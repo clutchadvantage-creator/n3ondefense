@@ -48,6 +48,8 @@ export class GameplayPointerLock {
     this.overlay.disabled = !this.supported;
   }
 
+  hidePrompt(): void { this.overlay.hidden = true; }
+
   requestLock(): void { this.request(); }
 
   release(): void {

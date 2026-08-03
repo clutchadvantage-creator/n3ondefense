@@ -221,9 +221,9 @@ export class ArenaScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.pointerLock = new GameplayPointerLock(this.game, {
       onLocked: () => this.resumeFromPointerLock(),
-      onLost: () => this.pauseForPointerLock()
+      onLost: (reason) => this.pauseForPointerLock(reason)
     });
-    this.pauseForPointerLock();
+    this.pauseForPointerLock('initial');
     this.pointerLock.showInitial();
   }
 
@@ -1875,13 +1875,17 @@ export class ArenaScene extends Phaser.Scene {
     this.input.keyboard?.resetKeys();
   }
 
-  private pauseForPointerLock(): void {
+  private pauseForPointerLock(reason: 'initial' | 'unlock' | 'blur' | 'hidden' | 'error'): void {
     if (this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) return;
     this.audio.stopPlantingLoop();
     this.clearGameplayInput();
     this.state.set(RoundState.Paused);
     this.physics.pause();
     this.setMenuCursorMode();
+    if (reason !== 'initial') {
+      this.pointerLock?.hidePrompt();
+      this.showPauseMenu();
+    }
   }
 
   private resumeFromPointerLock(): void {
