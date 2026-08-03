@@ -126,7 +126,7 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
     this.clearBoards();
     const panel = this.add.rectangle(width / 2, height / 2, Math.min(720, width - 80), 230, 0x0a1423, 0.94).setStrokeStyle(2, 0x4edfee, 0.55);
     const message = this.add.text(width / 2, height / 2,
-      'Online records could not be loaded.\n\nYou can continue playing normally. Completed online submissions are retried automatically when the service returns.', {
+      'Online records could not be loaded.\n\nLocal mode remains available. Online submissions with connectivity failures stay labeled QUEUED until the server accepts or rejects them.', {
         fontFamily: 'Rajdhani, sans-serif', fontSize: '22px', color: '#c8e5ef', align: 'center', wordWrap: { width: 640 }
       }).setOrigin(0.5);
     this.boardObjects.push(panel, message);

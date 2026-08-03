@@ -5,7 +5,7 @@ import { SceneKeys } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
 import { SaveSystem } from '../systems/SaveSystem';
 import { startArenaLoad } from '../utils/runFlow';
-import { createButton, disableButton } from '../utils/ui';
+import { createButton, disableButton, enableButton } from '../utils/ui';
 import { showInfoModal } from '../utils/localSaveUi';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 
@@ -76,26 +76,56 @@ export class MainMenuScene extends Phaser.Scene {
 
     profilePanel.setDepth(12);
 
-    const startButton = createButton(this, width / 2, 210, 'Start Operation', () => {
+    const onlineStatus = this.add.text(width / 2, 166, profile ? 'CHECKING ONLINE IDENTITY...' : 'CREATE A LOCAL PROFILE TO START', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#9fc8d8'
+    }).setOrigin(0.5);
+    if (profile) {
+      void OnlineRunManager.initializeIdentity(profile.id).then((status) => {
+        if (!onlineStatus.active) return;
+        const labels = {
+          connected: 'ONLINE IDENTITY CONNECTED',
+          none: 'ONLINE IDENTITY WILL BE CREATED WHEN YOU START ONLINE',
+          expired: 'ONLINE SESSION EXPIRED — START ONLINE TO RECOVER',
+          unavailable: 'ONLINE SERVICE UNAVAILABLE — LOCAL MODE REMAINS AVAILABLE'
+        } as const;
+        onlineStatus.setText(labels[status]).setColor(status === 'connected' ? '#8fffc4' : status === 'unavailable' ? '#ffbd85' : '#9fc8d8');
+      });
+    }
+
+    const startButton = createButton(this, width / 2 - 135, 210, 'Start Online', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
       }
       disableButton(startButton);
       void (async () => {
-        const serverSeed = await OnlineRunManager.beginRun(profile.id, profile.name);
-        const session = serverSeed === null ? undefined : {
-          baseSeed: serverSeed,
+        onlineStatus.setText('CREATING SERVER-AUTHORIZED RUN...').setColor('#9fc8d8');
+        const result = await OnlineRunManager.beginRun(profile.id, profile.name);
+        if (!result.ok || result.seed === undefined) {
+          onlineStatus.setText(`${result.message} CHOOSE LOCAL MODE OR RETRY.`).setColor('#ff9aab');
+          enableButton(startButton);
+          return;
+        }
+        const session = {
+          baseSeed: result.seed,
           round: 1,
           objectiveMode: OBJECTIVE_CONFIG.defaultMode
         };
         startArenaLoad(this, {
           reason: 'new-run',
           session,
-          message: serverSeed === null ? 'Building fresh offline operation...' : 'Deploying verified online operation...'
+          message: 'Deploying server-authorized online operation...'
         });
       })();
-    });
+    }, 240);
+    createButton(this, width / 2 + 135, 210, 'Start Local', () => {
+      if (!profile) {
+        this.scene.start(SceneKeys.LocalProfiles);
+        return;
+      }
+      OnlineRunManager.beginLocalRun();
+      startArenaLoad(this, { reason: 'new-run', message: 'Building explicitly local operation...' });
+    }, 240);
     createButton(this, width / 2, 262, 'Upgrade Store', () => this.scene.start(SceneKeys.Upgrades));
     createButton(this, width / 2, 314, 'Cosmetics Store', () => this.scene.start(SceneKeys.Cosmetics));
     createButton(this, width / 2, 366, 'Options', () => this.scene.start(SceneKeys.Options));

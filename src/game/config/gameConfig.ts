@@ -10,15 +10,7 @@ export const createGameConfig = (parent: string): Phaser.Types.Core.GameConfig =
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: WORLD_WIDTH,
-    height: WORLD_HEIGHT,
-    min: {
-      width: 960,
-      height: 640
-    },
-    max: {
-      width: 2560,
-      height: 1600
-    }
+    height: WORLD_HEIGHT
   },
   render: {
     antialias: true,

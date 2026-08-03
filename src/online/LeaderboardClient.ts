@@ -11,6 +11,12 @@ interface TokenResponse {
   refresh_expires_in_seconds: number;
 }
 
+export class OnlineApiError extends Error {
+  constructor(message: string, readonly status?: number) { super(message); }
+  get invalidCredential(): boolean { return this.status === 401 || this.status === 403; }
+  get retryable(): boolean { return this.status === undefined || this.status === 408 || this.status === 429 || (this.status >= 500); }
+}
+
 const fetchWithTimeout = async (url: string, init?: RequestInit, timeoutMs = 7000): Promise<Response> => {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -39,13 +45,18 @@ export class LeaderboardClient {
         displayName = `${displayName.slice(0, 17)}-${profileId.replace(/-/g, '').slice(-5)}`;
         continue;
       }
-      if (!response.ok) throw new Error(`Online identity failed (${response.status})`);
+      if (!response.ok) throw new OnlineApiError('Online identity could not be created.', response.status);
       return this.storeTokenResponse(profileId, await response.json() as TokenResponse);
     }
     throw new Error('Unable to allocate a unique online display name.');
   }
 
-  static async startRun(credentials: OnlineCredentials): Promise<{ run_id: string; seed: number; run_token: string }> {
+  static async restoreIdentity(profileId: string): Promise<OnlineCredentials | null> {
+    const existing = OnlineCredentialStore.load(profileId);
+    return existing ? this.ensureAccess(existing, true) : null;
+  }
+
+  static async startRun(credentials: OnlineCredentials): Promise<{ run_id: string; seed: number; run_token: string; run_token_expires_in_seconds: number; status: 'pending' }> {
     const current = await this.ensureAccess(credentials);
     return await this.request('/v1/runs', current, { method: 'POST', body: JSON.stringify({ game_version: GAME_VERSION }) });
   }
@@ -57,7 +68,7 @@ export class LeaderboardClient {
 
   static async leaderboard(category: OnlineLeaderboardCategory): Promise<OnlineLeaderboardEntry[]> {
     const response = await fetchWithTimeout(`${API_BASE_URL}/v1/leaderboards/${category}?limit=50`);
-    if (!response.ok) throw new Error(`Leaderboard unavailable (${response.status})`);
+    if (!response.ok) throw new OnlineApiError('Leaderboard unavailable.', response.status);
     return ((await response.json()) as { entries: OnlineLeaderboardEntry[] }).entries;
   }
 
@@ -78,18 +89,19 @@ export class LeaderboardClient {
     return await this.request('/v1/leaderboards/me/bests', current, { method: 'GET' });
   }
 
-  private static async ensureAccess(credentials: OnlineCredentials): Promise<OnlineCredentials> {
-    if (credentials.accessExpiresAt > Date.now() + 30_000) return credentials;
+  private static async ensureAccess(credentials: OnlineCredentials, forceRefresh = false): Promise<OnlineCredentials> {
+    if (!forceRefresh && credentials.accessExpiresAt > Date.now() + 30_000) return credentials;
     if (credentials.refreshExpiresAt <= Date.now()) {
       OnlineCredentialStore.clear(credentials.profileId);
-      throw new Error('Online identity expired. Reconnect from Leaderboards.');
+      throw new OnlineApiError('Online session expired. Reconnect your anonymous identity.', 401);
     }
     const response = await fetchWithTimeout(`${API_BASE_URL}/v1/auth/refresh`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: credentials.refreshToken })
     });
     if (!response.ok) {
-      OnlineCredentialStore.clear(credentials.profileId);
-      throw new Error('Online identity refresh failed.');
+      const error = new OnlineApiError('Online identity refresh failed.', response.status);
+      if (error.invalidCredential) OnlineCredentialStore.clear(credentials.profileId);
+      throw error;
     }
     return this.storeTokenResponse(credentials.profileId, await response.json() as TokenResponse);
   }
@@ -114,7 +126,7 @@ export class LeaderboardClient {
       ...init,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${credentials.accessToken}`, ...(init.headers ?? {}) }
     });
-    if (!response.ok) throw new Error(`Leaderboard API request failed (${response.status})`);
+    if (!response.ok) throw new OnlineApiError('Leaderboard service rejected the request.', response.status);
     return await response.json() as T;
   }
 }

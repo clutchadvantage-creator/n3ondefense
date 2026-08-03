@@ -25,6 +25,7 @@ import { LaserSecuritySystem } from '../systems/LaserSecuritySystem';
 import { startArenaLoad } from '../utils/runFlow';
 import { createButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
+import { GameplayPointerLock } from '../input/GameplayPointerLock';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -104,6 +105,7 @@ export class ArenaScene extends Phaser.Scene {
   private plantingProgressMs = 0;
   private lastPlayerShotMs = 0;
   private pointerDown = false;
+  private pointerLock: GameplayPointerLock | null = null;
 
   private nextSpawnAt = 0;
   private nextArenaHealthDropAt = 0;
@@ -217,6 +219,12 @@ export class ArenaScene extends Phaser.Scene {
     this.scale.on('resize', this.handleResize, this);
     this.events.on('resume-from-options', this.onResumeFromOptions);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
+    this.pointerLock = new GameplayPointerLock(this.game, {
+      onLocked: () => this.resumeFromPointerLock(),
+      onLost: () => this.pauseForPointerLock()
+    });
+    this.pauseForPointerLock();
+    this.pointerLock.showInitial();
   }
 
   private parseSessionData(data: unknown): ArenaSessionState | undefined {
@@ -545,8 +553,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePlayerMovement(now: number): void {
-    const pointer = this.input.activePointer;
-    const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, pointer.worldX, pointer.worldY);
+    const aim = this.getAimWorldPoint();
+    const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
     this.player.setRotation(angle + Math.PI / 2);
 
     const v = new Phaser.Math.Vector2(0, 0);
@@ -565,7 +573,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.space) && this.player.canDash(now)) {
-      this.player.dashToward(pointer, now);
+      this.player.dashTowardPoint(aim.x, aim.y, now);
       if (this.sound.get('sfx-boost')) {
         this.sound.play('sfx-boost', { volume: this.audio.getSfxVolume() });
       } else {
@@ -603,8 +611,8 @@ export class ArenaScene extends Phaser.Scene {
     if (now - this.lastPlayerShotMs < cadence) return;
     this.lastPlayerShotMs = now;
 
-    const pointer = this.input.activePointer;
-    const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, pointer.worldX, pointer.worldY);
+    const aim = this.getAimWorldPoint();
+    const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
     const speed = this.player.weapon.projectileSpeed;
 
     const bullet = this.physics.add.image(this.player.x + Math.cos(angle) * 14, this.player.y + Math.sin(angle) * 14, 'circle');
@@ -711,6 +719,11 @@ export class ArenaScene extends Phaser.Scene {
     this.spawnEnemy(type, defensePhase);
     if (type === 'defuser') this.lastDefuserSpawnAt = now;
     if (type === 'tank' || type === 'disruptor' || type === 'star') this.lastSpecialSpawnAt = now;
+  }
+
+  private getAimWorldPoint(): Phaser.Math.Vector2 {
+    return this.pointerLock?.worldPoint(this.cameras.main)
+      ?? new Phaser.Math.Vector2(this.input.activePointer.worldX, this.input.activePointer.worldY);
   }
 
   private pickEnemyType(profile: ReturnType<typeof getSpawnProfile>, now: number, defensePhase: boolean): EnemyType | null {
@@ -1169,9 +1182,7 @@ export class ArenaScene extends Phaser.Scene {
     if (now < this.abilityCooldownUntil[type]) return;
     if (!this.player.canSpendEnergy(cfg.energyCost)) return;
 
-    const pointer = this.input.activePointer;
-    const x = pointer.worldX;
-    const y = pointer.worldY;
+    const { x, y } = this.getAimWorldPoint();
     if (!this.isValidPlacement(x, y)) return;
 
     if (type === 'fence') {
@@ -1731,9 +1742,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateCrosshair(): void {
-    const pointer = this.input.activePointer;
-    const x = pointer.worldX;
-    const y = pointer.worldY;
+    const { x, y } = this.getAimWorldPoint();
     const valid = this.isValidPlacement(x, y);
     const color = valid ? 0x6ff6ff : COLORS.red;
 
@@ -1855,7 +1864,31 @@ export class ArenaScene extends Phaser.Scene {
 
     this.state.set(RoundState.Paused);
     this.physics.pause();
+    this.clearGameplayInput();
+    this.pointerLock?.release();
     this.showPauseMenu();
+  }
+
+  private clearGameplayInput(): void {
+    this.pointerDown = false;
+    this.player?.setVelocity(0, 0);
+    this.input.keyboard?.resetKeys();
+  }
+
+  private pauseForPointerLock(): void {
+    if (this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) return;
+    this.audio.stopPlantingLoop();
+    this.clearGameplayInput();
+    this.state.set(RoundState.Paused);
+    this.physics.pause();
+    this.setMenuCursorMode();
+  }
+
+  private resumeFromPointerLock(): void {
+    if (this.state.state !== RoundState.Paused || this.pauseMenu) return;
+    this.setGameplayCursorMode();
+    this.state.set(this.bombSites.getActiveBombSite() ? RoundState.Defense : RoundState.PrePlant);
+    this.physics.resume();
   }
 
   private showBanner(text: string): void {
@@ -1954,9 +1987,8 @@ export class ArenaScene extends Phaser.Scene {
   private resumeGameplay(): void {
     this.hidePauseMenu();
     if (this.state.state !== RoundState.Paused) return;
-    this.setGameplayCursorMode();
-    this.state.set(this.bombSites.getActiveBombSite() ? RoundState.Defense : RoundState.PrePlant);
-    this.physics.resume();
+    this.pointerLock?.showResume();
+    this.pointerLock?.requestLock();
   }
 
   private restartFromRoundOne(): void {
@@ -2014,6 +2046,8 @@ export class ArenaScene extends Phaser.Scene {
     this.destroyShieldOrb();
     this.input.off('pointerdown', this.onPointerDown);
     this.input.off('pointerup', this.onPointerUp);
+    this.pointerLock?.destroy();
+    this.pointerLock = null;
     this.setMenuCursorMode();
   }
 }

@@ -63,9 +63,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return now - this.lastDashMs >= this.stats.dashCooldownMs;
   }
 
-  dashToward(pointer: Phaser.Input.Pointer, now: number): void {
+  dashTowardPoint(targetX: number, targetY: number, now: number): void {
     this.lastDashMs = now;
-    const dir = new Phaser.Math.Vector2(pointer.worldX - this.x, pointer.worldY - this.y).normalize();
+    const dir = new Phaser.Math.Vector2(targetX - this.x, targetY - this.y).normalize();
     const dashFactor = PLAYER_BALANCE.dashSpeedBase * (0.9 + this.stats.dashDistanceMultiplier * PLAYER_BALANCE.dashSpeedMultiplier);
     this.dashUntil = now + Phaser.Math.Clamp(
       PLAYER_BALANCE.dashDurationBaseMs + this.stats.dashDistanceMultiplier * PLAYER_BALANCE.dashDurationPerMultiplierMs,

@@ -16,7 +16,7 @@ const save = (items: QueuedSubmission[]): void => {
 export class PendingSubmissionQueue {
   static add(item: Omit<QueuedSubmission, 'id' | 'attempts' | 'nextAttemptAt' | 'createdAt'>): void {
     const items = load();
-    if (items.some((existing) => existing.path === item.path && JSON.stringify(existing.body) === JSON.stringify(item.body))) return;
+    if (items.some((existing) => existing.runId === item.runId && existing.path === item.path && JSON.stringify(existing.body) === JSON.stringify(item.body))) return;
     items.push({ ...item, id: crypto.randomUUID(), attempts: 0, nextAttemptAt: Date.now(), createdAt: Date.now() });
     save(items);
   }

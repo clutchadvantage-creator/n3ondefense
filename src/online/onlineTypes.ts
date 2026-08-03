@@ -1,4 +1,5 @@
 export type OnlineRunStatus = 'pending' | 'verified' | 'flagged' | 'rejected';
+export type OnlineSubmissionState = OnlineRunStatus | 'submitted' | 'queued_offline' | 'failed';
 export type OnlineLeaderboardCategory = 'highest_round' | 'enemies_destroyed' | 'bomb_sites_destroyed';
 
 export interface OnlineCredentials {
@@ -14,6 +15,8 @@ export interface OnlineCredentials {
 export interface OnlineRunContext {
   runId: string;
   runToken: string;
+  runTokenExpiresAt: number;
+  status: OnlineRunStatus;
   seed: number;
   startedAt: number;
   milestoneSequence: number;
@@ -46,4 +49,12 @@ export interface QueuedSubmission {
   attempts: number;
   nextAttemptAt: number;
   createdAt: number;
+  kind: 'milestone' | 'completion';
+}
+
+export interface OnlineRunStartResult {
+  ok: boolean;
+  seed?: number;
+  state: 'started' | 'identity_required' | 'unavailable' | 'failed';
+  message: string;
 }

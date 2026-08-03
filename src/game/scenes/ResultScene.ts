@@ -4,6 +4,7 @@ import { SceneKeys } from '../flow/SceneKeys';
 import type { ArenaReward } from '../types';
 import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton } from '../utils/ui';
+import { OnlineRunManager } from '../../online/OnlineRunManager';
 
 export class ResultScene extends Phaser.Scene {
   constructor() {
@@ -40,7 +41,16 @@ export class ResultScene extends Phaser.Scene {
       color: '#f8b8ff'
     }).setOrigin(0.5);
 
-    const replayButton = createButton(this, width / 2, 390, 'Replay', () => {
+    const submissionStatus = OnlineRunManager.lastSubmissionStatus();
+    this.add.text(width / 2, 342, submissionStatus && submissionStatus !== 'local'
+      ? `ONLINE RUN: ${submissionStatus.replace(/_/g, ' ').toUpperCase()}`
+      : 'LOCAL RUN — NOT SUBMITTED ONLINE', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '20px',
+      color: submissionStatus === 'verified' ? '#8fffc4' : submissionStatus === 'rejected' || submissionStatus === 'failed' ? '#ff8da2' : '#ffc889'
+    }).setOrigin(0.5);
+
+    const replayButton = createButton(this, width / 2, 390, 'Replay Local', () => {
+      OnlineRunManager.beginLocalRun();
       disableButton(replayButton);
       this.registry.remove('round-finished');
       startArenaLoad(this, { reason: 'replay-after-fail', message: 'Rebuilding mission arena...' });

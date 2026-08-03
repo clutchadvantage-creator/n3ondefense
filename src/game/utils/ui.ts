@@ -33,3 +33,12 @@ export const disableButton = (button: Phaser.GameObjects.Container): void => {
   }
   button.alpha = 0.7;
 };
+
+export const enableButton = (button: Phaser.GameObjects.Container): void => {
+  for (const child of button.list) {
+    if (child.name === 'button-hit' && 'setInteractive' in child && typeof child.setInteractive === 'function') {
+      child.setInteractive({ useHandCursor: true });
+    }
+  }
+  button.alpha = 1;
+};
