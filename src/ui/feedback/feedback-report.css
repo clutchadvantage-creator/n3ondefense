@@ -1,0 +1,118 @@
+.feedback-launch {
+  position: absolute;
+  top: 22px;
+  left: 24px;
+  pointer-events: auto;
+  padding: 11px 17px;
+  border: 1px solid rgba(91, 239, 255, 0.85);
+  border-radius: 5px;
+  background: rgba(7, 19, 32, 0.88);
+  color: #d9fbff;
+  font: 700 15px 'Rajdhani', sans-serif;
+  letter-spacing: 0.055em;
+  cursor: pointer;
+  box-shadow: 0 0 16px rgba(48, 222, 255, 0.2), inset 0 0 14px rgba(48, 222, 255, 0.08);
+}
+
+.feedback-launch:hover,
+.feedback-launch:focus-visible {
+  outline: none;
+  border-color: #ff78da;
+  box-shadow: 0 0 20px rgba(255, 78, 202, 0.32);
+}
+
+.feedback-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  pointer-events: auto;
+  background: rgba(1, 4, 10, 0.82);
+}
+
+.feedback-dialog {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 30px;
+  border: 2px solid #55e9ff;
+  border-radius: 8px;
+  background: linear-gradient(150deg, rgba(13, 28, 45, 0.99), rgba(8, 12, 24, 0.99));
+  color: #defaff;
+  box-shadow: 0 0 35px rgba(45, 224, 255, 0.3), inset 0 0 28px rgba(73, 143, 255, 0.08);
+}
+
+.feedback-dialog h2 {
+  margin: 0 0 10px;
+  color: #65f3ff;
+  font: 700 25px 'Orbitron', sans-serif;
+  text-align: center;
+}
+
+.feedback-dialog p {
+  margin: 0 0 22px;
+  color: #c5e5ef;
+  font-size: 18px;
+  text-align: center;
+}
+
+.feedback-dialog label {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+  color: #ffd486;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.feedback-dialog select,
+.feedback-dialog textarea {
+  width: 100%;
+  border: 1px solid rgba(91, 239, 255, 0.65);
+  border-radius: 4px;
+  background: #07101d;
+  color: #e6fbff;
+  font: 18px 'Rajdhani', sans-serif;
+}
+
+.feedback-dialog select { padding: 10px 12px; }
+.feedback-dialog textarea { padding: 12px; resize: vertical; }
+.feedback-dialog select:focus,
+.feedback-dialog textarea:focus { outline: 2px solid #ff66d5; outline-offset: 2px; }
+
+.feedback-dialog .feedback-note {
+  margin: 16px 0 0;
+  color: #91b9c8;
+  font-size: 14px;
+}
+
+.feedback-actions {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.feedback-button {
+  min-width: 165px;
+  padding: 11px 16px;
+  border-radius: 4px;
+  font: 700 16px 'Rajdhani', sans-serif;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+
+.feedback-button.primary { border: 1px solid #56efff; background: #12364a; color: #dcfbff; }
+.feedback-button.secondary { border: 1px solid #78889d; background: #151b28; color: #cad9e5; }
+.feedback-button:hover,
+.feedback-button:focus-visible { outline: 2px solid #ff68d7; outline-offset: 2px; }
+
+@media (max-width: 620px) {
+  .feedback-launch { top: 12px; left: 12px; padding: 9px 12px; font-size: 13px; }
+  .feedback-dialog { padding: 22px 18px; }
+  .feedback-dialog h2 { font-size: 20px; }
+  .feedback-actions { flex-direction: column-reverse; }
+  .feedback-button { width: 100%; }
+}

@@ -1,0 +1,9 @@
+tunnel: REPLACE_TUNNEL_ID
+credentials-file: REPLACE_CLOUDFLARED_CREDENTIALS_FILE
+
+ingress:
+  - hostname: api.n3ondefense.org
+    service: http://127.0.0.1:8010
+    originRequest:
+      noTLSVerify: false
+  - service: http_status:404

@@ -1,0 +1,9 @@
+[project]
+name = "n3ondefense-leaderboard"
+version = "0.1.0"
+description = "Isolated N3ONDefense online leaderboard API"
+requires-python = ">=3.13,<3.14"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

@@ -1,0 +1,60 @@
+import Phaser from 'phaser';
+import type { EnemyType } from '../types';
+import { ENEMY_BALANCE } from '../config/balance';
+
+export interface EnemyStats {
+  type: EnemyType;
+  hp: number;
+  speed: number;
+  damage: number;
+  color: number;
+  size: number;
+  valueCredits: number;
+  valueCoreTokens: number;
+}
+
+export class Enemy extends Phaser.Physics.Arcade.Sprite {
+  readonly stats: EnemyStats;
+  hp: number;
+  lastAttackMs = 0;
+  lastShotMs = 0;
+  defuseProgressMs = 0;
+  disabledUntil = 0;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, texture: string, stats: EnemyStats) {
+    super(scene, x, y, texture);
+    this.stats = stats;
+    this.hp = stats.hp;
+    scene.add.existing(this);
+    scene.physics.add.existing(this);
+
+    if (stats.type === 'star') {
+      this.body?.setSize(stats.size, stats.size, true);
+    } else {
+      this.setCircle(stats.size / 2);
+    }
+
+    this.setDisplaySize(stats.size, stats.size);
+    this.setTint(stats.color);
+    this.setDepth(7);
+  }
+
+  takeDamage(amount: number): void {
+    this.hp = Math.max(0, this.hp - amount);
+    this.setTintFill(0xffffff);
+    this.scene.time.delayedCall(50, () => this.setTint(this.stats.color));
+  }
+
+  isDead(): boolean {
+    return this.hp <= 0;
+  }
+}
+
+export const baseEnemyStats: Record<EnemyType, EnemyStats> = {
+  grunt: { type: 'grunt', hp: ENEMY_BALANCE.grunt.hp, speed: ENEMY_BALANCE.grunt.speed, damage: ENEMY_BALANCE.grunt.damage, color: ENEMY_BALANCE.grunt.color, size: ENEMY_BALANCE.grunt.size, valueCredits: ENEMY_BALANCE.grunt.credits, valueCoreTokens: ENEMY_BALANCE.grunt.tokens },
+  shooter: { type: 'shooter', hp: ENEMY_BALANCE.shooter.hp, speed: ENEMY_BALANCE.shooter.speed, damage: ENEMY_BALANCE.shooter.damage, color: ENEMY_BALANCE.shooter.color, size: ENEMY_BALANCE.shooter.size, valueCredits: ENEMY_BALANCE.shooter.credits, valueCoreTokens: ENEMY_BALANCE.shooter.tokens },
+  defuser: { type: 'defuser', hp: ENEMY_BALANCE.defuser.hp, speed: ENEMY_BALANCE.defuser.speed, damage: ENEMY_BALANCE.defuser.damage, color: ENEMY_BALANCE.defuser.color, size: ENEMY_BALANCE.defuser.size, valueCredits: ENEMY_BALANCE.defuser.credits, valueCoreTokens: ENEMY_BALANCE.defuser.tokens },
+  tank: { type: 'tank', hp: ENEMY_BALANCE.tank.hp, speed: ENEMY_BALANCE.tank.speed, damage: ENEMY_BALANCE.tank.damage, color: ENEMY_BALANCE.tank.color, size: ENEMY_BALANCE.tank.size, valueCredits: ENEMY_BALANCE.tank.credits, valueCoreTokens: ENEMY_BALANCE.tank.tokens },
+  disruptor: { type: 'disruptor', hp: ENEMY_BALANCE.disruptor.hp, speed: ENEMY_BALANCE.disruptor.speed, damage: ENEMY_BALANCE.disruptor.damage, color: ENEMY_BALANCE.disruptor.color, size: ENEMY_BALANCE.disruptor.size, valueCredits: ENEMY_BALANCE.disruptor.credits, valueCoreTokens: ENEMY_BALANCE.disruptor.tokens },
+  star: { type: 'star', hp: ENEMY_BALANCE.star.hp, speed: ENEMY_BALANCE.star.speed, damage: ENEMY_BALANCE.star.damage, color: ENEMY_BALANCE.star.color, size: ENEMY_BALANCE.star.size, valueCredits: ENEMY_BALANCE.star.credits, valueCoreTokens: ENEMY_BALANCE.star.tokens }
+};

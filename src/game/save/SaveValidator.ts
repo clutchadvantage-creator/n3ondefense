@@ -1,0 +1,278 @@
+import { COSMETICS } from '../../data/cosmetics';
+import { UPGRADE_DEFINITIONS } from '../../data/upgrades';
+import Phaser from 'phaser';
+import type { CosmeticOption } from '../types';
+import { SFX_DEFINITIONS, createDefaultSoundVolumes } from '../config/audio';
+import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type LocalPlayerMetadata, type LocalPlayerProgress, type LocalPlayerSave, type LocalPlayerSaveV1, type LocalPlayerSettings, type ProfileSummary } from './LocalSaveTypes';
+
+const defaultSettings: LocalPlayerSettings = {
+  masterVolume: 0.8,
+  musicVolume: 0.6,
+  sfxVolume: 0.85,
+  soundVolumes: createDefaultSoundVolumes(),
+  screenShake: true,
+  particles: true
+};
+
+const defaultEquipped: Partial<Record<CosmeticOption['category'], string>> = {
+  playerColor: 'player-cyan',
+  playerShape: 'player-circle',
+  projectileColor: 'projectile-cyan',
+  trailColor: 'trail-cyan',
+  bombColor: 'bomb-purple',
+  turretSkin: 'turret-default',
+  fenceStyle: 'fence-default',
+  dashTrail: 'dash-cyan'
+};
+
+const defaultOwned = ['player-cyan', 'player-circle', 'projectile-cyan', 'turret-default', 'fence-default', 'dash-cyan'];
+
+const upgradeDefaults = (): Record<string, number> => {
+  const result: Record<string, number> = {};
+  for (const upgrade of UPGRADE_DEFINITIONS) {
+    result[upgrade.id] = 0;
+  }
+  return result;
+};
+
+const cosmeticIds = new Set(COSMETICS.map((cosmetic) => cosmetic.id));
+const cosmeticCategories = new Set<CosmeticOption['category']>(COSMETICS.map((cosmetic) => cosmetic.category));
+const upgradeIds = new Set(UPGRADE_DEFINITIONS.map((upgrade) => upgrade.id));
+
+const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+
+const toFiniteNumber = (value: unknown, fallback = 0): number => {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+};
+
+const toInteger = (value: unknown, fallback = 0): number => {
+  return Math.max(0, Math.floor(toFiniteNumber(value, fallback)));
+};
+
+const toBoolean = (value: unknown, fallback: boolean): boolean => typeof value === 'boolean' ? value : fallback;
+
+const sanitizeString = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
+
+const isTimestamp = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value));
+
+const normalizeOwnedCosmetics = (owned: unknown): string[] => {
+  const result = new Set<string>(defaultOwned);
+  if (Array.isArray(owned)) {
+    for (const item of owned) {
+      if (typeof item === 'string' && cosmeticIds.has(item)) result.add(item);
+    }
+  }
+  return Array.from(result);
+};
+
+const normalizeEquippedCosmetics = (equipped: unknown, owned: string[]): Partial<Record<CosmeticOption['category'], string>> => {
+  const result: Partial<Record<CosmeticOption['category'], string>> = { ...defaultEquipped };
+  if (isObject(equipped)) {
+    for (const [rawCategory, rawId] of Object.entries(equipped)) {
+      if (typeof rawCategory !== 'string' || typeof rawId !== 'string') continue;
+      if (!cosmeticCategories.has(rawCategory as CosmeticOption['category'])) continue;
+      if (!cosmeticIds.has(rawId)) continue;
+      if (!owned.includes(rawId)) continue;
+      result[rawCategory as CosmeticOption['category']] = rawId;
+    }
+  }
+  return result;
+};
+
+const normalizeProgress = (progress: unknown): LocalPlayerProgress => {
+  const candidate = isObject(progress) ? progress : {};
+  return {
+    highestRound: toInteger(candidate.highestRound),
+    roundsCompleted: toInteger(candidate.roundsCompleted),
+    enemiesDestroyed: toInteger(candidate.enemiesDestroyed),
+    bombSitesDestroyed: toInteger(candidate.bombSitesDestroyed),
+    totalCreditsEarned: toInteger(candidate.totalCreditsEarned),
+    totalCoreTokensEarned: toInteger(candidate.totalCoreTokensEarned),
+    totalPlaytimeSeconds: toInteger(candidate.totalPlaytimeSeconds)
+  };
+};
+
+const normalizeSettings = (settings: unknown): LocalPlayerSettings => {
+  const candidate = isObject(settings) ? settings : {};
+  const soundCandidates = isObject(candidate.soundVolumes) ? candidate.soundVolumes : {};
+  const soundVolumes = createDefaultSoundVolumes();
+  for (const definition of SFX_DEFINITIONS) {
+    soundVolumes[definition.key] = Phaser.Math.Clamp(toFiniteNumber(soundCandidates[definition.key], 1), 0, 1);
+  }
+  return {
+    masterVolume: Phaser.Math.Clamp(toFiniteNumber(candidate.masterVolume, defaultSettings.masterVolume), 0, 1),
+    musicVolume: Phaser.Math.Clamp(toFiniteNumber(candidate.musicVolume, defaultSettings.musicVolume), 0, 1),
+    sfxVolume: Phaser.Math.Clamp(toFiniteNumber(candidate.sfxVolume, defaultSettings.sfxVolume), 0, 1),
+    soundVolumes,
+    screenShake: toBoolean(candidate.screenShake, defaultSettings.screenShake),
+    particles: toBoolean(candidate.particles, defaultSettings.particles)
+  };
+};
+
+const normalizeMetadata = (metadata: unknown, revision: number): LocalPlayerMetadata => {
+  const candidate = isObject(metadata) ? metadata : {};
+  return {
+    updatedAt: isTimestamp(candidate.updatedAt) ? candidate.updatedAt : new Date().toISOString(),
+    saveRevision: Math.max(0, Math.floor(toFiniteNumber(candidate.saveRevision, revision))),
+    gameVersion: typeof candidate.gameVersion === 'string' && candidate.gameVersion.length > 0 ? candidate.gameVersion : GAME_VERSION
+  };
+};
+
+export const validateProfileName = (name: string, existingNames: string[] = []): { ok: boolean; value: string; error?: string } => {
+  const trimmed = name.trim();
+  if (trimmed.length < 2 || trimmed.length > 20) {
+    return { ok: false, value: trimmed, error: 'Profile name must be between 2 and 20 characters.' };
+  }
+  if (/[^A-Za-z0-9 _-]/.test(trimmed) || /[\u0000-\u001f\u007f<>"'`]/.test(trimmed)) {
+    return { ok: false, value: trimmed, error: 'Profile names can only use letters, numbers, spaces, hyphens, and underscores.' };
+  }
+  if (existingNames.some((existing) => existing.trim().toLowerCase() === trimmed.toLowerCase())) {
+    return { ok: false, value: trimmed, error: 'That local profile name already exists.' };
+  }
+  return { ok: true, value: trimmed };
+};
+
+export const createDefaultLocalSave = (profileId: string, profileName: string, source?: (Partial<LocalPlayerSave> & Record<string, unknown>)): LocalPlayerSave => {
+  const now = new Date().toISOString();
+  const owned = normalizeOwnedCosmetics(source?.cosmetics?.owned);
+  const legacyCredits = typeof source?.credits === 'number' ? source.credits : 0;
+  const legacyTokens = typeof source?.coreTokens === 'number' ? source.coreTokens : 0;
+  const save: LocalPlayerSave = {
+    version: CURRENT_SAVE_VERSION,
+    profile: {
+      id: profileId,
+      name: profileName,
+      createdAt: source?.profile?.createdAt && isTimestamp(source.profile.createdAt) ? source.profile.createdAt : now,
+      lastPlayedAt: now
+    },
+    wallet: {
+      credits: Math.max(0, toInteger(source?.wallet?.credits ?? legacyCredits)),
+      coreTokens: Math.max(0, toInteger(source?.wallet?.coreTokens ?? legacyTokens))
+    },
+    upgrades: { ...upgradeDefaults(), ...(isObject(source?.upgrades) ? source?.upgrades : {}) },
+    cosmetics: {
+      owned,
+      equipped: normalizeEquippedCosmetics(source?.cosmetics?.equipped, owned)
+    },
+    progress: normalizeProgress(source?.progress),
+    settings: normalizeSettings(source?.settings),
+    metadata: {
+      updatedAt: now,
+      saveRevision: 1,
+      gameVersion: GAME_VERSION
+    }
+  };
+  return normalizeLocalSave(save) ?? save;
+};
+
+export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
+  if (!isObject(input)) return null;
+
+  const version = toInteger(input.version, 0);
+  const current: Partial<LocalPlayerSave> = {};
+  if (version === 1) {
+    const v1 = input as Partial<LocalPlayerSaveV1>;
+    current.version = CURRENT_SAVE_VERSION;
+    current.profile = {
+      id: sanitizeString(v1.profile?.id),
+      name: sanitizeString(v1.profile?.name),
+      createdAt: isTimestamp(v1.profile?.createdAt) ? v1.profile.createdAt : new Date().toISOString(),
+      lastPlayedAt: isTimestamp(v1.profile?.lastPlayedAt) ? v1.profile.lastPlayedAt : new Date().toISOString()
+    };
+    current.wallet = {
+      credits: Math.max(0, toInteger(v1.wallet?.credits)),
+      coreTokens: Math.max(0, toInteger(v1.wallet?.coreTokens))
+    };
+    current.upgrades = { ...upgradeDefaults(), ...(isObject(v1.upgrades) ? v1.upgrades : {}) };
+    const owned = normalizeOwnedCosmetics(v1.cosmetics?.owned);
+    current.cosmetics = {
+      owned,
+      equipped: normalizeEquippedCosmetics(v1.cosmetics?.equipped, owned)
+    };
+    current.progress = {
+      highestRound: toInteger(v1.progress?.highestRound),
+      roundsCompleted: toInteger(v1.progress?.roundsCompleted),
+      enemiesDestroyed: toInteger(v1.progress?.enemiesDestroyed),
+      bombSitesDestroyed: toInteger(v1.progress?.bombSitesDestroyed),
+      totalCreditsEarned: toInteger(v1.progress?.totalCreditsEarned),
+      totalCoreTokensEarned: toInteger(v1.progress?.totalCoreTokensEarned),
+      totalPlaytimeSeconds: 0
+    };
+    current.settings = {
+      ...defaultSettings,
+      ...(isObject(v1.settings) ? {
+        masterVolume: v1.settings.masterVolume,
+        musicVolume: v1.settings.musicVolume,
+        sfxVolume: v1.settings.sfxVolume
+      } : {})
+    };
+    current.metadata = {
+      updatedAt: isTimestamp(v1.metadata?.updatedAt) ? v1.metadata.updatedAt : new Date().toISOString(),
+      saveRevision: 1,
+      gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
+    };
+  } else if (version === CURRENT_SAVE_VERSION) {
+    const candidate = input as Partial<LocalPlayerSave>;
+    const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
+    current.version = CURRENT_SAVE_VERSION;
+    current.profile = {
+      id: sanitizeString(candidate.profile?.id),
+      name: sanitizeString(candidate.profile?.name),
+      createdAt: isTimestamp(candidate.profile?.createdAt) ? candidate.profile.createdAt : new Date().toISOString(),
+      lastPlayedAt: isTimestamp(candidate.profile?.lastPlayedAt) ? candidate.profile.lastPlayedAt : new Date().toISOString()
+    };
+    current.wallet = {
+      credits: Math.max(0, toInteger(candidate.wallet?.credits ?? legacyCandidate.credits)),
+      coreTokens: Math.max(0, toInteger(candidate.wallet?.coreTokens ?? legacyCandidate.coreTokens))
+    };
+    current.upgrades = { ...upgradeDefaults(), ...(isObject(candidate.upgrades) ? candidate.upgrades : {}) };
+    const owned = normalizeOwnedCosmetics(candidate.cosmetics?.owned);
+    current.cosmetics = {
+      owned,
+      equipped: normalizeEquippedCosmetics(candidate.cosmetics?.equipped, owned)
+    };
+    current.progress = normalizeProgress(candidate.progress);
+    current.settings = normalizeSettings(candidate.settings);
+    current.metadata = normalizeMetadata(candidate.metadata, CURRENT_SAVE_VERSION);
+  } else {
+    return null;
+  }
+
+  if (!current.profile?.id || !current.profile?.name) return null;
+  if (!current.profile.createdAt || !current.profile.lastPlayedAt) return null;
+  if (!Object.keys(current.upgrades ?? {}).every((id) => upgradeIds.has(id))) return null;
+
+  return current as LocalPlayerSave;
+};
+
+export const normalizeImportedSave = (input: unknown): LocalPlayerSave | null => {
+  if (!isObject(input) || input.format !== EXPORT_FORMAT || input.exportVersion !== 1) return null;
+  return normalizeLocalSave(input.save);
+};
+
+export const buildProfileSummary = (save: LocalPlayerSave): ProfileSummary => ({
+  id: save.profile.id,
+  name: save.profile.name,
+  createdAt: save.profile.createdAt,
+  lastPlayedAt: save.profile.lastPlayedAt,
+  credits: save.wallet.credits,
+  coreTokens: save.wallet.coreTokens,
+  highestRound: save.progress.highestRound,
+  roundsCompleted: save.progress.roundsCompleted,
+  equippedPlayerColor: save.cosmetics.equipped.playerColor ?? null,
+  saveRevision: save.metadata.saveRevision
+});
+
+export const createEmptyProfileIndex = (): { version: 1; activeProfileId: string | null; profiles: ProfileSummary[]; legacyMigrationPrompted: boolean } => ({
+  version: 1,
+  activeProfileId: null,
+  profiles: [],
+  legacyMigrationPrompted: false
+});
+
+export const getDefaultSettings = (): LocalPlayerSettings => ({
+  ...defaultSettings,
+  soundVolumes: { ...defaultSettings.soundVolumes }
+});
+
+export const getDefaultOwnedCosmetics = (): string[] => [...defaultOwned];

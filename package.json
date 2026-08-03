@@ -1,0 +1,19 @@
+{
+  "name": "n3on-defense",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "balance:report": "node --experimental-strip-types scripts/analyze-balance.ts",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0"
+  }
+}

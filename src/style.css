@@ -1,0 +1,55 @@
+:root {
+  --bg0: #03050a;
+  --bg1: #080d17;
+  --text: #ddf8ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 320px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(49, 118, 255, 0.14) 0%, rgba(49, 118, 255, 0) 40%),
+    radial-gradient(circle at 80% 0%, rgba(255, 89, 206, 0.12) 0%, rgba(255, 89, 206, 0) 45%),
+    linear-gradient(145deg, var(--bg0), var(--bg1));
+  color: var(--text);
+  font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+}
+
+#game-root {
+  position: relative;
+  inset: 0;
+  width: 100%;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #02060d;
+}
+
+#phaser-game {
+  position: absolute;
+  inset: 0;
+}
+
+#game-ui-root {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+#phaser-game canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}

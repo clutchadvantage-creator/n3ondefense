@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+server/.env
+server/.venv/
+server/**/__pycache__/
+server/.pytest_cache/
+*.pyc
+
+# Deployment archives
+*.zip
+
+# Temporary server deployment copy
+server-deploy/

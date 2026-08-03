@@ -1,0 +1,312 @@
+import { COSMETICS } from '../../data/cosmetics';
+import { UPGRADE_DEFINITIONS } from '../../data/upgrades';
+import type { CosmeticOption } from '../types';
+import { type LocalPlayerSave, type ProfileSummary } from '../save/LocalSaveTypes';
+import { LocalSaveManager } from '../save/LocalSaveManager';
+
+export interface PurchaseResult {
+  ok: boolean;
+  message?: string;
+}
+
+export class PlayerProfileStore {
+  private static activeSave: LocalPlayerSave | null = null;
+  private static notice: string | null = null;
+  private static noticeUntil = 0;
+  private static lastPlaytimeCommitAt = Date.now();
+
+  static bootstrap(): void {
+    const selected = LocalSaveManager.getActiveProfileSave();
+    if (selected) {
+      PlayerProfileStore.activeSave = selected;
+      PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
+      return;
+    }
+
+    PlayerProfileStore.activeSave = null;
+  }
+
+  static hasActiveProfile(): boolean {
+    if (PlayerProfileStore.activeSave) return true;
+    return Boolean(LocalSaveManager.getActiveProfileSave());
+  }
+
+  static getActiveSave(): LocalPlayerSave {
+    if (!PlayerProfileStore.activeSave) {
+      const loaded = LocalSaveManager.getActiveProfileSave();
+      PlayerProfileStore.activeSave = loaded ?? null;
+    }
+    if (!PlayerProfileStore.activeSave) {
+      throw new Error('No active local profile is selected.');
+    }
+    return PlayerProfileStore.activeSave;
+  }
+
+  static getActiveProfileSummary(): ProfileSummary | null {
+    return LocalSaveManager.getActiveProfileSummary();
+  }
+
+  static getProfiles(): ProfileSummary[] {
+    return LocalSaveManager.listProfiles();
+  }
+
+  static getLeaderboardEntries() {
+    return LocalSaveManager.getLeaderboardEntries();
+  }
+
+  static getRecoveryStatus() {
+    return LocalSaveManager.getRecoveryStatus();
+  }
+
+  static getStorageMessage(): string | null {
+    return LocalSaveManager.getStorageMessage();
+  }
+
+  static getNotice(): string | null {
+    if (PlayerProfileStore.notice && Date.now() <= PlayerProfileStore.noticeUntil) return PlayerProfileStore.notice;
+    return null;
+  }
+
+  static consumeNotice(): string | null {
+    const notice = PlayerProfileStore.getNotice();
+    PlayerProfileStore.notice = null;
+    PlayerProfileStore.noticeUntil = 0;
+    return notice;
+  }
+
+  static selectProfile(profileId: string): PurchaseResult {
+    const result = LocalSaveManager.selectProfile(profileId);
+    if (!result.ok || !result.save) {
+      PlayerProfileStore.activeSave = null;
+      return { ok: false, message: result.message };
+    }
+
+    PlayerProfileStore.activeSave = result.save;
+    PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
+    PlayerProfileStore.markNotice('SAVED LOCALLY');
+    return { ok: true };
+  }
+
+  static createProfile(name: string): PurchaseResult {
+    const result = LocalSaveManager.createProfile(name);
+    if (!result.ok || !result.save) return { ok: false, message: result.message };
+    PlayerProfileStore.activeSave = result.save;
+    PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
+    PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
+    return { ok: true };
+  }
+
+  static createProfileFromLegacy(name: string): PurchaseResult {
+    const result = LocalSaveManager.createProfileFromLegacy(name);
+    if (!result.ok || !result.save) return { ok: false, message: result.message };
+    PlayerProfileStore.activeSave = result.save;
+    PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
+    PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
+    return { ok: true };
+  }
+
+  static renameProfile(profileId: string, name: string): PurchaseResult {
+    const result = LocalSaveManager.renameProfile(profileId, name);
+    if (!result.ok) return result;
+    if (PlayerProfileStore.activeSave?.profile.id === profileId) {
+      PlayerProfileStore.activeSave.profile.name = name.trim();
+    }
+    PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
+    return { ok: true };
+  }
+
+  static deleteProfile(profileId: string): PurchaseResult {
+    const result = LocalSaveManager.deleteProfile(profileId);
+    if (!result.ok) return result;
+    if (PlayerProfileStore.activeSave?.profile.id === profileId) {
+      PlayerProfileStore.activeSave = null;
+      const fallback = LocalSaveManager.getActiveProfileSave();
+      if (fallback) PlayerProfileStore.activeSave = fallback;
+    }
+    PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
+    return { ok: true };
+  }
+
+  static restoreBackup(profileId: string): PurchaseResult {
+    const result = LocalSaveManager.restoreBackup(profileId);
+    if (!result.ok) return result;
+    if (PlayerProfileStore.activeSave?.profile.id === profileId) {
+      PlayerProfileStore.activeSave = LocalSaveManager.getActiveProfileSave();
+    }
+    PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
+    return { ok: true };
+  }
+
+  static resetProgress(profileId: string): PurchaseResult {
+    const result = LocalSaveManager.resetProfile(profileId);
+    if (!result.ok) return result;
+    if (PlayerProfileStore.activeSave?.profile.id === profileId) {
+      PlayerProfileStore.activeSave = LocalSaveManager.getActiveProfileSave();
+    }
+    PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
+    return { ok: true };
+  }
+
+  static exportActiveProfile(): PurchaseResult {
+    const active = PlayerProfileStore.getActiveSave();
+    const result = LocalSaveManager.downloadProfile(active.profile.id);
+    if (!result.ok) return result;
+    PlayerProfileStore.markNotice('Backup exported.');
+    return { ok: true, message: result.message };
+  }
+
+  static importProfile(raw: unknown, mode: 'new' | 'replace', targetProfileId?: string): PurchaseResult {
+    const result = LocalSaveManager.importProfile(raw, mode, targetProfileId);
+    if (!result.ok) return result;
+    if (mode === 'replace' && targetProfileId) {
+      PlayerProfileStore.activeSave = LocalSaveManager.getActiveProfileSave();
+    }
+    PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
+    return { ok: true };
+  }
+
+  static previewImport(raw: unknown) {
+    return LocalSaveManager.previewImport(raw);
+  }
+
+  static detectLegacyProgress() {
+    return LocalSaveManager.detectLegacyProgress();
+  }
+
+  static recordLegacyPrompted(): void {
+    LocalSaveManager.recordLegacyPrompted();
+  }
+
+  static exportProfile(profileId: string): PurchaseResult & { file?: import('../save/LocalSaveTypes').ExportedSaveFile } {
+    const result = LocalSaveManager.exportProfile(profileId);
+    if (!result.ok || !result.file) return result;
+    return { ok: true, file: result.file };
+  }
+
+  static recordRoundCompletion(round: number): void {
+    const save = PlayerProfileStore.getActiveSave();
+    save.progress.roundsCompleted += 1;
+    save.progress.highestRound = Math.max(save.progress.highestRound, round);
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
+  static recordEnemyDestroyed(count = 1): void {
+    const save = PlayerProfileStore.getActiveSave();
+    save.progress.enemiesDestroyed = Math.max(0, save.progress.enemiesDestroyed + Math.max(0, Math.floor(count)));
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
+  static recordBombSiteDestroyed(count = 1): void {
+    const save = PlayerProfileStore.getActiveSave();
+    save.progress.bombSitesDestroyed = Math.max(0, save.progress.bombSitesDestroyed + Math.max(0, Math.floor(count)));
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
+  static addCredits(amount: number): void {
+    const save = PlayerProfileStore.getActiveSave();
+    save.wallet.credits = Math.max(0, save.wallet.credits + amount);
+    save.progress.totalCreditsEarned = Math.max(0, save.progress.totalCreditsEarned + Math.max(0, amount));
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
+  static addCoreTokens(amount: number): void {
+    const save = PlayerProfileStore.getActiveSave();
+    save.wallet.coreTokens = Math.max(0, save.wallet.coreTokens + amount);
+    save.progress.totalCoreTokensEarned = Math.max(0, save.progress.totalCoreTokensEarned + Math.max(0, amount));
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
+  static spendCredits(amount: number): boolean {
+    const save = PlayerProfileStore.getActiveSave();
+    if (save.wallet.credits < amount) return false;
+    save.wallet.credits -= amount;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return true;
+  }
+
+  static spendCoreTokens(amount: number): boolean {
+    const save = PlayerProfileStore.getActiveSave();
+    if (save.wallet.coreTokens < amount) return false;
+    save.wallet.coreTokens -= amount;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return true;
+  }
+
+  static purchaseUpgrade(upgradeKey: string): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const definition = UPGRADE_DEFINITIONS.find((upgrade) => upgrade.id === upgradeKey);
+    if (!definition) return { ok: false, message: 'Unknown upgrade.' };
+    const current = save.upgrades[upgradeKey] ?? 0;
+    if (current >= definition.maxLevel) return { ok: false, message: 'That upgrade is already maxed.' };
+
+    const cost = Math.round(definition.baseCost * definition.growth ** current);
+    if (save.wallet.credits < cost) return { ok: false, message: 'Not enough credits.' };
+
+    save.wallet.credits -= cost;
+    save.upgrades[upgradeKey] = current + 1;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return { ok: true };
+  }
+
+  static unlockCosmetic(cosmeticKey: string): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    if (!COSMETICS.some((cosmetic) => cosmetic.id === cosmeticKey)) return { ok: false, message: 'Unknown cosmetic.' };
+    if (!save.cosmetics.owned.includes(cosmeticKey)) {
+      save.cosmetics.owned.push(cosmeticKey);
+    }
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return { ok: true };
+  }
+
+  static equipCosmetic(slot: string, cosmeticKey: string): void {
+    const save = PlayerProfileStore.getActiveSave();
+    const category = slot as CosmeticOption['category'];
+    if (!save.cosmetics.owned.includes(cosmeticKey)) return;
+    save.cosmetics.equipped[category] = cosmeticKey;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
+  static setSettings(settings: Partial<LocalPlayerSave['settings']>): void {
+    const save = PlayerProfileStore.getActiveSave();
+    save.settings = { ...save.settings, ...settings };
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
+  static save(): void {
+    const save = PlayerProfileStore.getActiveSave();
+    const now = Date.now();
+    const deltaSeconds = Math.max(0, Math.floor((now - PlayerProfileStore.lastPlaytimeCommitAt) / 1000));
+    if (deltaSeconds > 0) {
+      save.progress.totalPlaytimeSeconds += deltaSeconds;
+      PlayerProfileStore.lastPlaytimeCommitAt = now;
+    }
+    save.metadata.updatedAt = new Date().toISOString();
+    save.metadata.saveRevision += 1;
+    const result = LocalSaveManager.importProfile(save, 'replace', save.profile.id);
+    if (!result.ok) {
+      PlayerProfileStore.markNotice('LOCAL SAVING UNAVAILABLE');
+    } else {
+      PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
+    }
+  }
+
+  static resetSessionTracking(): void {
+    PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
+  }
+
+  private static markNotice(text: string): void {
+    PlayerProfileStore.notice = text;
+    PlayerProfileStore.noticeUntil = Date.now() + 4000;
+  }
+}
