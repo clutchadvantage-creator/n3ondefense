@@ -18,6 +18,8 @@ export class AudioManager {
   private readonly playerDeathSfxPool: HTMLAudioElement[] = [];
   private plantingAudio: HTMLAudioElement | null = null;
   private plantingLoopRequested = false;
+  private disarmAudio: HTMLAudioElement | null = null;
+  private disarmLoopRequested = false;
   private shotSfxCursor = 0;
   private boostSfxCursor = 0;
   private explosionSfxCursor = 0;
@@ -268,6 +270,7 @@ export class AudioManager {
       playerDeath.volume = this.getSfxVolume('playerDeath');
     }
     if (this.plantingAudio) this.plantingAudio.volume = this.getSfxVolume('planting');
+    if (this.disarmAudio) this.disarmAudio.volume = this.getSfxVolume('disarm');
   }
 
   stopMusic(): void {
@@ -316,7 +319,28 @@ export class AudioManager {
     this.plantingAudio.currentTime = 0;
   }
 
-  playSfx(name: Exclude<AudioSfxName, 'planting'>): void {
+  startDisarmLoop(): void {
+    if (this.disarmLoopRequested) return;
+    this.disarmLoopRequested = true;
+    if (!this.disarmAudio) {
+      this.disarmAudio = new Audio('/assets/audio/soundeffects/disarm.mp3');
+      this.disarmAudio.preload = 'auto';
+      this.disarmAudio.loop = true;
+    }
+    if (!this.disarmAudio.paused) return;
+    this.disarmAudio.currentTime = 0;
+    this.disarmAudio.volume = this.getSfxVolume('disarm');
+    void this.disarmAudio.play().catch(() => undefined);
+  }
+
+  stopDisarmLoop(): void {
+    this.disarmLoopRequested = false;
+    if (!this.disarmAudio) return;
+    this.disarmAudio.pause();
+    this.disarmAudio.currentTime = 0;
+  }
+
+  playSfx(name: Exclude<AudioSfxName, 'planting' | 'disarm'>): void {
     switch (name) {
       case 'shot':
         this.playShotSfx();

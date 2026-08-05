@@ -10,6 +10,7 @@ export const SFX_DEFINITIONS = [
   { key: 'mine', label: 'Mine Detonation' },
   { key: 'beep', label: 'Charge Beep' },
   { key: 'defuseAlarm', label: 'Defuse Alarm' },
+  { key: 'disarm', label: 'Enemy Disarming' },
   { key: 'bomb', label: 'Explosion' },
   { key: 'pickup', label: 'Pickup' },
   { key: 'menu', label: 'Menu Select' }

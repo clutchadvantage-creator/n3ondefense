@@ -11,7 +11,7 @@ import { Turret } from '../abilities/Turret';
 import { Fence } from '../abilities/Fence';
 import { Player } from '../entities/Player';
 import { baseEnemyStats, Enemy } from '../enemies/Enemy';
-import { RoundState, type AbilityType, type ArenaLayout, type ArenaReward, type ArenaSessionState, type BombSiteRuntime, type EnemyType, type PickupType, type RectSpec, type RoundFinishedPayload } from '../types';
+import { BombSiteState, RoundState, type AbilityType, type ArenaLayout, type ArenaReward, type ArenaSessionState, type BombSiteRuntime, type EnemyType, type PickupType, type RectSpec, type RoundFinishedPayload } from '../types';
 import { AudioManager } from '../systems/AudioManager';
 import { BombSiteManager } from '../systems/BombSiteManager';
 import { GameStateMachine } from '../systems/GameStateMachine';
@@ -449,14 +449,17 @@ export class ArenaScene extends Phaser.Scene {
       this.state.set(RoundState.Defusing);
       this.hud.setWarning('DEFUSE IN PROGRESS');
       this.audio.playSfx('defuseAlarm');
+      this.audio.startDisarmLoop();
     });
 
     this.bombSites.on('bomb-site-defuse-stopped', () => {
       this.state.set(RoundState.Defense);
       this.hud.setWarning('');
+      this.audio.stopDisarmLoop();
     });
 
     this.bombSites.on('bomb-site-destroyed', () => {
+      this.audio.stopDisarmLoop();
       SaveSystem.recordBombSiteDestroyed();
       this.recoveryAfterSiteDestroy();
     });
@@ -1628,6 +1631,7 @@ export class ArenaScene extends Phaser.Scene {
       this.player.setVisible(false);
     }
     this.state.set(RoundState.Defeat);
+    this.audio.stopDisarmLoop();
     this.physics.pause();
 
     const result: ArenaReward = {
@@ -1861,6 +1865,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.audio.stopPlantingLoop();
+    this.audio.stopDisarmLoop();
 
     this.state.set(RoundState.Paused);
     this.physics.pause();
@@ -1878,6 +1883,7 @@ export class ArenaScene extends Phaser.Scene {
   private pauseForPointerLock(reason: 'initial' | 'unlock' | 'blur' | 'hidden' | 'error'): void {
     if (this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) return;
     this.audio.stopPlantingLoop();
+    this.audio.stopDisarmLoop();
     this.clearGameplayInput();
     this.state.set(RoundState.Paused);
     this.physics.pause();
@@ -1891,7 +1897,10 @@ export class ArenaScene extends Phaser.Scene {
   private resumeFromPointerLock(): void {
     if (this.state.state !== RoundState.Paused || this.pauseMenu) return;
     this.setGameplayCursorMode();
-    this.state.set(this.bombSites.getActiveBombSite() ? RoundState.Defense : RoundState.PrePlant);
+    const activeSite = this.bombSites.getActiveBombSite();
+    const defusing = activeSite?.state === BombSiteState.BeingDefused;
+    this.state.set(defusing ? RoundState.Defusing : activeSite ? RoundState.Defense : RoundState.PrePlant);
+    if (defusing) this.audio.startDisarmLoop();
     this.physics.resume();
   }
 
@@ -2035,6 +2044,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private cleanup(): void {
     this.audio.stopPlantingLoop();
+    this.audio.stopDisarmLoop();
     this.scale.off('resize', this.handleResize, this);
     this.events.off('resume-from-options', this.onResumeFromOptions);
     this.hud?.destroy();

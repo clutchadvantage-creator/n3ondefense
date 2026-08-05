@@ -12,7 +12,8 @@ interface LaserSegment {
   y2: number;
 }
 
-const PATTERN_NAMES = ['SWEEP', 'SPLIT / REJOIN', 'TWIRL', 'CROSSWEAVE'] as const;
+const PATTERN_NAMES = ['SWEEP', 'SPLIT / REJOIN', 'TWIRL', 'CROSSWEAVE', 'SPIN BLOOM', 'PRISM ORBIT'] as const;
+const LASER_COLORS = [0x39eeff, 0xff4ed3, 0x53ff8a, 0xffa340, 0xae6bff, 0xff5e75] as const;
 
 export class LaserSecuritySystem {
   private readonly graphics: Phaser.GameObjects.Graphics;
@@ -121,18 +122,56 @@ export class LaserSecuritySystem {
       }));
     }
 
-    const sway = Math.sin(t * Math.PI * 2) * h * 0.28;
-    return [
-      { x1: 0, y1: h * 0.18 + sway, x2: w, y2: h * 0.82 - sway },
-      { x1: 0, y1: h * 0.82 - sway, x2: w, y2: h * 0.18 + sway }
-    ];
+    if (pattern === 3) {
+      const sway = Math.sin(t * Math.PI * 2) * h * 0.28;
+      return [
+        { x1: 0, y1: h * 0.18 + sway, x2: w, y2: h * 0.82 - sway },
+        { x1: 0, y1: h * 0.82 - sway, x2: w, y2: h * 0.18 + sway }
+      ];
+    }
+
+    if (pattern === 4) {
+      const split = Math.sin(t * Math.PI);
+      const baseAngle = -Math.PI / 2 + t * Math.PI * 2;
+      const length = Math.hypot(w, h) * 0.58;
+      const cx = w * 0.5;
+      const cy = h * 0.5;
+      return Array.from({ length: 5 }, (_, index) => {
+        const band = index - 2;
+        const angle = baseAngle + band * 0.24 * split;
+        const offset = band * 72 * split;
+        const ox = -Math.sin(baseAngle) * offset;
+        const oy = Math.cos(baseAngle) * offset;
+        return {
+          x1: cx + ox - Math.cos(angle) * length,
+          y1: cy + oy - Math.sin(angle) * length,
+          x2: cx + ox + Math.cos(angle) * length,
+          y2: cy + oy + Math.sin(angle) * length
+        };
+      });
+    }
+
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const radius = Math.min(w, h) * (0.2 + Math.sin(t * Math.PI) * 0.18);
+    const rotation = t * Math.PI * 3;
+    const points = Array.from({ length: 6 }, (_, index) => ({
+      x: cx + Math.cos(rotation + index * Math.PI / 3) * radius,
+      y: cy + Math.sin(rotation + index * Math.PI / 3) * radius
+    }));
+    return points.map((point, index) => {
+      const opposite = points[(index + 3) % points.length];
+      return { x1: point.x, y1: point.y, x2: opposite.x, y2: opposite.y };
+    });
   }
 
   private draw(segments: LaserSegment[], now: number, telegraphing: boolean): void {
     this.graphics.clear();
-    const color = this.patternIndex % 2 === 0 ? this.theme.secondary : this.theme.accent;
+    const colorShift = Math.floor(now / 420);
     for (let index = 0; index < segments.length; index += 1) {
       const segment = segments[index];
+      const palette = [this.theme.primary, this.theme.secondary, this.theme.accent, ...LASER_COLORS];
+      const color = palette[(this.patternIndex * 2 + index + colorShift) % palette.length];
       if (telegraphing) {
         this.graphics.lineStyle(2, color, 0.3 + Math.sin(now * 0.025 + index) * 0.16);
         this.graphics.lineBetween(segment.x1, segment.y1, segment.x2, segment.y2);
