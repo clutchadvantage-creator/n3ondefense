@@ -26,6 +26,7 @@ import { startArenaLoad } from '../utils/runFlow';
 import { createButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { GameplayPointerLock } from '../input/GameplayPointerLock';
+import { ABILITY_ACTIONS, compactBindingLabel, type AbilityAction, type AbilityBindings } from '../config/controls';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -106,6 +107,8 @@ export class ArenaScene extends Phaser.Scene {
   private lastPlayerShotMs = 0;
   private pointerDown = false;
   private pointerLock: GameplayPointerLock | null = null;
+  private abilityBindings!: AbilityBindings;
+  private readonly pressedAbilityActions = new Set<AbilityAction>();
 
   private nextSpawnAt = 0;
   private nextArenaHealthDropAt = 0;
@@ -123,13 +126,9 @@ export class ArenaScene extends Phaser.Scene {
     s: Phaser.Input.Keyboard.Key;
     d: Phaser.Input.Keyboard.Key;
     e: Phaser.Input.Keyboard.Key;
-    q: Phaser.Input.Keyboard.Key;
-    f: Phaser.Input.Keyboard.Key;
-    r: Phaser.Input.Keyboard.Key;
     one: Phaser.Input.Keyboard.Key;
     two: Phaser.Input.Keyboard.Key;
     three: Phaser.Input.Keyboard.Key;
-    space: Phaser.Input.Keyboard.Key;
     esc: Phaser.Input.Keyboard.Key;
     f8: Phaser.Input.Keyboard.Key;
   };
@@ -165,12 +164,15 @@ export class ArenaScene extends Phaser.Scene {
   private navState = new WeakMap<Enemy, NavState>();
   private patrolTargets = new WeakMap<Enemy, PatrolPoint>();
   private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
+    if (this.state.state === RoundState.Paused) return;
     if (pointer.button === 0) {
       this.pointerDown = true;
       return;
     }
-    if (pointer.button === 1) {
-      this.activateShield(this.time.now);
+    const action = this.actionForBinding(`Mouse:${pointer.button}`);
+    if (action) {
+      pointer.event?.preventDefault();
+      this.pressedAbilityActions.add(action);
     }
   };
   private readonly onPointerUp = (pointer: Phaser.Input.Pointer): void => {
@@ -179,7 +181,13 @@ export class ArenaScene extends Phaser.Scene {
     }
   };
   private readonly onResumeFromOptions = (): void => {
+    this.refreshAbilityBindings();
     this.resumeGameplay();
+  };
+  private readonly onAbilityKeyDown = (event: KeyboardEvent): void => {
+    if (event.repeat || !this.scene.isActive() || this.state.state === RoundState.Paused) return;
+    const action = this.actionForBinding(`Keyboard:${event.code}`);
+    if (action) this.pressedAbilityActions.add(action);
   };
 
   constructor() {
@@ -525,20 +533,37 @@ export class ArenaScene extends Phaser.Scene {
       s: kb.addKey('S'),
       d: kb.addKey('D'),
       e: kb.addKey('E'),
-      q: kb.addKey('Q'),
-      f: kb.addKey('F'),
-      r: kb.addKey('R'),
       one: kb.addKey('ONE'),
       two: kb.addKey('TWO'),
       three: kb.addKey('THREE'),
-      space: kb.addKey('SPACE'),
       esc: kb.addKey('ESC')
       ,f8: kb.addKey('F8')
     };
 
     this.input.on('pointerdown', this.onPointerDown);
     this.input.on('pointerup', this.onPointerUp);
+    this.refreshAbilityBindings();
+    window.addEventListener('keydown', this.onAbilityKeyDown);
     this.setGameplayCursorMode();
+  }
+
+  private refreshAbilityBindings(): void {
+    this.abilityBindings = { ...SaveSystem.get().settings.abilityBindings };
+    const slots = this.hudPayload.abilities;
+    slots[0].keybind = compactBindingLabel(this.abilityBindings.fence);
+    slots[1].keybind = compactBindingLabel(this.abilityBindings.turret);
+    slots[2].keybind = compactBindingLabel(this.abilityBindings.mine);
+    slots[3].keybind = compactBindingLabel(this.abilityBindings.shield);
+  }
+
+  private actionForBinding(binding: string): AbilityAction | null {
+    return ABILITY_ACTIONS.find(({ action }) => this.abilityBindings?.[action] === binding)?.action ?? null;
+  }
+
+  private consumeAbilityAction(action: AbilityAction): boolean {
+    if (!this.pressedAbilityActions.has(action)) return false;
+    this.pressedAbilityActions.delete(action);
+    return true;
   }
 
   private createCrosshair(): void {
@@ -575,7 +600,7 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.space)
+    if (this.consumeAbilityAction('dash')
       && this.player.canDash(now)
       && this.player.canSpendEnergy(PLAYER_BALANCE.dashEnergyCost)) {
       this.player.spendEnergy(PLAYER_BALANCE.dashEnergyCost);
@@ -604,9 +629,10 @@ export class ArenaScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.two)) this.selectedAbility = 'turret';
     if (Phaser.Input.Keyboard.JustDown(this.keys.three)) this.selectedAbility = 'mine';
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.q)) this.placeAbility('fence', now);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.f)) this.placeAbility('turret', now);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.r)) this.placeAbility('mine', now);
+    if (this.consumeAbilityAction('fence')) this.placeAbility('fence', now);
+    if (this.consumeAbilityAction('turret')) this.placeAbility('turret', now);
+    if (this.consumeAbilityAction('mine')) this.placeAbility('mine', now);
+    if (this.consumeAbilityAction('shield')) this.activateShield(now);
   }
 
   private updatePlayerShooting(now: number): void {
@@ -1888,6 +1914,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private clearGameplayInput(): void {
     this.pointerDown = false;
+    this.pressedAbilityActions.clear();
     this.player?.setVelocity(0, 0);
     this.input.keyboard?.resetKeys();
   }
@@ -2072,6 +2099,7 @@ export class ArenaScene extends Phaser.Scene {
     this.destroyShieldOrb();
     this.input.off('pointerdown', this.onPointerDown);
     this.input.off('pointerup', this.onPointerUp);
+    window.removeEventListener('keydown', this.onAbilityKeyDown);
     this.pointerLock?.destroy();
     this.pointerLock = null;
     this.setMenuCursorMode();

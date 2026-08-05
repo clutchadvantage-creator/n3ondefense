@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 export interface HudAbilitySlot {
   id: 'fence' | 'turret' | 'mine' | 'shield';
-  keybind: 'Q' | 'F' | 'R' | 'MMB';
+  keybind: string;
   icon: string;
   label: string;
   cooldownMs: number;
@@ -452,6 +452,7 @@ export class Hud {
       const ready = !coolingDown && slot.hasEnergy && slot.underLimit;
       const prevReady = this.lastAbilityReady.get(slot.id) ?? false;
       this.lastAbilityReady.set(slot.id, ready);
+      visual.keyText.setText(slot.keybind);
 
       let status = this.formatCooldown(cooldownMs);
       if (slot.active) status = 'ACTIVE';

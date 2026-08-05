@@ -1,5 +1,6 @@
 import { createDefaultLocalSave, normalizeImportedSave, normalizeLocalSave } from './SaveValidator';
 import { createDefaultSoundVolumes } from '../config/audio';
+import { DEFAULT_ABILITY_BINDINGS } from '../config/controls';
 import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type ExportedSaveFile, type ImportedSavePreview, type LocalPlayerSave, type LocalPlayerSaveV1 } from './LocalSaveTypes';
 
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -66,14 +67,16 @@ export const migrateUnknownSave = (input: unknown, existingNames: string[] = [])
         sfxVolume: typeof input.settings.sfxVolume === 'number' ? input.settings.sfxVolume : 0.85,
         soundVolumes: createDefaultSoundVolumes(),
         screenShake: true,
-        particles: true
+        particles: true,
+        abilityBindings: { ...DEFAULT_ABILITY_BINDINGS }
       } : {
         masterVolume: 0.8,
         musicVolume: 0.6,
         sfxVolume: 0.85,
         soundVolumes: createDefaultSoundVolumes(),
         screenShake: true,
-        particles: true
+        particles: true,
+        abilityBindings: { ...DEFAULT_ABILITY_BINDINGS }
       }
     });
   }

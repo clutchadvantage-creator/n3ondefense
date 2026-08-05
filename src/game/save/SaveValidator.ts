@@ -4,6 +4,7 @@ import Phaser from 'phaser';
 import type { CosmeticOption } from '../types';
 import { SFX_DEFINITIONS, createDefaultSoundVolumes } from '../config/audio';
 import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type LocalPlayerMetadata, type LocalPlayerProgress, type LocalPlayerSave, type LocalPlayerSaveV1, type LocalPlayerSettings, type ProfileSummary } from './LocalSaveTypes';
+import { DEFAULT_ABILITY_BINDINGS, normalizeAbilityBindings } from '../config/controls';
 
 const defaultSettings: LocalPlayerSettings = {
   masterVolume: 0.8,
@@ -11,7 +12,8 @@ const defaultSettings: LocalPlayerSettings = {
   sfxVolume: 0.85,
   soundVolumes: createDefaultSoundVolumes(),
   screenShake: true,
-  particles: true
+  particles: true,
+  abilityBindings: { ...DEFAULT_ABILITY_BINDINGS }
 };
 
 const defaultEquipped: Partial<Record<CosmeticOption['category'], string>> = {
@@ -105,7 +107,8 @@ const normalizeSettings = (settings: unknown): LocalPlayerSettings => {
     sfxVolume: Phaser.Math.Clamp(toFiniteNumber(candidate.sfxVolume, defaultSettings.sfxVolume), 0, 1),
     soundVolumes,
     screenShake: toBoolean(candidate.screenShake, defaultSettings.screenShake),
-    particles: toBoolean(candidate.particles, defaultSettings.particles)
+    particles: toBoolean(candidate.particles, defaultSettings.particles),
+    abilityBindings: normalizeAbilityBindings(candidate.abilityBindings)
   };
 };
 
@@ -272,7 +275,8 @@ export const createEmptyProfileIndex = (): { version: 1; activeProfileId: string
 
 export const getDefaultSettings = (): LocalPlayerSettings => ({
   ...defaultSettings,
-  soundVolumes: { ...defaultSettings.soundVolumes }
+  soundVolumes: { ...defaultSettings.soundVolumes },
+  abilityBindings: { ...defaultSettings.abilityBindings }
 });
 
 export const getDefaultOwnedCosmetics = (): string[] => [...defaultOwned];

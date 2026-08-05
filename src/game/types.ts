@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import type { AudioSfxName } from './config/audio';
+import type { AbilityBindings } from './config/controls';
 
 export type SceneKey = 'boot' | 'splash' | 'local-profiles' | 'menu' | 'arena' | 'upgrades' | 'cosmetics' | 'results' | 'options' | 'round-finished' | 'loading';
 
@@ -168,6 +169,7 @@ export interface GameSaveData {
     soundVolumes: Record<AudioSfxName, number>;
     screenShake: boolean;
     particles: boolean;
+    abilityBindings: AbilityBindings;
   };
 }
 

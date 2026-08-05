@@ -1,6 +1,7 @@
 import type { CosmeticOption } from '../types';
 import type { AudioSfxName } from '../config/audio';
 import { GAME_VERSION } from '../config/version';
+import type { AbilityBindings } from '../config/controls';
 
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
@@ -38,6 +39,7 @@ export interface LocalPlayerSettings {
   soundVolumes: Record<AudioSfxName, number>;
   screenShake: boolean;
   particles: boolean;
+  abilityBindings: AbilityBindings;
 }
 
 export interface LocalPlayerCosmetics {
@@ -69,7 +71,7 @@ export interface LocalPlayerSaveV1 {
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
   progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds'>;
-  settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes'>;
+  settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }
 

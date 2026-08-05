@@ -8,6 +8,7 @@ import { pickJsonFile, showConfirmDialog, showInfoModal } from '../utils/localSa
 import { createButton } from '../utils/ui';
 import { getGameUiRoot } from '../../ui/getGameUiRoot';
 import { mountFeedbackReportUi, type FeedbackReportHandle } from '../../ui/feedback/FeedbackReportUi';
+import { ABILITY_ACTIONS, DEFAULT_ABILITY_BINDINGS, RESERVED_ABILITY_BINDINGS, bindingForKeyboardEvent, bindingForMouseButton, bindingLabel, type AbilityAction, type InputBinding } from '../config/controls';
 
 interface SliderParts {
   fill: Phaser.GameObjects.Rectangle;
@@ -26,6 +27,7 @@ export class OptionsScene extends Phaser.Scene {
   private resumeGameplayOnEsc = false;
   private settingsPersistTimer: Phaser.Time.TimerEvent | null = null;
   private feedbackReportUi: FeedbackReportHandle | null = null;
+  private cancelBindingCapture: (() => void) | null = null;
 
   constructor() {
     super(SceneKeys.Options);
@@ -136,9 +138,10 @@ export class OptionsScene extends Phaser.Scene {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '20px', color: '#b8dbff'
     }).setOrigin(0.5);
 
-    const designBottom = helperY + 28;
+    const keybindBottom = this.createKeybindPanel(centerX, helperY + 54, contentWidth);
+    const designBottom = keybindBottom + 20;
     if (designBottom > height - 18) {
-      this.cameras.main.setZoom(Math.max(0.72, (height - 18) / designBottom));
+      this.cameras.main.setZoom(Math.max(0.6, (height - 18) / designBottom));
     }
 
     this.input.keyboard?.on('keydown-ESC', this.handleEscReturn, this);
@@ -147,9 +150,123 @@ export class OptionsScene extends Phaser.Scene {
       this.settingsPersistTimer = null;
       this.feedbackReportUi?.destroy();
       this.feedbackReportUi = null;
+      this.cancelBindingCapture?.();
+      this.cancelBindingCapture = null;
       SaveSystem.persist();
       this.input.keyboard?.off('keydown-ESC', this.handleEscReturn, this);
     });
+  }
+
+  private createKeybindPanel(centerX: number, topY: number, contentWidth: number): number {
+    const panelWidth = Math.min(contentWidth, 900);
+    const panelHeight = 192;
+    const panelCenterY = topY + panelHeight * 0.5;
+    this.add.rectangle(centerX, panelCenterY, panelWidth, panelHeight, 0x0b1422, 0.92)
+      .setStrokeStyle(2, 0x53dfff, 0.72);
+    this.add.text(centerX, topY + 24, 'CUSTOM ABILITY KEYBINDS', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: '20px', color: '#69f4ff'
+    }).setOrigin(0.5);
+
+    const status = this.add.text(centerX, topY + 51, 'Select a binding, then press a key or mouse button. WASD, E, Esc, F8, and primary fire are reserved.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#a9cfe0', align: 'center'
+    }).setOrigin(0.5);
+    const bindings = { ...SaveSystem.get().settings.abilityBindings };
+    const valueLabels = new Map<AbilityAction, Phaser.GameObjects.Text>();
+
+    ABILITY_ACTIONS.forEach(({ action, label }, index) => {
+      const column = index % 2;
+      const row = Math.floor(index / 2);
+      const x = centerX + (column === 0 ? -panelWidth * 0.25 : panelWidth * 0.25);
+      const y = topY + 82 + row * 34;
+      this.add.text(x - 104, y, label.toUpperCase(), {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#dff8ff'
+      }).setOrigin(0, 0.5);
+      const bg = this.add.rectangle(x + 62, y, 164, 27, 0x14223a, 0.98).setStrokeStyle(1, 0xff7adf, 0.8);
+      const value = this.add.text(x + 62, y, bindingLabel(bindings[action]), {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#fff0ba'
+      }).setOrigin(0.5);
+      valueLabels.set(action, value);
+      const hit = this.add.rectangle(x + 62, y, 164, 29, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+      hit.on('pointerover', () => bg.setStrokeStyle(2, 0x69f4ff, 1));
+      hit.on('pointerout', () => bg.setStrokeStyle(1, 0xff7adf, 0.8));
+      hit.on('pointerdown', () => this.beginBindingCapture(action, bindings, valueLabels, status));
+    });
+
+    const reset = this.add.text(centerX + panelWidth * 0.25 + 62, topY + 150, 'RESET DEFAULTS', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#ffcf91', backgroundColor: '#172238', padding: { x: 18, y: 5 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    reset.on('pointerdown', () => {
+      this.cancelBindingCapture?.();
+      Object.assign(bindings, DEFAULT_ABILITY_BINDINGS);
+      for (const { action } of ABILITY_ACTIONS) valueLabels.get(action)?.setText(bindingLabel(bindings[action]));
+      SaveSystem.setSettings({ abilityBindings: { ...bindings } });
+      SaveSystem.persist();
+      status.setText('Default ability bindings restored.').setColor('#8fffc4');
+    });
+    return topY + panelHeight;
+  }
+
+  private beginBindingCapture(
+    action: AbilityAction,
+    bindings: Record<AbilityAction, InputBinding>,
+    labels: Map<AbilityAction, Phaser.GameObjects.Text>,
+    status: Phaser.GameObjects.Text
+  ): void {
+    this.cancelBindingCapture?.();
+    status.setText(`Listening for ${action.toUpperCase()} — press a key or mouse button. Esc cancels.`).setColor('#fff0a8');
+    labels.get(action)?.setText('PRESS INPUT...');
+
+    const finish = (binding: InputBinding | null, message?: string): void => {
+      cleanup();
+      if (!binding) {
+        labels.get(action)?.setText(bindingLabel(bindings[action]));
+        status.setText(message ?? 'Binding cancelled.').setColor('#a9cfe0');
+        return;
+      }
+      const conflict = ABILITY_ACTIONS.find((entry) => entry.action !== action && bindings[entry.action] === binding);
+      if (conflict) {
+        labels.get(action)?.setText(bindingLabel(bindings[action]));
+        status.setText(`${bindingLabel(binding)} is already assigned to ${conflict.label}.`).setColor('#ff9aaa');
+        return;
+      }
+      bindings[action] = binding;
+      labels.get(action)?.setText(bindingLabel(binding));
+      SaveSystem.setSettings({ abilityBindings: { ...bindings } });
+      SaveSystem.persist();
+      status.setText(`${action.toUpperCase()} bound to ${bindingLabel(binding)}.`).setColor('#8fffc4');
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.code === 'Escape') return finish(null);
+      const binding = bindingForKeyboardEvent(event);
+      if (RESERVED_ABILITY_BINDINGS.has(binding)) return finish(null, `${event.code.replace('Key', '')} is reserved for core controls.`);
+      finish(binding);
+    };
+    const onMouse = (event: MouseEvent): void => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.button === 2) {
+        window.addEventListener('contextmenu', (contextEvent) => {
+          contextEvent.preventDefault();
+          contextEvent.stopImmediatePropagation();
+        }, { capture: true, once: true });
+      }
+      const binding = bindingForMouseButton(event.button);
+      if (binding === 'Mouse:0') return finish(null, 'Primary mouse is reserved for firing.');
+      finish(binding, binding ? undefined : 'That mouse button is not supported.');
+    };
+    const cleanup = (): void => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('mousedown', onMouse, true);
+      this.cancelBindingCapture = null;
+    };
+    this.cancelBindingCapture = cleanup;
+    window.setTimeout(() => {
+      if (this.cancelBindingCapture !== cleanup) return;
+      window.addEventListener('keydown', onKey, true);
+      window.addEventListener('mousedown', onMouse, true);
+    }, 0);
   }
 
   private updateSoundVolume(key: AudioSfxName, value: number): void {

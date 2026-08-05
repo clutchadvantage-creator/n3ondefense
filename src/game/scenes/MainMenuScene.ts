@@ -8,6 +8,7 @@ import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton, enableButton } from '../utils/ui';
 import { showInfoModal } from '../utils/localSaveUi';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
+import { bindingLabel } from '../config/controls';
 
 export class MainMenuScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
@@ -159,7 +160,11 @@ export class MainMenuScene extends Phaser.Scene {
       );
     }, 280);
 
-    this.add.text(width / 2, height - 180, 'Controls:\nWASD Move    Mouse Aim    LMB Fire    MMB Shield    E Plant/Interact\nQ Fence    F Turret    R Mine    Space Dash\n1/2/3 Select Ability    Esc Pause', {
+    const bindings = save?.settings.abilityBindings;
+    const abilityControls = bindings
+      ? `${bindingLabel(bindings.fence)} Fence    ${bindingLabel(bindings.turret)} Turret    ${bindingLabel(bindings.mine)} Mine    ${bindingLabel(bindings.dash)} Dash    ${bindingLabel(bindings.shield)} Shield`
+      : 'Q Fence    F Turret    R Mine    Space Dash    Middle Mouse Shield';
+    this.add.text(width / 2, height - 180, `Controls:\nWASD Move    Mouse Aim    LMB Fire    E Plant/Interact\n${abilityControls}\n1/2/3 Select Ability    Esc Pause`, {
       fontFamily: 'Rajdhani, sans-serif',
       color: '#d6f0ff',
       fontSize: '22px',

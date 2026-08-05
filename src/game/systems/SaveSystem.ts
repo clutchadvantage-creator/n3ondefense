@@ -18,7 +18,8 @@ export class SaveSystem {
         sfxVolume: save.settings.sfxVolume,
         soundVolumes: { ...save.settings.soundVolumes },
         screenShake: save.settings.screenShake,
-        particles: save.settings.particles
+        particles: save.settings.particles,
+        abilityBindings: { ...save.settings.abilityBindings }
       }
     };
   }
