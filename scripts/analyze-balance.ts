@@ -76,7 +76,7 @@ console.table([
   { ability: 'fence', output: `${ABILITY_BALANCE.fence.damage} DPS`, energy: ABILITY_BALANCE.fence.energyCost, cooldownMs: ABILITY_BALANCE.fence.cooldownMs, outputPerEnergy: fixed(ABILITY_BALANCE.fence.damage * ABILITY_BALANCE.fence.durationMs / 1000 / ABILITY_BALANCE.fence.energyCost), outputPerCycle: ABILITY_BALANCE.fence.damage * ABILITY_BALANCE.fence.durationMs / 1000 },
   { ability: 'turret', output: `${fixed(ABILITY_BALANCE.turret.damage * ABILITY_BALANCE.turret.fireRate)} DPS`, energy: ABILITY_BALANCE.turret.energyCost, cooldownMs: ABILITY_BALANCE.turret.cooldownMs, outputPerEnergy: fixed(ABILITY_BALANCE.turret.damage * ABILITY_BALANCE.turret.fireRate * 10 / ABILITY_BALANCE.turret.energyCost), outputPerCycle: 'persistent' },
   { ability: 'mine', output: `${ABILITY_BALANCE.mine.damage} burst`, energy: ABILITY_BALANCE.mine.energyCost, cooldownMs: ABILITY_BALANCE.mine.cooldownMs, outputPerEnergy: fixed(ABILITY_BALANCE.mine.damage / ABILITY_BALANCE.mine.energyCost), outputPerCycle: ABILITY_BALANCE.mine.damage },
-  { ability: 'shield', output: `${ABILITY_BALANCE.shield.durationMs}ms immunity`, energy: 0, cooldownMs: ABILITY_BALANCE.shield.cooldownMs, outputPerEnergy: 'n/a', outputPerCycle: `${fixed(ABILITY_BALANCE.shield.durationMs / ABILITY_BALANCE.shield.cooldownMs * 100)}% max uptime` }
+  { ability: 'shield', output: `${ABILITY_BALANCE.shield.durationMs}ms immunity`, energy: ABILITY_BALANCE.shield.energyCost, cooldownMs: ABILITY_BALANCE.shield.cooldownMs, outputPerEnergy: fixed(ABILITY_BALANCE.shield.durationMs / ABILITY_BALANCE.shield.energyCost), outputPerCycle: `${fixed(ABILITY_BALANCE.shield.durationMs / ABILITY_BALANCE.shield.cooldownMs * 100)}% max uptime` }
 ]);
 
 console.log('\nSPAWN / DIFFICULTY / REWARD CURVE');

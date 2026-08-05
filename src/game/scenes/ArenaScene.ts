@@ -575,7 +575,10 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.space) && this.player.canDash(now)) {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.space)
+      && this.player.canDash(now)
+      && this.player.canSpendEnergy(PLAYER_BALANCE.dashEnergyCost)) {
+      this.player.spendEnergy(PLAYER_BALANCE.dashEnergyCost);
       this.player.dashTowardPoint(aim.x, aim.y, now);
       if (this.sound.get('sfx-boost')) {
         this.sound.play('sfx-boost', { volume: this.audio.getSfxVolume() });
@@ -612,6 +615,8 @@ export class ArenaScene extends Phaser.Scene {
 
     const cadence = 1000 / this.player.fireRate;
     if (now - this.lastPlayerShotMs < cadence) return;
+    if (!this.player.canSpendEnergy(WEAPON_BALANCE.energyCostPerShot)) return;
+    this.player.spendEnergy(WEAPON_BALANCE.energyCostPerShot);
     this.lastPlayerShotMs = now;
 
     const aim = this.getAimWorldPoint();
@@ -871,6 +876,9 @@ export class ArenaScene extends Phaser.Scene {
     const cooldownMs = ABILITY_BALANCE.shield.cooldownMs;
     if (now < this.shieldActiveUntil) return;
     if (now < this.shieldCooldownUntil) return;
+    if (!this.player.canSpendEnergy(ABILITY_BALANCE.shield.energyCost)) return;
+
+    this.player.spendEnergy(ABILITY_BALANCE.shield.energyCost);
 
     this.shieldActiveUntil = now + durationMs;
     this.shieldCooldownUntil = now + cooldownMs;
@@ -1374,7 +1382,10 @@ export class ArenaScene extends Phaser.Scene {
   private collectPickup(type: PickupType): void {
     this.audio.playSfx('pickup');
     if (type === 'health') this.player.hp = Math.min(this.player.stats.maxHealth, this.player.hp + PICKUP_BALANCE.healthRestore);
-    if (type === 'energy') this.player.energy = Math.min(this.player.energyStats.max, this.player.energy + PICKUP_BALANCE.energyRestore);
+    if (type === 'energy') {
+      const restored = this.player.energyStats.max * PICKUP_BALANCE.energyRestoreFraction;
+      this.player.energy = Math.min(this.player.energyStats.max, this.player.energy + restored);
+    }
     if (type === 'damageBoost') this.player.buffs.damageBoostUntil = this.time.now + WEAPON_BALANCE.buffDurationMs;
     if (type === 'speedBoost') this.player.buffs.speedBoostUntil = this.time.now + WEAPON_BALANCE.buffDurationMs;
     if (type === 'rapidFire') this.player.buffs.rapidFireUntil = this.time.now + WEAPON_BALANCE.buffDurationMs;
@@ -1726,6 +1737,7 @@ export class ArenaScene extends Phaser.Scene {
 
     shieldSlot.cooldownMs = now < this.shieldActiveUntil ? this.shieldActiveUntil - now : shieldCdMs;
     shieldSlot.active = now < this.shieldActiveUntil;
+    shieldSlot.hasEnergy = this.player.energy >= ABILITY_BALANCE.shield.energyCost;
 
     this.hud.update(this.hudPayload);
   }

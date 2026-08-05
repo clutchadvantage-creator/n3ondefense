@@ -375,7 +375,9 @@ export class Hud {
     this.healthReadyShine.x = this.healthTrack.x + Phaser.Math.Clamp(shineMax * 0.7, 0, shineMax);
 
     this.healthValue.setText(`${Math.max(0, Math.round(payload.hp))} / ${Math.max(1, Math.round(payload.maxHp))}`);
-    this.energyValue.setText(`${Math.max(0, Math.round(payload.energy))} / ${Math.max(1, Math.round(payload.maxEnergy))}`);
+    const energy = Math.max(0, payload.energy);
+    const energyText = Number.isInteger(energy) ? energy.toFixed(0) : energy.toFixed(1);
+    this.energyValue.setText(`${energyText} / ${Math.max(1, Math.round(payload.maxEnergy))}`);
 
     if (hpRatio <= 0.4) {
       if (!this.lowHealthPulse) {
