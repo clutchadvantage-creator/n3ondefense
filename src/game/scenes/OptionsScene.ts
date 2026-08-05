@@ -28,6 +28,20 @@ export class OptionsScene extends Phaser.Scene {
   private settingsPersistTimer: Phaser.Time.TimerEvent | null = null;
   private feedbackReportUi: FeedbackReportHandle | null = null;
   private cancelBindingCapture: (() => void) | null = null;
+  private scrollMax = 0;
+  private scrollThumb: Phaser.GameObjects.Rectangle | null = null;
+  private scrollTrackTop = 0;
+  private scrollTrackRange = 0;
+  private readonly handleOptionsWheel = (
+    _pointer: Phaser.Input.Pointer,
+    _over: Phaser.GameObjects.GameObject[],
+    _deltaX: number,
+    deltaY: number
+  ): void => this.scrollOptions(deltaY * 0.75);
+  private readonly handleScrollUp = (): void => this.scrollOptions(-110);
+  private readonly handleScrollDown = (): void => this.scrollOptions(110);
+  private readonly handlePageUp = (): void => this.scrollOptions(-this.scale.height * 0.72);
+  private readonly handlePageDown = (): void => this.scrollOptions(this.scale.height * 0.72);
 
   constructor() {
     super(SceneKeys.Options);
@@ -44,7 +58,7 @@ export class OptionsScene extends Phaser.Scene {
     const storageMessage = SaveSystem.getStorageMessage();
     this.feedbackReportUi = mountFeedbackReportUi(getGameUiRoot());
 
-    this.add.rectangle(centerX, height * 0.5, width, height, 0x070a12, 1);
+    this.add.rectangle(centerX, height * 0.5, width, height, 0x070a12, 1).setScrollFactor(0).setDepth(-100);
     this.add.text(centerX, 48, 'OPTIONS', {
       fontFamily: 'Orbitron, sans-serif', fontSize: '38px', color: '#58efff'
     }).setOrigin(0.5);
@@ -140,11 +154,14 @@ export class OptionsScene extends Phaser.Scene {
 
     const keybindBottom = this.createKeybindPanel(centerX, helperY + 54, contentWidth);
     const designBottom = keybindBottom + 20;
-    if (designBottom > height - 18) {
-      this.cameras.main.setZoom(Math.max(0.6, (height - 18) / designBottom));
-    }
+    this.configureScrolling(width, height, designBottom);
 
     this.input.keyboard?.on('keydown-ESC', this.handleEscReturn, this);
+    this.input.keyboard?.on('keydown-UP', this.handleScrollUp);
+    this.input.keyboard?.on('keydown-DOWN', this.handleScrollDown);
+    this.input.keyboard?.on('keydown-PAGE_UP', this.handlePageUp);
+    this.input.keyboard?.on('keydown-PAGE_DOWN', this.handlePageDown);
+    this.input.on('wheel', this.handleOptionsWheel);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.settingsPersistTimer?.remove();
       this.settingsPersistTimer = null;
@@ -154,7 +171,42 @@ export class OptionsScene extends Phaser.Scene {
       this.cancelBindingCapture = null;
       SaveSystem.persist();
       this.input.keyboard?.off('keydown-ESC', this.handleEscReturn, this);
+      this.input.keyboard?.off('keydown-UP', this.handleScrollUp);
+      this.input.keyboard?.off('keydown-DOWN', this.handleScrollDown);
+      this.input.keyboard?.off('keydown-PAGE_UP', this.handlePageUp);
+      this.input.keyboard?.off('keydown-PAGE_DOWN', this.handlePageDown);
+      this.input.off('wheel', this.handleOptionsWheel);
+      this.scrollThumb = null;
     });
+  }
+
+  private configureScrolling(width: number, height: number, contentBottom: number): void {
+    const bottomPadding = 30;
+    const contentHeight = Math.max(height, contentBottom + bottomPadding);
+    this.scrollMax = Math.max(0, contentHeight - height);
+    this.cameras.main.setBounds(0, 0, width, contentHeight).setScroll(0, 0);
+    if (this.scrollMax <= 0) return;
+
+    const trackHeight = Math.max(120, height - 72);
+    const thumbHeight = Math.max(48, trackHeight * (height / contentHeight));
+    this.scrollTrackTop = (height - trackHeight) * 0.5;
+    this.scrollTrackRange = trackHeight - thumbHeight;
+    this.add.rectangle(width - 16, height * 0.5, 6, trackHeight, 0x18324b, 0.82)
+      .setStrokeStyle(1, 0x4baccb, 0.65).setScrollFactor(0).setDepth(9000);
+    this.scrollThumb = this.add.rectangle(width - 16, this.scrollTrackTop + thumbHeight * 0.5, 8, thumbHeight, 0x62efff, 0.92)
+      .setStrokeStyle(1, 0xffffff, 0.75).setScrollFactor(0).setDepth(9001);
+    this.add.text(width - 28, height - 18, 'SCROLL', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', color: '#78cfe7'
+    }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(9001);
+  }
+
+  private scrollOptions(delta: number): void {
+    if (this.scrollMax <= 0 || this.cancelBindingCapture) return;
+    const next = Phaser.Math.Clamp(this.cameras.main.scrollY + delta, 0, this.scrollMax);
+    this.cameras.main.scrollY = next;
+    if (!this.scrollThumb) return;
+    const ratio = this.scrollMax > 0 ? next / this.scrollMax : 0;
+    this.scrollThumb.y = this.scrollTrackTop + this.scrollThumb.height * 0.5 + this.scrollTrackRange * ratio;
   }
 
   private createKeybindPanel(centerX: number, topY: number, contentWidth: number): number {
