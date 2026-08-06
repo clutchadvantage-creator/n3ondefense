@@ -171,8 +171,9 @@ export class ArenaScene extends Phaser.Scene {
 
   private navState = new WeakMap<Enemy, NavState>();
   private patrolTargets = new WeakMap<Enemy, PatrolPoint>();
-  private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
+  private readonly onPointerDown = (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[] = []): void => {
     if (this.state.state === RoundState.Paused) return;
+    if (currentlyOver.some((gameObject) => gameObject.getData('hudMusicControl') === true)) return;
     if (pointer.button === 0) {
       this.pointerDown = true;
       return;

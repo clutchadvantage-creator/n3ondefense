@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { AudioManager } from './AudioManager';
 
 export interface HudAbilitySlot {
   id: 'fence' | 'turret' | 'mine' | 'shield';
@@ -82,6 +83,8 @@ export class Hud {
   private readonly statsValueEnemies: Phaser.GameObjects.Text;
   private readonly statsLabelCredits: Phaser.GameObjects.Text;
   private readonly statsValueCredits: Phaser.GameObjects.Text;
+  private readonly musicLabel: Phaser.GameObjects.Text;
+  private readonly musicControls: Phaser.GameObjects.Text[];
 
   private readonly phaseBadge: Phaser.GameObjects.Rectangle;
   private readonly phaseText: Phaser.GameObjects.Text;
@@ -151,6 +154,31 @@ export class Hud {
     this.statsValueEnemies = scene.add.text(0, 0, '0', { fontFamily: 'Orbitron, sans-serif', fontSize: '20px', color: '#ffe19a' });
     this.statsLabelCredits = scene.add.text(0, 0, 'CREDITS', { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#b0b08c' });
     this.statsValueCredits = scene.add.text(0, 0, '0', { fontFamily: 'Orbitron, sans-serif', fontSize: '20px', color: '#fff080' });
+
+    const audio = AudioManager.get();
+    this.musicLabel = scene.add.text(0, 0, 'MUSIC', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#789ab6'
+    }).setOrigin(0, 0.5);
+    const controls = [
+      { icon: '⏮', title: 'Previous track', action: () => audio.previousMusicTrack() },
+      { icon: '▶', title: 'Play music', action: () => audio.playMusic() },
+      { icon: '⏸', title: 'Pause music', action: () => audio.pauseMusic() },
+      { icon: '⏭', title: 'Next track', action: () => audio.nextMusicTrack() }
+    ];
+    this.musicControls = controls.map(({ icon, title, action }) => {
+      const control = scene.add.text(0, 0, icon, {
+        fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#a8efff',
+        backgroundColor: '#0a1a27', padding: { x: 4, y: 2 }
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setData('hudMusicControl', true);
+      control.setName(title);
+      control.on('pointerover', () => control.setColor('#ffffff'));
+      control.on('pointerout', () => control.setColor('#a8efff'));
+      control.on('pointerdown', (_pointer: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+        event.stopPropagation();
+        action();
+      });
+      return control;
+    });
 
     this.phaseBadge = scene.add.rectangle(0, 0, 150, 24, 0x103243, HUD_ALPHA.phaseBadge).setOrigin(0, 0.5).setStrokeStyle(1, 0x5de7ff, 0.85);
     this.phaseText = scene.add.text(0, 0, 'PRE-PLANT', { fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#8ef2ff' }).setOrigin(0.5);
@@ -231,6 +259,8 @@ export class Hud {
       this.statsValueEnemies,
       this.statsLabelCredits,
       this.statsValueCredits,
+      this.musicLabel,
+      ...this.musicControls,
       this.phaseBadge,
       this.phaseText,
       this.objectiveText,
@@ -273,6 +303,7 @@ export class Hud {
     this.statsValueEnemies.setFontSize(Math.round(20 * fontScale));
     this.statsLabelCredits.setFontSize(Math.round(13 * fontScale));
     this.statsValueCredits.setFontSize(Math.round(20 * fontScale));
+    this.musicLabel.setFontSize(Math.round(10 * fontScale));
     this.phaseText.setFontSize(Math.round(14 * fontScale));
     this.objectiveText.setFontSize(Math.round(16 * fontScale));
     this.bombProgressLabel.setFontSize(Math.round(11 * fontScale));
@@ -328,6 +359,15 @@ export class Hud {
     this.statsValueEnemies.setPosition(statX + statW, statY + Math.round(18 * this.scaleFactor));
     this.statsLabelCredits.setPosition(statX + statW * 2, statY);
     this.statsValueCredits.setPosition(statX + statW * 2, statY + Math.round(18 * this.scaleFactor));
+
+    const musicY = this.sectionResources.y + sectionHeight - Math.round(14 * this.scaleFactor);
+    const musicStartX = this.sectionResources.x + sectionInner;
+    this.musicLabel.setPosition(musicStartX, musicY);
+    const controlsStartX = musicStartX + Math.round(48 * this.scaleFactor);
+    this.musicControls.forEach((control, index) => {
+      control.setFontSize(Math.round(13 * fontScale));
+      control.setPosition(controlsStartX + index * Math.round(27 * this.scaleFactor), musicY);
+    });
 
     const objX = this.sectionObjective.x + sectionInner;
     const objY = this.sectionObjective.y + Math.round(sectionHeight * 0.2);

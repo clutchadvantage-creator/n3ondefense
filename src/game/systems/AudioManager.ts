@@ -6,7 +6,10 @@ export class AudioManager {
   private readonly context: AudioContext;
   private readonly playlist = [
     '/assets/audio/music/Arc Grid SiegeV1.mp3',
-    '/assets/audio/music/Arc Grid SiegeV3.mp3'
+    '/assets/audio/music/Arc Grid SiegeV3.mp3',
+    '/assets/audio/music/Arc Grid Siege4.mp3',
+    '/assets/audio/music/Arc Grid Siege5.mp3',
+    '/assets/audio/music/Arc Grid Siege6.mp3'
   ];
   private musicAudio: HTMLAudioElement | null = null;
   private playlistIndex = 0;
@@ -244,6 +247,37 @@ export class AudioManager {
     void this.musicAudio?.play().catch(() => undefined);
   }
 
+  playMusic(): void {
+    this.startMusicLoop();
+  }
+
+  pauseMusic(): void {
+    this.musicAudio?.pause();
+    this.musicStarted = false;
+  }
+
+  nextMusicTrack(): void {
+    this.playlistIndex = (this.playlistIndex + 1) % this.playlist.length;
+    this.mountTrack(this.getCurrentTrackUrl());
+    this.musicStarted = true;
+    void this.musicAudio?.play().catch(() => {
+      this.musicStarted = false;
+    });
+  }
+
+  previousMusicTrack(): void {
+    this.playlistIndex = (this.playlistIndex - 1 + this.playlist.length) % this.playlist.length;
+    this.mountTrack(this.getCurrentTrackUrl());
+    this.musicStarted = true;
+    void this.musicAudio?.play().catch(() => {
+      this.musicStarted = false;
+    });
+  }
+
+  isMusicPlaying(): boolean {
+    return Boolean(this.musicAudio && !this.musicAudio.paused && this.musicStarted);
+  }
+
   startMusicLoop(): void {
     if (!this.musicAudio) {
       this.mountTrack(this.getCurrentTrackUrl());
@@ -283,8 +317,7 @@ export class AudioManager {
   }
 
   stopMusic(): void {
-    this.musicAudio?.pause();
-    this.musicStarted = false;
+    this.pauseMusic();
   }
 
   beep(kind: 'music' | 'sfx', frequency: number, durationMs: number, gain = 0.04, sound?: AudioSfxName): void {
