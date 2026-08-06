@@ -85,6 +85,7 @@ export class Hud {
   private readonly statsValueCredits: Phaser.GameObjects.Text;
   private readonly musicLabel: Phaser.GameObjects.Text;
   private readonly musicControls: Phaser.GameObjects.Text[];
+  private readonly musicControlActions = new Map<Phaser.GameObjects.Text, () => void>();
 
   private readonly phaseBadge: Phaser.GameObjects.Rectangle;
   private readonly phaseText: Phaser.GameObjects.Text;
@@ -177,6 +178,7 @@ export class Hud {
         event.stopPropagation();
         action();
       });
+      this.musicControlActions.set(control, action);
       return control;
     });
 
@@ -568,6 +570,16 @@ export class Hud {
   setWarning(msg: string): void {
     this.warning.setText(msg);
     this.warning.setAlpha(msg.length > 0 ? 1 : 0);
+  }
+
+  activateMusicControlAt(screenX: number, screenY: number): boolean {
+    for (const control of this.musicControls) {
+      if (!control.visible || !control.getBounds().contains(screenX, screenY)) continue;
+      this.musicControlActions.get(control)?.();
+      this.scene.tweens.add({ targets: control, alpha: 0.45, duration: 70, yoyo: true });
+      return true;
+    }
+    return false;
   }
 
   destroy(): void {

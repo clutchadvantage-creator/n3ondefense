@@ -3,7 +3,7 @@ import { starterWeapon } from '../../data/weapons';
 import { getUpgradeLevel } from '../../data/upgrades';
 import { COLORS, WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { OBJECTIVE_CONFIG } from '../config/gameplay';
-import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, WEAPON_BALANCE, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
+import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, WEAPON_BALANCE, getDefuseAssigneeCount, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
 import { Mine } from '../abilities/Mine';
@@ -96,6 +96,7 @@ export class ArenaScene extends Phaser.Scene {
   private turrets: Turret[] = [];
   private mines: Mine[] = [];
   private deathMines: DeathMine[] = [];
+  private readonly defuseAssignees = new Set<Enemy>();
   private readonly enemyTurretTargets = new WeakMap<Enemy, TurretTargetDecision>();
 
   private roundManager!: RoundManager;
@@ -173,6 +174,13 @@ export class ArenaScene extends Phaser.Scene {
   private patrolTargets = new WeakMap<Enemy, PatrolPoint>();
   private readonly onPointerDown = (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[] = []): void => {
     if (this.state.state === RoundState.Paused) return;
+    if (pointer.button === 0 && this.pointerLock?.locked) {
+      const aim = this.pointerLock.screenPoint();
+      if (this.hud.activateMusicControlAt(aim.x, aim.y)) {
+        this.pointerDown = false;
+        return;
+      }
+    }
     if (currentlyOver.some((gameObject) => gameObject.getData('hudMusicControl') === true)) return;
     if (pointer.button === 0) {
       this.pointerDown = true;
@@ -402,7 +410,7 @@ export class ArenaScene extends Phaser.Scene {
 
       const playerShape = SaveSystem.getEquippedCosmeticId('playerShape') ?? 'player-circle';
       this.player = new Player(this, this.layout.playerSpawn.x, this.layout.playerSpawn.y, playerShape, stats, energy, weapon);
-      this.player.setTint(SaveSystem.getCosmeticColor('playerColor'));
+      this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor'));
       this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
       this.cameras.main.setZoom(0.9);
     } else {
@@ -417,7 +425,7 @@ export class ArenaScene extends Phaser.Scene {
       this.player.buffs.damageBoostUntil = 0;
       this.player.buffs.speedBoostUntil = 0;
       this.player.buffs.rapidFireUntil = 0;
-      this.player.clearTint();
+      this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor'));
     }
 
     this.physics.add.collider(this.player, this.walls);
@@ -836,18 +844,18 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateEnemies(now: number, dt: number): void {
     const activeSite = this.bombSites.getActiveBombSite();
-    let defusingAny = false;
+    let activeDefusers = 0;
+    this.refreshDefuseAssignments(activeSite, now);
 
     for (const enemy of this.enemies) {
       if (!enemy.active) continue;
 
       if (!activeSite) {
         this.updateEnemyPatrol(enemy, now);
+      } else if (this.defuseAssignees.has(enemy)) {
+        if (this.updateDefuser(enemy, activeSite, now, dt)) activeDefusers += 1;
       } else if (enemy.stats.type === 'shooter') {
         this.updateShooter(enemy, now, activeSite);
-      } else if (enemy.stats.type === 'defuser') {
-        const isDefusing = this.updateDefuser(enemy, activeSite, now, dt);
-        defusingAny = defusingAny || isDefusing;
       } else if (enemy.stats.type === 'disruptor') {
         this.updateDisruptor(enemy, now);
       } else {
@@ -855,7 +863,13 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
-    if (!defusingAny && this.state.state === RoundState.Defusing) {
+    if (activeSite && activeDefusers > 0) {
+      this.bombSites.startDefuse(activeSite);
+      const cooperationMultiplier = 1 + Math.min(0.75, (activeDefusers - 1) * 0.25);
+      if (this.bombSites.applyDefuse(activeSite, dt * 1000 * cooperationMultiplier, OBJECTIVE_CONFIG.defuseRequiredMs)) {
+        this.triggerDefeat('bombDefused');
+      }
+    } else if (this.state.state === RoundState.Defusing) {
       this.state.set(RoundState.Defense);
       this.hud.setWarning('');
       if (activeSite) this.bombSites.stopDefuse(activeSite);
@@ -868,6 +882,22 @@ export class ArenaScene extends Phaser.Scene {
       this.killEnemy(e);
       return false;
     });
+  }
+
+  private refreshDefuseAssignments(activeSite: BombSiteRuntime | null, now: number): void {
+    this.defuseAssignees.clear();
+    if (!activeSite) return;
+
+    const desired = getDefuseAssigneeCount(this.roundManager.round);
+    const candidates = this.enemies
+      .filter((enemy) => enemy.active && !enemy.isDead() && now >= enemy.defuseInterruptedUntil)
+      .sort((a, b) => {
+        const specialistDifference = Number(b.stats.type === 'defuser') - Number(a.stats.type === 'defuser');
+        if (specialistDifference !== 0) return specialistDifference;
+        return Phaser.Math.Distance.Between(a.x, a.y, activeSite.x, activeSite.y)
+          - Phaser.Math.Distance.Between(b.x, b.y, activeSite.x, activeSite.y);
+      });
+    candidates.slice(0, desired).forEach((enemy) => this.defuseAssignees.add(enemy));
   }
 
   private updateEnemyPatrol(enemy: Enemy, now: number): void {
@@ -1005,11 +1035,6 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     enemy.setVelocity(0, 0);
-    this.bombSites.startDefuse(site);
-    const completed = this.bombSites.applyDefuse(site, dt * 1000, OBJECTIVE_CONFIG.defuseRequiredMs);
-    if (completed) {
-      this.triggerDefeat('bombDefused');
-    }
     return true;
   }
 
@@ -1181,6 +1206,7 @@ export class ArenaScene extends Phaser.Scene {
         if (hitEnemy) {
           hitEnemy.takeDamage(p.damage);
           hitEnemy.defuseProgressMs = 0;
+          hitEnemy.defuseInterruptedUntil = this.time.now + 800;
           this.spawnImpact(p.sprite.x, p.sprite.y, p.sprite.tintTopLeft);
           p.sprite.destroy();
           this.audio.playSfx('hit');
@@ -2167,6 +2193,7 @@ export class ArenaScene extends Phaser.Scene {
     this.turrets.length = 0;
     this.mines.length = 0;
     this.deathMines.length = 0;
+    this.defuseAssignees.clear();
 
     this.children.list
       .filter((obj) => 'depth' in obj && (obj as { depth: number }).depth <= 4 && obj !== this.player)

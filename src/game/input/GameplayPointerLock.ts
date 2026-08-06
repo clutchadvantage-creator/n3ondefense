@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import Phaser from 'phaser';
 
 interface PointerLockCallbacks {
   onLocked: () => void;
@@ -58,10 +58,15 @@ export class GameplayPointerLock {
   }
 
   worldPoint(camera: Phaser.Cameras.Scene2D.Camera): Phaser.Math.Vector2 {
+    const point = this.screenPoint();
+    return camera.getWorldPoint(point.x, point.y);
+  }
+
+  screenPoint(): Phaser.Math.Vector2 {
     const rect = this.canvas.getBoundingClientRect();
     const x = rect.width > 0 ? this.aimX * (this.game.scale.width / rect.width) : this.game.scale.width * 0.5;
     const y = rect.height > 0 ? this.aimY * (this.game.scale.height / rect.height) : this.game.scale.height * 0.5;
-    return camera.getWorldPoint(x, y);
+    return new Phaser.Math.Vector2(x, y);
   }
 
   destroy(): void {

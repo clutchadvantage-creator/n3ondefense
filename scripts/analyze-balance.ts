@@ -6,6 +6,7 @@ import {
   PLAYER_BALANCE,
   REWARD_BALANCE,
   WEAPON_BALANCE,
+  getDefuseAssigneeCount,
   getDifficultyCurve,
   getRoundSiteCountBalanced,
   getSpawnProfile,
@@ -85,7 +86,7 @@ console.table([1, 2, 3, 5, 6, 8, 10, 15, 20].map((round) => {
   const difficulty = getDifficultyCurve(round);
   const sites = getRoundSiteCountBalanced(round);
   const completionCredits = REWARD_BALANCE.completionBaseCredits + round * REWARD_BALANCE.completionCreditsPerRound + sites * REWARD_BALANCE.siteRecoveryCredits;
-  return { round, sites, graceMs: spawn.initialGraceMs, cadenceMs: spawn.defenseCadenceMs, countCap: spawn.activeCountCap, weightCap: spawn.activeWeightCap, hpMult: fixed(difficulty.healthMultiplier, 2), damageMult: fixed(difficulty.damageMultiplier, 2), speedMult: fixed(difficulty.speedMultiplier, 2), minimumCredits: completionCredits, minimumTokens: Math.max(REWARD_BALANCE.completionBaseTokens, Math.floor(round / REWARD_BALANCE.tokenRoundDivisor)) };
+  return { round, sites, graceMs: spawn.initialGraceMs, cadenceMs: spawn.defenseCadenceMs, countCap: spawn.activeCountCap, weightCap: spawn.activeWeightCap, defuseAssignees: getDefuseAssigneeCount(round), hpMult: fixed(difficulty.healthMultiplier, 2), damageMult: fixed(difficulty.damageMultiplier, 2), speedMult: fixed(difficulty.speedMultiplier, 2), minimumCredits: completionCredits, minimumTokens: Math.max(REWARD_BALANCE.completionBaseTokens, Math.floor(round / REWARD_BALANCE.tokenRoundDivisor)) };
 }));
 
 const projectedSpawnsPerSite = (round: number): number => {
@@ -143,6 +144,8 @@ for (let round = 1; round <= 50; round += 1) {
   assert(Object.values(curve).every(Number.isFinite), `difficulty finite at round ${round}`);
   assert(spawn.activeCountCap <= 26 && spawn.activeWeightCap <= 39, `active pressure caps at round ${round}`);
   assert(spawn.defenseCadenceMs >= 580, `spawn cadence floor at round ${round}`);
+  assert(getDefuseAssigneeCount(round) >= 1 && getDefuseAssigneeCount(round) <= 4, `defuse assignment cap at round ${round}`);
+  if (round > 1) assert(getDefuseAssigneeCount(round) >= getDefuseAssigneeCount(round - 1), `defuse assignments monotonic at round ${round}`);
   if (round === 1) {
     assert(spawn.composition.tank === 0 && spawn.composition.disruptor === 0 && spawn.composition.star === 0, 'Level 1 excludes advanced specials');
     assert(spawn.activeCountCap <= 7 && spawn.initialGraceMs >= 5000, 'Level 1 onboarding pressure');

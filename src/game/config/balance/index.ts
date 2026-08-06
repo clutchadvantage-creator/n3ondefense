@@ -105,8 +105,15 @@ export const getDifficultyCurve = (round: number, destroyedSites = 0): Difficult
   return {
     healthMultiplier: Math.min(2.1, 1 + (r - 1) * 0.065 + Math.max(0, r - 6) * 0.012 + destroyedSites * 0.035),
     damageMultiplier: Math.min(1.65, 1 + (r - 1) * 0.035 + Math.max(0, r - 8) * 0.008 + destroyedSites * 0.02),
-    speedMultiplier: Math.min(1.12, 1 + Math.max(0, r - 2) * 0.008)
+    // Movement grows visibly but remains capped so late enemies stay readable
+    // and never outrun a base-speed player solely because of level scaling.
+    speedMultiplier: Math.min(1.28, 1 + (r - 1) * 0.012 + Math.max(0, r - 8) * 0.004 + destroyedSites * 0.004)
   };
+};
+
+export const getDefuseAssigneeCount = (round: number): number => {
+  const r = Math.max(1, Math.floor(round));
+  return Math.min(4, 1 + Math.floor((r - 1) / 4));
 };
 
 export interface SpawnProfile {

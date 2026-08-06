@@ -18,6 +18,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   invulnUntil = 0;
   lastDashMs = -9_999;
   dashUntil = 0;
+  private cosmeticTint = 0xffffff;
   buffs: BuffState = {
     damageBoostUntil: 0,
     speedBoostUntil: 0,
@@ -83,13 +84,20 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.energy = Math.max(0, this.energy - amount);
   }
 
+  setCosmeticTint(color: number): void {
+    this.cosmeticTint = color;
+    this.setTint(color);
+  }
+
   takeDamage(amount: number): boolean {
     const now = this.scene.time.now;
     if (now < this.invulnUntil) return false;
     this.hp = Math.max(0, this.hp - amount);
     this.invulnUntil = now + this.stats.invulnMs;
     this.setTintFill(0xffffff);
-    this.scene.time.delayedCall(90, () => this.clearTint());
+    this.scene.time.delayedCall(90, () => {
+      if (this.active) this.setTint(this.cosmeticTint);
+    });
     return true;
   }
 

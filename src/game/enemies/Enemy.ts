@@ -19,6 +19,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   lastAttackMs = 0;
   lastShotMs = 0;
   defuseProgressMs = 0;
+  defuseInterruptedUntil = 0;
   disabledUntil = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, texture: string, stats: EnemyStats) {
