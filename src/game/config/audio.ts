@@ -1,6 +1,7 @@
 export const SFX_DEFINITIONS = [
   { key: 'shot', label: 'Weapon Fire' },
   { key: 'boost', label: 'Boost' },
+  { key: 'shieldOn', label: 'Shield Activation' },
   { key: 'planting', label: 'Planting' },
   { key: 'hit', label: 'Enemy Hit' },
   { key: 'playerDamage', label: 'Player Damage' },

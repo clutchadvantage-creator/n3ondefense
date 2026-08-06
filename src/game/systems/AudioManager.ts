@@ -171,6 +171,15 @@ export class AudioManager {
     });
   }
 
+  private playShieldOnSfx(): void {
+    const audio = new Audio('/assets/audio/soundeffects/shieldon.mp3');
+    audio.preload = 'auto';
+    audio.volume = this.getSfxVolume('shieldOn');
+    void audio.play().catch(() => {
+      this.beep('sfx', 720, 180, 0.06, 'shieldOn');
+    });
+  }
+
   private initDeathSfxPools(): void {
     const src = '/assets/audio/soundeffects/bang.mp3';
     for (let i = 0; i < 10; i += 1) {
@@ -347,6 +356,9 @@ export class AudioManager {
         break;
       case 'boost':
         this.playBoostSfx();
+        break;
+      case 'shieldOn':
+        this.playShieldOnSfx();
         break;
       case 'hit':
         this.beep('sfx', 180, 50, 0.06, name);

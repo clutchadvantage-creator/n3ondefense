@@ -65,6 +65,11 @@ interface PatrolPoint {
   y: number;
 }
 
+interface TurretTargetDecision {
+  turret: Turret | null;
+  reconsiderAt: number;
+}
+
 interface PauseMenuElements {
   backdrop: Phaser.GameObjects.Rectangle;
   panel: Phaser.GameObjects.Rectangle;
@@ -91,6 +96,7 @@ export class ArenaScene extends Phaser.Scene {
   private turrets: Turret[] = [];
   private mines: Mine[] = [];
   private deathMines: DeathMine[] = [];
+  private readonly enemyTurretTargets = new WeakMap<Enemy, TurretTargetDecision>();
 
   private roundManager!: RoundManager;
   private layout!: ArenaLayout;
@@ -880,6 +886,20 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateMelee(enemy: Enemy, site: BombSiteRuntime, now: number): void {
+    const turretTarget = this.getSecondaryTurretTarget(enemy, now);
+    if (turretTarget) {
+      const distance = Phaser.Math.Distance.Between(enemy.x, enemy.y, turretTarget.sprite.x, turretTarget.sprite.y);
+      this.navigateEnemy(enemy, turretTarget.sprite.x, turretTarget.sprite.y, now, enemy.stats.speed);
+      if (distance <= ENEMY_BALANCE[enemy.stats.type].attackRange + 12
+        && now - enemy.lastAttackMs >= ENEMY_BALANCE[enemy.stats.type].attackCooldownMs) {
+        enemy.lastAttackMs = now;
+        const roleScale = enemy.stats.type === 'star' ? 1.05 : enemy.stats.type === 'tank' ? 0.85 : 0.62;
+        turretTarget.takeDamage(enemy.stats.damage * roleScale);
+        this.spawnImpact(turretTarget.sprite.x, turretTarget.sprite.y, enemy.stats.color);
+      }
+      return;
+    }
+
     const toBomb = Phaser.Math.Distance.Between(enemy.x, enemy.y, site.x, site.y);
     const tx = toBomb < 260 || Math.random() < 0.42 ? site.x : this.player.x;
     const ty = toBomb < 260 || Math.random() < 0.42 ? site.y : this.player.y;
@@ -888,11 +908,7 @@ export class ArenaScene extends Phaser.Scene {
 
     if (enemy.stats.type === 'tank' || enemy.stats.type === 'star') {
       const isStar = enemy.stats.type === 'star';
-      const turretDamage = isStar ? 1.1 : 0.7;
       const fenceDamage = isStar ? 1.35 : 0.95;
-      for (const t of this.turrets) {
-        if (Phaser.Math.Distance.Between(enemy.x, enemy.y, t.sprite.x, t.sprite.y) < 34) t.hp -= turretDamage;
-      }
       for (const f of this.fences) {
         if (Phaser.Math.Distance.Between(enemy.x, enemy.y, f.sprite.x, f.sprite.y) < 56) f.hp -= fenceDamage;
       }
@@ -928,7 +944,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.shieldOrb.setVisible(true);
-    this.audio.playSfx('pickup');
+    this.audio.playSfx('shieldOn');
   }
 
   private updateShieldState(now: number): void {
@@ -950,8 +966,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateShooter(enemy: Enemy, now: number, site: BombSiteRuntime): void {
-    const focusX = Math.random() < 0.25 ? site.x : this.player.x;
-    const focusY = Math.random() < 0.25 ? site.y : this.player.y;
+    const turretTarget = this.getSecondaryTurretTarget(enemy, now);
+    const focusX = turretTarget?.sprite.x ?? (Math.random() < 0.25 ? site.x : this.player.x);
+    const focusY = turretTarget?.sprite.y ?? (Math.random() < 0.25 ? site.y : this.player.y);
 
     const v = new Phaser.Math.Vector2(focusX - enemy.x, focusY - enemy.y);
     const dist = v.length();
@@ -968,7 +985,7 @@ export class ArenaScene extends Phaser.Scene {
 
     if (now - enemy.lastShotMs > ENEMY_BALANCE.shooter.attackCooldownMs) {
       enemy.lastShotMs = now;
-      const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+      const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, turretTarget?.sprite.x ?? this.player.x, turretTarget?.sprite.y ?? this.player.y);
       const bullet = this.physics.add.image(enemy.x, enemy.y, 'circle');
       bullet.setDisplaySize(7, 7);
       bullet.setTint(COLORS.orange);
@@ -1180,7 +1197,7 @@ export class ArenaScene extends Phaser.Scene {
 
         for (const t of this.turrets) {
           if (Phaser.Math.Distance.Between(t.sprite.x, t.sprite.y, p.sprite.x, p.sprite.y) < 18) {
-            t.hp -= p.damage;
+            t.takeDamage(p.damage);
             p.sprite.destroy();
             return false;
           }
@@ -1251,10 +1268,11 @@ export class ArenaScene extends Phaser.Scene {
     const turretShots: Projectile[] = [];
 
     for (const turret of this.turrets) {
+      turret.updateVisual();
       const target = this.getNearestEnemy(turret.sprite.x, turret.sprite.y, turret.range);
       if (!target) continue;
       const angle = Phaser.Math.Angle.Between(turret.sprite.x, turret.sprite.y, target.x, target.y);
-      turret.sprite.rotation = angle + Math.PI / 2;
+      turret.aimAt(angle);
       if (!turret.canFire(now)) continue;
 
       turret.lastShotMs = now;
@@ -1311,6 +1329,9 @@ export class ArenaScene extends Phaser.Scene {
 
     this.turrets = this.turrets.filter((t) => {
       if (t.hp > 0) return true;
+      this.spawnImpact(t.sprite.x, t.sprite.y, SaveSystem.getCosmeticColor('turretSkin'));
+      const collapse = this.add.circle(t.sprite.x, t.sprite.y, 8, COLORS.orange, 0.35).setDepth(8);
+      this.tweens.add({ targets: collapse, radius: 32, alpha: 0, duration: 260, onComplete: () => collapse.destroy() });
       t.destroy();
       return false;
     });
@@ -1336,7 +1357,7 @@ export class ArenaScene extends Phaser.Scene {
 
       for (const turret of this.turrets) {
         const d = Phaser.Math.Distance.Between(turret.sprite.x, turret.sprite.y, mine.sprite.x, mine.sprite.y);
-        if (d <= mine.radius) turret.hp -= mine.damage * 0.5 * (1 - d / (mine.radius + 1));
+        if (d <= mine.radius) turret.takeDamage(mine.damage * 0.5 * (1 - d / (mine.radius + 1)));
       }
 
       for (const fence of this.fences) {
@@ -1392,6 +1413,29 @@ export class ArenaScene extends Phaser.Scene {
       });
       return;
     }
+  }
+
+  private getSecondaryTurretTarget(enemy: Enemy, now: number): Turret | null {
+    if (!['grunt', 'shooter', 'tank', 'star'].includes(enemy.stats.type) || this.turrets.length === 0) return null;
+
+    const previous = this.enemyTurretTargets.get(enemy);
+    if (previous && now < previous.reconsiderAt && previous.turret && previous.turret.hp > 0) return previous.turret;
+    if (previous && now < previous.reconsiderAt) return null;
+
+    const chance = enemy.stats.type === 'star' ? 0.34
+      : enemy.stats.type === 'tank' ? 0.28
+        : enemy.stats.type === 'shooter' ? 0.18
+          : 0.14;
+    const nearby = this.turrets
+      .filter((turret) => turret.hp > 0 && Phaser.Math.Distance.Between(enemy.x, enemy.y, turret.sprite.x, turret.sprite.y) <= 380)
+      .sort((a, b) => Phaser.Math.Distance.Between(enemy.x, enemy.y, a.sprite.x, a.sprite.y)
+        - Phaser.Math.Distance.Between(enemy.x, enemy.y, b.sprite.x, b.sprite.y));
+    const turret = nearby.length > 0 && Math.random() < chance ? nearby[0] : null;
+    this.enemyTurretTargets.set(enemy, {
+      turret,
+      reconsiderAt: now + (turret ? Phaser.Math.Between(2200, 4200) : Phaser.Math.Between(1800, 3200))
+    });
+    return turret;
   }
 
   private isClearForArenaPickup(x: number, y: number): boolean {
