@@ -464,6 +464,7 @@ export class ArenaScene extends Phaser.Scene {
   private registerBombSiteEvents(): void {
     this.bombSites.on('bomb-site-armed', (site: BombSiteRuntime) => {
       this.state.set(RoundState.Defense);
+      this.bombSites.refreshVisuals(this.layout.theme);
       const graceMs = getSpawnProfile(this.roundManager.round, this.bombSites.destroyedCount()).initialGraceMs;
       this.nextSpawnAt = this.time.now + graceMs;
       this.showBanner(`SITE ${site.letter} ARMED\nDEFEND THE ACTIVE CHARGE`);
@@ -472,6 +473,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.bombSites.on('bomb-site-defuse-started', () => {
       this.state.set(RoundState.Defusing);
+      this.bombSites.refreshVisuals(this.layout.theme);
       this.hud.setWarning('DEFUSE IN PROGRESS');
       this.audio.playSfx('defuseAlarm');
       this.audio.startDisarmLoop();
@@ -479,6 +481,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.bombSites.on('bomb-site-defuse-stopped', () => {
       this.state.set(RoundState.Defense);
+      this.bombSites.refreshVisuals(this.layout.theme);
       this.hud.setWarning('');
       this.audio.stopDisarmLoop();
     });
@@ -513,6 +516,7 @@ export class ArenaScene extends Phaser.Scene {
     this.updatePlayerMovement(now);
     this.updatePlayerShooting(now);
     this.updatePlanting(delta);
+    this.bombSites.updateAmbient(this.player.x, this.player.y, now, SaveSystem.get().settings.particles);
 
     const activeSite = this.bombSites.getActiveBombSite();
     if (activeSite) {

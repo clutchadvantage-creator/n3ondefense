@@ -11,6 +11,23 @@ interface ArmedSiteEffect {
   defenseMs: number;
 }
 
+interface AmbientSiteEffect {
+  root: Phaser.GameObjects.Container;
+  color: number;
+  halo: Phaser.GameObjects.Arc;
+  sweep: Phaser.GameObjects.Graphics;
+  rotor: Phaser.GameObjects.Graphics;
+  bomb: Phaser.GameObjects.Graphics;
+  leftMast: Phaser.GameObjects.Rectangle;
+  rightMast: Phaser.GameObjects.Rectangle;
+  leftTip: Phaser.GameObjects.Arc;
+  rightTip: Phaser.GameObjects.Arc;
+  particles: Phaser.GameObjects.Arc[];
+  phase: number;
+}
+
+const SITE_COLORS = [0x4ffcff, 0xff5ee7, 0x72ff91, 0xffb347, 0x9b7bff, 0xff627d] as const;
+
 export class BombSiteManager extends Phaser.Events.EventEmitter {
   readonly sites: BombSiteRuntime[] = [];
   private readonly mode: ObjectiveMode;
@@ -18,6 +35,7 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
   private scene: Phaser.Scene | null = null;
   private theme: ArenaTheme | null = null;
   private readonly armedEffects = new Map<string, ArmedSiteEffect>();
+  private readonly ambientEffects = new Map<string, AmbientSiteEffect>();
 
   constructor(mode: ObjectiveMode, maxActiveBombs: number) {
     super();
@@ -29,12 +47,14 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     this.scene = scene;
     this.theme = theme;
     this.destroyArmedEffects();
+    this.destroyAmbientEffects();
     this.sites.length = 0;
 
     for (let i = 0; i < positions.length; i += 1) {
       const p = positions[i];
       const letter = String.fromCharCode(65 + i);
-      const ring = scene.add.circle(p.x, p.y, 80, 0x000000, 0.08).setStrokeStyle(3, theme.primary, 0.9).setDepth(2);
+      const siteColor = SITE_COLORS[i % SITE_COLORS.length];
+      const ring = scene.add.circle(p.x, p.y, 80, siteColor, 0.035).setStrokeStyle(3, siteColor, 0.9).setDepth(2);
       const label = scene.add.text(p.x, p.y - 102, `Site ${letter}`, {
         fontFamily: 'Rajdhani, sans-serif',
         fontSize: '21px',
@@ -63,6 +83,7 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
         activeBomb: false,
         scorch: null
       });
+      this.createAmbientEffect(`site-${letter}`, p.x, p.y, siteColor, i);
     }
 
     if (this.mode === 'open') {
@@ -72,6 +93,41 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     }
 
     this.refreshVisuals(theme);
+  }
+
+  updateAmbient(playerX: number, playerY: number, now: number, particlesEnabled: boolean): void {
+    for (const site of this.sites) {
+      const effect = this.ambientEffects.get(site.id);
+      if (!effect) continue;
+      const destroyed = site.state === BombSiteState.Destroyed;
+      const locked = site.state === BombSiteState.Locked;
+      const charged = site.state === BombSiteState.Armed || site.state === BombSiteState.BeingDefused;
+      const activitySpeed = charged ? 2.15 : site.state === BombSiteState.Planting ? 1.55 : 1;
+      const distance = Phaser.Math.Distance.Between(playerX, playerY, site.x, site.y);
+      const proximity = destroyed ? 0 : Phaser.Math.Clamp(1 - (distance - 70) / 260, 0, 1);
+      const extension = locked ? proximity * 0.38 : 0.16 + proximity * 0.84;
+      const mastHeight = 34 * extension;
+
+      effect.leftMast.setScale(1, Math.max(0.05, extension));
+      effect.rightMast.setScale(1, Math.max(0.05, extension));
+      effect.leftTip.setPosition(-58, 5 - mastHeight).setAlpha(destroyed ? 0 : 0.35 + proximity * 0.65);
+      effect.rightTip.setPosition(58, 5 - mastHeight).setAlpha(destroyed ? 0 : 0.35 + proximity * 0.65);
+      effect.rotor.rotation = now * 0.00055 * activitySpeed + effect.phase;
+      effect.sweep.rotation = -now * 0.00028 * activitySpeed + effect.phase;
+      effect.bomb.rotation = Math.sin(now * 0.0018 + effect.phase) * 0.08;
+      effect.halo.setRadius(60 + Math.sin(now * 0.002 + effect.phase) * 3 + proximity * 7);
+      effect.halo.setAlpha(destroyed ? 0.06 : (locked ? 0.12 : 0.2) + proximity * 0.2);
+      effect.root.setAlpha(destroyed ? 0.22 : 1);
+
+      effect.particles.forEach((particle, index) => {
+        particle.setVisible(particlesEnabled && !destroyed);
+        if (!particle.visible) return;
+        const angle = now * (0.00045 + index * 0.000025) * activitySpeed + effect.phase + index * (Math.PI * 2 / effect.particles.length);
+        const radius = 69 + (index % 3) * 8 + Math.sin(now * 0.0025 + index) * 3;
+        particle.setPosition(Math.cos(angle) * radius, Math.sin(angle) * radius);
+        particle.setAlpha((locked ? 0.18 : 0.35) + proximity * 0.42);
+      });
+    }
   }
 
   activeBombCount(): number {
@@ -167,6 +223,8 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
       if (next) next.state = BombSiteState.Available;
     }
 
+    this.refreshVisuals(theme);
+
     if (this.sites.every((s) => s.state === BombSiteState.Destroyed)) {
       this.emit('all-bomb-sites-destroyed');
     }
@@ -186,35 +244,97 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
 
   refreshVisuals(theme: ArenaTheme): void {
     for (const s of this.sites) {
+      const siteColor = this.ambientEffects.get(s.id)?.color ?? theme.primary;
+      const siteCssColor = `#${siteColor.toString(16).padStart(6, '0')}`;
       if (s.state === BombSiteState.Available) {
-        s.ring.setStrokeStyle(3, theme.primary, 0.95);
-        s.label.setText(`Site ${s.letter} [AVAILABLE]`).setColor('#d6fbff');
+        s.ring.setStrokeStyle(3, siteColor, 0.95).setFillStyle(siteColor, 0.035);
+        s.label.setText(`Site ${s.letter} [AVAILABLE]`).setColor(siteCssColor);
       } else if (s.state === BombSiteState.Locked) {
         s.ring.setStrokeStyle(3, 0x3a4563, 0.65);
         s.label.setText(`Site ${s.letter} [LOCKED]`).setColor('#6f7c98');
       } else if (s.state === BombSiteState.Planting) {
-        s.ring.setStrokeStyle(3, theme.secondary, 1);
-        s.label.setText(`Site ${s.letter} [PLANTING]`).setColor('#fff0cf');
-      } else if (s.state === BombSiteState.Armed || s.state === BombSiteState.BeingDefused) {
-        s.ring.setStrokeStyle(3, 0xff5e75, 1);
-        s.label.setText(`Site ${s.letter} [ARMED]`).setColor('#ffd6dc');
+        s.ring.setStrokeStyle(4, siteColor, 1).setFillStyle(siteColor, 0.08);
+        s.label.setText(`Site ${s.letter} [PLANTING]`).setColor(siteCssColor);
+      } else if (s.state === BombSiteState.Armed) {
+        s.ring.setStrokeStyle(4, siteColor, 1).setFillStyle(siteColor, 0.09);
+        s.label.setText(`Site ${s.letter} [ARMED]`).setColor(siteCssColor);
+      } else if (s.state === BombSiteState.BeingDefused) {
+        s.ring.setStrokeStyle(4, 0xff5e75, 1).setFillStyle(0xff5e75, 0.1);
+        s.label.setText(`Site ${s.letter} [DEFUSE ALERT]`).setColor('#ffd6dc');
       } else if (s.state === BombSiteState.Destroyed) {
         s.label.setText(`Site ${s.letter} [DESTROYED]`).setColor('#737a8a');
       }
     }
   }
 
+  private createAmbientEffect(siteId: string, x: number, y: number, color: number, index: number): void {
+    if (!this.scene) return;
+    const root = this.scene.add.container(x, y).setDepth(3);
+    const halo = this.scene.add.circle(0, 0, 60, color, 0.04).setStrokeStyle(1, color, 0.28);
+
+    const sweep = this.scene.add.graphics();
+    sweep.lineStyle(1, color, 0.3);
+    sweep.lineBetween(-72, 0, 72, 0);
+    sweep.lineBetween(0, -72, 0, 72);
+    sweep.strokeCircle(0, 0, 48);
+
+    const rotor = this.scene.add.graphics();
+    rotor.lineStyle(3, color, 0.78);
+    for (let segment = 0; segment < 4; segment += 1) {
+      const start = segment * Math.PI * 0.5 + 0.12;
+      rotor.beginPath();
+      rotor.arc(0, 0, 34, start, start + 0.62, false);
+      rotor.strokePath();
+    }
+    rotor.fillStyle(0xffffff, 0.9);
+    rotor.fillCircle(34, 0, 2);
+    rotor.fillCircle(-34, 0, 2);
+
+    const bomb = this.scene.add.graphics();
+    bomb.fillStyle(0x07131d, 0.96);
+    bomb.lineStyle(2, color, 1);
+    bomb.fillCircle(0, 3, 13);
+    bomb.strokeCircle(0, 3, 13);
+    bomb.fillStyle(color, 0.95);
+    bomb.fillCircle(-4, 0, 3);
+    bomb.lineStyle(3, color, 0.95);
+    bomb.beginPath();
+    bomb.moveTo(7, -8);
+    bomb.lineTo(11, -14);
+    bomb.lineTo(16, -12);
+    bomb.strokePath();
+    bomb.fillStyle(0xffffff, 0.95);
+    bomb.fillCircle(18, -13, 2);
+
+    const leftMast = this.scene.add.rectangle(-58, 5, 3, 34, color, 0.9).setOrigin(0.5, 1);
+    const rightMast = this.scene.add.rectangle(58, 5, 3, 34, color, 0.9).setOrigin(0.5, 1);
+    const leftBase = this.scene.add.circle(-58, 6, 6, 0x07131d, 0.95).setStrokeStyle(2, color, 0.8);
+    const rightBase = this.scene.add.circle(58, 6, 6, 0x07131d, 0.95).setStrokeStyle(2, color, 0.8);
+    const leftTip = this.scene.add.circle(-58, -29, 4, color, 0.85).setStrokeStyle(1, 0xffffff, 0.8);
+    const rightTip = this.scene.add.circle(58, -29, 4, color, 0.85).setStrokeStyle(1, 0xffffff, 0.8);
+    const particles = Array.from({ length: 7 }, (_, particleIndex) =>
+      this.scene!.add.circle(0, 0, particleIndex % 3 === 0 ? 2.5 : 1.5, color, 0.55)
+    );
+
+    root.add([halo, sweep, rotor, bomb, leftMast, rightMast, leftBase, rightBase, leftTip, rightTip, ...particles]);
+    this.ambientEffects.set(siteId, {
+      root, color, halo, sweep, rotor, bomb, leftMast, rightMast, leftTip, rightTip, particles,
+      phase: index * 1.37
+    });
+  }
+
   private createArmedEffect(site: BombSiteRuntime, defenseMs: number): void {
     if (!this.scene || !this.theme) return;
     this.destroyArmedEffect(site.id);
 
+    const siteColor = this.ambientEffects.get(site.id)?.color ?? this.theme.primary;
     const electricity = this.scene.add.graphics().setDepth(5);
-    const shieldGlow = this.scene.add.circle(site.x, site.y, 29, this.theme.primary, 0.1)
-      .setStrokeStyle(1, this.theme.primary, 0.45)
+    const shieldGlow = this.scene.add.circle(site.x, site.y, 29, siteColor, 0.1)
+      .setStrokeStyle(1, siteColor, 0.45)
       .setDepth(5);
     const shield = this.scene.add.graphics().setDepth(6);
     shield.lineStyle(4, 0xffffff, 0.92);
-    shield.fillStyle(this.theme.primary, 0.13);
+    shield.fillStyle(siteColor, 0.13);
     shield.beginPath();
     shield.moveTo(site.x, site.y - 25);
     shield.lineTo(site.x + 21, site.y - 15);
@@ -260,7 +380,8 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     const flicker = 0.72 + Math.random() * 0.28;
 
     effect.electricity.clear();
-    effect.electricity.lineStyle(1 + charge * 2.2, this.theme.primary, (0.34 + charge * 0.52) * flicker);
+    const siteColor = this.ambientEffects.get(site.id)?.color ?? this.theme.primary;
+    effect.electricity.lineStyle(1 + charge * 2.2, siteColor, (0.34 + charge * 0.52) * flicker);
     for (let i = 0; i < segments; i += 1) {
       const angle = (i / segments) * Math.PI * 2 + Math.random() * 0.06;
       const nextAngle = angle + arcLength + Math.random() * 0.05;
@@ -297,8 +418,14 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     for (const siteId of Array.from(this.armedEffects.keys())) this.destroyArmedEffect(siteId);
   }
 
+  private destroyAmbientEffects(): void {
+    for (const effect of this.ambientEffects.values()) effect.root.destroy(true);
+    this.ambientEffects.clear();
+  }
+
   destroy(): void {
     this.destroyArmedEffects();
+    this.destroyAmbientEffects();
     this.removeAllListeners();
     for (const site of this.sites) {
       site.ring.destroy();
