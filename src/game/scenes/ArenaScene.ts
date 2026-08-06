@@ -152,6 +152,8 @@ export class ArenaScene extends Phaser.Scene {
     objective: 'NO ACTIVE CHARGE',
     defuseAlert: false,
     bombUrgent: false,
+    bombActive: false,
+    bombProgress: 0,
     buffs: this.hudBuffs,
     abilities: [
       { id: 'fence', keybind: 'Q', icon: '⛔', label: 'FENCE', cooldownMs: 0, selected: false, hasEnergy: true, underLimit: true },
@@ -798,7 +800,7 @@ export class ArenaScene extends Phaser.Scene {
       damage: Math.round(base.damage * (1 + (curve.damageMultiplier - 1) * phaseScale))
     };
 
-    const enemyTexture = type === 'star' ? 'enemy-star' : 'circle';
+    const enemyTexture = type === 'star' ? 'enemy-star' : `enemy-${type}`;
     const enemy = new Enemy(this, spawn.x, spawn.y, enemyTexture, stats);
     if (type === 'star') {
       enemy.setTexture('enemy-star');
@@ -1550,6 +1552,47 @@ export class ArenaScene extends Phaser.Scene {
       return container;
     }
 
+    if (type === 'damageBoost') {
+      const glow = this.add.circle(0, 0, 15, color, 0.13).setStrokeStyle(1, color, 0.45);
+      const body = this.add.rectangle(-1, -2, 18, 7, color, 0.95).setStrokeStyle(1, 0xffffff, 0.9);
+      const barrel = this.add.rectangle(10, -2, 10, 3, 0xffffff, 0.92);
+      const grip = this.add.polygon(-4, 5, [0, 0, 6, 0, 3, 10, -2, 10], color, 0.95);
+      container.add([glow, body, barrel, grip]);
+      return container;
+    }
+
+    if (type === 'speedBoost') {
+      const glow = this.add.circle(0, 0, 15, color, 0.13).setStrokeStyle(1, color, 0.45);
+      const rocket = this.add.polygon(0, -1, [0, -14, 7, -4, 6, 8, 0, 12, -6, 8, -7, -4], color, 0.96)
+        .setStrokeStyle(1, 0xffffff, 0.9);
+      const flame = this.add.triangle(0, 14, -5, 0, 5, 0, 0, 9, COLORS.orange, 0.92);
+      container.add([glow, flame, rocket]);
+      return container;
+    }
+
+    if (type === 'rapidFire') {
+      const glow = this.add.circle(0, 0, 15, color, 0.13).setStrokeStyle(1, color, 0.45);
+      const bolts = [-7, 0, 7].map((offset) => this.add.rectangle(offset, 0, 4, 20, color, 0.95)
+        .setRotation(0.35).setStrokeStyle(1, 0xffffff, 0.7));
+      container.add([glow, ...bolts]);
+      return container;
+    }
+
+    if (type === 'credits') {
+      const diamond = this.add.polygon(0, 0, [0, -11, 10, 0, 0, 11, -10, 0], color, 0.9)
+        .setStrokeStyle(2, 0xffffff, 0.8);
+      container.add(diamond);
+      return container;
+    }
+
+    if (type === 'coreToken') {
+      const token = this.add.polygon(0, 0, [0, -12, 10, -6, 10, 6, 0, 12, -10, 6, -10, -6], color, 0.88)
+        .setStrokeStyle(2, 0xffffff, 0.9);
+      const core = this.add.circle(0, 0, 4, 0xffffff, 0.9);
+      container.add([token, core]);
+      return container;
+    }
+
     const circle = this.add.circle(0, 0, 8, color, 0.85).setStrokeStyle(2, color, 1);
     container.add(circle);
     return container;
@@ -1744,6 +1787,10 @@ export class ArenaScene extends Phaser.Scene {
     this.hudPayload.objective = bombText;
     this.hudPayload.defuseAlert = this.state.state === RoundState.Defusing;
     this.hudPayload.bombUrgent = Boolean(active && active.timerMs <= 15_000);
+    this.hudPayload.bombActive = Boolean(active);
+    this.hudPayload.bombProgress = active
+      ? Phaser.Math.Clamp(1 - active.timerMs / OBJECTIVE_CONFIG.bombDefenseMs, 0, 1)
+      : 0;
 
     const [fenceSlot, turretSlot, mineSlot, shieldSlot] = this.hudPayload.abilities;
     fenceSlot.cooldownMs = fenceCdMs;
@@ -2011,7 +2058,7 @@ export class ArenaScene extends Phaser.Scene {
         this.scene.launch(SceneKeys.Options, { returnScene: SceneKeys.Arena, resumeGameplay: true });
         this.scene.pause();
       }, 280),
-      createButton(this, width * 0.5, height * 0.5 + 120, 'Upgrade Store', () => this.scene.start(SceneKeys.Upgrades), 280),
+      createButton(this, width * 0.5, height * 0.5 + 120, 'Store', () => this.scene.start(SceneKeys.Upgrades), 280),
       createButton(this, width * 0.5, height * 0.5 + 174, 'Quit To Main Menu', () => this.quitToMenu(), 280)
     ];
     buttons.forEach((btn) => {

@@ -24,6 +24,8 @@ export interface HudPayload {
   objective: string;
   defuseAlert: boolean;
   bombUrgent: boolean;
+  bombActive: boolean;
+  bombProgress: number;
   buffs: string[];
   abilities: HudAbilitySlot[];
 }
@@ -84,6 +86,9 @@ export class Hud {
   private readonly phaseBadge: Phaser.GameObjects.Rectangle;
   private readonly phaseText: Phaser.GameObjects.Text;
   private readonly objectiveText: Phaser.GameObjects.Text;
+  private readonly bombProgressTrack: Phaser.GameObjects.Rectangle;
+  private readonly bombProgressFill: Phaser.GameObjects.Rectangle;
+  private readonly bombProgressLabel: Phaser.GameObjects.Text;
 
   private readonly abilitySlots = new Map<HudAbilitySlot['id'], AbilitySlotVisual>();
   private readonly buffTitle: Phaser.GameObjects.Text;
@@ -154,6 +159,13 @@ export class Hud {
       fontSize: '16px',
       color: '#def6ff'
     });
+    this.bombProgressTrack = scene.add.rectangle(0, 0, 120, 10, 0x10201d, 0.92)
+      .setOrigin(0, 0.5).setStrokeStyle(1, 0x5b9d87, 0.75).setVisible(false);
+    this.bombProgressFill = scene.add.rectangle(0, 0, 120, 6, 0x53ff8a, 1)
+      .setOrigin(0, 0.5).setVisible(false);
+    this.bombProgressLabel = scene.add.text(0, 0, 'DETONATION', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', color: '#9ed6c2'
+    }).setOrigin(0, 1).setVisible(false);
 
     this.buffTitle = scene.add.text(0, 0, 'BUFFS', { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#9fd0ff' });
     this.buffText = scene.add.text(0, 0, 'NONE', { fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#cce8ff' });
@@ -222,6 +234,9 @@ export class Hud {
       this.phaseBadge,
       this.phaseText,
       this.objectiveText,
+      this.bombProgressTrack,
+      this.bombProgressFill,
+      this.bombProgressLabel,
       ...Array.from(this.abilitySlots.values()).map((s) => s.root),
       this.buffTitle,
       this.buffText
@@ -260,6 +275,7 @@ export class Hud {
     this.statsValueCredits.setFontSize(Math.round(20 * fontScale));
     this.phaseText.setFontSize(Math.round(14 * fontScale));
     this.objectiveText.setFontSize(Math.round(16 * fontScale));
+    this.bombProgressLabel.setFontSize(Math.round(11 * fontScale));
     this.buffTitle.setFontSize(Math.round(13 * fontScale));
     this.buffText.setFontSize(Math.round(15 * fontScale));
 
@@ -319,6 +335,11 @@ export class Hud {
     this.phaseText.setPosition(this.phaseBadge.x + this.phaseBadge.displayWidth / 2, this.phaseBadge.y);
     this.objectiveText.setPosition(objX, objY + Math.round(32 * this.scaleFactor));
     this.objectiveText.setWordWrapWidth(this.sectionObjective.displayWidth - sectionInner * 2, true);
+    const objectiveBarY = this.sectionObjective.y + sectionHeight - Math.round(13 * this.scaleFactor);
+    const objectiveBarWidth = this.sectionObjective.displayWidth - sectionInner * 2;
+    this.bombProgressTrack.setPosition(objX, objectiveBarY).setDisplaySize(objectiveBarWidth, Math.round(10 * this.scaleFactor));
+    this.bombProgressFill.setPosition(objX, objectiveBarY).setDisplaySize(objectiveBarWidth, Math.round(6 * this.scaleFactor));
+    this.bombProgressLabel.setPosition(objX, objectiveBarY - Math.round(7 * this.scaleFactor));
 
     const slotsStartX = this.sectionAbilities.x + sectionInner;
     const slotsStartY = this.sectionAbilities.y + sectionInner;
@@ -421,6 +442,21 @@ export class Hud {
     this.phaseText.setColor(phaseStyle.text).setText(payload.phase);
 
     this.objectiveText.setText(payload.objective);
+    const bombProgress = Phaser.Math.Clamp(payload.bombProgress, 0, 1);
+    this.bombProgressTrack.setVisible(payload.bombActive);
+    this.bombProgressFill.setVisible(payload.bombActive);
+    this.bombProgressLabel.setVisible(payload.bombActive);
+    if (payload.bombActive) {
+      this.bombProgressFill.displayWidth = this.bombProgressTrack.displayWidth * bombProgress;
+      const red = Math.round(83 + (255 - 83) * bombProgress);
+      const green = Math.round(255 + (78 - 255) * bombProgress);
+      const blue = Math.round(138 + (99 - 138) * bombProgress);
+      this.bombProgressFill.setFillStyle(Phaser.Display.Color.GetColor(red, green, blue), 1);
+      const urgentPulse = bombProgress >= 0.82 ? 0.48 + Math.abs(Math.sin(this.scene.time.now * 0.014)) * 0.52 : 1;
+      this.bombProgressFill.setAlpha(urgentPulse);
+      this.bombProgressLabel.setText(`DETONATION ${Math.round(bombProgress * 100)}%`)
+        .setColor(bombProgress >= 0.82 ? '#ff9aaa' : '#9ed6c2');
+    }
     if (payload.bombUrgent) {
       this.objectiveText.setColor('#ff9daf');
     } else {

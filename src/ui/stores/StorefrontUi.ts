@@ -3,7 +3,7 @@ import { getUpgradeCost, getUpgradeLevel } from '../../data/upgrades';
 import { getUpgradeComparison } from './upgradePresentation';
 import './storefront.css';
 
-type StoreMode = 'cosmetics' | 'upgrades';
+export type StoreMode = 'cosmetics' | 'upgrades';
 
 export interface StoreSnapshot {
   credits: number;
@@ -92,9 +92,30 @@ export class StorefrontUi {
 
     const shell = document.createElement('main');
     shell.className = 'store-shell';
-    shell.append(this.renderHeader(snapshot), this.renderBody(snapshot));
+    shell.append(this.renderHeader(snapshot), this.renderModeTabs(), this.renderBody(snapshot));
     screen.append(ambient, shell);
     this.options.root.replaceChildren(screen);
+  }
+
+  private renderModeTabs(): HTMLElement {
+    const nav = document.createElement('nav');
+    nav.className = 'store-mode-tabs';
+    for (const mode of ['upgrades', 'cosmetics'] as const) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = this.options.mode === mode ? 'active' : '';
+      button.textContent = mode === 'upgrades' ? 'UPGRADES' : 'COSMETICS';
+      button.addEventListener('click', () => {
+        if (this.options.mode === mode) return;
+        this.options.mode = mode;
+        this.selectedCategory = this.getCategories()[0] ?? '';
+        this.selectedId = this.getVisibleItems()[0]?.id ?? null;
+        this.message = '';
+        this.render();
+      });
+      nav.append(button);
+    }
+    return nav;
   }
 
   private renderHeader(snapshot: StoreSnapshot): HTMLElement {
@@ -105,7 +126,7 @@ export class StorefrontUi {
     const eyebrow = document.createElement('span');
     eyebrow.textContent = this.options.mode === 'cosmetics' ? 'NEON CUSTOMIZATION' : 'COMBAT SYSTEMS';
     const title = document.createElement('h1');
-    title.textContent = this.options.mode === 'cosmetics' ? 'COSMETICS SHOWROOM' : 'SYSTEM UPGRADE LAB';
+    title.textContent = 'N3ONDefense STORE';
     const subtitle = document.createElement('p');
     subtitle.textContent = this.options.mode === 'cosmetics'
       ? 'Customize your operative and defensive technology.'
@@ -253,12 +274,6 @@ export class StorefrontUi {
     card.type = 'button';
     card.className = `store-card ${classes} ${id === this.selectedId ? 'selected' : ''}`;
     card.dataset.itemId = id;
-    card.addEventListener('pointerenter', () => {
-      if (this.selectedId === id) return;
-      this.selectedId = id;
-      this.message = '';
-      this.render();
-    });
     card.addEventListener('click', () => {
       this.selectedId = id;
       this.message = '';

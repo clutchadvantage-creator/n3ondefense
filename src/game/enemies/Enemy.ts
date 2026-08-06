@@ -28,11 +28,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
-    if (stats.type === 'star') {
-      this.body?.setSize(stats.size, stats.size, true);
-    } else {
-      this.setCircle(stats.size / 2);
-    }
+    const bodyScale = stats.type === 'tank' || stats.type === 'star' ? 0.86 : 0.72;
+    this.body?.setSize(stats.size * bodyScale, stats.size * bodyScale, true);
 
     this.setDisplaySize(stats.size, stats.size);
     this.setTint(stats.color);

@@ -81,6 +81,20 @@ export class BootScene extends Phaser.Scene {
       graphics.strokePoints(points, true);
     });
 
+    const createEnemyPolygon = (key: string, points: Phaser.Types.Math.Vector2Like[]): void => {
+      g.clear();
+      g.fillStyle(0xffffff, 1);
+      g.fillPoints(points, true);
+      g.lineStyle(2, 0x172033, 1);
+      g.strokePoints(points, true);
+      g.generateTexture(key, 32, 32);
+    };
+    createEnemyPolygon('enemy-grunt', [{ x: 16, y: 4 }, { x: 29, y: 27 }, { x: 3, y: 27 }]);
+    createEnemyPolygon('enemy-shooter', [{ x: 16, y: 2 }, { x: 30, y: 16 }, { x: 16, y: 30 }, { x: 2, y: 16 }]);
+    createEnemyPolygon('enemy-defuser', [{ x: 9, y: 3 }, { x: 23, y: 3 }, { x: 30, y: 16 }, { x: 23, y: 29 }, { x: 9, y: 29 }, { x: 2, y: 16 }]);
+    createEnemyPolygon('enemy-tank', [{ x: 7, y: 2 }, { x: 25, y: 2 }, { x: 30, y: 7 }, { x: 30, y: 25 }, { x: 25, y: 30 }, { x: 7, y: 30 }, { x: 2, y: 25 }, { x: 2, y: 7 }]);
+    createEnemyPolygon('enemy-disruptor', [{ x: 16, y: 2 }, { x: 30, y: 12 }, { x: 25, y: 29 }, { x: 7, y: 29 }, { x: 2, y: 12 }]);
+
     const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, upgradeModule, cosmeticModule, resultModule, optionsModule, roundFinishedModule, loadingModule] = await Promise.all([
       import('./SplashScene'),
       import('./LeaderboardsScene'),

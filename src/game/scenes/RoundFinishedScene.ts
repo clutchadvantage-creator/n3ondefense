@@ -68,13 +68,9 @@ export class RoundFinishedScene extends Phaser.Scene {
       startArenaLoad(this, { reason: 'continue-next-round', session, message: 'Deploying next round arena...' });
     }, 320);
 
-    createButton(this, width / 2 - 170, 552, 'Upgrade Store', () => {
+    createButton(this, width / 2, 552, 'Store', () => {
       this.scene.start(SceneKeys.Upgrades, { returnScene: SceneKeys.RoundFinished });
-    }, 270);
-
-    createButton(this, width / 2 + 170, 552, 'Cosmetics Store', () => {
-      this.scene.start(SceneKeys.Cosmetics, { returnScene: SceneKeys.RoundFinished });
-    }, 270);
+    }, 320);
 
     createButton(this, width / 2, 612, 'Quit To Main Menu', () => {
       OnlineRunManager.complete('quit', payload?.completedRound);

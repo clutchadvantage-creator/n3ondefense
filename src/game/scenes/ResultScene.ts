@@ -55,9 +55,8 @@ export class ResultScene extends Phaser.Scene {
       this.registry.remove('round-finished');
       startArenaLoad(this, { reason: 'replay-after-fail', message: 'Rebuilding mission arena...' });
     });
-    createButton(this, width / 2, 442, 'Upgrade Store', () => this.scene.start(SceneKeys.Upgrades));
-    createButton(this, width / 2, 494, 'Cosmetics Store', () => this.scene.start(SceneKeys.Cosmetics));
-    createButton(this, width / 2, 546, 'Main Menu', () => {
+    createButton(this, width / 2, 454, 'Store', () => this.scene.start(SceneKeys.Upgrades));
+    createButton(this, width / 2, 514, 'Main Menu', () => {
       RunTransitionManager.clearForMenu(this);
       this.scene.start(SceneKeys.MainMenu);
     });

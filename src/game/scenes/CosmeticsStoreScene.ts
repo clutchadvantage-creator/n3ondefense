@@ -7,6 +7,8 @@ import { AudioManager } from '../systems/AudioManager';
 import { SaveSystem } from '../systems/SaveSystem';
 import type { CosmeticOption } from '../types';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
+import { UPGRADE_DEFINITIONS, getUpgradeCost, getUpgradeLevel } from '../../data/upgrades';
+import type { UpgradeDefinition } from '../types';
 
 interface StoreSceneData {
   returnScene?: string;
@@ -33,6 +35,7 @@ export class CosmeticsStoreScene extends Phaser.Scene {
       root: getGameUiRoot(),
       mode: 'cosmetics',
       cosmetics: COSMETICS,
+      upgrades: UPGRADE_DEFINITIONS,
       particlesEnabled: save.settings.particles,
       getSnapshot: () => {
         const current = SaveSystem.get();
@@ -50,7 +53,8 @@ export class CosmeticsStoreScene extends Phaser.Scene {
       },
       onReturnToGame: data?.returnScene ? () => this.scene.start(data.returnScene as string) : undefined,
       onUnlock: (item) => this.unlockCosmetic(item),
-      onEquip: (item) => this.equipCosmetic(item)
+      onEquip: (item) => this.equipCosmetic(item),
+      onUpgrade: (definition, level) => this.purchaseUpgrade(definition, level)
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -83,5 +87,17 @@ export class CosmeticsStoreScene extends Phaser.Scene {
     SaveSystem.equipCosmetic(item.category, item.id);
     AudioManager.get().playSfx('menu');
     return { ok: true, message: 'COSMETIC EQUIPPED' };
+  }
+
+  private purchaseUpgrade(definition: UpgradeDefinition, displayedLevel: number): { ok: boolean; message: string } {
+    const save = SaveSystem.get();
+    const currentLevel = getUpgradeLevel(save.upgrades, definition.id);
+    if (currentLevel !== displayedLevel) return { ok: false, message: 'LEVEL CHANGED • SELECT AGAIN' };
+    if (currentLevel >= definition.maxLevel) return { ok: false, message: 'MAX LEVEL' };
+    const cost = getUpgradeCost(definition.baseCost, definition.growth, currentLevel);
+    if (!SaveSystem.spendCredits(cost)) return { ok: false, message: `NEED ${(cost - save.credits).toLocaleString()} MORE CREDITS` };
+    SaveSystem.setUpgradeLevel(definition.id, currentLevel + 1);
+    AudioManager.get().playSfx('menu');
+    return { ok: true, message: 'UPGRADE INSTALLED' };
   }
 }

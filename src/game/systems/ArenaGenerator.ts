@@ -32,7 +32,7 @@ export class ArenaGenerator {
       walls.push({ x: 0, y: 0, w: 30, h: WORLD_HEIGHT });
       walls.push({ x: WORLD_WIDTH - 30, y: 0, w: 30, h: WORLD_HEIGHT });
 
-      const density = Math.min(12, 6 + round);
+      const density = Phaser.Math.Clamp(6 + Math.floor(round * 0.7) + random.int(-2, 5), 5, 18);
       for (let i = 0; i < density; i += 1) {
         const x = random.int(140, WORLD_WIDTH - 260);
         const y = random.int(140, WORLD_HEIGHT - 260);
@@ -69,18 +69,29 @@ export class ArenaGenerator {
         walls.push(...pieces.map(clampRect));
       }
 
-      const obstacles = obstacleFactory.batch(150, 150, WORLD_WIDTH - 300, WORLD_HEIGHT - 300, Math.min(22, 10 + round * 2));
+      const obstacleCount = Phaser.Math.Clamp(8 + Math.floor(round * 1.25) + random.int(-4, 7), 7, 28);
+      const obstacles = obstacleFactory.batch(150, 150, WORLD_WIDTH - 300, WORLD_HEIGHT - 300, obstacleCount);
 
-      const playerSpawn = new Phaser.Math.Vector2(140 + random.int(20, 120), WORLD_HEIGHT * 0.5 + random.int(-120, 120));
+      const spawnMargin = random.int(110, 210);
+      const spawnSide = random.int(0, 3);
+      const playerSpawn = spawnSide === 0
+        ? new Phaser.Math.Vector2(spawnMargin, random.int(180, WORLD_HEIGHT - 180))
+        : spawnSide === 1
+          ? new Phaser.Math.Vector2(WORLD_WIDTH - spawnMargin, random.int(180, WORLD_HEIGHT - 180))
+          : spawnSide === 2
+            ? new Phaser.Math.Vector2(random.int(180, WORLD_WIDTH - 180), spawnMargin)
+            : new Phaser.Math.Vector2(random.int(180, WORLD_WIDTH - 180), WORLD_HEIGHT - spawnMargin);
 
-      const enemySpawns = [
+      const enemySpawns = random.shuffle([
         new Phaser.Math.Vector2(120, 120),
         new Phaser.Math.Vector2(WORLD_WIDTH - 120, 120),
         new Phaser.Math.Vector2(120, WORLD_HEIGHT - 120),
         new Phaser.Math.Vector2(WORLD_WIDTH - 120, WORLD_HEIGHT - 120),
         new Phaser.Math.Vector2(WORLD_WIDTH - 160, WORLD_HEIGHT * 0.5),
-        new Phaser.Math.Vector2(160, WORLD_HEIGHT * 0.5)
-      ];
+        new Phaser.Math.Vector2(160, WORLD_HEIGHT * 0.5),
+        new Phaser.Math.Vector2(WORLD_WIDTH * 0.5, 110),
+        new Phaser.Math.Vector2(WORLD_WIDTH * 0.5, WORLD_HEIGHT - 110)
+      ]).slice(0, random.int(5, 8));
 
       const bombSites: Phaser.Math.Vector2[] = [];
       let guard = 0;
@@ -128,9 +139,16 @@ export class ArenaGenerator {
       { x: WORLD_WIDTH - 30, y: 0, w: 30, h: WORLD_HEIGHT }
     ];
 
-    // Keep fallback sparse to guarantee pathability and avoid load hangs.
-    walls.push({ x: WORLD_WIDTH * 0.5 - 40, y: 180, w: 80, h: 220 });
-    walls.push({ x: WORLD_WIDTH * 0.5 - 40, y: WORLD_HEIGHT - 400, w: 80, h: 220 });
+    // Keep fallback sparse but seed its silhouette so validation recovery does not repeat one arena.
+    const vertical = random.bool();
+    const offset = random.int(-260, 260);
+    if (vertical) {
+      walls.push({ x: WORLD_WIDTH * 0.5 + offset, y: 170, w: random.int(48, 86), h: random.int(190, 340) });
+      walls.push({ x: WORLD_WIDTH * 0.5 - offset - 60, y: WORLD_HEIGHT - random.int(390, 520), w: random.int(48, 86), h: random.int(190, 340) });
+    } else {
+      walls.push({ x: 210, y: WORLD_HEIGHT * 0.5 + offset, w: random.int(210, 390), h: random.int(48, 82) });
+      walls.push({ x: WORLD_WIDTH - random.int(520, 660), y: WORLD_HEIGHT * 0.5 - offset - 60, w: random.int(210, 390), h: random.int(48, 82) });
+    }
 
     const playerSpawn = new Phaser.Math.Vector2(180, WORLD_HEIGHT * 0.5);
     const enemySpawns = [
@@ -148,6 +166,7 @@ export class ArenaGenerator {
       new Phaser.Math.Vector2(WORLD_WIDTH * 0.5 + 130, WORLD_HEIGHT * 0.5 - 170),
       new Phaser.Math.Vector2(WORLD_WIDTH * 0.5 + 130, WORLD_HEIGHT * 0.5 + 170)
     ];
+    random.shuffle(candidates);
     for (const c of candidates) {
       if (bombSites.length >= siteCount) break;
       bombSites.push(c);

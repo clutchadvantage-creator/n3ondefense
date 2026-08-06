@@ -127,11 +127,10 @@ export class MainMenuScene extends Phaser.Scene {
       OnlineRunManager.beginLocalRun();
       startArenaLoad(this, { reason: 'new-run', message: 'Building explicitly local operation...' });
     }, 240);
-    createButton(this, width / 2, 262, 'Upgrade Store', () => this.scene.start(SceneKeys.Upgrades));
-    createButton(this, width / 2, 314, 'Cosmetics Store', () => this.scene.start(SceneKeys.Cosmetics));
-    createButton(this, width / 2, 366, 'Options', () => this.scene.start(SceneKeys.Options));
-    createButton(this, width / 2, 418, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), 220);
-    createButton(this, width / 2, 470, 'Local Save Information', () => {
+    createButton(this, width / 2, 276, 'Store', () => this.scene.start(SceneKeys.Upgrades));
+    createButton(this, width / 2, 328, 'Options', () => this.scene.start(SceneKeys.Options));
+    createButton(this, width / 2, 380, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), 220);
+    createButton(this, width / 2, 432, 'Local Save Information', () => {
       showInfoModal(
         this,
         'LOCAL SAVE INFORMATION',
