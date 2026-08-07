@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "balance:report": "node --experimental-strip-types scripts/analyze-balance.ts",
+    "arena:report": "node --experimental-strip-types scripts/analyze-arenas.ts",
     "preview": "vite preview"
   },
   "devDependencies": {

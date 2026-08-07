@@ -1,6 +1,7 @@
 import { ARENA_TEMPLATES, getRoundSiteCount } from '../config/gameplay';
 import type { ArenaTemplate, ObjectiveMode, RoundDefinition } from '../types';
 import { SeededRandom } from './SeededRandom';
+import { ARENA_GENERATION_CONFIG } from '../config/arenaGeneration.ts';
 
 export class RoundManager {
   round = 1;
@@ -22,21 +23,17 @@ export class RoundManager {
   }
 
   currentDefinition(): RoundDefinition {
-    const cycle = Math.floor((this.round - 1) / ARENA_TEMPLATES.length);
-    const index = (this.round - 1) % ARENA_TEMPLATES.length;
-    const random = new SeededRandom(this.baseSeed ^ Math.imul(cycle + 1, 0x45d9f3b));
-    const templates = random.shuffle([...ARENA_TEMPLATES]);
-    // Prevent a cycle boundary from placing the same macro layout back-to-back.
-    if (cycle > 0 && index === 0 && templates.length > 1) {
-      const previousRandom = new SeededRandom(this.baseSeed ^ Math.imul(cycle, 0x45d9f3b));
-      const previousTemplates = previousRandom.shuffle([...ARENA_TEMPLATES]);
-      if (templates[0] === previousTemplates.at(-1)) {
-        [templates[0], templates[1]] = [templates[1], templates[0]];
-      }
+    const recent:ArenaTemplate[]=[];
+    let template=ARENA_TEMPLATES[0];
+    for(let candidateRound=1;candidateRound<=this.round;candidateRound+=1){
+      const random=new SeededRandom(this.baseSeed^Math.imul(candidateRound,0x45d9f3b));
+      const candidates=random.shuffle([...ARENA_TEMPLATES]);
+      template=candidates.find((candidate)=>!recent.includes(candidate))??candidates[0];
+      recent.push(template);
+      if(recent.length>ARENA_GENERATION_CONFIG.archetypeCooldownRounds)recent.shift();
     }
     const siteCount = getRoundSiteCount(this.round);
-    const template = templates[index] as ArenaTemplate;
-    const roundSeed = (this.baseSeed ^ Math.imul(this.round, 0x9e3779b1) ^ Math.imul(cycle + 7, 0x85ebca6b)) >>> 0;
+    const roundSeed = (this.baseSeed ^ Math.imul(this.round, 0x9e3779b1) ^ Math.imul(Math.floor((this.round-1)/ARENA_TEMPLATES.length) + 7, 0x85ebca6b)) >>> 0;
     return {
       round: this.round,
       seed: roundSeed || this.round,

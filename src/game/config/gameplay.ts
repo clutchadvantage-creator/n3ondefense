@@ -1,5 +1,6 @@
 import type { ArenaTemplate, ObjectiveMode } from '../types';
 import { OBJECTIVE_BALANCE, getRoundSiteCountBalanced } from './balance';
+import { ARENA_ARCHETYPES } from './arenaGeneration.ts';
 
 export const GAME_TITLE = 'N3ONDefense';
 export const GAME_TAGLINE = 'Plant. Defend. Survive. Detonate.';
@@ -16,13 +17,7 @@ export const OBJECTIVE_CONFIG = {
   clearEnemiesOnSiteDestroy: false
 };
 
-export const ARENA_TEMPLATES: ArenaTemplate[] = [
-  'open-grid',
-  'corridor-network',
-  'central-fortress',
-  'split-arena',
-  'hazard-maze'
-];
+export const ARENA_TEMPLATES: ArenaTemplate[] = ARENA_ARCHETYPES;
 
 export const ROUND_SITE_RULES = [2, 3, 3, 4] as const;
 

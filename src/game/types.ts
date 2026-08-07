@@ -30,7 +30,19 @@ export enum BombSiteState {
 }
 
 export type ObjectiveMode = 'open' | 'sequential';
-export type ArenaTemplate = 'open-grid' | 'corridor-network' | 'central-fortress' | 'split-arena' | 'hazard-maze';
+export type ArenaTemplate =
+  | 'open-field'
+  | 'islands'
+  | 'fortress'
+  | 'ring'
+  | 'split'
+  | 'hub-spoke'
+  | 'canyon'
+  | 'maze'
+  | 'chambers'
+  | 'asymmetric-clusters'
+  | 'crossroads'
+  | 'perimeter';
 
 export interface ArenaTheme {
   id: string;
@@ -81,6 +93,21 @@ export interface ArenaLayout {
   enemySpawns: Phaser.Math.Vector2[];
   bombSites: Phaser.Math.Vector2[];
   decorativeNeon: RectSpec[];
+  generation: ArenaGenerationMetadata;
+}
+
+export interface ArenaGenerationMetadata {
+  attempt: number;
+  bounds: RectSpec;
+  openSpacePercentage: number;
+  majorStructureCount: number;
+  chokePointCount: number;
+  connectedRegionCount: number;
+  symmetryScore: number;
+  orientationBias: { horizontal: number; vertical: number; diagonal: number };
+  occupancy: number[];
+  similarityScore: number;
+  validation: string[];
 }
 
 export interface RoundDefinition {

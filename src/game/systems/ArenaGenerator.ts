@@ -1,197 +1,98 @@
 import Phaser from 'phaser';
-import type { ArenaLayout, ArenaTemplate, RectSpec } from '../types';
-import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
-import { ArenaThemeManager } from './ArenaThemeManager';
-import { ObstacleFactory } from './ObstacleFactory';
-import { SeededRandom } from './SeededRandom';
-import { WallFactory } from './WallFactory';
-import { ArenaValidator } from './ArenaValidator';
+import type { ArenaLayout, ArenaTemplate, GeneratedObstacle, RectSpec } from '../types.ts';
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants.ts';
+import { ARENA_GENERATION_CONFIG as CONFIG } from '../config/arenaGeneration.ts';
+import { ArenaThemeManager } from './ArenaThemeManager.ts';
+import { ObstacleFactory } from './ObstacleFactory.ts';
+import { SeededRandom } from './SeededRandom.ts';
+import { ArenaValidator } from './ArenaValidator.ts';
+import { generateArenaTopology, type PointSpec } from './ArenaTopology.ts';
+import { ArenaHistory, createArenaFingerprint, type ArenaFingerprint } from './ArenaFingerprint.ts';
 
-const clampRect = (r: RectSpec): RectSpec => ({
-  x: Phaser.Math.Clamp(r.x, 34, WORLD_WIDTH - 34),
-  y: Phaser.Math.Clamp(r.y, 34, WORLD_HEIGHT - 34),
-  w: Phaser.Math.Clamp(r.w, 16, WORLD_WIDTH - r.x - 34),
-  h: Phaser.Math.Clamp(r.h, 16, WORLD_HEIGHT - r.y - 34)
-});
+const pointClear = (point:PointSpec, rects:RectSpec[], clearance:number):boolean => rects.every((r)=>point.x<r.x-clearance||point.x>r.x+r.w+clearance||point.y<r.y-clearance||point.y>r.y+r.h+clearance);
+const obstacleRect = (obstacle:GeneratedObstacle):RectSpec => ({x:obstacle.x-obstacle.w/2,y:obstacle.y-obstacle.h/2,w:obstacle.w,h:obstacle.h});
+const vector = (point:PointSpec):Phaser.Math.Vector2 => new Phaser.Math.Vector2(Math.round(point.x),Math.round(point.y));
 
 export class ArenaGenerator {
-  static generate(seed: number, template: ArenaTemplate, round: number, siteCount: number): ArenaLayout {
-    let attempts = 0;
-    let currentSeed = seed;
+  private static readonly history = new ArenaHistory();
+  private static forcedArchetype:ArenaTemplate|null=null;
 
-    while (attempts < 10) {
-      attempts += 1;
-      const random = new SeededRandom(currentSeed);
-      const theme = ArenaThemeManager.pick(random);
-      const wallFactory = new WallFactory(random);
-      const obstacleFactory = new ObstacleFactory(random);
-
-      const walls: RectSpec[] = [];
-      walls.push({ x: 0, y: 0, w: WORLD_WIDTH, h: 30 });
-      walls.push({ x: 0, y: WORLD_HEIGHT - 30, w: WORLD_WIDTH, h: 30 });
-      walls.push({ x: 0, y: 0, w: 30, h: WORLD_HEIGHT });
-      walls.push({ x: WORLD_WIDTH - 30, y: 0, w: 30, h: WORLD_HEIGHT });
-
-      const density = Phaser.Math.Clamp(6 + Math.floor(round * 0.7) + random.int(-2, 5), 5, 18);
-      for (let i = 0; i < density; i += 1) {
-        const x = random.int(140, WORLD_WIDTH - 260);
-        const y = random.int(140, WORLD_HEIGHT - 260);
-        const len = random.int(130, 360);
-        const thick = random.int(20, 36);
-
-        let pieces: RectSpec[] = [];
-        if (template === 'open-grid') {
-          pieces = random.bool(0.6) ? wallFactory.horizontal(x, y, len, thick) : wallFactory.vertical(x, y, len, thick);
-        } else if (template === 'corridor-network') {
-          pieces = random.pick([
-            wallFactory.lShape(x, y, random.int(120, 240), random.int(100, 220), thick),
-            wallFactory.uShape(x, y, random.int(140, 240), random.int(120, 210), thick),
-            wallFactory.room(x, y, random.int(160, 260), random.int(130, 220), thick, true)
-          ]);
-        } else if (template === 'central-fortress') {
-          pieces = i < 3
-            ? wallFactory.cross(WORLD_WIDTH * 0.5 - 170 + i * 24, WORLD_HEIGHT * 0.5 - 170 + i * 24, 260, thick)
-            : wallFactory.connectedSegments(x, y, 170, random.int(2, 4), thick);
-        } else if (template === 'split-arena') {
-          pieces = random.pick([
-            wallFactory.vertical(WORLD_WIDTH * 0.5 + random.int(-80, 80), 120, WORLD_HEIGHT - 240, thick),
-            wallFactory.tShape(x, y, random.int(160, 280), random.int(120, 240), thick),
-            wallFactory.room(x, y, random.int(140, 240), random.int(120, 220), thick, true)
-          ]);
-        } else {
-          pieces = random.pick([
-            wallFactory.zigzag(x, y, random.int(60, 90), random.int(3, 6), thick),
-            wallFactory.angled(x, y, random.int(120, 260), thick),
-            wallFactory.barrierCluster(x, y, random.int(3, 6), random.int(46, 90))
-          ]);
-        }
-
-        walls.push(...pieces.map(clampRect));
-      }
-
-      const obstacleCount = Phaser.Math.Clamp(8 + Math.floor(round * 1.25) + random.int(-4, 7), 7, 28);
-      const obstacles = obstacleFactory.batch(150, 150, WORLD_WIDTH - 300, WORLD_HEIGHT - 300, obstacleCount);
-
-      const spawnMargin = random.int(110, 210);
-      const spawnSide = random.int(0, 3);
-      const playerSpawn = spawnSide === 0
-        ? new Phaser.Math.Vector2(spawnMargin, random.int(180, WORLD_HEIGHT - 180))
-        : spawnSide === 1
-          ? new Phaser.Math.Vector2(WORLD_WIDTH - spawnMargin, random.int(180, WORLD_HEIGHT - 180))
-          : spawnSide === 2
-            ? new Phaser.Math.Vector2(random.int(180, WORLD_WIDTH - 180), spawnMargin)
-            : new Phaser.Math.Vector2(random.int(180, WORLD_WIDTH - 180), WORLD_HEIGHT - spawnMargin);
-
-      const enemySpawns = random.shuffle([
-        new Phaser.Math.Vector2(120, 120),
-        new Phaser.Math.Vector2(WORLD_WIDTH - 120, 120),
-        new Phaser.Math.Vector2(120, WORLD_HEIGHT - 120),
-        new Phaser.Math.Vector2(WORLD_WIDTH - 120, WORLD_HEIGHT - 120),
-        new Phaser.Math.Vector2(WORLD_WIDTH - 160, WORLD_HEIGHT * 0.5),
-        new Phaser.Math.Vector2(160, WORLD_HEIGHT * 0.5),
-        new Phaser.Math.Vector2(WORLD_WIDTH * 0.5, 110),
-        new Phaser.Math.Vector2(WORLD_WIDTH * 0.5, WORLD_HEIGHT - 110)
-      ]).slice(0, random.int(5, 8));
-
-      const bombSites: Phaser.Math.Vector2[] = [];
-      let guard = 0;
-      while (bombSites.length < siteCount && guard < 400) {
-        guard += 1;
-        const pos = new Phaser.Math.Vector2(random.int(220, WORLD_WIDTH - 220), random.int(220, WORLD_HEIGHT - 220));
-        const tooClose = bombSites.some((s) => Phaser.Math.Distance.Between(s.x, s.y, pos.x, pos.y) < 220);
-        if (!tooClose) bombSites.push(pos);
-      }
-
-      const decorations: RectSpec[] = [];
-      for (let i = 0; i < 30; i += 1) {
-        decorations.push({ x: random.int(40, WORLD_WIDTH - 80), y: random.int(40, WORLD_HEIGHT - 80), w: random.int(20, 80), h: random.int(6, 16) });
-      }
-
-      const layout: ArenaLayout = {
-        seed: currentSeed,
-        template,
-        theme,
-        walls,
-        obstacles,
-        playerSpawn,
-        enemySpawns,
-        bombSites,
-        decorativeNeon: decorations
+  static generate(seed:number, requestedArchetype:ArenaTemplate, round:number, siteCount:number):ArenaLayout {
+    const archetype=this.forcedArchetype??requestedArchetype;
+    let best:{layout:ArenaLayout;fingerprint:ArenaFingerprint}|null=null;
+    for(let attempt=1;attempt<=CONFIG.maximumAttemptsPerArchetype;attempt+=1){
+      const attemptSeed=(seed^Math.imul(round+31,0x85ebca6b)^Math.imul(attempt,0x9e3779b1))>>>0;
+      const random=new SeededRandom(attemptSeed||1);
+      const topology=generateArenaTopology(archetype,attemptSeed||1);
+      const theme=ArenaThemeManager.pick(random);
+      const selectedSites=this.selectSites(random,topology.objectiveCandidates,siteCount);
+      const player=topology.playerCandidates[random.int(0,topology.playerCandidates.length-1)];
+      const protectedPoints=[player,...selectedSites,...topology.enemySpawns];
+      const obstacles=this.addSecondaryObstacles(random,topology.bounds,topology.walls,protectedPoints,archetype,round);
+      const decorations=this.createDecorations(random,topology.bounds,archetype);
+      const placeholder = {
+        attempt,bounds:topology.bounds,openSpacePercentage:0,majorStructureCount:topology.majorStructureCount,
+        chokePointCount:topology.chokePointCount,connectedRegionCount:topology.connectedRegionCount,symmetryScore:0,
+        orientationBias:topology.orientationBias,occupancy:[],similarityScore:0,validation:[]
       };
-
-      if (ArenaValidator.validate(layout, WORLD_WIDTH, WORLD_HEIGHT)) {
-        return layout;
-      }
-      currentSeed += 1;
+      const layout:ArenaLayout={seed,template:archetype,theme,walls:topology.walls,obstacles,playerSpawn:vector(player),enemySpawns:topology.enemySpawns.map(vector),bombSites:selectedSites.map(vector),decorativeNeon:decorations,generation:placeholder};
+      const validation=ArenaValidator.validateDetailed(layout,WORLD_WIDTH,WORLD_HEIGHT);
+      if(!validation.valid) continue;
+      const fingerprint=createArenaFingerprint({archetype,bounds:topology.bounds,blockers:[...topology.walls,...obstacles.map(obstacleRect)],bombSites:selectedSites,enemySpawns:topology.enemySpawns,attempt,majorStructureCount:topology.majorStructureCount,chokePointCount:topology.chokePointCount,connectedRegionCount:topology.connectedRegionCount,orientationBias:topology.orientationBias,validation:validation.checks});
+      fingerprint.similarityScore=this.history.highestSimilarity(fingerprint);
+      layout.generation=fingerprint;
+      if(!best||fingerprint.similarityScore<best.fingerprint.similarityScore)best={layout,fingerprint};
+      if(fingerprint.similarityScore<=CONFIG.similarityThreshold){this.history.add(fingerprint);this.debug(layout,round);return layout;}
     }
-
-    return ArenaGenerator.buildFallbackLayout(seed, template, siteCount);
+    if(best){this.history.add(best.fingerprint);this.debug(best.layout,round,'similarity fallback');return best.layout;}
+    const fallback=this.buildFallback(seed,archetype,siteCount);
+    this.history.add(fallback.generation as ArenaFingerprint);this.debug(fallback,round,'validation fallback');return fallback;
   }
 
-  private static buildFallbackLayout(seed: number, template: ArenaTemplate, siteCount: number): ArenaLayout {
-    const random = new SeededRandom(seed + 9_999);
-    const theme = ArenaThemeManager.pick(random);
+  private static selectSites(random:SeededRandom,candidates:PointSpec[],count:number):PointSpec[]{
+    const shuffled=random.shuffle([...candidates]);
+    const selected:PointSpec[]=[];
+    for(const candidate of shuffled){if(selected.every((site)=>Math.hypot(site.x-candidate.x,site.y-candidate.y)>=200))selected.push(candidate);if(selected.length>=count)break;}
+    return selected;
+  }
 
-    const walls: RectSpec[] = [
-      { x: 0, y: 0, w: WORLD_WIDTH, h: 30 },
-      { x: 0, y: WORLD_HEIGHT - 30, w: WORLD_WIDTH, h: 30 },
-      { x: 0, y: 0, w: 30, h: WORLD_HEIGHT },
-      { x: WORLD_WIDTH - 30, y: 0, w: 30, h: WORLD_HEIGHT }
-    ];
-
-    // Keep fallback sparse but seed its silhouette so validation recovery does not repeat one arena.
-    const vertical = random.bool();
-    const offset = random.int(-260, 260);
-    if (vertical) {
-      walls.push({ x: WORLD_WIDTH * 0.5 + offset, y: 170, w: random.int(48, 86), h: random.int(190, 340) });
-      walls.push({ x: WORLD_WIDTH * 0.5 - offset - 60, y: WORLD_HEIGHT - random.int(390, 520), w: random.int(48, 86), h: random.int(190, 340) });
-    } else {
-      walls.push({ x: 210, y: WORLD_HEIGHT * 0.5 + offset, w: random.int(210, 390), h: random.int(48, 82) });
-      walls.push({ x: WORLD_WIDTH - random.int(520, 660), y: WORLD_HEIGHT * 0.5 - offset - 60, w: random.int(210, 390), h: random.int(48, 82) });
-    }
-
-    const playerSpawn = new Phaser.Math.Vector2(180, WORLD_HEIGHT * 0.5);
-    const enemySpawns = [
-      new Phaser.Math.Vector2(120, 120),
-      new Phaser.Math.Vector2(WORLD_WIDTH - 120, 120),
-      new Phaser.Math.Vector2(120, WORLD_HEIGHT - 120),
-      new Phaser.Math.Vector2(WORLD_WIDTH - 120, WORLD_HEIGHT - 120)
-    ];
-
-    const bombSites: Phaser.Math.Vector2[] = [];
-    const candidates = [
-      new Phaser.Math.Vector2(WORLD_WIDTH - 240, 200),
-      new Phaser.Math.Vector2(WORLD_WIDTH - 260, WORLD_HEIGHT * 0.5),
-      new Phaser.Math.Vector2(WORLD_WIDTH - 240, WORLD_HEIGHT - 200),
-      new Phaser.Math.Vector2(WORLD_WIDTH * 0.5 + 130, WORLD_HEIGHT * 0.5 - 170),
-      new Phaser.Math.Vector2(WORLD_WIDTH * 0.5 + 130, WORLD_HEIGHT * 0.5 + 170)
-    ];
-    random.shuffle(candidates);
-    for (const c of candidates) {
-      if (bombSites.length >= siteCount) break;
-      bombSites.push(c);
-    }
-
-    const decorativeNeon: RectSpec[] = [];
-    for (let i = 0; i < 18; i += 1) {
-      decorativeNeon.push({
-        x: random.int(40, WORLD_WIDTH - 80),
-        y: random.int(40, WORLD_HEIGHT - 80),
-        w: random.int(24, 84),
-        h: random.int(6, 16)
-      });
-    }
-
-    return {
-      seed,
-      template,
-      theme,
-      walls,
-      obstacles: [],
-      playerSpawn,
-      enemySpawns,
-      bombSites,
-      decorativeNeon
+  private static addSecondaryObstacles(random:SeededRandom,bounds:RectSpec,walls:RectSpec[],protectedPoints:PointSpec[],archetype:ArenaTemplate,round:number):GeneratedObstacle[]{
+    const factory=new ObstacleFactory(random);
+    const ranges:Record<ArenaTemplate,[number,number]>={
+      'open-field':[8,15],islands:[3,8],fortress:[3,7],ring:[2,6],split:[4,9],'hub-spoke':[4,8],canyon:[2,6],maze:[1,4],chambers:[2,5],'asymmetric-clusters':[2,5],crossroads:[3,7],perimeter:[3,7]
     };
+    const [min,max]=ranges[archetype];
+    const target=random.int(min,Math.min(max,min+Math.floor(round/5)+4));
+    const obstacles:GeneratedObstacle[]=[];
+    for(let attempt=0;attempt<target*15&&obstacles.length<target;attempt+=1){
+      const candidate=factory.createAt(random.int(bounds.x+90,bounds.x+bounds.w-90),random.int(bounds.y+90,bounds.y+bounds.h-90),26,archetype==='open-field'?88:64);
+      const rect=obstacleRect(candidate);
+      const center={x:candidate.x,y:candidate.y};
+      if(!pointClear(center,walls,35)||protectedPoints.some((p)=>Math.hypot(p.x-center.x,p.y-center.y)<150)||obstacles.some((o)=>!pointClear(center,[obstacleRect(o)],45)))continue;
+      if(rect.x<bounds.x+35||rect.y<bounds.y+35||rect.x+rect.w>bounds.x+bounds.w-35||rect.y+rect.h>bounds.y+bounds.h-35)continue;
+      obstacles.push(candidate);
+    }
+    return obstacles;
   }
+
+  private static createDecorations(random:SeededRandom,bounds:RectSpec,archetype:ArenaTemplate):RectSpec[]{
+    const count=archetype==='open-field'?24:18;
+    return Array.from({length:count},()=>({x:random.int(bounds.x+40,bounds.x+bounds.w-90),y:random.int(bounds.y+40,bounds.y+bounds.h-40),w:random.int(24,90),h:random.int(5,14)}));
+  }
+
+  private static buildFallback(seed:number,archetype:ArenaTemplate,siteCount:number):ArenaLayout{
+    const random=new SeededRandom(seed^0x71f4a7c1);
+    const bounds={x:180,y:170,w:2040,h:1260};
+    const walls=[{x:bounds.x,y:bounds.y,w:bounds.w,h:30},{x:bounds.x,y:bounds.y+bounds.h-30,w:bounds.w,h:30},{x:bounds.x,y:bounds.y,w:30,h:bounds.h},{x:bounds.x+bounds.w-30,y:bounds.y,w:30,h:bounds.h}];
+    const sites=[{x:650,y:480},{x:1700,y:500},{x:720,y:1120},{x:1720,y:1100}].slice(0,siteCount);
+    const spawns=[{x:240,y:240},{x:2160,y:240},{x:2160,y:1360},{x:240,y:1360}];
+    const fingerprint=createArenaFingerprint({archetype,bounds,blockers:walls,bombSites:sites,enemySpawns:spawns,attempt:CONFIG.maximumAttemptsPerArchetype+1,majorStructureCount:0,chokePointCount:0,connectedRegionCount:1,orientationBias:{horizontal:.5,vertical:.5,diagonal:0},validation:['safe-fallback']});
+    fingerprint.similarityScore=this.history.highestSimilarity(fingerprint);
+    return {seed,template:archetype,theme:ArenaThemeManager.pick(random),walls,obstacles:[],playerSpawn:new Phaser.Math.Vector2(1200,800),enemySpawns:spawns.map(vector),bombSites:sites.map(vector),decorativeNeon:this.createDecorations(random,bounds,archetype),generation:fingerprint};
+  }
+
+  static resetHistory():void{this.history.clear();}
+  static forceArenaType(archetype:ArenaTemplate|null):void{this.forcedArchetype=archetype;}
+  static recentFingerprints():readonly ArenaFingerprint[]{return this.history.recent();}
+  private static debug(layout:ArenaLayout,round:number,note='accepted'):void{if(!import.meta.env.DEV)return;const m=layout.generation;console.info(`[Arena] ${note}`,{seed:layout.seed,round,archetype:layout.template,dimensions:`${m.bounds.w}x${m.bounds.h}`,attempt:m.attempt,similarity:m.similarityScore.toFixed(3),recent:this.history.recentArchetypes(),obstacles:layout.obstacles.length,walls:layout.walls.length,openSpace:m.openSpacePercentage,bombSites:layout.bombSites.length,spawns:layout.enemySpawns.length,validation:m.validation});}
 }

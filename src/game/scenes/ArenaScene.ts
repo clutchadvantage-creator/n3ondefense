@@ -11,7 +11,7 @@ import { Turret } from '../abilities/Turret';
 import { Fence } from '../abilities/Fence';
 import { Player } from '../entities/Player';
 import { baseEnemyStats, Enemy } from '../enemies/Enemy';
-import { BombSiteState, RoundState, type AbilityType, type ArenaLayout, type ArenaReward, type ArenaSessionState, type BombSiteRuntime, type EnemyType, type PickupType, type RectSpec, type RoundFinishedPayload } from '../types';
+import { BombSiteState, RoundState, type AbilityType, type ArenaLayout, type ArenaReward, type ArenaSessionState, type ArenaTemplate, type BombSiteRuntime, type EnemyType, type PickupType, type RectSpec, type RoundFinishedPayload } from '../types';
 import { AudioManager } from '../systems/AudioManager';
 import { BombSiteManager } from '../systems/BombSiteManager';
 import { GameStateMachine } from '../systems/GameStateMachine';
@@ -153,6 +153,7 @@ export class ArenaScene extends Phaser.Scene {
     three: Phaser.Input.Keyboard.Key;
     esc: Phaser.Input.Keyboard.Key;
     f8: Phaser.Input.Keyboard.Key;
+    f7: Phaser.Input.Keyboard.Key;
   };
 
   private selectedAbility: AbilityType = 'fence';
@@ -269,6 +270,11 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.pauseForPointerLock('initial');
     this.pointerLock.showInitial();
+    if(import.meta.env.DEV){
+      const debugGlobal=globalThis as typeof globalThis&{forceArenaType?:(type:ArenaTemplate|null)=>void;regenerateArena?:()=>void};
+      debugGlobal.forceArenaType=(type)=>{ArenaGenerator.forceArenaType(type);this.createRoundFromDefinition(this.roundManager.currentDefinition());};
+      debugGlobal.regenerateArena=()=>this.createRoundFromDefinition(this.roundManager.currentDefinition());
+    }
   }
 
   private parseSessionData(data: unknown): ArenaSessionState | undefined {
@@ -534,6 +540,10 @@ export class ArenaScene extends Phaser.Scene {
     if (import.meta.env.DEV && Phaser.Input.Keyboard.JustDown(this.keys.f8)) {
       this.balanceTelemetry?.setVisible(!this.balanceTelemetry.visible);
     }
+    if(import.meta.env.DEV&&Phaser.Input.Keyboard.JustDown(this.keys.f7)){
+      this.createRoundFromDefinition(this.roundManager.currentDefinition());
+      return;
+    }
 
     if (this.state.state === RoundState.Paused || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
       return;
@@ -587,6 +597,7 @@ export class ArenaScene extends Phaser.Scene {
       three: kb.addKey('THREE'),
       esc: kb.addKey('ESC')
       ,f8: kb.addKey('F8')
+      ,f7: kb.addKey('F7')
     };
 
     this.input.on('pointerdown', this.onPointerDown);
@@ -964,8 +975,9 @@ export class ArenaScene extends Phaser.Scene {
   private updateEnemyPatrol(enemy: Enemy, now: number): void {
     const target = this.patrolTargets.get(enemy) ?? { x: enemy.x, y: enemy.y };
     if (Phaser.Math.Distance.Between(enemy.x, enemy.y, target.x, target.y) < 42 || Math.random() < 0.002) {
-      target.x = Phaser.Math.Clamp(enemy.x + Phaser.Math.Between(-260, 260), 60, WORLD_WIDTH - 60);
-      target.y = Phaser.Math.Clamp(enemy.y + Phaser.Math.Between(-220, 220), 60, WORLD_HEIGHT - 60);
+      const bounds=this.layout.generation.bounds;
+      target.x = Phaser.Math.Clamp(enemy.x + Phaser.Math.Between(-260, 260), bounds.x+60, bounds.x+bounds.w-60);
+      target.y = Phaser.Math.Clamp(enemy.y + Phaser.Math.Between(-220, 220), bounds.y+60, bounds.y+bounds.h-60);
       this.patrolTargets.set(enemy, target);
     }
 
@@ -1601,8 +1613,9 @@ export class ArenaScene extends Phaser.Scene {
     if (activeHealthDrops >= PICKUP_BALANCE.maxArenaHealthDrops) return;
 
     for (let attempt = 0; attempt < 24; attempt += 1) {
-      const x = Phaser.Math.Between(100, WORLD_WIDTH - 100);
-      const y = Phaser.Math.Between(100, WORLD_HEIGHT - 100);
+      const bounds=this.layout.generation.bounds;
+      const x = Phaser.Math.Between(bounds.x+100, bounds.x+bounds.w-100);
+      const y = Phaser.Math.Between(bounds.y+100, bounds.y+bounds.h-100);
       if (!this.isClearForArenaPickup(x, y)) continue;
 
       const pickup = this.createPickupSprite('health', x, y, COLORS.green);
@@ -2109,7 +2122,8 @@ export class ArenaScene extends Phaser.Scene {
     this.balanceTelemetry.setText(
       `BALANCE DEV (F8)  R${round}  Sites ${destroyed}/${this.bombSites.sites.length}\n`
       + `Enemies ${this.enemies.length}/${spawn.activeCountCap}  Weight ${activeWeight.toFixed(1)}/${spawn.activeWeightCap.toFixed(1)}  HP ${Math.round(totalHp)}\n`
-      + `HPx ${curve.healthMultiplier.toFixed(2)}  DMGx ${curve.damageMultiplier.toFixed(2)}  Cadence ${spawn.defenseCadenceMs}ms`
+      + `HPx ${curve.healthMultiplier.toFixed(2)}  DMGx ${curve.damageMultiplier.toFixed(2)}  Cadence ${spawn.defenseCadenceMs}ms\n`
+      + `ARENA (F7 regenerate) ${this.layout.template} ${this.layout.generation.bounds.w}x${this.layout.generation.bounds.h} attempt ${this.layout.generation.attempt} similarity ${this.layout.generation.similarityScore.toFixed(3)} open ${this.layout.generation.openSpacePercentage}%`
     );
   }
 
@@ -2190,7 +2204,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private isValidPlacement(x: number, y: number): boolean {
-    if (x < 40 || y < 40 || x > WORLD_WIDTH - 40 || y > WORLD_HEIGHT - 40) return false;
+    const bounds=this.layout.generation.bounds;
+    if (x < bounds.x+40 || y < bounds.y+40 || x > bounds.x+bounds.w-40 || y > bounds.y+bounds.h-40) return false;
     if (this.hitWall(x, y)) return false;
     for (const s of this.bombSites.sites) {
       if (Phaser.Math.Distance.Between(x, y, s.x, s.y) < 86) return false;
