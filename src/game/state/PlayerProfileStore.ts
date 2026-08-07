@@ -3,8 +3,8 @@ import { UPGRADE_DEFINITIONS } from '../../data/upgrades';
 import type { CosmeticOption } from '../types';
 import { type LocalPlayerSave, type ProfileSummary } from '../save/LocalSaveTypes';
 import { LocalSaveManager } from '../save/LocalSaveManager';
-import { addModDrop, equipMod, rankUpMod, unequipMod } from '../mods/ModInventoryService.ts';
-import type { ModSlot, RunProtocolId } from '../mods/types.ts';
+import { addModDrop, equipMod, infuseModCard, rankUpMod, recycleDuplicateMod, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
+import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
 
 export interface PurchaseResult {
@@ -275,9 +275,9 @@ export class PlayerProfileStore {
     return result;
   }
 
-  static equipMod(slot: ModSlot, modId: string): PurchaseResult {
+  static equipMod(slot: ModSlot, modId: string, instanceId?: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
-    const result = equipMod(save.mods, slot, modId);
+    const result = equipMod(save.mods, slot, modId, instanceId);
     if (result.ok) PlayerProfileStore.save();
     return result;
   }
@@ -286,6 +286,29 @@ export class PlayerProfileStore {
     const save = PlayerProfileStore.getActiveSave();
     unequipMod(save.mods, slot);
     PlayerProfileStore.save();
+  }
+
+  static sellDuplicateMod(instanceId: string): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = sellDuplicateMod(save.mods, instanceId);
+    if (!result.ok || result.credits === undefined) return result;
+    save.wallet.credits += result.credits;
+    PlayerProfileStore.save();
+    return result;
+  }
+
+  static recycleDuplicateMod(instanceId: string): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = recycleDuplicateMod(save.mods, instanceId);
+    if (result.ok) PlayerProfileStore.save();
+    return result;
+  }
+
+  static infuseModCard(instanceId: string, infusionId: ModInfusionId): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = infuseModCard(save.mods, instanceId, infusionId);
+    if (result.ok) PlayerProfileStore.save();
+    return result;
   }
 
   static setPreferredProtocol(protocol: RunProtocolId): PurchaseResult {

@@ -4,6 +4,8 @@ export type ModRank = 1 | 2 | 3;
 export type ModSlot = 'weapon' | 'player' | 'defense' | 'bombSite' | 'wildcard';
 export type RunProtocolId = 'normal' | 'overdrive';
 export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone';
+export type ModVariant = 'standard' | 'corrupted';
+export type ModInfusionId = 'enemy-growth' | 'detonation-fireworks';
 
 export interface ModDefinition {
   id: string;
@@ -15,6 +17,16 @@ export interface ModDefinition {
   rankDescriptions: Record<ModRank, string>;
   tags: string[];
   dropWeight: number;
+  variant?: ModVariant;
+  positiveEffect?: string;
+  negativeEffect?: string;
+}
+
+export interface ModCardInstance {
+  instanceId: string;
+  modId: string;
+  acquiredAt: string;
+  infusionId?: ModInfusionId;
 }
 
 export interface OwnedModState {
@@ -32,10 +44,13 @@ export interface SavedModLoadout {
   id: string;
   name: string;
   slots: ModLoadoutSlots;
+  cardSlots: ModLoadoutSlots;
 }
 
 export interface LocalModCollection {
   inventory: ModInventory;
+  cards: ModCardInstance[];
+  plasmaChips: number;
   loadouts: SavedModLoadout[];
   activeLoadoutId: string;
 }

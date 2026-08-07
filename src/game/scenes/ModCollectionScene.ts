@@ -2,87 +2,120 @@ import Phaser from 'phaser';
 import { SceneKeys } from '../flow/SceneKeys';
 import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
 import { MOD_BALANCE } from '../mods/modBalance.ts';
-import type { ModSlot } from '../mods/types.ts';
+import { createModCardView } from '../mods/ModCardView.ts';
+import type { ModCardInstance, ModCategory, ModInfusionId, ModSlot } from '../mods/types.ts';
 import { SaveSystem } from '../systems/SaveSystem';
 import { createButton } from '../utils/ui';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { rollModDrop } from '../mods/ModDropService.ts';
 
-const RARITY_COLOR = { common: '#b9c9d4', uncommon: '#73ff9d', rare: '#62b7ff', prototype: '#d286ff', legendary: '#ffc75c' } as const;
+type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
+const CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player', 'defense', 'bombSite', 'utility'];
+const SORTS: SortMode[] = ['acquired', 'type', 'rank', 'rarity'];
+const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, prototype: 3, legendary: 4 } as const;
 
 export class ModCollectionScene extends Phaser.Scene {
-  private selectedId = MOD_DEFINITIONS[0].id;
+  private selectedCardId = '';
+  private categoryIndex = 0;
+  private sortIndex = 0;
+  private page = 0;
   private status = '';
 
   constructor() { super(SceneKeys.Mods); }
 
   create(): void {
     const { width, height } = this.scale;
-    this.add.rectangle(width / 2, height / 2, width, height, 0x050912, 1);
-    this.add.text(width / 2, 48, 'MOD COLLECTION', { fontFamily: 'Orbitron, sans-serif', fontSize: '36px', color: '#68f7ff' }).setOrigin(0.5);
-    this.add.text(width / 2, 82, 'Behavioral systems alter tactics. Permanent upgrades remain authoritative.', { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9c8dc' }).setOrigin(0.5);
-
     const mods = SaveSystem.getModCollection();
-    const cardWidth = Math.min(210, (width - 80) / MOD_DEFINITIONS.length - 12);
-    MOD_DEFINITIONS.forEach((definition, index) => {
-      const x = 40 + cardWidth / 2 + index * (cardWidth + 12);
-      const owned = mods.inventory[definition.id];
-      const selected = definition.id === this.selectedId;
-      const card = this.add.rectangle(x, 180, cardWidth, 130, 0x0b1724, owned ? 0.94 : 0.62)
-        .setStrokeStyle(selected ? 3 : 1, selected ? 0xffffff : Phaser.Display.Color.HexStringToColor(RARITY_COLOR[definition.rarity]).color, selected ? 1 : 0.7)
-        .setInteractive({ useHandCursor: true });
-      card.on('pointerdown', () => { this.selectedId = definition.id; this.scene.restart(); });
-      this.add.text(x, 142, owned ? definition.name.toUpperCase() : 'UNDISCOVERED', { fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: owned ? RARITY_COLOR[definition.rarity] : '#657386', align: 'center' }).setOrigin(0.5).setWordWrapWidth(cardWidth - 16);
-      this.add.text(x, 181, definition.category.toUpperCase(), { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#8eabc0' }).setOrigin(0.5);
-      this.add.text(x, 212, owned ? `RANK ${owned.rank}/3  •  DUPES ${owned.duplicates}` : 'LOCKED', { fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: owned ? '#dffaff' : '#7b8794' }).setOrigin(0.5);
+    const category = CATEGORIES[this.categoryIndex];
+    const sort = SORTS[this.sortIndex];
+    const cards = this.sortedCards(mods.cards.filter((card) => category === 'all' || MOD_BY_ID.get(card.modId)?.category === category), sort);
+    if (!this.selectedCardId || !mods.cards.some((card) => card.instanceId === this.selectedCardId)) this.selectedCardId = cards[0]?.instanceId ?? mods.cards[0]?.instanceId ?? '';
+
+    this.add.rectangle(width / 2, height / 2, width, height, 0x040811, 1);
+    this.add.grid(width / 2, height / 2, width, height, 48, 48, 0x050b14, 0.2, 0x153447, 0.12);
+    this.add.text(width / 2, 34, 'MOD CARD COLLECTION', { fontFamily: 'Orbitron, sans-serif', fontSize: '30px', color: '#68f7ff' }).setOrigin(0.5);
+    this.add.text(width / 2, 64, `${mods.cards.length} CARDS  •  ${mods.plasmaChips} PLASMA CHIPS  •  ${SaveSystem.get().credits.toLocaleString()} CREDITS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9ffe9' }).setOrigin(0.5);
+
+    createButton(this, 150, 104, `Group: ${category === 'all' ? 'ALL' : category.toUpperCase()}`, () => { this.categoryIndex = (this.categoryIndex + 1) % CATEGORIES.length; this.page = 0; this.scene.restart(); }, 250);
+    createButton(this, 430, 104, `Sort: ${sort.toUpperCase()}`, () => { this.sortIndex = (this.sortIndex + 1) % SORTS.length; this.page = 0; this.scene.restart(); }, 250);
+    createButton(this, width - 140, 104, 'Main Menu', () => this.scene.start(SceneKeys.MainMenu), 220);
+
+    const detailWidth = Math.min(360, width * 0.3);
+    const gridLeft = 36;
+    const gridRight = width - detailWidth - 42;
+    const cardWidth = Phaser.Math.Clamp((gridRight - gridLeft - 48) / 4, 112, 148);
+    const cardHeight = cardWidth * 1.4;
+    const columns = Math.max(2, Math.floor((gridRight - gridLeft) / (cardWidth + 14)));
+    const rows = Math.max(1, Math.floor((height - 230) / (cardHeight + 14)));
+    const perPage = columns * rows;
+    const maxPage = Math.max(0, Math.ceil(cards.length / perPage) - 1);
+    this.page = Math.min(this.page, maxPage);
+    cards.slice(this.page * perPage, (this.page + 1) * perPage).forEach((card, index) => {
+      const owned = mods.inventory[card.modId];
+      const x = gridLeft + cardWidth / 2 + (index % columns) * (cardWidth + 14);
+      const y = 154 + cardHeight / 2 + Math.floor(index / columns) * (cardHeight + 14);
+      const view = createModCardView(this, x, y, card, owned.rank, { width: cardWidth, height: cardHeight, selected: card.instanceId === this.selectedCardId, compact: true });
+      view.on('pointerdown', () => { this.selectedCardId = card.instanceId; this.scene.restart(); });
     });
+    if (!cards.length) this.add.text((gridLeft + gridRight) / 2, height / 2, 'NO COLLECTED CARDS IN THIS GROUP', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#607a8c' }).setOrigin(0.5);
+    createButton(this, gridLeft + 70, height - 36, '◀', () => { this.page = Math.max(0, this.page - 1); this.scene.restart(); }, 90);
+    this.add.text((gridLeft + gridRight) / 2, height - 36, `PAGE ${this.page + 1} / ${maxPage + 1}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#a8c8d9' }).setOrigin(0.5);
+    createButton(this, gridRight - 70, height - 36, '▶', () => { this.page = Math.min(maxPage, this.page + 1); this.scene.restart(); }, 90);
 
-    const definition = MOD_BY_ID.get(this.selectedId) ?? MOD_DEFINITIONS[0];
-    const owned = mods.inventory[definition.id];
-    this.add.rectangle(width / 2, 390, Math.min(1040, width - 80), 250, 0x08131f, 0.94).setStrokeStyle(2, Phaser.Display.Color.HexStringToColor(RARITY_COLOR[definition.rarity]).color, 0.8);
-    this.add.text(width / 2, 292, definition.name.toUpperCase(), { fontFamily: 'Orbitron, sans-serif', fontSize: '24px', color: RARITY_COLOR[definition.rarity] }).setOrigin(0.5);
-    this.add.text(width / 2, 330, definition.description, { fontFamily: 'Rajdhani, sans-serif', fontSize: '20px', color: '#d7efff', align: 'center' }).setOrigin(0.5).setWordWrapWidth(Math.min(900, width - 140));
-    const rankLines = ([1, 2, 3] as const).map((rank) => `R${rank}: ${definition.rankDescriptions[rank]}`).join('\n');
-    this.add.text(width / 2, 400, rankLines, { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9cce1', align: 'center' }).setOrigin(0.5).setWordWrapWidth(Math.min(900, width - 140));
-    const nextRank = owned && owned.rank < 3 ? (owned.rank + 1) as 2 | 3 : null;
-    const requirement = nextRank ? `${MOD_BALANCE.duplicateRequirements[nextRank]} duplicate(s) + ${MOD_BALANCE.rankCreditCosts[nextRank]} credits` : owned ? 'MAX RANK' : 'Discover this mod through gameplay.';
-    this.add.text(width / 2, 474, requirement, { fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#ffd18f' }).setOrigin(0.5);
-
-    const categorySlot = definition.category === 'utility' ? null : definition.category as ModSlot;
-    if (owned) {
-      if (categorySlot) createButton(this, width / 2 - 310, 548, `Equip ${categorySlot}`, () => this.apply(() => SaveSystem.equipMod(categorySlot, definition.id)), 210);
-      createButton(this, width / 2 - 80, 548, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id)), 210);
-      createButton(this, width / 2 + 150, 548, 'Rank Up', () => this.apply(() => SaveSystem.rankUpMod(definition.id)), 190);
-    }
-
-    const loadout = mods.loadouts.find((entry) => entry.id === mods.activeLoadoutId) ?? mods.loadouts[0];
-    const slots = Object.entries(loadout?.slots ?? {}).map(([slot, id]) => `${slot.toUpperCase()}: ${id ? MOD_BY_ID.get(id)?.name ?? 'INVALID' : 'EMPTY'}`).join('   |   ');
-    this.add.text(width / 2, 615, slots, { fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#9fffe2', align: 'center' }).setOrigin(0.5).setWordWrapWidth(width - 90);
-    createButton(this, width / 2 - 180, 674, 'Unequip Category', () => { if (categorySlot) { SaveSystem.unequipMod(categorySlot); this.status = 'Slot cleared.'; this.scene.restart(); } }, 230);
-    createButton(this, width / 2 + 70, 674, 'Unequip Wildcard', () => { SaveSystem.unequipMod('wildcard'); this.status = 'Wildcard cleared.'; this.scene.restart(); }, 220);
-    createButton(this, width / 2 + 300, 674, 'Main Menu', () => this.scene.start(SceneKeys.MainMenu), 190);
-    this.add.text(width / 2, Math.min(height - 34, 728), this.status, { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf' }).setOrigin(0.5);
-
+    const selected = mods.cards.find((card) => card.instanceId === this.selectedCardId);
+    this.createDetails(width - detailWidth / 2 - 20, 145, detailWidth, height - 180, selected);
     if (import.meta.env.DEV) this.installDevKeys();
   }
 
-  private apply(operation: () => { ok: boolean; message?: string }): void {
-    const result = operation();
-    this.status = `${result.ok ? 'Success' : 'Blocked'}: ${result.message ?? ''}`;
-    this.scene.restart();
+  private createDetails(x: number, y: number, width: number, height: number, card?: ModCardInstance): void {
+    this.add.rectangle(x, y + height / 2, width, height, 0x08131f, 0.96).setStrokeStyle(2, 0x50dfff, 0.65);
+    if (!card) {
+      this.add.text(x, y + 80, 'SELECT A COLLECTED CARD', { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: '#7895a8' }).setOrigin(0.5);
+      return;
+    }
+    const definition = MOD_BY_ID.get(card.modId)!;
+    const owned = SaveSystem.getModCollection().inventory[card.modId];
+    createModCardView(this, x, y + 120, card, owned.rank, { width: 145, height: 205, interactive: false });
+    const corruptedText = definition.variant === 'corrupted' ? `\n+ ${definition.positiveEffect}\n− ${definition.negativeEffect}` : '';
+    this.add.text(x, y + 246, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\n\nRANK ${owned.rank}/3 • ${owned.duplicates} DUPLICATES`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#d7efff', align: 'center'
+    }).setOrigin(0.5, 0).setWordWrapWidth(width - 28);
+    const sameCards = SaveSystem.getModCollection().cards.filter((entry) => entry.modId === card.modId);
+    const duplicate = sameCards[0]?.instanceId !== card.instanceId;
+    const categorySlot = definition.category === 'utility' ? null : definition.category as ModSlot;
+    const buttonY = y + height - 174;
+    if (categorySlot) createButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.apply(() => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40);
+    createButton(this, x, buttonY + 44, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40);
+    if (duplicate) {
+      const sell = MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity];
+      const chips = MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity];
+      createButton(this, x - width * 0.24, buttonY + 88, `Sell +${sell}C`, () => this.apply(() => SaveSystem.sellDuplicateMod(card.instanceId)), width * 0.43);
+      createButton(this, x + width * 0.24, buttonY + 88, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), width * 0.43);
+    } else {
+      createButton(this, x, buttonY + 88, 'Rank Up', () => this.apply(() => SaveSystem.rankUpMod(definition.id)), width - 40);
+    }
+    const infusion: ModInfusionId = card.infusionId === 'enemy-growth' ? 'detonation-fireworks' : 'enemy-growth';
+    createButton(this, x, buttonY + 132, `Infuse: ${infusion === 'enemy-growth' ? 'Big Enemies' : 'Fireworks'} (${MOD_BALANCE.infusionPlasmaCost[infusion]}◆)`, () => this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion)), width - 40);
+    this.add.text(x, y + height - 16, this.status, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf', align: 'center' }).setOrigin(0.5, 1).setWordWrapWidth(width - 24);
   }
 
-  private installDevKeys(): void {
-    this.add.text(12, this.scale.height - 12, 'DEV MODS: G grant/duplicate • 1/2/3 set rank • X clear • T test loadout • M simulated drop • I inspect', { fontFamily: 'monospace', fontSize: '12px', color: '#ffc57d' }).setOrigin(0, 1);
-    this.input.keyboard?.once('keydown-G', () => { SaveSystem.addMod(this.selectedId); this.scene.restart(); });
-    for (const rank of [1, 2, 3] as const) this.input.keyboard?.once(`keydown-${rank}`, () => {
-      if (!SaveSystem.getModCollection().inventory[this.selectedId]) SaveSystem.addMod(this.selectedId);
-      SaveSystem.getModCollection().inventory[this.selectedId].rank = rank;
-      SaveSystem.persist(); this.scene.restart();
+  private sortedCards(cards: ModCardInstance[], sort: SortMode): ModCardInstance[] {
+    return [...cards].sort((a, b) => {
+      const ad = MOD_BY_ID.get(a.modId)!; const bd = MOD_BY_ID.get(b.modId)!;
+      if (sort === 'type') return ad.category.localeCompare(bd.category) || ad.name.localeCompare(bd.name);
+      if (sort === 'rank') return (SaveSystem.getModCollection().inventory[b.modId]?.rank ?? 1) - (SaveSystem.getModCollection().inventory[a.modId]?.rank ?? 1);
+      if (sort === 'rarity') return RARITY_ORDER[bd.rarity] - RARITY_ORDER[ad.rarity];
+      return b.acquiredAt.localeCompare(a.acquiredAt);
     });
-    this.input.keyboard?.once('keydown-X', () => { const mods = SaveSystem.getModCollection(); mods.inventory = {}; mods.loadouts[0].slots = { weapon: null, player: null, defense: null, bombSite: null, wildcard: null }; SaveSystem.persist(); this.scene.restart(); });
-    this.input.keyboard?.once('keydown-T', () => { MOD_DEFINITIONS.forEach((mod) => SaveSystem.addMod(mod.id)); SaveSystem.equipMod('weapon', 'split-current'); SaveSystem.equipMod('player', 'emergency-capacitor'); SaveSystem.equipMod('defense', 'priority-targeting'); SaveSystem.equipMod('bombSite', 'emergency-shield'); SaveSystem.equipMod('wildcard', 'magnetic-payload'); this.scene.restart(); });
-    this.input.keyboard?.once('keydown-M', () => { const drop = rollModDrop({ source: 'milestone', round: 10, seed: Date.now(), sequence: 0, protocol: 'normal', guaranteed: true }); if (drop) SaveSystem.addMod(drop.id); this.scene.restart(); });
-    this.input.keyboard?.once('keydown-I', () => { console.info('[MOD RUNTIME]', new ModRuntime(SaveSystem.getModCollection()).snapshot(), SaveSystem.getModCollection()); });
+  }
+
+  private apply(operation: () => { ok: boolean; message?: string }): void { const result = operation(); this.status = `${result.ok ? 'Success' : 'Blocked'}: ${result.message ?? ''}`; this.scene.restart(); }
+
+  private installDevKeys(): void {
+    this.input.keyboard?.once('keydown-G', () => { SaveSystem.addMod(MOD_DEFINITIONS.find((mod) => mod.id === (MOD_BY_ID.get(SaveSystem.getModCollection().cards.find((card) => card.instanceId === this.selectedCardId)?.modId ?? '')?.id))?.id ?? MOD_DEFINITIONS[0].id); this.scene.restart(); });
+    this.input.keyboard?.once('keydown-X', () => { const mods = SaveSystem.getModCollection(); mods.inventory = {}; mods.cards = []; mods.plasmaChips = 0; mods.loadouts[0].slots = { weapon: null, player: null, defense: null, bombSite: null, wildcard: null }; mods.loadouts[0].cardSlots = { weapon: null, player: null, defense: null, bombSite: null, wildcard: null }; SaveSystem.persist(); this.scene.restart(); });
+    this.input.keyboard?.once('keydown-T', () => { MOD_DEFINITIONS.forEach((mod) => { SaveSystem.addMod(mod.id); SaveSystem.addMod(mod.id); }); this.scene.restart(); });
+    this.input.keyboard?.once('keydown-M', () => { const drop = rollModDrop({ source: 'milestone', round: 20, seed: Date.now(), sequence: 0, protocol: 'normal', guaranteed: true }); if (drop) SaveSystem.addMod(drop.id); this.scene.restart(); });
+    this.input.keyboard?.once('keydown-I', () => console.info('[MOD RUNTIME]', new ModRuntime(SaveSystem.getModCollection()).snapshot(), SaveSystem.getModCollection()));
   }
 }

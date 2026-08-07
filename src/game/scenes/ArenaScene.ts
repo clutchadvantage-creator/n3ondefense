@@ -30,8 +30,9 @@ import { ABILITY_ACTIONS, compactBindingLabel, type AbilityAction, type AbilityB
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_BALANCE } from '../mods/modBalance.ts';
 import { isGuaranteedMilestone, rollModDrop } from '../mods/ModDropService.ts';
-import type { ModDropSource, ModRewardRecord, RunProtocolId } from '../mods/types.ts';
+import type { ModDropSource, ModRewardRecord, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { magneticResistanceForEnemy, prioritizeTurretTargets, splitCurrentSecondaryDamage } from '../mods/ModRules.ts';
+import { createModCardView } from '../mods/ModCardView.ts';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -135,6 +136,7 @@ export class ArenaScene extends Phaser.Scene {
   private lastDefuserSpawnAt = -99_999;
 
   private pauseMenu: PauseMenuElements | null = null;
+  private equippedModsViewer: Phaser.GameObjects.Container | null = null;
   private siteActionText!: Phaser.GameObjects.Text;
   private crosshair!: Phaser.GameObjects.Graphics;
   private balanceTelemetry: Phaser.GameObjects.Text | null = null;
@@ -687,8 +689,10 @@ export class ArenaScene extends Phaser.Scene {
 
     const cadence = 1000 / this.player.fireRate;
     if (now - this.lastPlayerShotMs < cadence) return;
-    if (!this.player.canSpendEnergy(WEAPON_BALANCE.energyCostPerShot)) return;
-    this.player.spendEnergy(WEAPON_BALANCE.energyCostPerShot);
+    const corruptedShotCost = this.modRuntime.has('fractured-current') ? MOD_BALANCE.fracturedCurrent.extraShotEnergyCost : 0;
+    const shotEnergyCost = WEAPON_BALANCE.energyCostPerShot + corruptedShotCost;
+    if (!this.player.canSpendEnergy(shotEnergyCost)) return;
+    this.player.spendEnergy(shotEnergyCost);
     this.lastPlayerShotMs = now;
 
     const aim = this.getAimWorldPoint();
@@ -847,6 +851,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const enemyTexture = type === 'star' ? 'enemy-star' : `enemy-${type}`;
     const enemy = new Enemy(this, spawn.x, spawn.y, enemyTexture, stats);
+    if (this.modRuntime.hasInfusion('enemy-growth')) enemy.setScale(1.12);
     if (type === 'star') {
       enemy.setTexture('enemy-star');
       enemy.setBlendMode(Phaser.BlendModes.ADD);
@@ -1526,16 +1531,23 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private triggerSplitCurrent(killedEnemy: Enemy, finalKillingDamage: number): void {
-    const rank = this.modRuntime.rank('split-current');
-    if (!rank) return;
-    const radius = MOD_BALANCE.splitCurrent.radius[rank];
+    const standardRank = this.modRuntime.rank('split-current');
+    const corruptedRank = this.modRuntime.rank('fractured-current');
+    if (!standardRank && !corruptedRank) return;
+    const standardShare = standardRank ? MOD_BALANCE.splitCurrent.damageShare[standardRank] : 0;
+    const corruptedShare = corruptedRank ? MOD_BALANCE.fracturedCurrent.damageShare[corruptedRank] : 0;
+    const radius = corruptedShare > standardShare
+      ? MOD_BALANCE.fracturedCurrent.radius[corruptedRank || 1]
+      : MOD_BALANCE.splitCurrent.radius[standardRank || 1];
     const target = this.enemies
       .filter((enemy) => enemy !== killedEnemy && !enemy.isDead())
       .map((enemy) => ({ enemy, distance: Phaser.Math.Distance.Between(killedEnemy.x, killedEnemy.y, enemy.x, enemy.y) }))
       .filter(({ distance }) => distance <= radius)
       .sort((a, b) => a.distance - b.distance)[0]?.enemy;
     if (!target) return;
-    const damage = splitCurrentSecondaryDamage(finalKillingDamage, rank, false);
+    const damage = corruptedShare > standardShare
+      ? finalKillingDamage * corruptedShare
+      : splitCurrentSecondaryDamage(finalKillingDamage, standardRank || 1, false);
     target.takeDamage(damage);
     const arc = this.add.graphics().setDepth(11);
     arc.lineStyle(3, COLORS.cyan, 0.95);
@@ -1547,6 +1559,21 @@ export class ArenaScene extends Phaser.Scene {
     arc.lineTo(target.x, target.y);
     arc.strokePath();
     this.tweens.add({ targets: arc, alpha: 0, duration: 150, onComplete: () => arc.destroy() });
+  }
+
+  private playDetonationFireworks(x: number, y: number): void {
+    const colors = [0xff55dd, 0x55eeff, 0xffd35a, 0x7cff8b];
+    for (let burst = 0; burst < 4; burst += 1) {
+      this.time.delayedCall(120 + burst * 150, () => {
+        const bx = x + Phaser.Math.Between(-180, 180);
+        const by = y + Phaser.Math.Between(-150, 20);
+        for (let ray = 0; ray < 14; ray += 1) {
+          const angle = ray / 14 * Math.PI * 2;
+          const spark = this.add.circle(bx, by, 3, colors[(burst + ray) % colors.length], 1).setDepth(42);
+          this.tweens.add({ targets: spark, x: bx + Math.cos(angle) * 70, y: by + Math.sin(angle) * 70, alpha: 0, duration: 520, ease: 'Cubic.Out', onComplete: () => spark.destroy() });
+        }
+      });
+    }
   }
 
   private updateArenaHealthDrops(now: number): void {
@@ -1643,7 +1670,7 @@ export class ArenaScene extends Phaser.Scene {
     this.totalCreditsCollected += enemy.stats.valueCredits;
     SaveSystem.recordEnemyDestroyed();
 
-    this.tryAwardMod(enemy.stats.type === 'star' ? 'eliteEnemy' : 'normalEnemy');
+    this.tryAwardMod(enemy.stats.type === 'star' ? 'eliteEnemy' : 'normalEnemy', false, enemy.x, enemy.y);
 
     if (Math.random() < PICKUP_BALANCE.enemyDropChance) this.dropPickup(enemy.x, enemy.y);
 
@@ -1673,7 +1700,7 @@ export class ArenaScene extends Phaser.Scene {
     enemy.destroy();
   }
 
-  private tryAwardMod(source: ModDropSource, guaranteed = false): void {
+  private tryAwardMod(source: ModDropSource, guaranteed = false, x = this.player.x, y = this.player.y): void {
     const definition = rollModDrop({
       source,
       round: this.roundManager.round,
@@ -1686,8 +1713,13 @@ export class ArenaScene extends Phaser.Scene {
     const duplicate = Boolean(SaveSystem.getModCollection().inventory[definition.id]?.discovered);
     const result = SaveSystem.addMod(definition.id);
     if (!result.ok) return;
+    const card = SaveSystem.getModCollection().cards.at(-1);
     this.modsEarned.push({ modId: definition.id, duplicate, source });
     this.showBanner(`${duplicate ? 'MOD DUPLICATE' : 'MOD DISCOVERED'}\n${definition.name.toUpperCase()}`);
+    if (card) {
+      const view = createModCardView(this, x, y - 34, card, SaveSystem.getModCollection().inventory[definition.id].rank, { width: 58, height: 82, compact: true, interactive: false }).setDepth(50);
+      this.tweens.add({ targets: view, y: y - 104, scale: 1.25, alpha: 0, duration: 1250, ease: 'Cubic.Out', onComplete: () => view.destroy(true) });
+    }
   }
 
   private createDeathExplosion(x: number, y: number, color: number, playerDeath = false): void {
@@ -1849,6 +1881,8 @@ export class ArenaScene extends Phaser.Scene {
         onComplete: () => shard.destroy()
       });
     }
+
+    if (this.modRuntime.hasInfusion('detonation-fireworks')) this.playDetonationFireworks(site.x, site.y);
 
     for (const e of this.enemies) {
       const d = Phaser.Math.Distance.Between(e.x, e.y, site.x, site.y);
@@ -2242,7 +2276,7 @@ export class ArenaScene extends Phaser.Scene {
       this.pauseMenu.title.setPosition(width * 0.5, height * 0.5 - 190);
       this.pauseMenu.subtitle.setPosition(width * 0.5, height * 0.5 - 128);
 
-      const buttonYs = [height * 0.5 - 42, height * 0.5 + 12, height * 0.5 + 66, height * 0.5 + 120, height * 0.5 + 174];
+      const buttonYs = [height * 0.5 - 68, height * 0.5 - 16, height * 0.5 + 36, height * 0.5 + 88, height * 0.5 + 140, height * 0.5 + 192];
       this.pauseMenu.buttons.forEach((btn, i) => btn.setPosition(width * 0.5, buttonYs[i] ?? height * 0.5));
     }
   }
@@ -2255,7 +2289,7 @@ export class ArenaScene extends Phaser.Scene {
     const backdrop = this.add.rectangle(width * 0.5, height * 0.5, width, height, 0x03060c, 0.72)
       .setScrollFactor(0)
       .setDepth(1185);
-    const panel = this.add.rectangle(width * 0.5, height * 0.5, 560, 490, 0x0c1320, 0.96)
+    const panel = this.add.rectangle(width * 0.5, height * 0.5, 560, 540, 0x0c1320, 0.96)
       .setStrokeStyle(2, 0x53dfff, 0.9)
       .setScrollFactor(0)
       .setDepth(1190);
@@ -2279,15 +2313,16 @@ export class ArenaScene extends Phaser.Scene {
     ).setOrigin(0.5).setScrollFactor(0).setDepth(1192);
 
     const buttons = [
-      createButton(this, width * 0.5, height * 0.5 - 42, 'Resume', () => this.resumeGameplay(), 280),
-      createButton(this, width * 0.5, height * 0.5 + 12, 'Restart From Round 1', () => this.restartFromRoundOne(), 280),
-      createButton(this, width * 0.5, height * 0.5 + 66, 'Options', () => {
+      createButton(this, width * 0.5, height * 0.5 - 68, 'Resume', () => this.resumeGameplay(), 280),
+      createButton(this, width * 0.5, height * 0.5 - 16, 'Equipped Mod Cards', () => this.showEquippedModsViewer(), 280),
+      createButton(this, width * 0.5, height * 0.5 + 36, 'Restart From Round 1', () => this.restartFromRoundOne(), 280),
+      createButton(this, width * 0.5, height * 0.5 + 88, 'Options', () => {
         this.hidePauseMenu();
         this.scene.launch(SceneKeys.Options, { returnScene: SceneKeys.Arena, resumeGameplay: true });
         this.scene.pause();
       }, 280),
-      createButton(this, width * 0.5, height * 0.5 + 120, 'Store', () => this.scene.start(SceneKeys.Upgrades), 280),
-      createButton(this, width * 0.5, height * 0.5 + 174, 'Quit To Main Menu', () => this.quitToMenu(), 280)
+      createButton(this, width * 0.5, height * 0.5 + 140, 'Store', () => this.scene.start(SceneKeys.Upgrades), 280),
+      createButton(this, width * 0.5, height * 0.5 + 192, 'Quit To Main Menu', () => this.quitToMenu(), 280)
     ];
     buttons.forEach((btn) => {
       btn.setScrollFactor(0).setDepth(1195);
@@ -2301,6 +2336,34 @@ export class ArenaScene extends Phaser.Scene {
     this.pauseMenu = { backdrop, panel, title, subtitle, buttons };
   }
 
+  private showEquippedModsViewer(): void {
+    this.hidePauseMenu();
+    this.hideEquippedModsViewer();
+    const { width, height } = this.scale;
+    const root = this.add.container(0, 0).setScrollFactor(0).setDepth(1250);
+    root.add(this.add.rectangle(width / 2, height / 2, width, height, 0x02050b, 0.88));
+    root.add(this.add.rectangle(width / 2, height / 2, Math.min(width - 60, 1040), 470, 0x091521, 0.98).setStrokeStyle(2, 0x62e9ff, 0.9));
+    root.add(this.add.text(width / 2, height / 2 - 192, 'EQUIPPED MOD CARDS', { fontFamily: 'Orbitron, sans-serif', fontSize: '28px', color: '#71f6ff' }).setOrigin(0.5));
+    const mods = SaveSystem.getModCollection();
+    const loadout = mods.loadouts.find((entry) => entry.id === mods.activeLoadoutId) ?? mods.loadouts[0];
+    const equipped = this.modRuntime.snapshot();
+    equipped.forEach((entry, index) => {
+      const selectedCardId = Object.entries(loadout?.slots ?? {}).find(([, modId]) => modId === entry.id)?.[0] as ModSlot | undefined;
+      const card = mods.cards.find((candidate) => candidate.instanceId === (selectedCardId ? loadout?.cardSlots[selectedCardId] : ''))
+        ?? mods.cards.find((candidate) => candidate.modId === entry.id);
+      if (!card) return;
+      const spacing = Math.min(175, (width - 110) / Math.max(1, equipped.length));
+      const x = width / 2 - (equipped.length - 1) * spacing / 2 + index * spacing;
+      root.add(createModCardView(this, x, height / 2, card, entry.rank, { width: 140, height: 196, compact: true, interactive: false }));
+    });
+    if (!equipped.length) root.add(this.add.text(width / 2, height / 2, 'NO MOD CARDS EQUIPPED', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#7895a8' }).setOrigin(0.5));
+    const close = createButton(this, width / 2, height / 2 + 190, 'Back To Pause Menu', () => { this.hideEquippedModsViewer(); this.showPauseMenu(); }, 280);
+    root.add(close);
+    this.equippedModsViewer = root;
+  }
+
+  private hideEquippedModsViewer(): void { this.equippedModsViewer?.destroy(true); this.equippedModsViewer = null; }
+
   private hidePauseMenu(): void {
     if (!this.pauseMenu) return;
     this.pauseMenu.backdrop.destroy();
@@ -2312,6 +2375,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private resumeGameplay(): void {
+    this.hideEquippedModsViewer();
     this.hidePauseMenu();
     if (this.state.state !== RoundState.Paused) return;
     this.pointerLock?.showResume();
@@ -2369,6 +2433,7 @@ export class ArenaScene extends Phaser.Scene {
     this.balanceTelemetry?.destroy();
     this.balanceTelemetry = null;
     this.hidePauseMenu();
+    this.hideEquippedModsViewer();
     this.bombSites?.destroy();
     this.laserSecurity?.destroy();
     this.laserSecurity = null;

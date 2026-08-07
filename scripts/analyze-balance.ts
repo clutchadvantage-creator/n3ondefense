@@ -142,12 +142,15 @@ console.table(MOD_DEFINITIONS.map((mod) => ({
   id: mod.id,
   category: mod.category,
   rarity: mod.rarity,
+  variant: mod.variant ?? 'standard',
   maxRank: mod.maxRank,
   dropWeight: mod.dropWeight,
   rank2Duplicates: MOD_BALANCE.duplicateRequirements[2],
   rank2Credits: MOD_BALANCE.rankCreditCosts[2],
   rank3Duplicates: MOD_BALANCE.duplicateRequirements[3],
-  rank3Credits: MOD_BALANCE.rankCreditCosts[3]
+  rank3Credits: MOD_BALANCE.rankCreditCosts[3],
+  duplicateSale: MOD_BALANCE.duplicateCreditValueByRarity[mod.rarity],
+  duplicatePlasma: MOD_BALANCE.duplicatePlasmaValueByRarity[mod.rarity]
 })));
 console.log('\nTHREAT PROTOCOLS');
 console.table(Object.values(RUN_PROTOCOLS));
@@ -184,5 +187,7 @@ assert(Object.values(MOD_BALANCE.dropChance).every((chance) => chance >= 0 && ch
 assert(Object.values(MOD_BALANCE.raritySourceMultipliers).every((table) => Object.values(table).some((weight) => weight > 0)), 'each mod source has a usable drop table');
 assert(MOD_BALANCE.rankCreditCosts[3] >= MOD_BALANCE.rankCreditCosts[2], 'mod rank costs monotonic');
 assert(MOD_BALANCE.duplicateRequirements[3] >= MOD_BALANCE.duplicateRequirements[2], 'mod duplicate costs monotonic');
+assert(Object.values(MOD_BALANCE.duplicateCreditValueByRarity).every((value) => value > 0), 'duplicate sale values positive');
+assert(Object.values(MOD_BALANCE.duplicatePlasmaValueByRarity).every((value) => value > 0), 'duplicate plasma yields positive');
 assert(RUN_PROTOCOLS.overdrive.startingRound > RUN_PROTOCOLS.normal.startingRound, 'Overdrive starts later than Normal');
 console.log('\nAll mathematical safety and relationship checks passed.');

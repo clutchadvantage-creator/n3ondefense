@@ -7,7 +7,7 @@ import type { LocalModCollection, ProtocolPreference } from '../mods/types.ts';
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 3;
+export const CURRENT_SAVE_VERSION = 4;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -99,6 +99,10 @@ export interface LocalProfileIndex {
 }
 
 export type LocalPlayerSaveV2 = Omit<LocalPlayerSave, 'version' | 'mods' | 'protocol'> & { version: 2 };
+export type LocalPlayerSaveV3 = Omit<LocalPlayerSave, 'version' | 'mods'> & {
+  version: 3;
+  mods: Omit<LocalModCollection, 'cards' | 'plasmaChips'>;
+};
 
 export interface LocalLeaderboardEntry {
   profileId: string;

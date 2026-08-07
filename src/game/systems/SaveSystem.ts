@@ -2,7 +2,7 @@ import { COSMETICS } from '../../data/cosmetics';
 import { PlayerProfileStore } from '../state/PlayerProfileStore';
 import type { CosmeticOption, GameSaveData } from '../types';
 import type { OnlineProgressSnapshot } from '../../online/onlineTypes';
-import type { ModSlot, RunProtocolId } from '../mods/types.ts';
+import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 
 export class SaveSystem {
   static get(): GameSaveData {
@@ -100,8 +100,11 @@ export class SaveSystem {
 
   static addMod(modId: string) { return PlayerProfileStore.addMod(modId); }
   static rankUpMod(modId: string) { return PlayerProfileStore.rankUpMod(modId); }
-  static equipMod(slot: ModSlot, modId: string) { return PlayerProfileStore.equipMod(slot, modId); }
+  static equipMod(slot: ModSlot, modId: string, instanceId?: string) { return PlayerProfileStore.equipMod(slot, modId, instanceId); }
   static unequipMod(slot: ModSlot): void { PlayerProfileStore.unequipMod(slot); }
+  static sellDuplicateMod(instanceId: string) { return PlayerProfileStore.sellDuplicateMod(instanceId); }
+  static recycleDuplicateMod(instanceId: string) { return PlayerProfileStore.recycleDuplicateMod(instanceId); }
+  static infuseModCard(instanceId: string, infusionId: ModInfusionId) { return PlayerProfileStore.infuseModCard(instanceId, infusionId); }
   static getPreferredProtocol(): RunProtocolId { return PlayerProfileStore.getActiveSave().protocol.preferred; }
   static setPreferredProtocol(protocol: RunProtocolId) { return PlayerProfileStore.setPreferredProtocol(protocol); }
   static getHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.highestRound; }

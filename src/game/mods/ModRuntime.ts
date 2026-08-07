@@ -1,9 +1,10 @@
 import { MOD_BALANCE } from './modBalance.ts';
 import { MOD_BY_ID } from './definitions.ts';
-import type { EquippedModSnapshot, LocalModCollection, ModRank } from './types.ts';
+import type { EquippedModSnapshot, LocalModCollection, ModInfusionId, ModRank } from './types.ts';
 
 export class ModRuntime {
   private readonly equipped = new Map<string, ModRank>();
+  private readonly infusions = new Set<ModInfusionId>();
   private emergencyCapacitorUsed = false;
   private previousHealthRatio = 1;
   private readonly bombShieldCooldownUntil = new Map<string, number>();
@@ -23,6 +24,10 @@ export class ModRuntime {
       const owned = mods.inventory[modId];
       if (owned?.discovered) this.equipped.set(modId, owned.rank);
     }
+    for (const cardId of Object.values(loadout?.cardSlots ?? {})) {
+      const card = mods.cards.find((entry) => entry.instanceId === cardId);
+      if (card?.infusionId && this.equipped.has(card.modId)) this.infusions.add(card.infusionId);
+    }
   }
 
   beginRound(initialHealthRatio = 1): void {
@@ -34,6 +39,7 @@ export class ModRuntime {
 
   rank(modId: string): ModRank | 0 { return this.equipped.get(modId) ?? 0; }
   has(modId: string): boolean { return this.equipped.has(modId); }
+  hasInfusion(infusionId: ModInfusionId): boolean { return this.infusions.has(infusionId); }
   snapshot(): EquippedModSnapshot[] { return Array.from(this.equipped, ([id, rank]) => ({ id, rank })); }
 
   checkEmergencyCapacitor(currentHealthRatio: number): { energyShare: number; speedMultiplier: number; speedDurationMs: number } | null {

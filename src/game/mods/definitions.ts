@@ -30,6 +30,15 @@ export const MOD_DEFINITIONS: readonly ModDefinition[] = [
     description: 'Armed mines pull nearby enemies inward immediately before detonating.',
     rankDescriptions: { 1: 'Light pull within 105 range.', 2: 'Stronger pull within 125 range.', 3: 'Strong pull and briefly slow survivors.' },
     tags: ['mine', 'control', 'pull']
+  },
+  {
+    id: 'fractured-current', name: 'Fractured Current', category: 'weapon', rarity: 'prototype', maxRank: 3, dropWeight: 0.08,
+    variant: 'corrupted',
+    description: 'An unstable current turns weapon kills into violent arcs, but every shot drains additional energy.',
+    positiveEffect: 'Weapon kills release a stronger arc.',
+    negativeEffect: 'Each weapon shot costs 0.25 additional energy.',
+    rankDescriptions: { 1: 'Arc 25% of the killing hit within 160 range.', 2: 'Arc 35% within 195 range.', 3: 'Arc 45% within 235 range.' },
+    tags: ['corrupted', 'weapon-kill', 'tradeoff', 'secondary-damage']
   }
 ] as const;
 

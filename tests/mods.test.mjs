@@ -1,15 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addModDrop, createDefaultModCollection, equipMod, rankUpMod } from '../src/game/mods/ModInventoryService.ts';
+import { addModDrop, createDefaultModCollection, equipMod, infuseModCard, rankUpMod, recycleDuplicateMod, sellDuplicateMod } from '../src/game/mods/ModInventoryService.ts';
 import { normalizeModCollection, normalizeProtocolPreference } from '../src/game/mods/ModSaveNormalizer.ts';
 import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
 import { magneticResistanceForEnemy, prioritizeTurretTargets, protocolStart, splitCurrentSecondaryDamage } from '../src/game/mods/ModRules.ts';
 import { rollModDrop } from '../src/game/mods/ModDropService.ts';
 import { normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
+import { MOD_BY_ID } from '../src/game/mods/definitions.ts';
 
 test('old profiles receive empty mod and normal protocol defaults', () => {
   const mods = normalizeModCollection(undefined);
   assert.deepEqual(mods.inventory, {});
+  assert.deepEqual(mods.cards, []);
+  assert.equal(mods.plasmaChips, 0);
   assert.equal(mods.loadouts.length, 1);
   assert.equal(normalizeProtocolPreference(undefined).preferred, 'normal');
 });
@@ -26,7 +29,7 @@ test('a complete version-two profile migrates without losing progression or purc
     metadata: { updatedAt: '2025-01-02T00:00:00.000Z', saveRevision: 4, gameVersion: '0.0.1' }
   };
   const migrated = normalizeLocalSave(old);
-  assert.equal(migrated.version, 3);
+  assert.equal(migrated.version, 4);
   assert.equal(migrated.wallet.credits, 4321);
   assert.equal(migrated.upgrades['weapon.damage'], 4);
   assert.equal(migrated.cosmetics.equipped.playerColor, 'player-pink');
@@ -41,6 +44,53 @@ test('first acquisition unlocks rank one and later acquisitions store duplicates
   assert.equal(mods.inventory['split-current'].rank, 1);
   addModDrop(mods, 'split-current');
   assert.equal(mods.inventory['split-current'].duplicates, 1);
+  assert.equal(mods.cards.length, 2);
+});
+
+test('legacy aggregate duplicates migrate into individual card instances', () => {
+  const mods = normalizeModCollection({ inventory: { 'split-current': { rank: 2, duplicates: 3, discovered: true, acquiredCount: 4 } } });
+  assert.equal(mods.cards.length, 4);
+  assert.equal(new Set(mods.cards.map((card) => card.instanceId)).size, 4);
+});
+
+test('duplicate cards can be sold or recycled by rarity but the final card is protected', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current');
+  const sold = sellDuplicateMod(mods, mods.cards[1].instanceId);
+  assert.equal(sold.credits, 100);
+  const recycled = recycleDuplicateMod(mods, mods.cards[1].instanceId);
+  assert.equal(recycled.plasmaChips, 1);
+  assert.equal(mods.plasmaChips, 1);
+  assert.equal(sellDuplicateMod(mods, mods.cards[0].instanceId).ok, false);
+});
+
+test('Plasma Chip infusions spend chips and remain cosmetic runtime flags', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'split-current');
+  equipMod(mods, 'weapon', 'split-current');
+  mods.plasmaChips = 12;
+  assert.equal(infuseModCard(mods, mods.cards[0].instanceId, 'detonation-fireworks').ok, true);
+  assert.equal(mods.plasmaChips, 5);
+  assert.equal(new ModRuntime(mods).hasInfusion('detonation-fireworks'), true);
+});
+
+test('the specifically equipped card controls cosmetic infusion activation', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current');
+  mods.plasmaChips = 20;
+  infuseModCard(mods, mods.cards[1].instanceId, 'enemy-growth');
+  equipMod(mods, 'weapon', 'split-current', mods.cards[0].instanceId);
+  assert.equal(new ModRuntime(mods).hasInfusion('enemy-growth'), false);
+  equipMod(mods, 'weapon', 'split-current', mods.cards[1].instanceId);
+  assert.equal(new ModRuntime(mods).hasInfusion('enemy-growth'), true);
+});
+
+test('Corrupted cards declare both their positive effect and tradeoff', () => {
+  const corrupted = MOD_BY_ID.get('fractured-current');
+  assert.equal(corrupted.variant, 'corrupted');
+  assert.ok(corrupted.positiveEffect);
+  assert.ok(corrupted.negativeEffect);
+  assert.ok(corrupted.dropWeight < 0.1);
 });
 
 test('rank requirements, credit costs, duplicate spending, and rank cap are enforced', () => {
