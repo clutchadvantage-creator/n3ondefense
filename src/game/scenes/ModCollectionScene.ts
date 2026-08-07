@@ -31,6 +31,8 @@ export class ModCollectionScene extends Phaser.Scene {
     const category = CATEGORIES[this.categoryIndex];
     const sort = SORTS[this.sortIndex];
     const cards = this.sortedCards(mods.cards.filter((card) => category === 'all' || MOD_BY_ID.get(card.modId)?.category === category), sort);
+    const activeLoadout = mods.loadouts.find((loadout) => loadout.id === mods.activeLoadoutId) ?? mods.loadouts[0];
+    const equippedCardIds = new Set(Object.values(activeLoadout?.cardSlots ?? {}).filter((cardId): cardId is string => typeof cardId === 'string'));
     if (!this.selectedCardId || !mods.cards.some((card) => card.instanceId === this.selectedCardId)) this.selectedCardId = cards[0]?.instanceId ?? mods.cards[0]?.instanceId ?? '';
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x040811, 1);
@@ -55,7 +57,7 @@ export class ModCollectionScene extends Phaser.Scene {
     cards.slice(this.page * perPage, (this.page + 1) * perPage).forEach((card, index) => {
       const x = gridLeft + cardWidth / 2 + (index % columns) * (cardWidth + 14);
       const y = 154 + cardHeight / 2 + Math.floor(index / columns) * (cardHeight + 14);
-      const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: cardWidth, height: cardHeight, selected: card.instanceId === this.selectedCardId, compact: true });
+      const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: cardWidth, height: cardHeight, selected: card.instanceId === this.selectedCardId, compact: true, equipped: equippedCardIds.has(card.instanceId) });
       view.on('pointerdown', () => { this.selectedCardId = card.instanceId; this.scene.restart(); });
     });
     if (!cards.length) this.add.text((gridLeft + gridRight) / 2, height / 2, 'NO COLLECTED CARDS IN THIS GROUP', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#607a8c' }).setOrigin(0.5);
@@ -64,11 +66,11 @@ export class ModCollectionScene extends Phaser.Scene {
     createButton(this, gridRight - 70, height - 36, '▶', () => { this.page = Math.min(maxPage, this.page + 1); this.scene.restart(); }, 90);
 
     const selected = mods.cards.find((card) => card.instanceId === this.selectedCardId);
-    this.createDetails(width - detailWidth / 2 - 20, 145, detailWidth, height - 180, selected);
+    this.createDetails(width - detailWidth / 2 - 20, 145, detailWidth, height - 180, selected, selected ? equippedCardIds.has(selected.instanceId) : false);
     if (import.meta.env.DEV) this.installDevKeys();
   }
 
-  private createDetails(x: number, y: number, width: number, height: number, card?: ModCardInstance): void {
+  private createDetails(x: number, y: number, width: number, height: number, card?: ModCardInstance, equipped = false): void {
     this.add.rectangle(x, y + height / 2, width, height, 0x08131f, 0.96).setStrokeStyle(2, 0x50dfff, 0.65);
     if (!card) {
       this.add.text(x, y + 80, 'SELECT A COLLECTED CARD', { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: '#7895a8' }).setOrigin(0.5);
@@ -76,7 +78,7 @@ export class ModCollectionScene extends Phaser.Scene {
     }
     const definition = MOD_BY_ID.get(card.modId)!;
     const owned = SaveSystem.getModCollection().inventory[card.modId];
-    createModCardView(this, x, y + 120, card, card.upgradeLevel, { width: 145, height: 205, interactive: false });
+    createModCardView(this, x, y + 120, card, card.upgradeLevel, { width: 145, height: 205, interactive: false, equipped });
     const corruptedText = definition.variant === 'corrupted' ? `\n+ ${definition.positiveEffect}\n− ${definition.negativeEffect}` : '';
     this.add.text(x, y + 246, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\n\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#d7efff', align: 'center'

@@ -26,6 +26,7 @@ export interface ModCardViewOptions {
   selected?: boolean;
   compact?: boolean;
   interactive?: boolean;
+  equipped?: boolean;
 }
 
 export const createModCardView = (
@@ -73,6 +74,23 @@ export const createModCardView = (
     fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: '#8dffec', align: 'center'
   }).setOrigin(0.5, 1);
   container.add([rarity, iconRing, icon, name, stat, infusion]);
+
+  if (options.equipped) {
+    const markerX = -width / 2 + 15;
+    const markerY = height / 2 - 15;
+    const equippedGlow = scene.add.circle(markerX, markerY, 10, 0x55ffe1, 0.14)
+      .setStrokeStyle(1, 0x55ffe1, 0.55);
+    const equippedSpinner = scene.add.graphics();
+    equippedSpinner.lineStyle(2, 0x72ffe8, 1);
+    equippedSpinner.arc(markerX, markerY, 8, Phaser.Math.DegToRad(-70), Phaser.Math.DegToRad(45), false);
+    equippedSpinner.arc(markerX, markerY, 8, Phaser.Math.DegToRad(50), Phaser.Math.DegToRad(165), false);
+    equippedSpinner.arc(markerX, markerY, 8, Phaser.Math.DegToRad(170), Phaser.Math.DegToRad(285), false);
+    equippedSpinner.strokePath();
+    const equippedCore = scene.add.circle(markerX, markerY, 3, 0xffffff, 1);
+    container.add([equippedGlow, equippedSpinner, equippedCore]);
+    scene.tweens.add({ targets: equippedSpinner, angle: 360, duration: 1800, repeat: -1, ease: 'Linear' });
+    scene.tweens.add({ targets: equippedGlow, alpha: { from: 0.3, to: 0.8 }, scale: { from: 0.85, to: 1.15 }, duration: 800, yoyo: true, repeat: -1 });
+  }
 
   if (corrupted) {
     const glitch = scene.add.rectangle(0, 0, width - 8, 2, 0xff28cc, 0.7);
