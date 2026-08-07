@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { MOD_BY_ID } from './definitions.ts';
 import type { ModCardInstance, ModRank } from './types.ts';
+import { MOD_INFUSION_BY_ID } from './infusions.ts';
 
 export const MOD_RARITY_COLORS = {
   common: 0xb9c9d4,
@@ -68,7 +69,7 @@ export const createModCardView = (
   const stat = scene.add.text(0, height * 0.34, definition.rankDescriptions[rank], {
     fontFamily: 'Rajdhani, sans-serif', fontSize: options.compact ? '9px' : '11px', color: '#a9cfe0', align: 'center'
   }).setOrigin(0.5).setWordWrapWidth(width - 18);
-  const infusion = scene.add.text(0, height / 2 - 10, card.infusionId ? `◆ ${card.infusionId.replace(/-/g, ' ').toUpperCase()}` : '', {
+  const infusion = scene.add.text(0, height / 2 - 10, card.infusionId ? `◆ ${MOD_INFUSION_BY_ID.get(card.infusionId)?.name.toUpperCase() ?? 'INFUSED'}` : '', {
     fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: '#8dffec', align: 'center'
   }).setOrigin(0.5, 1);
   container.add([rarity, iconRing, icon, name, stat, infusion]);

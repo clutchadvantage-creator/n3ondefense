@@ -3,11 +3,12 @@ import { SceneKeys } from '../flow/SceneKeys';
 import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
 import { MOD_BALANCE } from '../mods/modBalance.ts';
 import { createModCardView } from '../mods/ModCardView.ts';
-import type { ModCardInstance, ModCategory, ModInfusionId, ModSlot } from '../mods/types.ts';
+import type { ModCardInstance, ModCategory, ModSlot } from '../mods/types.ts';
 import { SaveSystem } from '../systems/SaveSystem';
-import { createButton } from '../utils/ui';
+import { createButton, disableButton } from '../utils/ui';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { rollModDrop } from '../mods/ModDropService.ts';
+import { MOD_INFUSIONS } from '../mods/infusions.ts';
 
 type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
 const CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player', 'defense', 'bombSite', 'utility'];
@@ -20,6 +21,7 @@ export class ModCollectionScene extends Phaser.Scene {
   private sortIndex = 0;
   private page = 0;
   private status = '';
+  private infusionModal: Phaser.GameObjects.Container | null = null;
 
   constructor() { super(SceneKeys.Mods); }
 
@@ -92,10 +94,47 @@ export class ModCollectionScene extends Phaser.Scene {
       createButton(this, x - width * 0.24, buttonY + 132, `Sell +${sell}C`, () => this.apply(() => SaveSystem.sellDuplicateMod(card.instanceId)), width * 0.43);
       createButton(this, x + width * 0.24, buttonY + 132, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), width * 0.43);
     }
-    const infusion: ModInfusionId = card.infusionId === 'enemy-growth' ? 'detonation-fireworks' : 'enemy-growth';
-    createButton(this, x, buttonY + 176, `Infuse: ${infusion === 'enemy-growth' ? 'Big Enemies' : 'Fireworks'} (${MOD_BALANCE.infusionPlasmaCost[infusion]}◆)`, () => this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion)), width - 40);
+    createButton(this, x, buttonY + 176, card.infusionId ? 'Change Infusion' : 'Infuse Card', () => this.showInfusionModal(card), width - 40);
     const statusText = this.add.text(x, y + height - 16, this.status, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf', align: 'center' }).setOrigin(0.5, 1).setWordWrapWidth(width - 24);
     if (this.status) this.time.delayedCall(2200, () => { this.status = ''; if (statusText.active) statusText.setText(''); });
+  }
+
+  private showInfusionModal(card: ModCardInstance): void {
+    this.hideInfusionModal();
+    const { width, height } = this.scale;
+    const root = this.add.container(0, 0).setDepth(6000);
+    const blocker = this.add.rectangle(width / 2, height / 2, width, height, 0x02050b, 0.88).setInteractive();
+    const panelWidth = Math.min(760, width - 50);
+    const panelHeight = Math.min(590, height - 50);
+    root.add([blocker, this.add.rectangle(width / 2, height / 2, panelWidth, panelHeight, 0x091522, 0.99).setStrokeStyle(3, 0x55e9ff, 0.95)]);
+    root.add(this.add.text(width / 2, height / 2 - panelHeight / 2 + 38, 'SELECT COSMETIC INFUSION', { fontFamily: 'Orbitron, sans-serif', fontSize: '25px', color: '#69f5ff' }).setOrigin(0.5));
+    root.add(this.add.text(width / 2, height / 2 - panelHeight / 2 + 70, `Available Plasma Chips: ${SaveSystem.getModCollection().plasmaChips}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a7ffe8' }).setOrigin(0.5));
+    root.add(this.add.text(width / 2, height / 2 - panelHeight / 2 + 98, 'Infusions are visual effects only. They never alter combat, health, energy, abilities, or difficulty.', { fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#a6bed0', align: 'center' }).setOrigin(0.5).setWordWrapWidth(panelWidth - 50));
+
+    MOD_INFUSIONS.forEach((infusion, index) => {
+      const rowY = height / 2 - panelHeight / 2 + 160 + index * 142;
+      const installed = card.infusionId === infusion.id;
+      const affordable = SaveSystem.getModCollection().plasmaChips >= infusion.plasmaCost;
+      root.add(this.add.rectangle(width / 2, rowY, panelWidth - 54, 118, installed ? 0x103329 : 0x0c1a29, 0.95).setStrokeStyle(installed ? 3 : 1, installed ? 0x62ffae : 0x4bbfdb, installed ? 1 : 0.65));
+      root.add(this.add.text(width / 2 - panelWidth / 2 + 58, rowY, infusion.icon, { fontFamily: 'Orbitron, sans-serif', fontSize: '36px', color: '#8ff7ff' }).setOrigin(0.5));
+      root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY - 32, infusion.name.toUpperCase(), { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: installed ? '#7dffb4' : '#e5fbff' }).setOrigin(0, 0.5));
+      root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY - 2, infusion.description, { fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#abc9da' }).setOrigin(0, 0.5).setWordWrapWidth(panelWidth - 355));
+      root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY + 36, installed ? 'INSTALLED' : `${infusion.plasmaCost} PLASMA CHIPS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: installed ? '#70ffad' : affordable ? '#ffd98a' : '#ff91a4' }).setOrigin(0, 0.5));
+      const install = createButton(this, width / 2 + panelWidth / 2 - 130, rowY, installed ? 'Installed' : affordable ? 'Install' : 'Not Enough Chips', () => {
+        if (!installed) this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion.id));
+      }, 180);
+      if (installed || !affordable) disableButton(install);
+      root.add(install);
+    });
+
+    root.add(createButton(this, width / 2, height / 2 + panelHeight / 2 - 38, 'Close', () => this.hideInfusionModal(), 200));
+    this.input.keyboard?.once('keydown-ESC', () => this.hideInfusionModal());
+    this.infusionModal = root;
+  }
+
+  private hideInfusionModal(): void {
+    this.infusionModal?.destroy(true);
+    this.infusionModal = null;
   }
 
   private sortedCards(cards: ModCardInstance[], sort: SortMode): ModCardInstance[] {

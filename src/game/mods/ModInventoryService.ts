@@ -1,6 +1,7 @@
 import { MOD_BY_ID } from './definitions.ts';
 import { MOD_BALANCE } from './modBalance.ts';
 import type { LocalModCollection, ModCardInstance, ModInfusionId, ModLoadoutSlots, ModRank, ModSlot, OwnedModState } from './types.ts';
+import { MOD_INFUSION_BY_ID } from './infusions.ts';
 
 export interface ModOperationResult { ok: boolean; message: string; }
 
@@ -72,7 +73,9 @@ export const recycleDuplicateMod = (mods: LocalModCollection, instanceId: string
 export const infuseModCard = (mods: LocalModCollection, instanceId: string, infusionId: ModInfusionId): ModOperationResult => {
   const card = mods.cards.find((entry) => entry.instanceId === instanceId);
   if (!card) return { ok: false, message: 'Card not found.' };
-  const cost = MOD_BALANCE.infusionPlasmaCost[infusionId];
+  const infusion = MOD_INFUSION_BY_ID.get(infusionId);
+  if (!infusion) return { ok: false, message: 'Unknown cosmetic infusion.' };
+  const cost = infusion.plasmaCost;
   if (card.infusionId === infusionId) return { ok: false, message: 'That infusion is already installed.' };
   if (mods.plasmaChips < cost) return { ok: false, message: `Requires ${cost} Plasma Chips.` };
   mods.plasmaChips -= cost;

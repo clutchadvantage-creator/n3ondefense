@@ -1,6 +1,7 @@
 import { MOD_BY_ID } from './definitions.ts';
 import { createDefaultModCollection, createDefaultModLoadout, normalizeOwnedMod } from './ModInventoryService.ts';
-import type { LocalModCollection, ModCardInstance, ModSlot, ProtocolPreference, RunProtocolId } from './types.ts';
+import type { LocalModCollection, ModCardInstance, ModInfusionId, ModSlot, ProtocolPreference, RunProtocolId } from './types.ts';
+import { MOD_INFUSION_BY_ID } from './infusions.ts';
 
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const MOD_SLOTS: ModSlot[] = ['weapon', 'player', 'defense', 'bombSite', 'wildcard'];
@@ -27,7 +28,7 @@ export const normalizeModCollection = (mods: unknown): LocalModCollection => {
         modId: raw.modId,
         acquiredAt: typeof raw.acquiredAt === 'string' ? raw.acquiredAt : new Date(0).toISOString(),
         upgradeLevel: Math.max(0, Math.min(3, Math.floor(Number(raw.upgradeLevel) || 0))) as 0 | 1 | 2 | 3,
-        ...(raw.infusionId === 'enemy-growth' || raw.infusionId === 'detonation-fireworks' ? { infusionId: raw.infusionId } : {})
+        ...(typeof raw.infusionId === 'string' && MOD_INFUSION_BY_ID.has(raw.infusionId as ModInfusionId) ? { infusionId: raw.infusionId as ModCardInstance['infusionId'] } : {})
       });
     }
   }

@@ -7,6 +7,7 @@ import { magneticResistanceForEnemy, prioritizeTurretTargets, protocolStart, spl
 import { rollModDrop } from '../src/game/mods/ModDropService.ts';
 import { normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import { MOD_BY_ID } from '../src/game/mods/definitions.ts';
+import { MOD_INFUSIONS } from '../src/game/mods/infusions.ts';
 
 test('old profiles receive empty mod and normal protocol defaults', () => {
   const mods = normalizeModCollection(undefined);
@@ -82,6 +83,15 @@ test('Plasma Chip infusions spend chips and remain cosmetic runtime flags', () =
   assert.equal(infuseModCard(mods, mods.cards[0].instanceId, 'detonation-fireworks').ok, true);
   assert.equal(mods.plasmaChips, 5);
   assert.equal(new ModRuntime(mods).hasInfusion('detonation-fireworks'), true);
+});
+
+test('every listed infusion is explicitly cosmetic-only with a positive Plasma Chip cost', () => {
+  assert.equal(MOD_INFUSIONS.length, 2);
+  for (const infusion of MOD_INFUSIONS) {
+    assert.equal(infusion.cosmeticOnly, true);
+    assert.ok(infusion.plasmaCost > 0);
+    assert.ok(infusion.description.length > 20);
+  }
 });
 
 test('the specifically equipped card controls cosmetic infusion activation', () => {
