@@ -78,17 +78,19 @@ export const createModCardView = (
   if (options.equipped) {
     const markerX = -width / 2 + 15;
     const markerY = height / 2 - 15;
-    const equippedGlow = scene.add.circle(markerX, markerY, 10, 0x55ffe1, 0.14)
+    const equippedMarker = scene.add.container(markerX, markerY);
+    const equippedGlow = scene.add.circle(0, 0, 10, 0x55ffe1, 0.14)
       .setStrokeStyle(1, 0x55ffe1, 0.55);
     const equippedSpinner = scene.add.graphics();
     equippedSpinner.lineStyle(2, 0x72ffe8, 1);
-    equippedSpinner.arc(markerX, markerY, 8, Phaser.Math.DegToRad(-70), Phaser.Math.DegToRad(45), false);
-    equippedSpinner.arc(markerX, markerY, 8, Phaser.Math.DegToRad(50), Phaser.Math.DegToRad(165), false);
-    equippedSpinner.arc(markerX, markerY, 8, Phaser.Math.DegToRad(170), Phaser.Math.DegToRad(285), false);
+    equippedSpinner.arc(0, 0, 8, 0, Phaser.Math.PI2, false);
     equippedSpinner.strokePath();
-    const equippedCore = scene.add.circle(markerX, markerY, 3, 0xffffff, 1);
-    container.add([equippedGlow, equippedSpinner, equippedCore]);
-    scene.tweens.add({ targets: equippedSpinner, angle: 360, duration: 1800, repeat: -1, ease: 'Linear' });
+    const equippedCore = scene.add.text(0, 0, 'E', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: '8px', color: '#ffffff'
+    }).setOrigin(0.5);
+    equippedMarker.add([equippedGlow, equippedSpinner, equippedCore]);
+    container.add(equippedMarker);
+    scene.tweens.add({ targets: equippedMarker, scaleX: { from: 1, to: -1 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     scene.tweens.add({ targets: equippedGlow, alpha: { from: 0.3, to: 0.8 }, scale: { from: 0.85, to: 1.15 }, duration: 800, yoyo: true, repeat: -1 });
   }
 
