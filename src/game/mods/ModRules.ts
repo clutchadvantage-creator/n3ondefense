@@ -15,8 +15,8 @@ export const magneticResistanceForEnemy = (enemyType: string): number => {
 
 export const prioritizeTurretTargets = <T extends { distance: number; activelyDefusing: boolean; marked: boolean }>(targets: T[], rank: number): T[] => {
   return [...targets].sort((a, b) => {
-    const aPriority = rank > 0 && (a.activelyDefusing || (rank >= 2 && a.marked));
-    const bPriority = rank > 0 && (b.activelyDefusing || (rank >= 2 && b.marked));
+    const aPriority = rank >= 0 && (a.activelyDefusing || (rank >= 2 && a.marked));
+    const bPriority = rank >= 0 && (b.activelyDefusing || (rank >= 2 && b.marked));
     if (aPriority !== bPriority) return aPriority ? -1 : 1;
     return a.distance - b.distance;
   });

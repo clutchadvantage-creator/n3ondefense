@@ -1387,8 +1387,7 @@ export class ArenaScene extends Phaser.Scene {
       if (!mine.armed) continue;
       const trigger = this.enemies.some((e) => Phaser.Math.Distance.Between(e.x, e.y, mine.sprite.x, mine.sprite.y) <= mine.radius);
       if (trigger && mine.detonateAt === 0) {
-        const magneticRank = this.modRuntime.rank('magnetic-payload');
-        mine.beginDetonation(now, magneticRank ? MOD_BALANCE.magneticPayload.preDetonationMs : 0);
+        mine.beginDetonation(now, this.modRuntime.has('magnetic-payload') ? MOD_BALANCE.magneticPayload.preDetonationMs : 0);
       }
       if (mine.detonateAt === 0) continue;
       this.applyMagneticPayload(mine, now);
@@ -1500,7 +1499,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private applyMagneticPayload(mine: Mine, now: number): void {
     const rank = this.modRuntime.rank('magnetic-payload');
-    if (!rank || mine.readyToDetonate(now)) return;
+    if (!this.modRuntime.has('magnetic-payload') || mine.readyToDetonate(now)) return;
     const pullRadius = MOD_BALANCE.magneticPayload.pullRadius[rank];
     const pullStrength = MOD_BALANCE.magneticPayload.pullStrength[rank];
     for (const enemy of this.enemies) {
@@ -1533,12 +1532,14 @@ export class ArenaScene extends Phaser.Scene {
   private triggerSplitCurrent(killedEnemy: Enemy, finalKillingDamage: number): void {
     const standardRank = this.modRuntime.rank('split-current');
     const corruptedRank = this.modRuntime.rank('fractured-current');
-    if (!standardRank && !corruptedRank) return;
-    const standardShare = standardRank ? MOD_BALANCE.splitCurrent.damageShare[standardRank] : 0;
-    const corruptedShare = corruptedRank ? MOD_BALANCE.fracturedCurrent.damageShare[corruptedRank] : 0;
+    const hasStandard = this.modRuntime.has('split-current');
+    const hasCorrupted = this.modRuntime.has('fractured-current');
+    if (!hasStandard && !hasCorrupted) return;
+    const standardShare = hasStandard ? MOD_BALANCE.splitCurrent.damageShare[standardRank] : 0;
+    const corruptedShare = hasCorrupted ? MOD_BALANCE.fracturedCurrent.damageShare[corruptedRank] : 0;
     const radius = corruptedShare > standardShare
-      ? MOD_BALANCE.fracturedCurrent.radius[corruptedRank || 1]
-      : MOD_BALANCE.splitCurrent.radius[standardRank || 1];
+      ? MOD_BALANCE.fracturedCurrent.radius[corruptedRank]
+      : MOD_BALANCE.splitCurrent.radius[standardRank];
     const target = this.enemies
       .filter((enemy) => enemy !== killedEnemy && !enemy.isDead())
       .map((enemy) => ({ enemy, distance: Phaser.Math.Distance.Between(killedEnemy.x, killedEnemy.y, enemy.x, enemy.y) }))
@@ -1547,7 +1548,7 @@ export class ArenaScene extends Phaser.Scene {
     if (!target) return;
     const damage = corruptedShare > standardShare
       ? finalKillingDamage * corruptedShare
-      : splitCurrentSecondaryDamage(finalKillingDamage, standardRank || 1, false);
+      : splitCurrentSecondaryDamage(finalKillingDamage, standardRank, false);
     target.takeDamage(damage);
     const arc = this.add.graphics().setDepth(11);
     arc.lineStyle(3, COLORS.cyan, 0.95);
@@ -1717,7 +1718,7 @@ export class ArenaScene extends Phaser.Scene {
     this.modsEarned.push({ modId: definition.id, duplicate, source });
     this.showBanner(`${duplicate ? 'MOD DUPLICATE' : 'MOD DISCOVERED'}\n${definition.name.toUpperCase()}`);
     if (card) {
-      const view = createModCardView(this, x, y - 34, card, SaveSystem.getModCollection().inventory[definition.id].rank, { width: 58, height: 82, compact: true, interactive: false }).setDepth(50);
+      const view = createModCardView(this, x, y - 34, card, card.upgradeLevel, { width: 58, height: 82, compact: true, interactive: false }).setDepth(50);
       this.tweens.add({ targets: view, y: y - 104, scale: 1.25, alpha: 0, duration: 1250, ease: 'Cubic.Out', onComplete: () => view.destroy(true) });
     }
   }
@@ -2183,7 +2184,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getNearestEnemy(x: number, y: number, range: number): Enemy | null {
-    const priorityRank = this.modRuntime.rank('priority-targeting');
+    const priorityRank = this.modRuntime.has('priority-targeting') ? this.modRuntime.rank('priority-targeting') : -1;
     return prioritizeTurretTargets(this.enemies
       .filter((enemy) => !enemy.isDead())
       .map((enemy) => ({ enemy, distance: Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y), activelyDefusing: this.defuseAssignees.has(enemy), marked: this.time.now < (this.defuserMarkedUntil.get(enemy) ?? 0) }))

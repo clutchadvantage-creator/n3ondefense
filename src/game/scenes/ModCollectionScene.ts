@@ -51,10 +51,9 @@ export class ModCollectionScene extends Phaser.Scene {
     const maxPage = Math.max(0, Math.ceil(cards.length / perPage) - 1);
     this.page = Math.min(this.page, maxPage);
     cards.slice(this.page * perPage, (this.page + 1) * perPage).forEach((card, index) => {
-      const owned = mods.inventory[card.modId];
       const x = gridLeft + cardWidth / 2 + (index % columns) * (cardWidth + 14);
       const y = 154 + cardHeight / 2 + Math.floor(index / columns) * (cardHeight + 14);
-      const view = createModCardView(this, x, y, card, owned.rank, { width: cardWidth, height: cardHeight, selected: card.instanceId === this.selectedCardId, compact: true });
+      const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: cardWidth, height: cardHeight, selected: card.instanceId === this.selectedCardId, compact: true });
       view.on('pointerdown', () => { this.selectedCardId = card.instanceId; this.scene.restart(); });
     });
     if (!cards.length) this.add.text((gridLeft + gridRight) / 2, height / 2, 'NO COLLECTED CARDS IN THIS GROUP', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#607a8c' }).setOrigin(0.5);
@@ -75,35 +74,35 @@ export class ModCollectionScene extends Phaser.Scene {
     }
     const definition = MOD_BY_ID.get(card.modId)!;
     const owned = SaveSystem.getModCollection().inventory[card.modId];
-    createModCardView(this, x, y + 120, card, owned.rank, { width: 145, height: 205, interactive: false });
+    createModCardView(this, x, y + 120, card, card.upgradeLevel, { width: 145, height: 205, interactive: false });
     const corruptedText = definition.variant === 'corrupted' ? `\n+ ${definition.positiveEffect}\n− ${definition.negativeEffect}` : '';
-    this.add.text(x, y + 246, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\n\nRANK ${owned.rank}/3 • ${owned.duplicates} DUPLICATES`, {
+    this.add.text(x, y + 246, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\n\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#d7efff', align: 'center'
     }).setOrigin(0.5, 0).setWordWrapWidth(width - 28);
     const sameCards = SaveSystem.getModCollection().cards.filter((entry) => entry.modId === card.modId);
-    const duplicate = sameCards[0]?.instanceId !== card.instanceId;
+    const duplicate = sameCards.length > 1;
     const categorySlot = definition.category === 'utility' ? null : definition.category as ModSlot;
-    const buttonY = y + height - 174;
+    const buttonY = y + height - 210;
     if (categorySlot) createButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.apply(() => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40);
     createButton(this, x, buttonY + 44, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40);
+    createButton(this, x, buttonY + 88, 'Upgrade Card', () => this.apply(() => SaveSystem.rankUpMod(definition.id, card.instanceId)), width - 40);
     if (duplicate) {
       const sell = MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity];
       const chips = MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity];
-      createButton(this, x - width * 0.24, buttonY + 88, `Sell +${sell}C`, () => this.apply(() => SaveSystem.sellDuplicateMod(card.instanceId)), width * 0.43);
-      createButton(this, x + width * 0.24, buttonY + 88, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), width * 0.43);
-    } else {
-      createButton(this, x, buttonY + 88, 'Rank Up', () => this.apply(() => SaveSystem.rankUpMod(definition.id)), width - 40);
+      createButton(this, x - width * 0.24, buttonY + 132, `Sell +${sell}C`, () => this.apply(() => SaveSystem.sellDuplicateMod(card.instanceId)), width * 0.43);
+      createButton(this, x + width * 0.24, buttonY + 132, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), width * 0.43);
     }
     const infusion: ModInfusionId = card.infusionId === 'enemy-growth' ? 'detonation-fireworks' : 'enemy-growth';
-    createButton(this, x, buttonY + 132, `Infuse: ${infusion === 'enemy-growth' ? 'Big Enemies' : 'Fireworks'} (${MOD_BALANCE.infusionPlasmaCost[infusion]}◆)`, () => this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion)), width - 40);
-    this.add.text(x, y + height - 16, this.status, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf', align: 'center' }).setOrigin(0.5, 1).setWordWrapWidth(width - 24);
+    createButton(this, x, buttonY + 176, `Infuse: ${infusion === 'enemy-growth' ? 'Big Enemies' : 'Fireworks'} (${MOD_BALANCE.infusionPlasmaCost[infusion]}◆)`, () => this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion)), width - 40);
+    const statusText = this.add.text(x, y + height - 16, this.status, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf', align: 'center' }).setOrigin(0.5, 1).setWordWrapWidth(width - 24);
+    if (this.status) this.time.delayedCall(2200, () => { this.status = ''; if (statusText.active) statusText.setText(''); });
   }
 
   private sortedCards(cards: ModCardInstance[], sort: SortMode): ModCardInstance[] {
     return [...cards].sort((a, b) => {
       const ad = MOD_BY_ID.get(a.modId)!; const bd = MOD_BY_ID.get(b.modId)!;
       if (sort === 'type') return ad.category.localeCompare(bd.category) || ad.name.localeCompare(bd.name);
-      if (sort === 'rank') return (SaveSystem.getModCollection().inventory[b.modId]?.rank ?? 1) - (SaveSystem.getModCollection().inventory[a.modId]?.rank ?? 1);
+      if (sort === 'rank') return b.upgradeLevel - a.upgradeLevel;
       if (sort === 'rarity') return RARITY_ORDER[bd.rarity] - RARITY_ORDER[ad.rarity];
       return b.acquiredAt.localeCompare(a.acquiredAt);
     });

@@ -99,7 +99,7 @@ export class SaveSystem {
   }
 
   static addMod(modId: string) { return PlayerProfileStore.addMod(modId); }
-  static rankUpMod(modId: string) { return PlayerProfileStore.rankUpMod(modId); }
+  static rankUpMod(modId: string, instanceId?: string) { return PlayerProfileStore.rankUpMod(modId, instanceId); }
   static equipMod(slot: ModSlot, modId: string, instanceId?: string) { return PlayerProfileStore.equipMod(slot, modId, instanceId); }
   static unequipMod(slot: ModSlot): void { PlayerProfileStore.unequipMod(slot); }
   static sellDuplicateMod(instanceId: string) { return PlayerProfileStore.sellDuplicateMod(instanceId); }

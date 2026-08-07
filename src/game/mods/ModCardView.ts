@@ -49,8 +49,9 @@ export const createModCardView = (
     .setStrokeStyle(1, corrupted ? 0xff3ed7 : rarityColor, 0.38);
   container.add([shadow, body, inner]);
 
+  const illuminatedDots = rank;
   for (let dot = 0; dot < 3; dot += 1) {
-    container.add(scene.add.circle(-width / 2 + 15 + dot * 12, -height / 2 + 15, 4, dot < rank ? rarityColor : 0x172331, dot < rank ? 1 : 0.7)
+    container.add(scene.add.circle(-width / 2 + 15 + dot * 12, -height / 2 + 15, 4, dot < illuminatedDots ? rarityColor : 0x172331, dot < illuminatedDots ? 1 : 0.7)
       .setStrokeStyle(1, rarityColor, 0.9));
   }
   const rarity = scene.add.text(width / 2 - 8, -height / 2 + 9, corrupted ? 'CORRUPTED' : definition.rarity.toUpperCase(), {

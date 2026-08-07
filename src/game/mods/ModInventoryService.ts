@@ -19,14 +19,14 @@ export const addModDrop = (mods: LocalModCollection, modId: string, acquiredAt =
   if (!MOD_BY_ID.has(modId)) return { ok: false, message: 'Unknown mod.' };
   const owned = mods.inventory[modId];
   if (!owned) {
-    mods.inventory[modId] = { rank: 1, duplicates: 0, discovered: true, acquiredCount: 1, firstAcquiredAt: acquiredAt };
-    mods.cards.push({ instanceId: createCardId(modId), modId, acquiredAt });
-    return { ok: true, message: 'Mod discovered at Rank 1.' };
+    mods.inventory[modId] = { rank: 0, duplicates: 0, discovered: true, acquiredCount: 1, firstAcquiredAt: acquiredAt };
+    mods.cards.push({ instanceId: createCardId(modId), modId, acquiredAt, upgradeLevel: 0 });
+    return { ok: true, message: 'Mod card discovered.' };
   }
   owned.discovered = true;
   owned.duplicates += 1;
   owned.acquiredCount += 1;
-  mods.cards.push({ instanceId: createCardId(modId), modId, acquiredAt });
+  mods.cards.push({ instanceId: createCardId(modId), modId, acquiredAt, upgradeLevel: 0 });
   return { ok: true, message: 'Duplicate mod stored.' };
 };
 
@@ -44,7 +44,10 @@ const removeDuplicateCard = (mods: LocalModCollection, card: ModCardInstance): v
     }
   }
   const owned = mods.inventory[card.modId];
-  if (owned) owned.duplicates = Math.max(0, owned.duplicates - 1);
+  if (owned) {
+    owned.duplicates = Math.max(0, owned.duplicates - 1);
+    owned.rank = Math.max(0, ...mods.cards.filter((entry) => entry.modId === card.modId).map((entry) => entry.upgradeLevel)) as ModRank;
+  }
 };
 
 export const sellDuplicateMod = (mods: LocalModCollection, instanceId: string): ModOperationResult & { credits?: number } => {
@@ -77,16 +80,18 @@ export const infuseModCard = (mods: LocalModCollection, instanceId: string, infu
   return { ok: true, message: 'Cosmetic infusion installed.' };
 };
 
-export const rankUpMod = (mods: LocalModCollection, modId: string, credits: number): ModOperationResult & { cost?: number } => {
+export const rankUpMod = (mods: LocalModCollection, modId: string, credits: number, instanceId?: string): ModOperationResult & { cost?: number } => {
   const owned = mods.inventory[modId];
+  const targetCard = instanceId ? mods.cards.find((card) => card.instanceId === instanceId && card.modId === modId) : mods.cards.find((card) => card.modId === modId);
   if (!owned?.discovered) return { ok: false, message: 'Mod has not been discovered.' };
-  if (owned.rank >= 3) return { ok: false, message: 'Mod is already Rank 3.' };
-  const nextRank = (owned.rank + 1) as 2 | 3;
+  if (!targetCard) return { ok: false, message: 'Card not found.' };
+  if (targetCard.upgradeLevel >= 3) return { ok: false, message: 'Mod card is fully upgraded.' };
+  const nextRank = (targetCard.upgradeLevel + 1) as 1 | 2 | 3;
   const duplicateCost = MOD_BALANCE.duplicateRequirements[nextRank];
   const creditCost = MOD_BALANCE.rankCreditCosts[nextRank];
   if (owned.duplicates < duplicateCost) return { ok: false, message: `Requires ${duplicateCost} duplicate${duplicateCost === 1 ? '' : 's'}.`, cost: creditCost };
   if (credits < creditCost) return { ok: false, message: `Requires ${creditCost} credits.`, cost: creditCost };
-  const duplicateCards = mods.cards.filter((card) => card.modId === modId).slice(1, duplicateCost + 1);
+  const duplicateCards = mods.cards.filter((card) => card.modId === modId && card.instanceId !== targetCard.instanceId).slice(0, duplicateCost);
   if (duplicateCards.length < duplicateCost) return { ok: false, message: 'Duplicate card inventory is inconsistent.' };
   const consumedIds = new Set(duplicateCards.map((card) => card.instanceId));
   mods.cards = mods.cards.filter((card) => !consumedIds.has(card.instanceId));
@@ -94,8 +99,9 @@ export const rankUpMod = (mods: LocalModCollection, modId: string, credits: numb
     if (loadout.cardSlots[slot] && consumedIds.has(loadout.cardSlots[slot]!)) loadout.cardSlots[slot] = mods.cards.find((card) => card.modId === modId)?.instanceId ?? null;
   }
   owned.duplicates -= duplicateCost;
-  owned.rank = nextRank;
-  return { ok: true, message: `Upgraded to Rank ${nextRank}.`, cost: creditCost };
+  targetCard.upgradeLevel = nextRank;
+  owned.rank = Math.max(...mods.cards.filter((card) => card.modId === modId).map((card) => card.upgradeLevel)) as ModRank;
+  return { ok: true, message: `Card upgraded to ${nextRank}/3.`, cost: creditCost };
 };
 
 const slotAccepts = (slot: ModSlot, category: string): boolean => slot === 'wildcard' || slot === category;
@@ -124,6 +130,6 @@ export const normalizeOwnedMod = (value: unknown): OwnedModState | null => {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<OwnedModState>;
   if (!candidate.discovered) return null;
-  const rank = Math.max(1, Math.min(3, Math.floor(Number(candidate.rank) || 1))) as ModRank;
+  const rank = Math.max(0, Math.min(3, Math.floor(Number(candidate.rank) || 0))) as ModRank;
   return { rank, duplicates: Math.max(0, Math.floor(Number(candidate.duplicates) || 0)), discovered: true, acquiredCount: Math.max(1, Math.floor(Number(candidate.acquiredCount) || 1)), ...(typeof candidate.firstAcquiredAt === 'string' ? { firstAcquiredAt: candidate.firstAcquiredAt } : {}) };
 };

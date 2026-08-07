@@ -2,8 +2,8 @@ import type { ModRarity, ModDropSource, RunProtocolId } from './types.ts';
 
 export const MOD_BALANCE = {
   maxRank: 3,
-  duplicateRequirements: { 2: 1, 3: 2 } as const,
-  rankCreditCosts: { 2: 600, 3: 1200 } as const,
+  duplicateRequirements: { 1: 1, 2: 2, 3: 3 } as const,
+  rankCreditCosts: { 1: 600, 2: 1200, 3: 2000 } as const,
   conditionalDirectDamageBonusCap: 0.3,
   duplicateCreditValueByRarity: { common: 100, uncommon: 180, rare: 320, prototype: 550, legendary: 900 } satisfies Record<ModRarity, number>,
   duplicatePlasmaValueByRarity: { common: 1, uncommon: 2, rare: 3, prototype: 5, legendary: 8 } satisfies Record<ModRarity, number>,
@@ -17,12 +17,12 @@ export const MOD_BALANCE = {
   } satisfies Record<ModDropSource, Record<ModRarity, number>>,
   rarityRoundBonusPerRound: 0.025,
   guaranteedMilestoneEveryRounds: 5,
-  splitCurrent: { damageShare: { 1: 0.2, 2: 0.3, 3: 0.4 }, radius: { 1: 150, 2: 180, 3: 220 } },
-  fracturedCurrent: { extraShotEnergyCost: 0.25, damageShare: { 1: 0.25, 2: 0.35, 3: 0.45 }, radius: { 1: 160, 2: 195, 3: 235 } },
-  emergencyCapacitor: { healthThreshold: 0.25, energyShare: { 1: 0.2, 2: 0.35, 3: 0.5 }, rank3SpeedMultiplier: 1.18, rank3SpeedDurationMs: 2500 },
+  splitCurrent: { damageShare: { 0: 0.15, 1: 0.2, 2: 0.3, 3: 0.4 }, radius: { 0: 130, 1: 150, 2: 180, 3: 220 } },
+  fracturedCurrent: { extraShotEnergyCost: 0.25, damageShare: { 0: 0.18, 1: 0.25, 2: 0.35, 3: 0.45 }, radius: { 0: 140, 1: 160, 2: 195, 3: 235 } },
+  emergencyCapacitor: { healthThreshold: 0.25, energyShare: { 0: 0.1, 1: 0.2, 2: 0.35, 3: 0.5 }, rank3SpeedMultiplier: 1.18, rank3SpeedDurationMs: 2500 },
   priorityTargeting: { markedDurationMs: 2500, rank3TurretDamageBonus: 0.1 },
-  emergencyShield: { durationMs: { 1: 1000, 2: 2000, 3: 2000 }, cooldownMs: 30_000, knockbackRadius: 125, knockbackSpeed: 260 },
-  magneticPayload: { preDetonationMs: 240, pullRadius: { 1: 105, 2: 125, 3: 140 }, pullStrength: { 1: 105, 2: 155, 3: 195 }, rank3SlowFactor: 0.72, rank3SlowDurationMs: 1400 }
+  emergencyShield: { durationMs: { 0: 500, 1: 1000, 2: 2000, 3: 2000 }, cooldownMs: 30_000, knockbackRadius: 125, knockbackSpeed: 260 },
+  magneticPayload: { preDetonationMs: 240, pullRadius: { 0: 90, 1: 105, 2: 125, 3: 140 }, pullStrength: { 0: 75, 1: 105, 2: 155, 3: 195 }, rank3SlowFactor: 0.72, rank3SlowDurationMs: 1400 }
 } as const;
 
 export interface RunProtocolDefinition {

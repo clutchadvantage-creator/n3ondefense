@@ -1,6 +1,6 @@
 export type ModCategory = 'weapon' | 'player' | 'defense' | 'bombSite' | 'utility';
 export type ModRarity = 'common' | 'uncommon' | 'rare' | 'prototype' | 'legendary';
-export type ModRank = 1 | 2 | 3;
+export type ModRank = 0 | 1 | 2 | 3;
 export type ModSlot = 'weapon' | 'player' | 'defense' | 'bombSite' | 'wildcard';
 export type RunProtocolId = 'normal' | 'overdrive';
 export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone';
@@ -27,6 +27,7 @@ export interface ModCardInstance {
   modId: string;
   acquiredAt: string;
   infusionId?: ModInfusionId;
+  upgradeLevel: ModRank;
 }
 
 export interface OwnedModState {

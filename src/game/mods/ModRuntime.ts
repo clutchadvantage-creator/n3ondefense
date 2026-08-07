@@ -14,7 +14,7 @@ export class ModRuntime {
     if (snapshot) {
       snapshot.forEach(({ id, rank }) => {
         if (!MOD_BY_ID.has(id) || this.equipped.has(id)) return;
-        this.equipped.set(id, Math.max(1, Math.min(3, Math.floor(rank))) as ModRank);
+        this.equipped.set(id, Math.max(0, Math.min(3, Math.floor(rank))) as ModRank);
       });
       return;
     }
@@ -22,7 +22,9 @@ export class ModRuntime {
     for (const modId of Object.values(loadout?.slots ?? {})) {
       if (!modId || this.equipped.has(modId)) continue;
       const owned = mods.inventory[modId];
-      if (owned?.discovered) this.equipped.set(modId, owned.rank);
+      const slot = Object.entries(loadout?.slots ?? {}).find(([, equippedId]) => equippedId === modId)?.[0] as keyof typeof loadout.slots | undefined;
+      const card = slot ? mods.cards.find((entry) => entry.instanceId === loadout.cardSlots[slot]) : undefined;
+      if (owned?.discovered) this.equipped.set(modId, card?.upgradeLevel ?? owned.rank);
     }
     for (const cardId of Object.values(loadout?.cardSlots ?? {})) {
       const card = mods.cards.find((entry) => entry.instanceId === cardId);
@@ -46,7 +48,7 @@ export class ModRuntime {
     const rank = this.rank('emergency-capacitor');
     const crossed = this.previousHealthRatio >= MOD_BALANCE.emergencyCapacitor.healthThreshold && currentHealthRatio < MOD_BALANCE.emergencyCapacitor.healthThreshold;
     this.previousHealthRatio = currentHealthRatio;
-    if (!rank || this.emergencyCapacitorUsed || !crossed) return null;
+    if (!this.has('emergency-capacitor') || this.emergencyCapacitorUsed || !crossed) return null;
     this.emergencyCapacitorUsed = true;
     return {
       energyShare: MOD_BALANCE.emergencyCapacitor.energyShare[rank],
@@ -57,7 +59,7 @@ export class ModRuntime {
 
   activateBombShield(siteId: string, now: number): { activeUntil: number; knockback: boolean } | null {
     const rank = this.rank('emergency-shield');
-    if (!rank || now < (this.bombShieldCooldownUntil.get(siteId) ?? 0)) return null;
+    if (!this.has('emergency-shield') || now < (this.bombShieldCooldownUntil.get(siteId) ?? 0)) return null;
     const activeUntil = now + MOD_BALANCE.emergencyShield.durationMs[rank];
     this.bombShieldActiveUntil.set(siteId, activeUntil);
     this.bombShieldCooldownUntil.set(siteId, now + MOD_BALANCE.emergencyShield.cooldownMs);

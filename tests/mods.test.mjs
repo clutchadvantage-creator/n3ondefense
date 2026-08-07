@@ -29,7 +29,7 @@ test('a complete version-two profile migrates without losing progression or purc
     metadata: { updatedAt: '2025-01-02T00:00:00.000Z', saveRevision: 4, gameVersion: '0.0.1' }
   };
   const migrated = normalizeLocalSave(old);
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, 5);
   assert.equal(migrated.wallet.credits, 4321);
   assert.equal(migrated.upgrades['weapon.damage'], 4);
   assert.equal(migrated.cosmetics.equipped.playerColor, 'player-pink');
@@ -38,10 +38,11 @@ test('a complete version-two profile migrates without losing progression or purc
   assert.equal(migrated.protocol.preferred, 'normal');
 });
 
-test('first acquisition unlocks rank one and later acquisitions store duplicates', () => {
+test('first acquisition starts at zero upgrades and later acquisitions store duplicates', () => {
   const mods = createDefaultModCollection();
   assert.equal(addModDrop(mods, 'split-current').ok, true);
-  assert.equal(mods.inventory['split-current'].rank, 1);
+  assert.equal(mods.inventory['split-current'].rank, 0);
+  assert.equal(mods.cards[0].upgradeLevel, 0);
   addModDrop(mods, 'split-current');
   assert.equal(mods.inventory['split-current'].duplicates, 1);
   assert.equal(mods.cards.length, 2);
@@ -62,6 +63,15 @@ test('duplicate cards can be sold or recycled by rarity but the final card is pr
   assert.equal(recycled.plasmaChips, 1);
   assert.equal(mods.plasmaChips, 1);
   assert.equal(sellDuplicateMod(mods, mods.cards[0].instanceId).ok, false);
+});
+
+test('the selected original card can be recycled when another copy remains', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current');
+  const selectedId = mods.cards[0].instanceId;
+  assert.equal(recycleDuplicateMod(mods, selectedId).ok, true);
+  assert.equal(mods.cards.some((card) => card.instanceId === selectedId), false);
+  assert.equal(mods.cards.length, 1);
 });
 
 test('Plasma Chip infusions spend chips and remain cosmetic runtime flags', () => {
@@ -93,18 +103,22 @@ test('Corrupted cards declare both their positive effect and tradeoff', () => {
   assert.ok(corrupted.dropWeight < 0.1);
 });
 
-test('rank requirements, credit costs, duplicate spending, and rank cap are enforced', () => {
+test('three card upgrades fill levels zero through three and enforce costs and cap', () => {
   const mods = createDefaultModCollection();
   addModDrop(mods, 'split-current');
   assert.equal(rankUpMod(mods, 'split-current', 10_000).ok, false);
   addModDrop(mods, 'split-current');
-  const rankTwo = rankUpMod(mods, 'split-current', 10_000);
-  assert.equal(rankTwo.ok, true);
-  assert.equal(rankTwo.cost, 600);
+  const rankOne = rankUpMod(mods, 'split-current', 10_000);
+  assert.equal(rankOne.ok, true);
+  assert.equal(rankOne.cost, 600);
   assert.equal(mods.inventory['split-current'].duplicates, 0);
   addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current');
   assert.equal(rankUpMod(mods, 'split-current', 1199).ok, false);
   assert.equal(rankUpMod(mods, 'split-current', 1200).ok, true);
+  addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current');
+  assert.equal(rankUpMod(mods, 'split-current', 1999).ok, false);
+  assert.equal(rankUpMod(mods, 'split-current', 2000).ok, true);
+  assert.equal(mods.cards[0].upgradeLevel, 3);
   assert.equal(rankUpMod(mods, 'split-current', 99999).ok, false);
 });
 
@@ -125,7 +139,7 @@ test('invalid saved mods and invalid or duplicate loadout references are removed
     loadouts: [{ id: 'default', slots: { weapon: 'split-current', wildcard: 'split-current', player: 'bogus' } }]
   });
   assert.equal(normalized.inventory.bogus, undefined);
-  assert.equal(normalized.inventory['split-current'].rank, 3);
+  assert.equal(normalized.inventory['split-current'].rank, 2);
   assert.equal(normalized.loadouts[0].slots.weapon, 'split-current');
   assert.equal(normalized.loadouts[0].slots.wildcard, null);
   assert.equal(normalized.activeLoadoutId, 'default');
@@ -137,7 +151,7 @@ test('Split Current uses final hit damage and cannot recurse', () => {
 });
 
 test('Emergency Capacitor crosses threshold once per round and resets', () => {
-  const mods = createDefaultModCollection(); addModDrop(mods, 'emergency-capacitor'); mods.inventory['emergency-capacitor'].rank = 3; equipMod(mods, 'player', 'emergency-capacitor');
+  const mods = createDefaultModCollection(); addModDrop(mods, 'emergency-capacitor'); mods.inventory['emergency-capacitor'].rank = 3; mods.cards[0].upgradeLevel = 3; equipMod(mods, 'player', 'emergency-capacitor');
   const runtime = new ModRuntime(mods); runtime.beginRound(1);
   assert.equal(runtime.checkEmergencyCapacitor(0.24)?.energyShare, 0.5);
   assert.equal(runtime.checkEmergencyCapacitor(0.1), null);
@@ -151,7 +165,8 @@ test('Priority Targeting favors active and rank-two marked defusers', () => {
   const targets = [{ id: 'near', distance: 10, activelyDefusing: false, marked: false }, { id: 'active', distance: 80, activelyDefusing: true, marked: false }, { id: 'marked', distance: 50, activelyDefusing: false, marked: true }];
   assert.equal(prioritizeTurretTargets(targets, 1)[0].id, 'active');
   assert.equal(prioritizeTurretTargets(targets, 2)[0].id, 'marked');
-  assert.equal(prioritizeTurretTargets(targets, 0)[0].id, 'near');
+  assert.equal(prioritizeTurretTargets(targets, 0)[0].id, 'active');
+  assert.equal(prioritizeTurretTargets(targets, -1)[0].id, 'near');
 });
 
 test('Emergency Shield cooldown is per site', () => {

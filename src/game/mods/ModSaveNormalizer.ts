@@ -26,6 +26,7 @@ export const normalizeModCollection = (mods: unknown): LocalModCollection => {
         instanceId: raw.instanceId,
         modId: raw.modId,
         acquiredAt: typeof raw.acquiredAt === 'string' ? raw.acquiredAt : new Date(0).toISOString(),
+        upgradeLevel: Math.max(0, Math.min(3, Math.floor(Number(raw.upgradeLevel) || 0))) as 0 | 1 | 2 | 3,
         ...(raw.infusionId === 'enemy-growth' || raw.infusionId === 'detonation-fireworks' ? { infusionId: raw.infusionId } : {})
       });
     }
@@ -34,9 +35,10 @@ export const normalizeModCollection = (mods: unknown): LocalModCollection => {
     const expected = owned.duplicates + 1;
     const existing = cards.filter((card) => card.modId === modId).length;
     for (let index = existing; index < expected; index += 1) {
-      cards.push({ instanceId: `legacy-${modId}-${index + 1}`, modId, acquiredAt: owned.firstAcquiredAt ?? new Date(0).toISOString() });
+      cards.push({ instanceId: `legacy-${modId}-${index + 1}`, modId, acquiredAt: owned.firstAcquiredAt ?? new Date(0).toISOString(), upgradeLevel: index === 0 ? Math.max(0, owned.rank - 1) as 0 | 1 | 2 : 0 });
     }
     if (existing > expected) owned.duplicates = existing - 1;
+    owned.rank = Math.max(0, ...cards.filter((card) => card.modId === modId).map((card) => card.upgradeLevel)) as 0 | 1 | 2 | 3;
   }
   const rawLoadouts = Array.isArray(mods.loadouts) ? mods.loadouts : [];
   const loadouts = rawLoadouts.slice(0, 1).flatMap((raw, index) => {

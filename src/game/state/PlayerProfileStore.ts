@@ -266,9 +266,9 @@ export class PlayerProfileStore {
     return result;
   }
 
-  static rankUpMod(modId: string): PurchaseResult {
+  static rankUpMod(modId: string, instanceId?: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
-    const result = rankUpMod(save.mods, modId, save.wallet.credits);
+    const result = rankUpMod(save.mods, modId, save.wallet.credits, instanceId);
     if (!result.ok || result.cost === undefined) return result;
     save.wallet.credits -= result.cost;
     PlayerProfileStore.save();
