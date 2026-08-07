@@ -2,7 +2,7 @@ import type { ModRarity, ModDropSource, RunProtocolId } from './types.ts';
 
 export const MOD_BALANCE = {
   maxRank: 3,
-  duplicateRequirements: { 1: 1, 2: 2, 3: 3 } as const,
+  duplicateRequirements: { 1: 0, 2: 0, 3: 0 } as const,
   rankCreditCosts: { 1: 600, 2: 1200, 3: 2000 } as const,
   conditionalDirectDamageBonusCap: 0.3,
   duplicateCreditValueByRarity: { common: 100, uncommon: 180, rare: 320, prototype: 550, legendary: 900 } satisfies Record<ModRarity, number>,

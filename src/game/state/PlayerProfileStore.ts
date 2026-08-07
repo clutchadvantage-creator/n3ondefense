@@ -3,7 +3,7 @@ import { UPGRADE_DEFINITIONS } from '../../data/upgrades';
 import type { CosmeticOption } from '../types';
 import { type LocalPlayerSave, type ProfileSummary } from '../save/LocalSaveTypes';
 import { LocalSaveManager } from '../save/LocalSaveManager';
-import { addModDrop, equipMod, infuseModCard, rankUpMod, recycleDuplicateMod, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
+import { addModDrop, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleDuplicateMod, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
 
@@ -300,6 +300,13 @@ export class PlayerProfileStore {
   static recycleDuplicateMod(instanceId: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
     const result = recycleDuplicateMod(save.mods, instanceId);
+    if (result.ok) PlayerProfileStore.save();
+    return result;
+  }
+
+  static deleteModCard(instanceId: string): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = deleteModCard(save.mods, instanceId);
     if (result.ok) PlayerProfileStore.save();
     return result;
   }

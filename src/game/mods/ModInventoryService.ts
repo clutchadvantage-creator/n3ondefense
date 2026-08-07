@@ -31,43 +31,51 @@ export const addModDrop = (mods: LocalModCollection, modId: string, acquiredAt =
   return { ok: true, message: 'Duplicate mod stored.' };
 };
 
-const removableDuplicate = (mods: LocalModCollection, instanceId: string): ModCardInstance | null => {
-  const card = mods.cards.find((entry) => entry.instanceId === instanceId);
-  if (!card || mods.cards.filter((entry) => entry.modId === card.modId).length <= 1) return null;
-  return card;
-};
-
-const removeDuplicateCard = (mods: LocalModCollection, card: ModCardInstance): void => {
+const removeCard = (mods: LocalModCollection, card: ModCardInstance): void => {
   mods.cards = mods.cards.filter((entry) => entry.instanceId !== card.instanceId);
   for (const loadout of mods.loadouts) {
     for (const slot of Object.keys(loadout.cardSlots) as ModSlot[]) {
-      if (loadout.cardSlots[slot] === card.instanceId) loadout.cardSlots[slot] = mods.cards.find((entry) => entry.modId === card.modId)?.instanceId ?? null;
+      if (loadout.cardSlots[slot] !== card.instanceId) continue;
+      const replacement = mods.cards.find((entry) => entry.modId === card.modId);
+      loadout.cardSlots[slot] = replacement?.instanceId ?? null;
+      if (!replacement) loadout.slots[slot] = null;
     }
   }
   const owned = mods.inventory[card.modId];
   if (owned) {
-    owned.duplicates = Math.max(0, owned.duplicates - 1);
-    owned.rank = Math.max(0, ...mods.cards.filter((entry) => entry.modId === card.modId).map((entry) => entry.upgradeLevel)) as ModRank;
+    const remaining = mods.cards.filter((entry) => entry.modId === card.modId);
+    if (!remaining.length) delete mods.inventory[card.modId];
+    else {
+      owned.duplicates = Math.max(0, remaining.length - 1);
+      owned.rank = Math.max(...remaining.map((entry) => entry.upgradeLevel)) as ModRank;
+    }
   }
 };
 
 export const sellDuplicateMod = (mods: LocalModCollection, instanceId: string): ModOperationResult & { credits?: number } => {
-  const card = removableDuplicate(mods, instanceId);
+  const card = mods.cards.find((entry) => entry.instanceId === instanceId);
   const definition = card ? MOD_BY_ID.get(card.modId) : undefined;
-  if (!card || !definition) return { ok: false, message: 'Only duplicate cards can be sold.' };
+  if (!card || !definition) return { ok: false, message: 'Card not found.' };
   const credits = MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity];
-  removeDuplicateCard(mods, card);
-  return { ok: true, message: `Duplicate sold for ${credits} credits.`, credits };
+  removeCard(mods, card);
+  return { ok: true, message: `Card sold for ${credits} credits.`, credits };
 };
 
 export const recycleDuplicateMod = (mods: LocalModCollection, instanceId: string): ModOperationResult & { plasmaChips?: number } => {
-  const card = removableDuplicate(mods, instanceId);
+  const card = mods.cards.find((entry) => entry.instanceId === instanceId);
   const definition = card ? MOD_BY_ID.get(card.modId) : undefined;
-  if (!card || !definition) return { ok: false, message: 'Only duplicate cards can be recycled.' };
+  if (!card || !definition) return { ok: false, message: 'Card not found.' };
   const plasmaChips = MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity];
-  removeDuplicateCard(mods, card);
+  removeCard(mods, card);
   mods.plasmaChips += plasmaChips;
-  return { ok: true, message: `Duplicate recycled into ${plasmaChips} Plasma Chip${plasmaChips === 1 ? '' : 's'}.`, plasmaChips };
+  return { ok: true, message: `Card recycled into ${plasmaChips} Plasma Chip${plasmaChips === 1 ? '' : 's'}.`, plasmaChips };
+};
+
+export const deleteModCard = (mods: LocalModCollection, instanceId: string): ModOperationResult => {
+  const card = mods.cards.find((entry) => entry.instanceId === instanceId);
+  if (!card) return { ok: false, message: 'Card not found.' };
+  removeCard(mods, card);
+  return { ok: true, message: 'Card deleted.' };
 };
 
 export const infuseModCard = (mods: LocalModCollection, instanceId: string, infusionId: ModInfusionId): ModOperationResult => {
@@ -90,18 +98,8 @@ export const rankUpMod = (mods: LocalModCollection, modId: string, credits: numb
   if (!targetCard) return { ok: false, message: 'Card not found.' };
   if (targetCard.upgradeLevel >= 3) return { ok: false, message: 'Mod card is fully upgraded.' };
   const nextRank = (targetCard.upgradeLevel + 1) as 1 | 2 | 3;
-  const duplicateCost = MOD_BALANCE.duplicateRequirements[nextRank];
   const creditCost = MOD_BALANCE.rankCreditCosts[nextRank];
-  if (owned.duplicates < duplicateCost) return { ok: false, message: `Requires ${duplicateCost} duplicate${duplicateCost === 1 ? '' : 's'}.`, cost: creditCost };
   if (credits < creditCost) return { ok: false, message: `Requires ${creditCost} credits.`, cost: creditCost };
-  const duplicateCards = mods.cards.filter((card) => card.modId === modId && card.instanceId !== targetCard.instanceId).slice(0, duplicateCost);
-  if (duplicateCards.length < duplicateCost) return { ok: false, message: 'Duplicate card inventory is inconsistent.' };
-  const consumedIds = new Set(duplicateCards.map((card) => card.instanceId));
-  mods.cards = mods.cards.filter((card) => !consumedIds.has(card.instanceId));
-  for (const loadout of mods.loadouts) for (const slot of Object.keys(loadout.cardSlots) as ModSlot[]) {
-    if (loadout.cardSlots[slot] && consumedIds.has(loadout.cardSlots[slot]!)) loadout.cardSlots[slot] = mods.cards.find((card) => card.modId === modId)?.instanceId ?? null;
-  }
-  owned.duplicates -= duplicateCost;
   targetCard.upgradeLevel = nextRank;
   owned.rank = Math.max(...mods.cards.filter((card) => card.modId === modId).map((card) => card.upgradeLevel)) as ModRank;
   return { ok: true, message: `Card upgraded to ${nextRank}/3.`, cost: creditCost };

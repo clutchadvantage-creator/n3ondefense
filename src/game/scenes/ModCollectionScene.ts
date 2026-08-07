@@ -81,19 +81,16 @@ export class ModCollectionScene extends Phaser.Scene {
     this.add.text(x, y + 246, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\n\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#d7efff', align: 'center'
     }).setOrigin(0.5, 0).setWordWrapWidth(width - 28);
-    const sameCards = SaveSystem.getModCollection().cards.filter((entry) => entry.modId === card.modId);
-    const duplicate = sameCards.length > 1;
     const categorySlot = definition.category === 'utility' ? null : definition.category as ModSlot;
     const buttonY = y + height - 210;
     if (categorySlot) createButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.apply(() => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40);
     createButton(this, x, buttonY + 44, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40);
     createButton(this, x, buttonY + 88, 'Upgrade Card', () => this.apply(() => SaveSystem.rankUpMod(definition.id, card.instanceId)), width - 40);
-    if (duplicate) {
-      const sell = MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity];
-      const chips = MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity];
-      createButton(this, x - width * 0.24, buttonY + 132, `Sell +${sell}C`, () => this.apply(() => SaveSystem.sellDuplicateMod(card.instanceId)), width * 0.43);
-      createButton(this, x + width * 0.24, buttonY + 132, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), width * 0.43);
-    }
+    const sell = MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity];
+    const chips = MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity];
+    createButton(this, x - width * 0.31, buttonY + 132, `Sell +${sell}C`, () => this.apply(() => SaveSystem.sellDuplicateMod(card.instanceId)), width * 0.29);
+    createButton(this, x, buttonY + 132, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), width * 0.31);
+    createButton(this, x + width * 0.31, buttonY + 132, 'Delete', () => this.apply(() => SaveSystem.deleteModCard(card.instanceId)), width * 0.25);
     createButton(this, x, buttonY + 176, card.infusionId ? 'Change Infusion' : 'Infuse Card', () => this.showInfusionModal(card), width - 40);
     const statusText = this.add.text(x, y + height - 16, this.status, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf', align: 'center' }).setOrigin(0.5, 1).setWordWrapWidth(width - 24);
     if (this.status) this.time.delayedCall(2200, () => { this.status = ''; if (statusText.active) statusText.setText(''); });

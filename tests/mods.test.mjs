@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addModDrop, createDefaultModCollection, equipMod, infuseModCard, rankUpMod, recycleDuplicateMod, sellDuplicateMod } from '../src/game/mods/ModInventoryService.ts';
+import { addModDrop, createDefaultModCollection, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleDuplicateMod, sellDuplicateMod } from '../src/game/mods/ModInventoryService.ts';
 import { normalizeModCollection, normalizeProtocolPreference } from '../src/game/mods/ModSaveNormalizer.ts';
 import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
 import { magneticResistanceForEnemy, prioritizeTurretTargets, protocolStart, splitCurrentSecondaryDamage } from '../src/game/mods/ModRules.ts';
@@ -55,7 +55,7 @@ test('legacy aggregate duplicates migrate into individual card instances', () =>
   assert.equal(new Set(mods.cards.map((card) => card.instanceId)).size, 4);
 });
 
-test('duplicate cards can be sold or recycled by rarity but the final card is protected', () => {
+test('any card can be sold or recycled by rarity, including the final copy', () => {
   const mods = createDefaultModCollection();
   addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current');
   const sold = sellDuplicateMod(mods, mods.cards[1].instanceId);
@@ -63,7 +63,9 @@ test('duplicate cards can be sold or recycled by rarity but the final card is pr
   const recycled = recycleDuplicateMod(mods, mods.cards[1].instanceId);
   assert.equal(recycled.plasmaChips, 1);
   assert.equal(mods.plasmaChips, 1);
-  assert.equal(sellDuplicateMod(mods, mods.cards[0].instanceId).ok, false);
+  assert.equal(sellDuplicateMod(mods, mods.cards[0].instanceId).ok, true);
+  assert.equal(mods.cards.length, 0);
+  assert.equal(mods.inventory['split-current'], undefined);
 });
 
 test('the selected original card can be recycled when another copy remains', () => {
@@ -73,6 +75,16 @@ test('the selected original card can be recycled when another copy remains', () 
   assert.equal(recycleDuplicateMod(mods, selectedId).ok, true);
   assert.equal(mods.cards.some((card) => card.instanceId === selectedId), false);
   assert.equal(mods.cards.length, 1);
+});
+
+test('deleting an equipped final card removes ownership and clears its loadout slot', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'split-current');
+  equipMod(mods, 'weapon', 'split-current', mods.cards[0].instanceId);
+  assert.equal(deleteModCard(mods, mods.cards[0].instanceId).ok, true);
+  assert.equal(mods.inventory['split-current'], undefined);
+  assert.equal(mods.loadouts[0].slots.weapon, null);
+  assert.equal(mods.loadouts[0].cardSlots.weapon, null);
 });
 
 test('Plasma Chip infusions spend chips and remain cosmetic runtime flags', () => {
@@ -113,19 +125,14 @@ test('Corrupted cards declare both their positive effect and tradeoff', () => {
   assert.ok(corrupted.dropWeight < 0.1);
 });
 
-test('three card upgrades fill levels zero through three and enforce costs and cap', () => {
+test('one card upgrades from zero through three without duplicate requirements', () => {
   const mods = createDefaultModCollection();
-  addModDrop(mods, 'split-current');
-  assert.equal(rankUpMod(mods, 'split-current', 10_000).ok, false);
   addModDrop(mods, 'split-current');
   const rankOne = rankUpMod(mods, 'split-current', 10_000);
   assert.equal(rankOne.ok, true);
   assert.equal(rankOne.cost, 600);
-  assert.equal(mods.inventory['split-current'].duplicates, 0);
-  addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current');
   assert.equal(rankUpMod(mods, 'split-current', 1199).ok, false);
   assert.equal(rankUpMod(mods, 'split-current', 1200).ok, true);
-  addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current');
   assert.equal(rankUpMod(mods, 'split-current', 1999).ok, false);
   assert.equal(rankUpMod(mods, 'split-current', 2000).ok, true);
   assert.equal(mods.cards[0].upgradeLevel, 3);
