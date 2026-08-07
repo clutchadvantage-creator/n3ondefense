@@ -110,6 +110,7 @@ export class ArenaScene extends Phaser.Scene {
   private modsEarned: ModRewardRecord[] = [];
   private modDropSequence = 0;
   private runStartedAt = Date.now();
+  private fireworksCelebrationUntil = 0;
   private readonly enemyTurretTargets = new WeakMap<Enemy, TurretTargetDecision>();
 
   private roundManager!: RoundManager;
@@ -1564,17 +1565,28 @@ export class ArenaScene extends Phaser.Scene {
 
   private playDetonationFireworks(x: number, y: number): void {
     const colors = [0xff55dd, 0x55eeff, 0xffd35a, 0x7cff8b];
-    for (let burst = 0; burst < 4; burst += 1) {
-      this.time.delayedCall(120 + burst * 150, () => {
-        const bx = x + Phaser.Math.Between(-180, 180);
-        const by = y + Phaser.Math.Between(-150, 20);
-        for (let ray = 0; ray < 14; ray += 1) {
-          const angle = ray / 14 * Math.PI * 2;
-          const spark = this.add.circle(bx, by, 3, colors[(burst + ray) % colors.length], 1).setDepth(42);
-          this.tweens.add({ targets: spark, x: bx + Math.cos(angle) * 70, y: by + Math.sin(angle) * 70, alpha: 0, duration: 520, ease: 'Cubic.Out', onComplete: () => spark.destroy() });
+    const config = MOD_BALANCE.detonationFireworks;
+    const duration = Phaser.Math.Between(config.minDurationMs, config.maxDurationMs);
+    const startsAt = this.time.now;
+    this.fireworksCelebrationUntil = Math.max(this.fireworksCelebrationUntil, startsAt + duration);
+    let burst = 0;
+    const timer = this.time.addEvent({
+      delay: config.burstIntervalMs,
+      repeat: Math.max(0, Math.ceil(duration / config.burstIntervalMs) - 1),
+      callback: () => {
+        if (!this.sys.isActive() || this.time.now - startsAt > duration) { timer.remove(); return; }
+        const bx = x + Phaser.Math.Between(-155, 155);
+        const by = y + Phaser.Math.Between(-145, 35);
+        const rays = SaveSystem.get().settings.particles ? config.sparksPerBurst : Math.ceil(config.sparksPerBurst / 2);
+        for (let ray = 0; ray < rays; ray += 1) {
+          const angle = ray / rays * Math.PI * 2 + Phaser.Math.FloatBetween(-0.08, 0.08);
+          const distance = Phaser.Math.Between(52, 88);
+          const spark = this.add.circle(bx, by, Phaser.Math.Between(2, 4), colors[(burst + ray) % colors.length], 1).setDepth(42);
+          this.tweens.add({ targets: spark, x: bx + Math.cos(angle) * distance, y: by + Math.sin(angle) * distance, alpha: 0, duration: Phaser.Math.Between(480, 760), ease: 'Cubic.Out', onComplete: () => spark.destroy() });
         }
-      });
-    }
+        burst += 1;
+      }
+    });
   }
 
   private updateArenaHealthDrops(now: number): void {
@@ -1943,7 +1955,10 @@ export class ArenaScene extends Phaser.Scene {
     SaveSystem.recordRoundCompletion(completedRound);
     OnlineRunManager.recordMilestone(completedRound);
 
-    this.time.delayedCall(1400, () => {
+    const celebrationDelay = this.modRuntime.hasInfusion('detonation-fireworks')
+      ? Math.max(1400, this.fireworksCelebrationUntil - this.time.now)
+      : 1400;
+    this.time.delayedCall(celebrationDelay, () => {
       const next = this.roundManager.nextRound();
       const payload: RoundFinishedPayload = {
         baseSeed: this.roundManager.seedBase,

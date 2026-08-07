@@ -193,5 +193,7 @@ assert(MOD_BALANCE.duplicateRequirements[3] >= MOD_BALANCE.duplicateRequirements
 assert(MOD_BALANCE.duplicateRequirements[2] >= MOD_BALANCE.duplicateRequirements[1], 'mod first-to-second duplicate costs monotonic');
 assert(Object.values(MOD_BALANCE.duplicateCreditValueByRarity).every((value) => value > 0), 'duplicate sale values positive');
 assert(Object.values(MOD_BALANCE.duplicatePlasmaValueByRarity).every((value) => value > 0), 'duplicate plasma yields positive');
+assert(MOD_BALANCE.detonationFireworks.minDurationMs >= 20_000, 'fireworks minimum duration');
+assert(MOD_BALANCE.detonationFireworks.maxDurationMs <= 30_000 && MOD_BALANCE.detonationFireworks.maxDurationMs >= MOD_BALANCE.detonationFireworks.minDurationMs, 'fireworks duration range');
 assert(RUN_PROTOCOLS.overdrive.startingRound > RUN_PROTOCOLS.normal.startingRound, 'Overdrive starts later than Normal');
 console.log('\nAll mathematical safety and relationship checks passed.');

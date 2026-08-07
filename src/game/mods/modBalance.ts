@@ -8,6 +8,7 @@ export const MOD_BALANCE = {
   duplicateCreditValueByRarity: { common: 100, uncommon: 180, rare: 320, prototype: 550, legendary: 900 } satisfies Record<ModRarity, number>,
   duplicatePlasmaValueByRarity: { common: 1, uncommon: 2, rare: 3, prototype: 5, legendary: 8 } satisfies Record<ModRarity, number>,
   infusionPlasmaCost: { 'enemy-growth': 5, 'detonation-fireworks': 7 } as const,
+  detonationFireworks: { minDurationMs: 20_000, maxDurationMs: 30_000, burstIntervalMs: 520, sparksPerBurst: 12 },
   dropChance: { normalEnemy: 0.0005, eliteEnemy: 0.04, milestone: 0.12 } satisfies Record<ModDropSource, number>,
   rarityWeights: { common: 56, uncommon: 27, rare: 12, prototype: 4.5, legendary: 0.5 } satisfies Record<ModRarity, number>,
   raritySourceMultipliers: {

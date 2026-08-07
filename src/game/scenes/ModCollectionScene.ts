@@ -85,7 +85,11 @@ export class ModCollectionScene extends Phaser.Scene {
     const buttonY = y + height - 210;
     if (categorySlot) createButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.apply(() => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40);
     createButton(this, x, buttonY + 44, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40);
-    createButton(this, x, buttonY + 88, 'Upgrade Card', () => this.apply(() => SaveSystem.rankUpMod(definition.id, card.instanceId)), width - 40);
+    const nextUpgrade = card.upgradeLevel < 3 ? (card.upgradeLevel + 1) as 1 | 2 | 3 : null;
+    const upgradeButton = createButton(this, x, buttonY + 88, nextUpgrade ? `Upgrade Card — ${MOD_BALANCE.rankCreditCosts[nextUpgrade].toLocaleString()} Credits` : 'Upgrade Card — MAX LEVEL', () => {
+      if (nextUpgrade) this.apply(() => SaveSystem.rankUpMod(definition.id, card.instanceId));
+    }, width - 40);
+    if (!nextUpgrade) disableButton(upgradeButton);
     const sell = MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity];
     const chips = MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity];
     createButton(this, x - width * 0.31, buttonY + 132, `Sell +${sell}C`, () => this.apply(() => SaveSystem.sellDuplicateMod(card.instanceId)), width * 0.29);
