@@ -1,10 +1,10 @@
-import { COSMETICS } from '../../data/cosmetics';
-import { UPGRADE_DEFINITIONS } from '../../data/upgrades';
-import Phaser from 'phaser';
-import type { CosmeticOption } from '../types';
-import { SFX_DEFINITIONS, createDefaultSoundVolumes } from '../config/audio';
-import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type LocalPlayerMetadata, type LocalPlayerProgress, type LocalPlayerSave, type LocalPlayerSaveV1, type LocalPlayerSettings, type ProfileSummary } from './LocalSaveTypes';
-import { DEFAULT_ABILITY_BINDINGS, normalizeAbilityBindings } from '../config/controls';
+import { COSMETICS } from '../../data/cosmetics.ts';
+import { UPGRADE_DEFINITIONS } from '../../data/upgrades.ts';
+import type { CosmeticOption } from '../types.ts';
+import { SFX_DEFINITIONS, createDefaultSoundVolumes } from '../config/audio.ts';
+import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type LocalPlayerMetadata, type LocalPlayerProgress, type LocalPlayerSave, type LocalPlayerSaveV1, type LocalPlayerSettings, type ProfileSummary } from './LocalSaveTypes.ts';
+import { DEFAULT_ABILITY_BINDINGS, normalizeAbilityBindings } from '../config/controls.ts';
+import { normalizeModCollection, normalizeProtocolPreference } from '../mods/ModSaveNormalizer.ts';
 
 const defaultSettings: LocalPlayerSettings = {
   masterVolume: 0.8,
@@ -52,6 +52,7 @@ const toInteger = (value: unknown, fallback = 0): number => {
 };
 
 const toBoolean = (value: unknown, fallback: boolean): boolean => typeof value === 'boolean' ? value : fallback;
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
 const sanitizeString = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 
@@ -99,18 +100,19 @@ const normalizeSettings = (settings: unknown): LocalPlayerSettings => {
   const soundCandidates = isObject(candidate.soundVolumes) ? candidate.soundVolumes : {};
   const soundVolumes = createDefaultSoundVolumes();
   for (const definition of SFX_DEFINITIONS) {
-    soundVolumes[definition.key] = Phaser.Math.Clamp(toFiniteNumber(soundCandidates[definition.key], 1), 0, 1);
+    soundVolumes[definition.key] = clamp(toFiniteNumber(soundCandidates[definition.key], 1), 0, 1);
   }
   return {
-    masterVolume: Phaser.Math.Clamp(toFiniteNumber(candidate.masterVolume, defaultSettings.masterVolume), 0, 1),
-    musicVolume: Phaser.Math.Clamp(toFiniteNumber(candidate.musicVolume, defaultSettings.musicVolume), 0, 1),
-    sfxVolume: Phaser.Math.Clamp(toFiniteNumber(candidate.sfxVolume, defaultSettings.sfxVolume), 0, 1),
+    masterVolume: clamp(toFiniteNumber(candidate.masterVolume, defaultSettings.masterVolume), 0, 1),
+    musicVolume: clamp(toFiniteNumber(candidate.musicVolume, defaultSettings.musicVolume), 0, 1),
+    sfxVolume: clamp(toFiniteNumber(candidate.sfxVolume, defaultSettings.sfxVolume), 0, 1),
     soundVolumes,
     screenShake: toBoolean(candidate.screenShake, defaultSettings.screenShake),
     particles: toBoolean(candidate.particles, defaultSettings.particles),
     abilityBindings: normalizeAbilityBindings(candidate.abilityBindings)
   };
 };
+
 
 const normalizeMetadata = (metadata: unknown, revision: number): LocalPlayerMetadata => {
   const candidate = isObject(metadata) ? metadata : {};
@@ -157,6 +159,8 @@ export const createDefaultLocalSave = (profileId: string, profileName: string, s
       owned,
       equipped: normalizeEquippedCosmetics(source?.cosmetics?.equipped, owned)
     },
+    mods: normalizeModCollection(source?.mods),
+    protocol: normalizeProtocolPreference(source?.protocol),
     progress: normalizeProgress(source?.progress),
     settings: normalizeSettings(source?.settings),
     metadata: {
@@ -214,7 +218,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;
@@ -234,6 +238,8 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       owned,
       equipped: normalizeEquippedCosmetics(candidate.cosmetics?.equipped, owned)
     };
+    current.mods = normalizeModCollection(candidate.mods);
+    current.protocol = normalizeProtocolPreference(candidate.protocol);
     current.progress = normalizeProgress(candidate.progress);
     current.settings = normalizeSettings(candidate.settings);
     current.metadata = normalizeMetadata(candidate.metadata, CURRENT_SAVE_VERSION);
@@ -245,6 +251,8 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
   if (!current.profile.createdAt || !current.profile.lastPlayedAt) return null;
   if (!Object.keys(current.upgrades ?? {}).every((id) => upgradeIds.has(id))) return null;
 
+  current.mods = normalizeModCollection(current.mods);
+  current.protocol = normalizeProtocolPreference(current.protocol);
   return current as LocalPlayerSave;
 };
 

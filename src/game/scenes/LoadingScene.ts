@@ -219,7 +219,8 @@ export class LoadingScene extends Phaser.Scene {
     return {
       baseSeed: Math.floor(candidate.baseSeed),
       round: Math.max(1, Math.floor(candidate.round)),
-      objectiveMode: candidate.objectiveMode
+      objectiveMode: candidate.objectiveMode,
+      protocol: candidate.protocol === 'overdrive' ? 'overdrive' : 'normal'
     };
   }
 }

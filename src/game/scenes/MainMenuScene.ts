@@ -9,6 +9,8 @@ import { createButton, disableButton, enableButton } from '../utils/ui';
 import { showInfoModal } from '../utils/localSaveUi';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { bindingLabel } from '../config/controls';
+import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
+import { ModRuntime } from '../mods/ModRuntime.ts';
 
 export class MainMenuScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
@@ -40,6 +42,10 @@ export class MainMenuScene extends Phaser.Scene {
 
     const profile = SaveSystem.getActiveProfileSummary();
     const save = profile ? SaveSystem.get() : undefined;
+    const requestedProtocol = profile ? SaveSystem.getPreferredProtocol() : 'normal';
+    const protocol = profile && SaveSystem.getHighestRound() >= RUN_PROTOCOLS[requestedProtocol].unlockHighestRound ? requestedProtocol : 'normal';
+    const protocolDefinition = RUN_PROTOCOLS[protocol];
+    const equippedMods = profile ? new ModRuntime(SaveSystem.getModCollection()).snapshot() : [];
     const storageMessage = SaveSystem.getStorageMessage();
     const profilePanel = this.add.container(width - 190, 130).setDepth(12);
     const panel = this.add.rectangle(0, 0, 320, 180, 0x0b1422, 0.96).setStrokeStyle(2, 0x55e9ff, 0.9).setOrigin(0.5);
@@ -93,7 +99,18 @@ export class MainMenuScene extends Phaser.Scene {
       });
     }
 
-    const startButton = createButton(this, width / 2 - 135, 210, 'Start Online', () => {
+    const protocolButton = createButton(this, width / 2, 202, `Protocol: ${protocolDefinition.label.replace(' PROTOCOL', '')}`, () => {
+      if (!profile) return;
+      const next = protocol === 'normal' ? 'overdrive' : 'normal';
+      const result = SaveSystem.setPreferredProtocol(next);
+      if (result.ok) this.scene.restart();
+      else onlineStatus.setText(result.message ?? 'PROTOCOL LOCKED').setColor('#ffbd85');
+    }, 300);
+    if (profile && SaveSystem.getHighestRound() < RUN_PROTOCOLS.overdrive.unlockHighestRound) {
+      protocolButton.setAlpha(0.82);
+    }
+
+    const startButton = createButton(this, width / 2 - 135, 254, 'Start Online', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
@@ -101,7 +118,7 @@ export class MainMenuScene extends Phaser.Scene {
       disableButton(startButton);
       void (async () => {
         onlineStatus.setText('CREATING SERVER-AUTHORIZED RUN...').setColor('#9fc8d8');
-        const result = await OnlineRunManager.beginRun(profile.id, profile.name);
+        const result = await OnlineRunManager.beginRun(profile.id, profile.name, protocol, equippedMods);
         if (!result.ok || result.seed === undefined) {
           onlineStatus.setText(`${result.message} CHOOSE LOCAL MODE OR RETRY.`).setColor('#ff9aab');
           enableButton(startButton);
@@ -109,8 +126,12 @@ export class MainMenuScene extends Phaser.Scene {
         }
         const session = {
           baseSeed: result.seed,
-          round: 1,
-          objectiveMode: OBJECTIVE_CONFIG.defaultMode
+          round: protocolDefinition.startingRound,
+          objectiveMode: OBJECTIVE_CONFIG.defaultMode,
+          protocol,
+          runStartedAt: Date.now(),
+          equippedMods,
+          modsEarned: []
         };
         startArenaLoad(this, {
           reason: 'new-run',
@@ -119,18 +140,26 @@ export class MainMenuScene extends Phaser.Scene {
         });
       })();
     }, 240);
-    createButton(this, width / 2 + 135, 210, 'Start Local', () => {
+    createButton(this, width / 2 + 135, 254, 'Start Local', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
       }
       OnlineRunManager.beginLocalRun();
-      startArenaLoad(this, { reason: 'new-run', message: 'Building explicitly local operation...' });
+      startArenaLoad(this, {
+        reason: 'new-run',
+        session: {
+          baseSeed: Phaser.Math.Between(1, 999_999_999), round: protocolDefinition.startingRound,
+          objectiveMode: OBJECTIVE_CONFIG.defaultMode, protocol, runStartedAt: Date.now(), equippedMods, modsEarned: []
+        },
+        message: 'Building explicitly local operation...'
+      });
     }, 240);
-    createButton(this, width / 2, 276, 'Store', () => this.scene.start(SceneKeys.Upgrades));
-    createButton(this, width / 2, 328, 'Options', () => this.scene.start(SceneKeys.Options));
-    createButton(this, width / 2, 380, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), 220);
-    createButton(this, width / 2, 432, 'Local Save Information', () => {
+    createButton(this, width / 2, 310, 'Store', () => this.scene.start(SceneKeys.Upgrades));
+    createButton(this, width / 2, 362, 'Mod Collection', () => this.scene.start(SceneKeys.Mods));
+    createButton(this, width / 2, 414, 'Options', () => this.scene.start(SceneKeys.Options));
+    createButton(this, width / 2, 466, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), 220);
+    createButton(this, width / 2, 518, 'Local Save Information', () => {
       showInfoModal(
         this,
         'LOCAL SAVE INFORMATION',

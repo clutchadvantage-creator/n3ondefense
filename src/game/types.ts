@@ -1,8 +1,9 @@
 import type Phaser from 'phaser';
 import type { AudioSfxName } from './config/audio';
 import type { AbilityBindings } from './config/controls';
+import type { EquippedModSnapshot, ModRewardRecord, RunProtocolId } from './mods/types.ts';
 
-export type SceneKey = 'boot' | 'splash' | 'local-profiles' | 'menu' | 'arena' | 'upgrades' | 'cosmetics' | 'results' | 'options' | 'round-finished' | 'loading';
+export type SceneKey = 'boot' | 'splash' | 'local-profiles' | 'menu' | 'arena' | 'upgrades' | 'cosmetics' | 'mods' | 'results' | 'options' | 'round-finished' | 'loading';
 
 export enum RoundState {
   PrePlant = 'PrePlant',
@@ -179,12 +180,20 @@ export interface ArenaReward {
   reason: 'victory' | 'playerDead' | 'bombDefused';
   round?: number;
   seed?: number;
+  protocol: RunProtocolId;
+  equippedMods: EquippedModSnapshot[];
+  modsEarned: ModRewardRecord[];
+  runDurationMs: number;
 }
 
 export interface ArenaSessionState {
   baseSeed: number;
   round: number;
   objectiveMode: ObjectiveMode;
+  protocol: RunProtocolId;
+  runStartedAt?: number;
+  equippedMods?: EquippedModSnapshot[];
+  modsEarned?: ModRewardRecord[];
 }
 
 export interface RoundFinishedPayload {
@@ -198,4 +207,8 @@ export interface RoundFinishedPayload {
   objectiveMode: ObjectiveMode;
   creditsGained: number;
   coreTokensGained: number;
+  protocol: RunProtocolId;
+  equippedMods: EquippedModSnapshot[];
+  modsEarned: ModRewardRecord[];
+  runStartedAt: number;
 }

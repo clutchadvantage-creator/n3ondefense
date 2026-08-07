@@ -149,7 +149,11 @@ export class RunTransitionManager {
     return {
       baseSeed: Math.floor(session.baseSeed),
       round: Math.max(1, Math.floor(session.round)),
-      objectiveMode: session.objectiveMode
+      objectiveMode: session.objectiveMode,
+      protocol: session.protocol === 'overdrive' ? 'overdrive' : 'normal',
+      runStartedAt: Number.isFinite(session.runStartedAt) ? session.runStartedAt : Date.now(),
+      equippedMods: Array.isArray(session.equippedMods) ? session.equippedMods : [],
+      modsEarned: Array.isArray(session.modsEarned) ? session.modsEarned : []
     };
   }
 

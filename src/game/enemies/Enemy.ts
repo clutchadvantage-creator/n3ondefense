@@ -20,6 +20,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   lastShotMs = 0;
   defuseProgressMs = 0;
   defuseInterruptedUntil = 0;
+  slowedUntil = 0;
+  slowFactor = 1;
   disabledUntil = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, texture: string, stats: EnemyStats) {
@@ -45,6 +47,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   isDead(): boolean {
     return this.hp <= 0;
+  }
+
+  effectiveSpeed(baseSpeed: number, now: number): number {
+    return baseSpeed * (now < this.slowedUntil ? this.slowFactor : 1);
   }
 }
 

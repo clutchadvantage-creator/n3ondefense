@@ -1,12 +1,13 @@
-import type { CosmeticOption } from '../types';
-import type { AudioSfxName } from '../config/audio';
-import { GAME_VERSION } from '../config/version';
-import type { AbilityBindings } from '../config/controls';
+import type { CosmeticOption } from '../types.ts';
+import type { AudioSfxName } from '../config/audio.ts';
+import { GAME_VERSION } from '../config/version.ts';
+import type { AbilityBindings } from '../config/controls.ts';
+import type { LocalModCollection, ProtocolPreference } from '../mods/types.ts';
 
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 2;
+export const CURRENT_SAVE_VERSION = 3;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -59,6 +60,8 @@ export interface LocalPlayerSave {
   wallet: LocalPlayerWallet;
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
+  mods: LocalModCollection;
+  protocol: ProtocolPreference;
   progress: LocalPlayerProgress;
   settings: LocalPlayerSettings;
   metadata: LocalPlayerMetadata;
@@ -94,6 +97,8 @@ export interface LocalProfileIndex {
   profiles: ProfileSummary[];
   legacyMigrationPrompted: boolean;
 }
+
+export type LocalPlayerSaveV2 = Omit<LocalPlayerSave, 'version' | 'mods' | 'protocol'> & { version: 2 };
 
 export interface LocalLeaderboardEntry {
   profileId: string;

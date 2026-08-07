@@ -13,6 +13,8 @@ import {
   sustainedWeaponDps,
   type BalanceEnemyType
 } from '../src/game/config/balance/index.ts';
+import { MOD_BALANCE, RUN_PROTOCOLS } from '../src/game/mods/modBalance.ts';
+import { MOD_DEFINITIONS } from '../src/game/mods/definitions.ts';
 
 const assert = (condition: boolean, message: string): void => {
   if (!condition) throw new Error(`BALANCE ASSERTION FAILED: ${message}`);
@@ -135,6 +137,21 @@ console.table(UPGRADE_DEFINITIONS.map((upgrade) => {
   return { id: upgrade.id, maxLevel: upgrade.maxLevel, firstCost: costs[0], finalCost: costs.at(-1), cumulativeCost: costs.reduce((sum, cost) => sum + cost, 0), effectPerLevel: upgrade.effectPerLevel, stacking: 'additive' };
 }));
 
+console.log('\nMOD RANK AND DROP CONFIGURATION');
+console.table(MOD_DEFINITIONS.map((mod) => ({
+  id: mod.id,
+  category: mod.category,
+  rarity: mod.rarity,
+  maxRank: mod.maxRank,
+  dropWeight: mod.dropWeight,
+  rank2Duplicates: MOD_BALANCE.duplicateRequirements[2],
+  rank2Credits: MOD_BALANCE.rankCreditCosts[2],
+  rank3Duplicates: MOD_BALANCE.duplicateRequirements[3],
+  rank3Credits: MOD_BALANCE.rankCreditCosts[3]
+})));
+console.log('\nTHREAT PROTOCOLS');
+console.table(Object.values(RUN_PROTOCOLS));
+
 for (const enemy of Object.values(ENEMY_BALANCE)) {
   for (const value of [enemy.hp, enemy.speed, enemy.damage, enemy.attackCooldownMs, enemy.weight, enemy.credits]) assert(Number.isFinite(value) && value >= 0, 'enemy values must be finite and non-negative');
 }
@@ -162,4 +179,10 @@ for (const upgrade of UPGRADE_DEFINITIONS) {
 assert(weaponAtLevel(10).fireRate <= WEAPON_BALANCE.maximumFireRate, 'maximum fire rate cap');
 assert(OBJECTIVE_BALANCE.defuseRequiredMs >= 9000, 'defuser reaction time');
 assert(Math.abs(Object.values(getSpawnProfile(10).composition).reduce((sum, value) => sum + value, 0) - 1) < 0.0001, 'composition normalized');
+assert(MOD_BALANCE.conditionalDirectDamageBonusCap > 0 && MOD_BALANCE.conditionalDirectDamageBonusCap <= 0.3, 'conditional mod damage cap');
+assert(Object.values(MOD_BALANCE.dropChance).every((chance) => chance >= 0 && chance <= 1), 'mod drop chances are probabilities');
+assert(Object.values(MOD_BALANCE.raritySourceMultipliers).every((table) => Object.values(table).some((weight) => weight > 0)), 'each mod source has a usable drop table');
+assert(MOD_BALANCE.rankCreditCosts[3] >= MOD_BALANCE.rankCreditCosts[2], 'mod rank costs monotonic');
+assert(MOD_BALANCE.duplicateRequirements[3] >= MOD_BALANCE.duplicateRequirements[2], 'mod duplicate costs monotonic');
+assert(RUN_PROTOCOLS.overdrive.startingRound > RUN_PROTOCOLS.normal.startingRound, 'Overdrive starts later than Normal');
 console.log('\nAll mathematical safety and relationship checks passed.');

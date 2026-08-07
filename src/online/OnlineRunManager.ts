@@ -3,6 +3,7 @@ import { LeaderboardClient, OnlineApiError } from './LeaderboardClient';
 import { OnlineCredentialStore } from './OnlineCredentialStore';
 import { PendingSubmissionQueue } from './PendingSubmissionQueue';
 import type { OnlineProgressSnapshot, OnlineRunContext, OnlineRunStartResult, OnlineRunStatus } from './onlineTypes';
+import type { EquippedModSnapshot, RunProtocolId } from '../game/mods/types.ts';
 
 const ACTIVE_RUN_KEY = 'n3on-defense.online.active-run';
 const LAST_STATUS_KEY = 'n3on-defense.online.last-submission-status';
@@ -37,7 +38,7 @@ export class OnlineRunManager {
     }
   }
 
-  static async beginRun(profileId: string, displayName: string): Promise<OnlineRunStartResult> {
+  static async beginRun(profileId: string, displayName: string, protocol: RunProtocolId = 'normal', equippedMods: EquippedModSnapshot[] = []): Promise<OnlineRunStartResult> {
     this.clearActive();
     this.profileId = profileId;
     if (!LeaderboardClient.configured()) return { ok: false, state: 'unavailable', message: 'Online service is not configured.' };
@@ -53,7 +54,9 @@ export class OnlineRunManager {
         startedAt: Date.now(),
         milestoneSequence: 0,
         highestRound: 0,
-        baseline: SaveSystem.getOnlineProgressSnapshot()
+        baseline: SaveSystem.getOnlineProgressSnapshot(),
+        protocol,
+        equippedMods
       };
       this.persistActive();
       void this.flushQueue();
@@ -79,7 +82,9 @@ export class OnlineRunManager {
       sequence: this.active.milestoneSequence,
       highest_round: this.active.highestRound,
       ...progress,
-      elapsed_ms: Date.now() - this.active.startedAt
+      elapsed_ms: Date.now() - this.active.startedAt,
+      protocol: this.active.protocol,
+      equipped_mods: this.active.equippedMods
     });
     this.persistActive();
     void this.flushQueue();
@@ -94,7 +99,9 @@ export class OnlineRunManager {
       outcome,
       highest_round: this.active.highestRound,
       ...progress,
-      elapsed_ms: Date.now() - this.active.startedAt
+      elapsed_ms: Date.now() - this.active.startedAt,
+      protocol: this.active.protocol,
+      equipped_mods: this.active.equippedMods
     });
     this.setStatus(navigator.onLine ? 'submitted' : 'queued_offline');
     this.clearActive();
@@ -162,7 +169,11 @@ export class OnlineRunManager {
       const parsed = JSON.parse(sessionStorage.getItem(ACTIVE_RUN_KEY) ?? 'null') as (OnlineRunContext & { profileId?: string }) | null;
       if (!parsed || typeof parsed.runId !== 'string' || typeof parsed.runToken !== 'string') return null;
       this.profileId = parsed.profileId ?? null;
-      return parsed;
+      return {
+        ...parsed,
+        protocol: parsed.protocol === 'overdrive' ? 'overdrive' : 'normal',
+        equippedMods: Array.isArray(parsed.equippedMods) ? parsed.equippedMods : []
+      };
     } catch { return null; }
   }
 

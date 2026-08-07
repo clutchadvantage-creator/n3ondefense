@@ -3,6 +3,9 @@ import { UPGRADE_DEFINITIONS } from '../../data/upgrades';
 import type { CosmeticOption } from '../types';
 import { type LocalPlayerSave, type ProfileSummary } from '../save/LocalSaveTypes';
 import { LocalSaveManager } from '../save/LocalSaveManager';
+import { addModDrop, equipMod, rankUpMod, unequipMod } from '../mods/ModInventoryService.ts';
+import type { ModSlot, RunProtocolId } from '../mods/types.ts';
+import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
 
 export interface PurchaseResult {
   ok: boolean;
@@ -252,6 +255,44 @@ export class PlayerProfileStore {
     save.wallet.credits -= cost;
     save.upgrades[upgradeKey] = current + 1;
     save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return { ok: true };
+  }
+
+  static addMod(modId: string): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = addModDrop(save.mods, modId);
+    if (result.ok) PlayerProfileStore.save();
+    return result;
+  }
+
+  static rankUpMod(modId: string): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = rankUpMod(save.mods, modId, save.wallet.credits);
+    if (!result.ok || result.cost === undefined) return result;
+    save.wallet.credits -= result.cost;
+    PlayerProfileStore.save();
+    return result;
+  }
+
+  static equipMod(slot: ModSlot, modId: string): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = equipMod(save.mods, slot, modId);
+    if (result.ok) PlayerProfileStore.save();
+    return result;
+  }
+
+  static unequipMod(slot: ModSlot): void {
+    const save = PlayerProfileStore.getActiveSave();
+    unequipMod(save.mods, slot);
+    PlayerProfileStore.save();
+  }
+
+  static setPreferredProtocol(protocol: RunProtocolId): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const definition = RUN_PROTOCOLS[protocol];
+    if (save.progress.highestRound < definition.unlockHighestRound) return { ok: false, message: `Reach Round ${definition.unlockHighestRound} to unlock Overdrive.` };
+    save.protocol.preferred = protocol;
     PlayerProfileStore.save();
     return { ok: true };
   }

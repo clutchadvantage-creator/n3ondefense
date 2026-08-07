@@ -6,6 +6,8 @@ export class Mine {
   readonly damage: number;
   readonly radius: number;
   armed = false;
+  detonateAt = 0;
+  lastMagneticPulseAt = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, color: number, armMs: number, damage: number, radius: number) {
     this.sprite = scene.add.circle(x, y, 8, color, 0.7);
@@ -29,6 +31,14 @@ export class Mine {
       this.armed = true;
       this.sprite.setFillStyle(0xffa44d, 1);
     }
+  }
+
+  beginDetonation(now: number, delayMs: number): void {
+    if (this.detonateAt === 0) this.detonateAt = now + Math.max(0, delayMs);
+  }
+
+  readyToDetonate(now: number): boolean {
+    return this.detonateAt > 0 && now >= this.detonateAt;
   }
 
   destroy(): void {

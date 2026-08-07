@@ -1,4 +1,4 @@
-import type { UpgradeDefinition } from '../game/types';
+import type { UpgradeDefinition } from '../game/types.ts';
 
 export const UPGRADE_DEFINITIONS: UpgradeDefinition[] = [
   { id: 'player.maxHealth', category: 'player', label: 'Max Health', description: '+10 max HP', maxLevel: 10, baseCost: 75, growth: 1.26, effectPerLevel: 10 },

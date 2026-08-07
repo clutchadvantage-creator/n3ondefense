@@ -32,7 +32,7 @@ export class RoundFinishedScene extends Phaser.Scene {
     this.add.text(
       width / 2,
       252,
-      `Credits Gained: ${payload?.creditsGained ?? 0}\nCore Tokens Gained: ${payload?.coreTokensGained ?? 0}\nCompleted Seed: ${payload?.completedSeed ?? '-'}\nCompleted Layout: ${payload?.completedTemplate ?? '-'}`,
+      `Credits Gained: ${payload?.creditsGained ?? 0}\nCore Tokens Gained: ${payload?.coreTokensGained ?? 0}\nProtocol: ${(payload?.protocol ?? 'normal').toUpperCase()}  •  Mods Earned: ${payload?.modsEarned.length ?? 0}\nCompleted Seed: ${payload?.completedSeed ?? '-'}\nCompleted Layout: ${payload?.completedTemplate ?? '-'}`,
       {
         fontFamily: 'Rajdhani, sans-serif',
         fontSize: '28px',
@@ -63,7 +63,11 @@ export class RoundFinishedScene extends Phaser.Scene {
       const session: ArenaSessionState = {
         baseSeed: payload.baseSeed,
         round: payload.nextRound,
-        objectiveMode: payload.objectiveMode
+        objectiveMode: payload.objectiveMode,
+        protocol: payload.protocol,
+        runStartedAt: payload.runStartedAt,
+        equippedMods: payload.equippedMods,
+        modsEarned: payload.modsEarned
       };
       startArenaLoad(this, { reason: 'continue-next-round', session, message: 'Deploying next round arena...' });
     }, 320);

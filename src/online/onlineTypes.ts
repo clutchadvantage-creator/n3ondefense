@@ -22,6 +22,8 @@ export interface OnlineRunContext {
   milestoneSequence: number;
   highestRound: number;
   baseline: OnlineProgressSnapshot;
+  protocol: 'normal' | 'overdrive';
+  equippedMods: Array<{ id: string; rank: number }>;
 }
 
 export interface OnlineProgressSnapshot {

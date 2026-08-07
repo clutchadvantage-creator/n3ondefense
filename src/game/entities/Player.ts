@@ -19,6 +19,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   lastDashMs = -9_999;
   dashUntil = 0;
   private cosmeticTint = 0xffffff;
+  modSpeedBoostUntil = 0;
+  modSpeedMultiplier = 1;
   buffs: BuffState = {
     damageBoostUntil: 0,
     speedBoostUntil: 0,
@@ -43,7 +45,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   get speed(): number {
     const boosted = this.scene.time.now < this.buffs.speedBoostUntil;
-    return this.stats.moveSpeed * (boosted ? WEAPON_BALANCE.speedBoostMultiplier : 1);
+    const modBoost = this.scene.time.now < this.modSpeedBoostUntil ? this.modSpeedMultiplier : 1;
+    return this.stats.moveSpeed * (boosted ? WEAPON_BALANCE.speedBoostMultiplier : 1) * modBoost;
   }
 
   get fireRate(): number {

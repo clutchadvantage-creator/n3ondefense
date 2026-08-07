@@ -11,7 +11,8 @@ export const SceneKeys = {
   RoundFinished: 'round-finished',
   Options: 'options',
   Upgrades: 'upgrades',
-  Cosmetics: 'cosmetics'
+  Cosmetics: 'cosmetics',
+  Mods: 'mods'
 } as const;
 
 export const SceneStatusOrder = [
@@ -27,7 +28,8 @@ export const SceneStatusOrder = [
   SceneKeys.RoundFinished,
   SceneKeys.Options,
   SceneKeys.Upgrades,
-  SceneKeys.Cosmetics
+  SceneKeys.Cosmetics,
+  SceneKeys.Mods
 ] as const;
 
 export type SceneKeyValue = (typeof SceneKeys)[keyof typeof SceneKeys];

@@ -1,4 +1,4 @@
-import type { CosmeticOption } from '../game/types';
+import type { CosmeticOption } from '../game/types.ts';
 
 export const COSMETICS: CosmeticOption[] = [
   { id: 'player-cyan', category: 'playerColor', label: 'Cyan Operative', currency: 'credits', cost: 0, color: 0x00f5ff },

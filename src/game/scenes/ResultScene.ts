@@ -5,6 +5,10 @@ import type { ArenaReward } from '../types';
 import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
+import { OBJECTIVE_CONFIG } from '../config/gameplay';
+import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
+import { ModRuntime } from '../mods/ModRuntime.ts';
+import { SaveSystem } from '../systems/SaveSystem';
 
 export class ResultScene extends Phaser.Scene {
   constructor() {
@@ -23,7 +27,7 @@ export class ResultScene extends Phaser.Scene {
       color: victory ? '#56ff90' : '#ff5a76'
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 210, `Credits Earned: ${result?.credits ?? 0}\nCore Tokens Earned: ${result?.coreTokens ?? 0}\nRound: ${result?.round ?? '-'}  Seed: ${result?.seed ?? '-'}`, {
+    this.add.text(width / 2, 210, `Credits Earned: ${result?.credits ?? 0}\nCore Tokens Earned: ${result?.coreTokens ?? 0}\nRound: ${result?.round ?? '-'}  Seed: ${result?.seed ?? '-'}\nProtocol: ${(result?.protocol ?? 'normal').toUpperCase()}  Mods Earned: ${result?.modsEarned.length ?? 0}`, {
       fontFamily: 'Rajdhani, sans-serif',
       fontSize: '28px',
       color: '#dbfaff',
@@ -53,7 +57,20 @@ export class ResultScene extends Phaser.Scene {
       OnlineRunManager.beginLocalRun();
       disableButton(replayButton);
       this.registry.remove('round-finished');
-      startArenaLoad(this, { reason: 'replay-after-fail', message: 'Rebuilding mission arena...' });
+      const protocol = result?.protocol === 'overdrive' ? 'overdrive' : 'normal';
+      startArenaLoad(this, {
+        reason: 'replay-after-fail',
+        session: {
+          baseSeed: Phaser.Math.Between(1, 999_999_999),
+          round: RUN_PROTOCOLS[protocol].startingRound,
+          objectiveMode: OBJECTIVE_CONFIG.defaultMode,
+          protocol,
+          runStartedAt: Date.now(),
+          equippedMods: new ModRuntime(SaveSystem.getModCollection()).snapshot(),
+          modsEarned: []
+        },
+        message: 'Rebuilding mission arena...'
+      });
     });
     createButton(this, width / 2, 454, 'Store', () => this.scene.start(SceneKeys.Upgrades));
     createButton(this, width / 2, 514, 'Main Menu', () => {
