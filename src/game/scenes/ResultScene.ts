@@ -19,41 +19,56 @@ export class ResultScene extends Phaser.Scene {
     const result = this.registry.get('result') as ArenaReward | undefined;
     const { width, height } = this.scale;
     this.add.rectangle(width / 2, height / 2, width, height, 0x05070d, 1);
+    const panelWidth = Math.min(860, width - 48);
+    const panelHeight = Math.min(680, height - 40);
+    const panelTop = (height - panelHeight) / 2;
+    this.add.rectangle(width / 2, height / 2, panelWidth, panelHeight, 0x09131f, 0.94)
+      .setStrokeStyle(2, 0x55dff4, 0.72);
 
     const victory = result?.reason === 'victory';
-    this.add.text(width / 2, 130, victory ? 'MISSION SUCCESS' : 'MISSION FAILED', {
+    this.add.text(width / 2, panelTop + 42, victory ? 'MISSION SUCCESS' : 'MISSION FAILED', {
       fontFamily: 'Orbitron, sans-serif',
-      fontSize: '46px',
-      color: victory ? '#56ff90' : '#ff5a76'
-    }).setOrigin(0.5);
+      fontSize: `${Phaser.Math.Clamp(width * 0.037, 32, 46)}px`,
+      color: victory ? '#56ff90' : '#ff5a76',
+      align: 'center',
+      wordWrap: { width: panelWidth - 64, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0);
 
-    this.add.text(width / 2, 210, `Run Credits Earned: ${result?.runCreditsEarned ?? result?.credits ?? 0}\nCore Tokens Earned This Round: ${result?.coreTokens ?? 0}\nHighest Round: ${result?.highestRound ?? result?.round ?? '-'}  Seed: ${result?.seed ?? '-'}\nProtocol: ${(result?.protocol ?? 'normal').toUpperCase()}  Contract: ${(result?.contract ?? 'none').replace(/-/g, ' ').toUpperCase()}\nMod Signal: ${(result?.modFocus ?? 'none').replace(/([A-Z])/g, ' $1').toUpperCase()}  Mods Earned: ${result?.modsEarned.length ?? 0}`, {
+    const summary = this.add.text(width / 2, panelTop + 108, `Run Credits Earned: ${result?.runCreditsEarned ?? result?.credits ?? 0}\nCore Tokens Earned This Round: ${result?.coreTokens ?? 0}\nHighest Round: ${result?.highestRound ?? result?.round ?? '-'}  Seed: ${result?.seed ?? '-'}\nProtocol: ${(result?.protocol ?? 'normal').toUpperCase()}  Contract: ${(result?.contract ?? 'none').replace(/-/g, ' ').toUpperCase()}\nMod Signal: ${(result?.modFocus ?? 'none').replace(/([A-Z])/g, ' $1').toUpperCase()}  Mods Earned: ${result?.modsEarned.length ?? 0}`, {
       fontFamily: 'Rajdhani, sans-serif',
-      fontSize: '28px',
+      fontSize: `${height < 700 ? 20 : 23}px`,
       color: '#dbfaff',
-      align: 'center'
-    }).setOrigin(0.5);
+      align: 'center',
+      lineSpacing: 4,
+      wordWrap: { width: panelWidth - 72, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0);
 
     const reasonText =
       result?.reason === 'bombDefused' ? 'Defeat: bomb was defused.' :
       result?.reason === 'playerDead' ? 'Defeat: operator was eliminated.' :
       'Victory: payload detonated.';
 
-    this.add.text(width / 2, 300, reasonText, {
+    const reason = this.add.text(width / 2, summary.y + summary.height + 20, reasonText, {
       fontFamily: 'Rajdhani, sans-serif',
       fontSize: '24px',
-      color: '#f8b8ff'
-    }).setOrigin(0.5);
+      color: '#f8b8ff',
+      align: 'center',
+      wordWrap: { width: panelWidth - 72, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0);
 
     const submissionStatus = OnlineRunManager.lastSubmissionStatus();
-    this.add.text(width / 2, 342, submissionStatus && submissionStatus !== 'local'
+    const onlineStatus = this.add.text(width / 2, reason.y + reason.height + 14, submissionStatus && submissionStatus !== 'local'
       ? `ONLINE RUN: ${submissionStatus.replace(/_/g, ' ').toUpperCase()}`
       : 'LOCAL RUN — NOT SUBMITTED ONLINE', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '20px',
-      color: submissionStatus === 'verified' ? '#8fffc4' : submissionStatus === 'rejected' || submissionStatus === 'failed' ? '#ff8da2' : '#ffc889'
-    }).setOrigin(0.5);
+      color: submissionStatus === 'verified' ? '#8fffc4' : submissionStatus === 'rejected' || submissionStatus === 'failed' ? '#ff8da2' : '#ffc889',
+      align: 'center',
+      wordWrap: { width: panelWidth - 72, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0);
 
-    const replayButton = createButton(this, width / 2, 390, 'Replay Local', () => {
+    const firstButtonY = Math.max(onlineStatus.y + onlineStatus.height + 32, panelTop + panelHeight - 176);
+
+    const replayButton = createButton(this, width / 2, firstButtonY, 'Replay Local', () => {
       OnlineRunManager.beginLocalRun();
       disableButton(replayButton);
       this.registry.remove('round-finished');
@@ -75,8 +90,8 @@ export class ResultScene extends Phaser.Scene {
         message: 'Rebuilding mission arena...'
       });
     });
-    createButton(this, width / 2, 454, 'Store', () => this.scene.start(SceneKeys.Upgrades));
-    createButton(this, width / 2, 514, 'Main Menu', () => {
+    createButton(this, width / 2, firstButtonY + 56, 'Store', () => this.scene.start(SceneKeys.Upgrades));
+    createButton(this, width / 2, firstButtonY + 112, 'Main Menu', () => {
       RunTransitionManager.clearForMenu(this);
       this.scene.start(SceneKeys.MainMenu);
     });

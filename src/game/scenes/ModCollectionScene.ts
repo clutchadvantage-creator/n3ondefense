@@ -78,13 +78,22 @@ export class ModCollectionScene extends Phaser.Scene {
     }
     const definition = MOD_BY_ID.get(card.modId)!;
     const owned = SaveSystem.getModCollection().inventory[card.modId];
-    createModCardView(this, x, y + 120, card, card.upgradeLevel, { width: 145, height: 205, interactive: false, equipped });
+    const detailCardHeight = Phaser.Math.Clamp(height * 0.28, 150, 180);
+    const detailCardWidth = Math.min(132, width - 48);
+    const detailCardCenterY = y + 28 + detailCardHeight / 2;
+    createModCardView(this, x, detailCardCenterY, card, card.upgradeLevel, {
+      width: detailCardWidth,
+      height: detailCardHeight,
+      compact: true,
+      interactive: false,
+      equipped
+    });
     const corruptedText = definition.variant === 'corrupted' ? `\n+ ${definition.positiveEffect}\n− ${definition.negativeEffect}` : '';
-    this.add.text(x, y + 246, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\n\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#d7efff', align: 'center'
-    }).setOrigin(0.5, 0).setWordWrapWidth(width - 28);
+    this.add.text(x, y + 44 + detailCardHeight, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\n\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', color: '#d7efff', align: 'center', lineSpacing: -2
+    }).setOrigin(0.5, 0).setWordWrapWidth(width - 36, true).setMaxLines(7);
     const categorySlot = definition.category === 'utility' ? null : definition.category as ModSlot;
-    const buttonY = y + height - 210;
+    const buttonY = y + height - 232;
     if (categorySlot) createButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.apply(() => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40);
     createButton(this, x, buttonY + 44, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40);
     const nextUpgrade = card.upgradeLevel < 3 ? (card.upgradeLevel + 1) as 1 | 2 | 3 : null;
@@ -98,7 +107,9 @@ export class ModCollectionScene extends Phaser.Scene {
     createButton(this, x, buttonY + 132, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), width * 0.31);
     createButton(this, x + width * 0.31, buttonY + 132, 'Delete', () => this.apply(() => SaveSystem.deleteModCard(card.instanceId)), width * 0.25);
     createButton(this, x, buttonY + 176, card.infusionId ? 'Change Infusion' : 'Infuse Card', () => this.showInfusionModal(card), width - 40);
-    const statusText = this.add.text(x, y + height - 16, this.status, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf', align: 'center' }).setOrigin(0.5, 1).setWordWrapWidth(width - 24);
+    const statusText = this.add.text(x, y + height - 12, this.status, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf', align: 'center', lineSpacing: -2
+    }).setOrigin(0.5, 1).setWordWrapWidth(width - 32, true).setMaxLines(2);
     if (this.status) this.time.delayedCall(2200, () => { this.status = ''; if (statusText.active) statusText.setText(''); });
   }
 
@@ -112,7 +123,9 @@ export class ModCollectionScene extends Phaser.Scene {
     root.add([blocker, this.add.rectangle(width / 2, height / 2, panelWidth, panelHeight, 0x091522, 0.99).setStrokeStyle(3, 0x55e9ff, 0.95)]);
     root.add(this.add.text(width / 2, height / 2 - panelHeight / 2 + 38, 'SELECT COSMETIC INFUSION', { fontFamily: 'Orbitron, sans-serif', fontSize: '25px', color: '#69f5ff' }).setOrigin(0.5));
     root.add(this.add.text(width / 2, height / 2 - panelHeight / 2 + 70, `Available Plasma Chips: ${SaveSystem.getModCollection().plasmaChips}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a7ffe8' }).setOrigin(0.5));
-    root.add(this.add.text(width / 2, height / 2 - panelHeight / 2 + 98, 'Infusions are visual effects only. They never alter combat, health, energy, abilities, or difficulty.', { fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#a6bed0', align: 'center' }).setOrigin(0.5).setWordWrapWidth(panelWidth - 50));
+    root.add(this.add.text(width / 2, height / 2 - panelHeight / 2 + 98, 'Infusions are visual effects only. They never alter combat, health, energy, abilities, or difficulty.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#a6bed0', align: 'center', lineSpacing: 2
+    }).setOrigin(0.5, 0).setWordWrapWidth(panelWidth - 64, true).setMaxLines(2));
 
     MOD_INFUSIONS.forEach((infusion, index) => {
       const rowY = height / 2 - panelHeight / 2 + 160 + index * 142;
@@ -121,7 +134,9 @@ export class ModCollectionScene extends Phaser.Scene {
       root.add(this.add.rectangle(width / 2, rowY, panelWidth - 54, 118, installed ? 0x103329 : 0x0c1a29, 0.95).setStrokeStyle(installed ? 3 : 1, installed ? 0x62ffae : 0x4bbfdb, installed ? 1 : 0.65));
       root.add(this.add.text(width / 2 - panelWidth / 2 + 58, rowY, infusion.icon, { fontFamily: 'Orbitron, sans-serif', fontSize: '36px', color: '#8ff7ff' }).setOrigin(0.5));
       root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY - 32, infusion.name.toUpperCase(), { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: installed ? '#7dffb4' : '#e5fbff' }).setOrigin(0, 0.5));
-      root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY - 2, infusion.description, { fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#abc9da' }).setOrigin(0, 0.5).setWordWrapWidth(panelWidth - 355));
+      root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY - 18, infusion.description, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#abc9da', lineSpacing: -1
+      }).setOrigin(0, 0).setWordWrapWidth(panelWidth - 355, true).setMaxLines(2));
       root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY + 36, installed ? 'INSTALLED' : `${infusion.plasmaCost} PLASMA CHIPS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: installed ? '#70ffad' : affordable ? '#ffd98a' : '#ff91a4' }).setOrigin(0, 0.5));
       const install = createButton(this, width / 2 + panelWidth / 2 - 130, rowY, installed ? 'Installed' : affordable ? 'Install' : 'Not Enough Chips', () => {
         if (!installed) this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion.id));

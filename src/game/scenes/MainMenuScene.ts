@@ -54,36 +54,39 @@ export class MainMenuScene extends Phaser.Scene {
     const storageMessage = SaveSystem.getStorageMessage();
     const profilePanel = this.add.container(width - 190, 130).setDepth(12);
     const panel = this.add.rectangle(0, 0, 320, 180, 0x0b1422, 0.96).setStrokeStyle(2, 0x55e9ff, 0.9).setOrigin(0.5);
-    const profileTitle = this.add.text(0, -52, profile ? profile.name.toUpperCase() : 'LOCAL SAVE', {
+    const profileTitle = this.add.text(0, -74, profile ? profile.name.toUpperCase() : 'LOCAL SAVE', {
       fontFamily: 'Orbitron, sans-serif',
       fontSize: '20px',
       color: '#61f4ff'
-    }).setOrigin(0.5).setAlign('center').setWordWrapWidth(276, true);
-    const profileBody = this.add.text(0, -10, profile && save ? `${save.credits.toLocaleString()} Credits\n${save.coreTokens} Core Tokens\nHighest Round: ${profile.highestRound}\nLOCAL SAVE` : 'Select or create a local profile to continue.', {
+    }).setOrigin(0.5, 0).setAlign('center').setWordWrapWidth(276, true).setMaxLines(2);
+    const profileBody = this.add.text(0, -38, profile && save ? `${save.credits.toLocaleString()} Credits\n${save.coreTokens} Core Tokens\nHighest Round: ${profile.highestRound}\nLOCAL SAVE` : 'Select or create a local profile to continue.', {
       fontFamily: 'Rajdhani, sans-serif',
       fontSize: '16px',
-      color: '#a6fff2'
-    }).setOrigin(0.5).setAlign('center').setWordWrapWidth(276, true);
+      color: '#a6fff2',
+      lineSpacing: 1
+    }).setOrigin(0.5, 0).setAlign('center').setWordWrapWidth(276, true).setMaxLines(4);
 
     const saveNotice = SaveSystem.getNotice();
     if (saveNotice) {
-      const notice = this.add.text(0, 58, saveNotice, {
+      const notice = this.add.text(0, 76, saveNotice, {
         fontFamily: 'Rajdhani, sans-serif',
         fontSize: '13px',
         color: '#ffc98f',
         align: 'center'
-      }).setOrigin(0.5).setWordWrapWidth(276, true);
+      }).setOrigin(0.5, 1).setWordWrapWidth(276, true).setMaxLines(2);
       profilePanel.add(notice);
     }
 
     profilePanel.add([panel, profileTitle, profileBody]);
 
     if (storageMessage) {
-      this.add.text(width / 2, 176, storageMessage, {
+      this.add.text(width / 2, 140, storageMessage, {
         fontFamily: 'Rajdhani, sans-serif',
-        fontSize: '18px',
-        color: '#ff9aa8'
-      }).setOrigin(0.5);
+        fontSize: '17px',
+        color: '#ff9aa8',
+        align: 'center',
+        wordWrap: { width: Math.min(560, width - 80), useAdvancedWrap: true }
+      }).setOrigin(0.5).setMaxLines(2);
     }
 
     profilePanel.setDepth(12);
@@ -118,7 +121,7 @@ export class MainMenuScene extends Phaser.Scene {
     const setupSelection = this.getRunSetupSelection();
     const setupCost = getRunSetupCost(setupSelection);
     const setupX = Math.max(170, width * 0.15);
-    this.add.rectangle(setupX, 305, 315, 260, 0x081521, 0.88)
+    this.add.rectangle(setupX, 325, 315, 300, 0x081521, 0.88)
       .setStrokeStyle(2, 0x55e9ff, 0.65).setDepth(12);
     this.add.text(setupX, 198, 'ONE-RUN SETUP', {
       fontFamily: 'Orbitron, sans-serif', fontSize: '17px', color: '#61f4ff'
@@ -257,18 +260,22 @@ export class MainMenuScene extends Phaser.Scene {
     const abilityControls = bindings
       ? `${bindingLabel(bindings.fence)} Fence    ${bindingLabel(bindings.turret)} Turret    ${bindingLabel(bindings.mine)} Mine    ${bindingLabel(bindings.dash)} Dash    ${bindingLabel(bindings.shield)} Shield`
       : 'Q Fence    F Turret    R Mine    Space Dash    Middle Mouse Shield';
-    this.add.text(width / 2, height - 180, `Controls:\nWASD Move    Mouse Aim    LMB Fire    E Plant/Interact\n${abilityControls}\n1/2/3 Select Ability    Esc Pause`, {
+    this.add.text(width / 2, height - 126, `Controls:\nWASD Move    Mouse Aim    LMB Fire    E Plant/Interact\n${abilityControls}\n1/2/3 Select Ability    Esc Pause`, {
       fontFamily: 'Rajdhani, sans-serif',
       color: '#d6f0ff',
-      fontSize: '22px',
-      align: 'center'
-    }).setOrigin(0.5);
+      fontSize: `${height < 760 ? 18 : 20}px`,
+      align: 'center',
+      lineSpacing: 3,
+      wordWrap: { width: Math.min(940, width - 64), useAdvancedWrap: true }
+    }).setOrigin(0.5).setMaxLines(5);
 
     this.add.text(width / 2, height - 38, 'Plant at Site A, B, or C. Survive until detonation.', {
       fontFamily: 'Rajdhani, sans-serif',
       color: '#ff8bcf',
-      fontSize: '20px'
-    }).setOrigin(0.5);
+      fontSize: '19px',
+      align: 'center',
+      wordWrap: { width: width - 48, useAdvancedWrap: true }
+    }).setOrigin(0.5).setMaxLines(2);
   }
 
   private getRunSetupSelection(): RunSetupSelection {

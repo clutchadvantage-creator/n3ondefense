@@ -26,14 +26,16 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.add.rectangle(width / 2, height / 2, width, height, 0x030813, 1);
     this.drawBackdrop(width, height);
-    this.add.text(width / 2, 48, 'N3ONDefense ONLINE LEADERBOARDS', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '36px', color: '#62f2ff', stroke: '#030711', strokeThickness: 7
-    }).setOrigin(0.5);
-    this.statusText = this.add.text(width / 2, 88, 'CONNECTING TO LEADERBOARD NETWORK...', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9c9d8'
-    }).setOrigin(0.5);
+    this.add.text(width / 2, 28, 'N3ONDefense ONLINE LEADERBOARDS', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(width * 0.034, 25, 36)}px`, color: '#62f2ff', stroke: '#030711', strokeThickness: 7,
+      align: 'center', wordWrap: { width: width - 48, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0).setMaxLines(2);
+    this.statusText = this.add.text(width / 2, 80, 'CONNECTING TO LEADERBOARD NETWORK...', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#a9c9d8', align: 'center', lineSpacing: 2,
+      wordWrap: { width: Math.min(1120, width - 56), useAdvancedWrap: true }
+    }).setOrigin(0.5, 0).setMaxLines(2);
 
-    const aroundButton = createButton(this, width / 2, 126, 'Around Me', () => {
+    const aroundButton = createButton(this, width / 2, 144, 'Around Me', () => {
       this.aroundMode = !this.aroundMode;
       void this.loadBoards();
     }, 210);
@@ -78,7 +80,7 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const gap = Phaser.Math.Clamp(width * 0.012, 12, 24);
     const panelWidth = Math.min((width - gap * 4) / 3, 560);
-    const panelHeight = height - 220;
+    const panelHeight = height - 250;
     const totalWidth = panelWidth * 3 + gap * 2;
     const firstX = (width - totalWidth) / 2 + panelWidth / 2;
     const activeProfile = SaveSystem.getActiveProfileSummary();
@@ -86,9 +88,9 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
 
     CATEGORIES.forEach((category, boardIndex) => {
       const x = firstX + boardIndex * (panelWidth + gap);
-      const y = 156 + panelHeight / 2;
+      const y = 176 + panelHeight / 2;
       const panel = this.add.rectangle(x, y, panelWidth, panelHeight, 0x091526, 0.93).setStrokeStyle(2, category.color, 0.7);
-      const title = this.add.text(x, 182, category.title, {
+      const title = this.add.text(x, 202, category.title, {
         fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(panelWidth * 0.038, 13, 18)}px`,
         color: Phaser.Display.Color.IntegerToColor(category.color).rgba
       }).setOrigin(0.5);
@@ -102,7 +104,7 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
         return;
       }
       entries.forEach((entry, index) => {
-        const rowY = 220 + index * 36;
+        const rowY = 240 + index * 36;
         const active = entry.public_player_id === publicId;
         if (active) {
           const highlight = this.add.rectangle(x, rowY, panelWidth - 18, 31, category.color, 0.12);
@@ -113,7 +115,7 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
         }).setOrigin(0, 0.5);
         const name = this.add.text(x - panelWidth / 2 + 59, rowY, `${entry.display_name}${active ? ' • YOU' : ''}`, {
           fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: active ? '#ffffff' : '#c8e2ed'
-        }).setOrigin(0, 0.5).setWordWrapWidth(panelWidth * 0.52, false);
+        }).setOrigin(0, 0.5).setCrop(0, 0, Math.max(32, panelWidth - 170), 31);
         const value = this.add.text(x + panelWidth / 2 - 14, rowY, entry.value.toLocaleString(), {
           fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: Phaser.Display.Color.IntegerToColor(category.color).rgba
         }).setOrigin(1, 0.5);
@@ -124,10 +126,12 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
 
   private drawUnavailable(width: number, height: number): void {
     this.clearBoards();
-    const panel = this.add.rectangle(width / 2, height / 2, Math.min(720, width - 80), 230, 0x0a1423, 0.94).setStrokeStyle(2, 0x4edfee, 0.55);
+    const panelWidth = Math.min(760, width - 48);
+    const panel = this.add.rectangle(width / 2, height / 2, panelWidth, 250, 0x0a1423, 0.94).setStrokeStyle(2, 0x4edfee, 0.55);
     const message = this.add.text(width / 2, height / 2,
       'Online records could not be loaded.\n\nLocal mode remains available. Online submissions with connectivity failures stay labeled QUEUED until the server accepts or rejects them.', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '22px', color: '#c8e5ef', align: 'center', wordWrap: { width: 640 }
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '21px', color: '#c8e5ef', align: 'center', lineSpacing: 5,
+        wordWrap: { width: panelWidth - 64, useAdvancedWrap: true }
       }).setOrigin(0.5);
     this.boardObjects.push(panel, message);
   }

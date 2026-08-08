@@ -211,7 +211,7 @@ export class OptionsScene extends Phaser.Scene {
 
   private createKeybindPanel(centerX: number, topY: number, contentWidth: number): number {
     const panelWidth = Math.min(contentWidth, 900);
-    const panelHeight = 192;
+    const panelHeight = 248;
     const panelCenterY = topY + panelHeight * 0.5;
     this.add.rectangle(centerX, panelCenterY, panelWidth, panelHeight, 0x0b1422, 0.92)
       .setStrokeStyle(2, 0x53dfff, 0.72);
@@ -219,9 +219,11 @@ export class OptionsScene extends Phaser.Scene {
       fontFamily: 'Orbitron, sans-serif', fontSize: '20px', color: '#69f4ff'
     }).setOrigin(0.5);
 
-    const status = this.add.text(centerX, topY + 51, 'Select a binding, then press a key or mouse button. WASD, E, Esc, F8, and primary fire are reserved.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#a9cfe0', align: 'center'
-    }).setOrigin(0.5);
+    const status = this.add.text(centerX, topY + 58, 'Select a binding, then press a key or mouse button. WASD, E, Esc, F8, and primary fire are reserved.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#a9cfe0', align: 'center',
+      lineSpacing: 3,
+      wordWrap: { width: panelWidth - 64, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0);
     const bindings = { ...SaveSystem.get().settings.abilityBindings };
     const valueLabels = new Map<AbilityAction, Phaser.GameObjects.Text>();
 
@@ -229,7 +231,7 @@ export class OptionsScene extends Phaser.Scene {
       const column = index % 2;
       const row = Math.floor(index / 2);
       const x = centerX + (column === 0 ? -panelWidth * 0.25 : panelWidth * 0.25);
-      const y = topY + 82 + row * 34;
+      const y = topY + 124 + row * 40;
       this.add.text(x - 104, y, label.toUpperCase(), {
         fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#dff8ff'
       }).setOrigin(0, 0.5);
@@ -244,7 +246,7 @@ export class OptionsScene extends Phaser.Scene {
       hit.on('pointerdown', () => this.beginBindingCapture(action, bindings, valueLabels, status));
     });
 
-    const reset = this.add.text(centerX + panelWidth * 0.25 + 62, topY + 150, 'RESET DEFAULTS', {
+    const reset = this.add.text(centerX + panelWidth * 0.25 + 62, topY + 204, 'RESET DEFAULTS', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#ffcf91', backgroundColor: '#172238', padding: { x: 18, y: 5 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     reset.on('pointerdown', () => {

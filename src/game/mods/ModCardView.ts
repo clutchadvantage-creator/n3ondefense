@@ -65,12 +65,12 @@ export const createModCardView = (
   const icon = scene.add.text(0, -height * 0.12, ICONS[definition.id] ?? '◇', {
     fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.max(24, width * 0.25)}px`, color: corrupted ? '#ff74e6' : '#e7fbff'
   }).setOrigin(0.5);
-  const name = scene.add.text(0, height * 0.19, definition.name.toUpperCase(), {
-    fontFamily: 'Orbitron, sans-serif', fontSize: options.compact ? '10px' : '12px', color: '#eafcff', align: 'center'
-  }).setOrigin(0.5).setWordWrapWidth(width - 18);
-  const stat = scene.add.text(0, height * 0.34, definition.rankDescriptions[rank], {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: options.compact ? '9px' : '11px', color: '#a9cfe0', align: 'center'
-  }).setOrigin(0.5).setWordWrapWidth(width - 18);
+  const name = scene.add.text(0, height * 0.075, definition.name.toUpperCase(), {
+    fontFamily: 'Orbitron, sans-serif', fontSize: options.compact ? '10px' : '12px', color: '#eafcff', align: 'center', lineSpacing: -2
+  }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(2);
+  const stat = scene.add.text(0, height * 0.25, definition.rankDescriptions[rank], {
+    fontFamily: 'Rajdhani, sans-serif', fontSize: options.compact ? '9px' : '11px', color: '#a9cfe0', align: 'center', lineSpacing: -2
+  }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(options.compact ? 2 : 3);
   const infusion = scene.add.text(0, height / 2 - 10, card.infusionId ? `◆ ${MOD_INFUSION_BY_ID.get(card.infusionId)?.name.toUpperCase() ?? 'INFUSED'}` : '', {
     fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: '#8dffec', align: 'center'
   }).setOrigin(0.5, 1);

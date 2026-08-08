@@ -2407,15 +2407,23 @@ export class ArenaScene extends Phaser.Scene {
     this.bannerText.setPosition(width * 0.5, this.bannerText.y);
     this.siteActionText.setPosition(width * 0.5, height - 46);
     if (this.pauseMenu) {
-      this.pauseMenu.backdrop.setPosition(width * 0.5, height * 0.5);
-      this.pauseMenu.backdrop.setDisplaySize(width, height);
-      this.pauseMenu.panel.setPosition(width * 0.5, height * 0.5);
-      this.pauseMenu.title.setPosition(width * 0.5, height * 0.5 - 190);
-      this.pauseMenu.subtitle.setPosition(width * 0.5, height * 0.5 - 128);
-
-      const buttonYs = [height * 0.5 - 68, height * 0.5 - 16, height * 0.5 + 36, height * 0.5 + 88, height * 0.5 + 140, height * 0.5 + 192];
-      this.pauseMenu.buttons.forEach((btn, i) => btn.setPosition(width * 0.5, buttonYs[i] ?? height * 0.5));
+      this.layoutPauseMenu(width, height);
     }
+    if (this.equippedModsViewer) this.showEquippedModsViewer();
+  }
+
+  private layoutPauseMenu(width: number, height: number): void {
+    if (!this.pauseMenu) return;
+    const panelWidth = Math.min(600, width - 40);
+    const panelHeight = Math.min(570, height - 32);
+    const panelTop = (height - panelHeight) / 2;
+    const buttonGap = Math.min(52, Math.max(42, (panelHeight - 210) / 6));
+    const buttonStartY = panelTop + 184;
+    this.pauseMenu.backdrop.setPosition(width * 0.5, height * 0.5).setDisplaySize(width, height);
+    this.pauseMenu.panel.setPosition(width * 0.5, height * 0.5).setDisplaySize(panelWidth, panelHeight);
+    this.pauseMenu.title.setPosition(width * 0.5, panelTop + 36).setWordWrapWidth(panelWidth - 64, true);
+    this.pauseMenu.subtitle.setPosition(width * 0.5, panelTop + 98).setWordWrapWidth(panelWidth - 64, true);
+    this.pauseMenu.buttons.forEach((button, index) => button.setPosition(width * 0.5, buttonStartY + index * buttonGap));
   }
 
   private showPauseMenu(): void {
@@ -2431,23 +2439,24 @@ export class ArenaScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1190);
 
-    const title = this.add.text(width * 0.5, height * 0.5 - 190, 'PAUSED', {
+    const title = this.add.text(width * 0.5, 0, 'PAUSED', {
       fontFamily: 'Orbitron, sans-serif',
       fontSize: '44px',
       color: '#70f7ff'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1192);
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1192);
 
     const subtitle = this.add.text(
       width * 0.5,
-      height * 0.5 - 128,
+      0,
       `Round ${this.roundManager.round} | Seed ${this.layout.seed} | Layout ${this.layout.template}`,
       {
         fontFamily: 'Rajdhani, sans-serif',
-        fontSize: '26px',
+        fontSize: '23px',
         color: '#e1f8ff',
-        align: 'center'
+        align: 'center',
+        lineSpacing: 3
       }
-    ).setOrigin(0.5).setScrollFactor(0).setDepth(1192);
+    ).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1192);
 
     const buttons = [
       createButton(this, width * 0.5, height * 0.5 - 68, 'Resume', () => this.resumeGameplay(), 280),
@@ -2471,16 +2480,23 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     this.pauseMenu = { backdrop, panel, title, subtitle, buttons };
+    this.layoutPauseMenu(width, height);
   }
 
   private showEquippedModsViewer(): void {
     this.hidePauseMenu();
     this.hideEquippedModsViewer();
     const { width, height } = this.scale;
+    const panelWidth = Math.min(width - 40, 1080);
+    const panelHeight = Math.min(height - 32, 520);
+    const panelTop = (height - panelHeight) / 2;
     const root = this.add.container(0, 0).setScrollFactor(0).setDepth(1250);
     root.add(this.add.rectangle(width / 2, height / 2, width, height, 0x02050b, 0.88));
-    root.add(this.add.rectangle(width / 2, height / 2, Math.min(width - 60, 1040), 470, 0x091521, 0.98).setStrokeStyle(2, 0x62e9ff, 0.9));
-    root.add(this.add.text(width / 2, height / 2 - 192, 'EQUIPPED MOD CARDS', { fontFamily: 'Orbitron, sans-serif', fontSize: '28px', color: '#71f6ff' }).setOrigin(0.5));
+    root.add(this.add.rectangle(width / 2, height / 2, panelWidth, panelHeight, 0x091521, 0.98).setStrokeStyle(2, 0x62e9ff, 0.9));
+    root.add(this.add.text(width / 2, panelTop + 32, 'EQUIPPED MOD CARDS', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: '28px', color: '#71f6ff', align: 'center',
+      wordWrap: { width: panelWidth - 64, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0));
     const mods = SaveSystem.getModCollection();
     const loadout = mods.loadouts.find((entry) => entry.id === mods.activeLoadoutId) ?? mods.loadouts[0];
     const equipped = this.modRuntime.snapshot();
@@ -2489,12 +2505,19 @@ export class ArenaScene extends Phaser.Scene {
       const card = mods.cards.find((candidate) => candidate.instanceId === (selectedCardId ? loadout?.cardSlots[selectedCardId] : ''))
         ?? mods.cards.find((candidate) => candidate.modId === entry.id);
       if (!card) return;
-      const spacing = Math.min(175, (width - 110) / Math.max(1, equipped.length));
+      const spacing = Math.min(175, (panelWidth - 80) / Math.max(1, equipped.length));
       const x = width / 2 - (equipped.length - 1) * spacing / 2 + index * spacing;
-      root.add(createModCardView(this, x, height / 2, card, entry.rank, { width: 140, height: 196, compact: true, interactive: false }));
+      const cardWidth = Math.min(140, spacing - 12);
+      root.add(createModCardView(this, x, height / 2 + 8, card, entry.rank, {
+        width: cardWidth,
+        height: cardWidth * 1.4,
+        compact: true,
+        interactive: false,
+        equipped: true
+      }));
     });
     if (!equipped.length) root.add(this.add.text(width / 2, height / 2, 'NO MOD CARDS EQUIPPED', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#7895a8' }).setOrigin(0.5));
-    const close = createButton(this, width / 2, height / 2 + 190, 'Back To Pause Menu', () => { this.hideEquippedModsViewer(); this.showPauseMenu(); }, 280);
+    const close = createButton(this, width / 2, panelTop + panelHeight - 38, 'Back To Pause Menu', () => { this.hideEquippedModsViewer(); this.showPauseMenu(); }, 280);
     root.add(close);
     this.equippedModsViewer = root;
   }

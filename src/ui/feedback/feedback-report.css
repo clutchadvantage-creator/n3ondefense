@@ -42,6 +42,7 @@
   background: linear-gradient(150deg, rgba(13, 28, 45, 0.99), rgba(8, 12, 24, 0.99));
   color: #defaff;
   box-shadow: 0 0 35px rgba(45, 224, 255, 0.3), inset 0 0 28px rgba(73, 143, 255, 0.08);
+  overflow-wrap: anywhere;
 }
 
 .feedback-dialog h2 {
@@ -56,6 +57,7 @@
   color: #c5e5ef;
   font-size: 18px;
   text-align: center;
+  line-height: 1.5;
 }
 
 .feedback-dialog label {
@@ -65,6 +67,7 @@
   color: #ffd486;
   font-weight: 700;
   letter-spacing: 0.08em;
+  line-height: 1.35;
 }
 
 .feedback-dialog select,
@@ -90,12 +93,14 @@
 
 .feedback-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 14px;
   margin-top: 22px;
 }
 
 .feedback-button {
+  flex: 1 1 165px;
   min-width: 165px;
   padding: 11px 16px;
   border-radius: 4px;

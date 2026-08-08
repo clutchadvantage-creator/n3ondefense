@@ -25,25 +25,74 @@ export const pickJsonFile = async (): Promise<string | null> => {
   });
 };
 
-const createModalRoot = (scene: Phaser.Scene, title: string, body: string, width = 760, height = 420): Phaser.GameObjects.Container => {
+interface ModalLayout {
+  root: Phaser.GameObjects.Container;
+  buttonPositions: Array<{ x: number; y: number; width: number }>;
+}
+
+const createModalRoot = (
+  scene: Phaser.Scene,
+  title: string,
+  body: string,
+  requestedWidth: number,
+  minimumHeight: number,
+  requestedButtonWidths: number[]
+): ModalLayout => {
   const { width: sw, height: sh } = scene.scale;
+  const viewportPadding = Phaser.Math.Clamp(Math.min(sw, sh) * 0.05, 22, 46);
+  const width = Math.max(260, Math.min(requestedWidth, sw - viewportPadding * 2));
+  const horizontalPadding = Phaser.Math.Clamp(width * 0.07, 24, 52);
+  const usableWidth = width - horizontalPadding * 2;
+  const buttonGap = 16;
+  const buttonRows: Array<Array<{ index: number; width: number }>> = [];
+  requestedButtonWidths.forEach((requestedButtonWidth, index) => {
+    const buttonWidth = Math.min(requestedButtonWidth, usableWidth);
+    const currentRow = buttonRows.at(-1);
+    const occupied = currentRow?.reduce((sum, item) => sum + item.width, 0) ?? 0;
+    const required = occupied + (currentRow?.length ? buttonGap : 0) + buttonWidth;
+    if (!currentRow || required > usableWidth) buttonRows.push([{ index, width: buttonWidth }]);
+    else currentRow.push({ index, width: buttonWidth });
+  });
+
   const root = scene.add.container(0, 0).setDepth(4000).setScrollFactor(0);
-  const backdrop = scene.add.rectangle(sw / 2, sh / 2, sw, sh, 0x010409, 0.82).setScrollFactor(0);
-  const panel = scene.add.rectangle(sw / 2, sh / 2, width, height, 0x0b1320, 0.98).setStrokeStyle(2, 0x55e9ff, 0.95).setScrollFactor(0);
-  const titleText = scene.add.text(sw / 2, sh / 2 - height / 2 + 32, title, {
+  const backdrop = scene.add.rectangle(sw / 2, sh / 2, sw, sh, 0x010409, 0.82).setScrollFactor(0).setInteractive();
+  const titleText = scene.add.text(sw / 2, 0, title, {
     fontFamily: 'Orbitron, sans-serif',
-    fontSize: '30px',
-    color: '#64f4ff'
-  }).setOrigin(0.5).setScrollFactor(0);
-  const bodyText = scene.add.text(sw / 2, sh / 2 - 36, body, {
+    fontSize: `${Phaser.Math.Clamp(sw * 0.027, 22, 30)}px`,
+    color: '#64f4ff',
+    align: 'center',
+    wordWrap: { width: usableWidth, useAdvancedWrap: true }
+  }).setOrigin(0.5, 0).setScrollFactor(0);
+  const bodyText = scene.add.text(sw / 2, 0, body, {
     fontFamily: 'Rajdhani, sans-serif',
-    fontSize: '22px',
+    fontSize: `${Phaser.Math.Clamp(sw * 0.019, 17, 22)}px`,
     color: '#ddf7ff',
     align: 'center',
-    wordWrap: { width: width - 80 }
-  }).setOrigin(0.5).setScrollFactor(0);
+    lineSpacing: 5,
+    wordWrap: { width: usableWidth, useAdvancedWrap: true }
+  }).setOrigin(0.5, 0).setScrollFactor(0);
+
+  const buttonAreaHeight = Math.max(1, buttonRows.length) * 56;
+  const contentHeight = 30 + titleText.height + 24 + bodyText.height + 30 + buttonAreaHeight + 24;
+  const height = Math.min(Math.max(minimumHeight, contentHeight), sh - viewportPadding * 2);
+  const panelTop = (sh - height) / 2;
+  const panel = scene.add.rectangle(sw / 2, sh / 2, width, height, 0x0b1320, 0.98)
+    .setStrokeStyle(2, 0x55e9ff, 0.95).setScrollFactor(0);
+  titleText.setY(panelTop + 30);
+  bodyText.setY(titleText.y + titleText.height + 24);
+
+  const buttonPositions = requestedButtonWidths.map(() => ({ x: sw / 2, y: 0, width: 0 }));
+  const firstButtonY = panelTop + height - 24 - buttonAreaHeight + 20;
+  buttonRows.forEach((row, rowIndex) => {
+    const rowWidth = row.reduce((sum, item) => sum + item.width, 0) + buttonGap * Math.max(0, row.length - 1);
+    let cursorX = sw / 2 - rowWidth / 2;
+    row.forEach((item) => {
+      buttonPositions[item.index] = { x: cursorX + item.width / 2, y: firstButtonY + rowIndex * 56, width: item.width };
+      cursorX += item.width + buttonGap;
+    });
+  });
   root.add([backdrop, panel, titleText, bodyText]);
-  return root;
+  return { root, buttonPositions };
 };
 
 export const showConfirmDialog = (
@@ -55,17 +104,19 @@ export const showConfirmDialog = (
   cancelLabel = 'Cancel',
   onClose?: () => void
 ): LocalModalHandle => {
-  const root = createModalRoot(scene, title, body, 780, 360);
-  const { width, height } = scene.scale;
-  const confirm = createButton(scene, width / 2 - 120, height / 2 + 118, confirmLabel, () => {
+  const layout = createModalRoot(scene, title, body, 780, 360, [200, 200]);
+  const root = layout.root;
+  const confirmPosition = layout.buttonPositions[0];
+  const cancelPosition = layout.buttonPositions[1];
+  const confirm = createButton(scene, confirmPosition.x, confirmPosition.y, confirmLabel, () => {
     root.destroy(true);
     onClose?.();
     onConfirm();
-  }, 200);
-  const cancel = createButton(scene, width / 2 + 120, height / 2 + 118, cancelLabel, () => {
+  }, confirmPosition.width);
+  const cancel = createButton(scene, cancelPosition.x, cancelPosition.y, cancelLabel, () => {
     root.destroy(true);
     onClose?.();
-  }, 200);
+  }, cancelPosition.width);
   confirm.setDepth(4001).setScrollFactor(0);
   cancel.setDepth(4001).setScrollFactor(0);
   root.add([confirm, cancel]);
@@ -81,22 +132,19 @@ export const showInfoModal = (
   actions: Array<{ label: string; onClick: () => void; width?: number }>,
   onClose?: () => void
 ): LocalModalHandle => {
-  const root = createModalRoot(scene, title, body, 820, 420);
-  const { width, height } = scene.scale;
-  const totalWidth = actions.reduce((sum, action) => sum + (action.width ?? 210) + 12, 0) - 12;
-  let cursorX = width / 2 - totalWidth / 2;
+  const layout = createModalRoot(scene, title, body, 820, 420, actions.map((action) => action.width ?? 210));
+  const root = layout.root;
   const buttons: Phaser.GameObjects.Container[] = [];
-  for (const action of actions) {
-    const buttonWidth = action.width ?? 210;
-    const button = createButton(scene, cursorX + buttonWidth / 2, height / 2 + 132, action.label, () => {
+  actions.forEach((action, index) => {
+    const position = layout.buttonPositions[index];
+    const button = createButton(scene, position.x, position.y, action.label, () => {
       root.destroy(true);
       onClose?.();
       action.onClick();
-    }, buttonWidth);
+    }, position.width);
     button.setDepth(4001).setScrollFactor(0);
     buttons.push(button);
-    cursorX += buttonWidth + 12;
-  }
+  });
   root.add(buttons);
   return {
     destroy: () => root.destroy(true)

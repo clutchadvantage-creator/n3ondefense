@@ -10,11 +10,15 @@ export const createButton = (
   width = 220
 ): Phaser.GameObjects.Container => {
   const bg = scene.add.rectangle(0, 0, width, 40, 0x121a2b, 0.95).setStrokeStyle(2, COLORS.cyan, 0.9);
+  const labelFontSize = text.length > 28 || (width < 190 && text.length > 20) ? 14 : 16;
   const label = scene.add.text(0, 0, text, {
     color: '#d6f7ff',
-    fontSize: '16px',
-    fontFamily: 'Rajdhani, sans-serif'
-  }).setOrigin(0.5);
+    fontSize: `${labelFontSize}px`,
+    fontFamily: 'Rajdhani, sans-serif',
+    align: 'center',
+    lineSpacing: -2,
+    wordWrap: { width: Math.max(40, width - 20), useAdvancedWrap: true }
+  }).setOrigin(0.5).setMaxLines(2);
 
   const hit = scene.add.rectangle(0, 0, width, 40, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
   hit.setName('button-hit');

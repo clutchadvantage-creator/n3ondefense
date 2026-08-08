@@ -160,7 +160,7 @@ export const showNameInputDialog = (options: NameInputDialogOptions): DialogHand
   error.hidden = true;
 
   field.append(input, error);
-  modal.form.append(field);
+  modal.form.append(field, modal.actions);
 
   const setError = (message: string | null): void => {
     if (!message) {

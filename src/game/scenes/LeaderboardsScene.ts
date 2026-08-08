@@ -24,9 +24,10 @@ export class LeaderboardsScene extends Phaser.Scene {
     this.drawBackdrop(width, height);
 
     this.add.text(width / 2, 58, 'LEADERBOARDS', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '42px', color: '#64f4ff',
-      stroke: '#040812', strokeThickness: 7
-    }).setOrigin(0.5);
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(width * 0.04, 30, 42)}px`, color: '#64f4ff',
+      stroke: '#040812', strokeThickness: 7, align: 'center',
+      wordWrap: { width: width - 48, useAdvancedWrap: true }
+    }).setOrigin(0.5).setMaxLines(2);
     this.add.text(width / 2, 98, 'LOCAL PROFILE RECORDS • THIS BROWSER', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '20px', color: '#b4d6e8'
     }).setOrigin(0.5);
@@ -95,7 +96,7 @@ export class LeaderboardsScene extends Phaser.Scene {
       }).setOrigin(0, 0.5);
       this.add.text(x - width / 2 + 68, rowY, `${entry.name}${active ? '  • YOU' : ''}`, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', color: active ? '#ffffff' : '#c9e1ec'
-      }).setOrigin(0, 0.5);
+      }).setOrigin(0, 0.5).setCrop(0, 0, Math.max(36, width - 210), rowGap - 4);
       this.add.text(x + width / 2 - 20, rowY, board.format(board.value(entry)), {
         fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: Phaser.Display.Color.IntegerToColor(board.color).rgba
       }).setOrigin(1, 0.5);

@@ -67,6 +67,7 @@
     0 0 26px rgba(44, 231, 255, 0.08);
   padding: clamp(20px, 2vw, 28px);
   box-sizing: border-box;
+  overflow-wrap: anywhere;
 }
 
 .profiles-panel,
@@ -334,19 +335,22 @@
   background: rgba(0, 0, 0, 0.76);
   z-index: 100;
   pointer-events: auto;
+  overflow: auto;
 }
 
 .profile-modal {
-  width: min(460px, 100%);
+  width: min(500px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
   display: grid;
-  gap: 16px;
+  gap: 20px;
   border-radius: 18px;
 }
 
 .profile-modal p {
   margin: 0;
   color: #c8e5f6;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 .profile-modal-field {
@@ -365,6 +369,7 @@
   color: #f5fdff;
   padding: 0 14px;
   font: inherit;
+  line-height: 1.4;
 }
 
 .profile-modal-error {
@@ -397,5 +402,14 @@
   .panel-heading {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .profile-modal-backdrop {
+    padding: 12px;
+  }
+
+  .profile-modal {
+    max-height: calc(100vh - 24px);
+    padding: 22px 18px;
   }
 }
