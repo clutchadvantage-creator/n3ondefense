@@ -110,7 +110,6 @@ export class ArenaScene extends Phaser.Scene {
   private modsEarned: ModRewardRecord[] = [];
   private modDropSequence = 0;
   private runStartedAt = Date.now();
-  private fireworksCelebrationUntil = 0;
   private readonly enemyTurretTargets = new WeakMap<Enemy, TurretTargetDecision>();
 
   private roundManager!: RoundManager;
@@ -1580,7 +1579,6 @@ export class ArenaScene extends Phaser.Scene {
     const config = MOD_BALANCE.detonationFireworks;
     const duration = Phaser.Math.Between(config.minDurationMs, config.maxDurationMs);
     const startsAt = this.time.now;
-    this.fireworksCelebrationUntil = Math.max(this.fireworksCelebrationUntil, startsAt + duration);
     let burst = 0;
     const timer = this.time.addEvent({
       delay: config.burstIntervalMs,
@@ -1968,10 +1966,8 @@ export class ArenaScene extends Phaser.Scene {
     SaveSystem.recordRoundCompletion(completedRound);
     OnlineRunManager.recordMilestone(completedRound);
 
-    const celebrationDelay = this.modRuntime.hasInfusion('detonation-fireworks')
-      ? Math.max(1400, this.fireworksCelebrationUntil - this.time.now)
-      : 1400;
-    this.time.delayedCall(celebrationDelay, () => {
+    // Cosmetic infusions must never gate progression or delay round controls.
+    this.time.delayedCall(1400, () => {
       const next = this.roundManager.nextRound();
       const payload: RoundFinishedPayload = {
         baseSeed: this.roundManager.seedBase,
