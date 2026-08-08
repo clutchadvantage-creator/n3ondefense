@@ -56,7 +56,9 @@ export class OnlineRunManager {
         highestRound: 0,
         baseline: SaveSystem.getOnlineProgressSnapshot(),
         protocol,
-        equippedMods
+        // Infusions are local cosmetic state and are intentionally excluded
+        // from the server-authoritative gameplay submission contract.
+        equippedMods: equippedMods.map(({ id, rank }) => ({ id, rank }))
       };
       this.persistActive();
       void this.flushQueue();

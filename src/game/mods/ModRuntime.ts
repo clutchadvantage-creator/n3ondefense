@@ -1,34 +1,47 @@
 import { MOD_BALANCE } from './modBalance.ts';
 import { MOD_BY_ID } from './definitions.ts';
 import type { EquippedModSnapshot, LocalModCollection, ModInfusionId, ModRank } from './types.ts';
+import { MOD_INFUSION_BY_ID } from './infusions.ts';
 
 export class ModRuntime {
   private readonly equipped = new Map<string, ModRank>();
   private readonly infusions = new Set<ModInfusionId>();
+  private readonly infusionByModId = new Map<string, ModInfusionId>();
   private emergencyCapacitorUsed = false;
   private previousHealthRatio = 1;
   private readonly bombShieldCooldownUntil = new Map<string, number>();
   private readonly bombShieldActiveUntil = new Map<string, number>();
 
   constructor(mods: LocalModCollection, snapshot?: EquippedModSnapshot[]) {
+    const loadout = mods.loadouts.find((entry) => entry.id === mods.activeLoadoutId) ?? mods.loadouts[0];
+    const equippedCardFor = (modId: string) => {
+      const slot = Object.entries(loadout?.slots ?? {}).find(([, equippedId]) => equippedId === modId)?.[0] as keyof typeof loadout.slots | undefined;
+      return slot ? mods.cards.find((entry) => entry.instanceId === loadout.cardSlots[slot] && entry.modId === modId) : undefined;
+    };
+    const addInfusion = (modId: string, infusionId: ModInfusionId | undefined): void => {
+      if (!infusionId || !MOD_INFUSION_BY_ID.has(infusionId)) return;
+      this.infusions.add(infusionId);
+      this.infusionByModId.set(modId, infusionId);
+    };
+
     if (snapshot) {
-      snapshot.forEach(({ id, rank }) => {
+      snapshot.forEach(({ id, rank, infusionId }) => {
         if (!MOD_BY_ID.has(id) || this.equipped.has(id)) return;
         this.equipped.set(id, Math.max(0, Math.min(3, Math.floor(rank))) as ModRank);
+        // Old run snapshots contain only id/rank. Resolve those from the exact
+        // currently equipped card so in-progress local sessions remain valid.
+        addInfusion(id, infusionId ?? equippedCardFor(id)?.infusionId);
       });
       return;
     }
-    const loadout = mods.loadouts.find((entry) => entry.id === mods.activeLoadoutId) ?? mods.loadouts[0];
     for (const modId of Object.values(loadout?.slots ?? {})) {
       if (!modId || this.equipped.has(modId)) continue;
       const owned = mods.inventory[modId];
-      const slot = Object.entries(loadout?.slots ?? {}).find(([, equippedId]) => equippedId === modId)?.[0] as keyof typeof loadout.slots | undefined;
-      const card = slot ? mods.cards.find((entry) => entry.instanceId === loadout.cardSlots[slot]) : undefined;
-      if (owned?.discovered) this.equipped.set(modId, card?.upgradeLevel ?? owned.rank);
-    }
-    for (const cardId of Object.values(loadout?.cardSlots ?? {})) {
-      const card = mods.cards.find((entry) => entry.instanceId === cardId);
-      if (card?.infusionId && this.equipped.has(card.modId)) this.infusions.add(card.infusionId);
+      const card = equippedCardFor(modId);
+      if (owned?.discovered) {
+        this.equipped.set(modId, card?.upgradeLevel ?? owned.rank);
+        addInfusion(modId, card?.infusionId);
+      }
     }
   }
 
@@ -42,7 +55,9 @@ export class ModRuntime {
   rank(modId: string): ModRank | 0 { return this.equipped.get(modId) ?? 0; }
   has(modId: string): boolean { return this.equipped.has(modId); }
   hasInfusion(infusionId: ModInfusionId): boolean { return this.infusions.has(infusionId); }
-  snapshot(): EquippedModSnapshot[] { return Array.from(this.equipped, ([id, rank]) => ({ id, rank })); }
+  snapshot(): EquippedModSnapshot[] {
+    return Array.from(this.equipped, ([id, rank]) => ({ id, rank, infusionId: this.infusionByModId.get(id) }));
+  }
 
   checkEmergencyCapacitor(currentHealthRatio: number): { energyShare: number; speedMultiplier: number; speedDurationMs: number } | null {
     const rank = this.rank('emergency-capacitor');

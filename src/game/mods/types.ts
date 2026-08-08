@@ -71,4 +71,6 @@ export interface ModRewardRecord {
 export interface EquippedModSnapshot {
   id: string;
   rank: ModRank;
+  /** Cosmetic-only state needed to preserve the exact equipped card across rounds. */
+  infusionId?: ModInfusionId;
 }

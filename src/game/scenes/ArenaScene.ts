@@ -1664,21 +1664,35 @@ export class ArenaScene extends Phaser.Scene {
     const duration = Phaser.Math.Between(config.minDurationMs, config.maxDurationMs);
     const startsAt = this.time.now;
     let burst = 0;
-    const timer = this.time.addEvent({
+    const emitBurst = (): void => {
+      const bx = x + Phaser.Math.Between(-155, 155);
+      const by = y + Phaser.Math.Between(-145, 35);
+      const rays = SaveSystem.get().settings.particles ? config.sparksPerBurst : Math.ceil(config.sparksPerBurst / 2);
+      for (let ray = 0; ray < rays; ray += 1) {
+        const angle = ray / rays * Math.PI * 2 + Phaser.Math.FloatBetween(-0.08, 0.08);
+        const distance = Phaser.Math.Between(52, 88);
+        const spark = this.add.circle(bx, by, Phaser.Math.Between(2, 4), colors[(burst + ray) % colors.length], 1).setDepth(42);
+        this.tweens.add({ targets: spark, x: bx + Math.cos(angle) * distance, y: by + Math.sin(angle) * distance, alpha: 0, duration: Phaser.Math.Between(480, 760), ease: 'Cubic.Out', onComplete: () => spark.destroy() });
+      }
+      burst += 1;
+    };
+
+    // Make the infusion immediately visible even when the final site advances
+    // to the non-blocking round-finished screen shortly after detonation.
+    emitBurst();
+    const totalBursts = Math.max(1, Math.ceil(duration / config.burstIntervalMs));
+    if (totalBursts === 1) return;
+    let timer: Phaser.Time.TimerEvent | null = null;
+    timer = this.time.addEvent({
       delay: config.burstIntervalMs,
-      repeat: Math.max(0, Math.ceil(duration / config.burstIntervalMs) - 1),
+      repeat: totalBursts - 2,
       callback: () => {
-        if (!this.sys.isActive() || this.time.now - startsAt > duration) { timer.remove(); return; }
-        const bx = x + Phaser.Math.Between(-155, 155);
-        const by = y + Phaser.Math.Between(-145, 35);
-        const rays = SaveSystem.get().settings.particles ? config.sparksPerBurst : Math.ceil(config.sparksPerBurst / 2);
-        for (let ray = 0; ray < rays; ray += 1) {
-          const angle = ray / rays * Math.PI * 2 + Phaser.Math.FloatBetween(-0.08, 0.08);
-          const distance = Phaser.Math.Between(52, 88);
-          const spark = this.add.circle(bx, by, Phaser.Math.Between(2, 4), colors[(burst + ray) % colors.length], 1).setDepth(42);
-          this.tweens.add({ targets: spark, x: bx + Math.cos(angle) * distance, y: by + Math.sin(angle) * distance, alpha: 0, duration: Phaser.Math.Between(480, 760), ease: 'Cubic.Out', onComplete: () => spark.destroy() });
+        if (!this.sys.isActive() || this.time.now - startsAt > duration) {
+          timer?.remove();
+          timer = null;
+          return;
         }
-        burst += 1;
+        emitBurst();
       }
     });
   }

@@ -119,6 +119,19 @@ test('the specifically equipped card controls cosmetic infusion activation', () 
   assert.equal(new ModRuntime(mods).hasInfusion('enemy-growth'), true);
 });
 
+test('equipped-card infusions survive run snapshots and legacy id/rank snapshots', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'split-current');
+  mods.plasmaChips = 20;
+  infuseModCard(mods, mods.cards[0].instanceId, 'detonation-fireworks');
+  equipMod(mods, 'weapon', 'split-current', mods.cards[0].instanceId);
+
+  const snapshot = new ModRuntime(mods).snapshot();
+  assert.equal(snapshot[0].infusionId, 'detonation-fireworks');
+  assert.equal(new ModRuntime(mods, snapshot).hasInfusion('detonation-fireworks'), true);
+  assert.equal(new ModRuntime(mods, snapshot.map(({ id, rank }) => ({ id, rank }))).hasInfusion('detonation-fireworks'), true);
+});
+
 test('Corrupted cards declare both their positive effect and tradeoff', () => {
   const corrupted = MOD_BY_ID.get('fractured-current');
   assert.equal(corrupted.variant, 'corrupted');
