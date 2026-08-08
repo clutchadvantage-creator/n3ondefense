@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import type { AudioSfxName } from './config/audio';
 import type { AbilityBindings } from './config/controls';
 import type { EquippedModSnapshot, ModRewardRecord, RunProtocolId } from './mods/types.ts';
+import type { AccountProgressionTier, CosmeticPriceTier, ModFocusSignalId, RunContractId } from './economy/types.ts';
 
 export type SceneKey = 'boot' | 'splash' | 'local-profiles' | 'menu' | 'arena' | 'upgrades' | 'cosmetics' | 'mods' | 'results' | 'options' | 'round-finished' | 'loading';
 
@@ -182,6 +183,7 @@ export interface CosmeticOption {
   currency: 'credits' | 'coreTokens';
   cost: number;
   color: number;
+  priceTier?: CosmeticPriceTier;
 }
 
 export interface GameSaveData {
@@ -203,6 +205,7 @@ export interface GameSaveData {
 
 export interface ArenaReward {
   credits: number;
+  runCreditsEarned: number;
   coreTokens: number;
   reason: 'victory' | 'playerDead' | 'bombDefused';
   round?: number;
@@ -211,6 +214,12 @@ export interface ArenaReward {
   equippedMods: EquippedModSnapshot[];
   modsEarned: ModRewardRecord[];
   runDurationMs: number;
+  highestRound: number;
+  modFocus: ModFocusSignalId | null;
+  contract: RunContractId | null;
+  creditsSpentBeforeRun: number;
+  upgradeCompletionPercentage: number;
+  accountProgressionTier: AccountProgressionTier;
 }
 
 export interface ArenaSessionState {
@@ -221,6 +230,12 @@ export interface ArenaSessionState {
   runStartedAt?: number;
   equippedMods?: EquippedModSnapshot[];
   modsEarned?: ModRewardRecord[];
+  modFocus?: ModFocusSignalId | null;
+  contract?: RunContractId | null;
+  creditsSpentBeforeRun?: number;
+  upgradeCompletionPercentage?: number;
+  accountProgressionTier?: AccountProgressionTier;
+  runCreditsEarned?: number;
 }
 
 export interface RoundFinishedPayload {
@@ -238,4 +253,10 @@ export interface RoundFinishedPayload {
   equippedMods: EquippedModSnapshot[];
   modsEarned: ModRewardRecord[];
   runStartedAt: number;
+  modFocus: ModFocusSignalId | null;
+  contract: RunContractId | null;
+  creditsSpentBeforeRun: number;
+  upgradeCompletionPercentage: number;
+  accountProgressionTier: AccountProgressionTier;
+  runCreditsEarned: number;
 }

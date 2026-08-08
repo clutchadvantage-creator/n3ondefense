@@ -3,11 +3,12 @@ import type { AudioSfxName } from '../config/audio.ts';
 import { GAME_VERSION } from '../config/version.ts';
 import type { AbilityBindings } from '../config/controls.ts';
 import type { LocalModCollection, ProtocolPreference } from '../mods/types.ts';
+import type { CreditSpendBreakdown } from '../economy/types.ts';
 
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 5;
+export const CURRENT_SAVE_VERSION = 6;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -29,6 +30,8 @@ export interface LocalPlayerProgress {
   enemiesDestroyed: number;
   bombSitesDestroyed: number;
   totalCreditsEarned: number;
+  totalCreditsSpent: number;
+  creditSpendByCategory: CreditSpendBreakdown;
   totalCoreTokensEarned: number;
   totalPlaytimeSeconds: number;
 }
@@ -73,7 +76,7 @@ export interface LocalPlayerSaveV1 {
   wallet: LocalPlayerWallet;
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
-  progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds'>;
+  progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory'>;
   settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }

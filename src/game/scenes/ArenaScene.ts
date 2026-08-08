@@ -33,6 +33,8 @@ import { isGuaranteedMilestone, rollModDrop } from '../mods/ModDropService.ts';
 import type { ModDropSource, ModRewardRecord, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { magneticResistanceForEnemy, prioritizeTurretTargets, splitCurrentSecondaryDamage } from '../mods/ModRules.ts';
 import { createModCardView } from '../mods/ModCardView.ts';
+import { MOD_FOCUS_CATEGORIES, RUN_CONTRACT_IDS, getContract, getRoundCompletionCredits } from '../economy/economyBalance.ts';
+import type { AccountProgressionTier, ModFocusSignalId, RunContractId } from '../economy/types.ts';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -108,6 +110,12 @@ export class ArenaScene extends Phaser.Scene {
   private defuserMarkedUntil = new WeakMap<Enemy, number>();
   private modRuntime!: ModRuntime;
   private protocol: RunProtocolId = 'normal';
+  private modFocus: ModFocusSignalId | null = null;
+  private contract: RunContractId | null = null;
+  private creditsSpentBeforeRun = 0;
+  private upgradeCompletionPercentage = 0;
+  private accountProgressionTier: AccountProgressionTier = 'new';
+  private runCreditsEarned = 0;
   private modsEarned: ModRewardRecord[] = [];
   private modDropSequence = 0;
   private runStartedAt = Date.now();
@@ -238,6 +246,13 @@ export class ArenaScene extends Phaser.Scene {
     const sessionFromRegistry = this.registry.get('arena-session') as ArenaSessionState | undefined;
     const session = sessionFromData ?? sessionFromRegistry;
     this.protocol = session?.protocol ?? 'normal';
+    this.modFocus = session?.modFocus ?? null;
+    this.contract = session?.contract ?? null;
+    this.creditsSpentBeforeRun = session?.creditsSpentBeforeRun ?? 0;
+    this.upgradeCompletionPercentage = session?.upgradeCompletionPercentage ?? 0;
+    this.accountProgressionTier = session?.accountProgressionTier ?? 'new';
+    this.runCreditsEarned = session?.runCreditsEarned ?? 0;
+    this.totalCreditsCollected = this.runCreditsEarned;
     this.modsEarned = [...(session?.modsEarned ?? [])];
     this.runStartedAt = session?.runStartedAt ?? Date.now();
     this.modRuntime = new ModRuntime(SaveSystem.getModCollection(), session?.equippedMods);
@@ -291,7 +306,15 @@ export class ArenaScene extends Phaser.Scene {
       protocol: candidate.protocol === 'overdrive' ? 'overdrive' : 'normal',
       runStartedAt: typeof candidate.runStartedAt === 'number' ? candidate.runStartedAt : Date.now(),
       equippedMods: Array.isArray(candidate.equippedMods) ? candidate.equippedMods : undefined,
-      modsEarned: Array.isArray(candidate.modsEarned) ? candidate.modsEarned : []
+      modsEarned: Array.isArray(candidate.modsEarned) ? candidate.modsEarned : [],
+      modFocus: MOD_FOCUS_CATEGORIES.includes(candidate.modFocus as ModFocusSignalId) ? candidate.modFocus as ModFocusSignalId : null,
+      contract: RUN_CONTRACT_IDS.includes(candidate.contract as RunContractId) ? candidate.contract as RunContractId : null,
+      creditsSpentBeforeRun: Math.max(0, Math.floor(candidate.creditsSpentBeforeRun ?? 0)),
+      upgradeCompletionPercentage: Math.max(0, Math.min(100, candidate.upgradeCompletionPercentage ?? 0)),
+      accountProgressionTier: ['new', 'midgame', 'advanced', 'endgame', 'maxed'].includes(candidate.accountProgressionTier ?? '')
+        ? candidate.accountProgressionTier
+        : 'new',
+      runCreditsEarned: Math.max(0, Math.floor(candidate.runCreditsEarned ?? 0))
     };
   }
 
@@ -805,7 +828,8 @@ export class ArenaScene extends Phaser.Scene {
     const phaseMultiplier = defensePhase ? getSpawnCadenceMultiplier(elapsedMs) : 1;
     if (phaseMultiplier === null) return;
     const concurrentPressure = getConcurrentSpawnPressure(profile, activeSites.length);
-    const cadenceMs = Math.round((defensePhase ? profile.defenseCadenceMs : profile.prePlantCadenceMs) * phaseMultiplier * concurrentPressure.cadenceMultiplier);
+    const contractCadence = defensePhase ? getContract(this.contract)?.spawnCadenceMultiplier ?? 1 : 1;
+    const cadenceMs = Math.round((defensePhase ? profile.defenseCadenceMs : profile.prePlantCadenceMs) * phaseMultiplier * concurrentPressure.cadenceMultiplier * contractCadence);
     const { activeCountCap, activeWeightCap } = concurrentPressure;
 
     if (now < this.nextSpawnAt) return;
@@ -843,10 +867,13 @@ export class ArenaScene extends Phaser.Scene {
     });
     if (candidates.length === 0) return 'grunt';
 
-    const total = candidates.reduce((sum, type) => sum + profile.composition[type], 0);
+    const eliteWeightMultiplier = getContract(this.contract)?.eliteCompositionWeightMultiplier ?? 1;
+    const spawnWeight = (type: EnemyType): number => profile.composition[type]
+      * (type === 'tank' || type === 'disruptor' || type === 'star' ? eliteWeightMultiplier : 1);
+    const total = candidates.reduce((sum, type) => sum + spawnWeight(type), 0);
     let roll = Math.random() * total;
     for (const type of candidates) {
-      roll -= profile.composition[type];
+      roll -= spawnWeight(type);
       if (roll <= 0) return type;
     }
     return candidates[candidates.length - 1];
@@ -860,7 +887,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const stats = {
       ...base,
-      hp: Math.round(base.hp * (1 + (curve.healthMultiplier - 1) * phaseScale)),
+      hp: Math.round(base.hp * (1 + (curve.healthMultiplier - 1) * phaseScale) * (getContract(this.contract)?.enemyHealthMultiplier ?? 1)),
       speed: Math.round(base.speed * curve.speedMultiplier),
       damage: Math.round(base.damage * (1 + (curve.damageMultiplier - 1) * phaseScale))
     };
@@ -1788,6 +1815,8 @@ export class ArenaScene extends Phaser.Scene {
       seed: this.layout.seed,
       sequence: this.modDropSequence++,
       protocol: this.protocol,
+      focus: this.modFocus,
+      contract: this.contract,
       guaranteed
     });
     if (!definition) return;
@@ -2023,7 +2052,8 @@ export class ArenaScene extends Phaser.Scene {
     const completedTemplate = this.layout.template;
     this.tryAwardMod('milestone', isGuaranteedMilestone(completedRound));
 
-    const rewardCredits = this.roundCredits + REWARD_BALANCE.completionBaseCredits + completedRound * REWARD_BALANCE.completionCreditsPerRound;
+    const rawRewardCredits = this.roundCredits + getRoundCompletionCredits(completedRound);
+    const rewardCredits = Math.round(rawRewardCredits * (getContract(this.contract)?.creditRewardMultiplier ?? 1));
     const rewardTokens = this.roundCoreTokens + Math.max(REWARD_BALANCE.completionBaseTokens, Math.floor(completedRound / REWARD_BALANCE.tokenRoundDivisor));
     SaveSystem.addCredits(rewardCredits);
     SaveSystem.addCoreTokens(rewardTokens);
@@ -2047,7 +2077,13 @@ export class ArenaScene extends Phaser.Scene {
         protocol: this.protocol,
         equippedMods: this.modRuntime.snapshot(),
         modsEarned: [...this.modsEarned],
-        runStartedAt: this.runStartedAt
+        runStartedAt: this.runStartedAt,
+        modFocus: this.modFocus,
+        contract: this.contract,
+        creditsSpentBeforeRun: this.creditsSpentBeforeRun,
+        upgradeCompletionPercentage: this.upgradeCompletionPercentage,
+        accountProgressionTier: this.accountProgressionTier,
+        runCreditsEarned: this.runCreditsEarned + rewardCredits
       };
 
       this.registry.set('round-finished', payload);
@@ -2068,6 +2104,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const result: ArenaReward = {
       credits: this.roundCredits,
+      runCreditsEarned: this.runCreditsEarned + this.roundCredits,
       coreTokens: this.roundCoreTokens,
       reason,
       round: this.roundManager.round,
@@ -2075,7 +2112,13 @@ export class ArenaScene extends Phaser.Scene {
       protocol: this.protocol,
       equippedMods: this.modRuntime.snapshot(),
       modsEarned: [...this.modsEarned],
-      runDurationMs: Date.now() - this.runStartedAt
+      runDurationMs: Date.now() - this.runStartedAt,
+      highestRound: this.roundManager.round,
+      modFocus: this.modFocus,
+      contract: this.contract,
+      creditsSpentBeforeRun: this.creditsSpentBeforeRun,
+      upgradeCompletionPercentage: this.upgradeCompletionPercentage,
+      accountProgressionTier: this.accountProgressionTier
     };
 
     SaveSystem.addCredits(result.credits);

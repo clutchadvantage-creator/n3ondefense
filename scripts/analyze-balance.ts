@@ -15,6 +15,7 @@ import {
 } from '../src/game/config/balance/index.ts';
 import { MOD_BALANCE, RUN_PROTOCOLS } from '../src/game/mods/modBalance.ts';
 import { MOD_DEFINITIONS } from '../src/game/mods/definitions.ts';
+import { getRoundCompletionCredits } from '../src/game/economy/economyBalance.ts';
 
 const assert = (condition: boolean, message: string): void => {
   if (!condition) throw new Error(`BALANCE ASSERTION FAILED: ${message}`);
@@ -87,7 +88,7 @@ console.table([1, 2, 3, 5, 6, 8, 10, 15, 20].map((round) => {
   const spawn = getSpawnProfile(round);
   const difficulty = getDifficultyCurve(round);
   const sites = getRoundSiteCountBalanced(round);
-  const completionCredits = REWARD_BALANCE.completionBaseCredits + round * REWARD_BALANCE.completionCreditsPerRound + sites * REWARD_BALANCE.siteRecoveryCredits;
+  const completionCredits = getRoundCompletionCredits(round) + sites * REWARD_BALANCE.siteRecoveryCredits;
   return { round, sites, graceMs: spawn.initialGraceMs, cadenceMs: spawn.defenseCadenceMs, countCap: spawn.activeCountCap, weightCap: spawn.activeWeightCap, defuseAssignees: getDefuseAssigneeCount(round), hpMult: fixed(difficulty.healthMultiplier, 2), damageMult: fixed(difficulty.damageMultiplier, 2), speedMult: fixed(difficulty.speedMultiplier, 2), minimumCredits: completionCredits, minimumTokens: Math.max(REWARD_BALANCE.completionBaseTokens, Math.floor(round / REWARD_BALANCE.tokenRoundDivisor)) };
 }));
 
@@ -116,7 +117,7 @@ console.table([
   const spawns = projectedSpawnsPerSite(round) * sites;
   const averageWeight = (Object.keys(spawn.composition) as BalanceEnemyType[]).reduce((sum, type) => sum + spawn.composition[type] * ENEMY_BALANCE[type].weight, 0);
   const averageCredits = (Object.keys(spawn.composition) as BalanceEnemyType[]).reduce((sum, type) => sum + spawn.composition[type] * ENEMY_BALANCE[type].credits, 0);
-  const minimumRewards = REWARD_BALANCE.completionBaseCredits + round * REWARD_BALANCE.completionCreditsPerRound + sites * REWARD_BALANCE.siteRecoveryCredits;
+  const minimumRewards = getRoundCompletionCredits(round) + sites * REWARD_BALANCE.siteRecoveryCredits;
   return {
     test,
     round,

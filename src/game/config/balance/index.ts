@@ -88,8 +88,6 @@ export const PICKUP_BALANCE = {
 } as const;
 
 export const REWARD_BALANCE = {
-  completionBaseCredits: 150,
-  completionCreditsPerRound: 35,
   completionBaseTokens: 1,
   tokenRoundDivisor: 3,
   siteRecoveryCredits: 30,

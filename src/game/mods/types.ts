@@ -52,6 +52,8 @@ export interface LocalModCollection {
   inventory: ModInventory;
   cards: ModCardInstance[];
   plasmaChips: number;
+  /** Purchased saved configurations, never additional equipped Mod slots. */
+  purchasedLoadoutSlots: number;
   loadouts: SavedModLoadout[];
   activeLoadoutId: string;
 }

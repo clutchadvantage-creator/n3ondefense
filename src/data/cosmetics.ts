@@ -1,4 +1,8 @@
 import type { CosmeticOption } from '../game/types.ts';
+import type { CosmeticPriceTier } from '../game/economy/types.ts';
+
+export const getCosmeticPriceTier = (item: CosmeticOption): CosmeticPriceTier => item.priceTier
+  ?? (item.currency === 'coreTokens' ? 'rare' : 'standard');
 
 export const COSMETICS: CosmeticOption[] = [
   { id: 'player-cyan', category: 'playerColor', label: 'Cyan Operative', currency: 'credits', cost: 0, color: 0x00f5ff },

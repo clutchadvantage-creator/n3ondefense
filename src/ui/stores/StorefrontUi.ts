@@ -1,6 +1,7 @@
 import type { CosmeticOption, UpgradeDefinition } from '../../game/types';
 import { getUpgradeCost, getUpgradeLevel } from '../../data/upgrades';
 import { getUpgradeComparison } from './upgradePresentation';
+import { getCosmeticPriceTier } from '../../data/cosmetics.ts';
 import './storefront.css';
 
 export type StoreMode = 'cosmetics' | 'upgrades';
@@ -231,7 +232,7 @@ export class StorefrontUi {
     const owned = snapshot.ownedCosmetics.includes(item.id) || item.cost === 0;
     const equipped = snapshot.equippedCosmetics[item.category] === item.id;
     const affordable = item.currency === 'credits' ? snapshot.credits >= item.cost : snapshot.coreTokens >= item.cost;
-    const card = this.cardButton(item.id, `cosmetic-card ${owned ? 'owned' : 'locked'} ${equipped ? 'equipped' : ''}`);
+    const card = this.cardButton(item.id, `cosmetic-card tier-${getCosmeticPriceTier(item)} ${owned ? 'owned' : 'locked'} ${equipped ? 'equipped' : ''}`);
     const visual = this.renderCosmeticVisual(item, false);
     const badge = document.createElement('span');
     badge.className = 'card-badge';
@@ -240,7 +241,7 @@ export class StorefrontUi {
     name.textContent = item.label;
     const price = document.createElement('p');
     price.className = `card-price ${item.currency}`;
-    price.textContent = owned ? 'READY TO EQUIP' : `${item.cost.toLocaleString()} ${item.currency === 'credits' ? 'CREDITS' : 'CORE TOKENS'}`;
+    price.textContent = `${getCosmeticPriceTier(item).toUpperCase()} • ${owned ? 'READY TO EQUIP' : `${item.cost.toLocaleString()} ${item.currency === 'credits' ? 'CREDITS' : 'CORE TOKENS'}`}`;
     card.append(badge, visual, name, price);
     return card;
   }
@@ -300,7 +301,7 @@ export class StorefrontUi {
     const affordable = balance >= item.cost;
     const label = document.createElement('span');
     label.className = 'detail-eyebrow';
-    label.textContent = `${COSMETIC_LABELS[item.category].toUpperCase()} PREVIEW`;
+    label.textContent = `${getCosmeticPriceTier(item).toUpperCase()} • ${COSMETIC_LABELS[item.category].toUpperCase()} PREVIEW`;
     const preview = document.createElement('div');
     preview.className = 'cosmetic-preview-stage';
     preview.append(this.renderCosmeticVisual(item, true));

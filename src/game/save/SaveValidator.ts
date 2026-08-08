@@ -5,6 +5,8 @@ import { SFX_DEFINITIONS, createDefaultSoundVolumes } from '../config/audio.ts';
 import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type LocalPlayerMetadata, type LocalPlayerProgress, type LocalPlayerSave, type LocalPlayerSaveV1, type LocalPlayerSettings, type ProfileSummary } from './LocalSaveTypes.ts';
 import { DEFAULT_ABILITY_BINDINGS, normalizeAbilityBindings } from '../config/controls.ts';
 import { normalizeModCollection, normalizeProtocolPreference } from '../mods/ModSaveNormalizer.ts';
+import { createEmptyCreditSpendBreakdown } from '../economy/EconomyService.ts';
+import type { CreditSpendCategory } from '../economy/types.ts';
 
 const defaultSettings: LocalPlayerSettings = {
   masterVolume: 0.8,
@@ -84,12 +86,19 @@ const normalizeEquippedCosmetics = (equipped: unknown, owned: string[]): Partial
 
 const normalizeProgress = (progress: unknown): LocalPlayerProgress => {
   const candidate = isObject(progress) ? progress : {};
+  const rawSpend = isObject(candidate.creditSpendByCategory) ? candidate.creditSpendByCategory : {};
+  const creditSpendByCategory = createEmptyCreditSpendBreakdown();
+  for (const category of Object.keys(creditSpendByCategory) as CreditSpendCategory[]) {
+    creditSpendByCategory[category] = toInteger(rawSpend[category]);
+  }
   return {
     highestRound: toInteger(candidate.highestRound),
     roundsCompleted: toInteger(candidate.roundsCompleted),
     enemiesDestroyed: toInteger(candidate.enemiesDestroyed),
     bombSitesDestroyed: toInteger(candidate.bombSitesDestroyed),
     totalCreditsEarned: toInteger(candidate.totalCreditsEarned),
+    totalCreditsSpent: toInteger(candidate.totalCreditsSpent),
+    creditSpendByCategory,
     totalCoreTokensEarned: toInteger(candidate.totalCoreTokensEarned),
     totalPlaytimeSeconds: toInteger(candidate.totalPlaytimeSeconds)
   };
@@ -202,6 +211,8 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       enemiesDestroyed: toInteger(v1.progress?.enemiesDestroyed),
       bombSitesDestroyed: toInteger(v1.progress?.bombSitesDestroyed),
       totalCreditsEarned: toInteger(v1.progress?.totalCreditsEarned),
+      totalCreditsSpent: 0,
+      creditSpendByCategory: createEmptyCreditSpendBreakdown(),
       totalCoreTokensEarned: toInteger(v1.progress?.totalCoreTokensEarned),
       totalPlaytimeSeconds: 0
     };
@@ -218,7 +229,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;

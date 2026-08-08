@@ -1,11 +1,13 @@
 import { COSMETICS } from '../../data/cosmetics';
-import { UPGRADE_DEFINITIONS } from '../../data/upgrades';
+import { UPGRADE_DEFINITIONS, getUpgradeCost } from '../../data/upgrades';
 import type { CosmeticOption } from '../types';
 import { type LocalPlayerSave, type ProfileSummary } from '../save/LocalSaveTypes';
 import { LocalSaveManager } from '../save/LocalSaveManager';
-import { addModDrop, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleDuplicateMod, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
+import { addModDrop, createDefaultModLoadout, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleDuplicateMod, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
+import { buildRunEconomySnapshot, getNextLoadoutSlotCost, getRunSetupCost, purchaseRunSetup, spendCreditsAtomic } from '../economy/EconomyService.ts';
+import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
 
 export interface PurchaseResult {
   ok: boolean;
@@ -209,25 +211,28 @@ export class PlayerProfileStore {
   }
 
   static addCredits(amount: number): void {
+    if (!Number.isFinite(amount) || amount <= 0) return;
     const save = PlayerProfileStore.getActiveSave();
-    save.wallet.credits = Math.max(0, save.wallet.credits + amount);
-    save.progress.totalCreditsEarned = Math.max(0, save.progress.totalCreditsEarned + Math.max(0, amount));
+    const earned = Math.floor(amount);
+    save.wallet.credits += earned;
+    save.progress.totalCreditsEarned += earned;
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
   }
 
   static addCoreTokens(amount: number): void {
+    if (!Number.isFinite(amount) || amount <= 0) return;
     const save = PlayerProfileStore.getActiveSave();
-    save.wallet.coreTokens = Math.max(0, save.wallet.coreTokens + amount);
-    save.progress.totalCoreTokensEarned = Math.max(0, save.progress.totalCoreTokensEarned + Math.max(0, amount));
+    const earned = Math.floor(amount);
+    save.wallet.coreTokens += earned;
+    save.progress.totalCoreTokensEarned += earned;
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
   }
 
-  static spendCredits(amount: number): boolean {
+  static spendCredits(amount: number, category: CreditSpendCategory = 'other'): boolean {
     const save = PlayerProfileStore.getActiveSave();
-    if (save.wallet.credits < amount) return false;
-    save.wallet.credits -= amount;
+    if (!spendCreditsAtomic(save.wallet, save.progress, amount, category)) return false;
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
     return true;
@@ -235,8 +240,10 @@ export class PlayerProfileStore {
 
   static spendCoreTokens(amount: number): boolean {
     const save = PlayerProfileStore.getActiveSave();
-    if (save.wallet.coreTokens < amount) return false;
-    save.wallet.coreTokens -= amount;
+    if (!Number.isFinite(amount) || amount < 0) return false;
+    const spent = Math.floor(amount);
+    if (save.wallet.coreTokens < spent) return false;
+    save.wallet.coreTokens -= spent;
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
     return true;
@@ -249,10 +256,10 @@ export class PlayerProfileStore {
     const current = save.upgrades[upgradeKey] ?? 0;
     if (current >= definition.maxLevel) return { ok: false, message: 'That upgrade is already maxed.' };
 
-    const cost = Math.round(definition.baseCost * definition.growth ** current);
+    const cost = getUpgradeCost(definition.baseCost, definition.growth, current);
     if (save.wallet.credits < cost) return { ok: false, message: 'Not enough credits.' };
 
-    save.wallet.credits -= cost;
+    if (!spendCreditsAtomic(save.wallet, save.progress, cost, 'upgrade')) return { ok: false, message: 'Not enough credits.' };
     save.upgrades[upgradeKey] = current + 1;
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
@@ -270,9 +277,40 @@ export class PlayerProfileStore {
     const save = PlayerProfileStore.getActiveSave();
     const result = rankUpMod(save.mods, modId, save.wallet.credits, instanceId);
     if (!result.ok || result.cost === undefined) return result;
-    save.wallet.credits -= result.cost;
+    if (!spendCreditsAtomic(save.wallet, save.progress, result.cost, 'modRank')) return { ok: false, message: 'Not enough credits.' };
     PlayerProfileStore.save();
     return result;
+  }
+
+  static canAffordRunSetup(selection: RunSetupSelection): boolean {
+    return PlayerProfileStore.getActiveSave().wallet.credits >= getRunSetupCost(selection);
+  }
+
+  static purchaseRunSetup(selection: RunSetupSelection) {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = purchaseRunSetup(save.wallet, save.progress, selection);
+    if (result.ok) {
+      save.profile.lastPlayedAt = new Date().toISOString();
+      PlayerProfileStore.save();
+    }
+    return result;
+  }
+
+  static buildRunEconomySnapshot(selection: RunSetupSelection, creditsSpentBeforeRun: number) {
+    const save = PlayerProfileStore.getActiveSave();
+    return buildRunEconomySnapshot(save.upgrades, selection, creditsSpentBeforeRun);
+  }
+
+  static purchaseAdditionalModLoadoutSlot(): PurchaseResult & { cost?: number } {
+    const save = PlayerProfileStore.getActiveSave();
+    const cost = getNextLoadoutSlotCost(save.mods.purchasedLoadoutSlots);
+    if (cost === null) return { ok: false, message: 'Maximum saved Mod loadouts purchased.' };
+    if (!spendCreditsAtomic(save.wallet, save.progress, cost, 'loadout')) return { ok: false, message: 'Not enough credits.', cost };
+    save.mods.purchasedLoadoutSlots += 1;
+    const number = save.mods.loadouts.length + 1;
+    save.mods.loadouts.push({ id: `loadout-${number}`, name: `Loadout ${number}`, slots: createDefaultModLoadout(), cardSlots: createDefaultModLoadout() });
+    PlayerProfileStore.save();
+    return { ok: true, message: 'Saved Mod loadout purchased.', cost };
   }
 
   static equipMod(slot: ModSlot, modId: string, instanceId?: string): PurchaseResult {
@@ -293,6 +331,7 @@ export class PlayerProfileStore {
     const result = sellDuplicateMod(save.mods, instanceId);
     if (!result.ok || result.credits === undefined) return result;
     save.wallet.credits += result.credits;
+    save.progress.totalCreditsEarned += result.credits;
     PlayerProfileStore.save();
     return result;
   }

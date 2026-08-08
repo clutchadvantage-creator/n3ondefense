@@ -69,7 +69,7 @@ export class UpgradeStoreScene extends Phaser.Scene {
     if (currentLevel !== displayedLevel) return { ok: false, message: 'LEVEL CHANGED • SELECT AGAIN' };
     if (currentLevel >= definition.maxLevel) return { ok: false, message: 'MAX LEVEL' };
     const cost = getUpgradeCost(definition.baseCost, definition.growth, currentLevel);
-    if (!SaveSystem.spendCredits(cost)) {
+    if (!SaveSystem.spendCredits(cost, 'upgrade')) {
       return { ok: false, message: `NEED ${(cost - save.credits).toLocaleString()} MORE CREDITS` };
     }
     SaveSystem.setUpgradeLevel(definition.id, currentLevel + 1);
@@ -80,7 +80,7 @@ export class UpgradeStoreScene extends Phaser.Scene {
   private unlockCosmetic(item: CosmeticOption): { ok: boolean; message: string } {
     const save = SaveSystem.get();
     if (save.unlockedCosmetics.includes(item.id) || item.cost === 0) return this.equipCosmetic(item);
-    const paid = item.currency === 'credits' ? SaveSystem.spendCredits(item.cost) : SaveSystem.spendCoreTokens(item.cost);
+    const paid = item.currency === 'credits' ? SaveSystem.spendCredits(item.cost, 'cosmetic') : SaveSystem.spendCoreTokens(item.cost);
     if (!paid) {
       const balance = item.currency === 'credits' ? save.credits : save.coreTokens;
       return { ok: false, message: `NEED ${(item.cost - balance).toLocaleString()} MORE ${item.currency === 'credits' ? 'CREDITS' : 'CORE TOKENS'}` };

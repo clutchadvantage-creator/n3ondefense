@@ -153,7 +153,13 @@ export class RunTransitionManager {
       protocol: session.protocol === 'overdrive' ? 'overdrive' : 'normal',
       runStartedAt: Number.isFinite(session.runStartedAt) ? session.runStartedAt : Date.now(),
       equippedMods: Array.isArray(session.equippedMods) ? session.equippedMods : [],
-      modsEarned: Array.isArray(session.modsEarned) ? session.modsEarned : []
+      modsEarned: Array.isArray(session.modsEarned) ? session.modsEarned : [],
+      modFocus: session.modFocus ?? null,
+      contract: session.contract ?? null,
+      creditsSpentBeforeRun: Math.max(0, Math.floor(session.creditsSpentBeforeRun ?? 0)),
+      upgradeCompletionPercentage: Math.max(0, Math.min(100, session.upgradeCompletionPercentage ?? 0)),
+      accountProgressionTier: session.accountProgressionTier ?? 'new',
+      runCreditsEarned: Math.max(0, Math.floor(session.runCreditsEarned ?? 0))
     };
   }
 

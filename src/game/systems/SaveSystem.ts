@@ -3,6 +3,7 @@ import { PlayerProfileStore } from '../state/PlayerProfileStore';
 import type { CosmeticOption, GameSaveData } from '../types';
 import type { OnlineProgressSnapshot } from '../../online/onlineTypes';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
+import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
 
 export class SaveSystem {
   static get(): GameSaveData {
@@ -37,8 +38,8 @@ export class SaveSystem {
     PlayerProfileStore.addCoreTokens(amount);
   }
 
-  static spendCredits(amount: number): boolean {
-    return PlayerProfileStore.spendCredits(amount);
+  static spendCredits(amount: number, category: CreditSpendCategory = 'other'): boolean {
+    return PlayerProfileStore.spendCredits(amount, category);
   }
 
   static spendCoreTokens(amount: number): boolean {
@@ -109,6 +110,10 @@ export class SaveSystem {
   static getPreferredProtocol(): RunProtocolId { return PlayerProfileStore.getActiveSave().protocol.preferred; }
   static setPreferredProtocol(protocol: RunProtocolId) { return PlayerProfileStore.setPreferredProtocol(protocol); }
   static getHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.highestRound; }
+  static canAffordRunSetup(selection: RunSetupSelection): boolean { return PlayerProfileStore.canAffordRunSetup(selection); }
+  static purchaseRunSetup(selection: RunSetupSelection) { return PlayerProfileStore.purchaseRunSetup(selection); }
+  static buildRunEconomySnapshot(selection: RunSetupSelection, creditsSpentBeforeRun: number) { return PlayerProfileStore.buildRunEconomySnapshot(selection, creditsSpentBeforeRun); }
+  static purchaseAdditionalModLoadoutSlot() { return PlayerProfileStore.purchaseAdditionalModLoadoutSlot(); }
 
   static getLeaderboardEntries() {
     return PlayerProfileStore.getLeaderboardEntries();

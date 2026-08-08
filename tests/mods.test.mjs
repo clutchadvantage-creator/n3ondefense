@@ -30,7 +30,9 @@ test('a complete version-two profile migrates without losing progression or purc
     metadata: { updatedAt: '2025-01-02T00:00:00.000Z', saveRevision: 4, gameVersion: '0.0.1' }
   };
   const migrated = normalizeLocalSave(old);
-  assert.equal(migrated.version, 5);
+  assert.equal(migrated.version, 6);
+  assert.equal(migrated.progress.totalCreditsSpent, 0);
+  assert.equal(migrated.mods.purchasedLoadoutSlots, 1);
   assert.equal(migrated.wallet.credits, 4321);
   assert.equal(migrated.upgrades['weapon.damage'], 4);
   assert.equal(migrated.cosmetics.equipped.playerColor, 'player-pink');
@@ -162,6 +164,13 @@ test('invalid saved mods and invalid or duplicate loadout references are removed
   assert.equal(normalized.activeLoadoutId, 'default');
 });
 
+test('purchased saved-loadout capacity preserves configurations without adding combat slots', () => {
+  const normalized = normalizeModCollection({ purchasedLoadoutSlots: 3, loadouts: [{ id: 'default', name: 'Primary', slots: {} }] });
+  assert.equal(normalized.purchasedLoadoutSlots, 3);
+  assert.equal(normalized.loadouts.length, 3);
+  for (const loadout of normalized.loadouts) assert.deepEqual(Object.keys(loadout.slots), ['weapon', 'player', 'defense', 'bombSite', 'wildcard']);
+});
+
 test('Split Current uses final hit damage and cannot recurse', () => {
   assert.equal(splitCurrentSecondaryDamage(100, 3, false), 40);
   assert.equal(splitCurrentSecondaryDamage(100, 3, true), 0);
@@ -212,6 +221,6 @@ test('Normal and Overdrive starts are explicit and skipped rewards remain zero',
 test('mod drops are deterministic and run result fields serialize', () => {
   const request = { source: 'milestone', round: 10, seed: 12345, sequence: 2, protocol: 'overdrive', guaranteed: true };
   assert.equal(rollModDrop(request)?.id, rollModDrop(request)?.id);
-  const result = { protocol: 'overdrive', equippedMods: [{ id: 'split-current', rank: 2 }], modsEarned: [{ modId: 'split-current', duplicate: false, source: 'milestone' }], highestRound: 9, credits: 100, runDurationMs: 5000 };
+  const result = { protocol: 'overdrive', equippedMods: [{ id: 'split-current', rank: 2 }], modsEarned: [{ modId: 'split-current', duplicate: false, source: 'milestone' }], highestRound: 9, credits: 100, runCreditsEarned: 2100, creditsSpentBeforeRun: 20_000, modFocus: 'weapon', contract: 'elite-hunt', accountProgressionTier: 'advanced', upgradeCompletionPercentage: 68, runDurationMs: 5000 };
   assert.deepEqual(JSON.parse(JSON.stringify(result)), result);
 });

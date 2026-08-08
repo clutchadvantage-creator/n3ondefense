@@ -10,6 +10,7 @@ export const createDefaultModCollection = (): LocalModCollection => ({
   inventory: {},
   cards: [],
   plasmaChips: 0,
+  purchasedLoadoutSlots: 1,
   loadouts: [{ id: 'default', name: 'Primary Loadout', slots: createDefaultModLoadout(), cardSlots: createDefaultModLoadout() }],
   activeLoadoutId: 'default'
 });

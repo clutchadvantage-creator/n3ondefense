@@ -11,9 +11,14 @@ import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { bindingLabel } from '../config/controls';
 import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
 import { ModRuntime } from '../mods/ModRuntime.ts';
+import { ECONOMY_BALANCE, MOD_FOCUS_CATEGORIES, MOD_FOCUS_LABELS, RUN_CONTRACT_IDS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
+import { getRunSetupCost } from '../economy/EconomyService.ts';
+import type { ModFocusSignalId, RunContractId, RunSetupSelection } from '../economy/types.ts';
 
 export class MainMenuScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
+  private selectedModFocus: ModFocusSignalId | null = null;
+  private selectedContract: RunContractId | null = null;
 
   constructor() {
     super(SceneKeys.MainMenu);
@@ -110,6 +115,40 @@ export class MainMenuScene extends Phaser.Scene {
       protocolButton.setAlpha(0.82);
     }
 
+    const setupSelection = this.getRunSetupSelection();
+    const setupCost = getRunSetupCost(setupSelection);
+    const setupX = Math.max(170, width * 0.15);
+    this.add.rectangle(setupX, 305, 315, 260, 0x081521, 0.88)
+      .setStrokeStyle(2, 0x55e9ff, 0.65).setDepth(12);
+    this.add.text(setupX, 198, 'ONE-RUN SETUP', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: '17px', color: '#61f4ff'
+    }).setOrigin(0.5).setDepth(13);
+    this.add.text(setupX, 222, 'Optional pursuits are charged only when a run starts.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#a8c7d4', align: 'center'
+    }).setOrigin(0.5).setDepth(13).setWordWrapWidth(270, true);
+    createButton(this, setupX, 266, `Signal: ${this.selectedModFocus ? MOD_FOCUS_LABELS[this.selectedModFocus] : 'None'}`, () => {
+      const current = this.selectedModFocus ? MOD_FOCUS_CATEGORIES.indexOf(this.selectedModFocus) : -1;
+      this.selectedModFocus = current >= MOD_FOCUS_CATEGORIES.length - 1 ? null : MOD_FOCUS_CATEGORIES[current + 1];
+      this.scene.restart();
+    }, 276).setDepth(13);
+    createButton(this, setupX, 320, `Contract: ${this.selectedContract ? RUN_CONTRACTS[this.selectedContract].label : 'None'}`, () => {
+      const current = this.selectedContract ? RUN_CONTRACT_IDS.indexOf(this.selectedContract) : -1;
+      this.selectedContract = current >= RUN_CONTRACT_IDS.length - 1 ? null : RUN_CONTRACT_IDS[current + 1];
+      this.scene.restart();
+    }, 276).setDepth(13);
+    this.add.text(setupX, 365, setupCost > 0
+      ? `RUN FEE  ${setupCost.toLocaleString()} CREDITS\nSignal ${this.selectedModFocus ? `${ECONOMY_BALANCE.modFocus.categoryWeightMultiplier}x category weighting` : 'off'}  •  Contract ${this.selectedContract ? 'active' : 'off'}`
+      : 'RUN FEE  FREE\nStandard drop and challenge rules', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: setupCost > 0 ? '#ffd66b' : '#9fe8c2', align: 'center'
+    }).setOrigin(0.5).setDepth(13);
+    this.add.text(setupX, 414, this.selectedContract
+      ? RUN_CONTRACTS[this.selectedContract].description
+      : this.selectedModFocus
+        ? `${MOD_FOCUS_LABELS[this.selectedModFocus]} favors that category while preserving rarity and total drop quantity.`
+        : 'No Contract or focused Mod hunt selected.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', color: '#a8c7d4', align: 'center'
+    }).setOrigin(0.5).setDepth(13).setWordWrapWidth(276, true);
+
     const startButton = createButton(this, width / 2 - 135, 254, 'Start Online', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
@@ -117,6 +156,12 @@ export class MainMenuScene extends Phaser.Scene {
       }
       disableButton(startButton);
       void (async () => {
+        const selection = this.getRunSetupSelection();
+        if (!SaveSystem.canAffordRunSetup(selection)) {
+          onlineStatus.setText(`RUN SETUP REQUIRES ${getRunSetupCost(selection).toLocaleString()} CREDITS.`).setColor('#ff9aab');
+          enableButton(startButton);
+          return;
+        }
         onlineStatus.setText('CREATING SERVER-AUTHORIZED RUN...').setColor('#9fc8d8');
         const result = await OnlineRunManager.beginRun(profile.id, profile.name, protocol, equippedMods);
         if (!result.ok || result.seed === undefined) {
@@ -124,6 +169,15 @@ export class MainMenuScene extends Phaser.Scene {
           enableButton(startButton);
           return;
         }
+        const purchase = SaveSystem.purchaseRunSetup(selection);
+        if (!purchase.ok) {
+          OnlineRunManager.complete('quit');
+          onlineStatus.setText(purchase.message.toUpperCase()).setColor('#ff9aab');
+          enableButton(startButton);
+          return;
+        }
+        const economySnapshot = SaveSystem.buildRunEconomySnapshot(selection, purchase.cost);
+        this.clearRunSetupSelection();
         const session = {
           baseSeed: result.seed,
           round: protocolDefinition.startingRound,
@@ -131,7 +185,8 @@ export class MainMenuScene extends Phaser.Scene {
           protocol,
           runStartedAt: Date.now(),
           equippedMods,
-          modsEarned: []
+          modsEarned: [],
+          ...economySnapshot
         };
         startArenaLoad(this, {
           reason: 'new-run',
@@ -140,17 +195,27 @@ export class MainMenuScene extends Phaser.Scene {
         });
       })();
     }, 240);
-    createButton(this, width / 2 + 135, 254, 'Start Local', () => {
+    const localStartButton = createButton(this, width / 2 + 135, 254, 'Start Local', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
       }
+      disableButton(localStartButton);
+      const selection = this.getRunSetupSelection();
+      const purchase = SaveSystem.purchaseRunSetup(selection);
+      if (!purchase.ok) {
+        onlineStatus.setText(purchase.message.toUpperCase()).setColor('#ff9aab');
+        enableButton(localStartButton);
+        return;
+      }
+      const economySnapshot = SaveSystem.buildRunEconomySnapshot(selection, purchase.cost);
+      this.clearRunSetupSelection();
       OnlineRunManager.beginLocalRun();
       startArenaLoad(this, {
         reason: 'new-run',
         session: {
           baseSeed: Phaser.Math.Between(1, 999_999_999), round: protocolDefinition.startingRound,
-          objectiveMode: OBJECTIVE_CONFIG.defaultMode, protocol, runStartedAt: Date.now(), equippedMods, modsEarned: []
+          objectiveMode: OBJECTIVE_CONFIG.defaultMode, protocol, runStartedAt: Date.now(), equippedMods, modsEarned: [], ...economySnapshot
         },
         message: 'Building explicitly local operation...'
       });
@@ -204,6 +269,15 @@ export class MainMenuScene extends Phaser.Scene {
       color: '#ff8bcf',
       fontSize: '20px'
     }).setOrigin(0.5);
+  }
+
+  private getRunSetupSelection(): RunSetupSelection {
+    return { modFocus: this.selectedModFocus, contract: this.selectedContract };
+  }
+
+  private clearRunSetupSelection(): void {
+    this.selectedModFocus = null;
+    this.selectedContract = null;
   }
 
   private createAnimatedBackground(width: number, height: number): void {

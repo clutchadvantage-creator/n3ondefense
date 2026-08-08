@@ -32,6 +32,8 @@
 .store-card::after { content:''; position:absolute; inset:0; transform:translateX(-120%); background:linear-gradient(110deg,transparent,rgba(255,255,255,.07),transparent); transition:transform 450ms ease; pointer-events:none; }
 .store-card:hover::after { transform:translateX(120%); }.store-card:hover,.store-card:focus-visible,.store-card.selected { outline:none; transform:translateY(-2px); border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 15%,transparent),0 10px 28px rgba(0,0,0,.35); }
 .store-card.equipped,.store-card.maxed { border-color:var(--good); }.store-card.locked:not(.selected) .cosmetic-visual { filter:saturate(.45) brightness(.65); }
+.store-card.tier-prestige { border-color:rgba(255,208,92,.7); box-shadow:inset 0 0 22px rgba(255,185,45,.08); }
+.store-card.tier-rare:not(.selected) { border-color:rgba(210,111,255,.55); }
 .card-badge { justify-self:start; padding:3px 7px; border:1px solid currentColor; color:#92b8cc; font-size:.63rem; letter-spacing:.12em; }.equipped .card-badge,.maxed .card-badge { color:var(--good); }.owned .card-badge { color:#7beaff; }
 .store-card h3 { margin:0; font:700 .95rem 'Orbitron'; letter-spacing:.035em; }.store-card p { margin:0; }.card-current { color:#9fc7da; }.card-price { font-size:.82rem; letter-spacing:.08em; }.card-price.credits { color:#ffd66e; }.card-price.coreTokens { color:#e18cff; }
 .store-details { position:relative; padding:20px; overflow:auto; display:flex; flex-direction:column; gap:13px; background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,transparent),rgba(3,9,18,.9)); }

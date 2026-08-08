@@ -220,7 +220,16 @@ export class LoadingScene extends Phaser.Scene {
       baseSeed: Math.floor(candidate.baseSeed),
       round: Math.max(1, Math.floor(candidate.round)),
       objectiveMode: candidate.objectiveMode,
-      protocol: candidate.protocol === 'overdrive' ? 'overdrive' : 'normal'
+      protocol: candidate.protocol === 'overdrive' ? 'overdrive' : 'normal',
+      runStartedAt: candidate.runStartedAt,
+      equippedMods: candidate.equippedMods,
+      modsEarned: candidate.modsEarned,
+      modFocus: candidate.modFocus ?? null,
+      contract: candidate.contract ?? null,
+      creditsSpentBeforeRun: candidate.creditsSpentBeforeRun ?? 0,
+      upgradeCompletionPercentage: candidate.upgradeCompletionPercentage ?? 0,
+      accountProgressionTier: candidate.accountProgressionTier ?? 'new',
+      runCreditsEarned: candidate.runCreditsEarned ?? 0
     };
   }
 }

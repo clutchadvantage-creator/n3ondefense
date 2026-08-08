@@ -27,7 +27,7 @@ export class ResultScene extends Phaser.Scene {
       color: victory ? '#56ff90' : '#ff5a76'
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 210, `Credits Earned: ${result?.credits ?? 0}\nCore Tokens Earned: ${result?.coreTokens ?? 0}\nRound: ${result?.round ?? '-'}  Seed: ${result?.seed ?? '-'}\nProtocol: ${(result?.protocol ?? 'normal').toUpperCase()}  Mods Earned: ${result?.modsEarned.length ?? 0}`, {
+    this.add.text(width / 2, 210, `Run Credits Earned: ${result?.runCreditsEarned ?? result?.credits ?? 0}\nCore Tokens Earned This Round: ${result?.coreTokens ?? 0}\nHighest Round: ${result?.highestRound ?? result?.round ?? '-'}  Seed: ${result?.seed ?? '-'}\nProtocol: ${(result?.protocol ?? 'normal').toUpperCase()}  Contract: ${(result?.contract ?? 'none').replace(/-/g, ' ').toUpperCase()}\nMod Signal: ${(result?.modFocus ?? 'none').replace(/([A-Z])/g, ' $1').toUpperCase()}  Mods Earned: ${result?.modsEarned.length ?? 0}`, {
       fontFamily: 'Rajdhani, sans-serif',
       fontSize: '28px',
       color: '#dbfaff',
@@ -67,7 +67,10 @@ export class ResultScene extends Phaser.Scene {
           protocol,
           runStartedAt: Date.now(),
           equippedMods: new ModRuntime(SaveSystem.getModCollection()).snapshot(),
-          modsEarned: []
+          modsEarned: [],
+          // Paid one-run setup is consumed by the original run. Replay never
+          // grants a free Contract or focused Mod signal.
+          ...SaveSystem.buildRunEconomySnapshot({ modFocus: null, contract: null }, 0)
         },
         message: 'Rebuilding mission arena...'
       });
