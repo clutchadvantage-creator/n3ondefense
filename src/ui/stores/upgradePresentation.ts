@@ -15,6 +15,7 @@ export const getUpgradeValue = (definition: UpgradeDefinition, level: number): U
   if (id === 'player.dashCooldown') return { value: Math.max(1500, PLAYER_BALANCE.dashCooldownMs + effect), unit: 'ms' };
   if (id === 'player.dashDistance') return { value: (PLAYER_BALANCE.dashDistanceMultiplier + effect) * 100, unit: '% distance' };
   if (id === 'player.pickupRadius') return { value: PLAYER_BALANCE.pickupRadius + effect, unit: 'radius' };
+  if (id === 'player.shieldDuration') return { value: Math.min(ABILITY_BALANCE.shield.maximumDurationMs, ABILITY_BALANCE.shield.durationMs + effect) / 1000, unit: 'seconds', decimals: 2 };
   if (id === 'player.energyMax') return { value: PLAYER_BALANCE.energyMax + effect, unit: 'energy' };
   if (id === 'player.energyRegen') return { value: PLAYER_BALANCE.energyRegenPerSecond + effect, unit: 'energy/s', decimals: 1 };
   if (id === 'weapon.damage') return { value: WEAPON_BALANCE.damage + effect, unit: 'damage' };

@@ -51,7 +51,7 @@ export const ABILITY_BALANCE = {
   fence: { energyCost: 10, cooldownMs: 5200, maxActive: 2, damage: 30, hp: 110, durationMs: 16_000, width: 90, slowFactor: 0.68 },
   turret: { energyCost: 10, cooldownMs: 6800, maxActive: 2, damage: 13, hp: 145, durationMs: 0, range: 215, fireRate: 2.5 },
   mine: { energyCost: 10, cooldownMs: 4200, maxActive: 3, damage: 72, hp: 0, durationMs: 0, range: 0, fireRate: 0, armMs: 1000, radius: 82 },
-  shield: { energyCost: 15, durationMs: 2800, cooldownMs: 10_000 }
+  shield: { energyCost: 15, durationMs: 2800, maximumDurationMs: 5000, cooldownMs: 10_000 }
 } as const;
 
 export const OBJECTIVE_BALANCE = {
@@ -69,15 +69,16 @@ export const OBJECTIVE_BALANCE = {
 export const PICKUP_BALANCE = {
   enemyDropChance: 0.5,
   healthShare: 0.22,
-  energyShare: 0.18,
-  damageBoostShare: 0.1,
-  speedBoostShare: 0.1,
-  rapidFireShare: 0.1,
-  creditsShare: 0.27,
+  energyShare: 0.05,
+  damageBoostShare: 0.13,
+  speedBoostShare: 0.13,
+  rapidFireShare: 0.13,
+  creditsShare: 0.31,
   coreTokenShare: 0.03,
   lifetimeMs: 14_000,
   healthRestore: 28,
   energyRestoreFraction: 0.5,
+  energyAutoCollectMissingFraction: 0.2,
   credits: 24,
   arenaHealthFirstMinMs: 6000,
   arenaHealthFirstMaxMs: 10_000,

@@ -31,7 +31,7 @@ export interface StorefrontUiOptions {
 }
 
 const COSMETIC_LABELS: Record<CosmeticOption['category'], string> = {
-  playerColor: 'Player Color', playerShape: 'Player Shape', projectileColor: 'Projectile', trailColor: 'Trail',
+  playerColor: 'Operative Color', playerShape: 'Operative Frame', projectileColor: 'Projectile Color', projectileShape: 'Projectile Shape', trailColor: 'Trail',
   bombColor: 'Bomb', turretSkin: 'Turret', fenceStyle: 'Fence', dashTrail: 'Dash Trail'
 };
 const UPGRADE_LABELS: Record<UpgradeDefinition['category'], string> = {
@@ -410,7 +410,7 @@ export class StorefrontUi {
     const visual = document.createElement('div');
     visual.className = `cosmetic-visual ${item.category} ${large ? 'large' : ''}`;
     visual.style.setProperty('--item-color', `#${item.color.toString(16).padStart(6, '0')}`);
-    visual.dataset.shape = item.id.includes('square') ? 'square' : item.id.includes('triangle') ? 'triangle' : item.id.includes('star') ? 'star' : 'circle';
+    visual.dataset.shape = item.visualShape ?? 'circle';
     visual.innerHTML = '<i class="trail-a"></i><i class="trail-b"></i><b></b><span></span>';
     return visual;
   }
@@ -420,6 +420,7 @@ export class StorefrontUi {
       playerColor: 'Preview this operative color under holographic showroom lighting.',
       playerShape: 'Preview the geometric frame used by your operative in the arena.',
       projectileColor: 'A live pulse demonstrates the projectile color in motion.',
+      projectileShape: 'Preview the silhouette used by your operative weapon projectiles.',
       trailColor: 'A repeating motion pass previews the wake left behind moving objects.',
       bombColor: 'A safe holographic charge pulse previews the detonation palette.',
       turretSkin: 'A rotating sentinel model previews this defensive skin.',

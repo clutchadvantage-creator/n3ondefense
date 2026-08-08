@@ -1,0 +1,20 @@
+export const BOMBLET_HAZARD_BALANCE = {
+  unlockRound: 3,
+  initialDelayMs: 15_500,
+  telegraphMs: 1900,
+  fallMs: 850,
+  staggerMs: 70,
+  blastVisualMs: 360,
+  baseCooldownMs: 17_000,
+  minimumCooldownMs: 11_000,
+  cooldownReductionPerRoundMs: 280,
+  playerDamageBase: 16,
+  playerDamagePerRound: 0.75,
+  maximumPlayerDamage: 28,
+  blastRadius: 50,
+  minimumBomblets: 6,
+  maximumBomblets: 15,
+  roundsPerAdditionalBomblet: 2,
+  safeEdgeInset: 76,
+  fallHeight: 190
+} as const;

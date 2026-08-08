@@ -1,8 +1,9 @@
-import { UPGRADE_DEFINITIONS, getUpgradeCost } from '../src/data/upgrades.ts';
+import { UPGRADE_DEFINITIONS, getUpgradeCost, getUpgradeEffect } from '../src/data/upgrades.ts';
 import {
   ABILITY_BALANCE,
   ENEMY_BALANCE,
   OBJECTIVE_BALANCE,
+  PICKUP_BALANCE,
   PLAYER_BALANCE,
   REWARD_BALANCE,
   WEAPON_BALANCE,
@@ -45,6 +46,29 @@ const weaponAtLevel = (level: number) => {
 const weaponRows = [0, 1, 3, 5, 10].map(weaponAtLevel);
 console.log('\nPLAYER BASE');
 console.table([PLAYER_BALANCE]);
+const maximumUpgradeLevels = Object.fromEntries(UPGRADE_DEFINITIONS.map((upgrade) => [upgrade.id, upgrade.maxLevel]));
+const maximumEnergy = PLAYER_BALANCE.energyMax + getUpgradeEffect(maximumUpgradeLevels, 'player.energyMax');
+const maximumEnergyRegen = PLAYER_BALANCE.energyRegenPerSecond + getUpgradeEffect(maximumUpgradeLevels, 'player.energyRegen');
+const maximumShieldDuration = Math.min(
+  ABILITY_BALANCE.shield.maximumDurationMs,
+  ABILITY_BALANCE.shield.durationMs + getUpgradeEffect(maximumUpgradeLevels, 'player.shieldDuration')
+);
+const maximumHeatPerShot = Math.max(
+  WEAPON_BALANCE.minimumHeatPerShot,
+  WEAPON_BALANCE.heatPerShot + getUpgradeEffect(maximumUpgradeLevels, 'weapon.heatEfficiency')
+);
+const maximumFireRate = Math.min(
+  WEAPON_BALANCE.maximumFireRate,
+  WEAPON_BALANCE.fireRate + getUpgradeEffect(maximumUpgradeLevels, 'weapon.fireRate')
+);
+const maximumSustainedShotsPerSecond = Math.min(maximumFireRate, WEAPON_BALANCE.cooldownRate / maximumHeatPerShot);
+const maximumSustainedFireEnergyPerSecond = maximumSustainedShotsPerSecond * WEAPON_BALANCE.energyCostPerShot;
+console.log('\nENERGY ECONOMY (base vs fully upgraded)');
+console.table([
+  { state: 'base', capacity: PLAYER_BALANCE.energyMax, regenPerSecond: PLAYER_BALANCE.energyRegenPerSecond, sustainedFireCostPerSecond: fixed(Math.min(WEAPON_BALANCE.fireRate, WEAPON_BALANCE.cooldownRate / WEAPON_BALANCE.heatPerShot) * WEAPON_BALANCE.energyCostPerShot, 2), shieldDurationSeconds: fixed(ABILITY_BALANCE.shield.durationMs / 1000, 2), energyPickup: PLAYER_BALANCE.energyMax * PICKUP_BALANCE.energyRestoreFraction },
+  { state: 'maximum upgrades', capacity: maximumEnergy, regenPerSecond: maximumEnergyRegen, sustainedFireCostPerSecond: fixed(maximumSustainedFireEnergyPerSecond, 2), shieldDurationSeconds: fixed(maximumShieldDuration / 1000, 2), energyPickup: maximumEnergy * PICKUP_BALANCE.energyRestoreFraction }
+]);
+console.log(`Energy pickup chance per enemy defeated: ${(PICKUP_BALANCE.enemyDropChance * PICKUP_BALANCE.energyShare * 100).toFixed(1)}%`);
 console.log('\nWEAPON DPS (all weapon-output upgrades at listed level)');
 console.table(weaponRows);
 
@@ -183,6 +207,10 @@ for (const upgrade of UPGRADE_DEFINITIONS) {
   }
 }
 assert(weaponAtLevel(10).fireRate <= WEAPON_BALANCE.maximumFireRate, 'maximum fire rate cap');
+assert(maximumEnergyRegen < maximumSustainedFireEnergyPerSecond, 'fully upgraded sustained fire must consume energy faster than regeneration restores it');
+assert(maximumEnergy <= 160, 'fully upgraded energy capacity remains within pickup-useful target');
+assert(maximumShieldDuration === ABILITY_BALANCE.shield.maximumDurationMs, 'shield duration upgrade reaches its configured cap');
+assert(Math.abs(PICKUP_BALANCE.healthShare + PICKUP_BALANCE.energyShare + PICKUP_BALANCE.damageBoostShare + PICKUP_BALANCE.speedBoostShare + PICKUP_BALANCE.rapidFireShare + PICKUP_BALANCE.creditsShare + PICKUP_BALANCE.coreTokenShare - 1) < 0.0001, 'pickup weights sum to one');
 assert(OBJECTIVE_BALANCE.defuseRequiredMs >= 9000, 'defuser reaction time');
 assert(Math.abs(Object.values(getSpawnProfile(10).composition).reduce((sum, value) => sum + value, 0) - 1) < 0.0001, 'composition normalized');
 assert(MOD_BALANCE.conditionalDirectDamageBonusCap > 0 && MOD_BALANCE.conditionalDirectDamageBonusCap <= 0.3, 'conditional mod damage cap');

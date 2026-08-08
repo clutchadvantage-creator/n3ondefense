@@ -6,8 +6,9 @@ export const UPGRADE_DEFINITIONS: UpgradeDefinition[] = [
   { id: 'player.dashCooldown', category: 'player', label: 'Dash Cooldown', description: '-120ms dash cooldown', maxLevel: 8, baseCost: 110, growth: 1.3, effectPerLevel: -120 },
   { id: 'player.dashDistance', category: 'player', label: 'Dash Distance', description: '+6% dash distance', maxLevel: 8, baseCost: 120, growth: 1.29, effectPerLevel: 0.06 },
   { id: 'player.pickupRadius', category: 'player', label: 'Pickup Radius', description: '+7 pickup radius', maxLevel: 8, baseCost: 80, growth: 1.25, effectPerLevel: 7 },
-  { id: 'player.energyMax', category: 'player', label: 'Energy Capacity', description: '+10 max energy', maxLevel: 10, baseCost: 100, growth: 1.27, effectPerLevel: 10 },
-  { id: 'player.energyRegen', category: 'player', label: 'Energy Regen', description: '+1 energy/s', maxLevel: 10, baseCost: 125, growth: 1.29, effectPerLevel: 1 },
+  { id: 'player.shieldDuration', category: 'player', label: 'Shield Duration', description: '+0.275s shield duration', maxLevel: 8, baseCost: 145, growth: 1.31, effectPerLevel: 275 },
+  { id: 'player.energyMax', category: 'player', label: 'Energy Capacity', description: '+5 max energy', maxLevel: 10, baseCost: 100, growth: 1.27, effectPerLevel: 5 },
+  { id: 'player.energyRegen', category: 'player', label: 'Energy Regen', description: '+0.1 energy/s', maxLevel: 10, baseCost: 125, growth: 1.29, effectPerLevel: 0.1 },
 
   { id: 'weapon.damage', category: 'weapon', label: 'Weapon Damage', description: '+2 damage', maxLevel: 10, baseCost: 125, growth: 1.3, effectPerLevel: 2 },
   { id: 'weapon.fireRate', category: 'weapon', label: 'Weapon Fire Rate', description: '+0.4 shots/s', maxLevel: 10, baseCost: 160, growth: 1.31, effectPerLevel: 0.4 },
@@ -38,4 +39,9 @@ export const getUpgradeCost = (baseCost: number, growth: number, level: number):
 export const getUpgradeLevel = (upgrades: Record<string, number>, id: string): number => {
   const definition = UPGRADE_DEFINITIONS.find((upgrade) => upgrade.id === id);
   return Math.min(definition?.maxLevel ?? 0, Math.max(0, Math.floor(upgrades[id] ?? 0)));
+};
+
+export const getUpgradeEffect = (upgrades: Record<string, number>, id: string): number => {
+  const definition = UPGRADE_DEFINITIONS.find((upgrade) => upgrade.id === id);
+  return definition ? getUpgradeLevel(upgrades, id) * definition.effectPerLevel : 0;
 };

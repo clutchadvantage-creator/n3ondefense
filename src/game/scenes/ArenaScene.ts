@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { starterWeapon } from '../../data/weapons';
-import { getUpgradeLevel } from '../../data/upgrades';
+import { getUpgradeEffect, getUpgradeLevel } from '../../data/upgrades';
+import { getCosmeticTextureKey } from '../../data/cosmetics';
 import { COLORS, WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { OBJECTIVE_CONFIG } from '../config/gameplay';
 import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, WEAPON_BALANCE, getConcurrentSpawnPressure, getDefuseAssigneeCount, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
@@ -22,6 +23,7 @@ import { RoundManager } from '../systems/RoundManager';
 import { SaveSystem } from '../systems/SaveSystem';
 import { ArenaGenerator } from '../systems/ArenaGenerator';
 import { LaserSecuritySystem } from '../systems/LaserSecuritySystem';
+import { BombletHazardSystem } from '../systems/BombletHazardSystem';
 import { startArenaLoad } from '../utils/runFlow';
 import { createButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
@@ -127,6 +129,7 @@ export class ArenaScene extends Phaser.Scene {
   private pathfinder!: GridPathfinder;
   private bombSites!: BombSiteManager;
   private laserSecurity: LaserSecuritySystem | null = null;
+  private bombletHazard: BombletHazardSystem | null = null;
 
   private roundCredits = 0;
   private roundCoreTokens = 0;
@@ -344,6 +347,16 @@ export class ArenaScene extends Phaser.Scene {
     this.bombSites = new BombSiteManager(def.objectiveMode, OBJECTIVE_CONFIG.maxActiveBombs);
     this.bombSites.initialize(this, this.layout.bombSites, this.layout.theme);
     this.laserSecurity = new LaserSecuritySystem(this, def.round, this.layout.theme);
+    this.bombletHazard = new BombletHazardSystem(
+      this,
+      def.round,
+      def.seed,
+      this.layout.theme,
+      this.layout.generation.bounds,
+      (x, y) => this.hitWall(x, y),
+      SaveSystem.get().settings.particles,
+      () => this.audio.playSfx('playerDamage')
+    );
 
     this.registerBombSiteEvents();
 
@@ -453,8 +466,8 @@ export class ArenaScene extends Phaser.Scene {
         invulnMs: PLAYER_BALANCE.invulnerabilityMs
       };
       const energy = {
-        max: PLAYER_BALANCE.energyMax + getUpgradeLevel(up, 'player.energyMax') * 10,
-        regenPerSecond: PLAYER_BALANCE.energyRegenPerSecond + getUpgradeLevel(up, 'player.energyRegen')
+        max: PLAYER_BALANCE.energyMax + getUpgradeEffect(up, 'player.energyMax'),
+        regenPerSecond: PLAYER_BALANCE.energyRegenPerSecond + getUpgradeEffect(up, 'player.energyRegen')
       };
       const weapon = {
         ...starterWeapon,
@@ -593,7 +606,9 @@ export class ArenaScene extends Phaser.Scene {
     this.updateRelentlessSpawns(now, activeSites.length > 0);
 
     const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
+    const laserDangerWindow = this.laserSecurity?.isDangerWindow(now) ?? false;
     this.laserSecurity?.update(now, dt, this.player, this.enemies, playerLaserImmune);
+    this.bombletHazard?.update(now, this.player, laserDangerWindow);
     this.updateEnemies(now, dt);
     this.updateProjectiles(delta);
     this.updateAbilities(now, dt);
@@ -740,9 +755,16 @@ export class ArenaScene extends Phaser.Scene {
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
     const speed = this.player.weapon.projectileSpeed;
 
-    const bullet = this.physics.add.image(this.player.x + Math.cos(angle) * 14, this.player.y + Math.sin(angle) * 14, 'circle');
-    bullet.setDisplaySize(7, 7);
+    const projectileTexture = getCosmeticTextureKey(SaveSystem.getEquippedCosmeticId('projectileShape'), 'projectile-pulse');
+    const bullet = this.physics.add.image(this.player.x + Math.cos(angle) * 14, this.player.y + Math.sin(angle) * 14, projectileTexture);
+    const projectileSize = projectileTexture === 'projectile-missile'
+      ? { width: 15, height: 8 }
+      : projectileTexture === 'projectile-lightning'
+        ? { width: 15, height: 10 }
+        : { width: 8, height: 8 };
+    bullet.setDisplaySize(projectileSize.width, projectileSize.height);
     bullet.setTint(SaveSystem.getCosmeticColor('projectileColor'));
+    bullet.setRotation(angle);
     bullet.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     bullet.setDepth(8);
 
@@ -1089,7 +1111,10 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private activateShield(now: number): void {
-    const durationMs = ABILITY_BALANCE.shield.durationMs;
+    const durationMs = Math.min(
+      ABILITY_BALANCE.shield.maximumDurationMs,
+      ABILITY_BALANCE.shield.durationMs + getUpgradeEffect(SaveSystem.get().upgrades, 'player.shieldDuration')
+    );
     const cooldownMs = ABILITY_BALANCE.shield.cooldownMs;
     if (now < this.shieldActiveUntil) return;
     if (now < this.shieldCooldownUntil) return;
@@ -1585,6 +1610,9 @@ export class ArenaScene extends Phaser.Scene {
       }
       const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, p.sprite.x, p.sprite.y);
       if (d < this.player.stats.pickupRadius) {
+        if (p.type === 'energy' && this.player.energy > this.player.energyStats.max * (1 - PICKUP_BALANCE.energyAutoCollectMissingFraction)) {
+          return true;
+        }
         this.collectPickup(p.type);
         p.sprite.destroy();
         return false;
@@ -2571,6 +2599,8 @@ export class ArenaScene extends Phaser.Scene {
   private cleanupRoundObjects(): void {
     this.laserSecurity?.destroy();
     this.laserSecurity = null;
+    this.bombletHazard?.destroy();
+    this.bombletHazard = null;
     for (const e of this.enemies) e.destroy();
     for (const p of this.projectiles) p.sprite.destroy();
     for (const p of this.pickups) p.sprite.destroy();
@@ -2611,6 +2641,8 @@ export class ArenaScene extends Phaser.Scene {
     this.bombSites?.destroy();
     this.laserSecurity?.destroy();
     this.laserSecurity = null;
+    this.bombletHazard?.destroy();
+    this.bombletHazard = null;
     this.destroyShieldOrb();
     this.input.off('pointerdown', this.onPointerDown);
     this.input.off('pointerup', this.onPointerUp);

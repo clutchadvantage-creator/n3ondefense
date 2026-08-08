@@ -89,6 +89,18 @@ export class LaserSecuritySystem {
     }
   }
 
+  isDangerWindow(now: number): boolean {
+    const config = LASER_HAZARD_BALANCE;
+    const cooldownMs = Math.max(
+      config.minimumCooldownMs,
+      config.baseCooldownMs - Math.max(0, this.round - 1) * config.cooldownReductionPerRoundMs
+    );
+    const elapsed = now - this.createdAt - config.initialDelayMs;
+    if (elapsed < 0) return false;
+    const cycleLength = config.telegraphMs + config.activeMs + cooldownMs;
+    return elapsed % cycleLength < config.telegraphMs + config.activeMs;
+  }
+
   destroy(): void {
     this.graphics.destroy();
     this.warningText.destroy();

@@ -176,14 +176,29 @@ export interface UpgradeDefinition {
   effectPerLevel: number;
 }
 
+export type CosmeticVisualShape =
+  | 'circle'
+  | 'square'
+  | 'triangle'
+  | 'star'
+  | 'hexagon'
+  | 'diamond'
+  | 'cross'
+  | 'pulse'
+  | 'missile'
+  | 'lightning'
+  | 'orb';
+
 export interface CosmeticOption {
   id: string;
-  category: 'playerColor' | 'playerShape' | 'projectileColor' | 'trailColor' | 'bombColor' | 'turretSkin' | 'fenceStyle' | 'dashTrail';
+  category: 'playerColor' | 'playerShape' | 'projectileColor' | 'projectileShape' | 'trailColor' | 'bombColor' | 'turretSkin' | 'fenceStyle' | 'dashTrail';
   label: string;
   currency: 'credits' | 'coreTokens';
   cost: number;
   color: number;
   priceTier?: CosmeticPriceTier;
+  visualShape?: CosmeticVisualShape;
+  textureKey?: string;
 }
 
 export interface GameSaveData {
