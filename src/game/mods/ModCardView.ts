@@ -49,6 +49,7 @@ export const createModCardView = (
     .setStrokeStyle(options.selected ? 4 : 2, options.selected ? 0xffffff : rarityColor, 1);
   const inner = scene.add.rectangle(0, 0, width - 12, height - 12, corrupted ? 0x4d0d42 : rarityColor, 0.05)
     .setStrokeStyle(1, corrupted ? 0xff3ed7 : rarityColor, 0.38);
+  const sheen = scene.add.graphics();
   container.add([shadow, body, inner]);
 
   const illuminatedDots = rank;
@@ -99,6 +100,62 @@ export const createModCardView = (
     container.add(glitch);
     scene.tweens.add({ targets: [glitch, iconRing], x: { from: -width * 0.35, to: width * 0.35 }, alpha: { from: 0.2, to: 0.8 }, duration: 720, yoyo: true, repeat: -1 });
   }
-  if (options.interactive !== false) container.setSize(width, height).setInteractive({ useHandCursor: true });
+  container.add(sheen);
+  if (options.interactive !== false) {
+    const restingY = y;
+    const sheenState = { progress: 0 };
+    let sheenTween: Phaser.Tweens.Tween | null = null;
+    const redrawSheen = (): void => {
+      const halfWidth = width / 2;
+      const halfHeight = height / 2;
+      const scanX = -width * 0.78 + width * 1.56 * sheenState.progress;
+      const slant = width * 0.18;
+      const softHalfWidth = width * 0.16;
+      const coreHalfWidth = Math.max(2, width * 0.025);
+      const clampX = (value: number): number => Phaser.Math.Clamp(value, -halfWidth, halfWidth);
+      const drawBand = (bandHalfWidth: number, alpha: number): void => {
+        const points = [
+          new Phaser.Geom.Point(clampX(scanX - bandHalfWidth - slant), -halfHeight),
+          new Phaser.Geom.Point(clampX(scanX + bandHalfWidth - slant), -halfHeight),
+          new Phaser.Geom.Point(clampX(scanX + bandHalfWidth + slant), halfHeight),
+          new Phaser.Geom.Point(clampX(scanX - bandHalfWidth + slant), halfHeight)
+        ];
+        sheen.fillStyle(0xffffff, alpha);
+        sheen.fillPoints(points, true);
+      };
+      sheen.clear();
+      drawBand(softHalfWidth, 0.065);
+      drawBand(coreHalfWidth, 0.13);
+    };
+    container.setSize(width, height).setInteractive({ useHandCursor: true });
+    container.on('pointerover', () => {
+      scene.tweens.killTweensOf(container);
+      scene.tweens.killTweensOf(shadow);
+      sheenTween?.stop();
+      sheenState.progress = 0;
+      redrawSheen();
+      sheenTween = scene.tweens.add({
+        targets: sheenState,
+        progress: 1,
+        duration: 450,
+        ease: 'Cubic.Out',
+        onUpdate: redrawSheen,
+        onComplete: () => sheen.clear()
+      });
+      scene.tweens.add({ targets: container, y: restingY - 2, scale: 1.025, duration: 150, ease: 'Quad.Out' });
+      scene.tweens.add({ targets: shadow, alpha: 0.72, duration: 150 });
+      body.setStrokeStyle(options.selected ? 4 : 3, options.selected ? 0xffffff : rarityColor, 1);
+    });
+    container.on('pointerout', () => {
+      scene.tweens.killTweensOf(container);
+      scene.tweens.killTweensOf(shadow);
+      sheenTween?.stop();
+      sheenTween = null;
+      sheen.clear();
+      scene.tweens.add({ targets: container, y: restingY, scale: 1, duration: 150, ease: 'Quad.Out' });
+      scene.tweens.add({ targets: shadow, alpha: 0.45, duration: 150 });
+      body.setStrokeStyle(options.selected ? 4 : 2, options.selected ? 0xffffff : rarityColor, 1);
+    });
+  }
   return container;
 };
