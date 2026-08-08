@@ -59,6 +59,9 @@ export const OBJECTIVE_BALANCE = {
   bombDefenseMs: 75_000,
   defuseRequiredMs: 10_000,
   recoveryMs: 7000,
+  concurrentBombSpawnCadenceBonus: 0.12,
+  concurrentBombActiveCountBonus: 2,
+  concurrentBombActiveWeightBonus: 2,
   maxActiveDefusers: 1,
   defuserSpawnSpacingMs: 14_000
 } as const;
@@ -126,6 +129,15 @@ export interface SpawnProfile {
   composition: Record<BalanceEnemyType, number>;
 }
 
+export const getConcurrentSpawnPressure = (profile: SpawnProfile, activeBombCount: number): { cadenceMultiplier: number; activeCountCap: number; activeWeightCap: number } => {
+  const additionalBombs = Math.max(0, Math.floor(activeBombCount) - 1);
+  return {
+    cadenceMultiplier: 1 / (1 + additionalBombs * OBJECTIVE_BALANCE.concurrentBombSpawnCadenceBonus),
+    activeCountCap: profile.activeCountCap + additionalBombs * OBJECTIVE_BALANCE.concurrentBombActiveCountBonus,
+    activeWeightCap: profile.activeWeightCap + additionalBombs * OBJECTIVE_BALANCE.concurrentBombActiveWeightBonus
+  };
+};
+
 export const getSpawnProfile = (round: number, destroyedSites = 0): SpawnProfile => {
   const r = Math.max(1, Math.floor(round));
   const late = Math.max(0, r - 5);
@@ -142,7 +154,8 @@ export const getSpawnProfile = (round: number, destroyedSites = 0): SpawnProfile
 
   return {
     prePlantCadenceMs: Math.max(1200, 2700 - (r - 1) * 110),
-    defenseCadenceMs: Math.max(580, 1450 - (r - 1) * 75 - late * 16 - destroyedSites * 45),
+    // A small global cadence increase keeps pressure present without changing enemy durability.
+    defenseCadenceMs: Math.max(580, 1380 - (r - 1) * 78 - late * 16 - destroyedSites * 45),
     initialGraceMs: Math.max(2600, 5500 - (r - 1) * 280),
     activeCountCap: Math.min(26, 7 + Math.floor((r - 1) * 1.35) + destroyedSites),
     activeWeightCap: Math.min(39, 8 + (r - 1) * 2 + destroyedSites * 1.5),

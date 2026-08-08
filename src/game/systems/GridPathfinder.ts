@@ -31,7 +31,8 @@ export class GridPathfinder {
     private readonly worldWidth: number,
     private readonly worldHeight: number,
     private readonly cellSize: number,
-    walls: WallRect[]
+    walls: WallRect[],
+    private readonly blockerPadding = 0
   ) {
     this.cols = Math.ceil(worldWidth / cellSize);
     this.rows = Math.ceil(worldHeight / cellSize);
@@ -45,10 +46,10 @@ export class GridPathfinder {
 
   private buildBlockedGrid(walls: WallRect[]): void {
     for (const wall of walls) {
-      const minX = Math.max(0, Math.floor(wall.x / this.cellSize));
-      const maxX = Math.min(this.cols - 1, Math.floor((wall.x + wall.w) / this.cellSize));
-      const minY = Math.max(0, Math.floor(wall.y / this.cellSize));
-      const maxY = Math.min(this.rows - 1, Math.floor((wall.y + wall.h) / this.cellSize));
+      const minX = Math.max(0, Math.floor((wall.x - this.blockerPadding) / this.cellSize));
+      const maxX = Math.min(this.cols - 1, Math.floor((wall.x + wall.w + this.blockerPadding) / this.cellSize));
+      const minY = Math.max(0, Math.floor((wall.y - this.blockerPadding) / this.cellSize));
+      const maxY = Math.min(this.rows - 1, Math.floor((wall.y + wall.h + this.blockerPadding) / this.cellSize));
 
       for (let y = minY; y <= maxY; y++) {
         for (let x = minX; x <= maxX; x++) {
@@ -74,6 +75,24 @@ export class GridPathfinder {
   private isWalkable(cx: number, cy: number): boolean {
     if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) return false;
     return this.blocked[this.index(cx, cy)] === 0;
+  }
+
+  findNearestWalkableWorld(wx: number, wy: number, minimumRing = 0, maximumRing = 5): Phaser.Math.Vector2 | null {
+    const origin = this.worldToCell(wx, wy);
+    for (let ring = minimumRing; ring <= maximumRing; ring += 1) {
+      const candidates: Array<{ x: number; y: number }> = [];
+      for (let dy = -ring; dy <= ring; dy += 1) {
+        for (let dx = -ring; dx <= ring; dx += 1) {
+          if (ring > 0 && Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+          if (this.isWalkable(origin.x + dx, origin.y + dy)) candidates.push({ x: origin.x + dx, y: origin.y + dy });
+        }
+      }
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => Math.hypot(a.x - origin.x, a.y - origin.y) - Math.hypot(b.x - origin.x, b.y - origin.y));
+        return this.cellToWorld(candidates[0].x, candidates[0].y);
+      }
+    }
+    return null;
   }
 
   findPath(fromX: number, fromY: number, toX: number, toY: number, options?: PathQueryOptions): Phaser.Math.Vector2[] {

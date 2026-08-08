@@ -4,6 +4,7 @@ import { ARENA_ARCHETYPES, ARENA_GENERATION_CONFIG } from '../src/game/config/ar
 import { compareArenaFingerprints, createArenaFingerprint } from '../src/game/systems/ArenaFingerprint.ts';
 import { generateArenaTopology } from '../src/game/systems/ArenaTopology.ts';
 import { validateTopologyDraft } from '../src/game/systems/ArenaTopologyValidator.ts';
+import { getConcurrentSpawnPressure, getSpawnProfile } from '../src/game/config/balance/index.ts';
 
 test('every arena archetype is deterministic and exposes a distinct macro topology', () => {
   const silhouettes = new Set();
@@ -40,4 +41,17 @@ test('fingerprints compare resulting occupancy rather than seeds', () => {
   const open = make('open-field', 1234);
   assert.ok(compareArenaFingerprints(maze, sameMaze) > 0.999999);
   assert.ok(compareArenaFingerprints(maze, open) < ARENA_GENERATION_CONFIG.similarityThreshold);
+});
+
+test('concurrent bomb pressure scales modestly and monotonically', () => {
+  const profile = getSpawnProfile(4, 0);
+  const one = getConcurrentSpawnPressure(profile, 1);
+  const two = getConcurrentSpawnPressure(profile, 2);
+  const four = getConcurrentSpawnPressure(profile, 4);
+  assert.equal(one.cadenceMultiplier, 1);
+  assert.ok(two.cadenceMultiplier < one.cadenceMultiplier);
+  assert.ok(four.cadenceMultiplier < two.cadenceMultiplier);
+  assert.ok(four.cadenceMultiplier >= 0.7);
+  assert.ok(two.activeCountCap > one.activeCountCap);
+  assert.ok(two.activeWeightCap > one.activeWeightCap);
 });

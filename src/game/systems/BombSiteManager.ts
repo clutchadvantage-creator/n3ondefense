@@ -172,16 +172,17 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     this.emit('bomb-site-armed', site);
   }
 
-  tickActive(delta: number): BombSiteRuntime | null {
+  tickActive(delta: number): BombSiteRuntime[] {
+    const detonated: BombSiteRuntime[] = [];
     for (const site of this.sites) {
       if (site.state === BombSiteState.Armed || site.state === BombSiteState.BeingDefused) {
         site.timerMs = Math.max(0, site.timerMs - delta);
         if (site.state === BombSiteState.Armed) site.defuseMs = Math.max(0, site.defuseMs - delta * 0.35);
         this.updateArmedEffect(site);
-        if (site.timerMs <= 0) return site;
+        if (site.timerMs <= 0) detonated.push(site);
       }
     }
-    return null;
+    return detonated;
   }
 
   startDefuse(site: BombSiteRuntime): void {
@@ -231,7 +232,11 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
   }
 
   getActiveBombSite(): BombSiteRuntime | null {
-    return this.sites.find((s) => s.state === BombSiteState.Armed || s.state === BombSiteState.BeingDefused) ?? null;
+    return this.getActiveBombSites().sort((a, b) => a.timerMs - b.timerMs)[0] ?? null;
+  }
+
+  getActiveBombSites(): BombSiteRuntime[] {
+    return this.sites.filter((s) => s.state === BombSiteState.Armed || s.state === BombSiteState.BeingDefused);
   }
 
   getRemainingSites(): BombSiteRuntime[] {

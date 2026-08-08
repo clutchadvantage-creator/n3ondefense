@@ -3,7 +3,7 @@ import { starterWeapon } from '../../data/weapons';
 import { getUpgradeLevel } from '../../data/upgrades';
 import { COLORS, WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { OBJECTIVE_CONFIG } from '../config/gameplay';
-import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, WEAPON_BALANCE, getDefuseAssigneeCount, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
+import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, WEAPON_BALANCE, getConcurrentSpawnPressure, getDefuseAssigneeCount, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
 import { Mine } from '../abilities/Mine';
@@ -104,12 +104,14 @@ export class ArenaScene extends Phaser.Scene {
   private mines: Mine[] = [];
   private deathMines: DeathMine[] = [];
   private readonly defuseAssignees = new Set<Enemy>();
+  private defuseTargetByEnemy = new WeakMap<Enemy, BombSiteRuntime>();
   private defuserMarkedUntil = new WeakMap<Enemy, number>();
   private modRuntime!: ModRuntime;
   private protocol: RunProtocolId = 'normal';
   private modsEarned: ModRewardRecord[] = [];
   private modDropSequence = 0;
   private runStartedAt = Date.now();
+  private readonly detonatingSiteIds = new Set<string>();
   private readonly enemyTurretTargets = new WeakMap<Enemy, TurretTargetDecision>();
 
   private roundManager!: RoundManager;
@@ -302,16 +304,18 @@ export class ArenaScene extends Phaser.Scene {
 
   private createRoundFromDefinition(def: ReturnType<RoundManager['currentDefinition']>): void {
     this.cleanupRoundObjects();
+    this.detonatingSiteIds.clear();
     this.hidePauseMenu();
     this.physics.resume();
 
     this.layout = ArenaGenerator.generate(def.seed, def.template, def.round, def.siteCount);
     this.drawProceduralArena(this.layout);
-    this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 40, this.getBlockers());
+    this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 32, this.getBlockers(), 8);
 
     this.createOrMovePlayer();
     this.modRuntime.beginRound(1);
     this.defuserMarkedUntil = new WeakMap<Enemy, number>();
+    this.defuseTargetByEnemy = new WeakMap<Enemy, BombSiteRuntime>();
     this.createHudLayer();
 
     this.bombSites = new BombSiteManager(def.objectiveMode, OBJECTIVE_CONFIG.maxActiveBombs);
@@ -498,8 +502,8 @@ export class ArenaScene extends Phaser.Scene {
       this.state.set(RoundState.Defense);
       this.bombSites.refreshVisuals(this.layout.theme);
       const graceMs = getSpawnProfile(this.roundManager.round, this.bombSites.destroyedCount()).initialGraceMs;
-      this.nextSpawnAt = this.time.now + graceMs;
-      this.showBanner(`SITE ${site.letter} ARMED\nDEFEND THE ACTIVE CHARGE`);
+      if (this.bombSites.activeBombCount() === 1) this.nextSpawnAt = this.time.now + graceMs;
+      this.showBanner(`SITE ${site.letter} ARMED\n${this.bombSites.activeBombCount()} ACTIVE CHARGE${this.bombSites.activeBombCount() === 1 ? '' : 'S'}`);
       this.audio.playSfx('beep');
     });
 
@@ -512,10 +516,13 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     this.bombSites.on('bomb-site-defuse-stopped', () => {
-      this.state.set(RoundState.Defense);
+      const anyDefusing = this.bombSites.getActiveBombSites().some((site) => site.state === BombSiteState.BeingDefused);
+      this.state.set(anyDefusing ? RoundState.Defusing : RoundState.Defense);
       this.bombSites.refreshVisuals(this.layout.theme);
-      this.hud.setWarning('');
-      this.audio.stopDisarmLoop();
+      if (!anyDefusing) {
+        this.hud.setWarning('');
+        this.audio.stopDisarmLoop();
+      }
     });
 
     this.bombSites.on('bomb-site-destroyed', () => {
@@ -554,13 +561,13 @@ export class ArenaScene extends Phaser.Scene {
     this.updatePlanting(delta);
     this.bombSites.updateAmbient(this.player.x, this.player.y, now, SaveSystem.get().settings.particles);
 
-    const activeSite = this.bombSites.getActiveBombSite();
-    if (activeSite) {
+    const activeSites = this.bombSites.getActiveBombSites();
+    if (activeSites.length > 0) {
       const detonated = this.bombSites.tickActive(delta);
-      if (detonated) this.detonateSite(detonated);
+      for (const site of detonated) this.detonateSite(site);
     }
 
-    this.updateRelentlessSpawns(now, Boolean(activeSite));
+    this.updateRelentlessSpawns(now, activeSites.length > 0);
 
     const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
     this.laserSecurity?.update(now, dt, this.player, this.enemies, playerLaserImmune);
@@ -736,27 +743,22 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePlanting(delta: number): void {
-    const activeBomb = this.bombSites.getActiveBombSite();
-    if (activeBomb) {
-      this.audio.stopPlantingLoop();
-      this.siteActionText.setText('Defend the active charge.');
-      this.activePlantingSite = null;
-      this.plantingProgressMs = 0;
-      return;
-    }
+    const activeBombCount = this.bombSites.activeBombCount();
 
     const near = this.bombSites.getNearestAvailable(this.player.x, this.player.y, 90);
     if (!near) {
       this.audio.stopPlantingLoop();
       this.activePlantingSite = null;
       this.plantingProgressMs = 0;
-      this.siteActionText.setText('Move to an available site and hold E to plant.');
+      this.siteActionText.setText(activeBombCount > 0
+        ? `${activeBombCount} charge${activeBombCount === 1 ? '' : 's'} active. Defend them or move to another available site to plant.`
+        : 'Move to an available site and hold E to plant.');
       return;
     }
 
     if (!this.bombSites.canPlant(near)) {
       this.audio.stopPlantingLoop();
-      this.siteActionText.setText('Defend the active charge.');
+      this.siteActionText.setText('Maximum active charges reached.');
       return;
     }
 
@@ -786,8 +788,8 @@ export class ArenaScene extends Phaser.Scene {
       }
       this.activePlantingSite = null;
       this.plantingProgressMs = 0;
-      this.state.set(RoundState.PrePlant);
-      this.siteActionText.setText(`Site ${near.letter} ready. Hold E to plant.`);
+      this.state.set(activeBombCount > 0 ? RoundState.Defense : RoundState.PrePlant);
+      this.siteActionText.setText(`Site ${near.letter} ready. Hold E to plant${activeBombCount > 0 ? ' while defending active charges' : ''}.`);
     }
   }
 
@@ -796,21 +798,24 @@ export class ArenaScene extends Phaser.Scene {
     const destroyed = this.bombSites.destroyedCount();
 
     const profile = getSpawnProfile(level, destroyed);
-    const activeSite = this.bombSites.getActiveBombSite();
-    const elapsedMs = activeSite ? now - activeSite.plantedAt : 0;
+    const activeSites = this.bombSites.getActiveBombSites();
+    const oldestPlantTime = activeSites.reduce((oldest, site) => Math.min(oldest, site.plantedAt), Number.POSITIVE_INFINITY);
+    const elapsedMs = Number.isFinite(oldestPlantTime) ? now - oldestPlantTime : 0;
     if (defensePhase && elapsedMs < profile.initialGraceMs) return;
     const phaseMultiplier = defensePhase ? getSpawnCadenceMultiplier(elapsedMs) : 1;
     if (phaseMultiplier === null) return;
-    const cadenceMs = Math.round((defensePhase ? profile.defenseCadenceMs : profile.prePlantCadenceMs) * phaseMultiplier);
+    const concurrentPressure = getConcurrentSpawnPressure(profile, activeSites.length);
+    const cadenceMs = Math.round((defensePhase ? profile.defenseCadenceMs : profile.prePlantCadenceMs) * phaseMultiplier * concurrentPressure.cadenceMultiplier);
+    const { activeCountCap, activeWeightCap } = concurrentPressure;
 
     if (now < this.nextSpawnAt) return;
     this.nextSpawnAt = now + cadenceMs;
-    if (this.enemies.length >= profile.activeCountCap) return;
+    if (this.enemies.length >= activeCountCap) return;
 
     const type = this.pickEnemyType(profile, now, defensePhase);
     if (!type) return;
     const activeWeight = this.enemies.reduce((sum, enemy) => sum + ENEMY_BALANCE[enemy.stats.type].weight, 0);
-    if (activeWeight + ENEMY_BALANCE[type].weight > profile.activeWeightCap) return;
+    if (activeWeight + ENEMY_BALANCE[type].weight > activeWeightCap) return;
 
     this.spawnEnemy(type, defensePhase);
     if (type === 'defuser') this.lastDefuserSpawnAt = now;
@@ -889,38 +894,55 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateEnemies(now: number, dt: number): void {
-    const activeSite = this.bombSites.getActiveBombSite();
-    let activeDefusers = 0;
-    this.refreshDefuseAssignments(activeSite, now);
+    const activeSites = this.bombSites.getActiveBombSites();
+    const activeDefusersBySite = new Map<string, number>();
+    this.refreshDefuseAssignments(activeSites, now);
 
     for (const enemy of this.enemies) {
       if (!enemy.active) continue;
 
-      if (!activeSite) {
+      const assignedSite = this.defuseTargetByEnemy.get(enemy);
+      const targetSite = assignedSite ?? this.selectEnemyObjective(enemy, activeSites);
+      if (!targetSite) {
         this.updateEnemyPatrol(enemy, now);
-      } else if (this.defuseAssignees.has(enemy)) {
-        if (this.updateDefuser(enemy, activeSite, now, dt)) activeDefusers += 1;
+      } else if (assignedSite && this.defuseAssignees.has(enemy)) {
+        if (this.updateDefuser(enemy, assignedSite, now, dt)) {
+          activeDefusersBySite.set(assignedSite.id, (activeDefusersBySite.get(assignedSite.id) ?? 0) + 1);
+        }
       } else if (enemy.stats.type === 'shooter') {
-        this.updateShooter(enemy, now, activeSite);
+        this.updateShooter(enemy, now, targetSite);
       } else if (enemy.stats.type === 'disruptor') {
         this.updateDisruptor(enemy, now);
       } else {
-        this.updateMelee(enemy, activeSite, now);
+        this.updateMelee(enemy, targetSite, now);
       }
     }
 
-    if (activeSite && activeDefusers > 0) {
-      if (activeSite.state === BombSiteState.Armed) this.activateEmergencyBombShield(activeSite, now);
-      this.bombSites.startDefuse(activeSite);
-      const cooperationMultiplier = 1 + Math.min(0.75, (activeDefusers - 1) * 0.25);
-      if (!this.modRuntime.bombShieldBlocks(activeSite.id, now)
-        && this.bombSites.applyDefuse(activeSite, dt * 1000 * cooperationMultiplier, OBJECTIVE_CONFIG.defuseRequiredMs)) {
-        this.triggerDefeat('bombDefused');
+    let anyDefusing = false;
+    for (const site of activeSites) {
+      const activeDefusers = activeDefusersBySite.get(site.id) ?? 0;
+      if (activeDefusers > 0) {
+        if (site.state === BombSiteState.Armed) this.activateEmergencyBombShield(site, now);
+        this.bombSites.startDefuse(site);
+        anyDefusing = true;
+        const cooperationMultiplier = 1 + Math.min(0.75, (activeDefusers - 1) * 0.25);
+        if (!this.modRuntime.bombShieldBlocks(site.id, now)
+          && this.bombSites.applyDefuse(site, dt * 1000 * cooperationMultiplier, OBJECTIVE_CONFIG.defuseRequiredMs)) {
+          this.triggerDefeat('bombDefused');
+          return;
+        }
+      } else {
+        this.bombSites.stopDefuse(site);
       }
-    } else if (this.state.state === RoundState.Defusing) {
+    }
+    if (anyDefusing) {
+      this.state.set(RoundState.Defusing);
+      this.hud.setWarning('DEFUSE IN PROGRESS');
+      this.audio.startDisarmLoop();
+    } else if (activeSites.length > 0) {
       this.state.set(RoundState.Defense);
       this.hud.setWarning('');
-      if (activeSite) this.bombSites.stopDefuse(activeSite);
+      this.audio.stopDisarmLoop();
     }
 
     this.applyEnemySeparation();
@@ -932,25 +954,46 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
-  private refreshDefuseAssignments(activeSite: BombSiteRuntime | null, now: number): void {
+  private refreshDefuseAssignments(activeSites: BombSiteRuntime[], now: number): void {
     this.defuseAssignees.clear();
-    if (!activeSite) return;
+    this.defuseTargetByEnemy = new WeakMap<Enemy, BombSiteRuntime>();
+    if (activeSites.length === 0) return;
 
-    const desired = getDefuseAssigneeCount(this.roundManager.round);
+    const desired = getDefuseAssigneeCount(this.roundManager.round) + Math.max(0, activeSites.length - 1);
     const candidates = this.enemies
       .filter((enemy) => enemy.active && !enemy.isDead() && now >= enemy.defuseInterruptedUntil)
       .sort((a, b) => {
         const specialistDifference = Number(b.stats.type === 'defuser') - Number(a.stats.type === 'defuser');
         if (specialistDifference !== 0) return specialistDifference;
-        return Phaser.Math.Distance.Between(a.x, a.y, activeSite.x, activeSite.y)
-          - Phaser.Math.Distance.Between(b.x, b.y, activeSite.x, activeSite.y);
+        const nearestA = Math.min(...activeSites.map((site) => Phaser.Math.Distance.Between(a.x, a.y, site.x, site.y)));
+        const nearestB = Math.min(...activeSites.map((site) => Phaser.Math.Distance.Between(b.x, b.y, site.x, site.y)));
+        return nearestA - nearestB;
       });
+    const assignedPerSite = new Map<string, number>();
     candidates.slice(0, desired).forEach((enemy) => {
+      const site = [...activeSites].sort((a, b) => {
+        const scoreA = Phaser.Math.Distance.Between(enemy.x, enemy.y, a.x, a.y) + (assignedPerSite.get(a.id) ?? 0) * 480;
+        const scoreB = Phaser.Math.Distance.Between(enemy.x, enemy.y, b.x, b.y) + (assignedPerSite.get(b.id) ?? 0) * 480;
+        return scoreA - scoreB;
+      })[0];
+      if (!site) return;
       this.defuseAssignees.add(enemy);
+      this.defuseTargetByEnemy.set(enemy, site);
+      assignedPerSite.set(site.id, (assignedPerSite.get(site.id) ?? 0) + 1);
       if (this.modRuntime.rank('priority-targeting') >= 2) {
         this.defuserMarkedUntil.set(enemy, now + MOD_BALANCE.priorityTargeting.markedDurationMs);
       }
     });
+  }
+
+  private selectEnemyObjective(enemy: Enemy, activeSites: BombSiteRuntime[]): BombSiteRuntime | null {
+    if (activeSites.length === 0) return null;
+    return [...activeSites].sort((a, b) => {
+      const urgencyA = Math.max(0, 1 - a.timerMs / OBJECTIVE_CONFIG.bombDefenseMs);
+      const urgencyB = Math.max(0, 1 - b.timerMs / OBJECTIVE_CONFIG.bombDefenseMs);
+      return Phaser.Math.Distance.Between(enemy.x, enemy.y, a.x, a.y) - urgencyA * 180
+        - (Phaser.Math.Distance.Between(enemy.x, enemy.y, b.x, b.y) - urgencyB * 180);
+    })[0];
   }
 
   private activateEmergencyBombShield(site: BombSiteRuntime, now: number): void {
@@ -1078,11 +1121,13 @@ export class ArenaScene extends Phaser.Scene {
     const ideal = 230;
     const movementSpeed = enemy.effectiveSpeed(enemy.stats.speed, now);
     if (dist > ideal + 24) {
-      v.normalize();
-      enemy.setVelocity(v.x * movementSpeed, v.y * movementSpeed);
+      this.navigateEnemy(enemy, focusX, focusY, now, movementSpeed);
     } else if (dist < ideal - 22) {
       v.normalize();
-      enemy.setVelocity(-v.x * movementSpeed * 0.85, -v.y * movementSpeed * 0.85);
+      const bounds = this.layout.generation.bounds;
+      const retreatX = Phaser.Math.Clamp(enemy.x - v.x * 150, bounds.x + 55, bounds.x + bounds.w - 55);
+      const retreatY = Phaser.Math.Clamp(enemy.y - v.y * 150, bounds.y + 55, bounds.y + bounds.h - 55);
+      this.navigateEnemy(enemy, retreatX, retreatY, now, movementSpeed * 0.85);
     } else {
       enemy.setVelocity(0, 0);
     }
@@ -1155,6 +1200,7 @@ export class ArenaScene extends Phaser.Scene {
       nav.path.length = 0;
       nav.waypointIndex = 0;
       nav.nextRepathAt = now + 70;
+      return;
     }
 
     if (now - nav.lastSampleAt >= 240) {
@@ -1178,6 +1224,17 @@ export class ArenaScene extends Phaser.Scene {
           Phaser.Math.FloatBetween(-1, 1) * speed * 0.7,
           Phaser.Math.FloatBetween(-1, 1) * speed * 0.7
         );
+        if (nav.stuckTicks >= 3) {
+          const recovery = this.pathfinder.findNearestWalkableWorld(enemy.x, enemy.y, 1, 4);
+          if (recovery) {
+            enemy.setPosition(recovery.x, recovery.y);
+            body?.reset(recovery.x, recovery.y);
+            nav.lastSampleX = recovery.x;
+            nav.lastSampleY = recovery.y;
+          }
+          nav.stuckTicks = 0;
+        }
+        return;
       }
     }
 
@@ -1205,7 +1262,7 @@ export class ArenaScene extends Phaser.Scene {
         }
         return p;
       };
-      nav.path = this.pathfinder.findPath(enemy.x, enemy.y, targetX, targetY, { cellPenalty: penalty, smooth: true, maxIterations: 2500 });
+      nav.path = this.pathfinder.findPath(enemy.x, enemy.y, targetX, targetY, { cellPenalty: penalty, smooth: nav.stuckTicks === 0, maxIterations: 4800 });
       nav.waypointIndex = 0;
       nav.nextRepathAt = now + Phaser.Math.Between(360, 650);
       nav.targetKey = key;
@@ -1248,13 +1305,13 @@ export class ArenaScene extends Phaser.Scene {
         const d2 = dx * dx + dy * dy;
         if (d2 <= 0 || d2 > 31 * 31) continue;
         const d = Math.sqrt(d2);
-        const push = (31 - d) * 0.35;
+        const push = (31 - d) * 1.8;
         const nx = dx / d;
         const ny = dy / d;
-        a.x -= nx * push;
-        a.y -= ny * push;
-        b.x += nx * push;
-        b.y += ny * push;
+        const bodyA = a.body as Phaser.Physics.Arcade.Body | null;
+        const bodyB = b.body as Phaser.Physics.Arcade.Body | null;
+        if (bodyA) bodyA.velocity.add(new Phaser.Math.Vector2(-nx * push, -ny * push));
+        if (bodyB) bodyB.velocity.add(new Phaser.Math.Vector2(nx * push, ny * push));
       }
     }
   }
@@ -1879,7 +1936,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private detonateSite(site: BombSiteRuntime): void {
-    this.state.set(RoundState.Victory);
+    if (this.detonatingSiteIds.has(site.id)) return;
+    this.detonatingSiteIds.add(site.id);
+    this.state.set(this.bombSites.activeBombCount() > 1 ? RoundState.Defense : RoundState.Victory);
 
     const color = SaveSystem.getCosmeticColor('bombColor');
     this.audio.playSfx('bomb');
@@ -1924,13 +1983,18 @@ export class ArenaScene extends Phaser.Scene {
     this.time.delayedCall(850, () => {
       this.physics.world.timeScale = 1;
       this.bombSites.onDetonated(site, this.layout.theme);
+      this.detonatingSiteIds.delete(site.id);
       this.bombSites.refreshVisuals(this.layout.theme);
-      this.state.set(RoundState.PrePlant);
+      if (this.bombSites.sites.every((candidate) => candidate.state === BombSiteState.Destroyed)) {
+        this.state.set(RoundState.Victory);
+      } else {
+        this.state.set(this.bombSites.activeBombCount() > 0 ? RoundState.Defense : RoundState.PrePlant);
+      }
     });
   }
 
   private recoveryAfterSiteDestroy(): void {
-    this.showBanner('SITE DESTROYED - CHOOSE NEXT TARGET');
+    this.showBanner(this.bombSites.activeBombCount() > 0 ? 'SITE DESTROYED - KEEP DEFENDING' : 'SITE DESTROYED - CHOOSE NEXT TARGET');
 
     this.player.hp = Math.min(this.player.stats.maxHealth, this.player.hp + REWARD_BALANCE.siteRecoveryHealth);
     this.player.energy = Math.min(this.player.energyStats.max, this.player.energy + REWARD_BALANCE.siteRecoveryEnergy);
@@ -2026,11 +2090,14 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateHud(now: number): void {
-    const active = this.bombSites.getActiveBombSite();
-    const bombText = active
-      ? this.state.state === RoundState.Defusing
-        ? `DEFUSE IN PROGRESS  Site ${active.letter}  ${Math.ceil(active.timerMs / 1000)}s  ${Math.round((active.defuseMs / OBJECTIVE_CONFIG.defuseRequiredMs) * 100)}%`
-        : `CHARGE ARMED  Site ${active.letter}  ${Math.ceil(active.timerMs / 1000)}s  Defuse ${Math.round((active.defuseMs / OBJECTIVE_CONFIG.defuseRequiredMs) * 100)}%`
+    const activeSites = this.bombSites.getActiveBombSites();
+    const defusingSites = activeSites.filter((site) => site.state === BombSiteState.BeingDefused);
+    const hudFocus = [...(defusingSites.length > 0 ? defusingSites : activeSites)].sort((a, b) => a.timerMs - b.timerMs)[0] ?? null;
+    const activeSummary = activeSites.length > 1 ? `  ${activeSites.length} CHARGES ACTIVE` : '';
+    const bombText = hudFocus
+      ? defusingSites.length > 0
+        ? `DEFUSE IN PROGRESS  ${defusingSites.map((site) => site.letter).join('/')}  ${Math.ceil(hudFocus.timerMs / 1000)}s${activeSummary}`
+        : `CHARGE ARMED  Next: Site ${hudFocus.letter}  ${Math.ceil(hudFocus.timerMs / 1000)}s${activeSummary}`
       : 'NO ACTIVE CHARGE';
 
     const phaseMap: Record<RoundState, string> = {
@@ -2077,11 +2144,11 @@ export class ArenaScene extends Phaser.Scene {
     this.hudPayload.credits = this.totalCreditsCollected;
     this.hudPayload.phase = phaseMap[this.state.state];
     this.hudPayload.objective = bombText;
-    this.hudPayload.defuseAlert = this.state.state === RoundState.Defusing;
-    this.hudPayload.bombUrgent = Boolean(active && active.timerMs <= 15_000);
-    this.hudPayload.bombActive = Boolean(active);
-    this.hudPayload.bombProgress = active
-      ? Phaser.Math.Clamp(1 - active.timerMs / OBJECTIVE_CONFIG.bombDefenseMs, 0, 1)
+    this.hudPayload.defuseAlert = defusingSites.length > 0;
+    this.hudPayload.bombUrgent = Boolean(hudFocus && hudFocus.timerMs <= 15_000);
+    this.hudPayload.bombActive = Boolean(hudFocus);
+    this.hudPayload.bombProgress = hudFocus
+      ? Phaser.Math.Clamp(1 - hudFocus.timerMs / OBJECTIVE_CONFIG.bombDefenseMs, 0, 1)
       : 0;
 
     const [fenceSlot, turretSlot, mineSlot, shieldSlot] = this.hudPayload.abilities;
@@ -2272,9 +2339,9 @@ export class ArenaScene extends Phaser.Scene {
   private resumeFromPointerLock(): void {
     if (this.state.state !== RoundState.Paused || this.pauseMenu) return;
     this.setGameplayCursorMode();
-    const activeSite = this.bombSites.getActiveBombSite();
-    const defusing = activeSite?.state === BombSiteState.BeingDefused;
-    this.state.set(defusing ? RoundState.Defusing : activeSite ? RoundState.Defense : RoundState.PrePlant);
+    const activeSites = this.bombSites.getActiveBombSites();
+    const defusing = activeSites.some((site) => site.state === BombSiteState.BeingDefused);
+    this.state.set(defusing ? RoundState.Defusing : activeSites.length > 0 ? RoundState.Defense : RoundState.PrePlant);
     if (defusing) this.audio.startDisarmLoop();
     this.physics.resume();
   }
