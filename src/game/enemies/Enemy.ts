@@ -25,6 +25,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   slowFactor = 1;
   disabledUntil = 0;
   telemetrySpawnedAtActiveMs = 0;
+  telemetryFirstDamagedAtActiveMs: number | null = null;
   lastDamageSource: CombatDamageSource = 'unknown';
   readonly damageTakenBySource: Partial<Record<CombatDamageSource, number>> = {};
 
@@ -47,17 +48,22 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(7);
   }
 
-  takeDamage(amount: number, source: CombatDamageSource = 'unknown'): void {
-    if (!Number.isFinite(amount) || amount <= 0 || this.hp <= 0) return;
+  takeDamage(amount: number, source: CombatDamageSource = 'unknown'): number {
+    if (!Number.isFinite(amount) || amount <= 0 || this.hp <= 0) return 0;
+    if (this.telemetryFirstDamagedAtActiveMs === null) {
+      this.telemetryFirstDamagedAtActiveMs = GameplayTelemetryRecorder.activeEncounterElapsedMs();
+    }
     const applied = Math.min(this.hp, amount);
+    const overkill = Math.max(0, amount - applied);
     this.hp = Math.max(0, this.hp - applied);
     this.lastDamageSource = source;
     this.damageTakenBySource[source] = (this.damageTakenBySource[source] ?? 0) + applied;
-    GameplayTelemetryRecorder.recordEnemyDamage(this.stats.type, source, applied);
+    GameplayTelemetryRecorder.recordEnemyDamage(this.stats.type, source, applied, overkill);
     this.setTintFill(0xffffff);
     this.scene.time.delayedCall(50, () => {
       if (this.active) this.setTint(this.stats.color);
     });
+    return applied;
   }
 
   isDead(): boolean {

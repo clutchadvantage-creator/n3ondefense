@@ -31,20 +31,22 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.setCollideWorldBounds(true);
   }
 
-  takeDamage(amount: number, source: BossDamageSource = 'weapon'): void {
-    if (this.defeated || !Number.isFinite(amount) || amount <= 0) return;
+  takeDamage(amount: number, source: BossDamageSource = 'weapon'): number {
+    if (this.defeated || !Number.isFinite(amount) || amount <= 0) return 0;
     const applied = Math.min(this.hp, amount * (source === 'hazard' ? BOSS_BALANCE.hazardDamageMultiplier : 1));
-    if (applied <= 0) return;
+    if (applied <= 0) return 0;
     this.hp = Math.max(0, this.hp - applied);
     this.onDamaged(applied, source);
     this.setTintFill(0xffffff);
     this.scene.time.delayedCall(55, () => {
       if (this.active) this.setTint(BOSS_ARCHETYPES[this.archetype].color);
     });
-    if (this.hp > 0) return;
-    this.defeated = true;
-    this.setVelocity(0, 0);
-    this.onDefeated();
+    if (this.hp <= 0) {
+      this.defeated = true;
+      this.setVelocity(0, 0);
+      this.onDefeated();
+    }
+    return applied;
   }
 
   get healthRatio(): number {

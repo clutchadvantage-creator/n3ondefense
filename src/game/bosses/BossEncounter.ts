@@ -13,13 +13,24 @@ export interface BossProjectileSpec {
   damage: number;
   color: number;
   size?: number;
+  attack: BossAttackKind;
 }
+
+export type BossAttackKind =
+  | 'artillery-basic'
+  | 'artillery-super'
+  | 'storm-basic'
+  | 'storm-super'
+  | 'brawler-contact'
+  | 'brawler-pounce'
+  | 'brawler-super';
 
 export interface BossEncounterCallbacks {
   fireProjectile(spec: BossProjectileSpec): void;
-  damageArea(x: number, y: number, radius: number, damage: number): void;
+  damageArea(x: number, y: number, radius: number, damage: number, attack: BossAttackKind): void;
   dropCredit(x: number, y: number): void;
   onDamaged(damage: number, source: BossDamageSource): void;
+  onAttackCast(attack: BossAttackKind): void;
   onDefeated(): void;
 }
 
@@ -31,6 +42,7 @@ interface PendingStrike {
   triggerAt: number;
   marker: Phaser.GameObjects.Arc;
   color: number;
+  attack: BossAttackKind;
 }
 
 const BOSS_TITLE_Y = 250;
@@ -140,17 +152,19 @@ export class BossEncounter {
     this.boss.setVelocity(0, 0).setRotation(this.elapsedMs * 0.00035);
     if (this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
       this.lastBasicAt = this.elapsedMs;
+      this.callbacks.onAttackCast('artillery-basic');
       const aim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
       for (const offset of [-config.spreadRadians, 0, config.spreadRadians]) {
-        this.fire(aim + offset, config.projectileSpeed, config.projectileDamage, BOSS_ARCHETYPES.artillery.color, 11);
+        this.fire(aim + offset, config.projectileSpeed, config.projectileDamage, BOSS_ARCHETYPES.artillery.color, 11, 'artillery-basic');
       }
     }
     if (this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
       this.lastSuperAt = this.elapsedMs;
+      this.callbacks.onAttackCast('artillery-super');
       this.showCallout('SUPER: SIEGE NOVA', 1500);
       for (let i = 0; i < config.superProjectileCount; i += 1) {
         const angle = i / config.superProjectileCount * Math.PI * 2 + this.elapsedMs * 0.0002;
-        this.fire(angle, config.superProjectileSpeed, config.superProjectileDamage, 0xffd36a, 9);
+        this.fire(angle, config.superProjectileSpeed, config.superProjectileDamage, 0xffd36a, 9, 'artillery-super');
       }
     }
   }
@@ -167,14 +181,16 @@ export class BossEncounter {
 
     if (this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
       this.lastBasicAt = this.elapsedMs;
+      this.callbacks.onAttackCast('storm-basic');
       const aim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
       const center = (config.basicProjectileCount - 1) * 0.5;
       for (let i = 0; i < config.basicProjectileCount; i += 1) {
-        this.fire(aim + (i - center) * 0.09, config.projectileSpeed, config.projectileDamage, BOSS_ARCHETYPES['storm-mage'].color, 9);
+        this.fire(aim + (i - center) * 0.09, config.projectileSpeed, config.projectileDamage, BOSS_ARCHETYPES['storm-mage'].color, 9, 'storm-basic');
       }
     }
     if (this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
       this.lastSuperAt = this.elapsedMs;
+      this.callbacks.onAttackCast('storm-super');
       this.showCallout('SUPER: CROWN OF STORMS', config.superTelegraphMs);
       for (let i = 0; i < config.superStrikeCount; i += 1) {
         const angle = i / config.superStrikeCount * Math.PI * 2;
@@ -185,7 +201,8 @@ export class BossEncounter {
           config.superRadius,
           config.superDamage * this.damageMultiplier,
           config.superTelegraphMs + i * 90,
-          0xa978ff
+          0xa978ff,
+          'storm-super'
         );
       }
     }
@@ -195,10 +212,11 @@ export class BossEncounter {
     const config = BOSS_BALANCE.voidBrawler;
     if (this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
       this.lastSuperAt = this.elapsedMs;
+      this.callbacks.onAttackCast('brawler-super');
       this.showCallout('SUPER: VOID AMBUSH', config.superTelegraphMs);
       this.boss.setAlpha(0.12).setVelocity(0, 0);
       const target = this.findClearNear(player.x, player.y, 80, 150);
-      this.scheduleStrike(target.x, target.y, config.superRadius, config.superDamage * this.damageMultiplier, config.superTelegraphMs, 0xff4e82);
+      this.scheduleStrike(target.x, target.y, config.superRadius, config.superDamage * this.damageMultiplier, config.superTelegraphMs, 0xff4e82, 'brawler-super');
       this.lastTeleportAt = this.elapsedMs;
     }
 
@@ -228,6 +246,7 @@ export class BossEncounter {
       this.pounceEndsAt = 0;
     } else if (this.elapsedMs - this.lastPounceAt >= config.pounceCooldownMs) {
       this.lastPounceAt = this.elapsedMs;
+      this.callbacks.onAttackCast('brawler-pounce');
       this.pounceStartsAt = this.elapsedMs + config.pounceTelegraphMs;
       this.pounceEndsAt = this.pounceStartsAt + config.pounceDurationMs;
       this.pounceAngle = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
@@ -242,11 +261,13 @@ export class BossEncounter {
     if (Phaser.Math.Distance.Between(this.boss.x, this.boss.y, player.x, player.y) <= this.boss.hazardRadius + 14
       && this.elapsedMs - this.lastContactAt >= config.contactCooldownMs) {
       this.lastContactAt = this.elapsedMs;
-      this.callbacks.damageArea(this.boss.x, this.boss.y, this.boss.hazardRadius + 18, config.contactDamage * this.damageMultiplier);
+      const pouncing = this.pounceStartsAt > 0 && this.elapsedMs >= this.pounceStartsAt && this.elapsedMs < this.pounceEndsAt;
+      if (!pouncing) this.callbacks.onAttackCast('brawler-contact');
+      this.callbacks.damageArea(this.boss.x, this.boss.y, this.boss.hazardRadius + 18, config.contactDamage * this.damageMultiplier, pouncing ? 'brawler-pounce' : 'brawler-contact');
     }
   }
 
-  private fire(angle: number, speed: number, damage: number, color: number, size: number): void {
+  private fire(angle: number, speed: number, damage: number, color: number, size: number, attack: BossAttackKind): void {
     this.callbacks.fireProjectile({
       x: this.boss.x + Math.cos(angle) * 42,
       y: this.boss.y + Math.sin(angle) * 42,
@@ -254,14 +275,15 @@ export class BossEncounter {
       speed,
       damage: damage * this.damageMultiplier,
       color,
-      size
+      size,
+      attack
     });
   }
 
-  private scheduleStrike(x: number, y: number, radius: number, damage: number, delayMs: number, color: number): void {
+  private scheduleStrike(x: number, y: number, radius: number, damage: number, delayMs: number, color: number, attack: BossAttackKind): void {
     const target = this.clampPoint(x, y);
     const marker = this.scene.add.circle(target.x, target.y, radius, color, 0.08).setStrokeStyle(3, color, 0.9).setDepth(7);
-    this.pendingStrikes.push({ ...target, radius, damage, triggerAt: this.elapsedMs + delayMs, marker, color });
+    this.pendingStrikes.push({ ...target, radius, damage, triggerAt: this.elapsedMs + delayMs, marker, color, attack });
   }
 
   private updatePendingStrikes(_player: Player): void {
@@ -270,7 +292,7 @@ export class BossEncounter {
       const remaining = Math.max(0, strike.triggerAt - this.elapsedMs);
       strike.marker.setAlpha(0.18 + Math.sin(this.elapsedMs * 0.025 + index) * 0.12).setScale(1 + remaining / 5000);
       if (this.elapsedMs < strike.triggerAt) continue;
-      this.callbacks.damageArea(strike.x, strike.y, strike.radius, strike.damage);
+      this.callbacks.damageArea(strike.x, strike.y, strike.radius, strike.damage, strike.attack);
       this.spawnStrikeEffect(strike.x, strike.y, strike.radius, strike.color);
       strike.marker.destroy();
       this.pendingStrikes.splice(index, 1);

@@ -12,6 +12,7 @@ export class Turret {
   fireRate: number;
   lastShotMs = 0;
   disabledUntil = 0;
+  telemetryId = '';
 
   constructor(scene: Phaser.Scene, x: number, y: number, color: number, hp: number, damage: number, fireRate: number, range: number) {
     const glow = scene.add.circle(0, 1, 15, color, 0.12).setStrokeStyle(1, color, 0.32);
@@ -37,9 +38,11 @@ export class Turret {
     this.head.rotation = angle + Math.PI / 2;
   }
 
-  takeDamage(amount: number): void {
-    this.hp = Math.max(0, this.hp - Math.max(0, amount));
+  takeDamage(amount: number): number {
+    const applied = Math.min(this.hp, Math.max(0, amount));
+    this.hp = Math.max(0, this.hp - applied);
     this.updateVisual();
+    return applied;
   }
 
   updateVisual(): void {
