@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { addModDrop, createDefaultModCollection, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleDuplicateMod, sellDuplicateMod } from '../src/game/mods/ModInventoryService.ts';
 import { normalizeModCollection, normalizeProtocolPreference } from '../src/game/mods/ModSaveNormalizer.ts';
 import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
-import { magneticResistanceForEnemy, prioritizeTurretTargets, protocolStart, splitCurrentSecondaryDamage } from '../src/game/mods/ModRules.ts';
+import { applyOperativeSpeedMultipliers, magneticResistanceForEnemy, prioritizeTurretTargets, protocolStart, splitCurrentSecondaryDamage } from '../src/game/mods/ModRules.ts';
 import { rollModDrop } from '../src/game/mods/ModDropService.ts';
 import { normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import { MOD_BY_ID } from '../src/game/mods/definitions.ts';
 import { MOD_INFUSIONS } from '../src/game/mods/infusions.ts';
+import { MOD_BALANCE } from '../src/game/mods/modBalance.ts';
 
 test('old profiles receive empty mod and normal protocol defaults', () => {
   const mods = normalizeModCollection(undefined);
@@ -138,6 +139,35 @@ test('Corrupted cards declare both their positive effect and tradeoff', () => {
   assert.ok(corrupted.positiveEffect);
   assert.ok(corrupted.negativeEffect);
   assert.ok(corrupted.dropWeight < 0.1);
+});
+
+test('Nanite Fuel is a rare legendary Player Mod with three upgrades', () => {
+  const naniteFuel = MOD_BY_ID.get('nanite-fuel');
+  assert.equal(naniteFuel.category, 'player');
+  assert.equal(naniteFuel.rarity, 'legendary');
+  assert.equal(naniteFuel.maxRank, 3);
+  assert.ok(naniteFuel.dropWeight < 0.05);
+  assert.match(naniteFuel.rankDescriptions[3], /12\.5%/);
+});
+
+test('Nanite Fuel can drop in both protocols and is favored by boss rewards', () => {
+  for (const protocol of ['normal', 'overdrive']) {
+    assert.equal(rollModDrop({ source: 'milestone', round: 10, seed: 35_300, sequence: 0, protocol })?.id, 'nanite-fuel');
+    assert.equal(rollModDrop({ source: 'boss', round: 10, seed: 199, sequence: 0, protocol })?.id, 'nanite-fuel');
+  }
+  assert.ok(MOD_BALANCE.dropChance.boss > MOD_BALANCE.dropChance.milestone);
+  assert.ok(MOD_BALANCE.raritySourceMultipliers.boss.legendary > MOD_BALANCE.raritySourceMultipliers.milestone.legendary);
+});
+
+test('Nanite Fuel stacks after purchased speed and with temporary speed effects', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'nanite-fuel');
+  equipMod(mods, 'player', 'nanite-fuel');
+  assert.equal(new ModRuntime(mods).naniteFuelSpeedMultiplier(), 1.05);
+
+  mods.cards[0].upgradeLevel = 3;
+  assert.equal(new ModRuntime(mods).naniteFuelSpeedMultiplier(), 1.125);
+  assert.equal(applyOperativeSpeedMultipliers(300, 1.125, 1.3, 1.18), 517.725);
 });
 
 test('one card upgrades from zero through three without duplicate requirements', () => {

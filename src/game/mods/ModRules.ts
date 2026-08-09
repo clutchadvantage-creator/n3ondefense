@@ -13,6 +13,16 @@ export const magneticResistanceForEnemy = (enemyType: string): number => {
   return 1;
 };
 
+export const applyOperativeSpeedMultipliers = (
+  finalPurchasedSpeed: number,
+  permanentModMultiplier: number,
+  pickupMultiplier: number,
+  temporaryModMultiplier: number
+): number => Math.max(0, finalPurchasedSpeed)
+  * Math.max(0, permanentModMultiplier)
+  * Math.max(0, pickupMultiplier)
+  * Math.max(0, temporaryModMultiplier);
+
 export const prioritizeTurretTargets = <T extends { distance: number; activelyDefusing: boolean; marked: boolean }>(targets: T[], rank: number): T[] => {
   return [...targets].sort((a, b) => {
     const aPriority = rank >= 0 && (a.activelyDefusing || (rank >= 2 && a.marked));

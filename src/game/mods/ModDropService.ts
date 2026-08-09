@@ -46,7 +46,7 @@ export const rollModDrop = (request: ModDropRequest): ModDefinition | null => {
     const base = MOD_BALANCE.rarityWeights[definition.rarity]
       * MOD_BALANCE.raritySourceMultipliers[request.source][definition.rarity]
       * definition.dropWeight;
-    const highRarity = definition.rarity === 'rare' || definition.rarity === 'prototype' || definition.rarity === 'legendary';
+    const highRarity = definition.rarity === 'rare' || definition.rarity === 'epic' || definition.rarity === 'legendary';
     const rarityAdjusted = base * (highRarity ? 1 + Math.max(0, request.round - 1) * MOD_BALANCE.rarityRoundBonusPerRound : 1);
     const focusMultiplier = request.focus === definition.category ? ECONOMY_BALANCE.modFocus.categoryWeightMultiplier : 1;
     return rarityAdjusted * focusMultiplier;

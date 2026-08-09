@@ -541,6 +541,7 @@ export class ArenaScene extends Phaser.Scene {
 
       const playerShape = SaveSystem.getEquippedCosmeticId('playerShape') ?? 'player-circle';
       this.player = new Player(this, this.layout.playerSpawn.x, this.layout.playerSpawn.y, playerShape, stats, energy, weapon);
+      this.player.permanentModSpeedMultiplier = this.modRuntime.naniteFuelSpeedMultiplier();
       this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor'));
       this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
       this.cameras.main.setZoom(0.9);
@@ -553,6 +554,7 @@ export class ArenaScene extends Phaser.Scene {
       this.player.invulnUntil = 0;
       this.player.lastDashMs = -9_999;
       this.player.dashUntil = 0;
+      this.player.permanentModSpeedMultiplier = this.modRuntime.naniteFuelSpeedMultiplier();
       this.player.modSpeedBoostUntil = 0;
       this.player.modSpeedMultiplier = 1;
       this.player.buffs.damageBoostUntil = 0;

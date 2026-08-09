@@ -54,6 +54,9 @@ export class ModRuntime {
 
   rank(modId: string): ModRank | 0 { return this.equipped.get(modId) ?? 0; }
   has(modId: string): boolean { return this.equipped.has(modId); }
+  naniteFuelSpeedMultiplier(): number {
+    return this.has('nanite-fuel') ? MOD_BALANCE.naniteFuel.speedMultiplier[this.rank('nanite-fuel')] : 1;
+  }
   hasInfusion(infusionId: ModInfusionId): boolean { return this.infusions.has(infusionId); }
   snapshot(): EquippedModSnapshot[] {
     return Array.from(this.equipped, ([id, rank]) => ({ id, rank, infusionId: this.infusionByModId.get(id) }));

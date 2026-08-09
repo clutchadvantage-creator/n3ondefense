@@ -4,11 +4,11 @@ import type { ModCardInstance, ModRank } from './types.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
 
 export const MOD_RARITY_COLORS = {
-  common: 0xb9c9d4,
-  uncommon: 0x73ff9d,
-  rare: 0x62b7ff,
-  prototype: 0xd286ff,
-  legendary: 0xffc75c
+  common: 0xffffff,
+  uncommon: 0x55ff88,
+  rare: 0x38b6ff,
+  epic: 0xc05cff,
+  legendary: 0xff8a00
 } as const;
 
 const ICONS: Record<string, string> = {
@@ -17,7 +17,8 @@ const ICONS: Record<string, string> = {
   'priority-targeting': '◎',
   'emergency-shield': '⬡',
   'magnetic-payload': '⌁',
-  'fractured-current': 'ϟ!'
+  'fractured-current': 'ϟ!',
+  'nanite-fuel': '\u26fd'
 };
 
 export interface ModCardViewOptions {

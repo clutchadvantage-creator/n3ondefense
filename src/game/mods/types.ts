@@ -1,5 +1,5 @@
 export type ModCategory = 'weapon' | 'player' | 'defense' | 'bombSite' | 'utility';
-export type ModRarity = 'common' | 'uncommon' | 'rare' | 'prototype' | 'legendary';
+export type ModRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type ModRank = 0 | 1 | 2 | 3;
 export type ModSlot = 'weapon' | 'player' | 'defense' | 'bombSite' | 'wildcard';
 export type RunProtocolId = 'normal' | 'overdrive';

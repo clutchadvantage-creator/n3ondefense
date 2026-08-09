@@ -20,7 +20,7 @@ export const MOD_DEFINITIONS: readonly ModDefinition[] = [
     tags: ['turret', 'targeting', 'conditional-damage']
   },
   {
-    id: 'emergency-shield', name: 'Emergency Shield', category: 'bombSite', rarity: 'prototype', maxRank: 3, dropWeight: 0.55,
+    id: 'emergency-shield', name: 'Emergency Shield', category: 'bombSite', rarity: 'epic', maxRank: 3, dropWeight: 0.55,
     description: 'The first defuse contact can temporarily block progress at that bomb site.',
     rankDescriptions: { 0: 'Block progress for 0.5 seconds.', 1: 'Block progress for 1 second.', 2: 'Block progress for 2 seconds.', 3: 'Block for 2 seconds and repel nearby light enemies.' },
     tags: ['bomb-site', 'defuse', 'cooldown']
@@ -39,6 +39,12 @@ export const MOD_DEFINITIONS: readonly ModDefinition[] = [
     negativeEffect: 'Each weapon shot costs 0.25 additional energy.',
     rankDescriptions: { 0: 'Arc 18% of the killing hit within 140 range.', 1: 'Arc 25% of the killing hit within 160 range.', 2: 'Arc 35% within 195 range.', 3: 'Arc 45% within 235 range.' },
     tags: ['corrupted', 'weapon-kill', 'tradeoff', 'secondary-damage']
+  },
+  {
+    id: 'nanite-fuel', name: 'Nanite Fuel', category: 'player', rarity: 'legendary', maxRank: 3, dropWeight: 0.045,
+    description: 'Self-replicating nanites permanently accelerate the operative while this card is equipped, stacking with purchased speed and temporary boosts.',
+    rankDescriptions: { 0: 'Operative movement speed +5%.', 1: 'Operative movement speed +7.5%.', 2: 'Operative movement speed +10%.', 3: 'Operative movement speed +12.5%.' },
+    tags: ['player', 'movement', 'permanent-while-equipped', 'stacking-speed']
   }
 ] as const;
 

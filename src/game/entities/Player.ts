@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { EnergyStats, PlayerStats, WeaponStats } from '../types';
 import { PLAYER_BALANCE, WEAPON_BALANCE } from '../config/balance';
+import { applyOperativeSpeedMultipliers } from '../mods/ModRules.ts';
 
 export interface BuffState {
   damageBoostUntil: number;
@@ -19,6 +20,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   lastDashMs = -9_999;
   dashUntil = 0;
   private cosmeticTint = 0xffffff;
+  permanentModSpeedMultiplier = 1;
   modSpeedBoostUntil = 0;
   modSpeedMultiplier = 1;
   buffs: BuffState = {
@@ -46,7 +48,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   get speed(): number {
     const boosted = this.scene.time.now < this.buffs.speedBoostUntil;
     const modBoost = this.scene.time.now < this.modSpeedBoostUntil ? this.modSpeedMultiplier : 1;
-    return this.stats.moveSpeed * (boosted ? WEAPON_BALANCE.speedBoostMultiplier : 1) * modBoost;
+    return applyOperativeSpeedMultipliers(
+      this.stats.moveSpeed,
+      this.permanentModSpeedMultiplier,
+      boosted ? WEAPON_BALANCE.speedBoostMultiplier : 1,
+      modBoost
+    );
   }
 
   get fireRate(): number {

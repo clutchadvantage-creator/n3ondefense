@@ -13,7 +13,7 @@ import { MOD_INFUSIONS } from '../mods/infusions.ts';
 type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
 const CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player', 'defense', 'bombSite', 'utility'];
 const SORTS: SortMode[] = ['acquired', 'type', 'rank', 'rarity'];
-const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, prototype: 3, legendary: 4 } as const;
+const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 } as const;
 
 export class ModCollectionScene extends Phaser.Scene {
   private selectedCardId = '';
