@@ -3,7 +3,7 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { LASER_HAZARD_BALANCE } from '../config/laserHazards';
 import type { ArenaTheme } from '../types';
 import type { Player } from '../entities/Player';
-import type { Enemy } from '../enemies/Enemy';
+import { getScaledHazardDamage, type HazardDamageTarget } from '../config/hazardScaling';
 
 interface LaserSegment {
   x1: number;
@@ -38,7 +38,7 @@ export class LaserSecuritySystem {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1050).setAlpha(0);
   }
 
-  update(now: number, dt: number, player: Player, enemies: Enemy[], playerLaserImmune = false): void {
+  update(now: number, dt: number, player: Player, targets: HazardDamageTarget[], playerLaserImmune = false): void {
     const config = LASER_HAZARD_BALANCE;
     const cooldownMs = Math.max(
       config.minimumCooldownMs,
@@ -80,11 +80,12 @@ export class LaserSecuritySystem {
 
     this.warningText.setText(`SECURITY LASERS ACTIVE: ${PATTERN_NAMES[this.patternIndex]}`).setAlpha(0.72);
     if (!playerLaserImmune && this.touchesAnySegment(player.x, player.y, config.collisionRadius + 11, segments)) {
-      player.takeDamage(config.playerDamagePerHit);
+      player.takeDamage(getScaledHazardDamage(config.playerDamagePerHit, this.round, config.maximumPlayerDamagePerHit));
     }
-    for (const enemy of enemies) {
-      if (enemy.active && this.touchesAnySegment(enemy.x, enemy.y, config.collisionRadius + enemy.stats.size * 0.45, segments)) {
-        enemy.takeDamage(config.enemyDamagePerSecond * dt);
+    const enemyDamagePerSecond = getScaledHazardDamage(config.enemyDamagePerSecond, this.round, config.maximumEnemyDamagePerSecond);
+    for (const target of targets) {
+      if (target.active && this.touchesAnySegment(target.x, target.y, config.collisionRadius + target.hazardRadius, segments)) {
+        target.takeDamage(enemyDamagePerSecond * dt, 'hazard');
       }
     }
   }

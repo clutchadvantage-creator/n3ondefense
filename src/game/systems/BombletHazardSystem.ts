@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BOMBLET_HAZARD_BALANCE } from '../config/bombletHazards';
 import type { Player } from '../entities/Player';
 import type { ArenaTheme, RectSpec } from '../types';
+import { getScaledHazardDamage, type HazardDamageTarget } from '../config/hazardScaling';
 import { SeededRandom } from './SeededRandom';
 
 const PATTERN_NAMES = ['LANE DROP', 'CHECKER BURST', 'ORBITAL RING', 'SPIRAL RAIN', 'CROSS DROP', 'SCATTER GRID'] as const;
@@ -57,7 +58,7 @@ export class BombletHazardSystem {
     return this.targets.length > 0;
   }
 
-  update(now: number, player: Player, anotherHazardActive: boolean): void {
+  update(now: number, player: Player, targets: HazardDamageTarget[], anotherHazardActive: boolean): void {
     const config = BOMBLET_HAZARD_BALANCE;
     if (this.round < config.unlockRound) return;
 
@@ -95,7 +96,7 @@ export class BombletHazardSystem {
         .setRotation(now * 0.007 + index)
         .setAlpha(dropElapsed < 0 || target.exploded ? 0 : 0.35 + fallProgress * 0.65);
 
-      if (!target.exploded && dropElapsed >= config.fallMs) this.detonate(target, player);
+      if (!target.exploded && dropElapsed >= config.fallMs) this.detonate(target, player, targets);
     }
 
     const finalDelay = this.targets.at(-1)?.delayMs ?? 0;
@@ -232,7 +233,7 @@ export class BombletHazardSystem {
     return null;
   }
 
-  private detonate(target: TargetPoint, player: Player): void {
+  private detonate(target: TargetPoint, player: Player, damageTargets: HazardDamageTarget[]): void {
     const config = BOMBLET_HAZARD_BALANCE;
     target.exploded = true;
     target.marker.setAlpha(0);
@@ -273,8 +274,15 @@ export class BombletHazardSystem {
     }
 
     if (Phaser.Math.Distance.Between(player.x, player.y, target.x, target.y) <= config.blastRadius + 10) {
-      const damage = Math.min(config.maximumPlayerDamage, config.playerDamageBase + Math.max(0, this.round - 1) * config.playerDamagePerRound);
+      const damage = getScaledHazardDamage(config.playerDamageBase, this.round, config.maximumPlayerDamage);
       if (player.takeDamage(damage)) this.onPlayerDamaged?.();
+    }
+    const enemyDamage = getScaledHazardDamage(config.enemyDamageBase, this.round, config.maximumEnemyDamage);
+    for (const damageTarget of damageTargets) {
+      if (!damageTarget.active) continue;
+      if (Phaser.Math.Distance.Between(damageTarget.x, damageTarget.y, target.x, target.y) <= config.blastRadius + damageTarget.hazardRadius) {
+        damageTarget.takeDamage(enemyDamage, 'hazard');
+      }
     }
   }
 

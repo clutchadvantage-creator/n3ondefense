@@ -9,12 +9,13 @@ export const MOD_BALANCE = {
   duplicatePlasmaValueByRarity: { common: 1, uncommon: 2, rare: 3, prototype: 5, legendary: 8 } satisfies Record<ModRarity, number>,
   infusionPlasmaCost: { 'enemy-growth': 5, 'detonation-fireworks': 7 } as const,
   detonationFireworks: { minDurationMs: 20_000, maxDurationMs: 30_000, burstIntervalMs: 520, sparksPerBurst: 12 },
-  dropChance: { normalEnemy: 0.0005, eliteEnemy: 0.04, milestone: 0.12 } satisfies Record<ModDropSource, number>,
+  dropChance: { normalEnemy: 0.0005, eliteEnemy: 0.04, milestone: 0.12, boss: 0.55 } satisfies Record<ModDropSource, number>,
   rarityWeights: { common: 56, uncommon: 27, rare: 12, prototype: 4.5, legendary: 0.5 } satisfies Record<ModRarity, number>,
   raritySourceMultipliers: {
     normalEnemy: { common: 1, uncommon: 0.65, rare: 0.25, prototype: 0, legendary: 0 },
     eliteEnemy: { common: 0.7, uncommon: 1, rare: 1.4, prototype: 0.8, legendary: 0.2 },
-    milestone: { common: 0.5, uncommon: 1, rare: 1.7, prototype: 1.5, legendary: 0.5 }
+    milestone: { common: 0.5, uncommon: 1, rare: 1.7, prototype: 1.5, legendary: 0.5 },
+    boss: { common: 0.08, uncommon: 0.18, rare: 0.8, prototype: 2.2, legendary: 18 }
   } satisfies Record<ModDropSource, Record<ModRarity, number>>,
   rarityRoundBonusPerRound: 0.025,
   guaranteedMilestoneEveryRounds: 5,

@@ -38,6 +38,10 @@ export class SaveSystem {
     PlayerProfileStore.addCoreTokens(amount);
   }
 
+  static addPlasmaChips(amount: number): void {
+    PlayerProfileStore.addPlasmaChips(amount);
+  }
+
   static spendCredits(amount: number, category: CreditSpendCategory = 'other'): boolean {
     return PlayerProfileStore.spendCredits(amount, category);
   }

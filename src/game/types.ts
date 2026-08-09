@@ -264,6 +264,8 @@ export interface RoundFinishedPayload {
   objectiveMode: ObjectiveMode;
   creditsGained: number;
   coreTokensGained: number;
+  plasmaChipsGained: number;
+  bossDefeated: string | null;
   protocol: RunProtocolId;
   equippedMods: EquippedModSnapshot[];
   modsEarned: ModRewardRecord[];

@@ -3,7 +3,7 @@ export type ModRarity = 'common' | 'uncommon' | 'rare' | 'prototype' | 'legendar
 export type ModRank = 0 | 1 | 2 | 3;
 export type ModSlot = 'weapon' | 'player' | 'defense' | 'bombSite' | 'wildcard';
 export type RunProtocolId = 'normal' | 'overdrive';
-export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone';
+export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone' | 'boss';
 export type ModVariant = 'standard' | 'corrupted';
 export type ModInfusionId = 'enemy-growth' | 'detonation-fireworks';
 

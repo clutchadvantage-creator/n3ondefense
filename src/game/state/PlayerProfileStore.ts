@@ -326,6 +326,14 @@ export class PlayerProfileStore {
     PlayerProfileStore.save();
   }
 
+  static addPlasmaChips(amount: number): void {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const save = PlayerProfileStore.getActiveSave();
+    save.mods.plasmaChips += Math.floor(amount);
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
   static sellDuplicateMod(instanceId: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
     const result = sellDuplicateMod(save.mods, instanceId);

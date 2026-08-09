@@ -24,6 +24,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   slowFactor = 1;
   disabledUntil = 0;
 
+  get hazardRadius(): number {
+    return this.stats.size * 0.45;
+  }
+
   constructor(scene: Phaser.Scene, x: number, y: number, texture: string, stats: EnemyStats) {
     super(scene, x, y, texture);
     this.stats = stats;
@@ -39,10 +43,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(7);
   }
 
-  takeDamage(amount: number): void {
+  takeDamage(amount: number, _source?: 'hazard'): void {
     this.hp = Math.max(0, this.hp - amount);
     this.setTintFill(0xffffff);
-    this.scene.time.delayedCall(50, () => this.setTint(this.stats.color));
+    this.scene.time.delayedCall(50, () => {
+      if (this.active) this.setTint(this.stats.color);
+    });
   }
 
   isDead(): boolean {

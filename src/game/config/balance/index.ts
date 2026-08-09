@@ -48,7 +48,19 @@ export const ENEMY_BALANCE = {
 
 export const ABILITY_BALANCE = {
   cooldownScale: 1,
-  fence: { energyCost: 10, cooldownMs: 5200, maxActive: 2, damage: 30, hp: 110, durationMs: 16_000, width: 90, slowFactor: 0.68 },
+  fence: {
+    energyCost: 10,
+    cooldownMs: 5200,
+    maxActive: 2,
+    damage: 30,
+    hp: 110,
+    durationMs: 16_000,
+    width: 90,
+    slowFactor: 0.68,
+    projectileFanCount: 4,
+    projectileFanSpacingRadians: 0.105,
+    projectileFanDamageShare: 0.45
+  },
   turret: { energyCost: 10, cooldownMs: 6800, maxActive: 2, damage: 13, hp: 145, durationMs: 0, range: 215, fireRate: 2.5 },
   mine: { energyCost: 10, cooldownMs: 4200, maxActive: 3, damage: 72, hp: 0, durationMs: 0, range: 0, fireRate: 0, armMs: 1000, radius: 82 },
   shield: { energyCost: 15, durationMs: 2800, maximumDurationMs: 5000, cooldownMs: 10_000 }

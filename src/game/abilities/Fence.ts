@@ -2,12 +2,14 @@ import Phaser from 'phaser';
 
 export class Fence {
   readonly sprite: Phaser.GameObjects.Rectangle;
+  readonly width: number;
   hp: number;
   dps: number;
   slowFactor: number;
   expiresAt: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number, angle: number, color: number, width: number, durationMs: number, hp: number, dps: number, slowFactor: number) {
+    this.width = width;
     this.sprite = scene.add.rectangle(x, y, width, 8, color, 0.7);
     this.sprite.setStrokeStyle(2, color, 1);
     this.sprite.setRotation(angle);

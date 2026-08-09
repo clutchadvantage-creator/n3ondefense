@@ -40,7 +40,7 @@ export class RoundFinishedScene extends Phaser.Scene {
     const completedSummary = this.add.text(
       width / 2,
       panelTop + 132,
-      `Credits Gained: ${payload?.creditsGained ?? 0}\nCore Tokens Gained: ${payload?.coreTokensGained ?? 0}\nProtocol: ${(payload?.protocol ?? 'normal').toUpperCase()}  •  Contract: ${(payload?.contract ?? 'none').replace(/-/g, ' ').toUpperCase()}\nMod Signal: ${(payload?.modFocus ?? 'none').replace(/([A-Z])/g, ' $1').toUpperCase()}  •  Mods Earned: ${payload?.modsEarned.length ?? 0}\nCompleted Seed: ${payload?.completedSeed ?? '-'}\nCompleted Layout: ${payload?.completedTemplate ?? '-'}`,
+      `Credits Gained: ${payload?.creditsGained ?? 0}\nCore Tokens Gained: ${payload?.coreTokensGained ?? 0}\nPlasma Chips Gained: ${payload?.plasmaChipsGained ?? 0}${payload?.bossDefeated ? `\nBoss Defeated: ${payload.bossDefeated.replace(/-/g, ' ').toUpperCase()}` : ''}\nProtocol: ${(payload?.protocol ?? 'normal').toUpperCase()}  •  Contract: ${(payload?.contract ?? 'none').replace(/-/g, ' ').toUpperCase()}\nMod Signal: ${(payload?.modFocus ?? 'none').replace(/([A-Z])/g, ' $1').toUpperCase()}  •  Mods Earned: ${payload?.modsEarned.length ?? 0}\nCompleted Seed: ${payload?.completedSeed ?? '-'}\nCompleted Layout: ${payload?.completedTemplate ?? '-'}`,
       {
         fontFamily: 'Rajdhani, sans-serif',
         fontSize: `${height < 700 ? 19 : 22}px`,

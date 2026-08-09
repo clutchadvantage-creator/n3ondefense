@@ -113,6 +113,41 @@ export class BootScene extends Phaser.Scene {
       graphics.fillCircle(6, 6, 2);
     });
 
+    const createBossTexture = (key: string, draw: (graphics: Phaser.GameObjects.Graphics) => void): void => {
+      g.clear();
+      g.fillStyle(0xffffff, 1);
+      g.lineStyle(3, 0x151a28, 1);
+      draw(g);
+      g.generateTexture(key, 72, 72);
+    };
+    createBossTexture('boss-artillery', (graphics) => {
+      const gear = Array.from({ length: 16 }, (_, index) => {
+        const radius = index % 2 === 0 ? 31 : 24;
+        const angle = -Math.PI / 2 + index * Math.PI / 8;
+        return { x: 36 + Math.cos(angle) * radius, y: 36 + Math.sin(angle) * radius };
+      });
+      graphics.fillPoints(gear, true);
+      graphics.strokePoints(gear, true);
+      graphics.fillRect(31, 3, 10, 34);
+      graphics.strokeRect(31, 3, 10, 34);
+      graphics.fillCircle(36, 36, 12);
+      graphics.strokeCircle(36, 36, 12);
+    });
+    createBossTexture('boss-storm-mage', (graphics) => {
+      const crown = [{ x: 36, y: 2 }, { x: 49, y: 23 }, { x: 69, y: 36 }, { x: 49, y: 49 }, { x: 36, y: 70 }, { x: 23, y: 49 }, { x: 3, y: 36 }, { x: 23, y: 23 }];
+      graphics.fillPoints(crown, true);
+      graphics.strokePoints(crown, true);
+      graphics.fillPoints([{ x: 36, y: 15 }, { x: 57, y: 36 }, { x: 36, y: 57 }, { x: 15, y: 36 }], true);
+      graphics.strokePoints([{ x: 36, y: 15 }, { x: 57, y: 36 }, { x: 36, y: 57 }, { x: 15, y: 36 }], true);
+    });
+    createBossTexture('boss-void-brawler', (graphics) => {
+      const frame = [{ x: 7, y: 7 }, { x: 29, y: 16 }, { x: 36, y: 3 }, { x: 43, y: 16 }, { x: 65, y: 7 }, { x: 57, y: 29 }, { x: 70, y: 36 }, { x: 55, y: 43 }, { x: 62, y: 66 }, { x: 41, y: 56 }, { x: 36, y: 70 }, { x: 31, y: 56 }, { x: 10, y: 66 }, { x: 17, y: 43 }, { x: 2, y: 36 }, { x: 15, y: 29 }];
+      graphics.fillPoints(frame, true);
+      graphics.strokePoints(frame, true);
+      graphics.fillRect(23, 24, 26, 24);
+      graphics.strokeRect(23, 24, 26, 24);
+    });
+
     createPlayerTexture('enemy-star', (graphics) => {
       const points: Phaser.Types.Math.Vector2Like[] = [];
       for (let i = 0; i < 10; i += 1) {

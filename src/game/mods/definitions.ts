@@ -32,7 +32,7 @@ export const MOD_DEFINITIONS: readonly ModDefinition[] = [
     tags: ['mine', 'control', 'pull']
   },
   {
-    id: 'fractured-current', name: 'Fractured Current', category: 'weapon', rarity: 'prototype', maxRank: 3, dropWeight: 0.08,
+    id: 'fractured-current', name: 'Fractured Current', category: 'weapon', rarity: 'legendary', maxRank: 3, dropWeight: 0.08,
     variant: 'corrupted',
     description: 'An unstable current turns weapon kills into violent arcs, but every shot drains additional energy.',
     positiveEffect: 'Weapon kills release a stronger arc.',
