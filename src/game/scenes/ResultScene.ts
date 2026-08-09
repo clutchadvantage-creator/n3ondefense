@@ -6,7 +6,7 @@ import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { OBJECTIVE_CONFIG } from '../config/gameplay';
-import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
+import { RUN_PROTOCOLS, normalizeRunProtocolId } from '../mods/modBalance.ts';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { SaveSystem } from '../systems/SaveSystem';
 import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
@@ -18,6 +18,7 @@ export class ResultScene extends Phaser.Scene {
 
   create(): void {
     const result = this.registry.get('result') as ArenaReward | undefined;
+    const resultProtocol = normalizeRunProtocolId(result?.protocol);
     const { width, height } = this.scale;
     this.add.rectangle(width / 2, height / 2, width, height, 0x05070d, 1);
     const panelWidth = Math.min(860, width - 48);
@@ -35,7 +36,7 @@ export class ResultScene extends Phaser.Scene {
       wordWrap: { width: panelWidth - 64, useAdvancedWrap: true }
     }).setOrigin(0.5, 0);
 
-    const summary = this.add.text(width / 2, panelTop + 108, `Run Credits Earned: ${result?.runCreditsEarned ?? result?.credits ?? 0}\nCore Tokens Earned This Round: ${result?.coreTokens ?? 0}\nHighest Round: ${result?.highestRound ?? result?.round ?? '-'}  Seed: ${result?.seed ?? '-'}\nProtocol: ${(result?.protocol ?? 'normal').toUpperCase()}  Contract: ${(result?.contract ?? 'none').replace(/-/g, ' ').toUpperCase()}\nMod Signal: ${(result?.modFocus ?? 'none').replace(/([A-Z])/g, ' $1').toUpperCase()}  Mods Earned: ${result?.modsEarned.length ?? 0}`, {
+    const summary = this.add.text(width / 2, panelTop + 108, `Run Credits Earned: ${result?.runCreditsEarned ?? result?.credits ?? 0}\nCore Tokens Earned This Round: ${result?.coreTokens ?? 0}\nHighest Round: ${result?.highestRound ?? result?.round ?? '-'}  Seed: ${result?.seed ?? '-'}\nProtocol: ${RUN_PROTOCOLS[resultProtocol].label}  Contract: ${(result?.contract ?? 'none').replace(/-/g, ' ').toUpperCase()}\nMod Signal: ${(result?.modFocus ?? 'none').replace(/([A-Z])/g, ' $1').toUpperCase()}  Mods Earned: ${result?.modsEarned.length ?? 0}`, {
       fontFamily: 'Rajdhani, sans-serif',
       fontSize: `${height < 700 ? 20 : 23}px`,
       color: '#dbfaff',
@@ -73,7 +74,7 @@ export class ResultScene extends Phaser.Scene {
       OnlineRunManager.beginLocalRun();
       disableButton(replayButton);
       this.registry.remove('round-finished');
-      const protocol = result?.protocol === 'overdrive' ? 'overdrive' : 'normal';
+      const protocol = resultProtocol;
       startArenaLoad(this, {
         reason: 'replay-after-fail',
         session: {

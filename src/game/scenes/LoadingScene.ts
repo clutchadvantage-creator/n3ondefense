@@ -4,6 +4,7 @@ import { RunTransitionManager, type ArenaTransitionRequest } from '../flow/RunTr
 import { SceneKeys } from '../flow/SceneKeys';
 import type { ArenaLoadRequest } from '../utils/runFlow';
 import { createButton } from '../utils/ui';
+import { normalizeRunProtocolId } from '../mods/modBalance.ts';
 
 export class LoadingScene extends Phaser.Scene {
   private transitionRequest?: ArenaTransitionRequest;
@@ -220,7 +221,7 @@ export class LoadingScene extends Phaser.Scene {
       baseSeed: Math.floor(candidate.baseSeed),
       round: Math.max(1, Math.floor(candidate.round)),
       objectiveMode: candidate.objectiveMode,
-      protocol: candidate.protocol === 'overdrive' ? 'overdrive' : 'normal',
+      protocol: normalizeRunProtocolId(candidate.protocol),
       runStartedAt: candidate.runStartedAt,
       equippedMods: candidate.equippedMods,
       modsEarned: candidate.modsEarned,

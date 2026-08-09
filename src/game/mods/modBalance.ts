@@ -42,6 +42,8 @@ export const MOD_BALANCE = {
 
 export interface RunProtocolDefinition {
   id: RunProtocolId;
+  family: 'normal' | 'overdrive';
+  tier: number;
   label: string;
   description: string;
   unlockHighestRound: number;
@@ -50,7 +52,45 @@ export interface RunProtocolDefinition {
   modDropMultiplier: number;
 }
 
+export const RUN_PROTOCOL_IDS = [
+  'normal',
+  'overdrive',
+  'overdrive-orion',
+  'overdrive-ares',
+  'overdrive-lyra',
+  'overdrive-draco',
+  'overdrive-phoenix',
+  'overdrive-hydra',
+  'overdrive-andromeda',
+  'overdrive-perseus',
+  'overdrive-pegasus'
+] as const satisfies readonly RunProtocolId[];
+
 export const RUN_PROTOCOLS: Record<RunProtocolId, RunProtocolDefinition> = {
-  normal: { id: 'normal', label: 'NORMAL PROTOCOL', description: 'Classic operation beginning at Round 1.', unlockHighestRound: 0, startingRound: 1, scoreMultiplier: 1, modDropMultiplier: 1 },
-  overdrive: { id: 'overdrive', label: 'OVERDRIVE PROTOCOL', description: 'Begin at Round 5. Skipped rounds grant no rewards.', unlockHighestRound: 8, startingRound: 5, scoreMultiplier: 1.25, modDropMultiplier: 1.35 }
+  normal: { id: 'normal', family: 'normal', tier: 0, label: 'NORMAL PROTOCOL', description: 'Classic operation beginning at Round 1.', unlockHighestRound: 0, startingRound: 1, scoreMultiplier: 1, modDropMultiplier: 1 },
+  overdrive: { id: 'overdrive', family: 'overdrive', tier: 1, label: 'OVERDRIVE', description: 'Begin at Round 5. Skipped rounds grant no rewards.', unlockHighestRound: 8, startingRound: 5, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
+  'overdrive-orion': { id: 'overdrive-orion', family: 'overdrive', tier: 2, label: 'OVERDRIVE ORION', description: 'Begin at Round 10. Skipped rounds grant no rewards.', unlockHighestRound: 13, startingRound: 10, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
+  'overdrive-ares': { id: 'overdrive-ares', family: 'overdrive', tier: 3, label: 'OVERDRIVE ARES', description: 'Begin at Round 15. Skipped rounds grant no rewards.', unlockHighestRound: 18, startingRound: 15, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
+  'overdrive-lyra': { id: 'overdrive-lyra', family: 'overdrive', tier: 4, label: 'OVERDRIVE LYRA', description: 'Begin at Round 20. Skipped rounds grant no rewards.', unlockHighestRound: 23, startingRound: 20, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
+  'overdrive-draco': { id: 'overdrive-draco', family: 'overdrive', tier: 5, label: 'OVERDRIVE DRACO', description: 'Begin at Round 25. Skipped rounds grant no rewards.', unlockHighestRound: 28, startingRound: 25, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
+  'overdrive-phoenix': { id: 'overdrive-phoenix', family: 'overdrive', tier: 6, label: 'OVERDRIVE PHOENIX', description: 'Begin at Round 30. Skipped rounds grant no rewards.', unlockHighestRound: 33, startingRound: 30, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
+  'overdrive-hydra': { id: 'overdrive-hydra', family: 'overdrive', tier: 7, label: 'OVERDRIVE HYDRA', description: 'Begin at Round 35. Skipped rounds grant no rewards.', unlockHighestRound: 38, startingRound: 35, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
+  'overdrive-andromeda': { id: 'overdrive-andromeda', family: 'overdrive', tier: 8, label: 'OVERDRIVE ANDROMEDA', description: 'Begin at Round 40. Skipped rounds grant no rewards.', unlockHighestRound: 43, startingRound: 40, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
+  'overdrive-perseus': { id: 'overdrive-perseus', family: 'overdrive', tier: 9, label: 'OVERDRIVE PERSEUS', description: 'Begin at Round 45. Skipped rounds grant no rewards.', unlockHighestRound: 48, startingRound: 45, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
+  'overdrive-pegasus': { id: 'overdrive-pegasus', family: 'overdrive', tier: 10, label: 'OVERDRIVE PEGASUS', description: 'Begin at Round 50. Skipped rounds grant no rewards.', unlockHighestRound: 53, startingRound: 50, scoreMultiplier: 1.25, modDropMultiplier: 1.35 }
+};
+
+export const isRunProtocolId = (value: unknown): value is RunProtocolId =>
+  typeof value === 'string' && Object.prototype.hasOwnProperty.call(RUN_PROTOCOLS, value);
+
+export const normalizeRunProtocolId = (value: unknown): RunProtocolId =>
+  isRunProtocolId(value) ? value : 'normal';
+
+export const getUnlockedProtocolIds = (highestRound: number): RunProtocolId[] =>
+  RUN_PROTOCOL_IDS.filter((id) => highestRound >= RUN_PROTOCOLS[id].unlockHighestRound);
+
+export const cycleUnlockedProtocol = (current: RunProtocolId, highestRound: number, direction: 1 | -1): RunProtocolId => {
+  const unlocked = getUnlockedProtocolIds(highestRound);
+  const currentIndex = Math.max(0, unlocked.indexOf(current));
+  return unlocked[(currentIndex + direction + unlocked.length) % unlocked.length] ?? 'normal';
 };

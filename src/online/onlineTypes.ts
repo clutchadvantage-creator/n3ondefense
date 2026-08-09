@@ -1,3 +1,5 @@
+import type { RunProtocolId } from '../game/mods/types.ts';
+
 export type OnlineRunStatus = 'pending' | 'verified' | 'flagged' | 'rejected';
 export type OnlineSubmissionState = OnlineRunStatus | 'submitted' | 'queued_offline' | 'failed';
 export type OnlineLeaderboardCategory = 'highest_round' | 'enemies_destroyed' | 'bomb_sites_destroyed';
@@ -22,7 +24,7 @@ export interface OnlineRunContext {
   milestoneSequence: number;
   highestRound: number;
   baseline: OnlineProgressSnapshot;
-  protocol: 'normal' | 'overdrive';
+  protocol: RunProtocolId;
   equippedMods: Array<{ id: string; rank: number }>;
 }
 

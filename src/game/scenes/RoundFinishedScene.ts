@@ -6,6 +6,7 @@ import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
+import { RUN_PROTOCOLS, normalizeRunProtocolId } from '../mods/modBalance.ts';
 
 export class RoundFinishedScene extends Phaser.Scene {
   constructor() {
@@ -14,6 +15,7 @@ export class RoundFinishedScene extends Phaser.Scene {
 
   create(): void {
     const payload = this.registry.get('round-finished') as RoundFinishedPayload | undefined;
+    const protocolDefinition = RUN_PROTOCOLS[normalizeRunProtocolId(payload?.protocol)];
     const { width, height } = this.scale;
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x040811, 1);
@@ -41,7 +43,7 @@ export class RoundFinishedScene extends Phaser.Scene {
     const completedSummary = this.add.text(
       width / 2,
       panelTop + 132,
-      `Credits Gained: ${payload?.creditsGained ?? 0}\nCore Tokens Gained: ${payload?.coreTokensGained ?? 0}\nPlasma Chips Gained: ${payload?.plasmaChipsGained ?? 0}${payload?.bossDefeated ? `\nBoss Defeated: ${payload.bossDefeated.replace(/-/g, ' ').toUpperCase()}` : ''}\nProtocol: ${(payload?.protocol ?? 'normal').toUpperCase()}  •  Contract: ${(payload?.contract ?? 'none').replace(/-/g, ' ').toUpperCase()}\nMod Signal: ${(payload?.modFocus ?? 'none').replace(/([A-Z])/g, ' $1').toUpperCase()}  •  Mods Earned: ${payload?.modsEarned.length ?? 0}\nCompleted Seed: ${payload?.completedSeed ?? '-'}\nCompleted Layout: ${payload?.completedTemplate ?? '-'}`,
+      `Credits Gained: ${payload?.creditsGained ?? 0}\nCore Tokens Gained: ${payload?.coreTokensGained ?? 0}\nPlasma Chips Gained: ${payload?.plasmaChipsGained ?? 0}${payload?.bossDefeated ? `\nBoss Defeated: ${payload.bossDefeated.replace(/-/g, ' ').toUpperCase()}` : ''}\nProtocol: ${protocolDefinition.label}  •  Contract: ${(payload?.contract ?? 'none').replace(/-/g, ' ').toUpperCase()}\nMod Signal: ${(payload?.modFocus ?? 'none').replace(/([A-Z])/g, ' $1').toUpperCase()}  •  Mods Earned: ${payload?.modsEarned.length ?? 0}\nCompleted Seed: ${payload?.completedSeed ?? '-'}\nCompleted Layout: ${payload?.completedTemplate ?? '-'}`,
       {
         fontFamily: 'Rajdhani, sans-serif',
         fontSize: `${height < 700 ? 19 : 22}px`,

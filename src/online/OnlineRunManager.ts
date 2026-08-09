@@ -4,6 +4,7 @@ import { OnlineCredentialStore } from './OnlineCredentialStore';
 import { PendingSubmissionQueue } from './PendingSubmissionQueue';
 import type { OnlineProgressSnapshot, OnlineRunContext, OnlineRunStartResult, OnlineRunStatus } from './onlineTypes';
 import type { EquippedModSnapshot, RunProtocolId } from '../game/mods/types.ts';
+import { RUN_PROTOCOLS, normalizeRunProtocolId } from '../game/mods/modBalance.ts';
 
 const ACTIVE_RUN_KEY = 'n3on-defense.online.active-run';
 const LAST_STATUS_KEY = 'n3on-defense.online.last-submission-status';
@@ -85,7 +86,7 @@ export class OnlineRunManager {
       highest_round: this.active.highestRound,
       ...progress,
       elapsed_ms: Date.now() - this.active.startedAt,
-      protocol: this.active.protocol,
+      protocol: RUN_PROTOCOLS[this.active.protocol].family,
       equipped_mods: this.active.equippedMods
     });
     this.persistActive();
@@ -102,7 +103,7 @@ export class OnlineRunManager {
       highest_round: this.active.highestRound,
       ...progress,
       elapsed_ms: Date.now() - this.active.startedAt,
-      protocol: this.active.protocol,
+      protocol: RUN_PROTOCOLS[this.active.protocol].family,
       equipped_mods: this.active.equippedMods
     });
     this.setStatus(navigator.onLine ? 'submitted' : 'queued_offline');
@@ -173,7 +174,7 @@ export class OnlineRunManager {
       this.profileId = parsed.profileId ?? null;
       return {
         ...parsed,
-        protocol: parsed.protocol === 'overdrive' ? 'overdrive' : 'normal',
+        protocol: normalizeRunProtocolId(parsed.protocol),
         equippedMods: Array.isArray(parsed.equippedMods) ? parsed.equippedMods : []
       };
     } catch { return null; }

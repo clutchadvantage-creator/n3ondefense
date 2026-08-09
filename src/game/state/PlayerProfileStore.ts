@@ -368,7 +368,7 @@ export class PlayerProfileStore {
   static setPreferredProtocol(protocol: RunProtocolId): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
     const definition = RUN_PROTOCOLS[protocol];
-    if (save.progress.highestRound < definition.unlockHighestRound) return { ok: false, message: `Reach Round ${definition.unlockHighestRound} to unlock Overdrive.` };
+    if (save.progress.highestRound < definition.unlockHighestRound) return { ok: false, message: `Reach Round ${definition.unlockHighestRound} to unlock ${definition.label}.` };
     save.protocol.preferred = protocol;
     PlayerProfileStore.save();
     return { ok: true };

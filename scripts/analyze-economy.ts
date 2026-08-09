@@ -89,7 +89,7 @@ console.table([
 
 console.log('\nECONOMY MULTIPLIERS');
 console.table([
-  ...Object.values(RUN_PROTOCOLS).map((protocol) => ({ system: protocol.label, credits: '1.00x', score: `${protocol.scoreMultiplier.toFixed(2)}x`, modDrops: `${protocol.modDropMultiplier.toFixed(2)}x`, note: protocol.id === 'overdrive' ? 'Skipped rounds grant zero rewards' : 'Starts at Round 1' })),
+  ...Object.values(RUN_PROTOCOLS).map((protocol) => ({ system: protocol.label, credits: '1.00x', score: `${protocol.scoreMultiplier.toFixed(2)}x`, modDrops: `${protocol.modDropMultiplier.toFixed(2)}x`, note: protocol.family === 'overdrive' ? `Starts at Round ${protocol.startingRound}; skipped rounds grant zero rewards` : 'Starts at Round 1' })),
   { system: 'Focused Mod signal', credits: '1.00x', score: '1.00x', modDrops: 'Quantity unchanged', note: `${ECONOMY_BALANCE.modFocus.categoryWeightMultiplier.toFixed(2)}x selected-category weight` },
   ...Object.values(RUN_CONTRACTS).map((contract) => ({ system: contract.label, credits: `${contract.creditRewardMultiplier.toFixed(2)}x`, score: '1.00x', modDrops: `${contract.modDropChanceMultiplier.toFixed(2)}x`, note: `HP ${contract.enemyHealthMultiplier.toFixed(2)}x / cadence ${contract.spawnCadenceMultiplier.toFixed(2)}x / elite weight ${contract.eliteCompositionWeightMultiplier.toFixed(2)}x` }))
 ]);

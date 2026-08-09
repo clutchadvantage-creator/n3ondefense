@@ -224,5 +224,9 @@ assert(Object.values(MOD_BALANCE.duplicateCreditValueByRarity).every((value) => 
 assert(Object.values(MOD_BALANCE.duplicatePlasmaValueByRarity).every((value) => value > 0), 'duplicate plasma yields positive');
 assert(MOD_BALANCE.detonationFireworks.minDurationMs >= 20_000, 'fireworks minimum duration');
 assert(MOD_BALANCE.detonationFireworks.maxDurationMs <= 30_000 && MOD_BALANCE.detonationFireworks.maxDurationMs >= MOD_BALANCE.detonationFireworks.minDurationMs, 'fireworks duration range');
-assert(RUN_PROTOCOLS.overdrive.startingRound > RUN_PROTOCOLS.normal.startingRound, 'Overdrive starts later than Normal');
+const overdriveProtocols = Object.values(RUN_PROTOCOLS).filter((protocol) => protocol.family === 'overdrive');
+assert(overdriveProtocols.length === 10, 'ten named Overdrive tiers are configured');
+assert(overdriveProtocols.every((protocol, index) => protocol.startingRound === (index + 1) * 5), 'Overdrive starts advance in five-round steps');
+assert(overdriveProtocols.every((protocol, index) => protocol.tier === index + 1), 'Overdrive tiers are sequential');
+assert(overdriveProtocols.every((protocol) => protocol.unlockHighestRound > protocol.startingRound), 'Overdrive tiers require prior progression');
 console.log('\nAll mathematical safety and relationship checks passed.');

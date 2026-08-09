@@ -9,7 +9,7 @@ import { createButton, disableButton, enableButton } from '../utils/ui';
 import { showInfoModal } from '../utils/localSaveUi';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { bindingLabel } from '../config/controls';
-import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
+import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, getUnlockedProtocolIds } from '../mods/modBalance.ts';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { ECONOMY_BALANCE, MOD_FOCUS_CATEGORIES, MOD_FOCUS_LABELS, RUN_CONTRACT_IDS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
@@ -107,15 +107,26 @@ export class MainMenuScene extends Phaser.Scene {
       });
     }
 
-    const protocolButton = createButton(this, width / 2, 202, `Protocol: ${protocolDefinition.label.replace(' PROTOCOL', '')}`, () => {
+    const unlockedProtocols = profile ? getUnlockedProtocolIds(SaveSystem.getHighestRound()) : ['normal'] as const;
+    const selectProtocol = (direction: 1 | -1): void => {
       if (!profile) return;
-      const next = protocol === 'normal' ? 'overdrive' : 'normal';
+      const next = cycleUnlockedProtocol(protocol, SaveSystem.getHighestRound(), direction);
+      if (next === protocol && unlockedProtocols.length === 1) {
+        const nextLocked = RUN_PROTOCOL_IDS.find((id) => SaveSystem.getHighestRound() < RUN_PROTOCOLS[id].unlockHighestRound);
+        if (nextLocked) onlineStatus.setText(`${RUN_PROTOCOLS[nextLocked].label} UNLOCKS AT ROUND ${RUN_PROTOCOLS[nextLocked].unlockHighestRound}`).setColor('#ffbd85');
+        return;
+      }
       const result = SaveSystem.setPreferredProtocol(next);
       if (result.ok) this.scene.restart();
       else onlineStatus.setText(result.message ?? 'PROTOCOL LOCKED').setColor('#ffbd85');
-    }, 300);
-    if (profile && SaveSystem.getHighestRound() < RUN_PROTOCOLS.overdrive.unlockHighestRound) {
+    };
+    const protocolButton = createButton(this, width / 2, 202, `${protocolDefinition.label}\nSTART ROUND ${protocolDefinition.startingRound}`, () => selectProtocol(1), 300);
+    const previousProtocolButton = createButton(this, width / 2 - 174, 202, '<', () => selectProtocol(-1), 40);
+    const nextProtocolButton = createButton(this, width / 2 + 174, 202, '>', () => selectProtocol(1), 40);
+    if (profile && unlockedProtocols.length === 1) {
       protocolButton.setAlpha(0.82);
+      previousProtocolButton.setAlpha(0.82);
+      nextProtocolButton.setAlpha(0.82);
     }
 
     const setupSelection = this.getRunSetupSelection();

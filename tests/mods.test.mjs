@@ -8,7 +8,7 @@ import { rollModDrop } from '../src/game/mods/ModDropService.ts';
 import { normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import { MOD_BY_ID, MOD_DEFINITIONS } from '../src/game/mods/definitions.ts';
 import { MOD_INFUSIONS } from '../src/game/mods/infusions.ts';
-import { MOD_BALANCE } from '../src/game/mods/modBalance.ts';
+import { MOD_BALANCE, RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol } from '../src/game/mods/modBalance.ts';
 
 const equippedRuntimeAtRank = (modId, rank) => {
   const mods = createDefaultModCollection();
@@ -379,12 +379,34 @@ test('Magnetic Payload gives heavy enemies strong resistance', () => {
   assert.ok(magneticResistanceForEnemy('star') < magneticResistanceForEnemy('tank'));
 });
 
-test('Normal and Overdrive starts are explicit and skipped rewards remain zero', () => {
+test('the named Overdrive ladder starts every five rounds without skipped rewards', () => {
   assert.equal(protocolStart('normal', 0).startingRound, 1);
   assert.equal(protocolStart('overdrive', 7).protocol, 'normal');
   const overdrive = protocolStart('overdrive', 8);
   assert.equal(overdrive.startingRound, 5);
   assert.deepEqual(overdrive.skippedRewards, { credits: 0, coreTokens: 0, mods: 0, kills: 0, score: 0 });
+
+  const tiers = RUN_PROTOCOL_IDS.slice(1).map((id) => RUN_PROTOCOLS[id]);
+  assert.equal(tiers.length, 10);
+  assert.deepEqual(tiers.map((definition) => definition.startingRound), [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]);
+  assert.deepEqual(tiers.map((definition) => definition.tier), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.deepEqual(tiers.slice(0, 3).map((definition) => definition.label), ['OVERDRIVE', 'OVERDRIVE ORION', 'OVERDRIVE ARES']);
+  assert.ok(tiers.every((definition) => definition.family === 'overdrive'));
+  assert.ok(tiers.every((definition) => definition.scoreMultiplier === RUN_PROTOCOLS.overdrive.scoreMultiplier));
+  assert.ok(tiers.every((definition) => definition.modDropMultiplier === RUN_PROTOCOLS.overdrive.modDropMultiplier));
+  assert.equal(protocolStart('overdrive-orion', 12).protocol, 'normal');
+  assert.equal(protocolStart('overdrive-orion', 13).startingRound, 10);
+  assert.equal(protocolStart('overdrive-ares', 18).startingRound, 15);
+});
+
+test('protocol selection cycles only through unlocked named tiers and saves them', () => {
+  assert.equal(cycleUnlockedProtocol('normal', 7, 1), 'normal');
+  assert.equal(cycleUnlockedProtocol('normal', 13, 1), 'overdrive');
+  assert.equal(cycleUnlockedProtocol('overdrive', 13, 1), 'overdrive-orion');
+  assert.equal(cycleUnlockedProtocol('overdrive-orion', 13, 1), 'normal');
+  assert.equal(cycleUnlockedProtocol('normal', 13, -1), 'overdrive-orion');
+  assert.deepEqual(normalizeProtocolPreference({ preferred: 'overdrive-ares' }), { preferred: 'overdrive-ares' });
+  assert.deepEqual(normalizeProtocolPreference({ preferred: 'unknown-protocol' }), { preferred: 'normal' });
 });
 
 test('mod drops are deterministic and run result fields serialize', () => {

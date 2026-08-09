@@ -34,7 +34,7 @@ import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { GameplayPointerLock } from '../input/GameplayPointerLock';
 import { ABILITY_ACTIONS, compactBindingLabel, type AbilityAction, type AbilityBindings } from '../config/controls';
 import { ModRuntime } from '../mods/ModRuntime.ts';
-import { MOD_BALANCE } from '../mods/modBalance.ts';
+import { MOD_BALANCE, normalizeRunProtocolId } from '../mods/modBalance.ts';
 import { isGuaranteedMilestone, rollModDrop } from '../mods/ModDropService.ts';
 import type { ModDropSource, ModRewardRecord, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { magneticResistanceForEnemy, prioritizeTurretTargets, splitCurrentSecondaryDamage } from '../mods/ModRules.ts';
@@ -336,7 +336,7 @@ export class ArenaScene extends Phaser.Scene {
       baseSeed: Math.floor(candidate.baseSeed),
       round: Math.max(1, Math.floor(candidate.round)),
       objectiveMode: candidate.objectiveMode,
-      protocol: candidate.protocol === 'overdrive' ? 'overdrive' : 'normal',
+      protocol: normalizeRunProtocolId(candidate.protocol),
       runStartedAt: typeof candidate.runStartedAt === 'number' ? candidate.runStartedAt : Date.now(),
       equippedMods: Array.isArray(candidate.equippedMods) ? candidate.equippedMods : undefined,
       modsEarned: Array.isArray(candidate.modsEarned) ? candidate.modsEarned : [],

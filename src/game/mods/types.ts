@@ -2,7 +2,18 @@ export type ModCategory = 'weapon' | 'player' | 'defense' | 'bombSite' | 'utilit
 export type ModRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type ModRank = 0 | 1 | 2 | 3;
 export type ModSlot = 'weapon' | 'player' | 'defense' | 'bombSite' | 'wildcard';
-export type RunProtocolId = 'normal' | 'overdrive';
+export type RunProtocolId =
+  | 'normal'
+  | 'overdrive'
+  | 'overdrive-orion'
+  | 'overdrive-ares'
+  | 'overdrive-lyra'
+  | 'overdrive-draco'
+  | 'overdrive-phoenix'
+  | 'overdrive-hydra'
+  | 'overdrive-andromeda'
+  | 'overdrive-perseus'
+  | 'overdrive-pegasus';
 export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone' | 'boss';
 export type ModVariant = 'standard' | 'corrupted';
 export type ModInfusionId = 'enemy-growth' | 'detonation-fireworks';

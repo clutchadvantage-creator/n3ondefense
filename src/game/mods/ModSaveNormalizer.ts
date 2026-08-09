@@ -1,6 +1,7 @@
 import { MOD_BY_ID } from './definitions.ts';
 import { createDefaultModCollection, createDefaultModLoadout, normalizeOwnedMod } from './ModInventoryService.ts';
-import type { LocalModCollection, ModCardInstance, ModInfusionId, ModSlot, ProtocolPreference, RunProtocolId } from './types.ts';
+import type { LocalModCollection, ModCardInstance, ModInfusionId, ModSlot, ProtocolPreference } from './types.ts';
+import { normalizeRunProtocolId } from './modBalance.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
 import { ECONOMY_BALANCE } from '../economy/economyBalance.ts';
 
@@ -85,5 +86,5 @@ export const normalizeModCollection = (mods: unknown): LocalModCollection => {
 
 export const normalizeProtocolPreference = (value: unknown): ProtocolPreference => {
   const candidate = isObject(value) ? value.preferred : value;
-  return { preferred: (candidate === 'overdrive' ? 'overdrive' : 'normal') as RunProtocolId };
+  return { preferred: normalizeRunProtocolId(candidate) };
 };
