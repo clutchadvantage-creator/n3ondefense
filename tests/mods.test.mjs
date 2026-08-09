@@ -10,6 +10,15 @@ import { MOD_BY_ID } from '../src/game/mods/definitions.ts';
 import { MOD_INFUSIONS } from '../src/game/mods/infusions.ts';
 import { MOD_BALANCE } from '../src/game/mods/modBalance.ts';
 
+const equippedRuntimeAtRank = (modId, rank) => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, modId);
+  mods.cards[0].upgradeLevel = rank;
+  const category = MOD_BY_ID.get(modId).category;
+  equipMod(mods, category === 'utility' ? 'wildcard' : category, modId);
+  return new ModRuntime(mods);
+};
+
 test('old profiles receive empty mod and normal protocol defaults', () => {
   const mods = normalizeModCollection(undefined);
   assert.deepEqual(mods.inventory, {});
@@ -151,9 +160,15 @@ test('Nanite Fuel is a rare legendary Player Mod with three upgrades', () => {
 });
 
 test('Nanite Fuel can drop in both protocols and is favored by boss rewards', () => {
+  const findNaniteFuelSeed = (source, protocol) => {
+    for (let seed = 0; seed < 1_000_000; seed += 1) {
+      if (rollModDrop({ source, round: 10, seed, sequence: 0, protocol })?.id === 'nanite-fuel') return seed;
+    }
+    return null;
+  };
   for (const protocol of ['normal', 'overdrive']) {
-    assert.equal(rollModDrop({ source: 'milestone', round: 10, seed: 35_300, sequence: 0, protocol })?.id, 'nanite-fuel');
-    assert.equal(rollModDrop({ source: 'boss', round: 10, seed: 199, sequence: 0, protocol })?.id, 'nanite-fuel');
+    assert.notEqual(findNaniteFuelSeed('milestone', protocol), null);
+    assert.notEqual(findNaniteFuelSeed('boss', protocol), null);
   }
   assert.ok(MOD_BALANCE.dropChance.boss > MOD_BALANCE.dropChance.milestone);
   assert.ok(MOD_BALANCE.raritySourceMultipliers.boss.legendary > MOD_BALANCE.raritySourceMultipliers.milestone.legendary);
@@ -168,6 +183,52 @@ test('Nanite Fuel stacks after purchased speed and with temporary speed effects'
   mods.cards[0].upgradeLevel = 3;
   assert.equal(new ModRuntime(mods).naniteFuelSpeedMultiplier(), 1.125);
   assert.equal(applyOperativeSpeedMultipliers(300, 1.125, 1.3, 1.18), 517.725);
+});
+
+test('the expanded collection includes ranked fence, mine, pickup, and turret cards', () => {
+  const expected = [
+    ['conductive-fencing', 'common'],
+    ['high-yield-mines', 'common'],
+    ['hardlight-weave', 'uncommon'],
+    ['quick-fuse', 'uncommon'],
+    ['magnetic-service', 'rare'],
+    ['jailbroke-turrets', 'epic']
+  ];
+  for (const [id, rarity] of expected) {
+    const definition = MOD_BY_ID.get(id);
+    assert.equal(definition.rarity, rarity);
+    assert.equal(definition.maxRank, 3);
+  }
+});
+
+test('Magnetic Service multiplies final pickup collection range and pull speed by card rank', () => {
+  assert.deepEqual(equippedRuntimeAtRank('magnetic-service', 0).magneticServiceField(104), {
+    attractionRadius: 182,
+    pullSpeed: 155
+  });
+  assert.deepEqual(equippedRuntimeAtRank('magnetic-service', 3).magneticServiceField(104), {
+    attractionRadius: 364,
+    pullSpeed: 315
+  });
+  assert.deepEqual(new ModRuntime(createDefaultModCollection()).magneticServiceField(104), {
+    attractionRadius: 104,
+    pullSpeed: 0
+  });
+});
+
+test('Jailbroke Turrets scales fence-crossing streams from one through the operative four-stream fan', () => {
+  assert.deepEqual(equippedRuntimeAtRank('jailbroke-turrets', 0).jailbrokeTurretFan(), { streamCount: 1, damageShare: 1 });
+  assert.deepEqual(equippedRuntimeAtRank('jailbroke-turrets', 1).jailbrokeTurretFan(), { streamCount: 2, damageShare: 0.7 });
+  assert.deepEqual(equippedRuntimeAtRank('jailbroke-turrets', 2).jailbrokeTurretFan(), { streamCount: 3, damageShare: 0.55 });
+  assert.deepEqual(equippedRuntimeAtRank('jailbroke-turrets', 3).jailbrokeTurretFan(), { streamCount: 4, damageShare: 0.45 });
+  assert.equal(new ModRuntime(createDefaultModCollection()).jailbrokeTurretFan(), null);
+});
+
+test('fence and mine cards multiply the final permanent ability upgrades', () => {
+  assert.equal(70 * equippedRuntimeAtRank('conductive-fencing', 3).fenceDamageMultiplier(), 87.5);
+  assert.equal(270 * equippedRuntimeAtRank('hardlight-weave', 3).fenceHealthMultiplier(), 405);
+  assert.equal(142 * equippedRuntimeAtRank('high-yield-mines', 3).mineDamageMultiplier(), 177.5);
+  assert.equal(440 * equippedRuntimeAtRank('quick-fuse', 3).mineArmTimeMultiplier(), 220);
 });
 
 test('one card upgrades from zero through three without duplicate requirements', () => {

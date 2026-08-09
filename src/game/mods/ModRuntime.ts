@@ -57,6 +57,34 @@ export class ModRuntime {
   naniteFuelSpeedMultiplier(): number {
     return this.has('nanite-fuel') ? MOD_BALANCE.naniteFuel.speedMultiplier[this.rank('nanite-fuel')] : 1;
   }
+  magneticServiceField(collectionRadius: number): { attractionRadius: number; pullSpeed: number } {
+    if (!this.has('magnetic-service')) return { attractionRadius: collectionRadius, pullSpeed: 0 };
+    const rank = this.rank('magnetic-service');
+    return {
+      attractionRadius: collectionRadius * MOD_BALANCE.magneticService.attractionRangeMultiplier[rank],
+      pullSpeed: MOD_BALANCE.magneticService.pullSpeed[rank]
+    };
+  }
+  jailbrokeTurretFan(): { streamCount: number; damageShare: number } | null {
+    if (!this.has('jailbroke-turrets')) return null;
+    const rank = this.rank('jailbroke-turrets');
+    return {
+      streamCount: MOD_BALANCE.jailbrokeTurrets.streamCount[rank],
+      damageShare: MOD_BALANCE.jailbrokeTurrets.streamDamageShare[rank]
+    };
+  }
+  fenceDamageMultiplier(): number {
+    return this.has('conductive-fencing') ? MOD_BALANCE.conductiveFencing.damageMultiplier[this.rank('conductive-fencing')] : 1;
+  }
+  fenceHealthMultiplier(): number {
+    return this.has('hardlight-weave') ? MOD_BALANCE.hardlightWeave.healthMultiplier[this.rank('hardlight-weave')] : 1;
+  }
+  mineDamageMultiplier(): number {
+    return this.has('high-yield-mines') ? MOD_BALANCE.highYieldMines.damageMultiplier[this.rank('high-yield-mines')] : 1;
+  }
+  mineArmTimeMultiplier(): number {
+    return this.has('quick-fuse') ? MOD_BALANCE.quickFuse.armTimeMultiplier[this.rank('quick-fuse')] : 1;
+  }
   hasInfusion(infusionId: ModInfusionId): boolean { return this.infusions.has(infusionId); }
   snapshot(): EquippedModSnapshot[] {
     return Array.from(this.equipped, ([id, rank]) => ({ id, rank, infusionId: this.infusionByModId.get(id) }));

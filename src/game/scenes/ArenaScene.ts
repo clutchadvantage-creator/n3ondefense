@@ -1560,10 +1560,12 @@ export class ArenaScene extends Phaser.Scene {
 
       this.spawnProjectileTrail(p.sprite.x, p.sprite.y, p.trailColor);
 
-      if (p.from === 'player' && !p.fenceSplit) {
+      const canSplitAtFence = !p.fenceSplit && (p.from === 'player'
+        || (p.from === 'turret' && this.modRuntime.has('jailbroke-turrets')));
+      if (canSplitAtFence) {
         const split = this.splitProjectileAtFence(p);
         if (split.length > 0) {
-          GameplayTelemetryRecorder.recordProjectileMiss('weapon', 'fence-split', split.length);
+          GameplayTelemetryRecorder.recordProjectileMiss(p.from === 'turret' ? 'turret' : 'weapon', 'fence-split', split.length);
           fenceSplitProjectiles.push(...split);
           p.sprite.destroy();
           return false;
@@ -1658,7 +1660,10 @@ export class ArenaScene extends Phaser.Scene {
     if (!body) return [];
     const baseAngle = Math.atan2(body.velocity.y, body.velocity.x);
     const speed = Math.max(1, body.velocity.length());
-    const count = ABILITY_BALANCE.fence.projectileFanCount;
+    const turretFan = projectile.from === 'turret' ? this.modRuntime.jailbrokeTurretFan() : null;
+    if (projectile.from === 'turret' && !turretFan) return [];
+    const count = turretFan?.streamCount ?? ABILITY_BALANCE.fence.projectileFanCount;
+    const damageShare = turretFan?.damageShare ?? ABILITY_BALANCE.fence.projectileFanDamageShare;
     const spacing = ABILITY_BALANCE.fence.projectileFanSpacingRadians;
     const texture = projectile.sprite.texture.key;
     const tint = projectile.sprite.tintTopLeft;
@@ -1674,16 +1679,17 @@ export class ArenaScene extends Phaser.Scene {
       sprite.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
       spawned.push({
         sprite,
-        damage: projectile.damage * ABILITY_BALANCE.fence.projectileFanDamageShare,
-        from: 'player',
+        damage: projectile.damage * damageShare,
+        from: projectile.from,
         lifeMs: projectile.lifeMs,
         trailColor: projectile.trailColor,
         splitCurrentEligible: projectile.splitCurrentEligible,
         fenceSplit: true,
         previousX: x,
         previousY: y,
-        telemetryOwner: 'weapon',
-        critical: projectile.critical
+        telemetryOwner: projectile.telemetryOwner,
+        critical: projectile.critical,
+        turretId: projectile.turretId
       });
     }
     const pulse = this.add.circle(projectile.sprite.x, projectile.sprite.y, 8, SaveSystem.getCosmeticColor('fenceStyle'), 0.25)
@@ -1938,6 +1944,8 @@ export class ArenaScene extends Phaser.Scene {
 
   private updatePickups(now: number, dt: number): void {
     for (const p of this.pickups) p.sprite.rotation += dt * 2;
+    const collectionRadius = this.player.stats.pickupRadius;
+    const magneticField = this.modRuntime.magneticServiceField(collectionRadius);
 
     this.pickups = this.pickups.filter((p) => {
       if (now > p.expiresAt) {
@@ -1946,13 +1954,22 @@ export class ArenaScene extends Phaser.Scene {
         return false;
       }
       const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, p.sprite.x, p.sprite.y);
-      if (d < this.player.stats.pickupRadius) {
-        if (p.type === 'energy' && this.player.energy > this.player.energyStats.max * (1 - PICKUP_BALANCE.energyAutoCollectMissingFraction)) {
+      const energyCollectionBlocked = p.type === 'energy'
+        && this.player.energy > this.player.energyStats.max * (1 - PICKUP_BALANCE.energyAutoCollectMissingFraction);
+      if (d < collectionRadius) {
+        if (energyCollectionBlocked) {
           return true;
         }
         this.collectPickup(p.type, p.source);
         p.sprite.destroy();
         return false;
+      }
+      if (!energyCollectionBlocked && magneticField.pullSpeed > 0 && d < magneticField.attractionRadius) {
+        const step = Math.min(Math.max(0, d - collectionRadius * 0.7), magneticField.pullSpeed * dt);
+        if (step > 0) {
+          p.sprite.x += ((this.player.x - p.sprite.x) / d) * step;
+          p.sprite.y += ((this.player.y - p.sprite.y) / d) * step;
+        }
       }
       return true;
     });
@@ -3004,12 +3021,14 @@ export class ArenaScene extends Phaser.Scene {
   } {
     const up = SaveSystem.get().upgrades;
     if (type === 'fence') {
+      const upgradedDamage = ABILITY_BALANCE.fence.damage + getUpgradeLevel(up, 'fence.damage') * 4;
+      const upgradedHealth = ABILITY_BALANCE.fence.hp + getUpgradeLevel(up, 'fence.health') * 16;
       return {
         energyCost: ABILITY_BALANCE.fence.energyCost,
         cooldownMs: ABILITY_BALANCE.fence.cooldownMs,
         maxActive: ABILITY_BALANCE.fence.maxActive + getUpgradeLevel(up, 'fence.max'),
-        damage: ABILITY_BALANCE.fence.damage + getUpgradeLevel(up, 'fence.damage') * 4,
-        hp: ABILITY_BALANCE.fence.hp + getUpgradeLevel(up, 'fence.health') * 16,
+        damage: upgradedDamage * this.modRuntime.fenceDamageMultiplier(),
+        hp: upgradedHealth * this.modRuntime.fenceHealthMultiplier(),
         durationMs: ABILITY_BALANCE.fence.durationMs + getUpgradeLevel(up, 'fence.duration') * 1200,
         range: 0,
         fireRate: 0,
@@ -3032,16 +3051,18 @@ export class ArenaScene extends Phaser.Scene {
       };
     }
 
+    const upgradedMineDamage = ABILITY_BALANCE.mine.damage + getUpgradeLevel(up, 'mine.damage') * 7;
+    const upgradedMineArmMs = Math.max(400, ABILITY_BALANCE.mine.armMs - getUpgradeLevel(up, 'mine.arm') * 70);
     return {
       energyCost: ABILITY_BALANCE.mine.energyCost,
       cooldownMs: ABILITY_BALANCE.mine.cooldownMs,
       maxActive: ABILITY_BALANCE.mine.maxActive + getUpgradeLevel(up, 'mine.max'),
-      damage: ABILITY_BALANCE.mine.damage + getUpgradeLevel(up, 'mine.damage') * 7,
+      damage: upgradedMineDamage * this.modRuntime.mineDamageMultiplier(),
       hp: 0,
       durationMs: 0,
       range: 0,
       fireRate: 0,
-      armMs: Math.max(400, ABILITY_BALANCE.mine.armMs - getUpgradeLevel(up, 'mine.arm') * 70),
+      armMs: Math.max(100, upgradedMineArmMs * this.modRuntime.mineArmTimeMultiplier()),
       radius: ABILITY_BALANCE.mine.radius + getUpgradeLevel(up, 'mine.radius') * 7
     };
   }

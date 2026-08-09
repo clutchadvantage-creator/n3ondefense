@@ -18,7 +18,13 @@ const ICONS: Record<string, string> = {
   'emergency-shield': '⬡',
   'magnetic-payload': '⌁',
   'fractured-current': 'ϟ!',
-  'nanite-fuel': '\u26fd'
+  'nanite-fuel': '\u26fd',
+  'magnetic-service': '\u{1f9f2}',
+  'jailbroke-turrets': '\u265c',
+  'conductive-fencing': '\u26a1',
+  'high-yield-mines': '\u2739',
+  'hardlight-weave': '\u25a6',
+  'quick-fuse': '\u23f1'
 };
 
 export interface ModCardViewOptions {

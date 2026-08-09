@@ -22,6 +22,18 @@ export const MOD_BALANCE = {
   splitCurrent: { damageShare: { 0: 0.15, 1: 0.2, 2: 0.3, 3: 0.4 }, radius: { 0: 130, 1: 150, 2: 180, 3: 220 } },
   fracturedCurrent: { extraShotEnergyCost: 0.25, damageShare: { 0: 0.18, 1: 0.25, 2: 0.35, 3: 0.45 }, radius: { 0: 140, 1: 160, 2: 195, 3: 235 } },
   naniteFuel: { speedMultiplier: { 0: 1.05, 1: 1.075, 2: 1.1, 3: 1.125 } },
+  magneticService: {
+    attractionRangeMultiplier: { 0: 1.75, 1: 2.25, 2: 2.75, 3: 3.5 },
+    pullSpeed: { 0: 155, 1: 195, 2: 245, 3: 315 }
+  },
+  jailbrokeTurrets: {
+    streamCount: { 0: 1, 1: 2, 2: 3, 3: 4 },
+    streamDamageShare: { 0: 1, 1: 0.7, 2: 0.55, 3: 0.45 }
+  },
+  conductiveFencing: { damageMultiplier: { 0: 1.1, 1: 1.15, 2: 1.2, 3: 1.25 } },
+  highYieldMines: { damageMultiplier: { 0: 1.1, 1: 1.15, 2: 1.2, 3: 1.25 } },
+  hardlightWeave: { healthMultiplier: { 0: 1.15, 1: 1.25, 2: 1.35, 3: 1.5 } },
+  quickFuse: { armTimeMultiplier: { 0: 0.85, 1: 0.75, 2: 0.65, 3: 0.5 } },
   emergencyCapacitor: { healthThreshold: 0.25, energyShare: { 0: 0.1, 1: 0.2, 2: 0.35, 3: 0.5 }, rank3SpeedMultiplier: 1.18, rank3SpeedDurationMs: 2500 },
   priorityTargeting: { markedDurationMs: 2500, rank3TurretDamageBonus: 0.1 },
   emergencyShield: { durationMs: { 0: 500, 1: 1000, 2: 2000, 3: 2000 }, cooldownMs: 30_000, knockbackRadius: 125, knockbackSpeed: 260 },

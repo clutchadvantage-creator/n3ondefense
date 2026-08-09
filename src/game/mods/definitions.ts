@@ -45,6 +45,42 @@ export const MOD_DEFINITIONS: readonly ModDefinition[] = [
     description: 'Self-replicating nanites permanently accelerate the operative while this card is equipped, stacking with purchased speed and temporary boosts.',
     rankDescriptions: { 0: 'Operative movement speed +5%.', 1: 'Operative movement speed +7.5%.', 2: 'Operative movement speed +10%.', 3: 'Operative movement speed +12.5%.' },
     tags: ['player', 'movement', 'permanent-while-equipped', 'stacking-speed']
+  },
+  {
+    id: 'magnetic-service', name: 'Magnetic Service', category: 'player', rarity: 'rare', maxRank: 3, dropWeight: 0.65,
+    description: 'An operative-mounted magnetic service field pulls pickups inward from beyond the normal collection radius.',
+    rankDescriptions: { 0: 'Attract pickups within 1.75x collection range.', 1: 'Attract pickups within 2.25x collection range.', 2: 'Attract pickups within 2.75x collection range.', 3: 'Attract pickups within 3.5x collection range.' },
+    tags: ['player', 'pickup', 'attraction', 'stacking-radius']
+  },
+  {
+    id: 'jailbroke-turrets', name: 'Jailbroke Turrets', category: 'defense', rarity: 'epic', maxRank: 3, dropWeight: 0.5,
+    description: 'Unauthorized targeting firmware lets turret rounds cross friendly fences and split into independently tracked streams.',
+    rankDescriptions: { 0: 'Fence crossing: 1 stream at 100% damage.', 1: 'Fence crossing: 2 streams at 70% damage each.', 2: 'Fence crossing: 3 streams at 55% damage each.', 3: 'Fence crossing: 4 streams at 45% damage each.' },
+    tags: ['turret', 'fence', 'projectile-fan', 'stream-count']
+  },
+  {
+    id: 'conductive-fencing', name: 'Conductive Fencing', category: 'defense', rarity: 'common', maxRank: 3, dropWeight: 1,
+    description: 'Conductive filaments amplify the final damage output of every deployed fence.',
+    rankDescriptions: { 0: 'Fence damage +10%.', 1: 'Fence damage +15%.', 2: 'Fence damage +20%.', 3: 'Fence damage +25%.' },
+    tags: ['fence', 'damage', 'stacking-upgrade']
+  },
+  {
+    id: 'high-yield-mines', name: 'High-Yield Mines', category: 'defense', rarity: 'common', maxRank: 3, dropWeight: 1,
+    description: 'Denser reactive compound increases final mine blast damage without changing its trigger behavior.',
+    rankDescriptions: { 0: 'Mine damage +10%.', 1: 'Mine damage +15%.', 2: 'Mine damage +20%.', 3: 'Mine damage +25%.' },
+    tags: ['mine', 'damage', 'stacking-upgrade']
+  },
+  {
+    id: 'hardlight-weave', name: 'Hardlight Weave', category: 'defense', rarity: 'uncommon', maxRank: 3, dropWeight: 0.85,
+    description: 'A reinforced hardlight weave multiplies fence durability after permanent health upgrades are applied.',
+    rankDescriptions: { 0: 'Fence health +15%.', 1: 'Fence health +25%.', 2: 'Fence health +35%.', 3: 'Fence health +50%.' },
+    tags: ['fence', 'health', 'stacking-upgrade']
+  },
+  {
+    id: 'quick-fuse', name: 'Quick Fuse', category: 'defense', rarity: 'uncommon', maxRank: 3, dropWeight: 0.85,
+    description: 'Accelerated priming firmware reduces mine arming time after permanent arm-speed upgrades are applied.',
+    rankDescriptions: { 0: 'Mine arming time -15%.', 1: 'Mine arming time -25%.', 2: 'Mine arming time -35%.', 3: 'Mine arming time -50%.' },
+    tags: ['mine', 'arming-time', 'stacking-upgrade']
   }
 ] as const;
 
