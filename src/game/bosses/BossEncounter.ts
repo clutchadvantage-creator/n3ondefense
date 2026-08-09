@@ -19,6 +19,7 @@ export interface BossEncounterCallbacks {
   fireProjectile(spec: BossProjectileSpec): void;
   damageArea(x: number, y: number, radius: number, damage: number): void;
   dropCredit(x: number, y: number): void;
+  onDamaged(damage: number, source: BossDamageSource): void;
   onDefeated(): void;
 }
 
@@ -291,7 +292,8 @@ export class BossEncounter {
     this.scene.tweens.add({ targets: flash, radius: 70, alpha: 0, duration: 360, onComplete: () => { this.effects.delete(flash); flash.destroy(); } });
   }
 
-  private handleBossDamage(damage: number, _source: BossDamageSource): void {
+  private handleBossDamage(damage: number, source: BossDamageSource): void {
+    this.callbacks.onDamaged(damage, source);
     this.creditDamage += damage;
     const threshold = this.boss.maxHp / BOSS_BALANCE.creditDropChunks;
     while (this.creditDamage >= threshold) {

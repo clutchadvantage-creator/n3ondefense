@@ -25,7 +25,8 @@ export class LaserSecuritySystem {
   constructor(
     scene: Phaser.Scene,
     private readonly round: number,
-    private readonly theme: ArenaTheme
+    private readonly theme: ArenaTheme,
+    private readonly onPlayerDamaged?: (damage: number) => void
   ) {
     this.createdAt = scene.time.now;
     this.graphics = scene.add.graphics().setDepth(6).setBlendMode(Phaser.BlendModes.ADD);
@@ -80,7 +81,8 @@ export class LaserSecuritySystem {
 
     this.warningText.setText(`SECURITY LASERS ACTIVE: ${PATTERN_NAMES[this.patternIndex]}`).setAlpha(0.72);
     if (!playerLaserImmune && this.touchesAnySegment(player.x, player.y, config.collisionRadius + 11, segments)) {
-      player.takeDamage(getScaledHazardDamage(config.playerDamagePerHit, this.round, config.maximumPlayerDamagePerHit));
+      const damage = getScaledHazardDamage(config.playerDamagePerHit, this.round, config.maximumPlayerDamagePerHit);
+      if (player.takeDamage(damage)) this.onPlayerDamaged?.(damage);
     }
     const enemyDamagePerSecond = getScaledHazardDamage(config.enemyDamagePerSecond, this.round, config.maximumEnemyDamagePerSecond);
     for (const target of targets) {

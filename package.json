@@ -10,6 +10,7 @@
     "balance:report": "node --experimental-strip-types scripts/analyze-balance.ts",
     "economy:report": "node --experimental-strip-types scripts/analyze-economy.ts",
     "arena:report": "node --experimental-strip-types scripts/analyze-arenas.ts",
+    "telemetry:report": "node --experimental-strip-types scripts/analyze-gameplay-telemetry.ts",
     "preview": "vite preview"
   },
   "devDependencies": {

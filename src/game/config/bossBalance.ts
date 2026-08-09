@@ -10,9 +10,9 @@ export const BOSS_ARCHETYPES: Record<BossArchetype, { label: string; subtitle: s
 
 export const BOSS_BALANCE = {
   intervalRounds: 5,
-  baseHealth: 3600,
-  healthPerTier: 950,
-  maximumHealth: 11_200,
+  baseHealth: 7200,
+  healthPerTier: 1900,
+  maximumHealth: 22_400,
   hazardDamageMultiplier: 0.35,
   damageMultiplierPerTier: 0.08,
   maximumDamageMultiplier: 1.48,

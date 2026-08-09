@@ -5,6 +5,7 @@ import type { ArenaSessionState, RoundFinishedPayload } from '../types';
 import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
+import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
 
 export class RoundFinishedScene extends Phaser.Scene {
   constructor() {
@@ -65,7 +66,7 @@ export class RoundFinishedScene extends Phaser.Scene {
       }
     ).setOrigin(0.5, 0);
 
-    const firstButtonY = Math.max(nextSummary.y + nextSummary.height + 28, panelBottom - 192);
+    const firstButtonY = Math.max(nextSummary.y + nextSummary.height + 24, panelBottom - 236);
 
     const continueButton = createButton(this, width / 2, firstButtonY, 'Continue To Next Round', () => {
       disableButton(continueButton);
@@ -96,8 +97,13 @@ export class RoundFinishedScene extends Phaser.Scene {
       this.scene.start(SceneKeys.Upgrades, { returnScene: SceneKeys.RoundFinished });
     }, 320);
 
-    createButton(this, width / 2, firstButtonY + 104, 'Quit To Main Menu', () => {
+    createButton(this, width / 2, firstButtonY + 104, 'Export Gameplay Metrics', () => {
+      GameplayTelemetryRecorder.exportToJsonFile();
+    }, 320);
+
+    createButton(this, width / 2, firstButtonY + 156, 'Quit To Main Menu', () => {
       OnlineRunManager.complete('quit', payload?.completedRound);
+      GameplayTelemetryRecorder.finishRun('quit');
       this.registry.remove('arena-session');
       RunTransitionManager.clearForMenu(this);
       this.scene.start(SceneKeys.MainMenu);

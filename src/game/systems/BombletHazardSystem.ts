@@ -41,7 +41,7 @@ export class BombletHazardSystem {
     private readonly bounds: RectSpec,
     private readonly isBlocked: (x: number, y: number) => boolean,
     private readonly particlesEnabled: boolean,
-    private readonly onPlayerDamaged?: () => void
+    private readonly onPlayerDamaged?: (damage: number) => void
   ) {
     this.random = new SeededRandom((seed ^ Math.imul(round + 17, 0x9e3779b1) ^ 0xb04b1e7) >>> 0);
     this.nextStrikeAt = scene.time.now + BOMBLET_HAZARD_BALANCE.initialDelayMs + this.random.int(0, 1200);
@@ -275,7 +275,7 @@ export class BombletHazardSystem {
 
     if (Phaser.Math.Distance.Between(player.x, player.y, target.x, target.y) <= config.blastRadius + 10) {
       const damage = getScaledHazardDamage(config.playerDamageBase, this.round, config.maximumPlayerDamage);
-      if (player.takeDamage(damage)) this.onPlayerDamaged?.();
+      if (player.takeDamage(damage)) this.onPlayerDamaged?.(damage);
     }
     const enemyDamage = getScaledHazardDamage(config.enemyDamageBase, this.round, config.maximumEnemyDamage);
     for (const damageTarget of damageTargets) {

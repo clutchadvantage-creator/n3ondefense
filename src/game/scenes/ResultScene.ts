@@ -9,6 +9,7 @@ import { OBJECTIVE_CONFIG } from '../config/gameplay';
 import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { SaveSystem } from '../systems/SaveSystem';
+import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
 
 export class ResultScene extends Phaser.Scene {
   constructor() {
@@ -66,7 +67,7 @@ export class ResultScene extends Phaser.Scene {
       wordWrap: { width: panelWidth - 72, useAdvancedWrap: true }
     }).setOrigin(0.5, 0);
 
-    const firstButtonY = Math.max(onlineStatus.y + onlineStatus.height + 32, panelTop + panelHeight - 176);
+    const firstButtonY = Math.max(onlineStatus.y + onlineStatus.height + 28, panelTop + panelHeight - 228);
 
     const replayButton = createButton(this, width / 2, firstButtonY, 'Replay Local', () => {
       OnlineRunManager.beginLocalRun();
@@ -90,8 +91,11 @@ export class ResultScene extends Phaser.Scene {
         message: 'Rebuilding mission arena...'
       });
     });
-    createButton(this, width / 2, firstButtonY + 56, 'Store', () => this.scene.start(SceneKeys.Upgrades));
-    createButton(this, width / 2, firstButtonY + 112, 'Main Menu', () => {
+    createButton(this, width / 2, firstButtonY + 52, 'Store', () => this.scene.start(SceneKeys.Upgrades));
+    createButton(this, width / 2, firstButtonY + 104, 'Export Gameplay Metrics', () => {
+      GameplayTelemetryRecorder.exportToJsonFile();
+    });
+    createButton(this, width / 2, firstButtonY + 156, 'Main Menu', () => {
       RunTransitionManager.clearForMenu(this);
       this.scene.start(SceneKeys.MainMenu);
     });

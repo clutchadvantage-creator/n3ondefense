@@ -41,6 +41,7 @@ import { magneticResistanceForEnemy, prioritizeTurretTargets, splitCurrentSecond
 import { createModCardView } from '../mods/ModCardView.ts';
 import { MOD_FOCUS_CATEGORIES, RUN_CONTRACT_IDS, getContract, getRoundCompletionCredits } from '../economy/economyBalance.ts';
 import type { AccountProgressionTier, ModFocusSignalId, RunContractId } from '../economy/types.ts';
+import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -281,6 +282,17 @@ export class ArenaScene extends Phaser.Scene {
       this.registry.remove('arena-session');
     }
 
+    GameplayTelemetryRecorder.beginRun({
+      runId: `${this.runStartedAt}-${this.roundManager.seedBase}`,
+      startedAt: this.runStartedAt,
+      baseSeed: this.roundManager.seedBase,
+      protocol: this.protocol,
+      contract: this.contract,
+      modFocus: this.modFocus,
+      upgrades: { ...SaveSystem.get().upgrades },
+      equippedMods: this.modRuntime.snapshot()
+    });
+
     this.createInput();
     this.createCrosshair();
     try {
@@ -362,9 +374,26 @@ export class ArenaScene extends Phaser.Scene {
     this.defuseTargetByEnemy = new WeakMap<Enemy, BombSiteRuntime>();
     this.createHudLayer();
 
+    GameplayTelemetryRecorder.beginEncounter({
+      kind: 'round',
+      round: def.round,
+      seed: def.seed,
+      layout: this.layout.template,
+      maximumPlayerHealth: this.player.stats.maxHealth,
+      maximumPlayerEnergy: this.player.energyStats.max,
+      weaponDamage: this.player.weapon.damage,
+      weaponFireRate: this.player.fireRate,
+      weaponCritChance: this.player.weapon.critChance,
+      weaponHeatPerShot: this.player.weapon.heatPerShot,
+      energyRegenPerSecond: this.player.energyStats.regenPerSecond
+    });
+
     this.bombSites = new BombSiteManager(def.objectiveMode, OBJECTIVE_CONFIG.maxActiveBombs);
     this.bombSites.initialize(this, this.layout.bombSites, this.layout.theme);
-    this.laserSecurity = new LaserSecuritySystem(this, def.round, this.layout.theme);
+    this.laserSecurity = new LaserSecuritySystem(this, def.round, this.layout.theme, (damage) => {
+      this.audio.playSfx('playerDamage');
+      GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
+    });
     this.bombletHazard = new BombletHazardSystem(
       this,
       def.round,
@@ -373,7 +402,10 @@ export class ArenaScene extends Phaser.Scene {
       this.layout.generation.bounds,
       (x, y) => this.hitWall(x, y),
       SaveSystem.get().settings.particles,
-      () => this.audio.playSfx('playerDamage')
+      (damage) => {
+        this.audio.playSfx('playerDamage');
+        GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
+      }
     );
 
     this.registerBombSiteEvents();
@@ -609,6 +641,8 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
+    GameplayTelemetryRecorder.recordActiveFrame(delta, this.enemies.length, this.player.hp, this.player.energy);
+
     this.player.updateEnergy(dt);
     this.updatePlayerMovement(now);
     this.updatePlayerShooting(now);
@@ -749,6 +783,7 @@ export class ArenaScene extends Phaser.Scene {
       && this.player.canDash(now)
       && this.player.canSpendEnergy(PLAYER_BALANCE.dashEnergyCost)) {
       this.player.spendEnergy(PLAYER_BALANCE.dashEnergyCost);
+      GameplayTelemetryRecorder.recordAbilityUse('dash', PLAYER_BALANCE.dashEnergyCost);
       this.player.dashTowardPoint(aim.x, aim.y, now);
       if (this.sound.get('sfx-boost')) {
         this.sound.play('sfx-boost', { volume: this.audio.getSfxVolume() });
@@ -811,6 +846,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const crit = Math.random() < this.player.weapon.critChance;
     const damage = this.player.weapon.damage * this.player.damageMultiplier * (crit ? WEAPON_BALANCE.critMultiplier : 1);
+    GameplayTelemetryRecorder.recordShot(damage, shotEnergyCost);
 
     this.projectiles.push({
       sprite: bullet,
@@ -959,6 +995,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const enemyTexture = type === 'star' ? 'enemy-star' : `enemy-${type}`;
     const enemy = new Enemy(this, spawn.x, spawn.y, enemyTexture, stats);
+    enemy.telemetrySpawnedAtActiveMs = GameplayTelemetryRecorder.recordEnemySpawn(type, stats.hp);
     if (this.modRuntime.hasInfusion('enemy-growth')) enemy.setScale(1.12);
     if (type === 'star') {
       enemy.setTexture('enemy-star');
@@ -968,7 +1005,10 @@ export class ArenaScene extends Phaser.Scene {
     this.physics.add.collider(enemy, this.walls);
     this.physics.add.collider(enemy, this.player, () => {
       const hit = this.player.takeDamage(enemy.stats.damage);
-      if (hit) this.audio.playSfx('playerDamage');
+      if (hit) {
+        this.audio.playSfx('playerDamage');
+        GameplayTelemetryRecorder.recordPlayerDamage('enemy-contact', enemy.stats.damage);
+      }
     });
 
     this.enemies.push(enemy);
@@ -1164,6 +1204,7 @@ export class ArenaScene extends Phaser.Scene {
     if (!this.player.canSpendEnergy(ABILITY_BALANCE.shield.energyCost)) return;
 
     this.player.spendEnergy(ABILITY_BALANCE.shield.energyCost);
+    GameplayTelemetryRecorder.recordAbilityUse('shield', ABILITY_BALANCE.shield.energyCost);
 
     this.shieldActiveUntil = now + durationMs;
     this.shieldCooldownUntil = now + cooldownMs;
@@ -1455,7 +1496,7 @@ export class ArenaScene extends Phaser.Scene {
             : 0;
           const finalDamage = p.damage * (1 + conditionalBonus);
           const wasAlive = !hitEnemy.isDead();
-          hitEnemy.takeDamage(finalDamage);
+          hitEnemy.takeDamage(finalDamage, p.from === 'player' ? 'weapon' : 'turret');
           hitEnemy.defuseProgressMs = 0;
           hitEnemy.defuseInterruptedUntil = this.time.now + 800;
           if (wasAlive && hitEnemy.isDead() && p.from === 'player' && p.splitCurrentEligible) {
@@ -1471,7 +1512,10 @@ export class ArenaScene extends Phaser.Scene {
       if (p.from === 'enemy') {
         if (Phaser.Math.Distance.Between(this.player.x, this.player.y, p.sprite.x, p.sprite.y) < 16) {
           const hit = this.player.takeDamage(p.damage);
-          if (hit) this.audio.playSfx('playerDamage');
+          if (hit) {
+            this.audio.playSfx('playerDamage');
+            GameplayTelemetryRecorder.recordPlayerDamage('enemy-projectile', p.damage);
+          }
           p.sprite.destroy();
           return false;
         }
@@ -1613,6 +1657,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.player.spendEnergy(cfg.energyCost);
+    GameplayTelemetryRecorder.recordAbilityUse(type, cfg.energyCost);
     this.abilityCooldownUntil[type] = now + cfg.cooldownMs;
     this.audio.playSfx('place');
   }
@@ -1661,7 +1706,7 @@ export class ArenaScene extends Phaser.Scene {
       for (const e of this.enemies) {
         const d = Phaser.Math.Distance.Between(e.x, e.y, mine.sprite.x, mine.sprite.y);
         if (d <= mine.radius) {
-          e.takeDamage(mine.damage * (1 - d / (mine.radius + 1)));
+          e.takeDamage(mine.damage * (1 - d / (mine.radius + 1)), 'mine');
           if (!e.isDead() && this.modRuntime.rank('magnetic-payload') === 3) {
             e.slowFactor = MOD_BALANCE.magneticPayload.rank3SlowFactor;
             e.slowedUntil = now + MOD_BALANCE.magneticPayload.rank3SlowDurationMs;
@@ -1689,7 +1734,7 @@ export class ArenaScene extends Phaser.Scene {
           fence.sprite.y + Math.sin(fence.sprite.rotation) * half
         );
         if (d < 11) {
-          enemy.takeDamage(fence.dps * dt);
+          enemy.takeDamage(fence.dps * dt, 'fence');
           const body = enemy.body as Phaser.Physics.Arcade.Body | null;
           if (body) enemy.setVelocity(body.velocity.x * fence.slowFactor, body.velocity.y * fence.slowFactor);
           if (enemy.stats.type === 'tank') fence.hp -= 16 * dt;
@@ -1743,7 +1788,8 @@ export class ArenaScene extends Phaser.Scene {
       const playerDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, mine.sprite.x, mine.sprite.y);
       if (playerDist <= mine.radius) {
         const falloff = 1 - playerDist / (mine.radius + 1);
-        this.player.takeDamage(mine.damage * falloff);
+        const damage = mine.damage * falloff;
+        if (this.player.takeDamage(damage)) GameplayTelemetryRecorder.recordPlayerDamage('enemy-death-mine', damage);
       }
 
       for (const turret of this.turrets) {
@@ -1766,6 +1812,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.pickups = this.pickups.filter((p) => {
       if (now > p.expiresAt) {
+        GameplayTelemetryRecorder.recordPickupExpired(p.type);
         p.sprite.destroy();
         return false;
       }
@@ -1834,7 +1881,7 @@ export class ArenaScene extends Phaser.Scene {
     const damage = corruptedShare > standardShare
       ? finalKillingDamage * corruptedShare
       : splitCurrentSecondaryDamage(finalKillingDamage, standardRank, false);
-    target.takeDamage(damage);
+    target.takeDamage(damage, 'splitCurrent');
     const arc = this.add.graphics().setDepth(11);
     arc.lineStyle(3, COLORS.cyan, 0.95);
     arc.beginPath();
@@ -1910,6 +1957,7 @@ export class ArenaScene extends Phaser.Scene {
         sprite: pickup,
         expiresAt: now + PICKUP_BALANCE.arenaHealthLifetimeMs
       });
+      GameplayTelemetryRecorder.recordPickupDropped('health', 'arena-support');
       return;
     }
   }
@@ -1952,6 +2000,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private collectPickup(type: PickupType): void {
     this.audio.playSfx('pickup');
+    GameplayTelemetryRecorder.recordPickupCollected(type);
     if (type === 'health') this.player.hp = Math.min(this.player.stats.maxHealth, this.player.hp + PICKUP_BALANCE.healthRestore);
     if (type === 'energy') {
       const restored = this.player.energyStats.max * PICKUP_BALANCE.energyRestoreFraction;
@@ -1980,6 +2029,16 @@ export class ArenaScene extends Phaser.Scene {
     this.roundCoreTokens += enemy.stats.valueCoreTokens;
     this.totalCreditsCollected += enemy.stats.valueCredits;
     SaveSystem.recordEnemyDestroyed();
+
+    GameplayTelemetryRecorder.recordEnemyKill({
+      type: enemy.stats.type,
+      maximumHealth: enemy.stats.hp,
+      spawnedAtActiveMs: enemy.telemetrySpawnedAtActiveMs,
+      finalSource: enemy.lastDamageSource,
+      damageBySource: enemy.damageTakenBySource,
+      credits: enemy.stats.valueCredits,
+      coreTokens: enemy.stats.valueCoreTokens
+    });
 
     this.tryAwardMod(enemy.stats.type === 'star' ? 'eliteEnemy' : 'normalEnemy', false, enemy.x, enemy.y);
 
@@ -2028,6 +2087,7 @@ export class ArenaScene extends Phaser.Scene {
     if (!result.ok) return;
     const card = SaveSystem.getModCollection().cards.at(-1);
     this.modsEarned.push({ modId: definition.id, duplicate, source });
+    GameplayTelemetryRecorder.recordModDrop(definition.id, definition.rarity, source, duplicate);
     this.showBanner(`${duplicate ? 'MOD DUPLICATE' : 'MOD DISCOVERED'}\n${definition.name.toUpperCase()}`);
     if (card) {
       const view = createModCardView(this, x, y - 34, card, card.upgradeLevel, { width: 58, height: 82, compact: true, interactive: false }).setDepth(50);
@@ -2068,7 +2128,7 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private dropPickup(x: number, y: number): void {
+  private dropPickup(x: number, y: number): PickupType {
     const roll = Math.random();
     let type: PickupType = 'credits';
     if (roll < PICKUP_BALANCE.healthShare) type = 'health';
@@ -2092,6 +2152,8 @@ export class ArenaScene extends Phaser.Scene {
     const p = this.createPickupSprite(type, x, y, colorMap[type]);
     this.tweens.add({ targets: p, alpha: { from: 0.45, to: 1 }, yoyo: true, duration: 280, repeat: -1 });
     this.pickups.push({ type, sprite: p, expiresAt: this.time.now + PICKUP_BALANCE.lifetimeMs });
+    GameplayTelemetryRecorder.recordPickupDropped(type, 'enemy');
+    return type;
   }
 
   private createPickupSprite(type: PickupType, x: number, y: number, color: number): Phaser.GameObjects.Container {
@@ -2201,8 +2263,13 @@ export class ArenaScene extends Phaser.Scene {
 
     for (const e of this.enemies) {
       const d = Phaser.Math.Distance.Between(e.x, e.y, site.x, site.y);
-      if (d < 360) e.takeDamage(9999);
+      if (d < 360) e.takeDamage(9999, 'bomb');
     }
+    this.enemies = this.enemies.filter((enemy) => {
+      if (!enemy.isDead()) return true;
+      this.killEnemy(enemy);
+      return false;
+    });
 
     this.projectiles = this.projectiles.filter((p) => {
       if (Phaser.Math.Distance.Between(p.sprite.x, p.sprite.y, site.x, site.y) < 330) {
@@ -2244,6 +2311,7 @@ export class ArenaScene extends Phaser.Scene {
       const p = this.createPickupSprite(pickupType, px, py, pickupType === 'health' ? COLORS.green : COLORS.cyan);
       this.tweens.add({ targets: p, alpha: { from: 0.45, to: 1 }, yoyo: true, duration: 280, repeat: -1 });
       this.pickups.push({ type: pickupType, sprite: p, expiresAt: this.time.now + 11_000 });
+      GameplayTelemetryRecorder.recordPickupDropped(pickupType, 'site-recovery');
     }
   }
 
@@ -2263,6 +2331,7 @@ export class ArenaScene extends Phaser.Scene {
     SaveSystem.addCoreTokens(rewardTokens);
     SaveSystem.recordRoundCompletion(completedRound);
     OnlineRunManager.recordMilestone(completedRound);
+    GameplayTelemetryRecorder.endEncounter('completed', { credits: rewardCredits, coreTokens: rewardTokens });
 
     // Cosmetic infusions must never gate progression or delay round controls.
     this.time.delayedCall(1400, () => {
@@ -2328,7 +2397,10 @@ export class ArenaScene extends Phaser.Scene {
 
     this.bombSites = new BombSiteManager('open', 1);
     this.bombSites.initialize(this, [], this.layout.theme);
-    this.laserSecurity = new LaserSecuritySystem(this, this.bossRound, this.layout.theme);
+    this.laserSecurity = new LaserSecuritySystem(this, this.bossRound, this.layout.theme, (damage) => {
+      this.audio.playSfx('playerDamage');
+      GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
+    });
     this.bombletHazard = new BombletHazardSystem(
       this,
       this.bossRound,
@@ -2337,8 +2409,25 @@ export class ArenaScene extends Phaser.Scene {
       this.layout.generation.bounds,
       (x, y) => this.hitWall(x, y),
       SaveSystem.get().settings.particles,
-      () => this.audio.playSfx('playerDamage')
+      (damage) => {
+        this.audio.playSfx('playerDamage');
+        GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
+      }
     );
+
+    GameplayTelemetryRecorder.beginEncounter({
+      kind: 'boss',
+      round: this.bossRound,
+      seed: bossSeed,
+      layout: this.layout.template,
+      maximumPlayerHealth: this.player.stats.maxHealth,
+      maximumPlayerEnergy: this.player.energyStats.max,
+      weaponDamage: this.player.weapon.damage,
+      weaponFireRate: this.player.fireRate,
+      weaponCritChance: this.player.weapon.critChance,
+      weaponHeatPerShot: this.player.weapon.heatPerShot,
+      energyRegenPerSecond: this.player.energyStats.regenPerSecond
+    });
 
     const spawn = [...this.layout.bombSites]
       .sort((a, b) => Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
@@ -2356,9 +2445,11 @@ export class ArenaScene extends Phaser.Scene {
         fireProjectile: (spec) => this.spawnBossProjectile(spec),
         damageArea: (x, y, radius, damage) => this.applyBossAreaDamage(x, y, radius, damage),
         dropCredit: (x, y) => this.dropBossCredit(x, y),
+        onDamaged: (damage, source) => GameplayTelemetryRecorder.recordBossDamage(source, damage),
         onDefeated: () => this.completeBossFight()
       }
     );
+    GameplayTelemetryRecorder.startBoss(archetype, this.bossEncounter.boss.maxHp);
     this.physics.add.collider(this.bossEncounter.boss, this.walls);
 
     this.bossPickupRandom = new SeededRandom((bossSeed ^ 0x51f15e11) >>> 0);
@@ -2393,7 +2484,10 @@ export class ArenaScene extends Phaser.Scene {
 
   private applyBossAreaDamage(x: number, y: number, radius: number, damage: number): void {
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) <= radius + 12) {
-      if (this.player.takeDamage(damage)) this.audio.playSfx('playerDamage');
+      if (this.player.takeDamage(damage)) {
+        this.audio.playSfx('playerDamage');
+        GameplayTelemetryRecorder.recordPlayerDamage('boss', damage);
+      }
     }
     for (const turret of this.turrets) {
       if (Phaser.Math.Distance.Between(turret.sprite.x, turret.sprite.y, x, y) <= radius + 12) turret.takeDamage(damage * 0.7);
@@ -2412,6 +2506,8 @@ export class ArenaScene extends Phaser.Scene {
     const sprite = this.createPickupSprite('credits', px, py, 0xffd65a);
     this.tweens.add({ targets: sprite, alpha: { from: 0.5, to: 1 }, yoyo: true, duration: 320, repeat: -1 });
     this.pickups.push({ type: 'credits', sprite, expiresAt: this.time.now + BOSS_BALANCE.supportPickupLifetimeMs });
+    GameplayTelemetryRecorder.recordPickupDropped('credits', 'boss-damage');
+    GameplayTelemetryRecorder.recordBossCreditDrop();
   }
 
   private updateBossSupportPickups(now: number): void {
@@ -2444,6 +2540,7 @@ export class ArenaScene extends Phaser.Scene {
     const sprite = this.createPickupSprite(type, point.x, point.y, color);
     this.tweens.add({ targets: sprite, alpha: { from: 0.45, to: 1 }, yoyo: true, duration: 300, repeat: -1 });
     this.pickups.push({ type, sprite, expiresAt: now + BOSS_BALANCE.supportPickupLifetimeMs });
+    GameplayTelemetryRecorder.recordPickupDropped(type, 'boss-support');
     this.showBanner(`${type.toUpperCase()} SUPPORT DROP`);
   }
 
@@ -2467,6 +2564,12 @@ export class ArenaScene extends Phaser.Scene {
     this.totalCreditsCollected += rewards.credits;
     this.runCreditsEarned += collectedCredits + rewards.credits;
     this.tryAwardMod('boss', false, this.bossEncounter.boss.x, this.bossEncounter.boss.y);
+    GameplayTelemetryRecorder.recordBossDefeated();
+    GameplayTelemetryRecorder.endEncounter('bossDefeated', {
+      credits: collectedCredits + rewards.credits,
+      coreTokens: collectedTokens + rewards.coreTokens,
+      plasmaChips: rewards.plasmaChips
+    });
 
     const payload: RoundFinishedPayload = {
       ...this.pendingRoundPayload,
@@ -2518,6 +2621,8 @@ export class ArenaScene extends Phaser.Scene {
 
     SaveSystem.addCredits(result.credits);
     SaveSystem.addCoreTokens(result.coreTokens);
+    GameplayTelemetryRecorder.endEncounter(reason, { credits: result.credits, coreTokens: result.coreTokens });
+    GameplayTelemetryRecorder.finishRun(reason);
     OnlineRunManager.complete(reason === 'playerDead' ? 'player_dead' : 'bomb_defused', currentCombatRound);
     this.registry.remove('arena-session');
 
@@ -3010,11 +3115,15 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private restartFromRoundOne(): void {
+    GameplayTelemetryRecorder.endEncounter('quit', { credits: this.roundCredits, coreTokens: this.roundCoreTokens });
+    GameplayTelemetryRecorder.finishRun('quit');
     startArenaLoad(this, { reason: 'new-run', message: 'Restarting from round 1...' });
   }
 
   private quitToMenu(): void {
     this.setMenuCursorMode();
+    GameplayTelemetryRecorder.endEncounter('quit', { credits: this.roundCredits, coreTokens: this.roundCoreTokens });
+    GameplayTelemetryRecorder.finishRun('quit');
     OnlineRunManager.complete('quit', this.currentCombatRound());
     this.registry.remove('arena-session');
     RunTransitionManager.clearForMenu(this);

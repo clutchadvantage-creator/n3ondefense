@@ -25,6 +25,8 @@ test('boss gates occur every fifth completed round with bounded progression rewa
   assert.equal(isBossRound(5), true);
   assert.equal(isBossRound(10), true);
   assert.equal(isBossRound(11), false);
+  assert.equal(getBossHealth(5), 7200);
+  assert.equal(getBossHealth(10), 9100);
   assert.ok(getBossHealth(10) > getBossHealth(5));
   assert.ok(getBossHealth(500) < Number.POSITIVE_INFINITY);
   const early = getBossRewards(5);

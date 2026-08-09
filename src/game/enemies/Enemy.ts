@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { EnemyType } from '../types';
 import { ENEMY_BALANCE } from '../config/balance';
+import { GameplayTelemetryRecorder, type CombatDamageSource } from '../telemetry/GameplayTelemetryRecorder.ts';
 
 export interface EnemyStats {
   type: EnemyType;
@@ -23,6 +24,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   slowedUntil = 0;
   slowFactor = 1;
   disabledUntil = 0;
+  telemetrySpawnedAtActiveMs = 0;
+  lastDamageSource: CombatDamageSource = 'unknown';
+  readonly damageTakenBySource: Partial<Record<CombatDamageSource, number>> = {};
 
   get hazardRadius(): number {
     return this.stats.size * 0.45;
@@ -43,8 +47,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(7);
   }
 
-  takeDamage(amount: number, _source?: 'hazard'): void {
-    this.hp = Math.max(0, this.hp - amount);
+  takeDamage(amount: number, source: CombatDamageSource = 'unknown'): void {
+    if (!Number.isFinite(amount) || amount <= 0 || this.hp <= 0) return;
+    const applied = Math.min(this.hp, amount);
+    this.hp = Math.max(0, this.hp - applied);
+    this.lastDamageSource = source;
+    this.damageTakenBySource[source] = (this.damageTakenBySource[source] ?? 0) + applied;
+    GameplayTelemetryRecorder.recordEnemyDamage(this.stats.type, source, applied);
     this.setTintFill(0xffffff);
     this.scene.time.delayedCall(50, () => {
       if (this.active) this.setTint(this.stats.color);
