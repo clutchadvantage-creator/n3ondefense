@@ -78,13 +78,13 @@ export class ModCollectionScene extends Phaser.Scene {
     }
     const definition = MOD_BY_ID.get(card.modId)!;
     const owned = SaveSystem.getModCollection().inventory[card.modId];
-    const detailCardHeight = Phaser.Math.Clamp(height * 0.28, 150, 180);
-    const detailCardWidth = Math.min(132, width - 48);
+    const detailCardWidth = Math.min(210, width - 56);
+    const detailCardHeight = detailCardWidth * 1.4;
     const detailCardCenterY = y + 28 + detailCardHeight / 2;
     createModCardView(this, x, detailCardCenterY, card, card.upgradeLevel, {
       width: detailCardWidth,
       height: detailCardHeight,
-      compact: true,
+      compact: false,
       interactive: false,
       equipped
     });
