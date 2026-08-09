@@ -7,9 +7,64 @@ export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone' | 'boss';
 export type ModVariant = 'standard' | 'corrupted';
 export type ModInfusionId = 'enemy-growth' | 'detonation-fireworks';
 
+export type ModStat =
+  | 'weaponDamage'
+  | 'weaponFireRate'
+  | 'weaponProjectileSpeed'
+  | 'weaponCritChance'
+  | 'weaponCritDamage'
+  | 'weaponHeatPerShot'
+  | 'weaponMaxHeat'
+  | 'weaponCooling'
+  | 'weaponEnergyCost'
+  | 'playerMaxHealth'
+  | 'playerEnergyMax'
+  | 'playerEnergyRegen'
+  | 'playerMoveSpeed'
+  | 'playerDashCooldown'
+  | 'playerDashDistance'
+  | 'playerPickupRadius'
+  | 'playerInvulnerability'
+  | 'fenceDamage'
+  | 'fenceHealth'
+  | 'fenceDuration'
+  | 'fenceMaxActive'
+  | 'fenceCooldown'
+  | 'fenceEnergyCost'
+  | 'turretDamage'
+  | 'turretHealth'
+  | 'turretFireRate'
+  | 'turretRange'
+  | 'turretMaxActive'
+  | 'turretCooldown'
+  | 'turretEnergyCost'
+  | 'mineDamage'
+  | 'mineRadius'
+  | 'mineArmTime'
+  | 'mineMaxActive'
+  | 'mineCooldown'
+  | 'mineEnergyCost'
+  | 'shieldDuration'
+  | 'shieldCooldown'
+  | 'shieldEnergyCost'
+  | 'healthPickupValue'
+  | 'energyPickupValue'
+  | 'buffDuration'
+  | 'creditValue'
+  | 'enemyPickupChance'
+  | 'bombDuration';
+
+export interface ModStatModifier {
+  stat: ModStat;
+  mode: 'multiply' | 'add';
+  values: Record<ModRank, number>;
+}
+
 export interface ModDefinition {
   id: string;
   name: string;
+  icon: string;
+  iconColor: number;
   description: string;
   category: ModCategory;
   rarity: ModRarity;
@@ -20,6 +75,7 @@ export interface ModDefinition {
   variant?: ModVariant;
   positiveEffect?: string;
   negativeEffect?: string;
+  modifiers?: readonly ModStatModifier[];
 }
 
 export interface ModCardInstance {

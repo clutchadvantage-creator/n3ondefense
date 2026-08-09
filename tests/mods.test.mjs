@@ -6,7 +6,7 @@ import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
 import { applyOperativeSpeedMultipliers, magneticResistanceForEnemy, prioritizeTurretTargets, protocolStart, splitCurrentSecondaryDamage } from '../src/game/mods/ModRules.ts';
 import { rollModDrop } from '../src/game/mods/ModDropService.ts';
 import { normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
-import { MOD_BY_ID } from '../src/game/mods/definitions.ts';
+import { MOD_BY_ID, MOD_DEFINITIONS } from '../src/game/mods/definitions.ts';
 import { MOD_INFUSIONS } from '../src/game/mods/infusions.ts';
 import { MOD_BALANCE } from '../src/game/mods/modBalance.ts';
 
@@ -18,6 +18,71 @@ const equippedRuntimeAtRank = (modId, rank) => {
   equipMod(mods, category === 'utility' ? 'wildcard' : category, modId);
   return new ModRuntime(mods);
 };
+
+test('the expanded collection adds at least ten discoveries to every rarity', () => {
+  const expectedMinimums = { common: 13, uncommon: 13, rare: 13, epic: 12, legendary: 12 };
+  const counts = Object.fromEntries(Object.keys(expectedMinimums).map((rarity) => [
+    rarity,
+    MOD_DEFINITIONS.filter((definition) => definition.rarity === rarity).length
+  ]));
+  assert.deepEqual(counts, expectedMinimums);
+  assert.equal(MOD_DEFINITIONS.length, 63);
+  assert.equal(new Set(MOD_DEFINITIONS.map((definition) => definition.id)).size, MOD_DEFINITIONS.length);
+});
+
+test('every Mod has a colored icon, ranked copy, and reachable positive drop weight', () => {
+  for (const definition of MOD_DEFINITIONS) {
+    assert.ok(definition.icon.length > 0, `${definition.id} is missing an icon`);
+    assert.ok(Number.isInteger(definition.iconColor) && definition.iconColor > 0 && definition.iconColor <= 0xffffff);
+    assert.notEqual(definition.iconColor, 0xffffff, `${definition.id} still uses a plain white icon`);
+    assert.equal(Object.keys(definition.rankDescriptions).length, 4);
+    assert.ok(definition.dropWeight > 0);
+  }
+});
+
+test('data-driven modifiers are finite, ranked, and use safe multiplier values', () => {
+  const definitionsWithModifiers = MOD_DEFINITIONS.filter((definition) => definition.modifiers?.length);
+  assert.equal(definitionsWithModifiers.length, 50);
+  for (const definition of definitionsWithModifiers) {
+    for (const modifier of definition.modifiers) {
+      assert.deepEqual(Object.keys(modifier.values), ['0', '1', '2', '3']);
+      for (const value of Object.values(modifier.values)) {
+        assert.equal(Number.isFinite(value), true, `${definition.id}/${modifier.stat} is not finite`);
+        if (modifier.mode === 'multiply') assert.ok(value > 0, `${definition.id}/${modifier.stat} has a non-positive multiplier`);
+      }
+    }
+  }
+});
+
+test('new corrupted cards pair exceptional positives with explicit mechanical penalties', () => {
+  const ids = ['ruptured-heat-sink', 'glass-cannon', 'volatile-reactor', 'black-star-engine'];
+  for (const id of ids) {
+    const definition = MOD_BY_ID.get(id);
+    assert.equal(definition.variant, 'corrupted');
+    assert.ok(definition.positiveEffect.length > 20);
+    assert.ok(definition.negativeEffect.length > 20);
+    assert.ok(definition.modifiers.length >= 2);
+    assert.ok(definition.tags.includes('tradeoff'));
+  }
+  assert.ok(MOD_DEFINITIONS.filter((definition) => definition.variant === 'corrupted').length >= 5);
+});
+
+test('generic Mod effects stack by equipped card and preserve corrupted tradeoffs', () => {
+  const glass = equippedRuntimeAtRank('glass-cannon', 3);
+  assert.equal(glass.multiplier('weaponDamage'), 1.52);
+  assert.equal(glass.multiplier('playerMaxHealth'), 0.78);
+
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'glass-cannon');
+  addModDrop(mods, 'promethean-core');
+  mods.cards[0].upgradeLevel = 3;
+  mods.cards[1].upgradeLevel = 3;
+  equipMod(mods, 'weapon', 'glass-cannon', mods.cards[0].instanceId);
+  equipMod(mods, 'wildcard', 'promethean-core', mods.cards[1].instanceId);
+  const stacked = new ModRuntime(mods);
+  assert.ok(Math.abs(stacked.multiplier('weaponDamage') - 1.52 * 1.31) < 1e-12);
+  assert.equal(stacked.multiplier('playerMaxHealth'), 0.78);
+});
 
 test('old profiles receive empty mod and normal protocol defaults', () => {
   const mods = normalizeModCollection(undefined);

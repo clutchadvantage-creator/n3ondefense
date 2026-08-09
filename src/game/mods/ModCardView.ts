@@ -11,22 +11,6 @@ export const MOD_RARITY_COLORS = {
   legendary: 0xff8a00
 } as const;
 
-const ICONS: Record<string, string> = {
-  'split-current': 'ϟ',
-  'emergency-capacitor': '◒',
-  'priority-targeting': '◎',
-  'emergency-shield': '⬡',
-  'magnetic-payload': '⌁',
-  'fractured-current': 'ϟ!',
-  'nanite-fuel': '\u26fd',
-  'magnetic-service': '\u{1f9f2}',
-  'jailbroke-turrets': '\u265c',
-  'conductive-fencing': '\u26a1',
-  'high-yield-mines': '\u2739',
-  'hardlight-weave': '\u25a6',
-  'quick-fuse': '\u23f1'
-};
-
 export interface ModCardViewOptions {
   width?: number;
   height?: number;
@@ -50,6 +34,8 @@ export const createModCardView = (
   const height = options.height ?? 210;
   const corrupted = definition.variant === 'corrupted';
   const rarityColor = MOD_RARITY_COLORS[definition.rarity];
+  const iconColor = definition.iconColor;
+  const iconCssColor = Phaser.Display.Color.IntegerToColor(iconColor).rgba;
   const container = scene.add.container(x, y);
   const shadow = scene.add.rectangle(4, 6, width, height, 0x000000, 0.45).setOrigin(0.5);
   const body = scene.add.rectangle(0, 0, width, height, corrupted ? 0x190817 : 0x091521, 0.97)
@@ -59,6 +45,43 @@ export const createModCardView = (
   const sheen = scene.add.graphics();
   container.add([shadow, body, inner]);
 
+  const corruptionTweens: Phaser.Tweens.Tween[] = [];
+  if (corrupted) {
+    let seed = Array.from(definition.id).reduce((value, character) => Math.imul(value ^ character.charCodeAt(0), 16777619), 2166136261) >>> 0;
+    const random = (): number => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 0x100000000;
+    };
+    for (let index = 0; index < 7; index += 1) {
+      const blotch = scene.add.graphics();
+      const centerX = (random() - 0.5) * width * 0.78;
+      const centerY = (random() - 0.5) * height * 0.78;
+      const radius = width * (0.045 + random() * 0.06);
+      const points: Phaser.Geom.Point[] = [];
+      for (let point = 0; point < 8; point += 1) {
+        const angle = Phaser.Math.PI2 * point / 8;
+        const reach = radius * (0.55 + random() * 0.7);
+        points.push(new Phaser.Geom.Point(centerX + Math.cos(angle) * reach, centerY + Math.sin(angle) * reach));
+      }
+      blotch.fillStyle(index % 3 === 0 ? 0x050107 : 0xff22c8, index % 3 === 0 ? 0.48 : 0.12);
+      blotch.fillPoints(points, true);
+      blotch.lineStyle(1, index % 2 === 0 ? 0xff36d1 : 0x71235f, 0.25).strokePoints(points, true);
+      container.add(blotch);
+      corruptionTweens.push(scene.tweens.add({
+        targets: blotch,
+        alpha: { from: 0.3 + random() * 0.25, to: 0.75 + random() * 0.2 },
+        scaleX: { from: 0.86, to: 1.14 },
+        scaleY: { from: 1.12, to: 0.88 },
+        angle: { from: -4 - random() * 4, to: 4 + random() * 4 },
+        duration: 760 + Math.round(random() * 900),
+        delay: Math.round(random() * 500),
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      }));
+    }
+  }
+
   const illuminatedDots = rank;
   for (let dot = 0; dot < 3; dot += 1) {
     container.add(scene.add.circle(-width / 2 + 15 + dot * 12, -height / 2 + 15, 4, dot < illuminatedDots ? rarityColor : 0x172331, dot < illuminatedDots ? 1 : 0.7)
@@ -67,10 +90,10 @@ export const createModCardView = (
   const rarity = scene.add.text(width / 2 - 8, -height / 2 + 9, corrupted ? 'CORRUPTED' : definition.rarity.toUpperCase(), {
     fontFamily: 'Rajdhani, sans-serif', fontSize: options.compact ? '8px' : '10px', color: corrupted ? '#ff5bd9' : Phaser.Display.Color.IntegerToColor(rarityColor).rgba
   }).setOrigin(1, 0);
-  const iconRing = scene.add.circle(0, -height * 0.12, width * 0.25, corrupted ? 0xff26cf : rarityColor, 0.08)
-    .setStrokeStyle(2, corrupted ? 0xff4ddd : rarityColor, 0.8);
-  const icon = scene.add.text(0, -height * 0.12, ICONS[definition.id] ?? '◇', {
-    fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.max(24, width * 0.25)}px`, color: corrupted ? '#ff74e6' : '#e7fbff'
+  const iconRing = scene.add.circle(0, -height * 0.12, width * 0.25, iconColor, corrupted ? 0.13 : 0.09)
+    .setStrokeStyle(2, corrupted ? 0xff4ddd : iconColor, 0.82);
+  const icon = scene.add.text(0, -height * 0.12, definition.icon, {
+    fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.max(24, width * 0.25)}px`, color: iconCssColor
   }).setOrigin(0.5);
   const name = scene.add.text(0, height * 0.075, definition.name.toUpperCase(), {
     fontFamily: 'Orbitron, sans-serif', fontSize: options.compact ? '10px' : '12px', color: '#eafcff', align: 'center', lineSpacing: -2
@@ -103,9 +126,44 @@ export const createModCardView = (
   }
 
   if (corrupted) {
-    const glitch = scene.add.rectangle(0, 0, width - 8, 2, 0xff28cc, 0.7);
-    container.add(glitch);
-    scene.tweens.add({ targets: [glitch, iconRing], x: { from: -width * 0.35, to: width * 0.35 }, alpha: { from: 0.2, to: 0.8 }, duration: 720, yoyo: true, repeat: -1 });
+    const ghostLeft = scene.add.text(-2, -height * 0.12, definition.icon, {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.max(24, width * 0.25)}px`, color: '#ff1dbd'
+    }).setOrigin(0.5).setAlpha(0.22);
+    const ghostRight = scene.add.text(2, -height * 0.12, definition.icon, {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.max(24, width * 0.25)}px`, color: '#4ffff3'
+    }).setOrigin(0.5).setAlpha(0.16);
+    container.addAt(ghostLeft, Math.max(0, container.getIndex(icon)));
+    container.addAt(ghostRight, Math.max(0, container.getIndex(icon)));
+    for (let stripIndex = 0; stripIndex < 3; stripIndex += 1) {
+      const strip = scene.add.rectangle(
+        -width * 0.22 + stripIndex * width * 0.19,
+        -height * 0.31 + stripIndex * height * 0.27,
+        width * (0.28 + stripIndex * 0.08),
+        1 + stripIndex,
+        stripIndex === 1 ? 0x54fff0 : 0xff28cc,
+        0.48
+      );
+      container.add(strip);
+      corruptionTweens.push(scene.tweens.add({
+        targets: strip,
+        x: { from: strip.x - width * 0.12, to: strip.x + width * 0.12 },
+        alpha: { from: 0.08, to: 0.72 },
+        duration: 280 + stripIndex * 170,
+        delay: stripIndex * 130,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Quad.easeInOut'
+      }));
+    }
+    corruptionTweens.push(scene.tweens.add({
+      targets: [ghostLeft, ghostRight],
+      x: { from: -3, to: 3 },
+      alpha: { from: 0.08, to: 0.32 },
+      duration: 190,
+      yoyo: true,
+      repeat: -1
+    }));
+    container.once('destroy', () => corruptionTweens.forEach((tween) => tween.remove()));
   }
   container.add(sheen);
   if (options.interactive !== false) {

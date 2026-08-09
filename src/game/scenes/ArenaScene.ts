@@ -514,30 +514,43 @@ export class ArenaScene extends Phaser.Scene {
     const hasValidBody = !!this.player && !!this.player.active && !!this.player.body;
 
     if (!hasValidBody) {
+      const baseMaxHealth = PLAYER_BALANCE.maxHealth + getUpgradeLevel(up, 'player.maxHealth') * 10;
+      const baseDashCooldownMs = Math.max(1500, PLAYER_BALANCE.dashCooldownMs - getUpgradeLevel(up, 'player.dashCooldown') * 120);
+      const baseDashDistance = PLAYER_BALANCE.dashDistanceMultiplier + getUpgradeLevel(up, 'player.dashDistance') * 0.06;
+      const basePickupRadius = PLAYER_BALANCE.pickupRadius + getUpgradeLevel(up, 'player.pickupRadius') * 7;
       const stats = {
-        maxHealth: PLAYER_BALANCE.maxHealth + getUpgradeLevel(up, 'player.maxHealth') * 10,
+        maxHealth: Math.max(1, Math.round(baseMaxHealth * this.modRuntime.multiplier('playerMaxHealth'))),
         moveSpeed: PLAYER_BALANCE.moveSpeed + getUpgradeLevel(up, 'player.moveSpeed') * 7,
-        dashCooldownMs: Math.max(1500, PLAYER_BALANCE.dashCooldownMs - getUpgradeLevel(up, 'player.dashCooldown') * 120),
-        dashDistanceMultiplier: PLAYER_BALANCE.dashDistanceMultiplier + getUpgradeLevel(up, 'player.dashDistance') * 0.06,
-        pickupRadius: PLAYER_BALANCE.pickupRadius + getUpgradeLevel(up, 'player.pickupRadius') * 7,
-        invulnMs: PLAYER_BALANCE.invulnerabilityMs
+        dashCooldownMs: Math.max(500, baseDashCooldownMs * this.modRuntime.multiplier('playerDashCooldown')),
+        dashDistanceMultiplier: baseDashDistance * this.modRuntime.multiplier('playerDashDistance'),
+        pickupRadius: basePickupRadius * this.modRuntime.multiplier('playerPickupRadius'),
+        invulnMs: PLAYER_BALANCE.invulnerabilityMs * this.modRuntime.multiplier('playerInvulnerability')
       };
+      const baseEnergyMax = PLAYER_BALANCE.energyMax + getUpgradeEffect(up, 'player.energyMax');
+      const baseEnergyRegen = PLAYER_BALANCE.energyRegenPerSecond + getUpgradeEffect(up, 'player.energyRegen');
       const energy = {
-        max: PLAYER_BALANCE.energyMax + getUpgradeEffect(up, 'player.energyMax'),
-        regenPerSecond: PLAYER_BALANCE.energyRegenPerSecond + getUpgradeEffect(up, 'player.energyRegen')
+        max: Math.max(1, Math.round(baseEnergyMax * this.modRuntime.multiplier('playerEnergyMax'))),
+        regenPerSecond: baseEnergyRegen * this.modRuntime.multiplier('playerEnergyRegen')
       };
+      const baseDamage = starterWeapon.damage + getUpgradeLevel(up, 'weapon.damage') * 2;
+      const baseFireRate = Math.min(WEAPON_BALANCE.maximumFireRate, starterWeapon.fireRate + getUpgradeLevel(up, 'weapon.fireRate') * 0.4);
+      const baseProjectileSpeed = starterWeapon.projectileSpeed + getUpgradeLevel(up, 'weapon.projectileSpeed') * 30;
+      const baseCritChance = Math.min(WEAPON_BALANCE.maximumCritChance, starterWeapon.critChance + getUpgradeLevel(up, 'weapon.critChance') * 0.02);
+      const baseHeatPerShot = Math.max(WEAPON_BALANCE.minimumHeatPerShot, starterWeapon.heatPerShot - getUpgradeLevel(up, 'weapon.heatEfficiency') * 0.4);
       const weapon = {
         ...starterWeapon,
-        damage: starterWeapon.damage + getUpgradeLevel(up, 'weapon.damage') * 2,
-        fireRate: Math.min(WEAPON_BALANCE.maximumFireRate, starterWeapon.fireRate + getUpgradeLevel(up, 'weapon.fireRate') * 0.4),
-        projectileSpeed: starterWeapon.projectileSpeed + getUpgradeLevel(up, 'weapon.projectileSpeed') * 30,
-        critChance: Math.min(WEAPON_BALANCE.maximumCritChance, starterWeapon.critChance + getUpgradeLevel(up, 'weapon.critChance') * 0.02),
-        heatPerShot: Math.max(WEAPON_BALANCE.minimumHeatPerShot, starterWeapon.heatPerShot - getUpgradeLevel(up, 'weapon.heatEfficiency') * 0.4)
+        damage: baseDamage * this.modRuntime.multiplier('weaponDamage'),
+        fireRate: baseFireRate * this.modRuntime.multiplier('weaponFireRate'),
+        projectileSpeed: baseProjectileSpeed * this.modRuntime.multiplier('weaponProjectileSpeed'),
+        critChance: Phaser.Math.Clamp(baseCritChance + this.modRuntime.addition('weaponCritChance'), 0, 0.9),
+        heatPerShot: Math.max(0.5, baseHeatPerShot * this.modRuntime.multiplier('weaponHeatPerShot')),
+        maxHeat: starterWeapon.maxHeat * this.modRuntime.multiplier('weaponMaxHeat'),
+        cooldownRate: starterWeapon.cooldownRate * this.modRuntime.multiplier('weaponCooling')
       };
 
       const playerShape = SaveSystem.getEquippedCosmeticId('playerShape') ?? 'player-circle';
       this.player = new Player(this, this.layout.playerSpawn.x, this.layout.playerSpawn.y, playerShape, stats, energy, weapon);
-      this.player.permanentModSpeedMultiplier = this.modRuntime.naniteFuelSpeedMultiplier();
+      this.player.permanentModSpeedMultiplier = this.modRuntime.permanentMoveSpeedMultiplier();
       this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor'));
       this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
       this.cameras.main.setZoom(0.9);
@@ -550,7 +563,7 @@ export class ArenaScene extends Phaser.Scene {
       this.player.invulnUntil = 0;
       this.player.lastDashMs = -9_999;
       this.player.dashUntil = 0;
-      this.player.permanentModSpeedMultiplier = this.modRuntime.naniteFuelSpeedMultiplier();
+      this.player.permanentModSpeedMultiplier = this.modRuntime.permanentMoveSpeedMultiplier();
       this.player.modSpeedBoostUntil = 0;
       this.player.modSpeedMultiplier = 1;
       this.player.buffs.damageBoostUntil = 0;
@@ -865,7 +878,7 @@ export class ArenaScene extends Phaser.Scene {
     const cadence = 1000 / this.player.fireRate;
     if (now - this.lastPlayerShotMs < cadence) return;
     const corruptedShotCost = this.modRuntime.has('fractured-current') ? MOD_BALANCE.fracturedCurrent.extraShotEnergyCost : 0;
-    const shotEnergyCost = WEAPON_BALANCE.energyCostPerShot + corruptedShotCost;
+    const shotEnergyCost = (WEAPON_BALANCE.energyCostPerShot + corruptedShotCost) * this.modRuntime.multiplier('weaponEnergyCost');
     if (!this.player.canSpendEnergy(shotEnergyCost)) {
       if (now - this.lastShotEnergyDeniedAt >= cadence) {
         this.lastShotEnergyDeniedAt = now;
@@ -894,7 +907,8 @@ export class ArenaScene extends Phaser.Scene {
     bullet.setDepth(8);
 
     const crit = Math.random() < this.player.weapon.critChance;
-    const damage = this.player.weapon.damage * this.player.damageMultiplier * (crit ? WEAPON_BALANCE.critMultiplier : 1);
+    const criticalMultiplier = WEAPON_BALANCE.critMultiplier * this.modRuntime.multiplier('weaponCritDamage');
+    const damage = this.player.weapon.damage * this.player.damageMultiplier * (crit ? criticalMultiplier : 1);
     GameplayTelemetryRecorder.recordShot(damage, shotEnergyCost, crit);
 
     this.projectiles.push({
@@ -951,7 +965,7 @@ export class ArenaScene extends Phaser.Scene {
 
       if (pct >= 1) {
         this.audio.stopPlantingLoop();
-        this.bombSites.armSite(near, OBJECTIVE_CONFIG.bombDefenseMs, this.time.now);
+        this.bombSites.armSite(near, this.getBombDefenseDurationMs(), this.time.now);
         this.bombSites.refreshVisuals(this.layout.theme);
         this.activePlantingSite = null;
         this.plantingProgressMs = 0;
@@ -1191,8 +1205,9 @@ export class ArenaScene extends Phaser.Scene {
   private selectEnemyObjective(enemy: Enemy, activeSites: BombSiteRuntime[]): BombSiteRuntime | null {
     if (activeSites.length === 0) return null;
     return [...activeSites].sort((a, b) => {
-      const urgencyA = Math.max(0, 1 - a.timerMs / OBJECTIVE_CONFIG.bombDefenseMs);
-      const urgencyB = Math.max(0, 1 - b.timerMs / OBJECTIVE_CONFIG.bombDefenseMs);
+      const bombDurationMs = this.getBombDefenseDurationMs();
+      const urgencyA = Math.max(0, 1 - a.timerMs / bombDurationMs);
+      const urgencyB = Math.max(0, 1 - b.timerMs / bombDurationMs);
       return Phaser.Math.Distance.Between(enemy.x, enemy.y, a.x, a.y) - urgencyA * 180
         - (Phaser.Math.Distance.Between(enemy.x, enemy.y, b.x, b.y) - urgencyB * 180);
     })[0];
@@ -1265,11 +1280,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private activateShield(now: number): void {
-    const durationMs = Math.min(
-      ABILITY_BALANCE.shield.maximumDurationMs,
-      ABILITY_BALANCE.shield.durationMs + getUpgradeEffect(SaveSystem.get().upgrades, 'player.shieldDuration')
-    );
-    const cooldownMs = ABILITY_BALANCE.shield.cooldownMs;
+    const durationMs = this.getShieldDurationMs();
+    const cooldownMs = this.getShieldCooldownMs();
+    const energyCost = this.getShieldEnergyCost();
     if (now < this.shieldActiveUntil) {
       GameplayTelemetryRecorder.recordAbilityDenied('shield', 'already-active');
       return;
@@ -1278,13 +1291,13 @@ export class ArenaScene extends Phaser.Scene {
       GameplayTelemetryRecorder.recordAbilityDenied('shield', 'cooldown');
       return;
     }
-    if (!this.player.canSpendEnergy(ABILITY_BALANCE.shield.energyCost)) {
-      GameplayTelemetryRecorder.recordEnergyDenied('shield', ABILITY_BALANCE.shield.energyCost, this.player.energy);
+    if (!this.player.canSpendEnergy(energyCost)) {
+      GameplayTelemetryRecorder.recordEnergyDenied('shield', energyCost, this.player.energy);
       return;
     }
 
-    this.player.spendEnergy(ABILITY_BALANCE.shield.energyCost);
-    GameplayTelemetryRecorder.recordAbilityUse('shield', ABILITY_BALANCE.shield.energyCost);
+    this.player.spendEnergy(energyCost);
+    GameplayTelemetryRecorder.recordAbilityUse('shield', energyCost);
 
     this.shieldActiveUntil = now + durationMs;
     this.shieldCooldownUntil = now + cooldownMs;
@@ -2146,23 +2159,25 @@ export class ArenaScene extends Phaser.Scene {
     let appliedRestoration = 0;
     if (type === 'health') {
       const before = this.player.hp;
-      requestedRestoration = PICKUP_BALANCE.healthRestore;
+      requestedRestoration = PICKUP_BALANCE.healthRestore * this.modRuntime.multiplier('healthPickupValue');
       this.player.hp = Math.min(this.player.stats.maxHealth, this.player.hp + requestedRestoration);
       appliedRestoration = this.player.hp - before;
     }
     if (type === 'energy') {
       const before = this.player.energy;
-      const restored = this.player.energyStats.max * PICKUP_BALANCE.energyRestoreFraction;
+      const restored = this.player.energyStats.max * PICKUP_BALANCE.energyRestoreFraction * this.modRuntime.multiplier('energyPickupValue');
       requestedRestoration = restored;
       this.player.energy = Math.min(this.player.energyStats.max, this.player.energy + restored);
       appliedRestoration = this.player.energy - before;
     }
-    if (type === 'damageBoost') this.player.buffs.damageBoostUntil = this.time.now + WEAPON_BALANCE.buffDurationMs;
-    if (type === 'speedBoost') this.player.buffs.speedBoostUntil = this.time.now + WEAPON_BALANCE.buffDurationMs;
-    if (type === 'rapidFire') this.player.buffs.rapidFireUntil = this.time.now + WEAPON_BALANCE.buffDurationMs;
+    const buffDurationMs = WEAPON_BALANCE.buffDurationMs * this.modRuntime.multiplier('buffDuration');
+    if (type === 'damageBoost') this.player.buffs.damageBoostUntil = this.time.now + buffDurationMs;
+    if (type === 'speedBoost') this.player.buffs.speedBoostUntil = this.time.now + buffDurationMs;
+    if (type === 'rapidFire') this.player.buffs.rapidFireUntil = this.time.now + buffDurationMs;
     if (type === 'credits') {
-      this.roundCredits += PICKUP_BALANCE.credits;
-      this.totalCreditsCollected += PICKUP_BALANCE.credits;
+      const credits = this.scaleModCredits(PICKUP_BALANCE.credits);
+      this.roundCredits += credits;
+      this.totalCreditsCollected += credits;
     }
     if (type === 'coreToken') this.roundCoreTokens += 1;
     GameplayTelemetryRecorder.recordPickupCollected(type, source, requestedRestoration, appliedRestoration);
@@ -2177,9 +2192,10 @@ export class ArenaScene extends Phaser.Scene {
 
   private killEnemy(enemy: Enemy): void {
     this.audio.playSfx('enemyDeath');
-    this.roundCredits += enemy.stats.valueCredits;
+    const enemyCredits = this.scaleModCredits(enemy.stats.valueCredits);
+    this.roundCredits += enemyCredits;
     this.roundCoreTokens += enemy.stats.valueCoreTokens;
-    this.totalCreditsCollected += enemy.stats.valueCredits;
+    this.totalCreditsCollected += enemyCredits;
     SaveSystem.recordEnemyDestroyed();
 
     GameplayTelemetryRecorder.recordEnemyKill({
@@ -2189,13 +2205,14 @@ export class ArenaScene extends Phaser.Scene {
       firstDamagedAtActiveMs: enemy.telemetryFirstDamagedAtActiveMs,
       finalSource: enemy.lastDamageSource,
       damageBySource: enemy.damageTakenBySource,
-      credits: enemy.stats.valueCredits,
+      credits: enemyCredits,
       coreTokens: enemy.stats.valueCoreTokens
     });
 
     this.tryAwardMod(enemy.stats.type === 'star' ? 'eliteEnemy' : 'normalEnemy', false, enemy.x, enemy.y);
 
-    if (Math.random() < PICKUP_BALANCE.enemyDropChance) this.dropPickup(enemy.x, enemy.y);
+    const pickupChance = Math.min(1, PICKUP_BALANCE.enemyDropChance * this.modRuntime.multiplier('enemyPickupChance'));
+    if (Math.random() < pickupChance) this.dropPickup(enemy.x, enemy.y);
 
     this.createDeathExplosion(enemy.x, enemy.y, enemy.stats.color);
 
@@ -2458,8 +2475,9 @@ export class ArenaScene extends Phaser.Scene {
     this.abilityCooldownUntil.turret = Math.min(this.abilityCooldownUntil.turret, this.time.now + 900);
     this.abilityCooldownUntil.mine = Math.min(this.abilityCooldownUntil.mine, this.time.now + 900);
 
-    this.roundCredits += REWARD_BALANCE.siteRecoveryCredits;
-    this.totalCreditsCollected += REWARD_BALANCE.siteRecoveryCredits;
+    const recoveryCredits = this.scaleModCredits(REWARD_BALANCE.siteRecoveryCredits);
+    this.roundCredits += recoveryCredits;
+    this.totalCreditsCollected += recoveryCredits;
 
     for (const s of this.bombSites.getRemainingSites()) {
       const pickupType: PickupType = Math.random() < 0.5 ? 'health' : 'energy';
@@ -2481,7 +2499,7 @@ export class ArenaScene extends Phaser.Scene {
     const completedTemplate = this.layout.template;
     this.tryAwardMod('milestone', isGuaranteedMilestone(completedRound));
 
-    const rawRewardCredits = this.roundCredits + getRoundCompletionCredits(completedRound);
+    const rawRewardCredits = this.roundCredits + this.scaleModCredits(getRoundCompletionCredits(completedRound));
     const rewardCredits = Math.round(rawRewardCredits * (getContract(this.contract)?.creditRewardMultiplier ?? 1));
     const rewardTokens = this.roundCoreTokens + Math.max(REWARD_BALANCE.completionBaseTokens, Math.floor(completedRound / REWARD_BALANCE.tokenRoundDivisor));
     SaveSystem.addCredits(rewardCredits);
@@ -2726,25 +2744,26 @@ export class ArenaScene extends Phaser.Scene {
     SaveSystem.recordEnemyDestroyed();
 
     const rewards = getBossRewards(this.bossRound);
+    const bossCredits = this.scaleModCredits(rewards.credits);
     const collectedCredits = this.roundCredits;
     const collectedTokens = this.roundCoreTokens;
-    SaveSystem.addCredits(collectedCredits + rewards.credits);
+    SaveSystem.addCredits(collectedCredits + bossCredits);
     SaveSystem.addCoreTokens(collectedTokens + rewards.coreTokens);
     SaveSystem.addPlasmaChips(rewards.plasmaChips);
-    this.totalCreditsCollected += rewards.credits;
-    this.runCreditsEarned += collectedCredits + rewards.credits;
+    this.totalCreditsCollected += bossCredits;
+    this.runCreditsEarned += collectedCredits + bossCredits;
     this.tryAwardMod('boss', false, this.bossEncounter.boss.x, this.bossEncounter.boss.y);
     GameplayTelemetryRecorder.recordBossDefeated();
     this.captureTelemetryEndState();
     GameplayTelemetryRecorder.endEncounter('bossDefeated', {
-      credits: collectedCredits + rewards.credits,
+      credits: collectedCredits + bossCredits,
       coreTokens: collectedTokens + rewards.coreTokens,
       plasmaChips: rewards.plasmaChips
     });
 
     const payload: RoundFinishedPayload = {
       ...this.pendingRoundPayload,
-      creditsGained: this.pendingRoundPayload.creditsGained + collectedCredits + rewards.credits,
+      creditsGained: this.pendingRoundPayload.creditsGained + collectedCredits + bossCredits,
       coreTokensGained: this.pendingRoundPayload.coreTokensGained + collectedTokens + rewards.coreTokens,
       plasmaChipsGained: rewards.plasmaChips,
       bossDefeated: this.bossEncounter.archetype,
@@ -2752,7 +2771,7 @@ export class ArenaScene extends Phaser.Scene {
       runCreditsEarned: this.runCreditsEarned
     };
     this.pendingRoundPayload = payload;
-    this.showBanner(`BOSS DESTROYED\n+${rewards.credits.toLocaleString()} CREDITS  +${rewards.coreTokens} TOKENS  +${rewards.plasmaChips} PLASMA`);
+    this.showBanner(`BOSS DESTROYED\n+${bossCredits.toLocaleString()} CREDITS  +${rewards.coreTokens} TOKENS  +${rewards.plasmaChips} PLASMA`);
     this.time.delayedCall(2200, () => {
       this.registry.set('round-finished', payload);
       this.scene.start(SceneKeys.RoundFinished);
@@ -2874,7 +2893,7 @@ export class ArenaScene extends Phaser.Scene {
     this.hudPayload.bombUrgent = Boolean(hudFocus && hudFocus.timerMs <= 15_000);
     this.hudPayload.bombActive = Boolean(hudFocus);
     this.hudPayload.bombProgress = hudFocus
-      ? Phaser.Math.Clamp(1 - hudFocus.timerMs / OBJECTIVE_CONFIG.bombDefenseMs, 0, 1)
+      ? Phaser.Math.Clamp(1 - hudFocus.timerMs / this.getBombDefenseDurationMs(), 0, 1)
       : 0;
     this.refreshHudRadarContacts();
 
@@ -2899,13 +2918,10 @@ export class ArenaScene extends Phaser.Scene {
 
     shieldSlot.cooldownMs = now < this.shieldActiveUntil ? this.shieldActiveUntil - now : shieldCdMs;
     shieldSlot.cooldownDurationMs = now < this.shieldActiveUntil
-      ? Math.min(
-        ABILITY_BALANCE.shield.maximumDurationMs,
-        ABILITY_BALANCE.shield.durationMs + getUpgradeEffect(SaveSystem.get().upgrades, 'player.shieldDuration')
-      )
-      : ABILITY_BALANCE.shield.cooldownMs;
+      ? this.getShieldDurationMs()
+      : this.getShieldCooldownMs();
     shieldSlot.active = now < this.shieldActiveUntil;
-    shieldSlot.hasEnergy = this.player.energy >= ABILITY_BALANCE.shield.energyCost;
+    shieldSlot.hasEnergy = this.player.energy >= this.getShieldEnergyCost();
 
     this.hud.update(this.hudPayload);
   }
@@ -2963,13 +2979,10 @@ export class ArenaScene extends Phaser.Scene {
       ? this.shieldActiveUntil - now
       : Math.max(0, this.shieldCooldownUntil - now);
     shieldSlot.cooldownDurationMs = now < this.shieldActiveUntil
-      ? Math.min(
-        ABILITY_BALANCE.shield.maximumDurationMs,
-        ABILITY_BALANCE.shield.durationMs + getUpgradeEffect(SaveSystem.get().upgrades, 'player.shieldDuration')
-      )
-      : ABILITY_BALANCE.shield.cooldownMs;
+      ? this.getShieldDurationMs()
+      : this.getShieldCooldownMs();
     shieldSlot.active = now < this.shieldActiveUntil;
-    shieldSlot.hasEnergy = this.player.energy >= ABILITY_BALANCE.shield.energyCost;
+    shieldSlot.hasEnergy = this.player.energy >= this.getShieldEnergyCost();
     this.hud.update(this.hudPayload);
   }
 
@@ -3081,12 +3094,12 @@ export class ArenaScene extends Phaser.Scene {
       const upgradedDamage = ABILITY_BALANCE.fence.damage + getUpgradeLevel(up, 'fence.damage') * 4;
       const upgradedHealth = ABILITY_BALANCE.fence.hp + getUpgradeLevel(up, 'fence.health') * 16;
       return {
-        energyCost: ABILITY_BALANCE.fence.energyCost,
-        cooldownMs: ABILITY_BALANCE.fence.cooldownMs,
-        maxActive: ABILITY_BALANCE.fence.maxActive + getUpgradeLevel(up, 'fence.max'),
-        damage: upgradedDamage * this.modRuntime.fenceDamageMultiplier(),
-        hp: upgradedHealth * this.modRuntime.fenceHealthMultiplier(),
-        durationMs: ABILITY_BALANCE.fence.durationMs + getUpgradeLevel(up, 'fence.duration') * 1200,
+        energyCost: ABILITY_BALANCE.fence.energyCost * this.modRuntime.multiplier('fenceEnergyCost'),
+        cooldownMs: ABILITY_BALANCE.fence.cooldownMs * this.modRuntime.multiplier('fenceCooldown'),
+        maxActive: ABILITY_BALANCE.fence.maxActive + getUpgradeLevel(up, 'fence.max') + Math.floor(this.modRuntime.addition('fenceMaxActive')),
+        damage: upgradedDamage * this.modRuntime.fenceDamageMultiplier() * this.modRuntime.multiplier('fenceDamage'),
+        hp: upgradedHealth * this.modRuntime.fenceHealthMultiplier() * this.modRuntime.multiplier('fenceHealth'),
+        durationMs: (ABILITY_BALANCE.fence.durationMs + getUpgradeLevel(up, 'fence.duration') * 1200) * this.modRuntime.multiplier('fenceDuration'),
         range: 0,
         fireRate: 0,
         armMs: 0,
@@ -3095,14 +3108,14 @@ export class ArenaScene extends Phaser.Scene {
     }
     if (type === 'turret') {
       return {
-        energyCost: ABILITY_BALANCE.turret.energyCost,
-        cooldownMs: ABILITY_BALANCE.turret.cooldownMs,
-        maxActive: ABILITY_BALANCE.turret.maxActive + getUpgradeLevel(up, 'turret.max'),
-        damage: ABILITY_BALANCE.turret.damage + getUpgradeLevel(up, 'turret.damage') * 2,
-        hp: ABILITY_BALANCE.turret.hp + getUpgradeLevel(up, 'turret.health') * 20,
+        energyCost: ABILITY_BALANCE.turret.energyCost * this.modRuntime.multiplier('turretEnergyCost'),
+        cooldownMs: ABILITY_BALANCE.turret.cooldownMs * this.modRuntime.multiplier('turretCooldown'),
+        maxActive: ABILITY_BALANCE.turret.maxActive + getUpgradeLevel(up, 'turret.max') + Math.floor(this.modRuntime.addition('turretMaxActive')),
+        damage: (ABILITY_BALANCE.turret.damage + getUpgradeLevel(up, 'turret.damage') * 2) * this.modRuntime.multiplier('turretDamage'),
+        hp: (ABILITY_BALANCE.turret.hp + getUpgradeLevel(up, 'turret.health') * 20) * this.modRuntime.multiplier('turretHealth'),
         durationMs: 0,
-        range: ABILITY_BALANCE.turret.range + getUpgradeLevel(up, 'turret.range') * 12,
-        fireRate: ABILITY_BALANCE.turret.fireRate + getUpgradeLevel(up, 'turret.fireRate') * 0.25,
+        range: (ABILITY_BALANCE.turret.range + getUpgradeLevel(up, 'turret.range') * 12) * this.modRuntime.multiplier('turretRange'),
+        fireRate: (ABILITY_BALANCE.turret.fireRate + getUpgradeLevel(up, 'turret.fireRate') * 0.25) * this.modRuntime.multiplier('turretFireRate'),
         armMs: 0,
         radius: 0
       };
@@ -3111,17 +3124,41 @@ export class ArenaScene extends Phaser.Scene {
     const upgradedMineDamage = ABILITY_BALANCE.mine.damage + getUpgradeLevel(up, 'mine.damage') * 7;
     const upgradedMineArmMs = Math.max(400, ABILITY_BALANCE.mine.armMs - getUpgradeLevel(up, 'mine.arm') * 70);
     return {
-      energyCost: ABILITY_BALANCE.mine.energyCost,
-      cooldownMs: ABILITY_BALANCE.mine.cooldownMs,
-      maxActive: ABILITY_BALANCE.mine.maxActive + getUpgradeLevel(up, 'mine.max'),
-      damage: upgradedMineDamage * this.modRuntime.mineDamageMultiplier(),
+      energyCost: ABILITY_BALANCE.mine.energyCost * this.modRuntime.multiplier('mineEnergyCost'),
+      cooldownMs: ABILITY_BALANCE.mine.cooldownMs * this.modRuntime.multiplier('mineCooldown'),
+      maxActive: ABILITY_BALANCE.mine.maxActive + getUpgradeLevel(up, 'mine.max') + Math.floor(this.modRuntime.addition('mineMaxActive')),
+      damage: upgradedMineDamage * this.modRuntime.mineDamageMultiplier() * this.modRuntime.multiplier('mineDamage'),
       hp: 0,
       durationMs: 0,
       range: 0,
       fireRate: 0,
-      armMs: Math.max(100, upgradedMineArmMs * this.modRuntime.mineArmTimeMultiplier()),
-      radius: ABILITY_BALANCE.mine.radius + getUpgradeLevel(up, 'mine.radius') * 7
+      armMs: Math.max(100, upgradedMineArmMs * this.modRuntime.mineArmTimeMultiplier() * this.modRuntime.multiplier('mineArmTime')),
+      radius: (ABILITY_BALANCE.mine.radius + getUpgradeLevel(up, 'mine.radius') * 7) * this.modRuntime.multiplier('mineRadius')
     };
+  }
+
+  private getShieldDurationMs(): number {
+    const upgraded = Math.min(
+      ABILITY_BALANCE.shield.maximumDurationMs,
+      ABILITY_BALANCE.shield.durationMs + getUpgradeEffect(SaveSystem.get().upgrades, 'player.shieldDuration')
+    );
+    return upgraded * this.modRuntime.multiplier('shieldDuration');
+  }
+
+  private getShieldCooldownMs(): number {
+    return ABILITY_BALANCE.shield.cooldownMs * this.modRuntime.multiplier('shieldCooldown');
+  }
+
+  private getShieldEnergyCost(): number {
+    return ABILITY_BALANCE.shield.energyCost * this.modRuntime.multiplier('shieldEnergyCost');
+  }
+
+  private getBombDefenseDurationMs(): number {
+    return OBJECTIVE_CONFIG.bombDefenseMs * this.modRuntime.multiplier('bombDuration');
+  }
+
+  private scaleModCredits(baseCredits: number): number {
+    return Math.max(0, Math.round(baseCredits * this.modRuntime.multiplier('creditValue')));
   }
 
   private hitWall(x: number, y: number): boolean {

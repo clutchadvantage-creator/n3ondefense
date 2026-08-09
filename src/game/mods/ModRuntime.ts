@@ -1,6 +1,6 @@
 import { MOD_BALANCE } from './modBalance.ts';
 import { MOD_BY_ID } from './definitions.ts';
-import type { EquippedModSnapshot, LocalModCollection, ModInfusionId, ModRank } from './types.ts';
+import type { EquippedModSnapshot, LocalModCollection, ModInfusionId, ModRank, ModStat } from './types.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
 
 export class ModRuntime {
@@ -54,6 +54,29 @@ export class ModRuntime {
 
   rank(modId: string): ModRank | 0 { return this.equipped.get(modId) ?? 0; }
   has(modId: string): boolean { return this.equipped.has(modId); }
+  multiplier(stat: ModStat): number {
+    let result = 1;
+    for (const [modId, rank] of this.equipped) {
+      const definition = MOD_BY_ID.get(modId);
+      for (const modifier of definition?.modifiers ?? []) {
+        if (modifier.stat === stat && modifier.mode === 'multiply') result *= modifier.values[rank];
+      }
+    }
+    return Math.max(0.05, result);
+  }
+  addition(stat: ModStat): number {
+    let result = 0;
+    for (const [modId, rank] of this.equipped) {
+      const definition = MOD_BY_ID.get(modId);
+      for (const modifier of definition?.modifiers ?? []) {
+        if (modifier.stat === stat && modifier.mode === 'add') result += modifier.values[rank];
+      }
+    }
+    return result;
+  }
+  permanentMoveSpeedMultiplier(): number {
+    return this.naniteFuelSpeedMultiplier() * this.multiplier('playerMoveSpeed');
+  }
   naniteFuelSpeedMultiplier(): number {
     return this.has('nanite-fuel') ? MOD_BALANCE.naniteFuel.speedMultiplier[this.rank('nanite-fuel')] : 1;
   }
