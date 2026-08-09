@@ -18,7 +18,7 @@ import { BombSiteManager } from '../systems/BombSiteManager';
 import { GameStateMachine } from '../systems/GameStateMachine';
 import { GridPathfinder } from '../systems/GridPathfinder';
 import { Hud } from '../systems/Hud';
-import type { HudPayload } from '../systems/Hud';
+import type { HudPayload, HudRadarContact } from '../systems/Hud';
 import { RoundManager } from '../systems/RoundManager';
 import { SaveSystem } from '../systems/SaveSystem';
 import { ArenaGenerator } from '../systems/ArenaGenerator';
@@ -198,6 +198,7 @@ export class ArenaScene extends Phaser.Scene {
   private shieldOrb: Phaser.GameObjects.Arc | null = null;
   private shieldPulseTween: Phaser.Tweens.Tween | null = null;
   private readonly hudBuffs: string[] = [];
+  private readonly hudRadarContacts: HudRadarContact[] = [];
   private readonly hudPayload: HudPayload = {
     hp: 0,
     maxHp: 1,
@@ -207,32 +208,27 @@ export class ArenaScene extends Phaser.Scene {
     enemies: 0,
     credits: 0,
     phase: 'PRE-PLANT',
-    objective: 'NO ACTIVE CHARGE',
+    objective: 'SITE A AVAILABLE',
+    objectiveTimerMs: null,
     defuseAlert: false,
     bombUrgent: false,
     bombActive: false,
     bombProgress: 0,
     buffs: this.hudBuffs,
     abilities: [
-      { id: 'fence', keybind: 'Q', icon: '⛔', label: 'FENCE', cooldownMs: 0, selected: false, hasEnergy: true, underLimit: true },
-      { id: 'turret', keybind: 'F', icon: '⌖', label: 'TURRET', cooldownMs: 0, selected: false, hasEnergy: true, underLimit: true },
-      { id: 'mine', keybind: 'R', icon: '✹', label: 'MINE', cooldownMs: 0, selected: false, hasEnergy: true, underLimit: true },
-      { id: 'shield', keybind: 'MMB', icon: '◉', label: 'SHIELD', cooldownMs: 0, active: false, selected: false, hasEnergy: true, underLimit: true }
-    ]
+      { id: 'fence', keybind: 'Q', icon: '⛔', label: 'FENCE', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.fence.cooldownMs, selected: false, hasEnergy: true, underLimit: true },
+      { id: 'turret', keybind: 'F', icon: '⌖', label: 'TURRET', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.turret.cooldownMs, selected: false, hasEnergy: true, underLimit: true },
+      { id: 'mine', keybind: 'R', icon: '✹', label: 'MINE', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.mine.cooldownMs, selected: false, hasEnergy: true, underLimit: true },
+      { id: 'shield', keybind: 'MMB', icon: '◉', label: 'SHIELD', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.shield.cooldownMs, active: false, selected: false, hasEnergy: true, underLimit: true }
+    ],
+    radarRange: 900,
+    radarContacts: this.hudRadarContacts
   };
 
   private navState = new WeakMap<Enemy, NavState>();
   private patrolTargets = new WeakMap<Enemy, PatrolPoint>();
-  private readonly onPointerDown = (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[] = []): void => {
+  private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
     if (this.state.state === RoundState.Paused) return;
-    if (pointer.button === 0 && this.pointerLock?.locked) {
-      const aim = this.pointerLock.screenPoint();
-      if (this.hud.activateMusicControlAt(aim.x, aim.y)) {
-        this.pointerDown = false;
-        return;
-      }
-    }
-    if (currentlyOver.some((gameObject) => gameObject.getData('hudMusicControl') === true)) return;
     if (pointer.button === 0) {
       this.pointerDown = true;
       return;
@@ -573,7 +569,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.hud = new Hud(this);
 
-    this.bannerText = this.add.text(this.scale.width * 0.5, 60, '', {
+    this.bannerText = this.add.text(this.scale.width * 0.5, 148, '', {
       fontFamily: 'Orbitron, sans-serif',
       fontSize: '36px',
       color: '#74f5ff',
@@ -611,7 +607,6 @@ export class ArenaScene extends Phaser.Scene {
       GameplayTelemetryRecorder.recordDefuseStarted(site.id);
       this.state.set(RoundState.Defusing);
       this.bombSites.refreshVisuals(this.layout.theme);
-      this.hud.setWarning('DEFUSE IN PROGRESS');
       this.audio.playSfx('defuseAlarm');
       this.audio.startDisarmLoop();
     });
@@ -622,7 +617,6 @@ export class ArenaScene extends Phaser.Scene {
       this.state.set(anyDefusing ? RoundState.Defusing : RoundState.Defense);
       this.bombSites.refreshVisuals(this.layout.theme);
       if (!anyDefusing) {
-        this.hud.setWarning('');
         this.audio.stopDisarmLoop();
       }
     });
@@ -1147,11 +1141,9 @@ export class ArenaScene extends Phaser.Scene {
     }
     if (anyDefusing) {
       this.state.set(RoundState.Defusing);
-      this.hud.setWarning('DEFUSE IN PROGRESS');
       this.audio.startDisarmLoop();
     } else if (activeSites.length > 0) {
       this.state.set(RoundState.Defense);
-      this.hud.setWarning('');
       this.audio.stopDisarmLoop();
     }
 
@@ -2820,12 +2812,18 @@ export class ArenaScene extends Phaser.Scene {
     const activeSites = this.bombSites.getActiveBombSites();
     const defusingSites = activeSites.filter((site) => site.state === BombSiteState.BeingDefused);
     const hudFocus = [...(defusingSites.length > 0 ? defusingSites : activeSites)].sort((a, b) => a.timerMs - b.timerMs)[0] ?? null;
-    const activeSummary = activeSites.length > 1 ? `  ${activeSites.length} CHARGES ACTIVE` : '';
-    const bombText = hudFocus
+    const targetSite = this.bombSites.sites
+      .filter((site) => site.state === BombSiteState.Available || site.state === BombSiteState.Planting)
+      .sort((a, b) => Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y)
+        - Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y))[0] ?? null;
+    const activeSummary = activeSites.length > 1 ? ` • ${activeSites.length} ACTIVE` : '';
+    const objectiveText = hudFocus
       ? defusingSites.length > 0
-        ? `DEFUSE IN PROGRESS  ${defusingSites.map((site) => site.letter).join('/')}  ${Math.ceil(hudFocus.timerMs / 1000)}s${activeSummary}`
-        : `CHARGE ARMED  Next: Site ${hudFocus.letter}  ${Math.ceil(hudFocus.timerMs / 1000)}s${activeSummary}`
-      : 'NO ACTIVE CHARGE';
+        ? `SITE ${hudFocus.letter} — DEFUSE${activeSummary}`
+        : `SITE ${hudFocus.letter} — DEFEND${activeSummary}`
+      : targetSite
+        ? `SITE ${targetSite.letter} ${targetSite.state === BombSiteState.Planting ? '— PLANTING' : 'AVAILABLE'}`
+        : this.state.state === RoundState.Victory ? 'ALL SITES SECURED' : 'OBJECTIVE COMPLETE';
 
     const phaseMap: Record<RoundState, string> = {
       [RoundState.PrePlant]: 'PRE-PLANT',
@@ -2870,31 +2868,42 @@ export class ArenaScene extends Phaser.Scene {
     this.hudPayload.enemies = this.enemies.length;
     this.hudPayload.credits = this.totalCreditsCollected;
     this.hudPayload.phase = phaseMap[this.state.state];
-    this.hudPayload.objective = bombText;
+    this.hudPayload.objective = objectiveText;
+    this.hudPayload.objectiveTimerMs = hudFocus?.timerMs ?? null;
     this.hudPayload.defuseAlert = defusingSites.length > 0;
     this.hudPayload.bombUrgent = Boolean(hudFocus && hudFocus.timerMs <= 15_000);
     this.hudPayload.bombActive = Boolean(hudFocus);
     this.hudPayload.bombProgress = hudFocus
       ? Phaser.Math.Clamp(1 - hudFocus.timerMs / OBJECTIVE_CONFIG.bombDefenseMs, 0, 1)
       : 0;
+    this.refreshHudRadarContacts();
 
     const [fenceSlot, turretSlot, mineSlot, shieldSlot] = this.hudPayload.abilities;
     fenceSlot.cooldownMs = fenceCdMs;
+    fenceSlot.cooldownDurationMs = fenceCfg.cooldownMs;
     fenceSlot.selected = this.selectedAbility === 'fence';
     fenceSlot.hasEnergy = this.player.energy >= fenceCfg.energyCost;
     fenceSlot.underLimit = this.fences.length < fenceCfg.maxActive;
 
     turretSlot.cooldownMs = turretCdMs;
+    turretSlot.cooldownDurationMs = turretCfg.cooldownMs;
     turretSlot.selected = this.selectedAbility === 'turret';
     turretSlot.hasEnergy = this.player.energy >= turretCfg.energyCost;
     turretSlot.underLimit = this.turrets.length < turretCfg.maxActive;
 
     mineSlot.cooldownMs = mineCdMs;
+    mineSlot.cooldownDurationMs = mineCfg.cooldownMs;
     mineSlot.selected = this.selectedAbility === 'mine';
     mineSlot.hasEnergy = this.player.energy >= mineCfg.energyCost;
     mineSlot.underLimit = this.mines.length < mineCfg.maxActive;
 
     shieldSlot.cooldownMs = now < this.shieldActiveUntil ? this.shieldActiveUntil - now : shieldCdMs;
+    shieldSlot.cooldownDurationMs = now < this.shieldActiveUntil
+      ? Math.min(
+        ABILITY_BALANCE.shield.maximumDurationMs,
+        ABILITY_BALANCE.shield.durationMs + getUpgradeEffect(SaveSystem.get().upgrades, 'player.shieldDuration')
+      )
+      : ABILITY_BALANCE.shield.cooldownMs;
     shieldSlot.active = now < this.shieldActiveUntil;
     shieldSlot.hasEnergy = this.player.energy >= ABILITY_BALANCE.shield.energyCost;
 
@@ -2927,30 +2936,78 @@ export class ArenaScene extends Phaser.Scene {
     this.hudPayload.credits = this.totalCreditsCollected;
     this.hudPayload.phase = this.state.state === RoundState.Paused ? 'PAUSED' : 'BOSS FIGHT';
     this.hudPayload.objective = `ELIMINATE ${BOSS_ARCHETYPES[encounter.archetype].label}`;
+    this.hudPayload.objectiveTimerMs = null;
     this.hudPayload.defuseAlert = false;
     this.hudPayload.bombUrgent = false;
     this.hudPayload.bombActive = false;
     this.hudPayload.bombProgress = 0;
+    this.refreshHudRadarContacts();
 
     const [fenceSlot, turretSlot, mineSlot, shieldSlot] = this.hudPayload.abilities;
     fenceSlot.cooldownMs = Math.max(0, this.abilityCooldownUntil.fence - now);
+    fenceSlot.cooldownDurationMs = fenceCfg.cooldownMs;
     fenceSlot.selected = this.selectedAbility === 'fence';
     fenceSlot.hasEnergy = this.player.energy >= fenceCfg.energyCost;
     fenceSlot.underLimit = this.fences.length < fenceCfg.maxActive;
     turretSlot.cooldownMs = Math.max(0, this.abilityCooldownUntil.turret - now);
+    turretSlot.cooldownDurationMs = turretCfg.cooldownMs;
     turretSlot.selected = this.selectedAbility === 'turret';
     turretSlot.hasEnergy = this.player.energy >= turretCfg.energyCost;
     turretSlot.underLimit = this.turrets.length < turretCfg.maxActive;
     mineSlot.cooldownMs = Math.max(0, this.abilityCooldownUntil.mine - now);
+    mineSlot.cooldownDurationMs = mineCfg.cooldownMs;
     mineSlot.selected = this.selectedAbility === 'mine';
     mineSlot.hasEnergy = this.player.energy >= mineCfg.energyCost;
     mineSlot.underLimit = this.mines.length < mineCfg.maxActive;
     shieldSlot.cooldownMs = now < this.shieldActiveUntil
       ? this.shieldActiveUntil - now
       : Math.max(0, this.shieldCooldownUntil - now);
+    shieldSlot.cooldownDurationMs = now < this.shieldActiveUntil
+      ? Math.min(
+        ABILITY_BALANCE.shield.maximumDurationMs,
+        ABILITY_BALANCE.shield.durationMs + getUpgradeEffect(SaveSystem.get().upgrades, 'player.shieldDuration')
+      )
+      : ABILITY_BALANCE.shield.cooldownMs;
     shieldSlot.active = now < this.shieldActiveUntil;
     shieldSlot.hasEnergy = this.player.energy >= ABILITY_BALANCE.shield.energyCost;
     this.hud.update(this.hudPayload);
+  }
+
+  private refreshHudRadarContacts(): void {
+    this.hudRadarContacts.length = 0;
+    const playerX = this.player.x;
+    const playerY = this.player.y;
+
+    for (const enemy of this.enemies) {
+      if (!enemy.active || enemy.isDead()) continue;
+      this.hudRadarContacts.push({
+        kind: 'enemy',
+        state: 'normal',
+        dx: enemy.x - playerX,
+        dy: enemy.y - playerY
+      });
+    }
+
+    if (this.bossEncounter?.boss.active && !this.bossEncounter.boss.isDefeated) {
+      this.hudRadarContacts.push({
+        kind: 'boss',
+        state: 'normal',
+        dx: this.bossEncounter.boss.x - playerX,
+        dy: this.bossEncounter.boss.y - playerY
+      });
+    } else if (this.bombSites) {
+      for (const site of this.bombSites.sites) {
+        if (site.state === BombSiteState.Destroyed || site.state === BombSiteState.Detonated) continue;
+        const state = site.state === BombSiteState.BeingDefused ? 'defusing'
+          : site.state === BombSiteState.Armed ? 'active'
+            : site.state === BombSiteState.Available || site.state === BombSiteState.Planting ? 'available'
+              : 'locked';
+        this.hudRadarContacts.push({ kind: 'objective', state, dx: site.x - playerX, dy: site.y - playerY });
+      }
+    }
+
+    const bounds = this.layout.generation.bounds;
+    this.hudPayload.radarRange = Math.max(600, Math.min(bounds.w, bounds.h) * 0.42);
   }
 
   private currentCombatRound(): number {
@@ -3157,11 +3214,11 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private showBanner(text: string): void {
-    this.bannerText.setText(text).setAlpha(0).setY(56);
+    this.bannerText.setText(text).setAlpha(0).setY(148);
     this.tweens.add({
       targets: this.bannerText,
       alpha: { from: 0, to: 1 },
-      y: 88,
+      y: 174,
       duration: 260,
       yoyo: true,
       hold: 800

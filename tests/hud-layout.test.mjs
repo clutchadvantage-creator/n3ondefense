@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { calculateHudLayout, formatHudCountdown } from '../src/game/systems/hudLayout.ts';
+
+const overlaps = (a, b) => !(
+  a.x + a.width <= b.x
+  || b.x + b.width <= a.x
+  || a.y + a.height <= b.y
+  || b.y + b.height <= a.y
+);
+
+test('HUD perimeter clusters stay in bounds and the top row does not overlap', () => {
+  for (const [width, height] of [[640, 480], [800, 600], [1024, 768], [1366, 768], [1920, 1080], [2560, 1080]]) {
+    const layout = calculateHudLayout(width, height);
+    for (const rect of [layout.vitals, layout.objective, layout.stats, layout.abilities]) {
+      assert.ok(rect.x >= 0 && rect.y >= 0, `${width}x${height} starts outside the viewport`);
+      assert.ok(rect.x + rect.width <= width, `${width}x${height} exceeds horizontal bounds`);
+      assert.ok(rect.y + rect.height <= height, `${width}x${height} exceeds vertical bounds`);
+    }
+    assert.equal(overlaps(layout.vitals, layout.objective), false, `${width}x${height} vitals overlap objective`);
+    assert.equal(overlaps(layout.objective, layout.stats), false, `${width}x${height} objective overlaps stats`);
+    assert.ok(layout.radar.diameter >= 120 && layout.radar.diameter <= 150);
+    assert.ok(layout.radar.centerX - layout.radar.diameter / 2 >= 0);
+    assert.ok(layout.radar.centerY + layout.radar.diameter / 2 <= height);
+    assert.ok(layout.radar.centerX + layout.radar.diameter / 2 < layout.abilities.x);
+  }
+});
+
+test('objective countdown is compact and rounds up partial seconds', () => {
+  assert.equal(formatHudCountdown(null), '');
+  assert.equal(formatHudCountdown(0), '00:00');
+  assert.equal(formatHudCountdown(1), '00:01');
+  assert.equal(formatHudCountdown(42_000), '00:42');
+  assert.equal(formatHudCountdown(75_000), '01:15');
+});
