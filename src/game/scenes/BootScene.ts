@@ -301,13 +301,14 @@ export class BootScene extends Phaser.Scene {
     createEnemyPolygon('enemy-tank', [{ x: 7, y: 2 }, { x: 25, y: 2 }, { x: 30, y: 7 }, { x: 30, y: 25 }, { x: 25, y: 30 }, { x: 7, y: 30 }, { x: 2, y: 25 }, { x: 2, y: 7 }]);
     createEnemyPolygon('enemy-disruptor', [{ x: 16, y: 2 }, { x: 30, y: 12 }, { x: 25, y: 29 }, { x: 7, y: 29 }, { x: 2, y: 12 }]);
 
-    const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, upgradeModule, cosmeticModule, modModule, resultModule, optionsModule, roundFinishedModule, loadingModule] = await Promise.all([
+    const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, legendaryRevealModule, upgradeModule, cosmeticModule, modModule, resultModule, optionsModule, roundFinishedModule, loadingModule] = await Promise.all([
       import('./SplashScene'),
       import('./LeaderboardsScene'),
       import('./OnlineLeaderboardsScene'),
       import('./LocalProfileScene'),
       import('./MainMenuScene'),
       import('./ArenaScene'),
+      import('./LegendaryModRevealScene'),
       import('./UpgradeStoreScene'),
       import('./CosmeticsStoreScene'),
       import('./ModCollectionScene'),
@@ -323,6 +324,7 @@ export class BootScene extends Phaser.Scene {
     this.scene.add(SceneKeys.LocalProfiles, profileModule.LocalProfileScene, false);
     this.scene.add(SceneKeys.MainMenu, menuModule.MainMenuScene, false);
     this.scene.add(SceneKeys.Arena, arenaModule.ArenaScene, false);
+    this.scene.add(SceneKeys.LegendaryModReveal, legendaryRevealModule.LegendaryModRevealScene, false);
     this.scene.add(SceneKeys.Upgrades, upgradeModule.UpgradeStoreScene, false);
     this.scene.add(SceneKeys.Cosmetics, cosmeticModule.CosmeticsStoreScene, false);
     this.scene.add(SceneKeys.Mods, modModule.ModCollectionScene, false);

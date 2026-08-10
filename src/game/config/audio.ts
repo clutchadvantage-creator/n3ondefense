@@ -14,6 +14,7 @@ export const SFX_DEFINITIONS = [
   { key: 'disarm', label: 'Enemy Disarming' },
   { key: 'bomb', label: 'Explosion' },
   { key: 'pickup', label: 'Pickup' },
+  { key: 'legendaryMod', label: 'Legendary Mod' },
   { key: 'menu', label: 'Menu Select' }
 ] as const;
 

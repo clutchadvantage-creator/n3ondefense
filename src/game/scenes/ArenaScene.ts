@@ -41,6 +41,7 @@ import { isGuaranteedMilestone, rollModDrop } from '../mods/ModDropService.ts';
 import type { ModDropSource, ModRewardRecord, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { magneticResistanceForEnemy, prioritizeTurretTargets, splitCurrentSecondaryDamage } from '../mods/ModRules.ts';
 import { createModCardView } from '../mods/ModCardView.ts';
+import { ModAcquisitionPresenter } from '../mods/ModAcquisitionPresenter.ts';
 import { MOD_FOCUS_CATEGORIES, RUN_CONTRACT_IDS, getContract, getRoundCompletionCredits } from '../economy/economyBalance.ts';
 import type { AccountProgressionTier, ModFocusSignalId, RunContractId } from '../economy/types.ts';
 import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
@@ -187,6 +188,8 @@ export class ArenaScene extends Phaser.Scene {
 
   private pauseMenu: PauseMenuElements | null = null;
   private equippedModsViewer: Phaser.GameObjects.Container | null = null;
+  private modAcquisitionPresenter: ModAcquisitionPresenter | null = null;
+  private legendaryRevealPhysicsWasPaused = false;
   private siteActionText!: Phaser.GameObjects.Text;
   private crosshair!: Phaser.GameObjects.Graphics;
   private balanceTelemetry: Phaser.GameObjects.Text | null = null;
@@ -326,6 +329,11 @@ export class ArenaScene extends Phaser.Scene {
       this.scene.start(SceneKeys.MainMenu);
       return;
     }
+
+    this.modAcquisitionPresenter = new ModAcquisitionPresenter(this, {
+      onLegendaryStart: () => this.pauseForLegendaryModReveal(),
+      onLegendaryComplete: () => this.resumeAfterLegendaryModReveal()
+    });
 
     this.scale.on('resize', this.handleResize, this);
     this.events.on('resume-from-options', this.onResumeFromOptions);
@@ -2539,11 +2547,28 @@ export class ArenaScene extends Phaser.Scene {
     const card = SaveSystem.getModCollection().cards.at(-1);
     this.modsEarned.push({ modId: definition.id, duplicate, source });
     GameplayTelemetryRecorder.recordModDrop(definition.id, definition.rarity, source, duplicate);
-    this.showBanner(`${duplicate ? 'MOD DUPLICATE' : 'MOD DISCOVERED'}\n${definition.name.toUpperCase()}`);
     if (card) {
-      const view = createModCardView(this, x, y - 34, card, card.upgradeLevel, { width: 58, height: 82, compact: true, interactive: false }).setDepth(50);
-      this.tweens.add({ targets: view, y: y - 104, scale: 1.25, alpha: 0, duration: 1250, ease: 'Cubic.Out', onComplete: () => view.destroy(true) });
+      const sourcePosition = this.modRevealScreenPosition(x, y);
+      this.modAcquisitionPresenter?.enqueue({
+        card: { ...card },
+        rarity: definition.rarity,
+        duplicate,
+        sourceScreenX: sourcePosition.x,
+        sourceScreenY: sourcePosition.y
+      });
     }
+  }
+
+  private modRevealScreenPosition(worldX: number, worldY: number): { x: number; y: number } {
+    const camera = this.cameras.main;
+    const x = camera.x + (worldX - camera.worldView.x) * camera.zoom;
+    const y = camera.y + (worldY - camera.worldView.y) * camera.zoom;
+    const visible = x >= -40 && x <= this.scale.width + 40 && y >= -40 && y <= this.scale.height + 40;
+    if (!visible) return { x: this.scale.width * 0.5, y: this.scale.height * 0.78 };
+    return {
+      x: Phaser.Math.Clamp(x, 32, this.scale.width - 32),
+      y: Phaser.Math.Clamp(y, 32, this.scale.height - 32)
+    };
   }
 
   private createDeathExplosion(x: number, y: number, color: number, playerDeath = false): void {
@@ -2805,8 +2830,7 @@ export class ArenaScene extends Phaser.Scene {
     this.captureTelemetryEndState();
     GameplayTelemetryRecorder.endEncounter('completed', { credits: rewardCredits, coreTokens: rewardTokens });
 
-    // Cosmetic infusions must never gate progression or delay round controls.
-    this.time.delayedCall(1400, () => {
+    this.transitionAfterModReveals(1400, () => {
       const next = this.roundManager.nextRound();
       const payload: RoundFinishedPayload = {
         baseSeed: this.roundManager.seedBase,
@@ -3068,7 +3092,7 @@ export class ArenaScene extends Phaser.Scene {
     };
     this.pendingRoundPayload = payload;
     this.showBanner(`BOSS DESTROYED\n+${bossCredits.toLocaleString()} CREDITS  +${rewards.coreTokens} TOKENS  +${rewards.plasmaChips} PLASMA`);
-    this.time.delayedCall(2200, () => {
+    this.transitionAfterModReveals(2200, () => {
       this.registry.set('round-finished', payload);
       this.scene.start(SceneKeys.RoundFinished);
     });
@@ -3113,9 +3137,20 @@ export class ArenaScene extends Phaser.Scene {
     OnlineRunManager.complete(reason === 'playerDead' ? 'player_dead' : 'bomb_defused', currentCombatRound);
     this.registry.remove('arena-session');
 
-    this.time.delayedCall(700, () => {
+    this.transitionAfterModReveals(700, () => {
       this.registry.set('result', result);
       this.scene.start(SceneKeys.Results);
+    });
+  }
+
+  private transitionAfterModReveals(fallbackDelayMs: number, callback: () => void): void {
+    if (!this.modAcquisitionPresenter?.isBusy()) {
+      this.time.delayedCall(fallbackDelayMs, callback);
+      return;
+    }
+    this.modAcquisitionPresenter.whenIdle(() => {
+      if (!this.scene.isActive()) return;
+      this.time.delayedCall(150, callback);
     });
   }
 
@@ -3517,6 +3552,28 @@ export class ArenaScene extends Phaser.Scene {
     this.input.keyboard?.resetKeys();
   }
 
+  private pauseForLegendaryModReveal(): void {
+    this.legendaryRevealPhysicsWasPaused = this.physics.world.isPaused;
+    this.audio.stopPlantingLoop();
+    this.audio.stopDisarmLoop();
+    this.clearGameplayInput();
+    this.crosshair?.setVisible(false);
+    this.physics.pause();
+  }
+
+  private resumeAfterLegendaryModReveal(): void {
+    this.crosshair?.setVisible(true);
+    const shouldRemainPaused = this.legendaryRevealPhysicsWasPaused
+      || this.state.state === RoundState.Paused
+      || this.state.state === RoundState.Victory
+      || this.state.state === RoundState.Defeat;
+    if (shouldRemainPaused) this.physics.pause();
+    else this.physics.resume();
+    if (this.state.state === RoundState.Planting) this.audio.startPlantingLoop();
+    if (this.state.state === RoundState.Defusing) this.audio.startDisarmLoop();
+    this.legendaryRevealPhysicsWasPaused = false;
+  }
+
   private pauseForPointerLock(reason: 'initial' | 'unlock' | 'blur' | 'hidden' | 'error'): void {
     if (this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) return;
     this.audio.stopPlantingLoop();
@@ -3564,6 +3621,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bannerText.setPosition(width * 0.5, this.bannerText.y);
     this.siteActionText.setPosition(width * 0.5, height - 46);
     this.bossEncounter?.resize(width);
+    this.modAcquisitionPresenter?.resize(width, height);
     if (this.pauseMenu) {
       this.layoutPauseMenu(width, height);
     }
@@ -3761,6 +3819,8 @@ export class ArenaScene extends Phaser.Scene {
   private cleanup(): void {
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
+    this.modAcquisitionPresenter?.destroy();
+    this.modAcquisitionPresenter = null;
     this.scale.off('resize', this.handleResize, this);
     this.events.off('resume-from-options', this.onResumeFromOptions);
     this.events.off('return-from-mod-collection', this.onReturnFromModCollection);

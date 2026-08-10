@@ -183,6 +183,48 @@ export class AudioManager {
     });
   }
 
+  private playLegendaryModSfx(): void {
+    if (this.context.state === 'suspended') {
+      this.context.resume().catch(() => undefined);
+    }
+    const start = this.context.currentTime;
+    const mix = this.getVolume('sfx', 'legendaryMod');
+    const master = this.context.createGain();
+    master.gain.setValueAtTime(0.0001, start);
+    master.gain.exponentialRampToValueAtTime(Math.max(0.0001, 0.11 * mix), start + 0.035);
+    master.gain.exponentialRampToValueAtTime(0.0001, start + 0.9);
+    master.connect(this.context.destination);
+
+    const notes = [164.81, 246.94, 329.63, 493.88];
+    notes.forEach((frequency, index) => {
+      const noteStart = start + index * 0.085;
+      const oscillator = this.context.createOscillator();
+      const gain = this.context.createGain();
+      oscillator.type = index % 2 === 0 ? 'square' : 'sawtooth';
+      oscillator.frequency.setValueAtTime(frequency, noteStart);
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.5, noteStart + 0.28);
+      gain.gain.setValueAtTime(0.0001, noteStart);
+      gain.gain.exponentialRampToValueAtTime(0.18, noteStart + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.42);
+      oscillator.connect(gain);
+      gain.connect(master);
+      oscillator.start(noteStart);
+      oscillator.stop(noteStart + 0.45);
+    });
+
+    const impact = this.context.createOscillator();
+    const impactGain = this.context.createGain();
+    impact.type = 'sine';
+    impact.frequency.setValueAtTime(95, start);
+    impact.frequency.exponentialRampToValueAtTime(48, start + 0.5);
+    impactGain.gain.setValueAtTime(0.34, start);
+    impactGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.58);
+    impact.connect(impactGain);
+    impactGain.connect(master);
+    impact.start(start);
+    impact.stop(start + 0.6);
+  }
+
   private initDeathSfxPools(): void {
     const src = '/assets/audio/soundeffects/bang.mp3';
     for (let i = 0; i < 10; i += 1) {
@@ -420,6 +462,9 @@ export class AudioManager {
         break;
       case 'pickup':
         this.beep('sfx', 840, 90, 0.05, name);
+        break;
+      case 'legendaryMod':
+        this.playLegendaryModSfx();
         break;
       case 'menu':
         this.beep('sfx', 520, 60, 0.04, name);
