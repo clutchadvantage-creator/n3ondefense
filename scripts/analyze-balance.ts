@@ -172,10 +172,13 @@ console.table(MOD_DEFINITIONS.map((mod) => ({
   dropWeight: mod.dropWeight,
   upgrade1Duplicates: MOD_BALANCE.duplicateRequirements[1],
   upgrade1Credits: MOD_BALANCE.rankCreditCosts[1],
+  upgrade1CoreTokens: MOD_BALANCE.rankCoreTokenCostsByRarity[mod.rarity][1],
   rank2Duplicates: MOD_BALANCE.duplicateRequirements[2],
   rank2Credits: MOD_BALANCE.rankCreditCosts[2],
+  rank2CoreTokens: MOD_BALANCE.rankCoreTokenCostsByRarity[mod.rarity][2],
   rank3Duplicates: MOD_BALANCE.duplicateRequirements[3],
   rank3Credits: MOD_BALANCE.rankCreditCosts[3],
+  rank3CoreTokens: MOD_BALANCE.rankCoreTokenCostsByRarity[mod.rarity][3],
   duplicateSale: MOD_BALANCE.duplicateCreditValueByRarity[mod.rarity],
   duplicatePlasma: MOD_BALANCE.duplicatePlasmaValueByRarity[mod.rarity]
 })));
@@ -218,6 +221,14 @@ assert(Object.values(MOD_BALANCE.dropChance).every((chance) => chance >= 0 && ch
 assert(Object.values(MOD_BALANCE.raritySourceMultipliers).every((table) => Object.values(table).some((weight) => weight > 0)), 'each mod source has a usable drop table');
 assert(MOD_BALANCE.rankCreditCosts[3] >= MOD_BALANCE.rankCreditCosts[2], 'mod rank costs monotonic');
 assert(MOD_BALANCE.rankCreditCosts[2] >= MOD_BALANCE.rankCreditCosts[1], 'mod first-to-second upgrade costs monotonic');
+assert(Object.values(MOD_BALANCE.rankCoreTokenCostsByRarity.common).every((cost) => cost === 0), 'common Mods remain credit-only');
+assert(Object.values(MOD_BALANCE.rankCoreTokenCostsByRarity.uncommon).every((cost) => cost === 0), 'uncommon Mods remain credit-only');
+assert(MOD_BALANCE.rankCoreTokenCostsByRarity.rare[3] <= 10, 'rare Mod Core Token costs stay modest');
+for (const rarity of ['rare', 'epic', 'legendary'] as const) {
+  const costs = MOD_BALANCE.rankCoreTokenCostsByRarity[rarity];
+  assert(costs[1] > 0 && costs[2] >= costs[1] && costs[3] >= costs[2], `${rarity} Core Token costs are positive and monotonic`);
+}
+assert(MOD_BALANCE.rankCoreTokenCostsByRarity.legendary[3] >= 500, 'final legendary rank costs several hundred Core Tokens');
 assert(MOD_BALANCE.duplicateRequirements[3] >= MOD_BALANCE.duplicateRequirements[2], 'mod duplicate costs monotonic');
 assert(MOD_BALANCE.duplicateRequirements[2] >= MOD_BALANCE.duplicateRequirements[1], 'mod first-to-second duplicate costs monotonic');
 assert(Object.values(MOD_BALANCE.duplicateCreditValueByRarity).every((value) => value > 0), 'duplicate sale values positive');

@@ -38,7 +38,10 @@ export class ModCollectionScene extends Phaser.Scene {
     this.add.rectangle(width / 2, height / 2, width, height, 0x040811, 1);
     this.add.grid(width / 2, height / 2, width, height, 48, 48, 0x050b14, 0.2, 0x153447, 0.12);
     this.add.text(width / 2, 34, 'MOD CARD COLLECTION', { fontFamily: 'Orbitron, sans-serif', fontSize: '30px', color: '#68f7ff' }).setOrigin(0.5);
-    this.add.text(width / 2, 64, `${mods.cards.length} CARDS  •  ${mods.plasmaChips} PLASMA CHIPS  •  ${SaveSystem.get().credits.toLocaleString()} CREDITS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9ffe9' }).setOrigin(0.5);
+    const wallet = SaveSystem.get();
+    this.add.text(width / 2, 64, `${mods.cards.length} CARDS  •  ${mods.plasmaChips.toLocaleString()} PLASMA CHIPS  •  ${wallet.coreTokens.toLocaleString()} CORE TOKENS  •  ${wallet.credits.toLocaleString()} CREDITS`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: width < 900 ? '14px' : '18px', color: '#a9ffe9', align: 'center'
+    }).setOrigin(0.5).setWordWrapWidth(Math.max(280, width - 48), true).setMaxLines(2);
 
     createButton(this, 150, 104, `Group: ${category === 'all' ? 'ALL' : category.toUpperCase()}`, () => { this.categoryIndex = (this.categoryIndex + 1) % CATEGORIES.length; this.page = 0; this.scene.restart(); }, 250);
     createButton(this, 430, 104, `Sort: ${sort.toUpperCase()}`, () => { this.sortIndex = (this.sortIndex + 1) % SORTS.length; this.page = 0; this.scene.restart(); }, 250);
@@ -97,7 +100,11 @@ export class ModCollectionScene extends Phaser.Scene {
     if (categorySlot) createButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.apply(() => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40);
     createButton(this, x, buttonY + 44, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40);
     const nextUpgrade = card.upgradeLevel < 3 ? (card.upgradeLevel + 1) as 1 | 2 | 3 : null;
-    const upgradeButton = createButton(this, x, buttonY + 88, nextUpgrade ? `Upgrade Card — ${MOD_BALANCE.rankCreditCosts[nextUpgrade].toLocaleString()} Credits` : 'Upgrade Card — MAX LEVEL', () => {
+    const coreTokenCost = nextUpgrade ? MOD_BALANCE.rankCoreTokenCostsByRarity[definition.rarity][nextUpgrade] : 0;
+    const upgradeLabel = nextUpgrade
+      ? `Upgrade — ${MOD_BALANCE.rankCreditCosts[nextUpgrade].toLocaleString()} Credits${coreTokenCost > 0 ? `\n+ ${coreTokenCost.toLocaleString()} Core Tokens` : ''}`
+      : 'Upgrade Card — MAX LEVEL';
+    const upgradeButton = createButton(this, x, buttonY + 88, upgradeLabel, () => {
       if (nextUpgrade) this.apply(() => SaveSystem.rankUpMod(definition.id, card.instanceId));
     }, width - 40);
     if (!nextUpgrade) disableButton(upgradeButton);

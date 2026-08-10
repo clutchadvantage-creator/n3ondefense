@@ -92,18 +92,22 @@ export const infuseModCard = (mods: LocalModCollection, instanceId: string, infu
   return { ok: true, message: 'Cosmetic infusion installed.' };
 };
 
-export const rankUpMod = (mods: LocalModCollection, modId: string, credits: number, instanceId?: string): ModOperationResult & { cost?: number } => {
+export const rankUpMod = (mods: LocalModCollection, modId: string, credits: number, coreTokens = 0, instanceId?: string): ModOperationResult & { cost?: number; coreTokenCost?: number } => {
   const owned = mods.inventory[modId];
+  const definition = MOD_BY_ID.get(modId);
   const targetCard = instanceId ? mods.cards.find((card) => card.instanceId === instanceId && card.modId === modId) : mods.cards.find((card) => card.modId === modId);
-  if (!owned?.discovered) return { ok: false, message: 'Mod has not been discovered.' };
+  if (!owned?.discovered || !definition) return { ok: false, message: 'Mod has not been discovered.' };
   if (!targetCard) return { ok: false, message: 'Card not found.' };
   if (targetCard.upgradeLevel >= 3) return { ok: false, message: 'Mod card is fully upgraded.' };
   const nextRank = (targetCard.upgradeLevel + 1) as 1 | 2 | 3;
   const creditCost = MOD_BALANCE.rankCreditCosts[nextRank];
-  if (credits < creditCost) return { ok: false, message: `Requires ${creditCost} credits.`, cost: creditCost };
+  const coreTokenCost = MOD_BALANCE.rankCoreTokenCostsByRarity[definition.rarity][nextRank];
+  if (credits < creditCost) return { ok: false, message: `Requires ${creditCost.toLocaleString()} Credits.`, cost: creditCost, coreTokenCost };
+  if (coreTokens < coreTokenCost) return { ok: false, message: `Requires ${coreTokenCost.toLocaleString()} Core Tokens.`, cost: creditCost, coreTokenCost };
   targetCard.upgradeLevel = nextRank;
   owned.rank = Math.max(...mods.cards.filter((card) => card.modId === modId).map((card) => card.upgradeLevel)) as ModRank;
-  return { ok: true, message: `Card upgraded to ${nextRank}/3.`, cost: creditCost };
+  const tokenMessage = coreTokenCost > 0 ? ` and ${coreTokenCost.toLocaleString()} Core Tokens` : '';
+  return { ok: true, message: `Card upgraded to ${nextRank}/3 for ${creditCost.toLocaleString()} Credits${tokenMessage}.`, cost: creditCost, coreTokenCost };
 };
 
 const slotAccepts = (slot: ModSlot, category: string): boolean => slot === 'wildcard' || slot === category;

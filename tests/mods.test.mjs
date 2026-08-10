@@ -310,6 +310,37 @@ test('one card upgrades from zero through three without duplicate requirements',
   assert.equal(rankUpMod(mods, 'split-current', 99999).ok, false);
 });
 
+test('rare, epic, and legendary ranks require escalating Core Tokens', () => {
+  assert.deepEqual(MOD_BALANCE.rankCoreTokenCostsByRarity.common, { 1: 0, 2: 0, 3: 0 });
+  assert.deepEqual(MOD_BALANCE.rankCoreTokenCostsByRarity.uncommon, { 1: 0, 2: 0, 3: 0 });
+  assert.deepEqual(MOD_BALANCE.rankCoreTokenCostsByRarity.rare, { 1: 2, 2: 5, 3: 10 });
+  assert.deepEqual(MOD_BALANCE.rankCoreTokenCostsByRarity.epic, { 1: 15, 2: 40, 3: 90 });
+  assert.deepEqual(MOD_BALANCE.rankCoreTokenCostsByRarity.legendary, { 1: 100, 2: 250, 3: 500 });
+
+  const rare = createDefaultModCollection(); addModDrop(rare, 'priority-targeting');
+  const rareBlocked = rankUpMod(rare, 'priority-targeting', 10_000, 1);
+  assert.equal(rareBlocked.ok, false);
+  assert.match(rareBlocked.message, /2 Core Tokens/);
+  assert.equal(rare.cards[0].upgradeLevel, 0);
+  const rareUpgrade = rankUpMod(rare, 'priority-targeting', 10_000, 2);
+  assert.equal(rareUpgrade.ok, true);
+  assert.equal(rareUpgrade.coreTokenCost, 2);
+  assert.equal(rare.cards[0].upgradeLevel, 1);
+
+  const epic = createDefaultModCollection(); addModDrop(epic, 'emergency-shield');
+  assert.equal(rankUpMod(epic, 'emergency-shield', 10_000, 14).ok, false);
+  assert.equal(rankUpMod(epic, 'emergency-shield', 10_000, 15).coreTokenCost, 15);
+
+  const legendary = createDefaultModCollection(); addModDrop(legendary, 'nanite-fuel');
+  assert.equal(rankUpMod(legendary, 'nanite-fuel', 10_000, 99).ok, false);
+  assert.equal(rankUpMod(legendary, 'nanite-fuel', 10_000, 100).coreTokenCost, 100);
+  assert.equal(rankUpMod(legendary, 'nanite-fuel', 10_000, 249).ok, false);
+  assert.equal(rankUpMod(legendary, 'nanite-fuel', 10_000, 250).coreTokenCost, 250);
+  assert.equal(rankUpMod(legendary, 'nanite-fuel', 10_000, 499).ok, false);
+  assert.equal(rankUpMod(legendary, 'nanite-fuel', 10_000, 500).coreTokenCost, 500);
+  assert.equal(legendary.cards[0].upgradeLevel, 3);
+});
+
 test('slot validation, wildcard behavior, and duplicate equip prevention work', () => {
   const mods = createDefaultModCollection();
   addModDrop(mods, 'split-current'); addModDrop(mods, 'emergency-capacitor');

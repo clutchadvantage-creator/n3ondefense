@@ -275,9 +275,11 @@ export class PlayerProfileStore {
 
   static rankUpMod(modId: string, instanceId?: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
-    const result = rankUpMod(save.mods, modId, save.wallet.credits, instanceId);
-    if (!result.ok || result.cost === undefined) return result;
+    const result = rankUpMod(save.mods, modId, save.wallet.credits, save.wallet.coreTokens, instanceId);
+    if (!result.ok || result.cost === undefined || result.coreTokenCost === undefined) return result;
     if (!spendCreditsAtomic(save.wallet, save.progress, result.cost, 'modRank')) return { ok: false, message: 'Not enough credits.' };
+    save.wallet.coreTokens -= result.coreTokenCost;
+    save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
     return result;
   }

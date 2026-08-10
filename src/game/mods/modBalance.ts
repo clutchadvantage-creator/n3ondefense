@@ -4,6 +4,13 @@ export const MOD_BALANCE = {
   maxRank: 3,
   duplicateRequirements: { 1: 0, 2: 0, 3: 0 } as const,
   rankCreditCosts: { 1: 600, 2: 1200, 3: 2000 } as const,
+  rankCoreTokenCostsByRarity: {
+    common: { 1: 0, 2: 0, 3: 0 },
+    uncommon: { 1: 0, 2: 0, 3: 0 },
+    rare: { 1: 2, 2: 5, 3: 10 },
+    epic: { 1: 15, 2: 40, 3: 90 },
+    legendary: { 1: 100, 2: 250, 3: 500 }
+  } satisfies Record<ModRarity, Record<1 | 2 | 3, number>>,
   conditionalDirectDamageBonusCap: 0.3,
   duplicateCreditValueByRarity: { common: 100, uncommon: 180, rare: 320, epic: 550, legendary: 900 } satisfies Record<ModRarity, number>,
   duplicatePlasmaValueByRarity: { common: 1, uncommon: 2, rare: 3, epic: 5, legendary: 8 } satisfies Record<ModRarity, number>,
