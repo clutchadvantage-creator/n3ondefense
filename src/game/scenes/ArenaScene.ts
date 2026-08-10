@@ -4,7 +4,7 @@ import { getUpgradeEffect, getUpgradeLevel } from '../../data/upgrades';
 import { getCosmeticTextureKey } from '../../data/cosmetics';
 import { COLORS, WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { OBJECTIVE_CONFIG } from '../config/gameplay';
-import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, WEAPON_BALANCE, getConcurrentSpawnPressure, getDefuseAssigneeCount, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
+import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, TANK_HOMING_MISSILE_BALANCE, WEAPON_BALANCE, getConcurrentSpawnPressure, getDefuseAssigneeCount, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
 import { Mine } from '../abilities/Mine';
@@ -12,6 +12,7 @@ import { Turret } from '../abilities/Turret';
 import { Fence } from '../abilities/Fence';
 import { Player } from '../entities/Player';
 import { baseEnemyStats, Enemy } from '../enemies/Enemy';
+import { getTankHomingMissileSpeed, steerTankHomingMissile } from '../enemies/HomingMissile.ts';
 import { BombSiteState, RoundState, type AbilityType, type ArenaLayout, type ArenaReward, type ArenaSessionState, type ArenaTemplate, type BombSiteRuntime, type EnemyType, type PickupType, type RectSpec, type RoundFinishedPayload } from '../types';
 import { AudioManager } from '../systems/AudioManager';
 import { BombSiteManager } from '../systems/BombSiteManager';
@@ -57,6 +58,15 @@ interface Projectile {
   critical?: boolean;
   turretId?: string;
   bossAttack?: BossAttackKind;
+}
+
+interface HomingMissile {
+  sprite: Phaser.Physics.Arcade.Image;
+  owner: Enemy;
+  hp: number;
+  lifeMs: number;
+  damage: number;
+  detonated: boolean;
 }
 
 interface Pickup {
@@ -115,6 +125,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private enemies: Enemy[] = [];
   private projectiles: Projectile[] = [];
+  private homingMissiles: HomingMissile[] = [];
   private pickups: Pickup[] = [];
   private fences: Fence[] = [];
   private turrets: Turret[] = [];
@@ -717,6 +728,7 @@ export class ArenaScene extends Phaser.Scene {
     this.laserSecurity?.update(now, dt, this.player, hazardTargets, playerLaserImmune);
     this.bombletHazard?.update(now, this.player, hazardTargets, laserDangerWindow);
     this.updateEnemies(now, dt);
+    this.updateHomingMissiles(delta);
     this.updateProjectiles(delta);
     this.updateAbilities(now, dt);
     this.updateDeathMines(now);
@@ -1101,6 +1113,9 @@ export class ArenaScene extends Phaser.Scene {
     const enemyTexture = type === 'star' ? 'enemy-star' : `enemy-${type}`;
     const enemy = new Enemy(this, spawn.x, spawn.y, enemyTexture, stats);
     enemy.telemetrySpawnedAtActiveMs = GameplayTelemetryRecorder.recordEnemySpawn(type, stats.hp);
+    if (type === 'tank') {
+      enemy.lastShotMs = this.time.now - TANK_HOMING_MISSILE_BALANCE.cooldownMs * 0.35;
+    }
     if (this.modRuntime.hasInfusion('enemy-growth')) enemy.setScale(1.12);
     if (type === 'star') {
       enemy.setTexture('enemy-star');
@@ -1140,6 +1155,7 @@ export class ArenaScene extends Phaser.Scene {
 
       const assignedSite = this.defuseTargetByEnemy.get(enemy);
       const targetSite = assignedSite ?? this.selectEnemyObjective(enemy, activeSites);
+      if (enemy.stats.type === 'tank' && !assignedSite) this.updateTankHomingMissile(enemy, now);
       if (!targetSite) {
         this.updateEnemyPatrol(enemy, now);
       } else if (assignedSite && this.defuseAssignees.has(enemy)) {
@@ -1368,6 +1384,117 @@ export class ArenaScene extends Phaser.Scene {
     this.shieldPulseTween = null;
     this.shieldOrb?.destroy();
     this.shieldOrb = null;
+  }
+
+  private updateTankHomingMissile(enemy: Enemy, now: number): void {
+    if (now - enemy.lastShotMs < TANK_HOMING_MISSILE_BALANCE.cooldownMs) return;
+    if (this.homingMissiles.some((missile) => missile.owner === enemy && missile.sprite.active)) return;
+
+    const distanceToPlayer = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+    if (distanceToPlayer > TANK_HOMING_MISSILE_BALANCE.launchRange) return;
+
+    enemy.lastShotMs = now;
+    const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+    const launchOffset = enemy.stats.size * 0.65;
+    const x = enemy.x + Math.cos(angle) * launchOffset;
+    const y = enemy.y + Math.sin(angle) * launchOffset;
+    const speed = getTankHomingMissileSpeed(this.player.speed);
+    const sprite = this.physics.add.image(x, y, 'projectile-missile');
+    sprite.setDisplaySize(30, 14).setTint(COLORS.pink).setRotation(angle).setDepth(9);
+    sprite.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    const body = sprite.body as Phaser.Physics.Arcade.Body | null;
+    body?.setSize(24, 10, true);
+
+    this.homingMissiles.push({
+      sprite,
+      owner: enemy,
+      hp: TANK_HOMING_MISSILE_BALANCE.health,
+      lifeMs: TANK_HOMING_MISSILE_BALANCE.lifetimeMs,
+      damage: TANK_HOMING_MISSILE_BALANCE.damage,
+      detonated: false
+    });
+    GameplayTelemetryRecorder.recordProjectileFired('enemy');
+
+    const launchFlash = this.add.circle(x, y, 8, COLORS.pink, 0.28)
+      .setStrokeStyle(2, COLORS.purple, 0.95)
+      .setDepth(8);
+    this.tweens.add({ targets: launchFlash, radius: 28, alpha: 0, duration: 260, onComplete: () => launchFlash.destroy() });
+    this.audio.playSfx('beep');
+  }
+
+  private updateHomingMissiles(delta: number): void {
+    this.homingMissiles = this.homingMissiles.filter((missile) => {
+      if (missile.detonated || !missile.sprite.active || !missile.sprite.body) return false;
+
+      missile.lifeMs -= delta;
+      if (missile.lifeMs <= 0) {
+        this.detonateHomingMissile(missile, 'expired');
+        return false;
+      }
+      if (this.hitWall(missile.sprite.x, missile.sprite.y)) {
+        this.detonateHomingMissile(missile, 'wall');
+        return false;
+      }
+
+      const body = missile.sprite.body as Phaser.Physics.Arcade.Body;
+      const currentAngle = body.velocity.lengthSq() > 0
+        ? Math.atan2(body.velocity.y, body.velocity.x)
+        : missile.sprite.rotation;
+      const targetAngle = Phaser.Math.Angle.Between(missile.sprite.x, missile.sprite.y, this.player.x, this.player.y);
+      const angle = steerTankHomingMissile(currentAngle, targetAngle, delta);
+      const speed = getTankHomingMissileSpeed(this.player.speed);
+      missile.sprite.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+      missile.sprite.setRotation(angle);
+      missile.sprite.setAlpha(missile.lifeMs < 1500 ? 0.7 + Math.sin(this.time.now * 0.035) * 0.3 : 1);
+      this.spawnProjectileTrail(missile.sprite.x, missile.sprite.y, COLORS.pink);
+
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, missile.sprite.x, missile.sprite.y) <= 19) {
+        this.detonateHomingMissile(missile, 'impact');
+        return false;
+      }
+      return true;
+    });
+  }
+
+  private detonateHomingMissile(missile: HomingMissile, cause: 'impact' | 'expired' | 'wall' | 'intercepted'): void {
+    if (missile.detonated) return;
+    missile.detonated = true;
+    const { x, y } = missile.sprite;
+    missile.sprite.destroy();
+
+    const intercepted = cause === 'intercepted';
+    const color = intercepted ? COLORS.cyan : COLORS.pink;
+    const blast = this.add.circle(x, y, 8, color, 0.3)
+      .setStrokeStyle(3, intercepted ? COLORS.cyan : COLORS.purple, 0.95)
+      .setDepth(12);
+    this.tweens.add({
+      targets: blast,
+      radius: TANK_HOMING_MISSILE_BALANCE.blastRadius,
+      alpha: 0,
+      duration: intercepted ? 180 : 260,
+      onComplete: () => blast.destroy()
+    });
+    this.spawnImpact(x, y, color);
+    this.audio.playSfx('mine');
+
+    if (intercepted) {
+      GameplayTelemetryRecorder.recordProjectileHit('enemy', 0, 0, false, true);
+      return;
+    }
+
+    const playerInBlast = Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y)
+      <= TANK_HOMING_MISSILE_BALANCE.blastRadius;
+    if (playerInBlast) {
+      const hit = this.player.takeDamage(missile.damage);
+      GameplayTelemetryRecorder.recordProjectileHit('enemy', hit ? missile.damage : 0, 0, false, !hit);
+      if (hit) {
+        this.audio.playSfx('playerDamage');
+        GameplayTelemetryRecorder.recordPlayerDamage('enemy-missile', missile.damage);
+      }
+      return;
+    }
+
+    GameplayTelemetryRecorder.recordProjectileMiss('enemy', cause === 'wall' ? 'wall' : 'expired');
   }
 
   private updateShooter(enemy: Enemy, now: number, site: BombSiteRuntime): void {
@@ -1613,6 +1740,32 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       if (p.from === 'player' || p.from === 'turret') {
+        if (p.from === 'player') {
+          const hitMissile = this.homingMissiles.find((missile) =>
+            !missile.detonated
+            && missile.sprite.active
+            && Phaser.Math.Distance.Between(missile.sprite.x, missile.sprite.y, p.sprite.x, p.sprite.y) <= 16
+          );
+          if (hitMissile) {
+            const applied = Math.min(hitMissile.hp, p.damage);
+            const overkill = Math.max(0, p.damage - applied);
+            hitMissile.hp = Math.max(0, hitMissile.hp - applied);
+            GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
+            this.spawnImpact(p.sprite.x, p.sprite.y, COLORS.cyan);
+            p.sprite.destroy();
+            this.audio.playSfx('hit');
+            if (hitMissile.hp <= 0) {
+              this.detonateHomingMissile(hitMissile, 'intercepted');
+            } else {
+              hitMissile.sprite.setTintFill(0xffffff);
+              this.time.delayedCall(55, () => {
+                if (hitMissile.sprite.active) hitMissile.sprite.setTint(COLORS.pink);
+              });
+            }
+            return false;
+          }
+        }
+
         const boss = this.bossEncounter?.boss;
         if (boss?.active && !boss.isDefeated
           && Phaser.Math.Distance.Between(boss.x, boss.y, p.sprite.x, p.sprite.y) < boss.hazardRadius + 8) {
@@ -2539,6 +2692,11 @@ export class ArenaScene extends Phaser.Scene {
         return false;
       }
       return true;
+    });
+    this.homingMissiles = this.homingMissiles.filter((missile) => {
+      if (Phaser.Math.Distance.Between(missile.sprite.x, missile.sprite.y, site.x, site.y) >= 330) return true;
+      this.detonateHomingMissile(missile, 'intercepted');
+      return false;
     });
 
     this.time.delayedCall(850, () => {
@@ -3528,6 +3686,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bombletHazard = null;
     for (const e of this.enemies) e.destroy();
     for (const p of this.projectiles) p.sprite.destroy();
+    for (const missile of this.homingMissiles) missile.sprite.destroy();
     for (const p of this.pickups) p.sprite.destroy();
     for (const f of this.fences) f.destroy();
     for (const t of this.turrets) t.destroy();
@@ -3538,6 +3697,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.enemies.length = 0;
     this.projectiles.length = 0;
+    this.homingMissiles.length = 0;
     this.pickups.length = 0;
     this.fences.length = 0;
     this.turrets.length = 0;

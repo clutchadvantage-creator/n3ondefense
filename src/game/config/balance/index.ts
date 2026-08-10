@@ -46,6 +46,17 @@ export const ENEMY_BALANCE = {
   star: { hp: 260, speed: 70, damage: 15, attackCooldownMs: 650, attackRange: 44, weight: 5, unlockRound: 8, credits: 15, tokens: 1, color: 0xffda66, size: 44 }
 } as const;
 
+export const TANK_HOMING_MISSILE_BALANCE = {
+  cooldownMs: 7200,
+  launchRange: 620,
+  damage: 24,
+  health: 32,
+  lifetimeMs: 6500,
+  speedMultiplier: 0.88,
+  turnRateRadiansPerSecond: 2.6,
+  blastRadius: 54
+} as const;
+
 export const ABILITY_BALANCE = {
   cooldownScale: 1,
   fence: {

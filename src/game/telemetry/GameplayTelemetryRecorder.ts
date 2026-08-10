@@ -5,7 +5,7 @@ import type { ModDropSource, RunProtocolId, EquippedModSnapshot } from '../mods/
 import type { ModFocusSignalId, RunContractId } from '../economy/types.ts';
 
 export type CombatDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard' | 'bomb' | 'splitCurrent' | 'unknown';
-export type PlayerDamageSource = 'enemy-contact' | 'enemy-projectile' | 'enemy-death-mine' | 'laser' | 'bomblet' | 'boss';
+export type PlayerDamageSource = 'enemy-contact' | 'enemy-projectile' | 'enemy-missile' | 'enemy-death-mine' | 'laser' | 'bomblet' | 'boss';
 export type PickupDropSource = 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support';
 export type EncounterKind = 'round' | 'boss';
 export type EncounterOutcome = 'completed' | 'playerDead' | 'bombDefused' | 'bossDefeated' | 'quit' | 'replaced';
