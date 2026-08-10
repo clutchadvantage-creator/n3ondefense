@@ -118,7 +118,8 @@ export class ModCollectionScene extends Phaser.Scene {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#e8f8ff', align: 'center', lineSpacing: 2
     }).setOrigin(0.5, 0).setWordWrapWidth(width - 34, true);
     const categorySlot = definition.category === 'utility' ? null : definition.category as ModSlot;
-    const buttonY = y + height - 220;
+    const buttonGap = 48;
+    const buttonY = y + height - 240;
     const availableDetailCopyHeight = Math.max(72, buttonY - detailCopy.y - 14);
     for (let fontSize = 16; detailCopy.height > availableDetailCopyHeight && fontSize >= 14; fontSize -= 1) {
       detailCopy.setFontSize(fontSize);
@@ -127,22 +128,27 @@ export class ModCollectionScene extends Phaser.Scene {
       detailCopy.setMaxLines(Math.max(4, Math.floor(availableDetailCopyHeight / 17)));
     }
     if (categorySlot) createButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.apply(() => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40);
-    createButton(this, x, buttonY + 42, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40);
+    createButton(this, x, buttonY + buttonGap, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40);
     const nextUpgrade = card.upgradeLevel < 3 ? (card.upgradeLevel + 1) as 1 | 2 | 3 : null;
     const coreTokenCost = nextUpgrade ? MOD_BALANCE.rankCoreTokenCostsByRarity[definition.rarity][nextUpgrade] : 0;
     const upgradeLabel = nextUpgrade
       ? `Upgrade — ${MOD_BALANCE.rankCreditCosts[nextUpgrade].toLocaleString()} Credits${coreTokenCost > 0 ? `\n+ ${coreTokenCost.toLocaleString()} Core Tokens` : ''}`
       : 'Upgrade Card — MAX LEVEL';
-    const upgradeButton = createButton(this, x, buttonY + 84, upgradeLabel, () => {
+    const upgradeButton = createButton(this, x, buttonY + buttonGap * 2, upgradeLabel, () => {
       if (nextUpgrade) this.apply(() => SaveSystem.rankUpMod(definition.id, card.instanceId));
     }, width - 40);
     if (!nextUpgrade) disableButton(upgradeButton);
     const sell = MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity];
     const chips = MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity];
-    createButton(this, x - width * 0.31, buttonY + 126, `Sell +${sell}C`, () => this.apply(() => SaveSystem.sellDuplicateMod(card.instanceId)), width * 0.29);
-    createButton(this, x, buttonY + 126, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), width * 0.31);
-    createButton(this, x + width * 0.31, buttonY + 126, 'Delete', () => this.apply(() => SaveSystem.deleteModCard(card.instanceId)), width * 0.25);
-    createButton(this, x, buttonY + 168, card.infusionId ? 'Change Infusion' : 'Infuse Card', () => this.showInfusionModal(card), width - 40);
+    const actionRowWidth = width - 40;
+    const actionGap = 8;
+    const actionButtonWidth = (actionRowWidth - actionGap * 2) / 3;
+    const actionLeft = x - actionRowWidth / 2;
+    const actionY = buttonY + buttonGap * 3;
+    createButton(this, actionLeft + actionButtonWidth / 2, actionY, `Sell +${sell}C`, () => this.apply(() => SaveSystem.sellDuplicateMod(card.instanceId)), actionButtonWidth);
+    createButton(this, actionLeft + actionButtonWidth * 1.5 + actionGap, actionY, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), actionButtonWidth);
+    createButton(this, actionLeft + actionButtonWidth * 2.5 + actionGap * 2, actionY, 'Delete', () => this.apply(() => SaveSystem.deleteModCard(card.instanceId)), actionButtonWidth);
+    createButton(this, x, buttonY + buttonGap * 4, card.infusionId ? 'Change Infusion' : 'Infuse Card', () => this.showInfusionModal(card), width - 40);
     const statusText = this.add.text(x, y + height - 4, this.status, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf', align: 'center', lineSpacing: -2
     }).setOrigin(0.5, 1).setWordWrapWidth(width - 32, true).setMaxLines(2);

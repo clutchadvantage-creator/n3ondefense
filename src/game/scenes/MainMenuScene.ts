@@ -15,6 +15,20 @@ import { ECONOMY_BALANCE, MOD_FOCUS_CATEGORIES, MOD_FOCUS_LABELS, RUN_CONTRACT_I
 import { getRunSetupCost } from '../economy/EconomyService.ts';
 import type { ModFocusSignalId, RunContractId, RunSetupSelection } from '../economy/types.ts';
 
+const MAIN_MENU_TIPS = [
+  'Shoot through a placed fence to split and multiply your projectiles.',
+  'Place turrets near bomb sites to help interrupt incoming defuse attempts.',
+  'Visit the Store regularly so permanent upgrades keep pace with harder rounds.',
+  'Abilities and weapon fire both consume energy. Watch your energy reserves.',
+  'Infused Mods add optional visual flair to each session.',
+  'Press F to place a turret.',
+  'Press R to place a mine.',
+  'Press Q to place a fence.',
+  'Keep moving and watch every active bomb site for defuse attempts.',
+  'Online runs submit eligible statistics to the online leaderboards.',
+  'Local runs remain offline and do not submit statistics to online leaderboards.'
+] as const;
+
 export class MainMenuScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
   private selectedModFocus: ModFocusSignalId | null = null;
@@ -108,6 +122,17 @@ export class MainMenuScene extends Phaser.Scene {
     }
 
     const unlockedProtocols = profile ? getUnlockedProtocolIds(SaveSystem.getHighestRound()) : ['normal'] as const;
+    const protocolY = 202;
+    const protocolArrowWidth = 44;
+    const protocolGap = 8;
+    const protocolWidth = Math.max(200, Math.min(320, width - protocolArrowWidth * 2 - protocolGap * 2 - 24));
+    const protocolArrowOffset = protocolWidth / 2 + protocolGap + protocolArrowWidth / 2;
+    const menuStartY = 254;
+    const menuRowGap = 54;
+    const pairGap = 16;
+    const pairButtonWidth = Math.max(170, Math.min(250, (width - pairGap - 48) / 2));
+    const pairOffset = (pairButtonWidth + pairGap) / 2;
+    const singleButtonWidth = Math.max(220, Math.min(280, width - 48));
     const selectProtocol = (direction: 1 | -1): void => {
       if (!profile) return;
       const next = cycleUnlockedProtocol(protocol, SaveSystem.getHighestRound(), direction);
@@ -120,9 +145,9 @@ export class MainMenuScene extends Phaser.Scene {
       if (result.ok) this.scene.restart();
       else onlineStatus.setText(result.message ?? 'PROTOCOL LOCKED').setColor('#ffbd85');
     };
-    const protocolButton = createButton(this, width / 2, 202, `${protocolDefinition.label}\nSTART ROUND ${protocolDefinition.startingRound}`, () => selectProtocol(1), 300);
-    const previousProtocolButton = createButton(this, width / 2 - 174, 202, '<', () => selectProtocol(-1), 40);
-    const nextProtocolButton = createButton(this, width / 2 + 174, 202, '>', () => selectProtocol(1), 40);
+    const protocolButton = createButton(this, width / 2, protocolY, `${protocolDefinition.label}\nSTART ROUND ${protocolDefinition.startingRound}`, () => selectProtocol(1), protocolWidth);
+    const previousProtocolButton = createButton(this, width / 2 - protocolArrowOffset, protocolY, '<', () => selectProtocol(-1), protocolArrowWidth);
+    const nextProtocolButton = createButton(this, width / 2 + protocolArrowOffset, protocolY, '>', () => selectProtocol(1), protocolArrowWidth);
     if (profile && unlockedProtocols.length === 1) {
       protocolButton.setAlpha(0.82);
       previousProtocolButton.setAlpha(0.82);
@@ -163,7 +188,7 @@ export class MainMenuScene extends Phaser.Scene {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', color: '#a8c7d4', align: 'center'
     }).setOrigin(0.5).setDepth(13).setWordWrapWidth(276, true);
 
-    const startButton = createButton(this, width / 2 - 135, 254, 'Start Online', () => {
+    const startButton = createButton(this, width / 2 - pairOffset, menuStartY, 'Start Online', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
@@ -208,8 +233,8 @@ export class MainMenuScene extends Phaser.Scene {
           message: 'Deploying server-authorized online operation...'
         });
       })();
-    }, 240);
-    const localStartButton = createButton(this, width / 2 + 135, 254, 'Start Local', () => {
+    }, pairButtonWidth);
+    const localStartButton = createButton(this, width / 2 + pairOffset, menuStartY, 'Start Local', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
@@ -233,13 +258,14 @@ export class MainMenuScene extends Phaser.Scene {
         },
         message: 'Building explicitly local operation...'
       });
-    }, 240);
-    createButton(this, width / 2, 310, 'Store', () => this.scene.start(SceneKeys.Upgrades));
-    createButton(this, width / 2 - 115, 362, 'Mod Collection', () => this.scene.start(SceneKeys.Mods), 210);
-    createButton(this, width / 2 + 115, 362, 'Leaderboards', () => this.scene.start(SceneKeys.OnlineLeaderboards), 210);
-    createButton(this, width / 2, 414, 'Options', () => this.scene.start(SceneKeys.Options));
-    createButton(this, width / 2, 466, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), 220);
-    createButton(this, width / 2, 518, 'Local Save Information', () => {
+    }, pairButtonWidth);
+    createButton(this, width / 2, menuStartY + menuRowGap, 'Store', () => this.scene.start(SceneKeys.Upgrades), singleButtonWidth);
+    createButton(this, width / 2 - pairOffset, menuStartY + menuRowGap * 2, 'Mod Collection', () => this.scene.start(SceneKeys.Mods), pairButtonWidth);
+    createButton(this, width / 2 + pairOffset, menuStartY + menuRowGap * 2, 'Leaderboards', () => this.scene.start(SceneKeys.OnlineLeaderboards), pairButtonWidth);
+    createButton(this, width / 2, menuStartY + menuRowGap * 3, 'Options', () => this.scene.start(SceneKeys.Options), singleButtonWidth);
+    createButton(this, width / 2, menuStartY + menuRowGap * 4, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), singleButtonWidth);
+    const lastMenuY = menuStartY + menuRowGap * 5;
+    createButton(this, width / 2, lastMenuY, 'Local Save Information', () => {
       showInfoModal(
         this,
         'LOCAL SAVE INFORMATION',
@@ -266,16 +292,19 @@ export class MainMenuScene extends Phaser.Scene {
           }
         ]
       );
-    }, 280);
+    }, singleButtonWidth);
 
     const bindings = save?.settings.abilityBindings;
     const abilityControls = bindings
       ? `${bindingLabel(bindings.fence)} Fence    ${bindingLabel(bindings.turret)} Turret    ${bindingLabel(bindings.mine)} Mine    ${bindingLabel(bindings.dash)} Dash    ${bindingLabel(bindings.shield)} Shield`
       : 'Q Fence    F Turret    R Mine    Space Dash    Middle Mouse Shield';
-    this.add.text(width / 2, height - 126, `Controls:\nWASD Move    Mouse Aim    LMB Fire    E Plant/Interact\n${abilityControls}\n1/2/3 Select Ability    Esc Pause`, {
+    const controlsFontSize = height < 760 ? 18 : 20;
+    const controlsY = height - 126;
+    this.createTipRotator(width, lastMenuY + 34, controlsY - controlsFontSize * 2.4 - 10);
+    this.add.text(width / 2, controlsY, `Controls:\nWASD Move    Mouse Aim    LMB Fire    E Plant/Interact\n${abilityControls}\n1/2/3 Select Ability    Esc Pause`, {
       fontFamily: 'Rajdhani, sans-serif',
       color: '#d6f0ff',
-      fontSize: `${height < 760 ? 18 : 20}px`,
+      fontSize: `${controlsFontSize}px`,
       align: 'center',
       lineSpacing: 3,
       wordWrap: { width: Math.min(940, width - 64), useAdvancedWrap: true }
@@ -288,6 +317,47 @@ export class MainMenuScene extends Phaser.Scene {
       align: 'center',
       wordWrap: { width: width - 48, useAdvancedWrap: true }
     }).setOrigin(0.5).setMaxLines(2);
+  }
+
+  private createTipRotator(width: number, availableTop: number, availableBottom: number): void {
+    const availableHeight = availableBottom - availableTop;
+    if (availableHeight < 48) return;
+    const panelWidth = Math.min(760, width - 48);
+    const panelHeight = Math.min(66, availableHeight);
+    const y = (availableTop + availableBottom) / 2;
+    const panel = this.add.rectangle(width / 2, y, panelWidth, panelHeight, 0x07131f, 0.76)
+      .setStrokeStyle(1, 0x58f4ff, 0.38).setDepth(14);
+    let currentTip = Phaser.Math.Between(0, MAIN_MENU_TIPS.length - 1);
+    const tipText = this.add.text(width / 2, y, `TIP: ${MAIN_MENU_TIPS[currentTip]}`, {
+      fontFamily: 'Rajdhani, sans-serif',
+      fontSize: width < 700 ? '16px' : '18px',
+      fontStyle: 'bold',
+      color: '#f4d5ff',
+      align: 'center',
+      lineSpacing: 2
+    }).setOrigin(0.5).setWordWrapWidth(panelWidth - 36, true).setMaxLines(2).setDepth(15);
+
+    this.time.addEvent({
+      delay: 6200,
+      loop: true,
+      callback: () => {
+        if (!tipText.active) return;
+        let nextTip = currentTip;
+        while (nextTip === currentTip) nextTip = Phaser.Math.Between(0, MAIN_MENU_TIPS.length - 1);
+        currentTip = nextTip;
+        this.tweens.add({
+          targets: tipText,
+          alpha: 0,
+          duration: 220,
+          onComplete: () => {
+            if (!tipText.active) return;
+            tipText.setText(`TIP: ${MAIN_MENU_TIPS[currentTip]}`);
+            this.tweens.add({ targets: tipText, alpha: 1, duration: 280 });
+          }
+        });
+      }
+    });
+    this.tweens.add({ targets: panel, alpha: { from: 0.68, to: 0.92 }, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 
   private getRunSetupSelection(): RunSetupSelection {
