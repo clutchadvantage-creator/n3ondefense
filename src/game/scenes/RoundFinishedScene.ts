@@ -68,7 +68,24 @@ export class RoundFinishedScene extends Phaser.Scene {
       }
     ).setOrigin(0.5, 0);
 
-    const firstButtonY = Math.max(nextSummary.y + nextSummary.height + 24, panelBottom - 288);
+    const buttonSpacing = 48;
+    const buttonHalfHeight = 20;
+    const footerFontSize = height < 700 ? 16 : 18;
+    const footerEstimatedHeight = footerFontSize + 6;
+    const minimumFirstButtonY = nextSummary.y + nextSummary.height + 24;
+    const preferredFirstButtonY = Math.max(minimumFirstButtonY, panelBottom - 288);
+    const preferredFooterBottom = panelBottom - 12;
+    const preferredFooterTop = preferredFooterBottom - footerEstimatedHeight;
+    const preferredButtonStackBottom = preferredFirstButtonY + buttonSpacing * 4 + buttonHalfHeight;
+    const footerBottom = preferredButtonStackBottom + 10 <= preferredFooterTop
+      ? preferredFooterBottom
+      : Math.min(height - 8, panelBottom + 14);
+    const footerTop = footerBottom - footerEstimatedHeight;
+    const latestFirstButtonY = footerTop - 10 - buttonSpacing * 4 - buttonHalfHeight;
+    const footerFits = latestFirstButtonY >= minimumFirstButtonY;
+    const firstButtonY = footerFits
+      ? Math.min(preferredFirstButtonY, latestFirstButtonY)
+      : preferredFirstButtonY;
 
     const continueButton = createButton(this, width / 2, firstButtonY, 'Continue To Next Round', () => {
       disableButton(continueButton);
@@ -95,19 +112,19 @@ export class RoundFinishedScene extends Phaser.Scene {
       startArenaLoad(this, { reason: 'continue-next-round', session, message: 'Deploying next round arena...' });
     }, 320);
 
-    createButton(this, width / 2, firstButtonY + 52, 'Store', () => {
+    createButton(this, width / 2, firstButtonY + buttonSpacing, 'Store', () => {
       this.scene.start(SceneKeys.Upgrades, { returnScene: SceneKeys.RoundFinished });
     }, 320);
 
-    createButton(this, width / 2, firstButtonY + 104, 'Mod Collection', () => {
+    createButton(this, width / 2, firstButtonY + buttonSpacing * 2, 'Mod Collection', () => {
       this.scene.start(SceneKeys.Mods, { returnScene: SceneKeys.RoundFinished });
     }, 320);
 
-    createButton(this, width / 2, firstButtonY + 156, 'Export Gameplay Metrics', () => {
+    createButton(this, width / 2, firstButtonY + buttonSpacing * 3, 'Export Gameplay Metrics', () => {
       GameplayTelemetryRecorder.exportToJsonFile();
     }, 320);
 
-    createButton(this, width / 2, firstButtonY + 208, 'Quit To Main Menu', () => {
+    createButton(this, width / 2, firstButtonY + buttonSpacing * 4, 'Quit To Main Menu', () => {
       OnlineRunManager.complete('quit', payload?.completedRound);
       GameplayTelemetryRecorder.finishRun('quit');
       this.registry.remove('arena-session');
@@ -115,12 +132,14 @@ export class RoundFinishedScene extends Phaser.Scene {
       this.scene.start(SceneKeys.MainMenu);
     }, 320);
 
-    this.add.text(width / 2, panelBottom - 22, 'Endless flow: continue to generate a new arena each round.', {
-      fontFamily: 'Rajdhani, sans-serif',
-      fontSize: '18px',
-      color: '#9eb8d4',
-      align: 'center',
-      wordWrap: { width: panelWidth - 56, useAdvancedWrap: true }
-    }).setOrigin(0.5, 1);
+    if (footerFits) {
+      this.add.text(width / 2, footerBottom, 'Endless flow: continue to generate a new arena each round.', {
+        fontFamily: 'Rajdhani, sans-serif',
+        fontSize: `${footerFontSize}px`,
+        color: '#9eb8d4',
+        align: 'center',
+        wordWrap: { width: panelWidth - 56, useAdvancedWrap: true }
+      }).setOrigin(0.5, 1);
+    }
   }
 }
