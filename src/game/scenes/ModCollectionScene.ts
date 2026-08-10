@@ -155,44 +155,60 @@ export class ModCollectionScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const root = this.add.container(0, 0).setDepth(6000);
     const blocker = this.add.rectangle(width / 2, height / 2, width, height, 0x02050b, 0.88).setInteractive();
-    const panelWidth = Math.min(760, width - 50);
-    const panelHeight = Math.min(590, height - 50);
+    const panelWidth = Math.min(900, width - 16);
+    const panelHeight = Math.min(680, height - 16);
+    const panelLeft = width / 2 - panelWidth / 2;
+    const panelRight = width / 2 + panelWidth / 2;
+    const panelTop = height / 2 - panelHeight / 2;
+    const panelBottom = height / 2 + panelHeight / 2;
     root.add([blocker, this.add.rectangle(width / 2, height / 2, panelWidth, panelHeight, 0x091522, 0.99).setStrokeStyle(3, 0x55e9ff, 0.95)]);
-    root.add(this.add.text(width / 2, height / 2 - panelHeight / 2 + 38, 'SELECT COSMETIC INFUSION', { fontFamily: 'Orbitron, sans-serif', fontSize: '25px', color: '#69f5ff' }).setOrigin(0.5));
-    root.add(this.add.text(width / 2, height / 2 - panelHeight / 2 + 70, `Available Plasma Chips: ${SaveSystem.getModCollection().plasmaChips}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a7ffe8' }).setOrigin(0.5));
-    root.add(this.add.text(width / 2, height / 2 - panelHeight / 2 + 98, 'Infusions are visual effects only. They never alter combat, health, energy, abilities, or difficulty.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#a6bed0', align: 'center', lineSpacing: 2
-    }).setOrigin(0.5, 0).setWordWrapWidth(panelWidth - 64, true).setMaxLines(2));
+    root.add(this.add.text(width / 2, panelTop + 36, 'SELECT COSMETIC INFUSION', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.round(Phaser.Math.Clamp(panelWidth * 0.034, 22, 28))}px`, color: '#69f5ff'
+    }).setOrigin(0.5));
+    root.add(this.add.text(width / 2, panelTop + 72, `Available Plasma Chips: ${SaveSystem.getModCollection().plasmaChips}`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', fontStyle: 'bold', color: '#a7ffe8'
+    }).setOrigin(0.5));
+    root.add(this.add.text(width / 2, panelTop + 98, 'Infusions are optional visual and game-feel effects. They never alter combat, health, energy, abilities, rewards, or difficulty.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: panelWidth < 620 ? '14px' : '15px', color: '#b4cddd', align: 'center', lineSpacing: 1
+    }).setOrigin(0.5, 0).setWordWrapWidth(panelWidth - 72, true).setMaxLines(2));
 
-    const infusionsPerPage = panelHeight < 540 ? 2 : 3;
+    const infusionsPerPage = panelHeight >= 560 ? 3 : panelHeight >= 440 ? 2 : 1;
     const pageCount = Math.max(1, Math.ceil(MOD_INFUSIONS.length / infusionsPerPage));
     this.infusionPage = Phaser.Math.Clamp(this.infusionPage, 0, pageCount - 1);
     const visibleInfusions = MOD_INFUSIONS.slice(this.infusionPage * infusionsPerPage, (this.infusionPage + 1) * infusionsPerPage);
-    const rowSpacing = infusionsPerPage === 3 ? 126 : 118;
+    const pageY = panelBottom - 92;
+    const closeY = panelBottom - 32;
+    const rowsTop = panelTop + 146;
+    const rowsBottom = pageY - 34;
+    const rowSlotHeight = (rowsBottom - rowsTop) / visibleInfusions.length;
+    const rowHeight = Phaser.Math.Clamp(rowSlotHeight - 10, 88, 112);
+    const installWidth = Phaser.Math.Clamp(panelWidth * 0.24, 150, 190);
+    const installX = panelRight - 26 - installWidth / 2;
+    const copyX = panelLeft + 92;
+    const copyWidth = Math.max(150, installX - installWidth / 2 - copyX - 18);
     visibleInfusions.forEach((infusion, index) => {
-      const rowY = height / 2 - panelHeight / 2 + 160 + index * rowSpacing;
+      const rowY = rowsTop + rowSlotHeight * (index + 0.5);
       const installed = card.infusionId === infusion.id;
       const affordable = SaveSystem.getModCollection().plasmaChips >= infusion.plasmaCost;
-      root.add(this.add.rectangle(width / 2, rowY, panelWidth - 54, 108, installed ? 0x103329 : 0x0c1a29, 0.95).setStrokeStyle(installed ? 3 : 1, installed ? 0x62ffae : 0x4bbfdb, installed ? 1 : 0.65));
-      root.add(this.add.text(width / 2 - panelWidth / 2 + 58, rowY, infusion.icon, { fontFamily: 'Orbitron, sans-serif', fontSize: '36px', color: '#8ff7ff' }).setOrigin(0.5));
-      root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY - 32, infusion.name.toUpperCase(), { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: installed ? '#7dffb4' : '#e5fbff' }).setOrigin(0, 0.5));
-      root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY - 18, infusion.description, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#abc9da', lineSpacing: -1
-      }).setOrigin(0, 0).setWordWrapWidth(panelWidth - 355, true).setMaxLines(2));
-      root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY + 36, installed ? 'INSTALLED' : `${infusion.plasmaCost} PLASMA CHIPS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: installed ? '#70ffad' : affordable ? '#ffd98a' : '#ff91a4' }).setOrigin(0, 0.5));
-      const install = createButton(this, width / 2 + panelWidth / 2 - 130, rowY, installed ? 'Installed' : affordable ? 'Install' : 'Not Enough Chips', () => {
+      root.add(this.add.rectangle(width / 2, rowY, panelWidth - 44, rowHeight, installed ? 0x103329 : 0x0c1a29, 0.95).setStrokeStyle(installed ? 3 : 1, installed ? 0x62ffae : 0x4bbfdb, installed ? 1 : 0.65));
+      root.add(this.add.text(panelLeft + 52, rowY, infusion.icon, { fontFamily: 'Orbitron, sans-serif', fontSize: '34px', color: '#8ff7ff' }).setOrigin(0.5));
+      root.add(this.add.text(copyX, rowY - 30, infusion.name.toUpperCase(), { fontFamily: 'Orbitron, sans-serif', fontSize: '17px', color: installed ? '#7dffb4' : '#e5fbff' }).setOrigin(0, 0.5));
+      root.add(this.add.text(copyX, rowY - 15, infusion.description, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#c0d9e7', lineSpacing: 0
+      }).setOrigin(0, 0).setWordWrapWidth(copyWidth, true).setMaxLines(2));
+      root.add(this.add.text(copyX, rowY + rowHeight / 2 - 15, installed ? 'INSTALLED' : `${infusion.plasmaCost} PLASMA CHIPS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', fontStyle: 'bold', color: installed ? '#70ffad' : affordable ? '#ffd98a' : '#ff91a4' }).setOrigin(0, 0.5));
+      const install = createButton(this, installX, rowY, installed ? 'Installed' : affordable ? 'Install' : 'Not Enough Chips', () => {
         if (!installed) this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion.id));
-      }, 180);
+      }, installWidth);
       if (installed || !affordable) disableButton(install);
       root.add(install);
     });
 
-    const pageY = height / 2 + panelHeight / 2 - 78;
-    const previousPage = createButton(this, width / 2 - 128, pageY, '◀', () => {
+    const previousPage = createButton(this, width / 2 - 132, pageY, '◀', () => {
       this.infusionPage -= 1;
       this.showInfusionModal(card, true);
     }, 82);
-    const nextPage = createButton(this, width / 2 + 128, pageY, '▶', () => {
+    const nextPage = createButton(this, width / 2 + 132, pageY, '▶', () => {
       this.infusionPage += 1;
       this.showInfusionModal(card, true);
     }, 82);
@@ -205,7 +221,7 @@ export class ModCollectionScene extends Phaser.Scene {
       }).setOrigin(0.5),
       nextPage
     ]);
-    root.add(createButton(this, width / 2, height / 2 + panelHeight / 2 - 38, 'Close', () => this.hideInfusionModal(), 200));
+    root.add(createButton(this, width / 2, closeY, 'Close', () => this.hideInfusionModal(), 220));
     this.infusionModal = root;
   }
 
