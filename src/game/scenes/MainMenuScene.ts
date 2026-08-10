@@ -26,7 +26,20 @@ const MAIN_MENU_TIPS = [
   'Press Q to place a fence.',
   'Keep moving and watch every active bomb site for defuse attempts.',
   'Online runs submit eligible statistics to the online leaderboards.',
-  'Local runs remain offline and do not submit statistics to online leaderboards.'
+  'Local runs remain offline and do not submit statistics to online leaderboards.',
+  'Press Escape during a run to pause the game and open the pause menu.',
+  'Adjust master, music, sound-effect, and individual sound volumes in Options.',
+  'Set custom ability key bindings in Options. Changes are saved to your active profile.',
+  'Use the mouse wheel, arrow keys, or Page Up and Page Down to navigate the Options screen.',
+  'Press Escape in Options, the Store, or Mod Collection to return to the previous screen.',
+  'Use Switch Profile on the main menu to create or select another local operative profile.',
+  'Open Local Save Information to export a backup before clearing browser data or changing devices.',
+  'The Store and Mod Collection are available after each completed round before you continue.',
+  'Open Leaderboards from the main menu to review rankings from eligible online runs.',
+  'The pause menu provides access to Options and your Mod Collection without ending the run.',
+  'You can replay the animated splash screen from the Options menu.',
+  'Use the protocol arrows on the main menu to choose among your unlocked starting tiers.',
+  'Run Signals and Contracts are optional and charge their listed fee only when the run starts.'
 ] as const;
 
 export class MainMenuScene extends Phaser.Scene {
