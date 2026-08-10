@@ -408,8 +408,9 @@ export class StorefrontUi {
 
   private renderCosmeticVisual(item: CosmeticOption, large: boolean): HTMLElement {
     const visual = document.createElement('div');
-    visual.className = `cosmetic-visual ${item.category} ${large ? 'large' : ''}`;
-    visual.style.setProperty('--item-color', `#${item.color.toString(16).padStart(6, '0')}`);
+    visual.className = `cosmetic-visual ${item.category} ${item.colorMode === 'prism' ? 'prism' : ''} ${large ? 'large' : ''}`;
+    const previewColor = item.colorMode === 'prism' ? 0xff4ed3 : item.color;
+    visual.style.setProperty('--item-color', `#${previewColor.toString(16).padStart(6, '0')}`);
     visual.dataset.shape = item.visualShape ?? 'circle';
     visual.innerHTML = '<i class="trail-a"></i><i class="trail-b"></i><b></b><span></span>';
     return visual;

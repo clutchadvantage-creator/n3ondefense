@@ -184,6 +184,7 @@ export type CosmeticVisualShape =
   | 'hexagon'
   | 'diamond'
   | 'cross'
+  | 'spaceship'
   | 'pulse'
   | 'missile'
   | 'lightning'
@@ -196,6 +197,7 @@ export interface CosmeticOption {
   currency: 'credits' | 'coreTokens';
   cost: number;
   color: number;
+  colorMode?: 'prism';
   priceTier?: CosmeticPriceTier;
   visualShape?: CosmeticVisualShape;
   textureKey?: string;

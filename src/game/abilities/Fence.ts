@@ -33,6 +33,11 @@ export class Fence {
     return now >= this.expiresAt || this.hp <= 0;
   }
 
+  setColor(color: number): void {
+    this.sprite.setFillStyle(color, 0.7);
+    this.sprite.setStrokeStyle(2, color, 1);
+  }
+
   destroy(): void {
     this.sprite.destroy();
   }

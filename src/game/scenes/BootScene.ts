@@ -94,6 +94,32 @@ export class BootScene extends Phaser.Scene {
       graphics.strokePoints(points, true);
     });
 
+    g.clear();
+    g.fillStyle(0x04070d, 0);
+    g.fillRect(0, 0, 44, 30);
+    g.lineStyle(2, 0x121a2b, 1);
+    const shipHull = [
+      { x: 4, y: 15 }, { x: 10, y: 8 }, { x: 28, y: 8 }, { x: 42, y: 15 },
+      { x: 28, y: 22 }, { x: 10, y: 22 }
+    ];
+    g.fillStyle(0xffffff, 1);
+    g.fillPoints(shipHull, true);
+    g.strokePoints(shipHull, true);
+    const topFin = [{ x: 12, y: 9 }, { x: 18, y: 2 }, { x: 24, y: 9 }];
+    const lowerWing = [{ x: 15, y: 20 }, { x: 27, y: 28 }, { x: 33, y: 20 }];
+    g.fillStyle(0xc4cad6, 1);
+    g.fillPoints(topFin, true);
+    g.strokePoints(topFin, true);
+    g.fillPoints(lowerWing, true);
+    g.strokePoints(lowerWing, true);
+    g.fillStyle(0x7c8799, 1);
+    g.fillRoundedRect(2, 10, 8, 10, 2);
+    g.strokeRoundedRect(2, 10, 8, 10, 2);
+    g.fillStyle(0xe9faff, 1);
+    g.fillEllipse(27, 10, 10, 7);
+    g.strokeEllipse(27, 10, 10, 7);
+    g.generateTexture('player-spaceship', 44, 30);
+
     const createProjectileTexture = (key: string, width: number, height: number, draw: (graphics: Phaser.GameObjects.Graphics) => void): void => {
       g.clear();
       g.fillStyle(0xffffff, 1);

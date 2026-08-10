@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COSMETICS, getCosmeticTextureKey } from '../src/data/cosmetics.ts';
+import { COSMETICS, getCosmeticDisplayColor, getCosmeticTextureKey, getPrismColor } from '../src/data/cosmetics.ts';
 import { UPGRADE_DEFINITIONS, getUpgradeEffect } from '../src/data/upgrades.ts';
 import { ABILITY_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, WEAPON_BALANCE } from '../src/game/config/balance/index.ts';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
@@ -44,4 +44,24 @@ test('projectile shape cosmetics are unique, renderable, and migrate into existi
   assert.equal(save.cosmetics.equipped.projectileShape, 'projectile-shape-pulse');
   const migrated = normalizeLocalSave({ ...save, cosmetics: { ...save.cosmetics, equipped: { playerColor: 'player-cyan' } } });
   assert.equal(migrated?.cosmetics.equipped.projectileShape, 'projectile-shape-pulse');
+});
+
+test('the Starhopper is a renderable side-view operative frame', () => {
+  const frame = COSMETICS.find((cosmetic) => cosmetic.id === 'player-spaceship');
+  assert.ok(frame);
+  assert.equal(frame.category, 'playerShape');
+  assert.equal(frame.visualShape, 'spaceship');
+  assert.equal(getCosmeticTextureKey(frame.id, ''), 'player-spaceship');
+});
+
+test('every color-driven cosmetic category has a cycling prism option', () => {
+  const expectedCategories = ['playerColor', 'projectileColor', 'trailColor', 'bombColor', 'turretSkin', 'fenceStyle', 'dashTrail'];
+  const prismItems = COSMETICS.filter((cosmetic) => cosmetic.colorMode === 'prism');
+  assert.deepEqual(prismItems.map((cosmetic) => cosmetic.category), expectedCategories);
+  assert.notEqual(getPrismColor(0), getPrismColor(800));
+  for (const item of prismItems) {
+    const color = getCosmeticDisplayColor(item, 1200);
+    assert.ok(Number.isInteger(color));
+    assert.ok(color >= 0 && color <= 0xffffff);
+  }
 });

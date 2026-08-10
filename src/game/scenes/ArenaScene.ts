@@ -10,6 +10,7 @@ import { SceneKeys } from '../flow/SceneKeys';
 import { Mine } from '../abilities/Mine';
 import { Turret } from '../abilities/Turret';
 import { Fence } from '../abilities/Fence';
+import { MAX_DISTINCT_FENCE_SPLITS, resolveFenceSplitStage } from '../abilities/FenceSplitRules.ts';
 import { Player } from '../entities/Player';
 import { baseEnemyStats, Enemy } from '../enemies/Enemy';
 import { getTankHomingMissileSpeed, steerTankHomingMissile } from '../enemies/HomingMissile.ts';
@@ -51,7 +52,7 @@ interface Projectile {
   lifeMs: number;
   trailColor: number;
   splitCurrentEligible?: boolean;
-  fenceSplit?: boolean;
+  crossedFences?: Set<Fence>;
   previousX?: number;
   previousY?: number;
   telemetryOwner?: 'weapon' | 'turret' | 'enemy' | 'boss';
@@ -568,7 +569,7 @@ export class ArenaScene extends Phaser.Scene {
       const playerShape = SaveSystem.getEquippedCosmeticId('playerShape') ?? 'player-circle';
       this.player = new Player(this, this.layout.playerSpawn.x, this.layout.playerSpawn.y, playerShape, stats, energy, weapon);
       this.player.permanentModSpeedMultiplier = this.modRuntime.permanentMoveSpeedMultiplier();
-      this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor'));
+      this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor', this.time.now));
       this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
       this.cameras.main.setZoom(0.9);
     } else {
@@ -586,7 +587,7 @@ export class ArenaScene extends Phaser.Scene {
       this.player.buffs.damageBoostUntil = 0;
       this.player.buffs.speedBoostUntil = 0;
       this.player.buffs.rapidFireUntil = 0;
-      this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor'));
+      this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor', this.time.now));
     }
 
     this.physics.add.collider(this.player, this.walls);
@@ -687,6 +688,7 @@ export class ArenaScene extends Phaser.Scene {
     const requestedRegeneration = this.player.energyStats.regenPerSecond * dt;
     this.player.updateEnergy(dt);
     GameplayTelemetryRecorder.recordEnergyRegeneration(requestedRegeneration, this.player.energy - energyBeforeRegeneration);
+    this.updatePrismCosmetics(now);
     this.updatePlayerMovement(now);
     this.updatePlayerShooting(now);
 
@@ -829,10 +831,24 @@ export class ArenaScene extends Phaser.Scene {
     if (this.crosshair) this.crosshair.setVisible(false);
   }
 
+  private updatePrismCosmetics(now: number): void {
+    if (SaveSystem.isPrismCosmetic('playerColor')) {
+      this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor', now));
+    }
+    if (SaveSystem.isPrismCosmetic('fenceStyle')) {
+      const color = SaveSystem.getCosmeticColor('fenceStyle', now);
+      for (const fence of this.fences) fence.setColor(color);
+    }
+    if (SaveSystem.isPrismCosmetic('turretSkin')) {
+      const color = SaveSystem.getCosmeticColor('turretSkin', now);
+      for (const turret of this.turrets) turret.setColor(color);
+    }
+  }
+
   private updatePlayerMovement(now: number): void {
     const aim = this.getAimWorldPoint();
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
-    this.player.setRotation(angle + Math.PI / 2);
+    this.player.setRotation(angle + (this.player.texture.key === 'player-spaceship' ? 0 : Math.PI / 2));
 
     const v = new Phaser.Math.Vector2(0, 0);
     if (this.keys.w.isDown) v.y -= 1;
@@ -863,8 +879,8 @@ export class ArenaScene extends Phaser.Scene {
         } else {
           this.audio.playSfx('boost');
         }
-        const c = SaveSystem.getCosmeticColor('dashTrail');
         for (let i = 0; i < 9; i += 1) {
+          const c = SaveSystem.getCosmeticColor('dashTrail', now + i * 95);
           const p = this.add.circle(this.player.x, this.player.y, Phaser.Math.Between(3, 7), c, 0.8).setDepth(3);
           this.tweens.add({
             targets: p,
@@ -943,7 +959,7 @@ export class ArenaScene extends Phaser.Scene {
         ? { width: 15, height: 10 }
         : { width: 8, height: 8 };
     bullet.setDisplaySize(projectileSize.width, projectileSize.height);
-    bullet.setTint(SaveSystem.getCosmeticColor('projectileColor'));
+    bullet.setTint(SaveSystem.getCosmeticColor('projectileColor', now));
     bullet.setRotation(angle);
     bullet.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     bullet.setDepth(8);
@@ -958,7 +974,7 @@ export class ArenaScene extends Phaser.Scene {
       damage,
       from: 'player',
       lifeMs: 950,
-      trailColor: SaveSystem.getCosmeticColor('trailColor'),
+      trailColor: SaveSystem.getCosmeticColor('trailColor', now),
       splitCurrentEligible: true,
       previousX: bullet.x,
       previousY: bullet.y,
@@ -1262,7 +1278,7 @@ export class ArenaScene extends Phaser.Scene {
   private activateEmergencyBombShield(site: BombSiteRuntime, now: number): void {
     const activation = this.modRuntime.activateBombShield(site.id, now);
     if (!activation) return;
-    const color = SaveSystem.getCosmeticColor('bombColor');
+    const color = SaveSystem.getCosmeticColor('bombColor', now);
     const shield = this.add.circle(site.x, site.y, 72, color, 0.12).setStrokeStyle(4, 0xffffff, 0.9).setDepth(12);
     this.tweens.add({ targets: shield, radius: 92, alpha: 0, duration: Math.max(350, activation.activeUntil - now), onComplete: () => shield.destroy() });
     if (!activation.knockback) return;
@@ -1705,6 +1721,8 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateProjectiles(delta: number): void {
     const fenceSplitProjectiles: Projectile[] = [];
+    const prismProjectileColor = SaveSystem.isPrismCosmetic('projectileColor');
+    const prismTrailColor = SaveSystem.isPrismCosmetic('trailColor');
     this.projectiles = this.projectiles.filter((p) => {
       p.lifeMs -= delta;
       if (p.lifeMs <= 0 || !p.sprite.body) {
@@ -1721,13 +1739,21 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       let visualTrailColor = p.trailColor;
-      if ((p.from === 'player' || p.from === 'turret') && this.modRuntime.hasInfusion('prismatic-rounds')) {
+      const friendlyProjectile = p.from === 'player' || p.from === 'turret';
+      const colorTime = this.time.now + (p.sprite.x + p.sprite.y) * 1.5;
+      if (friendlyProjectile && prismProjectileColor) {
+        p.sprite.setTint(SaveSystem.getCosmeticColor('projectileColor', colorTime));
+      }
+      if (friendlyProjectile && prismTrailColor) {
+        visualTrailColor = SaveSystem.getCosmeticColor('trailColor', colorTime);
+      }
+      if (friendlyProjectile && this.modRuntime.hasInfusion('prismatic-rounds')) {
         visualTrailColor = this.infusionSpectrumColor((p.sprite.x + p.sprite.y) * 0.0007);
         p.sprite.setTint(visualTrailColor);
       }
       this.spawnProjectileTrail(p.sprite.x, p.sprite.y, visualTrailColor);
 
-      const canSplitAtFence = !p.fenceSplit && (p.from === 'player'
+      const canSplitAtFence = (p.crossedFences?.size ?? 0) < MAX_DISTINCT_FENCE_SPLITS && (p.from === 'player'
         || (p.from === 'turret' && this.modRuntime.has('jailbroke-turrets')));
       if (canSplitAtFence) {
         const split = this.splitProjectileAtFence(p);
@@ -1837,6 +1863,7 @@ export class ArenaScene extends Phaser.Scene {
     const previousX = projectile.previousX ?? projectile.sprite.x;
     const previousY = projectile.previousY ?? projectile.sprite.y;
     const crossedFence = this.fences.find((fence) => {
+      if (projectile.crossedFences?.has(fence)) return false;
       const half = fence.width * 0.5;
       const cos = Math.cos(fence.sprite.rotation);
       const sin = Math.sin(fence.sprite.rotation);
@@ -1855,13 +1882,20 @@ export class ArenaScene extends Phaser.Scene {
     const speed = Math.max(1, body.velocity.length());
     const turretFan = projectile.from === 'turret' ? this.modRuntime.jailbrokeTurretFan() : null;
     if (projectile.from === 'turret' && !turretFan) return [];
-    const count = turretFan?.streamCount ?? ABILITY_BALANCE.fence.projectileFanCount;
-    const damageShare = turretFan?.damageShare ?? ABILITY_BALANCE.fence.projectileFanDamageShare;
+    const splitStage = resolveFenceSplitStage(
+      turretFan?.streamCount ?? ABILITY_BALANCE.fence.projectileFanCount,
+      turretFan?.damageShare ?? ABILITY_BALANCE.fence.projectileFanDamageShare,
+      projectile.crossedFences?.size ?? 0
+    );
+    if (!splitStage) return [];
+    const { streamCount: count, damageShare } = splitStage;
     const spacing = ABILITY_BALANCE.fence.projectileFanSpacingRadians;
     const texture = projectile.sprite.texture.key;
     const tint = projectile.sprite.tintTopLeft;
     const width = projectile.sprite.displayWidth;
     const height = projectile.sprite.displayHeight;
+    const crossedFences = new Set(projectile.crossedFences);
+    crossedFences.add(crossedFence);
     const spawned: Projectile[] = [];
     for (let index = 0; index < count; index += 1) {
       const angle = baseAngle + (index - (count - 1) * 0.5) * spacing;
@@ -1877,7 +1911,7 @@ export class ArenaScene extends Phaser.Scene {
         lifeMs: projectile.lifeMs,
         trailColor: projectile.trailColor,
         splitCurrentEligible: projectile.splitCurrentEligible,
-        fenceSplit: true,
+        crossedFences: new Set(crossedFences),
         previousX: x,
         previousY: y,
         telemetryOwner: projectile.telemetryOwner,
@@ -1885,7 +1919,7 @@ export class ArenaScene extends Phaser.Scene {
         turretId: projectile.turretId
       });
     }
-    const pulse = this.add.circle(projectile.sprite.x, projectile.sprite.y, 8, SaveSystem.getCosmeticColor('fenceStyle'), 0.25)
+    const pulse = this.add.circle(projectile.sprite.x, projectile.sprite.y, 8, SaveSystem.getCosmeticColor('fenceStyle', this.time.now), 0.25)
       .setStrokeStyle(2, 0xffffff, 0.8).setDepth(9);
     this.tweens.add({ targets: pulse, radius: 28, alpha: 0, duration: 220, onComplete: () => pulse.destroy() });
     return spawned;
@@ -1955,7 +1989,7 @@ export class ArenaScene extends Phaser.Scene {
         GameplayTelemetryRecorder.recordAbilityDenied('fence', 'active-limit');
         return;
       }
-      const fence = new Fence(this, x, y, this.player.rotation, SaveSystem.getCosmeticColor('fenceStyle'), ABILITY_BALANCE.fence.width, cfg.durationMs, cfg.hp, cfg.damage, ABILITY_BALANCE.fence.slowFactor);
+      const fence = new Fence(this, x, y, this.player.rotation, SaveSystem.getCosmeticColor('fenceStyle', now), ABILITY_BALANCE.fence.width, cfg.durationMs, cfg.hp, cfg.damage, ABILITY_BALANCE.fence.slowFactor);
       this.fences.push(fence);
     }
 
@@ -1964,7 +1998,7 @@ export class ArenaScene extends Phaser.Scene {
         GameplayTelemetryRecorder.recordAbilityDenied('turret', 'active-limit');
         return;
       }
-      const turret = new Turret(this, x, y, SaveSystem.getCosmeticColor('turretSkin'), cfg.hp, cfg.damage, cfg.fireRate, cfg.range);
+      const turret = new Turret(this, x, y, SaveSystem.getCosmeticColor('turretSkin', now), cfg.hp, cfg.damage, cfg.fireRate, cfg.range);
       turret.telemetryId = `turret-${++this.turretTelemetrySequence}`;
       this.turrets.push(turret);
       GameplayTelemetryRecorder.recordTurretPlaced(turret.telemetryId, { maximumHealth: cfg.hp, damage: cfg.damage, fireRate: cfg.fireRate, range: cfg.range });
@@ -2003,10 +2037,10 @@ export class ArenaScene extends Phaser.Scene {
       turret.lastShotMs = now;
       const b = this.physics.add.image(turret.sprite.x, turret.sprite.y, 'circle');
       b.setDisplaySize(6, 6);
-      b.setTint(SaveSystem.getCosmeticColor('projectileColor'));
+      b.setTint(SaveSystem.getCosmeticColor('projectileColor', now));
       b.setVelocity(Math.cos(angle) * 560, Math.sin(angle) * 560);
       GameplayTelemetryRecorder.recordTurretShot(turret.telemetryId);
-      turretShots.push({ sprite: b, damage: turret.damage, from: 'turret', lifeMs: 1150, trailColor: SaveSystem.getCosmeticColor('trailColor'), telemetryOwner: 'turret', turretId: turret.telemetryId });
+      turretShots.push({ sprite: b, damage: turret.damage, from: 'turret', lifeMs: 1150, trailColor: SaveSystem.getCosmeticColor('trailColor', now), telemetryOwner: 'turret', turretId: turret.telemetryId });
     }
     this.projectiles.push(...turretShots);
 
@@ -2090,7 +2124,7 @@ export class ArenaScene extends Phaser.Scene {
     this.turrets = this.turrets.filter((t) => {
       if (t.hp > 0) return true;
       GameplayTelemetryRecorder.recordTurretDestroyed(t.telemetryId);
-      this.spawnImpact(t.sprite.x, t.sprite.y, SaveSystem.getCosmeticColor('turretSkin'));
+      this.spawnImpact(t.sprite.x, t.sprite.y, SaveSystem.getCosmeticColor('turretSkin', now));
       const collapse = this.add.circle(t.sprite.x, t.sprite.y, 8, COLORS.orange, 0.35).setDepth(8);
       this.tweens.add({ targets: collapse, radius: 32, alpha: 0, duration: 260, onComplete: () => collapse.destroy() });
       t.destroy();
@@ -2649,7 +2683,8 @@ export class ArenaScene extends Phaser.Scene {
     this.detonatingSiteIds.add(site.id);
     this.state.set(this.bombSites.activeBombCount() > 1 ? RoundState.Defense : RoundState.Victory);
 
-    const color = SaveSystem.getCosmeticColor('bombColor');
+    const color = SaveSystem.getCosmeticColor('bombColor', this.time.now);
+    const prismBomb = SaveSystem.isPrismCosmetic('bombColor');
     this.audio.playSfx('bomb');
     this.cameras.main.shake(760, 0.02);
     this.physics.world.timeScale = 0.35;
@@ -2660,7 +2695,10 @@ export class ArenaScene extends Phaser.Scene {
     this.tweens.add({ targets: ring2, radius: 360, alpha: 0, duration: 620, onComplete: () => ring2.destroy() });
 
     for (let i = 0; i < 70; i += 1) {
-      const shard = this.add.rectangle(site.x, site.y, Phaser.Math.Between(2, 5), Phaser.Math.Between(8, 18), Math.random() < 0.5 ? color : this.layout.theme.secondary, 0.95).setDepth(31);
+      const shardColor = prismBomb
+        ? SaveSystem.getCosmeticColor('bombColor', this.time.now + i * 75)
+        : Math.random() < 0.5 ? color : this.layout.theme.secondary;
+      const shard = this.add.rectangle(site.x, site.y, Phaser.Math.Between(2, 5), Phaser.Math.Between(8, 18), shardColor, 0.95).setDepth(31);
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const dist = Phaser.Math.Between(90, 420);
       this.tweens.add({
@@ -3032,7 +3070,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.state.state === RoundState.Defeat) return;
     if (reason === 'playerDead') {
       this.audio.playSfx('playerDeath');
-      this.createDeathExplosion(this.player.x, this.player.y, SaveSystem.getCosmeticColor('playerColor'), true);
+      this.createDeathExplosion(this.player.x, this.player.y, SaveSystem.getCosmeticColor('playerColor', this.time.now), true);
       this.player.setVisible(false);
     }
     this.state.set(RoundState.Defeat);
