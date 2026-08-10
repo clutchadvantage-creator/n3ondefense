@@ -248,6 +248,9 @@ export class ArenaScene extends Phaser.Scene {
     this.refreshAbilityBindings();
     this.resumeGameplay();
   };
+  private readonly onReturnFromModCollection = (): void => {
+    if (this.state.state === RoundState.Paused) this.showPauseMenu();
+  };
   private readonly onAbilityKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat || !this.scene.isActive() || this.state.state === RoundState.Paused) return;
     const action = this.actionForBinding(`Keyboard:${event.code}`);
@@ -312,6 +315,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.scale.on('resize', this.handleResize, this);
     this.events.on('resume-from-options', this.onResumeFromOptions);
+    this.events.on('return-from-mod-collection', this.onReturnFromModCollection);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.pointerLock = new GameplayPointerLock(this.game, {
       onLocked: () => this.resumeFromPointerLock(),
@@ -3277,10 +3281,10 @@ export class ArenaScene extends Phaser.Scene {
   private layoutPauseMenu(width: number, height: number): void {
     if (!this.pauseMenu) return;
     const panelWidth = Math.min(600, width - 40);
-    const panelHeight = Math.min(570, height - 32);
+    const panelHeight = Math.min(620, height - 32);
     const panelTop = (height - panelHeight) / 2;
-    const buttonGap = Math.min(52, Math.max(42, (panelHeight - 210) / 6));
-    const buttonStartY = panelTop + 184;
+    const buttonGap = Math.min(50, Math.max(40, (panelHeight - 220) / Math.max(1, this.pauseMenu.buttons.length - 1)));
+    const buttonStartY = panelTop + 174;
     this.pauseMenu.backdrop.setPosition(width * 0.5, height * 0.5).setDisplaySize(width, height);
     this.pauseMenu.panel.setPosition(width * 0.5, height * 0.5).setDisplaySize(panelWidth, panelHeight);
     this.pauseMenu.title.setPosition(width * 0.5, panelTop + 36).setWordWrapWidth(panelWidth - 64, true);
@@ -3296,7 +3300,7 @@ export class ArenaScene extends Phaser.Scene {
     const backdrop = this.add.rectangle(width * 0.5, height * 0.5, width, height, 0x03060c, 0.72)
       .setScrollFactor(0)
       .setDepth(1185);
-    const panel = this.add.rectangle(width * 0.5, height * 0.5, 560, 540, 0x0c1320, 0.96)
+    const panel = this.add.rectangle(width * 0.5, height * 0.5, 560, 590, 0x0c1320, 0.96)
       .setStrokeStyle(2, 0x53dfff, 0.9)
       .setScrollFactor(0)
       .setDepth(1190);
@@ -3323,14 +3327,19 @@ export class ArenaScene extends Phaser.Scene {
     const buttons = [
       createButton(this, width * 0.5, height * 0.5 - 68, 'Resume', () => this.resumeGameplay(), 280),
       createButton(this, width * 0.5, height * 0.5 - 16, 'Equipped Mod Cards', () => this.showEquippedModsViewer(), 280),
-      createButton(this, width * 0.5, height * 0.5 + 36, 'Restart From Round 1', () => this.restartFromRoundOne(), 280),
-      createButton(this, width * 0.5, height * 0.5 + 88, 'Options', () => {
+      createButton(this, width * 0.5, height * 0.5 + 36, 'Mod Collection (Next Run)', () => {
+        this.hidePauseMenu();
+        this.scene.launch(SceneKeys.Mods, { returnScene: SceneKeys.Arena, resumePausedScene: true });
+        this.scene.pause();
+      }, 280),
+      createButton(this, width * 0.5, height * 0.5 + 88, 'Restart From Round 1', () => this.restartFromRoundOne(), 280),
+      createButton(this, width * 0.5, height * 0.5 + 140, 'Options', () => {
         this.hidePauseMenu();
         this.scene.launch(SceneKeys.Options, { returnScene: SceneKeys.Arena, resumeGameplay: true });
         this.scene.pause();
       }, 280),
-      createButton(this, width * 0.5, height * 0.5 + 140, 'Store', () => this.scene.start(SceneKeys.Upgrades), 280),
-      createButton(this, width * 0.5, height * 0.5 + 192, 'Quit To Main Menu', () => this.quitToMenu(), 280)
+      createButton(this, width * 0.5, height * 0.5 + 192, 'Store', () => this.scene.start(SceneKeys.Upgrades), 280),
+      createButton(this, width * 0.5, height * 0.5 + 244, 'Quit To Main Menu', () => this.quitToMenu(), 280)
     ];
     buttons.forEach((btn) => {
       btn.setScrollFactor(0).setDepth(1195);
@@ -3458,6 +3467,7 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopDisarmLoop();
     this.scale.off('resize', this.handleResize, this);
     this.events.off('resume-from-options', this.onResumeFromOptions);
+    this.events.off('return-from-mod-collection', this.onReturnFromModCollection);
     this.hud?.destroy();
     this.siteActionText?.destroy();
     this.bannerText?.destroy();

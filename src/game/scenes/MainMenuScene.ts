@@ -235,7 +235,8 @@ export class MainMenuScene extends Phaser.Scene {
       });
     }, 240);
     createButton(this, width / 2, 310, 'Store', () => this.scene.start(SceneKeys.Upgrades));
-    createButton(this, width / 2, 362, 'Mod Collection', () => this.scene.start(SceneKeys.Mods));
+    createButton(this, width / 2 - 115, 362, 'Mod Collection', () => this.scene.start(SceneKeys.Mods), 210);
+    createButton(this, width / 2 + 115, 362, 'Leaderboards', () => this.scene.start(SceneKeys.OnlineLeaderboards), 210);
     createButton(this, width / 2, 414, 'Options', () => this.scene.start(SceneKeys.Options));
     createButton(this, width / 2, 466, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), 220);
     createButton(this, width / 2, 518, 'Local Save Information', () => {

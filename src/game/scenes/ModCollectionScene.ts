@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { SceneKeys } from '../flow/SceneKeys';
+import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys';
 import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
 import { MOD_BALANCE } from '../mods/modBalance.ts';
 import { createModCardView } from '../mods/ModCardView.ts';
@@ -15,6 +15,11 @@ const CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player', 'defe
 const SORTS: SortMode[] = ['acquired', 'type', 'rank', 'rarity'];
 const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 } as const;
 
+interface ModCollectionSceneData {
+  returnScene?: SceneKeyValue;
+  resumePausedScene?: boolean;
+}
+
 export class ModCollectionScene extends Phaser.Scene {
   private selectedCardId = '';
   private categoryIndex = 0;
@@ -22,10 +27,14 @@ export class ModCollectionScene extends Phaser.Scene {
   private page = 0;
   private status = '';
   private infusionModal: Phaser.GameObjects.Container | null = null;
+  private returnScene: SceneKeyValue = SceneKeys.MainMenu;
+  private resumePausedScene = false;
 
   constructor() { super(SceneKeys.Mods); }
 
-  create(): void {
+  create(data?: ModCollectionSceneData): void {
+    this.returnScene = data?.returnScene ?? SceneKeys.MainMenu;
+    this.resumePausedScene = data?.resumePausedScene === true;
     const { width, height } = this.scale;
     const mods = SaveSystem.getModCollection();
     const category = CATEGORIES[this.categoryIndex];
@@ -43,9 +52,14 @@ export class ModCollectionScene extends Phaser.Scene {
       fontFamily: 'Rajdhani, sans-serif', fontSize: width < 900 ? '14px' : '18px', color: '#a9ffe9', align: 'center'
     }).setOrigin(0.5).setWordWrapWidth(Math.max(280, width - 48), true).setMaxLines(2);
 
-    createButton(this, 150, 104, `Group: ${category === 'all' ? 'ALL' : category.toUpperCase()}`, () => { this.categoryIndex = (this.categoryIndex + 1) % CATEGORIES.length; this.page = 0; this.scene.restart(); }, 250);
-    createButton(this, 430, 104, `Sort: ${sort.toUpperCase()}`, () => { this.sortIndex = (this.sortIndex + 1) % SORTS.length; this.page = 0; this.scene.restart(); }, 250);
-    createButton(this, width - 140, 104, 'Main Menu', () => this.scene.start(SceneKeys.MainMenu), 220);
+    createButton(this, 150, 104, `Group: ${category === 'all' ? 'ALL' : category.toUpperCase()}`, () => { this.categoryIndex = (this.categoryIndex + 1) % CATEGORIES.length; this.page = 0; this.restartCollection(); }, 250);
+    createButton(this, 430, 104, `Sort: ${sort.toUpperCase()}`, () => { this.sortIndex = (this.sortIndex + 1) % SORTS.length; this.page = 0; this.restartCollection(); }, 250);
+    const returnLabel = this.returnScene === SceneKeys.Arena
+      ? 'Back To Pause Menu'
+      : this.returnScene === SceneKeys.RoundFinished
+        ? 'Back To Level Complete'
+        : 'Main Menu';
+    createButton(this, width - 140, 104, returnLabel, () => this.returnToPreviousScene(), 220);
 
     const detailWidth = Math.min(360, width * 0.3);
     const gridLeft = 36;
@@ -61,15 +75,16 @@ export class ModCollectionScene extends Phaser.Scene {
       const x = gridLeft + cardWidth / 2 + (index % columns) * (cardWidth + 14);
       const y = 154 + cardHeight / 2 + Math.floor(index / columns) * (cardHeight + 14);
       const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: cardWidth, height: cardHeight, selected: card.instanceId === this.selectedCardId, compact: true, equipped: equippedCardIds.has(card.instanceId) });
-      view.on('pointerdown', () => { this.selectedCardId = card.instanceId; this.scene.restart(); });
+      view.on('pointerdown', () => { this.selectedCardId = card.instanceId; this.restartCollection(); });
     });
     if (!cards.length) this.add.text((gridLeft + gridRight) / 2, height / 2, 'NO COLLECTED CARDS IN THIS GROUP', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#607a8c' }).setOrigin(0.5);
-    createButton(this, gridLeft + 70, height - 36, '◀', () => { this.page = Math.max(0, this.page - 1); this.scene.restart(); }, 90);
+    createButton(this, gridLeft + 70, height - 36, '◀', () => { this.page = Math.max(0, this.page - 1); this.restartCollection(); }, 90);
     this.add.text((gridLeft + gridRight) / 2, height - 36, `PAGE ${this.page + 1} / ${maxPage + 1}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#a8c8d9' }).setOrigin(0.5);
-    createButton(this, gridRight - 70, height - 36, '▶', () => { this.page = Math.min(maxPage, this.page + 1); this.scene.restart(); }, 90);
+    createButton(this, gridRight - 70, height - 36, '▶', () => { this.page = Math.min(maxPage, this.page + 1); this.restartCollection(); }, 90);
 
     const selected = mods.cards.find((card) => card.instanceId === this.selectedCardId);
     this.createDetails(width - detailWidth / 2 - 20, 145, detailWidth, height - 180, selected, selected ? equippedCardIds.has(selected.instanceId) : false);
+    this.input.keyboard?.once('keydown-ESC', () => this.returnToPreviousScene());
     if (import.meta.env.DEV) this.installDevKeys();
   }
 
@@ -172,13 +187,28 @@ export class ModCollectionScene extends Phaser.Scene {
     });
   }
 
-  private apply(operation: () => { ok: boolean; message?: string }): void { const result = operation(); this.status = `${result.ok ? 'Success' : 'Blocked'}: ${result.message ?? ''}`; this.scene.restart(); }
+  private apply(operation: () => { ok: boolean; message?: string }): void { const result = operation(); this.status = `${result.ok ? 'Success' : 'Blocked'}: ${result.message ?? ''}`; this.restartCollection(); }
+
+  private restartCollection(): void {
+    this.scene.restart({ returnScene: this.returnScene, resumePausedScene: this.resumePausedScene });
+  }
+
+  private returnToPreviousScene(): void {
+    if (this.resumePausedScene && this.scene.isPaused(this.returnScene)) {
+      const returnTarget = this.scene.get(this.returnScene);
+      this.scene.resume(this.returnScene);
+      returnTarget.events.emit('return-from-mod-collection');
+      this.scene.stop();
+      return;
+    }
+    this.scene.start(this.returnScene);
+  }
 
   private installDevKeys(): void {
-    this.input.keyboard?.once('keydown-G', () => { SaveSystem.addMod(MOD_DEFINITIONS.find((mod) => mod.id === (MOD_BY_ID.get(SaveSystem.getModCollection().cards.find((card) => card.instanceId === this.selectedCardId)?.modId ?? '')?.id))?.id ?? MOD_DEFINITIONS[0].id); this.scene.restart(); });
-    this.input.keyboard?.once('keydown-X', () => { const mods = SaveSystem.getModCollection(); mods.inventory = {}; mods.cards = []; mods.plasmaChips = 0; mods.loadouts[0].slots = { weapon: null, player: null, defense: null, bombSite: null, wildcard: null }; mods.loadouts[0].cardSlots = { weapon: null, player: null, defense: null, bombSite: null, wildcard: null }; SaveSystem.persist(); this.scene.restart(); });
-    this.input.keyboard?.once('keydown-T', () => { MOD_DEFINITIONS.forEach((mod) => { SaveSystem.addMod(mod.id); SaveSystem.addMod(mod.id); }); this.scene.restart(); });
-    this.input.keyboard?.once('keydown-M', () => { const drop = rollModDrop({ source: 'milestone', round: 20, seed: Date.now(), sequence: 0, protocol: 'normal', guaranteed: true }); if (drop) SaveSystem.addMod(drop.id); this.scene.restart(); });
+    this.input.keyboard?.once('keydown-G', () => { SaveSystem.addMod(MOD_DEFINITIONS.find((mod) => mod.id === (MOD_BY_ID.get(SaveSystem.getModCollection().cards.find((card) => card.instanceId === this.selectedCardId)?.modId ?? '')?.id))?.id ?? MOD_DEFINITIONS[0].id); this.restartCollection(); });
+    this.input.keyboard?.once('keydown-X', () => { const mods = SaveSystem.getModCollection(); mods.inventory = {}; mods.cards = []; mods.plasmaChips = 0; mods.loadouts[0].slots = { weapon: null, player: null, defense: null, bombSite: null, wildcard: null }; mods.loadouts[0].cardSlots = { weapon: null, player: null, defense: null, bombSite: null, wildcard: null }; SaveSystem.persist(); this.restartCollection(); });
+    this.input.keyboard?.once('keydown-T', () => { MOD_DEFINITIONS.forEach((mod) => { SaveSystem.addMod(mod.id); SaveSystem.addMod(mod.id); }); this.restartCollection(); });
+    this.input.keyboard?.once('keydown-M', () => { const drop = rollModDrop({ source: 'milestone', round: 20, seed: Date.now(), sequence: 0, protocol: 'normal', guaranteed: true }); if (drop) SaveSystem.addMod(drop.id); this.restartCollection(); });
     this.input.keyboard?.once('keydown-I', () => console.info('[MOD RUNTIME]', new ModRuntime(SaveSystem.getModCollection()).snapshot(), SaveSystem.getModCollection()));
   }
 }

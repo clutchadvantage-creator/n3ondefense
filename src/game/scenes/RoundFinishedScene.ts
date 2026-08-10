@@ -68,7 +68,7 @@ export class RoundFinishedScene extends Phaser.Scene {
       }
     ).setOrigin(0.5, 0);
 
-    const firstButtonY = Math.max(nextSummary.y + nextSummary.height + 24, panelBottom - 236);
+    const firstButtonY = Math.max(nextSummary.y + nextSummary.height + 24, panelBottom - 288);
 
     const continueButton = createButton(this, width / 2, firstButtonY, 'Continue To Next Round', () => {
       disableButton(continueButton);
@@ -99,11 +99,15 @@ export class RoundFinishedScene extends Phaser.Scene {
       this.scene.start(SceneKeys.Upgrades, { returnScene: SceneKeys.RoundFinished });
     }, 320);
 
-    createButton(this, width / 2, firstButtonY + 104, 'Export Gameplay Metrics', () => {
+    createButton(this, width / 2, firstButtonY + 104, 'Mod Collection', () => {
+      this.scene.start(SceneKeys.Mods, { returnScene: SceneKeys.RoundFinished });
+    }, 320);
+
+    createButton(this, width / 2, firstButtonY + 156, 'Export Gameplay Metrics', () => {
       GameplayTelemetryRecorder.exportToJsonFile();
     }, 320);
 
-    createButton(this, width / 2, firstButtonY + 156, 'Quit To Main Menu', () => {
+    createButton(this, width / 2, firstButtonY + 208, 'Quit To Main Menu', () => {
       OnlineRunManager.complete('quit', payload?.completedRound);
       GameplayTelemetryRecorder.finishRun('quit');
       this.registry.remove('arena-session');

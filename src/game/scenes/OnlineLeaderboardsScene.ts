@@ -44,7 +44,7 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
 
     createButton(this, width / 2 - 270, height - 38, 'Local Records', () => this.scene.start(SceneKeys.Leaderboards), 220);
     createButton(this, width / 2, height - 38, 'Refresh', () => { void this.loadBoards(); }, 190);
-    createButton(this, width / 2 + 270, height - 38, 'Back To Splash', () => this.scene.start(SceneKeys.Splash), 220);
+    createButton(this, width / 2 + 270, height - 38, 'Back To Main Menu', () => this.scene.start(SceneKeys.MainMenu), 220);
 
     if (!LeaderboardClient.configured()) {
       this.statusText.setText('ONLINE SERVICE NOT CONFIGURED • LOCAL LEADERBOARDS REMAIN AVAILABLE').setColor('#ffc67d');

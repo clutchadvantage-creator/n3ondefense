@@ -59,7 +59,7 @@ export class LeaderboardsScene extends Phaser.Scene {
       );
     });
 
-    createButton(this, width / 2, height - 42, 'Back To Splash', () => this.scene.start(SceneKeys.Splash), 240);
+    createButton(this, width / 2, height - 42, 'Back To Main Menu', () => this.scene.start(SceneKeys.MainMenu), 240);
   }
 
   private drawBoard(

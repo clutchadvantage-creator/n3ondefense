@@ -3,7 +3,6 @@ import splashImageUrl from '../../assets/splashimage.png';
 import { SPLASH_SESSION_KEY } from '../config/gameplay';
 import { SceneKeys } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
-import { createButton } from '../utils/ui';
 
 export class SplashScene extends Phaser.Scene {
   private skipped = false;
@@ -11,7 +10,6 @@ export class SplashScene extends Phaser.Scene {
   private splashImage: Phaser.GameObjects.Image | null = null;
   private versionText: Phaser.GameObjects.Text | null = null;
   private creatorText: Phaser.GameObjects.Text | null = null;
-  private leaderboardButton: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super(SceneKeys.Splash);
@@ -66,10 +64,6 @@ export class SplashScene extends Phaser.Scene {
     this.creatorText = this.add.text(0, 0, 'Created By RuntWerkx Gaming Division', creditStyle).setOrigin(1, 1).setDepth(20);
     this.layoutCornerText(width, height);
 
-    this.leaderboardButton = createButton(this, width / 2, height - 82, 'Leaderboards', () => {
-      this.scene.start(SceneKeys.OnlineLeaderboards);
-    }, 230).setDepth(30);
-
     this.time.addEvent({
       delay: 120,
       loop: true,
@@ -110,14 +104,12 @@ export class SplashScene extends Phaser.Scene {
       this.splashImage = null;
       this.versionText = null;
       this.creatorText = null;
-      this.leaderboardButton = null;
     });
   }
 
   private handleResize(size: Phaser.Structs.Size): void {
     this.layoutSplashImage(size.width, size.height);
     this.layoutCornerText(size.width, size.height);
-    this.leaderboardButton?.setPosition(size.width / 2, size.height - 82);
   }
 
   private layoutCornerText(width: number, height: number): void {
