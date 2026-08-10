@@ -18,6 +18,7 @@ export interface ModCardViewOptions {
   compact?: boolean;
   interactive?: boolean;
   equipped?: boolean;
+  duplicateCount?: number;
 }
 
 export const createModCardView = (
@@ -136,6 +137,22 @@ export const createModCardView = (
     container.add(equippedMarker);
     scene.tweens.add({ targets: equippedMarker, scaleX: { from: 1, to: -1 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     scene.tweens.add({ targets: equippedGlow, alpha: { from: 0.3, to: 0.8 }, scale: { from: 0.85, to: 1.15 }, duration: 800, yoyo: true, repeat: -1 });
+  }
+
+  if ((options.duplicateCount ?? 0) > 0) {
+    const markerX = width / 2 - (compact ? 14 : 18);
+    const markerY = height / 2 - (compact ? 15 : 19);
+    const duplicateMarker = scene.add.container(markerX, markerY);
+    const markerColor = 0xffd66e;
+    const backCard = scene.add.rectangle(-4, -3, compact ? 11 : 14, compact ? 14 : 18, 0x0b1723, 0.96)
+      .setStrokeStyle(1, markerColor, 0.65);
+    const frontCard = scene.add.rectangle(0, 0, compact ? 11 : 14, compact ? 14 : 18, 0x152235, 1)
+      .setStrokeStyle(1, markerColor, 1);
+    const count = scene.add.text(0, 0, `+${options.duplicateCount}`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: compact ? '7px' : '10px', fontStyle: 'bold', color: '#fff3bd'
+    }).setOrigin(0.5);
+    duplicateMarker.add([backCard, frontCard, count]);
+    container.add(duplicateMarker);
   }
 
   if (corrupted) {

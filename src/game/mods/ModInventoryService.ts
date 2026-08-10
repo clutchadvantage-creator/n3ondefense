@@ -32,6 +32,40 @@ export const addModDrop = (mods: LocalModCollection, modId: string, acquiredAt =
   return { ok: true, message: 'Duplicate mod stored.' };
 };
 
+export const getModCopyCounts = (cards: readonly ModCardInstance[]): Map<string, number> => {
+  const counts = new Map<string, number>();
+  for (const card of cards) counts.set(card.modId, (counts.get(card.modId) ?? 0) + 1);
+  return counts;
+};
+
+export const getRecyclableUnupgradedDuplicates = (mods: LocalModCollection): ModCardInstance[] => {
+  const cardsByMod = new Map<string, ModCardInstance[]>();
+  for (const card of mods.cards) {
+    const group = cardsByMod.get(card.modId) ?? [];
+    group.push(card);
+    cardsByMod.set(card.modId, group);
+  }
+  const equippedCardIds = new Set(mods.loadouts.flatMap((loadout) => Object.values(loadout.cardSlots)));
+  const recyclable: ModCardInstance[] = [];
+  for (const cards of cardsByMod.values()) {
+    if (cards.length <= 1) continue;
+    const unupgraded = cards.filter((card) => card.upgradeLevel === 0);
+    if (!unupgraded.length) continue;
+    if (cards.some((card) => card.upgradeLevel > 0)) {
+      recyclable.push(...unupgraded);
+      continue;
+    }
+    const keeper = [...unupgraded].sort((a, b) =>
+      Number(Boolean(b.infusionId)) - Number(Boolean(a.infusionId))
+      || Number(equippedCardIds.has(b.instanceId)) - Number(equippedCardIds.has(a.instanceId))
+      || a.acquiredAt.localeCompare(b.acquiredAt)
+      || a.instanceId.localeCompare(b.instanceId)
+    )[0];
+    recyclable.push(...unupgraded.filter((card) => card.instanceId !== keeper.instanceId));
+  }
+  return recyclable;
+};
+
 const removeCard = (mods: LocalModCollection, card: ModCardInstance): void => {
   mods.cards = mods.cards.filter((entry) => entry.instanceId !== card.instanceId);
   for (const loadout of mods.loadouts) {
@@ -70,6 +104,25 @@ export const recycleDuplicateMod = (mods: LocalModCollection, instanceId: string
   removeCard(mods, card);
   mods.plasmaChips += plasmaChips;
   return { ok: true, message: `Card recycled into ${plasmaChips} Plasma Chip${plasmaChips === 1 ? '' : 's'}.`, plasmaChips };
+};
+
+export const recycleAllUnupgradedDuplicates = (mods: LocalModCollection): ModOperationResult & { recycledCards?: number; plasmaChips?: number } => {
+  const recyclable = getRecyclableUnupgradedDuplicates(mods);
+  if (!recyclable.length) return { ok: false, message: 'No unupgraded duplicate cards are available to recycle.' };
+  let plasmaChips = 0;
+  let recycledCards = 0;
+  for (const card of recyclable) {
+    const result = recycleDuplicateMod(mods, card.instanceId);
+    if (!result.ok) continue;
+    plasmaChips += result.plasmaChips ?? 0;
+    recycledCards += 1;
+  }
+  return {
+    ok: recycledCards > 0,
+    message: `Recycled ${recycledCards} unupgraded duplicate card${recycledCards === 1 ? '' : 's'} into ${plasmaChips} Plasma Chip${plasmaChips === 1 ? '' : 's'}.`,
+    recycledCards,
+    plasmaChips
+  };
 };
 
 export const deleteModCard = (mods: LocalModCollection, instanceId: string): ModOperationResult => {

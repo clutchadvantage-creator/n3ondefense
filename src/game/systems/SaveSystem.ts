@@ -116,6 +116,7 @@ export class SaveSystem {
   static unequipMod(slot: ModSlot): void { PlayerProfileStore.unequipMod(slot); }
   static sellDuplicateMod(instanceId: string) { return PlayerProfileStore.sellDuplicateMod(instanceId); }
   static recycleDuplicateMod(instanceId: string) { return PlayerProfileStore.recycleDuplicateMod(instanceId); }
+  static recycleAllUnupgradedDuplicates() { return PlayerProfileStore.recycleAllUnupgradedDuplicates(); }
   static deleteModCard(instanceId: string) { return PlayerProfileStore.deleteModCard(instanceId); }
   static infuseModCard(instanceId: string, infusionId: ModInfusionId) { return PlayerProfileStore.infuseModCard(instanceId, infusionId); }
   static getPreferredProtocol(): RunProtocolId { return PlayerProfileStore.getActiveSave().protocol.preferred; }

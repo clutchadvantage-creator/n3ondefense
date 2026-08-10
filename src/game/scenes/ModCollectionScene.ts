@@ -9,10 +9,14 @@ import { createButton, disableButton } from '../utils/ui';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { rollModDrop } from '../mods/ModDropService.ts';
 import { MOD_INFUSIONS } from '../mods/infusions.ts';
+import { getModCopyCounts, getRecyclableUnupgradedDuplicates } from '../mods/ModInventoryService.ts';
+import { showConfirmDialog, type LocalModalHandle } from '../utils/localSaveUi.ts';
 
 type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
+type FilterMode = 'all' | 'duplicates';
 const CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player', 'defense', 'bombSite', 'utility'];
 const SORTS: SortMode[] = ['acquired', 'type', 'rank', 'rarity'];
+const FILTERS: FilterMode[] = ['all', 'duplicates'];
 const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 } as const;
 
 interface ModCollectionSceneData {
@@ -24,14 +28,19 @@ export class ModCollectionScene extends Phaser.Scene {
   private selectedCardId = '';
   private categoryIndex = 0;
   private sortIndex = 0;
+  private filterIndex = 0;
   private page = 0;
   private status = '';
   private infusionModal: Phaser.GameObjects.Container | null = null;
+  private bulkRecycleModal: LocalModalHandle | null = null;
   private infusionPage = 0;
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
   private resumePausedScene = false;
   private readonly handleEscape = (): void => {
-    if (this.infusionModal) this.hideInfusionModal();
+    if (this.bulkRecycleModal) {
+      this.bulkRecycleModal.destroy();
+      this.bulkRecycleModal = null;
+    } else if (this.infusionModal) this.hideInfusionModal();
     else this.returnToPreviousScene();
   };
 
@@ -44,10 +53,20 @@ export class ModCollectionScene extends Phaser.Scene {
     const mods = SaveSystem.getModCollection();
     const category = CATEGORIES[this.categoryIndex];
     const sort = SORTS[this.sortIndex];
-    const cards = this.sortedCards(mods.cards.filter((card) => category === 'all' || MOD_BY_ID.get(card.modId)?.category === category), sort);
+    const filter = FILTERS[this.filterIndex];
+    const copyCounts = getModCopyCounts(mods.cards);
+    const cards = this.sortedCards(mods.cards.filter((card) =>
+      (category === 'all' || MOD_BY_ID.get(card.modId)?.category === category)
+      && (filter === 'all' || (copyCounts.get(card.modId) ?? 0) > 1)
+    ), sort);
+    const recyclableDuplicates = getRecyclableUnupgradedDuplicates(mods);
+    const bulkPlasmaValue = recyclableDuplicates.reduce((total, card) => {
+      const definition = MOD_BY_ID.get(card.modId);
+      return total + (definition ? MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity] : 0);
+    }, 0);
     const activeLoadout = mods.loadouts.find((loadout) => loadout.id === mods.activeLoadoutId) ?? mods.loadouts[0];
     const equippedCardIds = new Set(Object.values(activeLoadout?.cardSlots ?? {}).filter((cardId): cardId is string => typeof cardId === 'string'));
-    if (!this.selectedCardId || !mods.cards.some((card) => card.instanceId === this.selectedCardId)) this.selectedCardId = cards[0]?.instanceId ?? mods.cards[0]?.instanceId ?? '';
+    if (!cards.some((card) => card.instanceId === this.selectedCardId)) this.selectedCardId = cards[0]?.instanceId ?? '';
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x040811, 1);
     this.add.grid(width / 2, height / 2, width, height, 48, 48, 0x050b14, 0.2, 0x153447, 0.12);
@@ -57,14 +76,22 @@ export class ModCollectionScene extends Phaser.Scene {
       fontFamily: 'Rajdhani, sans-serif', fontSize: width < 900 ? '16px' : '20px', fontStyle: 'bold', color: '#c0fff0', align: 'center'
     }).setOrigin(0.5).setWordWrapWidth(Math.max(280, width - 48), true).setMaxLines(2);
 
-    createButton(this, 150, 104, `Group: ${category === 'all' ? 'ALL' : category.toUpperCase()}`, () => { this.categoryIndex = (this.categoryIndex + 1) % CATEGORIES.length; this.page = 0; this.restartCollection(); }, 250);
-    createButton(this, 430, 104, `Sort: ${sort.toUpperCase()}`, () => { this.sortIndex = (this.sortIndex + 1) % SORTS.length; this.page = 0; this.restartCollection(); }, 250);
+    const returnWidth = Phaser.Math.Clamp(width * 0.18, 160, 220);
+    const toolbarGap = 10;
+    const toolbarButtonWidth = Phaser.Math.Clamp((width - returnWidth - 76 - toolbarGap * 3) / 4, 108, 230);
+    const toolbarStart = 24;
+    const toolbarX = (index: number): number => toolbarStart + toolbarButtonWidth / 2 + index * (toolbarButtonWidth + toolbarGap);
+    createButton(this, toolbarX(0), 104, `Group: ${category === 'all' ? 'ALL' : category.toUpperCase()}`, () => { this.categoryIndex = (this.categoryIndex + 1) % CATEGORIES.length; this.page = 0; this.restartCollection(); }, toolbarButtonWidth);
+    createButton(this, toolbarX(1), 104, `Sort: ${sort.toUpperCase()}`, () => { this.sortIndex = (this.sortIndex + 1) % SORTS.length; this.page = 0; this.restartCollection(); }, toolbarButtonWidth);
+    createButton(this, toolbarX(2), 104, `Filter: ${filter.toUpperCase()}`, () => { this.filterIndex = (this.filterIndex + 1) % FILTERS.length; this.page = 0; this.restartCollection(); }, toolbarButtonWidth);
+    const recycleAll = createButton(this, toolbarX(3), 104, `Recycle Rank-0\n${recyclableDuplicates.length} Cards +${bulkPlasmaValue}◆`, () => this.confirmBulkRecycle(recyclableDuplicates.length, bulkPlasmaValue), toolbarButtonWidth);
+    if (!recyclableDuplicates.length) disableButton(recycleAll);
     const returnLabel = this.returnScene === SceneKeys.Arena
       ? 'Back To Pause Menu'
       : this.returnScene === SceneKeys.RoundFinished
         ? 'Back To Level Complete'
         : 'Main Menu';
-    createButton(this, width - 140, 104, returnLabel, () => this.returnToPreviousScene(), 220);
+    createButton(this, width - returnWidth / 2 - 16, 104, returnLabel, () => this.returnToPreviousScene(), returnWidth);
 
     const detailWidth = Math.min(360, width * 0.3);
     const gridLeft = 36;
@@ -79,23 +106,23 @@ export class ModCollectionScene extends Phaser.Scene {
     cards.slice(this.page * perPage, (this.page + 1) * perPage).forEach((card, index) => {
       const x = gridLeft + cardWidth / 2 + (index % columns) * (cardWidth + 14);
       const y = 154 + cardHeight / 2 + Math.floor(index / columns) * (cardHeight + 14);
-      const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: cardWidth, height: cardHeight, selected: card.instanceId === this.selectedCardId, compact: true, equipped: equippedCardIds.has(card.instanceId) });
+      const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: cardWidth, height: cardHeight, selected: card.instanceId === this.selectedCardId, compact: true, equipped: equippedCardIds.has(card.instanceId), duplicateCount: Math.max(0, (copyCounts.get(card.modId) ?? 1) - 1) });
       view.on('pointerdown', () => { this.selectedCardId = card.instanceId; this.restartCollection(); });
     });
-    if (!cards.length) this.add.text((gridLeft + gridRight) / 2, height / 2, 'NO COLLECTED CARDS IN THIS GROUP', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#607a8c' }).setOrigin(0.5);
+    if (!cards.length) this.add.text((gridLeft + gridRight) / 2, height / 2, filter === 'duplicates' ? 'NO DUPLICATE CARDS IN THIS GROUP' : 'NO COLLECTED CARDS IN THIS GROUP', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#607a8c' }).setOrigin(0.5);
     createButton(this, gridLeft + 70, height - 36, '◀', () => { this.page = Math.max(0, this.page - 1); this.restartCollection(); }, 90);
     this.add.text((gridLeft + gridRight) / 2, height - 36, `PAGE ${this.page + 1} / ${maxPage + 1}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#a8c8d9' }).setOrigin(0.5);
     createButton(this, gridRight - 70, height - 36, '▶', () => { this.page = Math.min(maxPage, this.page + 1); this.restartCollection(); }, 90);
 
     const selected = mods.cards.find((card) => card.instanceId === this.selectedCardId);
-    this.createDetails(width - detailWidth / 2 - 20, 145, detailWidth, height - 180, selected, selected ? equippedCardIds.has(selected.instanceId) : false);
+    this.createDetails(width - detailWidth / 2 - 20, 145, detailWidth, height - 180, selected, selected ? equippedCardIds.has(selected.instanceId) : false, selected ? Math.max(0, (copyCounts.get(selected.modId) ?? 1) - 1) : 0);
     this.input.keyboard?.off('keydown-ESC', this.handleEscape);
     this.input.keyboard?.on('keydown-ESC', this.handleEscape);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.keyboard?.off('keydown-ESC', this.handleEscape));
     if (import.meta.env.DEV) this.installDevKeys();
   }
 
-  private createDetails(x: number, y: number, width: number, height: number, card?: ModCardInstance, equipped = false): void {
+  private createDetails(x: number, y: number, width: number, height: number, card?: ModCardInstance, equipped = false, duplicateCount = 0): void {
     this.add.rectangle(x, y + height / 2, width, height, 0x08131f, 0.96).setStrokeStyle(2, 0x50dfff, 0.65);
     if (!card) {
       this.add.text(x, y + 80, 'SELECT A COLLECTED CARD', { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: '#7895a8' }).setOrigin(0.5);
@@ -111,7 +138,8 @@ export class ModCollectionScene extends Phaser.Scene {
       height: detailCardHeight,
       compact: false,
       interactive: false,
-      equipped
+      equipped,
+      duplicateCount
     });
     const corruptedText = definition.variant === 'corrupted' ? `\n+ ${definition.positiveEffect}\n− ${definition.negativeEffect}` : '';
     const detailCopy = this.add.text(x, y + 30 + detailCardHeight, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
@@ -153,6 +181,23 @@ export class ModCollectionScene extends Phaser.Scene {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf', align: 'center', lineSpacing: -2
     }).setOrigin(0.5, 1).setWordWrapWidth(width - 32, true).setMaxLines(2);
     if (this.status) this.time.delayedCall(2200, () => { this.status = ''; if (statusText.active) statusText.setText(''); });
+  }
+
+  private confirmBulkRecycle(cardCount: number, plasmaChips: number): void {
+    if (cardCount <= 0) return;
+    this.bulkRecycleModal?.destroy();
+    this.bulkRecycleModal = showConfirmDialog(
+      this,
+      'RECYCLE ALL UNUPGRADED DUPLICATES',
+      `Recycle ${cardCount} rank-0 duplicate card${cardCount === 1 ? '' : 's'} into ${plasmaChips} Plasma Chip${plasmaChips === 1 ? '' : 's'}?\n\nOne copy of every Mod will be kept, and cards with upgrade levels are never recycled. Rank-0 infused cards can be recycled because infusions are cosmetic rather than upgrades.`,
+      'Recycle All',
+      () => {
+        this.bulkRecycleModal = null;
+        this.apply(() => SaveSystem.recycleAllUnupgradedDuplicates());
+      },
+      'Cancel',
+      () => { this.bulkRecycleModal = null; }
+    );
   }
 
   private showInfusionModal(card: ModCardInstance, preservePage = false): void {

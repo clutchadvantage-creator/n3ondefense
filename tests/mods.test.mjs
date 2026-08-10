@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addModDrop, createDefaultModCollection, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleDuplicateMod, sellDuplicateMod } from '../src/game/mods/ModInventoryService.ts';
+import { addModDrop, createDefaultModCollection, deleteModCard, equipMod, getModCopyCounts, getRecyclableUnupgradedDuplicates, infuseModCard, rankUpMod, recycleAllUnupgradedDuplicates, recycleDuplicateMod, sellDuplicateMod } from '../src/game/mods/ModInventoryService.ts';
 import { normalizeModCollection, normalizeProtocolPreference } from '../src/game/mods/ModSaveNormalizer.ts';
 import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
 import { applyOperativeSpeedMultipliers, magneticResistanceForEnemy, prioritizeTurretTargets, protocolStart, splitCurrentSecondaryDamage } from '../src/game/mods/ModRules.ts';
@@ -152,6 +152,49 @@ test('the selected original card can be recycled when another copy remains', () 
   assert.equal(recycleDuplicateMod(mods, selectedId).ok, true);
   assert.equal(mods.cards.some((card) => card.instanceId === selectedId), false);
   assert.equal(mods.cards.length, 1);
+});
+
+test('duplicate identity ignores upgrade level and bulk recycling removes only rank-zero extras', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'split-current', '2026-01-01T00:00:00.000Z');
+  addModDrop(mods, 'split-current', '2026-01-02T00:00:00.000Z');
+  addModDrop(mods, 'split-current', '2026-01-03T00:00:00.000Z');
+  addModDrop(mods, 'emergency-capacitor', '2026-01-04T00:00:00.000Z');
+  addModDrop(mods, 'emergency-capacitor', '2026-01-05T00:00:00.000Z');
+  const splitCards = mods.cards.filter((card) => card.modId === 'split-current');
+  const capacitorCards = mods.cards.filter((card) => card.modId === 'emergency-capacitor');
+  splitCards[0].upgradeLevel = 2;
+  capacitorCards[0].infusionId = 'enemy-growth';
+  equipMod(mods, 'weapon', 'split-current', splitCards[1].instanceId);
+
+  const counts = getModCopyCounts(mods.cards);
+  assert.equal(counts.get('split-current'), 3);
+  assert.equal(counts.get('emergency-capacitor'), 2);
+  assert.deepEqual(
+    getRecyclableUnupgradedDuplicates(mods).map((card) => card.instanceId).sort(),
+    [splitCards[1].instanceId, splitCards[2].instanceId, capacitorCards[1].instanceId].sort()
+  );
+
+  const result = recycleAllUnupgradedDuplicates(mods);
+  assert.equal(result.ok, true);
+  assert.equal(result.recycledCards, 3);
+  assert.equal(result.plasmaChips, 4);
+  assert.equal(mods.plasmaChips, 4);
+  assert.equal(mods.cards.length, 2);
+  assert.equal(mods.cards.find((card) => card.modId === 'split-current')?.upgradeLevel, 2);
+  assert.equal(mods.cards.find((card) => card.modId === 'emergency-capacitor')?.infusionId, 'enemy-growth');
+  assert.equal(mods.loadouts[0].cardSlots.weapon, splitCards[0].instanceId);
+});
+
+test('bulk recycling leaves upgraded duplicate pairs untouched', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'split-current');
+  addModDrop(mods, 'split-current');
+  mods.cards[0].upgradeLevel = 1;
+  mods.cards[1].upgradeLevel = 3;
+  assert.equal(getRecyclableUnupgradedDuplicates(mods).length, 0);
+  assert.equal(recycleAllUnupgradedDuplicates(mods).ok, false);
+  assert.equal(mods.cards.length, 2);
 });
 
 test('deleting an equipped final card removes ownership and clears its loadout slot', () => {

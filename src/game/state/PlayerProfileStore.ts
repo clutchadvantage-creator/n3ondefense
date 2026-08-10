@@ -3,7 +3,7 @@ import { UPGRADE_DEFINITIONS, getUpgradeCost } from '../../data/upgrades';
 import type { CosmeticOption } from '../types';
 import { type LocalPlayerSave, type ProfileSummary } from '../save/LocalSaveTypes';
 import { LocalSaveManager } from '../save/LocalSaveManager';
-import { addModDrop, createDefaultModLoadout, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleDuplicateMod, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
+import { addModDrop, createDefaultModLoadout, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleAllUnupgradedDuplicates, recycleDuplicateMod, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
 import { buildRunEconomySnapshot, getNextLoadoutSlotCost, getRunSetupCost, purchaseRunSetup, spendCreditsAtomic } from '../economy/EconomyService.ts';
@@ -349,6 +349,13 @@ export class PlayerProfileStore {
   static recycleDuplicateMod(instanceId: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
     const result = recycleDuplicateMod(save.mods, instanceId);
+    if (result.ok) PlayerProfileStore.save();
+    return result;
+  }
+
+  static recycleAllUnupgradedDuplicates(): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = recycleAllUnupgradedDuplicates(save.mods);
     if (result.ok) PlayerProfileStore.save();
     return result;
   }
