@@ -2514,7 +2514,8 @@ export class ArenaScene extends Phaser.Scene {
       alpha: 0,
       scaleX: 1.3,
       scaleY: 1.3,
-      duration: 680,
+      delay: 180,
+      duration: 760,
       ease: 'Back.easeOut',
       onComplete: () => label.destroy()
     });
