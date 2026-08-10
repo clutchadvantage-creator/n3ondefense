@@ -191,7 +191,11 @@ export type CosmeticVisualShape =
   | 'pulse'
   | 'missile'
   | 'lightning'
-  | 'orb';
+  | 'orb'
+  | 'sword'
+  | 'bubbles'
+  | 'balloons'
+  | 'carrot';
 
 export interface CosmeticOption {
   id: string;

@@ -203,6 +203,42 @@ export class BootScene extends Phaser.Scene {
       graphics.fillStyle(0xffffff, 0.45);
       graphics.fillCircle(6, 6, 2);
     });
+    createProjectileTexture('projectile-sword', 30, 14, (graphics) => {
+      graphics.fillPoints([
+        { x: 8, y: 4 }, { x: 24, y: 4 }, { x: 29, y: 7 }, { x: 24, y: 10 }, { x: 8, y: 10 }
+      ], true);
+      graphics.fillStyle(0xc4cad6, 1);
+      graphics.fillRect(6, 2, 3, 10);
+      graphics.fillPoints([{ x: 1, y: 6 }, { x: 6, y: 5 }, { x: 6, y: 9 }, { x: 1, y: 8 }], true);
+    });
+    createProjectileTexture('projectile-bubbles', 24, 20, (graphics) => {
+      graphics.lineStyle(2, 0xffffff, 1);
+      graphics.strokeCircle(7, 12, 5);
+      graphics.strokeCircle(15, 7, 6);
+      graphics.strokeCircle(18, 15, 4);
+      graphics.fillStyle(0xffffff, 0.65);
+      graphics.fillCircle(13, 5, 1.5);
+      graphics.fillCircle(5, 10, 1);
+    });
+    createProjectileTexture('projectile-balloons', 26, 24, (graphics) => {
+      graphics.lineStyle(1, 0xffffff, 0.85);
+      graphics.lineBetween(7, 10, 3, 22);
+      graphics.lineBetween(13, 9, 3, 22);
+      graphics.lineBetween(20, 11, 3, 22);
+      graphics.fillStyle(0xffffff, 1);
+      graphics.fillEllipse(7, 8, 8, 11);
+      graphics.fillEllipse(14, 6, 9, 12);
+      graphics.fillEllipse(20, 9, 8, 11);
+      graphics.fillPoints([{ x: 6, y: 13 }, { x: 8, y: 13 }, { x: 7, y: 16 }], true);
+      graphics.fillPoints([{ x: 13, y: 12 }, { x: 15, y: 12 }, { x: 14, y: 15 }], true);
+      graphics.fillPoints([{ x: 19, y: 14 }, { x: 21, y: 14 }, { x: 20, y: 17 }], true);
+    });
+    createProjectileTexture('projectile-carrot', 30, 16, (graphics) => {
+      graphics.fillPoints([{ x: 8, y: 2 }, { x: 29, y: 8 }, { x: 8, y: 14 }, { x: 12, y: 8 }], true);
+      graphics.fillStyle(0xc4cad6, 1);
+      graphics.fillPoints([{ x: 9, y: 8 }, { x: 1, y: 2 }, { x: 4, y: 8 }, { x: 1, y: 14 }], true);
+      graphics.fillPoints([{ x: 10, y: 8 }, { x: 4, y: 4 }, { x: 6, y: 8 }, { x: 4, y: 12 }], true);
+    });
 
     const createBossTexture = (key: string, draw: (graphics: Phaser.GameObjects.Graphics) => void): void => {
       g.clear();

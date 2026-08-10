@@ -38,6 +38,10 @@ export const COSMETICS: CosmeticOption[] = [
   { id: 'projectile-shape-missile', category: 'projectileShape', label: 'Micro Missile', currency: 'credits', cost: 700, color: 0xff9b3d, visualShape: 'missile', textureKey: 'projectile-missile' },
   { id: 'projectile-shape-lightning', category: 'projectileShape', label: 'Lightning Bolt', currency: 'coreTokens', cost: 4, color: 0xffed62, visualShape: 'lightning', textureKey: 'projectile-lightning' },
   { id: 'projectile-shape-orb', category: 'projectileShape', label: 'Photon Orb', currency: 'credits', cost: 525, color: 0xc77dff, visualShape: 'orb', textureKey: 'projectile-orb' },
+  { id: 'projectile-shape-sword', category: 'projectileShape', label: 'Arcblade', currency: 'credits', cost: 900, color: 0xbcefff, visualShape: 'sword', textureKey: 'projectile-sword' },
+  { id: 'projectile-shape-bubbles', category: 'projectileShape', label: 'Bubble Cluster', currency: 'credits', cost: 650, color: 0x7cecff, visualShape: 'bubbles', textureKey: 'projectile-bubbles' },
+  { id: 'projectile-shape-balloons', category: 'projectileShape', label: 'Balloon Barrage', currency: 'coreTokens', cost: 4, color: 0xff79d7, visualShape: 'balloons', textureKey: 'projectile-balloons' },
+  { id: 'projectile-shape-carrot', category: 'projectileShape', label: 'Rocket Carrot', currency: 'credits', cost: 800, color: 0xff9d48, visualShape: 'carrot', textureKey: 'projectile-carrot' },
 
   { id: 'trail-cyan', category: 'trailColor', label: 'Ion Trail', currency: 'credits', cost: 300, color: 0x48e2ff },
   { id: 'trail-purple', category: 'trailColor', label: 'Nova Trail', currency: 'credits', cost: 520, color: 0xac5dff },

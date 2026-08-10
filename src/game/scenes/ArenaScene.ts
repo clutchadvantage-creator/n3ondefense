@@ -954,10 +954,16 @@ export class ArenaScene extends Phaser.Scene {
 
     const projectileTexture = getCosmeticTextureKey(SaveSystem.getEquippedCosmeticId('projectileShape'), 'projectile-pulse');
     const bullet = this.physics.add.image(this.player.x + Math.cos(angle) * 14, this.player.y + Math.sin(angle) * 14, projectileTexture);
-    const projectileSize = projectileTexture === 'projectile-missile'
-      ? { width: 15, height: 8 }
+    const projectileSize = projectileTexture === 'projectile-missile' || projectileTexture === 'projectile-sword'
+      ? { width: 17, height: 8 }
       : projectileTexture === 'projectile-lightning'
         ? { width: 15, height: 10 }
+        : projectileTexture === 'projectile-carrot'
+          ? { width: 16, height: 9 }
+          : projectileTexture === 'projectile-bubbles'
+            ? { width: 13, height: 11 }
+            : projectileTexture === 'projectile-balloons'
+              ? { width: 14, height: 13 }
         : { width: 8, height: 8 };
     bullet.setDisplaySize(projectileSize.width, projectileSize.height);
     bullet.setTint(SaveSystem.getCosmeticColor('projectileColor', now));
