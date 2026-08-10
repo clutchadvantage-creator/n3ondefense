@@ -49,7 +49,7 @@ export class ModCollectionScene extends Phaser.Scene {
     this.add.text(width / 2, 34, 'MOD CARD COLLECTION', { fontFamily: 'Orbitron, sans-serif', fontSize: '30px', color: '#68f7ff' }).setOrigin(0.5);
     const wallet = SaveSystem.get();
     this.add.text(width / 2, 64, `${mods.cards.length} CARDS  •  ${mods.plasmaChips.toLocaleString()} PLASMA CHIPS  •  ${wallet.coreTokens.toLocaleString()} CORE TOKENS  •  ${wallet.credits.toLocaleString()} CREDITS`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: width < 900 ? '14px' : '18px', color: '#a9ffe9', align: 'center'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: width < 900 ? '16px' : '20px', fontStyle: 'bold', color: '#c0fff0', align: 'center'
     }).setOrigin(0.5).setWordWrapWidth(Math.max(280, width - 48), true).setMaxLines(2);
 
     createButton(this, 150, 104, `Group: ${category === 'all' ? 'ALL' : category.toUpperCase()}`, () => { this.categoryIndex = (this.categoryIndex + 1) % CATEGORIES.length; this.page = 0; this.restartCollection(); }, 250);
@@ -98,7 +98,7 @@ export class ModCollectionScene extends Phaser.Scene {
     const owned = SaveSystem.getModCollection().inventory[card.modId];
     const detailCardWidth = Math.min(210, width - 56);
     const detailCardHeight = detailCardWidth * 1.4;
-    const detailCardCenterY = y + 28 + detailCardHeight / 2;
+    const detailCardCenterY = y + 14 + detailCardHeight / 2;
     createModCardView(this, x, detailCardCenterY, card, card.upgradeLevel, {
       width: detailCardWidth,
       height: detailCardHeight,
@@ -107,29 +107,36 @@ export class ModCollectionScene extends Phaser.Scene {
       equipped
     });
     const corruptedText = definition.variant === 'corrupted' ? `\n+ ${definition.positiveEffect}\n− ${definition.negativeEffect}` : '';
-    this.add.text(x, y + 44 + detailCardHeight, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\n\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', color: '#d7efff', align: 'center', lineSpacing: -2
-    }).setOrigin(0.5, 0).setWordWrapWidth(width - 36, true).setMaxLines(7);
+    const detailCopy = this.add.text(x, y + 30 + detailCardHeight, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#e8f8ff', align: 'center', lineSpacing: 2
+    }).setOrigin(0.5, 0).setWordWrapWidth(width - 34, true);
     const categorySlot = definition.category === 'utility' ? null : definition.category as ModSlot;
-    const buttonY = y + height - 232;
+    const buttonY = y + height - 220;
+    const availableDetailCopyHeight = Math.max(72, buttonY - detailCopy.y - 14);
+    for (let fontSize = 16; detailCopy.height > availableDetailCopyHeight && fontSize >= 14; fontSize -= 1) {
+      detailCopy.setFontSize(fontSize);
+    }
+    if (detailCopy.height > availableDetailCopyHeight) {
+      detailCopy.setMaxLines(Math.max(4, Math.floor(availableDetailCopyHeight / 17)));
+    }
     if (categorySlot) createButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.apply(() => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40);
-    createButton(this, x, buttonY + 44, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40);
+    createButton(this, x, buttonY + 42, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40);
     const nextUpgrade = card.upgradeLevel < 3 ? (card.upgradeLevel + 1) as 1 | 2 | 3 : null;
     const coreTokenCost = nextUpgrade ? MOD_BALANCE.rankCoreTokenCostsByRarity[definition.rarity][nextUpgrade] : 0;
     const upgradeLabel = nextUpgrade
       ? `Upgrade — ${MOD_BALANCE.rankCreditCosts[nextUpgrade].toLocaleString()} Credits${coreTokenCost > 0 ? `\n+ ${coreTokenCost.toLocaleString()} Core Tokens` : ''}`
       : 'Upgrade Card — MAX LEVEL';
-    const upgradeButton = createButton(this, x, buttonY + 88, upgradeLabel, () => {
+    const upgradeButton = createButton(this, x, buttonY + 84, upgradeLabel, () => {
       if (nextUpgrade) this.apply(() => SaveSystem.rankUpMod(definition.id, card.instanceId));
     }, width - 40);
     if (!nextUpgrade) disableButton(upgradeButton);
     const sell = MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity];
     const chips = MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity];
-    createButton(this, x - width * 0.31, buttonY + 132, `Sell +${sell}C`, () => this.apply(() => SaveSystem.sellDuplicateMod(card.instanceId)), width * 0.29);
-    createButton(this, x, buttonY + 132, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), width * 0.31);
-    createButton(this, x + width * 0.31, buttonY + 132, 'Delete', () => this.apply(() => SaveSystem.deleteModCard(card.instanceId)), width * 0.25);
-    createButton(this, x, buttonY + 176, card.infusionId ? 'Change Infusion' : 'Infuse Card', () => this.showInfusionModal(card), width - 40);
-    const statusText = this.add.text(x, y + height - 12, this.status, {
+    createButton(this, x - width * 0.31, buttonY + 126, `Sell +${sell}C`, () => this.apply(() => SaveSystem.sellDuplicateMod(card.instanceId)), width * 0.29);
+    createButton(this, x, buttonY + 126, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), width * 0.31);
+    createButton(this, x + width * 0.31, buttonY + 126, 'Delete', () => this.apply(() => SaveSystem.deleteModCard(card.instanceId)), width * 0.25);
+    createButton(this, x, buttonY + 168, card.infusionId ? 'Change Infusion' : 'Infuse Card', () => this.showInfusionModal(card), width - 40);
+    const statusText = this.add.text(x, y + height - 4, this.status, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf', align: 'center', lineSpacing: -2
     }).setOrigin(0.5, 1).setWordWrapWidth(width - 32, true).setMaxLines(2);
     if (this.status) this.time.delayedCall(2200, () => { this.status = ''; if (statusText.active) statusText.setText(''); });

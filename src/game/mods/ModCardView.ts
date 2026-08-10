@@ -37,6 +37,19 @@ export const createModCardView = (
   const iconColor = definition.iconColor;
   const iconCssColor = Phaser.Display.Color.IntegerToColor(iconColor).rgba;
   const container = scene.add.container(x, y);
+  const compact = options.compact === true;
+  const rarityFontSize = Math.round(compact
+    ? Phaser.Math.Clamp(width * 0.068, 7, 10)
+    : Phaser.Math.Clamp(width * 0.067, 12, 14));
+  const nameFontSize = Math.round(compact
+    ? Phaser.Math.Clamp(width * 0.082, 8, 12)
+    : Phaser.Math.Clamp(width * 0.081, 15, 18));
+  const statFontSize = Math.round(compact
+    ? Phaser.Math.Clamp(width * 0.074, 8, 11)
+    : Phaser.Math.Clamp(width * 0.072, 14, 16));
+  const infusionFontSize = Math.round(compact
+    ? Phaser.Math.Clamp(width * 0.064, 7, 10)
+    : Phaser.Math.Clamp(width * 0.06, 11, 13));
   const shadow = scene.add.rectangle(4, 6, width, height, 0x000000, 0.45).setOrigin(0.5);
   const body = scene.add.rectangle(0, 0, width, height, corrupted ? 0x190817 : 0x091521, 0.97)
     .setStrokeStyle(options.selected ? 4 : 2, options.selected ? 0xffffff : rarityColor, 1);
@@ -88,7 +101,7 @@ export const createModCardView = (
       .setStrokeStyle(1, rarityColor, 0.9));
   }
   const rarity = scene.add.text(width / 2 - 8, -height / 2 + 9, corrupted ? 'CORRUPTED' : definition.rarity.toUpperCase(), {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: options.compact ? '8px' : '10px', color: corrupted ? '#ff5bd9' : Phaser.Display.Color.IntegerToColor(rarityColor).rgba
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${rarityFontSize}px`, fontStyle: 'bold', color: corrupted ? '#ff5bd9' : Phaser.Display.Color.IntegerToColor(rarityColor).rgba
   }).setOrigin(1, 0);
   const iconRing = scene.add.circle(0, -height * 0.12, width * 0.25, iconColor, corrupted ? 0.13 : 0.09)
     .setStrokeStyle(2, corrupted ? 0xff4ddd : iconColor, 0.82);
@@ -96,13 +109,13 @@ export const createModCardView = (
     fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.max(24, width * 0.25)}px`, color: iconCssColor
   }).setOrigin(0.5);
   const name = scene.add.text(0, height * 0.075, definition.name.toUpperCase(), {
-    fontFamily: 'Orbitron, sans-serif', fontSize: options.compact ? '10px' : '12px', color: '#eafcff', align: 'center', lineSpacing: -2
+    fontFamily: 'Orbitron, sans-serif', fontSize: `${nameFontSize}px`, color: '#f4fdff', align: 'center', lineSpacing: compact ? -1 : 1
   }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(2);
   const stat = scene.add.text(0, height * 0.25, definition.rankDescriptions[rank], {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: options.compact ? '9px' : '11px', color: '#a9cfe0', align: 'center', lineSpacing: -2
-  }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(options.compact ? 2 : 3);
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${statFontSize}px`, color: '#c9e9f4', align: 'center', lineSpacing: compact ? 0 : 2
+  }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(compact && card.infusionId ? 2 : 3);
   const infusion = scene.add.text(0, height / 2 - 10, card.infusionId ? `◆ ${MOD_INFUSION_BY_ID.get(card.infusionId)?.name.toUpperCase() ?? 'INFUSED'}` : '', {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: '#8dffec', align: 'center'
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${infusionFontSize}px`, fontStyle: 'bold', color: '#a5fff0', align: 'center'
   }).setOrigin(0.5, 1);
   container.add([rarity, iconRing, icon, name, stat, infusion]);
 
