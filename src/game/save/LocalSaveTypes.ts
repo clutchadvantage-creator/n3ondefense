@@ -8,7 +8,7 @@ import type { CreditSpendBreakdown } from '../economy/types.ts';
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 6;
+export const CURRENT_SAVE_VERSION = 7;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -34,6 +34,7 @@ export interface LocalPlayerProgress {
   creditSpendByCategory: CreditSpendBreakdown;
   totalCoreTokensEarned: number;
   totalPlaytimeSeconds: number;
+  initialDeploymentBriefingSeen: boolean;
 }
 
 export interface LocalPlayerSettings {
@@ -76,7 +77,7 @@ export interface LocalPlayerSaveV1 {
   wallet: LocalPlayerWallet;
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
-  progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory'>;
+  progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen'>;
   settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }

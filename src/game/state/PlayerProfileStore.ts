@@ -210,6 +210,22 @@ export class PlayerProfileStore {
     PlayerProfileStore.save();
   }
 
+  static getInitialDeploymentBriefingState(): { seen: boolean; highestRound: number } {
+    const progress = PlayerProfileStore.getActiveSave().progress;
+    return {
+      seen: progress.initialDeploymentBriefingSeen,
+      highestRound: progress.highestRound
+    };
+  }
+
+  static markInitialDeploymentBriefingSeen(): void {
+    const save = PlayerProfileStore.getActiveSave();
+    if (save.progress.initialDeploymentBriefingSeen) return;
+    save.progress.initialDeploymentBriefingSeen = true;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
   static addCredits(amount: number): void {
     if (!Number.isFinite(amount) || amount <= 0) return;
     const save = PlayerProfileStore.getActiveSave();

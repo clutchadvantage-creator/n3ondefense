@@ -98,7 +98,8 @@ test('version-five profiles preserve balances and receive economy telemetry defa
     metadata: { updatedAt: '2026-02-01T00:00:00.000Z', saveRevision: 99, gameVersion: '0.0.1' }
   });
   assert.ok(migrated);
-  assert.equal(migrated.version, 6);
+  assert.equal(migrated.version, 7);
+  assert.equal(migrated.progress.initialDeploymentBriefingSeen, false);
   assert.equal(migrated.wallet.credits, 9_876_543);
   assert.equal(migrated.wallet.coreTokens, 44);
   assert.equal(migrated.progress.totalCreditsSpent, 0);

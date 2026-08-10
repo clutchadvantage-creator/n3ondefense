@@ -101,7 +101,8 @@ const normalizeProgress = (progress: unknown): LocalPlayerProgress => {
     totalCreditsSpent: toInteger(candidate.totalCreditsSpent),
     creditSpendByCategory,
     totalCoreTokensEarned: toInteger(candidate.totalCoreTokensEarned),
-    totalPlaytimeSeconds: toInteger(candidate.totalPlaytimeSeconds)
+    totalPlaytimeSeconds: toInteger(candidate.totalPlaytimeSeconds),
+    initialDeploymentBriefingSeen: toBoolean(candidate.initialDeploymentBriefingSeen, false)
   };
 };
 
@@ -215,7 +216,8 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       totalCreditsSpent: 0,
       creditSpendByCategory: createEmptyCreditSpendBreakdown(),
       totalCoreTokensEarned: toInteger(v1.progress?.totalCoreTokensEarned),
-      totalPlaytimeSeconds: 0
+      totalPlaytimeSeconds: 0,
+      initialDeploymentBriefingSeen: false
     };
     current.settings = {
       ...defaultSettings,
@@ -230,7 +232,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;
