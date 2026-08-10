@@ -54,6 +54,21 @@ test('the Starhopper is a renderable side-view operative frame', () => {
   assert.equal(getCosmeticTextureKey(frame.id, ''), 'player-spaceship');
 });
 
+test('the clover, ice cream, and airplane operative frames are uniquely renderable', () => {
+  const expectedFrames = [
+    ['player-clover', 'clover', 'player-clover'],
+    ['player-ice-cream', 'iceCream', 'player-ice-cream'],
+    ['player-airplane', 'airplane', 'player-airplane']
+  ];
+  for (const [id, shape, texture] of expectedFrames) {
+    const frame = COSMETICS.find((cosmetic) => cosmetic.id === id);
+    assert.ok(frame);
+    assert.equal(frame.category, 'playerShape');
+    assert.equal(frame.visualShape, shape);
+    assert.equal(getCosmeticTextureKey(frame.id, ''), texture);
+  }
+});
+
 test('every color-driven cosmetic category has a cycling prism option', () => {
   const expectedCategories = ['playerColor', 'projectileColor', 'trailColor', 'bombColor', 'turretSkin', 'fenceStyle', 'dashTrail'];
   const prismItems = COSMETICS.filter((cosmetic) => cosmetic.colorMode === 'prism');

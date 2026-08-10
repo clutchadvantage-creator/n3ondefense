@@ -120,6 +120,71 @@ export class BootScene extends Phaser.Scene {
     g.strokeEllipse(27, 10, 10, 7);
     g.generateTexture('player-spaceship', 44, 30);
 
+    g.clear();
+    g.fillStyle(0x04070d, 0);
+    g.fillRect(0, 0, 38, 38);
+    g.lineStyle(7, 0x121a2b, 1);
+    g.lineBetween(20, 22, 31, 35);
+    g.lineStyle(5, 0xffffff, 1);
+    g.lineBetween(20, 22, 31, 35);
+    g.fillStyle(0xffffff, 1);
+    g.lineStyle(2, 0x121a2b, 1);
+    for (const leaf of [{ x: 13, y: 13 }, { x: 25, y: 13 }, { x: 13, y: 25 }, { x: 25, y: 25 }]) {
+      g.fillCircle(leaf.x, leaf.y, 8);
+      g.strokeCircle(leaf.x, leaf.y, 8);
+    }
+    g.fillCircle(19, 19, 5);
+    g.generateTexture('player-clover', 38, 38);
+
+    g.clear();
+    g.fillStyle(0x04070d, 0);
+    g.fillRect(0, 0, 36, 44);
+    g.fillStyle(0xc4cad6, 1);
+    g.lineStyle(2, 0x121a2b, 1);
+    const cone = [{ x: 7, y: 18 }, { x: 29, y: 18 }, { x: 18, y: 42 }];
+    g.fillPoints(cone, true);
+    g.strokePoints(cone, true);
+    g.lineBetween(11, 20, 22, 36);
+    g.lineBetween(25, 20, 15, 36);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(18, 14, 11);
+    g.strokeCircle(18, 14, 11);
+    g.fillCircle(10, 17, 6);
+    g.strokeCircle(10, 17, 6);
+    g.fillCircle(26, 17, 6);
+    g.strokeCircle(26, 17, 6);
+    g.fillStyle(0xe9faff, 1);
+    g.fillCircle(14, 10, 3);
+    g.generateTexture('player-ice-cream', 36, 44);
+
+    g.clear();
+    g.fillStyle(0x04070d, 0);
+    g.fillRect(0, 0, 46, 34);
+    g.lineStyle(2, 0x121a2b, 1);
+    g.fillStyle(0xc4cad6, 1);
+    const airplaneWings = [
+      { x: 17, y: 14 }, { x: 25, y: 2 }, { x: 31, y: 3 }, { x: 28, y: 14 },
+      { x: 28, y: 20 }, { x: 31, y: 31 }, { x: 25, y: 32 }, { x: 17, y: 20 }
+    ];
+    g.fillPoints(airplaneWings, true);
+    g.strokePoints(airplaneWings, true);
+    const airplaneTail = [
+      { x: 9, y: 14 }, { x: 4, y: 8 }, { x: 10, y: 8 }, { x: 15, y: 14 },
+      { x: 15, y: 20 }, { x: 10, y: 26 }, { x: 4, y: 26 }, { x: 9, y: 20 }
+    ];
+    g.fillPoints(airplaneTail, true);
+    g.strokePoints(airplaneTail, true);
+    g.fillStyle(0xffffff, 1);
+    const airplaneBody = [
+      { x: 3, y: 14 }, { x: 31, y: 13 }, { x: 43, y: 17 }, { x: 31, y: 21 }, { x: 3, y: 20 }, { x: 8, y: 17 }
+    ];
+    g.fillPoints(airplaneBody, true);
+    g.strokePoints(airplaneBody, true);
+    g.fillStyle(0xe9faff, 1);
+    g.fillEllipse(32, 17, 7, 5);
+    g.strokeEllipse(32, 17, 7, 5);
+    g.generateTexture('player-airplane', 46, 34);
+
     const createProjectileTexture = (key: string, width: number, height: number, draw: (graphics: Phaser.GameObjects.Graphics) => void): void => {
       g.clear();
       g.fillStyle(0xffffff, 1);

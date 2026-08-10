@@ -22,6 +22,9 @@ export const COSMETICS: CosmeticOption[] = [
   { id: 'player-diamond', category: 'playerShape', label: 'Diamond Vector', currency: 'credits', cost: 825, color: 0xff70c8, visualShape: 'diamond', textureKey: 'player-diamond' },
   { id: 'player-cross', category: 'playerShape', label: 'Crossguard Frame', currency: 'coreTokens', cost: 4, color: 0xffe879, visualShape: 'cross', textureKey: 'player-cross' },
   { id: 'player-spaceship', category: 'playerShape', label: 'Starhopper Frame', currency: 'coreTokens', cost: 6, color: 0x62eaff, visualShape: 'spaceship', textureKey: 'player-spaceship', priceTier: 'prestige' },
+  { id: 'player-clover', category: 'playerShape', label: 'Lucky Clover Frame', currency: 'credits', cost: 975, color: 0x66ff91, visualShape: 'clover', textureKey: 'player-clover' },
+  { id: 'player-ice-cream', category: 'playerShape', label: 'Neon Scoop Frame', currency: 'credits', cost: 1_100, color: 0xff9edc, visualShape: 'iceCream', textureKey: 'player-ice-cream' },
+  { id: 'player-airplane', category: 'playerShape', label: 'Skywing Frame', currency: 'coreTokens', cost: 5, color: 0x7cecff, visualShape: 'airplane', textureKey: 'player-airplane' },
 
   { id: 'projectile-cyan', category: 'projectileColor', label: 'Pulse Cyan', currency: 'credits', cost: 0, color: 0x4ef9ff },
   { id: 'projectile-orange', category: 'projectileColor', label: 'Thermal Orange', currency: 'credits', cost: 650, color: 0xff9b3d },

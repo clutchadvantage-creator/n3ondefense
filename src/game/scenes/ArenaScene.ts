@@ -848,7 +848,8 @@ export class ArenaScene extends Phaser.Scene {
   private updatePlayerMovement(now: number): void {
     const aim = this.getAimWorldPoint();
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
-    this.player.setRotation(angle + (this.player.texture.key === 'player-spaceship' ? 0 : Math.PI / 2));
+    const forwardFacingFrame = this.player.texture.key === 'player-spaceship' || this.player.texture.key === 'player-airplane';
+    this.player.setRotation(angle + (forwardFacingFrame ? 0 : Math.PI / 2));
 
     const v = new Phaser.Math.Vector2(0, 0);
     if (this.keys.w.isDown) v.y -= 1;

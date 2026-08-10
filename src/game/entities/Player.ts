@@ -40,6 +40,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
     if (texture === 'player-spaceship') this.setCircle(12, 10, 3);
+    else if (texture === 'player-clover') this.setCircle(12, 7, 7);
+    else if (texture === 'player-ice-cream') this.setCircle(12, 6, 10);
+    else if (texture === 'player-airplane') this.setCircle(12, 11, 5);
     else this.setCircle(12);
     this.setDamping(true);
     this.setDrag(0.0005);
