@@ -27,8 +27,13 @@ export class ModCollectionScene extends Phaser.Scene {
   private page = 0;
   private status = '';
   private infusionModal: Phaser.GameObjects.Container | null = null;
+  private infusionPage = 0;
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
   private resumePausedScene = false;
+  private readonly handleEscape = (): void => {
+    if (this.infusionModal) this.hideInfusionModal();
+    else this.returnToPreviousScene();
+  };
 
   constructor() { super(SceneKeys.Mods); }
 
@@ -84,7 +89,9 @@ export class ModCollectionScene extends Phaser.Scene {
 
     const selected = mods.cards.find((card) => card.instanceId === this.selectedCardId);
     this.createDetails(width - detailWidth / 2 - 20, 145, detailWidth, height - 180, selected, selected ? equippedCardIds.has(selected.instanceId) : false);
-    this.input.keyboard?.once('keydown-ESC', () => this.returnToPreviousScene());
+    this.input.keyboard?.off('keydown-ESC', this.handleEscape);
+    this.input.keyboard?.on('keydown-ESC', this.handleEscape);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.keyboard?.off('keydown-ESC', this.handleEscape));
     if (import.meta.env.DEV) this.installDevKeys();
   }
 
@@ -142,7 +149,8 @@ export class ModCollectionScene extends Phaser.Scene {
     if (this.status) this.time.delayedCall(2200, () => { this.status = ''; if (statusText.active) statusText.setText(''); });
   }
 
-  private showInfusionModal(card: ModCardInstance): void {
+  private showInfusionModal(card: ModCardInstance, preservePage = false): void {
+    if (!preservePage) this.infusionPage = 0;
     this.hideInfusionModal();
     const { width, height } = this.scale;
     const root = this.add.container(0, 0).setDepth(6000);
@@ -156,11 +164,16 @@ export class ModCollectionScene extends Phaser.Scene {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#a6bed0', align: 'center', lineSpacing: 2
     }).setOrigin(0.5, 0).setWordWrapWidth(panelWidth - 64, true).setMaxLines(2));
 
-    MOD_INFUSIONS.forEach((infusion, index) => {
-      const rowY = height / 2 - panelHeight / 2 + 160 + index * 142;
+    const infusionsPerPage = panelHeight < 540 ? 2 : 3;
+    const pageCount = Math.max(1, Math.ceil(MOD_INFUSIONS.length / infusionsPerPage));
+    this.infusionPage = Phaser.Math.Clamp(this.infusionPage, 0, pageCount - 1);
+    const visibleInfusions = MOD_INFUSIONS.slice(this.infusionPage * infusionsPerPage, (this.infusionPage + 1) * infusionsPerPage);
+    const rowSpacing = infusionsPerPage === 3 ? 126 : 118;
+    visibleInfusions.forEach((infusion, index) => {
+      const rowY = height / 2 - panelHeight / 2 + 160 + index * rowSpacing;
       const installed = card.infusionId === infusion.id;
       const affordable = SaveSystem.getModCollection().plasmaChips >= infusion.plasmaCost;
-      root.add(this.add.rectangle(width / 2, rowY, panelWidth - 54, 118, installed ? 0x103329 : 0x0c1a29, 0.95).setStrokeStyle(installed ? 3 : 1, installed ? 0x62ffae : 0x4bbfdb, installed ? 1 : 0.65));
+      root.add(this.add.rectangle(width / 2, rowY, panelWidth - 54, 108, installed ? 0x103329 : 0x0c1a29, 0.95).setStrokeStyle(installed ? 3 : 1, installed ? 0x62ffae : 0x4bbfdb, installed ? 1 : 0.65));
       root.add(this.add.text(width / 2 - panelWidth / 2 + 58, rowY, infusion.icon, { fontFamily: 'Orbitron, sans-serif', fontSize: '36px', color: '#8ff7ff' }).setOrigin(0.5));
       root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY - 32, infusion.name.toUpperCase(), { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: installed ? '#7dffb4' : '#e5fbff' }).setOrigin(0, 0.5));
       root.add(this.add.text(width / 2 - panelWidth / 2 + 96, rowY - 18, infusion.description, {
@@ -174,8 +187,25 @@ export class ModCollectionScene extends Phaser.Scene {
       root.add(install);
     });
 
+    const pageY = height / 2 + panelHeight / 2 - 78;
+    const previousPage = createButton(this, width / 2 - 128, pageY, '◀', () => {
+      this.infusionPage -= 1;
+      this.showInfusionModal(card, true);
+    }, 82);
+    const nextPage = createButton(this, width / 2 + 128, pageY, '▶', () => {
+      this.infusionPage += 1;
+      this.showInfusionModal(card, true);
+    }, 82);
+    if (this.infusionPage === 0) disableButton(previousPage);
+    if (this.infusionPage >= pageCount - 1) disableButton(nextPage);
+    root.add([
+      previousPage,
+      this.add.text(width / 2, pageY, `PAGE ${this.infusionPage + 1} / ${pageCount}`, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', fontStyle: 'bold', color: '#bdeeff'
+      }).setOrigin(0.5),
+      nextPage
+    ]);
     root.add(createButton(this, width / 2, height / 2 + panelHeight / 2 - 38, 'Close', () => this.hideInfusionModal(), 200));
-    this.input.keyboard?.once('keydown-ESC', () => this.hideInfusionModal());
     this.infusionModal = root;
   }
 

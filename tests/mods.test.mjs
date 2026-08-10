@@ -175,11 +175,32 @@ test('Plasma Chip infusions spend chips and remain cosmetic runtime flags', () =
 });
 
 test('every listed infusion is explicitly cosmetic-only with a positive Plasma Chip cost', () => {
-  assert.equal(MOD_INFUSIONS.length, 2);
+  assert.deepEqual(MOD_INFUSIONS.map((infusion) => infusion.id), [
+    'enemy-growth',
+    'detonation-fireworks',
+    'prismatic-rounds',
+    'holo-afterimage',
+    'pickup-orbit',
+    'ghost-echoes',
+    'arcade-pop'
+  ]);
   for (const infusion of MOD_INFUSIONS) {
     assert.equal(infusion.cosmeticOnly, true);
     assert.ok(infusion.plasmaCost > 0);
+    assert.equal(infusion.plasmaCost, MOD_BALANCE.infusionPlasmaCost[infusion.id]);
     assert.ok(infusion.description.length > 20);
+  }
+});
+
+test('each new cosmetic infusion installs on its exact card and reaches the runtime snapshot', () => {
+  for (const infusionId of ['prismatic-rounds', 'holo-afterimage', 'pickup-orbit', 'ghost-echoes', 'arcade-pop']) {
+    const mods = createDefaultModCollection();
+    addModDrop(mods, 'split-current');
+    equipMod(mods, 'weapon', 'split-current', mods.cards[0].instanceId);
+    mods.plasmaChips = 20;
+    assert.equal(infuseModCard(mods, mods.cards[0].instanceId, infusionId).ok, true);
+    assert.equal(new ModRuntime(mods).hasInfusion(infusionId), true);
+    assert.equal(new ModRuntime(mods).snapshot()[0].infusionId, infusionId);
   }
 });
 

@@ -137,6 +137,8 @@ export class ArenaScene extends Phaser.Scene {
   private runStartedAt = Date.now();
   private readonly detonatingSiteIds = new Set<string>();
   private readonly enemyTurretTargets = new WeakMap<Enemy, TurretTargetDecision>();
+  private nextHoloAfterimageAt = 0;
+  private arcadePopSequence = 0;
 
   private roundManager!: RoundManager;
   private layout!: ArenaLayout;
@@ -873,6 +875,30 @@ export class ArenaScene extends Phaser.Scene {
     if (this.consumeAbilityAction('turret')) this.placeAbility('turret', now);
     if (this.consumeAbilityAction('mine')) this.placeAbility('mine', now);
     if (this.consumeAbilityAction('shield')) this.activateShield(now);
+    this.updateHoloAfterimage(now);
+  }
+
+  private updateHoloAfterimage(now: number): void {
+    if (!this.modRuntime.hasInfusion('holo-afterimage') || now < this.nextHoloAfterimageAt) return;
+    const body = this.player.body as Phaser.Physics.Arcade.Body | null;
+    if (!body || body.velocity.lengthSq() < 36) return;
+    this.nextHoloAfterimageAt = now + (SaveSystem.get().settings.particles ? 90 : 180);
+    const echo = this.add.image(this.player.x, this.player.y, this.player.texture.key, this.player.frame.name)
+      .setDisplaySize(this.player.displayWidth, this.player.displayHeight)
+      .setRotation(this.player.rotation)
+      .setTint(this.infusionSpectrumColor(0.12))
+      .setAlpha(0.32)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(7);
+    this.tweens.add({
+      targets: echo,
+      alpha: 0,
+      scaleX: 1.16,
+      scaleY: 1.16,
+      duration: 360,
+      ease: 'Quad.Out',
+      onComplete: () => echo.destroy()
+    });
   }
 
   private updatePlayerShooting(now: number): void {
@@ -1567,7 +1593,12 @@ export class ArenaScene extends Phaser.Scene {
         return false;
       }
 
-      this.spawnProjectileTrail(p.sprite.x, p.sprite.y, p.trailColor);
+      let visualTrailColor = p.trailColor;
+      if ((p.from === 'player' || p.from === 'turret') && this.modRuntime.hasInfusion('prismatic-rounds')) {
+        visualTrailColor = this.infusionSpectrumColor((p.sprite.x + p.sprite.y) * 0.0007);
+        p.sprite.setTint(visualTrailColor);
+      }
+      this.spawnProjectileTrail(p.sprite.x, p.sprite.y, visualTrailColor);
 
       const canSplitAtFence = !p.fenceSplit && (p.from === 'player'
         || (p.from === 'turret' && this.modRuntime.has('jailbroke-turrets')));
@@ -1984,6 +2015,12 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
+  private infusionSpectrumColor(offset = 0): number {
+    const hue = ((this.time.now * 0.00022 + offset) % 1 + 1) % 1;
+    const rgb = Phaser.Display.Color.HSVToRGB(hue, 0.82, 1) as Phaser.Types.Display.ColorObject;
+    return Phaser.Display.Color.GetColor(rgb.r, rgb.g, rgb.b);
+  }
+
   private applyMagneticPayload(mine: Mine, now: number): void {
     const rank = this.modRuntime.rank('magnetic-payload');
     if (!this.modRuntime.has('magnetic-payload') || mine.readyToDetonate(now)) return;
@@ -2218,6 +2255,8 @@ export class ArenaScene extends Phaser.Scene {
     const pickupChance = Math.min(1, PICKUP_BALANCE.enemyDropChance * this.modRuntime.multiplier('enemyPickupChance'));
     if (Math.random() < pickupChance) this.dropPickup(enemy.x, enemy.y);
 
+    if (this.modRuntime.hasInfusion('ghost-echoes')) this.playEnemyGhostEcho(enemy);
+    if (this.modRuntime.hasInfusion('arcade-pop')) this.playArcadePop(enemy.x, enemy.y);
     this.createDeathExplosion(enemy.x, enemy.y, enemy.stats.color);
 
     if (enemy.stats.type === 'star') {
@@ -2242,6 +2281,49 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     enemy.destroy();
+  }
+
+  private playEnemyGhostEcho(enemy: Enemy): void {
+    const ghost = this.add.image(enemy.x, enemy.y, enemy.texture.key, enemy.frame.name)
+      .setDisplaySize(enemy.displayWidth, enemy.displayHeight)
+      .setRotation(enemy.rotation)
+      .setTint(0x74f7ff)
+      .setAlpha(0.42)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(7);
+    this.tweens.add({
+      targets: ghost,
+      y: ghost.y - 42,
+      alpha: 0,
+      scaleX: 1.22,
+      scaleY: 1.22,
+      duration: 720,
+      ease: 'Cubic.Out',
+      onComplete: () => ghost.destroy()
+    });
+  }
+
+  private playArcadePop(x: number, y: number): void {
+    const callouts = ['ZAP!', 'NICE!', 'RAD!', 'POP!', 'NEON!'];
+    const index = this.arcadePopSequence++ % callouts.length;
+    const label = this.add.text(x, y - 18, callouts[index], {
+      fontFamily: 'Orbitron, sans-serif',
+      fontSize: '16px',
+      fontStyle: 'bold',
+      color: Phaser.Display.Color.IntegerToColor(this.infusionSpectrumColor(index * 0.14)).rgba,
+      stroke: '#020711',
+      strokeThickness: 4
+    }).setOrigin(0.5).setDepth(13).setRotation(Phaser.Math.FloatBetween(-0.1, 0.1));
+    this.tweens.add({
+      targets: label,
+      y: label.y - 34,
+      alpha: 0,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      duration: 680,
+      ease: 'Back.easeOut',
+      onComplete: () => label.destroy()
+    });
   }
 
   private tryAwardMod(source: ModDropSource, guaranteed = false, x = this.player.x, y = this.player.y): void {
@@ -2332,6 +2414,12 @@ export class ArenaScene extends Phaser.Scene {
 
   private createPickupSprite(type: PickupType, x: number, y: number, color: number): Phaser.GameObjects.Container {
     const container = this.add.container(x, y).setDepth(6);
+    if (this.modRuntime?.hasInfusion('pickup-orbit')) {
+      const orbit = this.add.circle(0, 0, 17, color, 0.06).setStrokeStyle(1, color, 0.72);
+      const satelliteA = this.add.circle(17, 0, 3, 0xffffff, 0.95).setStrokeStyle(1, color, 1);
+      const satelliteB = this.add.circle(-17, 0, 2, color, 0.95).setStrokeStyle(1, 0xffffff, 0.85);
+      container.add([orbit, satelliteA, satelliteB]);
+    }
 
     if (type === 'health') {
       const v = this.add.rectangle(0, 0, 5, 16, COLORS.green, 0.95).setStrokeStyle(1, 0xbaffc6, 1);
@@ -3456,6 +3544,8 @@ export class ArenaScene extends Phaser.Scene {
     this.mines.length = 0;
     this.deathMines.length = 0;
     this.defuseAssignees.clear();
+    this.nextHoloAfterimageAt = 0;
+    this.arcadePopSequence = 0;
 
     this.children.list
       .filter((obj) => 'depth' in obj && (obj as { depth: number }).depth <= 4 && obj !== this.player)

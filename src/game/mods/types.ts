@@ -16,7 +16,14 @@ export type RunProtocolId =
   | 'overdrive-pegasus';
 export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone' | 'boss';
 export type ModVariant = 'standard' | 'corrupted';
-export type ModInfusionId = 'enemy-growth' | 'detonation-fireworks';
+export type ModInfusionId =
+  | 'enemy-growth'
+  | 'detonation-fireworks'
+  | 'prismatic-rounds'
+  | 'holo-afterimage'
+  | 'pickup-orbit'
+  | 'ghost-echoes'
+  | 'arcade-pop';
 
 export type ModStat =
   | 'weaponDamage'
