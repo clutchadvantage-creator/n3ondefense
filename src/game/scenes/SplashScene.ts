@@ -5,11 +5,19 @@ import { SceneKeys } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
 
 export class SplashScene extends Phaser.Scene {
+  private static readonly SLOGAN = 'Arcade never died....it went N3ON!......';
   private skipped = false;
   private readonly audio = AudioManager.get();
   private splashImage: Phaser.GameObjects.Image | null = null;
   private versionText: Phaser.GameObjects.Text | null = null;
   private creatorText: Phaser.GameObjects.Text | null = null;
+  private sloganText: Phaser.GameObjects.Text | null = null;
+  private sloganCyanGhost: Phaser.GameObjects.Text | null = null;
+  private sloganPinkGhost: Phaser.GameObjects.Text | null = null;
+  private sloganNoise: Phaser.GameObjects.Graphics | null = null;
+  private sloganX = 0;
+  private sloganY = 0;
+  private sloganVisible = false;
 
   constructor() {
     super(SceneKeys.Splash);
@@ -64,6 +72,39 @@ export class SplashScene extends Phaser.Scene {
     this.creatorText = this.add.text(0, 0, 'Created By RuntWerkx Gaming Division', creditStyle).setOrigin(1, 1).setDepth(20);
     this.layoutCornerText(width, height);
 
+    const sloganStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: 'Orbitron, sans-serif',
+      fontSize: '24px',
+      fontStyle: 'bold',
+      color: '#bafaff',
+      align: 'center',
+      stroke: '#02050b',
+      strokeThickness: 5,
+      shadow: { color: '#22ddff', blur: 12, fill: true, stroke: true }
+    };
+    this.sloganPinkGhost = this.add.text(0, 0, SplashScene.SLOGAN, { ...sloganStyle, color: '#ff5bd9' })
+      .setOrigin(0.5).setAlpha(0).setDepth(21).setBlendMode(Phaser.BlendModes.ADD);
+    this.sloganCyanGhost = this.add.text(0, 0, SplashScene.SLOGAN, { ...sloganStyle, color: '#41f3ff' })
+      .setOrigin(0.5).setAlpha(0).setDepth(22).setBlendMode(Phaser.BlendModes.ADD);
+    this.sloganText = this.add.text(0, 0, SplashScene.SLOGAN, sloganStyle)
+      .setOrigin(0.5).setAlpha(0).setDepth(23);
+    this.sloganNoise = this.add.graphics().setDepth(24).setBlendMode(Phaser.BlendModes.ADD);
+    this.layoutSlogan(width, height);
+    this.tweens.add({
+      targets: this.sloganText,
+      alpha: 1,
+      delay: 520,
+      duration: 520,
+      ease: 'Sine.easeOut',
+      onComplete: () => { this.sloganVisible = true; }
+    });
+
+    this.time.addEvent({
+      delay: 85,
+      loop: true,
+      callback: () => this.updateSloganNoise()
+    });
+
     this.time.addEvent({
       delay: 120,
       loop: true,
@@ -104,12 +145,84 @@ export class SplashScene extends Phaser.Scene {
       this.splashImage = null;
       this.versionText = null;
       this.creatorText = null;
+      this.sloganText = null;
+      this.sloganCyanGhost = null;
+      this.sloganPinkGhost = null;
+      this.sloganNoise = null;
+      this.sloganVisible = false;
     });
   }
 
   private handleResize(size: Phaser.Structs.Size): void {
     this.layoutSplashImage(size.width, size.height);
     this.layoutCornerText(size.width, size.height);
+    this.layoutSlogan(size.width, size.height);
+  }
+
+  private updateSloganNoise(): void {
+    const text = this.sloganText;
+    const cyanGhost = this.sloganCyanGhost;
+    const pinkGhost = this.sloganPinkGhost;
+    const noise = this.sloganNoise;
+    if (!this.sloganVisible || !text || !cyanGhost || !pinkGhost || !noise) return;
+
+    text.setText(SplashScene.SLOGAN).setPosition(this.sloganX, this.sloganY).setAlpha(1);
+    cyanGhost.setText(SplashScene.SLOGAN).setPosition(this.sloganX, this.sloganY).setAlpha(0);
+    pinkGhost.setText(SplashScene.SLOGAN).setPosition(this.sloganX, this.sloganY).setAlpha(0);
+    noise.clear();
+
+    const hardBlink = Math.random() < 0.045;
+    const glitches = hardBlink || Math.random() < 0.24;
+    if (!glitches) return;
+
+    const jitterX = Phaser.Math.Between(1, 4);
+    const jitterY = Phaser.Math.Between(-2, 2);
+    const corrupted = this.corruptSlogan();
+    text.setPosition(this.sloganX + Phaser.Math.Between(-1, 1), this.sloganY + jitterY)
+      .setAlpha(hardBlink ? 0.12 : Phaser.Math.FloatBetween(0.72, 0.94));
+    cyanGhost.setText(corrupted).setPosition(this.sloganX - jitterX, this.sloganY - jitterY)
+      .setAlpha(hardBlink ? 0.22 : 0.38);
+    pinkGhost.setText(corrupted).setPosition(this.sloganX + jitterX, this.sloganY + jitterY)
+      .setAlpha(hardBlink ? 0.18 : 0.32);
+
+    const halfWidth = Math.min(text.displayWidth / 2, this.scale.width * 0.46);
+    for (let i = 0; i < Phaser.Math.Between(3, 7); i += 1) {
+      noise.fillStyle(Math.random() < 0.5 ? 0x41f3ff : 0xff5bd9, Phaser.Math.FloatBetween(0.25, 0.75));
+      noise.fillRect(
+        this.sloganX + Phaser.Math.FloatBetween(-halfWidth, halfWidth),
+        this.sloganY + Phaser.Math.FloatBetween(-text.displayHeight * 0.55, text.displayHeight * 0.55),
+        Phaser.Math.Between(3, 22),
+        Phaser.Math.Between(1, 2)
+      );
+    }
+  }
+
+  private corruptSlogan(): string {
+    const characters = [...SplashScene.SLOGAN];
+    const mutableIndices = characters
+      .map((character, index) => /[A-Za-z0-9]/.test(character) ? index : -1)
+      .filter((index) => index >= 0);
+    const replacements = ['#', '/', '|', '0', '3', '?'];
+    for (let i = 0; i < Phaser.Math.Between(1, 3); i += 1) {
+      const index = Phaser.Utils.Array.GetRandom(mutableIndices);
+      characters[index] = Phaser.Utils.Array.GetRandom(replacements);
+    }
+    return characters.join('');
+  }
+
+  private layoutSlogan(width: number, height: number): void {
+    if (!this.splashImage || !this.sloganText || !this.sloganCyanGhost || !this.sloganPinkGhost) return;
+    const texture = this.splashImage.texture.getSourceImage() as HTMLImageElement;
+    const imageTop = this.splashImage.y - texture.naturalHeight * this.splashImage.scaleY * 0.5;
+    const mappedPromptLeadIn = imageTop + texture.naturalHeight * this.splashImage.scaleY * 0.825;
+    this.sloganX = width / 2;
+    this.sloganY = Phaser.Math.Clamp(mappedPromptLeadIn, height * 0.62, height - 86);
+
+    const fontSize = Math.round(Phaser.Math.Clamp(width / 45, 10, 25));
+    const letterSpacing = Phaser.Math.Clamp(Math.round(fontSize * 0.08), 1, 2);
+    for (const text of [this.sloganText, this.sloganCyanGhost, this.sloganPinkGhost]) {
+      text.setFontSize(fontSize).setLetterSpacing(letterSpacing).setPosition(this.sloganX, this.sloganY);
+    }
   }
 
   private layoutCornerText(width: number, height: number): void {
