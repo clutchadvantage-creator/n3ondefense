@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import splashImageUrl from '../../assets/splashimage.png';
 import { SPLASH_SESSION_KEY } from '../config/gameplay';
+import { GAME_VERSION } from '../config/version';
 import { SceneKeys } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
 
@@ -68,7 +69,7 @@ export class SplashScene extends Phaser.Scene {
       strokeThickness: 4,
       shadow: { color: '#29dfff', blur: 8, fill: true }
     };
-    this.versionText = this.add.text(0, 0, 'Version 0.0.1', creditStyle).setOrigin(0, 1).setDepth(20);
+    this.versionText = this.add.text(0, 0, `Version ${GAME_VERSION}`, creditStyle).setOrigin(0, 1).setDepth(20);
     this.creatorText = this.add.text(0, 0, 'Created By RuntWerkx Gaming Division', creditStyle).setOrigin(1, 1).setDepth(20);
     this.layoutCornerText(width, height);
 
