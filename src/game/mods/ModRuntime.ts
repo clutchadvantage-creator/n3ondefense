@@ -2,6 +2,7 @@ import { MOD_BALANCE } from './modBalance.ts';
 import { MOD_BY_ID } from './definitions.ts';
 import type { EquippedModSnapshot, LocalModCollection, ModInfusionId, ModRank, ModStat } from './types.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
+import { isLegendaryModId } from './ModLoadoutRules.ts';
 
 export class ModRuntime {
   private readonly equipped = new Map<string, ModRank>();
@@ -25,21 +26,27 @@ export class ModRuntime {
     };
 
     if (snapshot) {
+      let hasLegendary = false;
       snapshot.forEach(({ id, rank, infusionId }) => {
         if (!MOD_BY_ID.has(id) || this.equipped.has(id)) return;
+        if (isLegendaryModId(id) && hasLegendary) return;
         this.equipped.set(id, Math.max(0, Math.min(3, Math.floor(rank))) as ModRank);
+        if (isLegendaryModId(id)) hasLegendary = true;
         // Old run snapshots contain only id/rank. Resolve those from the exact
         // currently equipped card so in-progress local sessions remain valid.
         addInfusion(id, infusionId ?? equippedCardFor(id)?.infusionId);
       });
       return;
     }
+    let hasLegendary = false;
     for (const modId of Object.values(loadout?.slots ?? {})) {
       if (!modId || this.equipped.has(modId)) continue;
+      if (isLegendaryModId(modId) && hasLegendary) continue;
       const owned = mods.inventory[modId];
       const card = equippedCardFor(modId);
       if (owned?.discovered) {
         this.equipped.set(modId, card?.upgradeLevel ?? owned.rank);
+        if (isLegendaryModId(modId)) hasLegendary = true;
         addInfusion(modId, card?.infusionId);
       }
     }

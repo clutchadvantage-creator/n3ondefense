@@ -2,6 +2,7 @@ import { MOD_BY_ID } from './definitions.ts';
 import { MOD_BALANCE } from './modBalance.ts';
 import type { LocalModCollection, ModCardInstance, ModInfusionId, ModLoadoutSlots, ModRank, ModSlot, OwnedModState } from './types.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
+import { hasLegendaryInAnotherSlot } from './ModLoadoutRules.ts';
 
 export interface ModOperationResult { ok: boolean; message: string; }
 
@@ -173,6 +174,9 @@ export const equipMod = (mods: LocalModCollection, slot: ModSlot, modId: string,
   if (!loadout) return { ok: false, message: 'No active loadout.' };
   if (!slotAccepts(slot, definition.category)) return { ok: false, message: `${definition.name} cannot use the ${slot} slot.` };
   if (Object.entries(loadout.slots).some(([otherSlot, equipped]) => otherSlot !== slot && equipped === modId)) return { ok: false, message: 'The same mod cannot be equipped twice.' };
+  if (definition.rarity === 'legendary' && hasLegendaryInAnotherSlot(loadout.slots, slot)) {
+    return { ok: false, message: 'Only one Legendary Mod can be equipped at a time.' };
+  }
   const card = instanceId ? mods.cards.find((entry) => entry.instanceId === instanceId && entry.modId === modId) : mods.cards.find((entry) => entry.modId === modId);
   if (!card) return { ok: false, message: 'That card instance is missing.' };
   loadout.slots[slot] = modId;

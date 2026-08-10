@@ -416,6 +416,46 @@ test('slot validation, wildcard behavior, and duplicate equip prevention work', 
   assert.equal(equipMod(mods, 'weapon', 'missing').ok, false);
 });
 
+test('only one Legendary Mod can be equipped and the occupied slot can be replaced', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'fractured-current');
+  addModDrop(mods, 'nanite-fuel');
+  addModDrop(mods, 'promethean-core');
+  assert.equal(equipMod(mods, 'weapon', 'fractured-current').ok, true);
+  const blocked = equipMod(mods, 'player', 'nanite-fuel');
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.message, /Only one Legendary Mod/i);
+  assert.equal(equipMod(mods, 'weapon', 'promethean-core').ok, true);
+  assert.equal(mods.loadouts[0].slots.weapon, 'promethean-core');
+  assert.equal(mods.loadouts[0].slots.player, null);
+});
+
+test('saved loadouts and resumed snapshots discard extra Legendary Mods', () => {
+  const normalized = normalizeModCollection({
+    inventory: {
+      'fractured-current': { rank: 1, duplicates: 0, discovered: true },
+      'nanite-fuel': { rank: 2, duplicates: 0, discovered: true },
+      'architect-prime': { rank: 3, duplicates: 0, discovered: true }
+    },
+    loadouts: [{
+      id: 'default',
+      slots: { weapon: 'fractured-current', player: 'nanite-fuel', defense: 'architect-prime' }
+    }]
+  });
+  assert.equal(normalized.loadouts[0].slots.weapon, 'fractured-current');
+  assert.equal(normalized.loadouts[0].slots.player, null);
+  assert.equal(normalized.loadouts[0].slots.defense, null);
+
+  const runtime = new ModRuntime(createDefaultModCollection(), [
+    { id: 'nanite-fuel', rank: 3 },
+    { id: 'promethean-core', rank: 3 },
+    { id: 'split-current', rank: 2 }
+  ]);
+  assert.equal(runtime.has('nanite-fuel'), true);
+  assert.equal(runtime.has('promethean-core'), false);
+  assert.equal(runtime.has('split-current'), true);
+});
+
 test('invalid saved mods and invalid or duplicate loadout references are removed', () => {
   const normalized = normalizeModCollection({
     inventory: { 'split-current': { rank: 9, duplicates: 2, discovered: true }, bogus: { rank: 1, discovered: true } },

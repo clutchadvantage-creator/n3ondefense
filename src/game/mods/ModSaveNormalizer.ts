@@ -4,6 +4,7 @@ import type { LocalModCollection, ModCardInstance, ModInfusionId, ModSlot, Proto
 import { normalizeRunProtocolId } from './modBalance.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
 import { ECONOMY_BALANCE } from '../economy/economyBalance.ts';
+import { isLegendaryModId } from './ModLoadoutRules.ts';
 
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const MOD_SLOTS: ModSlot[] = ['weapon', 'player', 'defense', 'bombSite', 'wildcard'];
@@ -53,18 +54,21 @@ export const normalizeModCollection = (mods: unknown): LocalModCollection => {
     const slots = createDefaultModLoadout();
     const cardSlots = createDefaultModLoadout();
     const equipped = new Set<string>();
+    let hasLegendary = false;
     const rawSlots = isObject(raw.slots) ? raw.slots : {};
     for (const slot of MOD_SLOTS) {
       const id = typeof rawSlots[slot] === 'string' ? rawSlots[slot] : null;
       const definition = id ? MOD_BY_ID.get(id) : undefined;
       if (!id || !definition || !inventory[id]?.discovered || equipped.has(id)) continue;
       if (slot !== 'wildcard' && definition.category !== slot) continue;
+      if (isLegendaryModId(id) && hasLegendary) continue;
       slots[slot] = id;
       const requestedCard = isObject(raw.cardSlots) && typeof raw.cardSlots[slot] === 'string' ? raw.cardSlots[slot] : '';
       cardSlots[slot] = cards.some((card) => card.instanceId === requestedCard && card.modId === id)
         ? requestedCard
         : cards.find((card) => card.modId === id)?.instanceId ?? null;
       equipped.add(id);
+      if (isLegendaryModId(id)) hasLegendary = true;
     }
     return [{ id: typeof raw.id === 'string' && raw.id ? raw.id : `loadout-${index + 1}`, name: typeof raw.name === 'string' && raw.name ? raw.name : 'Primary Loadout', slots, cardSlots }];
   });
