@@ -192,6 +192,8 @@ test('Garage responsive layout keeps critical docks, terminals, and stations on 
       assert.ok(point.y - layout.cardHeight / 2 > 65);
       assert.ok(point.y + layout.cardHeight / 2 < height - 45);
     }
+    const dockLabelTop = layout.dockCenters[0].y - layout.cardHeight / 2 - (layout.compact ? 14 : 18);
+    assert.ok(dockLabelTop > layout.configTerminal.y + layout.configTerminal.height);
     for (const rect of [layout.configTerminal, layout.walletTerminal, layout.operatorPreview]) {
       assert.ok(rect.x >= 0 && rect.y >= 0);
       assert.ok(rect.x + rect.width <= width);
@@ -203,10 +205,13 @@ test('Garage responsive layout keeps critical docks, terminals, and stations on 
 
 test('desktop Garage gives the deployment, wallet, and operative displays readable space', () => {
   const layout = calculateGarageLayout(1920, 1080);
-  assert.ok(layout.configTerminal.width >= 320);
-  assert.ok(layout.configTerminal.height >= 174);
+  assert.ok(layout.configTerminal.width >= 390);
+  assert.ok(layout.configTerminal.height >= 230);
   assert.equal(layout.walletTerminal.width, layout.configTerminal.width);
   assert.equal(layout.walletTerminal.height, layout.configTerminal.height);
+  assert.ok(layout.configTerminal.x > layout.safe + 30);
+  assert.equal(1920 - layout.walletTerminal.x - layout.walletTerminal.width, layout.configTerminal.x);
+  assert.ok(layout.configTerminal.y >= 106);
   assert.ok(layout.operatorPreview.width >= 330);
   assert.ok(layout.operatorPreview.height >= 174);
   assert.ok(layout.operatorPreview.y >= 88);
@@ -218,6 +223,15 @@ test('equipping an operative frame or color refreshes the Garage showcase', () =
   assert.match(source, /this\.refreshOperatorPreview\(\)/);
   assert.match(source, /getEquippedCosmeticId\('playerShape'\)/);
   assert.match(source, /getCosmeticColor\('playerColor'/);
+});
+
+test('Gear Locker uses category-aware cosmetic previews instead of generic color balls', () => {
+  const garage = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
+  const preview = readFileSync(new URL('../src/game/cosmetics/CosmeticPreview.ts', import.meta.url), 'utf8');
+  assert.match(garage, /createCosmeticPreview\(this, item/);
+  for (const category of ['playerShape', 'playerColor', 'projectileShape', 'projectileColor', 'trailColor', 'dashTrail', 'bombColor', 'turretSkin', 'fenceStyle']) {
+    assert.match(preview, new RegExp(`case '${category}'`));
+  }
 });
 
 test('Garage navigation is registered and Mod Collection preserves its return route', () => {

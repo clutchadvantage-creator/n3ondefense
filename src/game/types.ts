@@ -188,6 +188,7 @@ export type CosmeticVisualShape =
   | 'clover'
   | 'iceCream'
   | 'airplane'
+  | 'ufo'
   | 'pulse'
   | 'missile'
   | 'lightning'

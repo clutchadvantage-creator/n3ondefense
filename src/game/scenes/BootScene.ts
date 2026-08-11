@@ -185,6 +185,27 @@ export class BootScene extends Phaser.Scene {
     g.strokeEllipse(32, 17, 7, 5);
     g.generateTexture('player-airplane', 46, 34);
 
+    g.clear();
+    g.fillStyle(0x04070d, 0);
+    g.fillRect(0, 0, 42, 42);
+    g.lineStyle(2, 0x121a2b, 1);
+    g.fillStyle(0xc4cad6, 1);
+    g.fillCircle(21, 21, 18);
+    g.strokeCircle(21, 21, 18);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(21, 21, 12);
+    g.strokeCircle(21, 21, 12);
+    g.fillStyle(0xe9faff, 1);
+    g.fillCircle(21, 21, 6);
+    g.strokeCircle(21, 21, 6);
+    for (let index = 0; index < 8; index += 1) {
+      const angle = index * Math.PI / 4;
+      g.fillCircle(21 + Math.cos(angle) * 15, 21 + Math.sin(angle) * 15, 2);
+    }
+    g.fillStyle(0x7c8799, 1);
+    g.fillTriangle(19, 3, 23, 3, 21, 8);
+    g.generateTexture('player-ufo', 42, 42);
+
     const createProjectileTexture = (key: string, width: number, height: number, draw: (graphics: Phaser.GameObjects.Graphics) => void): void => {
       g.clear();
       g.fillStyle(0xffffff, 1);

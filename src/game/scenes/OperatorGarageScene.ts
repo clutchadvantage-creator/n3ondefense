@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { COSMETICS, getCosmeticDisplayColor } from '../../data/cosmetics.ts';
+import { COSMETICS, getCosmeticDisplayColor, getCosmeticTextureKey } from '../../data/cosmetics.ts';
+import { createCosmeticPreview } from '../cosmetics/CosmeticPreview.ts';
 import { MOD_FOCUS_CATEGORIES, MOD_FOCUS_LABELS, RUN_CONTRACT_IDS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys.ts';
@@ -40,6 +41,8 @@ export class OperatorGarageScene extends Phaser.Scene {
   private operatorPreviewRoot: Phaser.GameObjects.Container | null = null;
   private operatorPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
   private operatorPreviewLayout: { rect: GarageRect; compact: boolean } | null = null;
+  private cosmeticPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
+  private cosmeticPreviewColorTargets: Array<{ item: CosmeticOption; setColor: (color: number) => void }> = [];
   private status = '';
   private libraryCategoryIndex = 0;
   private libraryRarityIndex = 0;
@@ -147,12 +150,12 @@ export class OperatorGarageScene extends Phaser.Scene {
 
   private terminalFrame(rect: GarageRect, title: string, color = 0x55efff): Phaser.GameObjects.Container {
     const root = this.add.container(rect.x, rect.y).setDepth(40);
-    const roomy = rect.height >= 150;
-    const headerHeight = roomy ? 31 : 27;
+    const roomy = rect.height >= 180;
+    const headerHeight = roomy ? 35 : 29;
     const panel = this.add.rectangle(0, 0, rect.width, rect.height, 0x07131d, 0.9).setOrigin(0).setStrokeStyle(2, color, 0.58);
     const header = this.add.rectangle(0, 0, rect.width, headerHeight, color, 0.1).setOrigin(0).setStrokeStyle(1, color, 0.35);
-    const label = this.add.text(11, roomy ? 7 : 6, title, {
-      fontFamily: 'Orbitron, sans-serif', fontSize: roomy ? '13px' : '11px', color: Phaser.Display.Color.IntegerToColor(color).rgba
+    const label = this.add.text(13, roomy ? 8 : 7, title, {
+      fontFamily: 'Orbitron, sans-serif', fontSize: roomy ? '15px' : '12px', color: Phaser.Display.Color.IntegerToColor(color).rgba
     }).setOrigin(0);
     const led = this.add.circle(rect.width - 14, headerHeight / 2, roomy ? 4 : 3, 0x68ffac, 0.9);
     root.add([panel, header, label, led]);
@@ -162,7 +165,7 @@ export class OperatorGarageScene extends Phaser.Scene {
 
   private createConfigurationTerminal(rect: GarageRect, compact: boolean): void {
     const root = this.terminalFrame(rect, 'DEPLOYMENT CONFIGURATION');
-    const roomy = !compact && rect.height >= 150;
+    const roomy = !compact && rect.height >= 180;
     const highestRound = SaveSystem.getHighestRound();
     const requested = SaveSystem.getPreferredProtocol();
     const protocol = highestRound >= RUN_PROTOCOLS[requested].unlockHighestRound ? requested : 'normal';
@@ -172,16 +175,16 @@ export class OperatorGarageScene extends Phaser.Scene {
       { label: 'CONTRACT', value: setup.contract ? RUN_CONTRACTS[setup.contract].label : 'NO CONTRACT ACTIVE', action: () => this.cycleContract() },
       { label: 'SIGNAL', value: setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus] : 'NO SIGNAL ACTIVE', action: () => this.cycleSignal() }
     ];
-    const startY = roomy ? 38 : 30;
-    const rowGap = roomy ? 37 : 24;
+    const startY = roomy ? 43 : 33;
+    const rowGap = roomy ? 43 : 27;
     rows.forEach((row, index) => {
       const y = startY + index * rowGap;
       const hit = this.add.rectangle(7, y - 1, rect.width - 14, rowGap - 4, 0x102331, 0.5).setOrigin(0).setInteractive({ useHandCursor: true });
-      const label = this.add.text(13, y + (roomy ? 6 : 4), row.label, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '12px' : '10px', color: '#78adbf'
+      const label = this.add.text(15, y + (roomy ? 7 : 5), row.label, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '14px' : '11px', color: '#78adbf'
       }).setOrigin(0);
-      const value = this.add.text(rect.width - 13, y + (roomy ? 4 : 3), row.value, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '14px' : '11px', fontStyle: 'bold', color: '#d6fbff'
+      const value = this.add.text(rect.width - 15, y + (roomy ? 4 : 3), row.value, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '17px' : '12px', fontStyle: 'bold', color: '#d6fbff'
       }).setOrigin(1, 0).setMaxLines(1);
       hit.on('pointerover', () => hit.setFillStyle(0x17374a, 0.75));
       hit.on('pointerout', () => hit.setFillStyle(0x102331, 0.5));
@@ -190,15 +193,15 @@ export class OperatorGarageScene extends Phaser.Scene {
     });
     if (roomy) {
       const cost = getRunSetupCost(setup);
-      root.add(this.add.text(rect.width / 2, rect.height - 18, cost > 0 ? `NEXT RUN FEE // ${cost.toLocaleString()} CREDITS` : 'NEXT RUN FEE // FREE', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', fontStyle: 'bold', color: cost > 0 ? '#ffd077' : '#7fffc2'
+      root.add(this.add.text(rect.width / 2, rect.height - 19, cost > 0 ? `NEXT RUN FEE // ${cost.toLocaleString()} CREDITS` : 'NEXT RUN FEE // FREE', {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', fontStyle: 'bold', color: cost > 0 ? '#ffd077' : '#7fffc2'
       }).setOrigin(0.5));
     }
   }
 
   private createWalletTerminal(rect: GarageRect, compact: boolean): void {
     const root = this.terminalFrame(rect, 'DIGITAL WALLET', 0xff5bcf);
-    const roomy = !compact && rect.height >= 150;
+    const roomy = !compact && rect.height >= 180;
     const save = SaveSystem.get();
     const plasma = SaveSystem.getModCollection().plasmaChips;
     const values = [
@@ -207,16 +210,16 @@ export class OperatorGarageScene extends Phaser.Scene {
       ['PLASMA CHIPS', plasma.toLocaleString(), '#db8fff']
     ] as const;
     values.forEach(([label, value, color], index) => {
-      const y = (roomy ? 44 : 34) + index * (roomy ? 37 : 24);
-      root.add(this.add.text(13, y, label, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '13px' : '10px', color: '#7c9dad'
+      const y = (roomy ? 48 : 37) + index * (roomy ? 43 : 27);
+      root.add(this.add.text(15, y, label, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '15px' : '11px', color: '#7c9dad'
       }).setOrigin(0));
-      root.add(this.add.text(rect.width - 13, y - 3, value, {
-        fontFamily: 'Orbitron, sans-serif', fontSize: roomy ? '18px' : '13px', color
+      root.add(this.add.text(rect.width - 15, y - 4, value, {
+        fontFamily: 'Orbitron, sans-serif', fontSize: roomy ? '21px' : '14px', color
       }).setOrigin(1, 0));
     });
     if (roomy) root.add(this.add.text(rect.width / 2, rect.height - 18, `HIGHEST ROUND // ${SaveSystem.getHighestRound()}`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', fontStyle: 'bold', color: '#9bc4d3'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', fontStyle: 'bold', color: '#9bc4d3'
     }).setOrigin(0.5));
   }
 
@@ -448,7 +451,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       const equipped = item.id === equippedId;
       const color = getCosmeticDisplayColor(item, this.time.now);
       const panel = this.add.rectangle(x, y, itemWidth, itemHeight, 0x0a1823, 0.96).setStrokeStyle(equipped ? 3 : 1, equipped ? 0x66ffad : color, equipped ? 1 : 0.55).setInteractive({ useHandCursor: true });
-      const swatch = this.add.circle(x, y - 19, 15, color, 0.34).setStrokeStyle(2, color, 0.95);
+      const visual = this.createLockerCosmeticVisual(item, x, y - 20, Math.min(76, itemWidth * 0.55), 38);
       const label = this.add.text(x, y + 7, item.label.toUpperCase(), { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', fontStyle: 'bold', color: '#e4faff', align: 'center' }).setOrigin(0.5).setWordWrapWidth(itemWidth - 12, true).setMaxLines(2);
       const state = this.add.text(x, y + 35, equipped ? 'EQUIPPED' : 'OWNED // CLICK TO EQUIP', { fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: equipped ? '#70ffac' : '#89abba' }).setOrigin(0.5);
       panel.on('pointerdown', () => {
@@ -458,7 +461,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         this.status = `SUCCESS // ${item.label.toUpperCase()} EQUIPPED`;
         this.showCosmetics();
       });
-      root.add([panel, swatch, label, state]);
+      root.add([panel, visual, label, state]);
     });
     if (!owned.length) root.add(this.add.text((gridLeft + gridRight) / 2, height / 2, 'NO OWNED COSMETICS IN THIS LOCKER\nVISIT THE STORE TO UNLOCK ITEMS', { fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#688694', align: 'center' }).setOrigin(0.5));
     const previous = createButton(this, gridLeft + 50, height - 35, '◀', () => { this.cosmeticPage = Math.max(0, this.cosmeticPage - 1); this.showCosmetics(); }, 82);
@@ -467,6 +470,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     if (this.cosmeticPage === maxPage) disableButton(next);
     root.add([previous, this.add.text((gridLeft + gridRight) / 2, height - 35, `PAGE ${this.cosmeticPage + 1} / ${maxPage + 1}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#add7e4' }).setOrigin(0.5), next]);
     this.createCosmeticLockerPreview(root, width - previewWidth / 2 - 12, 130, previewWidth - 12, height - 155, category, equippedId);
+    this.startLockerPrismPreviewUpdates();
   }
 
   private createCosmeticLockerPreview(root: Phaser.GameObjects.Container, x: number, y: number, width: number, height: number, category: CosmeticOption['category'], equippedId?: string): void {
@@ -477,17 +481,29 @@ export class OperatorGarageScene extends Phaser.Scene {
       root.add(this.add.text(x, y + height / 2, 'NO ITEM EQUIPPED', { fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#7793a0' }).setOrigin(0.5));
       return;
     }
-    const color = getCosmeticDisplayColor(item, this.time.now);
-    if (category === 'playerShape' || category === 'playerColor') {
-      const shapeId = SaveSystem.getEquippedCosmeticId('playerShape') ?? 'player-circle';
-      const preview = this.add.image(x, y + height * 0.42, this.textures.exists(shapeId) ? shapeId : 'player-circle').setScale(Math.min(4, width / 55)).setTint(SaveSystem.getCosmeticColor('playerColor', this.time.now));
-      root.add(preview);
-    } else {
-      root.add(this.add.circle(x, y + height * 0.42, Math.min(55, width * 0.23), color, 0.2).setStrokeStyle(4, color, 0.95));
-      root.add(this.add.text(x, y + height * 0.42, '◆', { fontFamily: 'Orbitron, sans-serif', fontSize: '34px', color: Phaser.Display.Color.IntegerToColor(color).rgba }).setOrigin(0.5));
-    }
+    root.add(this.createLockerCosmeticVisual(item, x, y + height * 0.42, width * 0.62, Math.min(130, height * 0.32)));
     root.add(this.add.text(x, y + height * 0.72, item.label.toUpperCase(), { fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#e4fbff', align: 'center' }).setOrigin(0.5).setWordWrapWidth(width - 20, true));
     root.add(this.add.text(x, y + height * 0.83, COSMETIC_CATEGORY_LABELS[category], { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#94b4c2', align: 'center' }).setOrigin(0.5));
+  }
+
+  private createLockerCosmeticVisual(item: CosmeticOption, x: number, y: number, maxWidth: number, maxHeight: number): Phaser.GameObjects.Container {
+    const operatorTextureKey = getCosmeticTextureKey(SaveSystem.getEquippedCosmeticId('playerShape'), 'player-circle');
+    const projectileTextureKey = getCosmeticTextureKey(SaveSystem.getEquippedCosmeticId('projectileShape'), 'projectile-pulse');
+    const preview = createCosmeticPreview(this, item, x, y, { maxWidth, maxHeight, operatorTextureKey, projectileTextureKey });
+    if (item.colorMode === 'prism') this.cosmeticPreviewColorTargets.push({ item, setColor: preview.setColor });
+    return preview.container;
+  }
+
+  private startLockerPrismPreviewUpdates(): void {
+    if (!this.cosmeticPreviewColorTargets.length) return;
+    this.cosmeticPreviewColorTimer = this.time.addEvent({
+      delay: 90,
+      loop: true,
+      callback: () => {
+        const now = this.time.now;
+        this.cosmeticPreviewColorTargets.forEach(({ item, setColor }) => setColor(getCosmeticDisplayColor(item, now)));
+      }
+    });
   }
 
   private showOverdrive(): void {
@@ -599,6 +615,9 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private closeOverlay(): void {
+    this.cosmeticPreviewColorTimer?.remove(false);
+    this.cosmeticPreviewColorTimer = null;
+    this.cosmeticPreviewColorTargets = [];
     this.overlay?.destroy(true);
     this.overlay = null;
   }

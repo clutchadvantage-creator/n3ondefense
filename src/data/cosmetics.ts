@@ -25,6 +25,7 @@ export const COSMETICS: CosmeticOption[] = [
   { id: 'player-clover', category: 'playerShape', label: 'Lucky Clover Frame', currency: 'credits', cost: 975, color: 0x66ff91, visualShape: 'clover', textureKey: 'player-clover' },
   { id: 'player-ice-cream', category: 'playerShape', label: 'Neon Scoop Frame', currency: 'credits', cost: 1_100, color: 0xff9edc, visualShape: 'iceCream', textureKey: 'player-ice-cream' },
   { id: 'player-airplane', category: 'playerShape', label: 'Skywing Frame', currency: 'coreTokens', cost: 5, color: 0x7cecff, visualShape: 'airplane', textureKey: 'player-airplane' },
+  { id: 'player-ufo', category: 'playerShape', label: 'Orbit Saucer Frame', currency: 'coreTokens', cost: 6, color: 0x8dffcf, visualShape: 'ufo', textureKey: 'player-ufo', priceTier: 'prestige' },
 
   { id: 'projectile-cyan', category: 'projectileColor', label: 'Pulse Cyan', currency: 'credits', cost: 0, color: 0x4ef9ff },
   { id: 'projectile-orange', category: 'projectileColor', label: 'Thermal Orange', currency: 'credits', cost: 650, color: 0xff9b3d },

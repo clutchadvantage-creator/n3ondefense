@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { COSMETICS, getCosmeticDisplayColor, getCosmeticTextureKey, getPrismColor } from '../src/data/cosmetics.ts';
 import { UPGRADE_DEFINITIONS, getUpgradeEffect } from '../src/data/upgrades.ts';
 import { ABILITY_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, WEAPON_BALANCE } from '../src/game/config/balance/index.ts';
@@ -56,11 +57,12 @@ test('the Starhopper is a renderable side-view operative frame', () => {
   assert.equal(getCosmeticTextureKey(frame.id, ''), 'player-spaceship');
 });
 
-test('the clover, ice cream, and airplane operative frames are uniquely renderable', () => {
+test('the clover, ice cream, airplane, and top-down UFO operative frames are uniquely renderable', () => {
   const expectedFrames = [
     ['player-clover', 'clover', 'player-clover'],
     ['player-ice-cream', 'iceCream', 'player-ice-cream'],
-    ['player-airplane', 'airplane', 'player-airplane']
+    ['player-airplane', 'airplane', 'player-airplane'],
+    ['player-ufo', 'ufo', 'player-ufo']
   ];
   for (const [id, shape, texture] of expectedFrames) {
     const frame = COSMETICS.find((cosmetic) => cosmetic.id === id);
@@ -69,6 +71,12 @@ test('the clover, ice cream, and airplane operative frames are uniquely renderab
     assert.equal(frame.visualShape, shape);
     assert.equal(getCosmeticTextureKey(frame.id, ''), texture);
   }
+  const boot = readFileSync(new URL('../src/game/scenes/BootScene.ts', import.meta.url), 'utf8');
+  const player = readFileSync(new URL('../src/game/entities/Player.ts', import.meta.url), 'utf8');
+  const storefront = readFileSync(new URL('../src/ui/stores/storefront.css', import.meta.url), 'utf8');
+  assert.match(boot, /generateTexture\('player-ufo'/);
+  assert.match(player, /texture === 'player-ufo'/);
+  assert.match(storefront, /data-shape=ufo/);
 });
 
 test('every color-driven cosmetic category has a cycling prism option', () => {
