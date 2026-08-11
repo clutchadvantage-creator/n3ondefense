@@ -57,16 +57,16 @@ export class GameplayPointerLock {
     if (this.locked) void document.exitPointerLock();
   }
 
-  worldPoint(camera: Phaser.Cameras.Scene2D.Camera): Phaser.Math.Vector2 {
-    const point = this.screenPoint();
-    return camera.getWorldPoint(point.x, point.y);
+  worldPoint(camera: Phaser.Cameras.Scene2D.Camera, output = new Phaser.Math.Vector2()): Phaser.Math.Vector2 {
+    const point = this.screenPoint(output);
+    return camera.getWorldPoint(point.x, point.y, output);
   }
 
-  screenPoint(): Phaser.Math.Vector2 {
+  screenPoint(output = new Phaser.Math.Vector2()): Phaser.Math.Vector2 {
     const rect = this.canvas.getBoundingClientRect();
     const x = rect.width > 0 ? this.aimX * (this.game.scale.width / rect.width) : this.game.scale.width * 0.5;
     const y = rect.height > 0 ? this.aimY * (this.game.scale.height / rect.height) : this.game.scale.height * 0.5;
-    return new Phaser.Math.Vector2(x, y);
+    return output.set(x, y);
   }
 
   destroy(): void {

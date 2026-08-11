@@ -80,10 +80,13 @@ export class BombletHazardSystem {
     const patternName = PATTERN_NAMES[this.patternIndex];
     if (elapsed < config.telegraphMs) {
       const remaining = (config.telegraphMs - elapsed) / 1000;
-      this.warningText.setText(`BOMBLET DROP: ${patternName}  ${remaining.toFixed(1)}s`)
-        .setAlpha(0.62 + Math.sin(now * 0.02) * 0.24);
+      const warning = `BOMBLET DROP: ${patternName}  ${remaining.toFixed(1)}s`;
+      if (this.warningText.text !== warning) this.warningText.setText(warning);
+      this.warningText.setAlpha(0.62 + Math.sin(now * 0.02) * 0.24);
     } else {
-      this.warningText.setText(`BOMBLETS INBOUND: ${patternName}`).setAlpha(0.78);
+      const warning = `BOMBLETS INBOUND: ${patternName}`;
+      if (this.warningText.text !== warning) this.warningText.setText(warning);
+      this.warningText.setAlpha(0.78);
     }
 
     for (const [index, target] of this.targets.entries()) {
@@ -111,7 +114,10 @@ export class BombletHazardSystem {
 
   destroy(): void {
     this.clearTargets();
-    for (const effect of this.effects) effect.destroy();
+    for (const effect of this.effects) {
+      this.scene.tweens.killTweensOf(effect);
+      effect.destroy();
+    }
     this.effects.clear();
     this.warningText.destroy();
   }
@@ -273,14 +279,20 @@ export class BombletHazardSystem {
       }
     }
 
-    if (Phaser.Math.Distance.Between(player.x, player.y, target.x, target.y) <= config.blastRadius + 10) {
+    const playerDx = player.x - target.x;
+    const playerDy = player.y - target.y;
+    const playerRadius = config.blastRadius + 10;
+    if (playerDx * playerDx + playerDy * playerDy <= playerRadius * playerRadius) {
       const damage = getScaledHazardDamage(config.playerDamageBase, this.round, config.maximumPlayerDamage);
       if (player.takeDamage(damage)) this.onPlayerDamaged?.(damage);
     }
     const enemyDamage = getScaledHazardDamage(config.enemyDamageBase, this.round, config.maximumEnemyDamage);
     for (const damageTarget of damageTargets) {
       if (!damageTarget.active) continue;
-      if (Phaser.Math.Distance.Between(damageTarget.x, damageTarget.y, target.x, target.y) <= config.blastRadius + damageTarget.hazardRadius) {
+      const dx = damageTarget.x - target.x;
+      const dy = damageTarget.y - target.y;
+      const radius = config.blastRadius + damageTarget.hazardRadius;
+      if (dx * dx + dy * dy <= radius * radius) {
         damageTarget.takeDamage(enemyDamage, 'hazard');
       }
     }

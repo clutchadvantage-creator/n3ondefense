@@ -79,6 +79,11 @@ export const COSMETICS: CosmeticOption[] = [
   { id: 'dash-prism', category: 'dashTrail', label: 'Prism Dash', currency: 'coreTokens', cost: 7, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' }
 ];
 
+const COSMETICS_BY_ID = new Map(COSMETICS.map((cosmetic) => [cosmetic.id, cosmetic]));
+
+export const getCosmeticById = (id: string | null | undefined): CosmeticOption | undefined =>
+  id ? COSMETICS_BY_ID.get(id) : undefined;
+
 const prismCategoryPhase: Partial<Record<CosmeticOption['category'], number>> = {
   playerColor: 0,
   projectileColor: 0.12,
@@ -109,4 +114,4 @@ export const getCosmeticDisplayColor = (item: CosmeticOption, timeMs: number): n
   isPrismCosmetic(item) ? getPrismColor(timeMs, prismCategoryPhase[item.category] ?? 0) : item.color;
 
 export const getCosmeticTextureKey = (id: string | null, fallback: string): string =>
-  COSMETICS.find((cosmetic) => cosmetic.id === id)?.textureKey ?? fallback;
+  getCosmeticById(id)?.textureKey ?? fallback;

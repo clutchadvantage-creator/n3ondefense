@@ -355,6 +355,7 @@ const deriveEncounter = (encounter: GameplayEncounterMetrics): void => {
 export class GameplayTelemetryRecorder {
   private static state: StoredTelemetry | null = null;
   private static flushTimer: number | null = null;
+  private static idleFlushId: number | null = null;
 
   static beginRun(input: { runId: string; startedAt: number; baseSeed: number; protocol: RunProtocolId; contract: RunContractId | null; modFocus: ModFocusSignalId | null; upgrades: Record<string, number>; equippedMods: EquippedModSnapshot[] }): void {
     const state = this.getState();
@@ -423,7 +424,10 @@ export class GameplayTelemetryRecorder {
     encounter.objectives.activeBombTimeMs += activeBombs * appliedDelta;
     encounter.objectives.activeDefuserTimeMs += activeDefusers * appliedDelta;
     encounter.objectives.peakSimultaneousDefusers = Math.max(encounter.objectives.peakSimultaneousDefusers, activeDefusers);
-    for (const [buff, active] of Object.entries(input.buffs ?? {}) as Array<[BuffName, boolean]>) if (active) increment(encounter.buffUptimeMs, buff, appliedDelta);
+    const buffs = input.buffs;
+    if (buffs?.damageBoost) increment(encounter.buffUptimeMs, 'damageBoost', appliedDelta);
+    if (buffs?.speedBoost) increment(encounter.buffUptimeMs, 'speedBoost', appliedDelta);
+    if (buffs?.rapidFire) increment(encounter.buffUptimeMs, 'rapidFire', appliedDelta);
   }
 
   static activeEncounterElapsedMs(): number { return this.activeEncounter()?.activeDurationMs ?? 0; }
@@ -835,6 +839,10 @@ export class GameplayTelemetryRecorder {
     this.state = emptyStoredTelemetry();
     if (this.flushTimer !== null && typeof window !== 'undefined') window.clearTimeout(this.flushTimer);
     this.flushTimer = null;
+    if (this.idleFlushId !== null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+      window.cancelIdleCallback(this.idleFlushId);
+    }
+    this.idleFlushId = null;
   }
 
   private static activeRun(): GameplayRunMetrics | null { return this.getState().activeRun; }
@@ -881,11 +889,33 @@ export class GameplayTelemetryRecorder {
   }
 
   private static persistSoon(): void {
-    if (typeof window === 'undefined' || this.flushTimer !== null) return;
-    this.flushTimer = window.setTimeout(() => { this.flushTimer = null; this.persistNow(); }, 1200);
+    if (typeof window === 'undefined' || this.flushTimer !== null || this.idleFlushId !== null) return;
+    // Combat telemetry remains in memory and is flushed in a quiet browser
+    // window. Encounter/run boundaries still call persistNow synchronously.
+    this.flushTimer = window.setTimeout(() => {
+      this.flushTimer = null;
+      if ('requestIdleCallback' in window) {
+        this.idleFlushId = window.requestIdleCallback(() => {
+          this.idleFlushId = null;
+          this.persistNow();
+        }, { timeout: 1500 });
+      } else {
+        this.persistNow();
+      }
+    }, 8000);
   }
 
   private static persistNow(): void {
+    if (typeof window !== 'undefined') {
+      if (this.flushTimer !== null) {
+        window.clearTimeout(this.flushTimer);
+        this.flushTimer = null;
+      }
+      if (this.idleFlushId !== null) {
+        if ('cancelIdleCallback' in window) window.cancelIdleCallback(this.idleFlushId);
+        this.idleFlushId = null;
+      }
+    }
     if (typeof localStorage === 'undefined') return;
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.getState())); } catch {
       // Telemetry is non-critical and must never interrupt gameplay or saves.

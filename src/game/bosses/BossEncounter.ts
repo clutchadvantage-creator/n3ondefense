@@ -143,7 +143,10 @@ export class BossEncounter {
     this.callout.destroy();
     for (const strike of this.pendingStrikes) strike.marker.destroy();
     this.pendingStrikes.length = 0;
-    for (const effect of this.effects) effect.destroy();
+    for (const effect of this.effects) {
+      this.scene.tweens.killTweensOf(effect);
+      effect.destroy();
+    }
     this.effects.clear();
   }
 
@@ -171,13 +174,15 @@ export class BossEncounter {
 
   private updateStormMage(player: Player): void {
     const config = BOSS_BALANCE.stormMage;
-    const desired = new Phaser.Math.Vector2(
-      player.x + Math.cos(this.elapsedMs * 0.00055) * 260,
-      player.y + Math.sin(this.elapsedMs * 0.0007) * 210
-    );
-    const direction = desired.subtract(new Phaser.Math.Vector2(this.boss.x, this.boss.y));
-    if (direction.lengthSq() > 25) direction.normalize().scale(config.movementSpeed);
-    this.boss.setVelocity(direction.x, direction.y).setRotation(-this.elapsedMs * 0.0006);
+    let directionX = player.x + Math.cos(this.elapsedMs * 0.00055) * 260 - this.boss.x;
+    let directionY = player.y + Math.sin(this.elapsedMs * 0.0007) * 210 - this.boss.y;
+    const distanceSquared = directionX * directionX + directionY * directionY;
+    if (distanceSquared > 25) {
+      const scale = config.movementSpeed / Math.sqrt(distanceSquared);
+      directionX *= scale;
+      directionY *= scale;
+    }
+    this.boss.setVelocity(directionX, directionY).setRotation(-this.elapsedMs * 0.0006);
 
     if (this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
       this.lastBasicAt = this.elapsedMs;
@@ -253,9 +258,15 @@ export class BossEncounter {
       this.showCallout('POUNCE LOCKED', config.pounceTelegraphMs);
       this.boss.setVelocity(0, 0);
     } else {
-      const direction = new Phaser.Math.Vector2(player.x - this.boss.x, player.y - this.boss.y);
-      if (direction.lengthSq() > 1) direction.normalize().scale(config.movementSpeed);
-      this.boss.setVelocity(direction.x, direction.y).setRotation(Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y));
+      let directionX = player.x - this.boss.x;
+      let directionY = player.y - this.boss.y;
+      const distanceSquared = directionX * directionX + directionY * directionY;
+      if (distanceSquared > 1) {
+        const scale = config.movementSpeed / Math.sqrt(distanceSquared);
+        directionX *= scale;
+        directionY *= scale;
+      }
+      this.boss.setVelocity(directionX, directionY).setRotation(Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y));
     }
 
     if (Phaser.Math.Distance.Between(this.boss.x, this.boss.y, player.x, player.y) <= this.boss.hazardRadius + 14

@@ -28,6 +28,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   telemetryFirstDamagedAtActiveMs: number | null = null;
   lastDamageSource: CombatDamageSource = 'unknown';
   readonly damageTakenBySource: Partial<Record<CombatDamageSource, number>> = {};
+  private damageFlashUntil = 0;
+  private damageFlashActive = false;
 
   get hazardRadius(): number {
     return this.stats.size * 0.45;
@@ -60,10 +62,15 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.damageTakenBySource[source] = (this.damageTakenBySource[source] ?? 0) + applied;
     GameplayTelemetryRecorder.recordEnemyDamage(this.stats.type, source, applied, overkill);
     this.setTintFill(0xffffff);
-    this.scene.time.delayedCall(50, () => {
-      if (this.active) this.setTint(this.stats.color);
-    });
+    if (!this.damageFlashActive) this.damageFlashUntil = this.scene.time.now + 50;
+    this.damageFlashActive = true;
     return applied;
+  }
+
+  updateDamageFlash(now: number): void {
+    if (!this.damageFlashActive || now < this.damageFlashUntil) return;
+    this.damageFlashActive = false;
+    if (this.active) this.setTint(this.stats.color);
   }
 
   isDead(): boolean {

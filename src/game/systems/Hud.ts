@@ -54,11 +54,29 @@ interface AbilitySlotVisual {
   statusText: Phaser.GameObjects.Text;
   overlay: Phaser.GameObjects.Rectangle;
   cooldownRing: Phaser.GameObjects.Graphics;
+  lastKeybind?: string;
+  lastStatus?: string;
+  lastReady?: boolean;
+  lastCoolingDown?: boolean;
+  lastActive?: boolean;
+  lastSelected?: boolean;
+  lastHasEnergy?: boolean;
+  lastUnderLimit?: boolean;
 }
 
 const COOLDOWN_READY_EPSILON_MS = 140;
 const HUD_DEPTH = 1000;
 const SURFACE_COLOR = 0x060b12;
+const PHASE_COLOR_MAP: Record<string, { fill: number; border: number; text: string }> = {
+  'PRE-PLANT': { fill: 0x103243, border: 0x5de7ff, text: '#8ef2ff' },
+  PLANTING: { fill: 0x43330e, border: 0xf1ca5a, text: '#ffe591' },
+  DEFEND: { fill: 0x3b193d, border: 0xff79df, text: '#ffd0f7' },
+  'DEFUSE ALERT': { fill: 0x4a141f, border: 0xff5b70, text: '#ffd6dc' },
+  'ROUND COMPLETE': { fill: 0x133f33, border: 0x7cffa4, text: '#ceffe0' },
+  'MISSION FAILURE': { fill: 0x4a1016, border: 0xff596e, text: '#ffd8de' },
+  'BOSS FIGHT': { fill: 0x43330e, border: 0xffca63, text: '#ffe3a1' },
+  PAUSED: { fill: 0x2a2f39, border: 0xa8c7db, text: '#e9f7ff' }
+};
 
 export class Hud {
   private readonly scene: Phaser.Scene;
@@ -357,6 +375,10 @@ export class Hud {
     return seconds < 10 ? seconds.toFixed(1) : `${Math.ceil(seconds)}`;
   }
 
+  private setTextIfChanged(text: Phaser.GameObjects.Text, value: string): void {
+    if (text.text !== value) text.setText(value);
+  }
+
   private updateVitalsEmphasis(payload: HudPayload, hpRatio: number, energyRatio: number): void {
     const now = this.scene.time.now;
     if (this.previousHealth !== null && Math.abs(payload.hp - this.previousHealth) >= 0.1) this.healthEmphasisUntil = now + 850;
@@ -390,9 +412,9 @@ export class Hud {
     const shineMax = Math.max(0, this.healthFill.displayWidth - this.healthReadyShine.displayWidth);
     this.healthReadyShine.x = this.healthTrack.x + Phaser.Math.Clamp(shineMax * 0.7, 0, shineMax);
 
-    this.healthValue.setText(`${Math.max(0, Math.round(payload.hp))} / ${Math.max(1, Math.round(payload.maxHp))}`);
+    this.setTextIfChanged(this.healthValue, `${Math.max(0, Math.round(payload.hp))} / ${Math.max(1, Math.round(payload.maxHp))}`);
     const energy = Math.max(0, payload.energy);
-    this.energyValue.setText(`${Number.isInteger(energy) ? energy.toFixed(0) : energy.toFixed(1)} / ${Math.max(1, Math.round(payload.maxEnergy))}`);
+    this.setTextIfChanged(this.energyValue, `${Number.isInteger(energy) ? energy.toFixed(0) : energy.toFixed(1)} / ${Math.max(1, Math.round(payload.maxEnergy))}`);
     this.updateVitalsEmphasis(payload, hpRatio, energyRatio);
 
     if (hpRatio <= 0.4) {
@@ -409,31 +431,22 @@ export class Hud {
       this.hpGlow.setAlpha(0.18);
     }
 
-    this.statsValueLevel.setText(`${payload.level}`);
-    this.statsValueEnemies.setText(this.formatCompactNumber(Math.max(0, payload.enemies)));
-    this.statsValueCredits.setText(this.formatCompactNumber(Math.max(0, payload.credits)));
+    this.setTextIfChanged(this.statsValueLevel, `${payload.level}`);
+    this.setTextIfChanged(this.statsValueEnemies, this.formatCompactNumber(Math.max(0, payload.enemies)));
+    this.setTextIfChanged(this.statsValueCredits, this.formatCompactNumber(Math.max(0, payload.credits)));
 
-    const phaseColorMap: Record<string, { fill: number; border: number; text: string }> = {
-      'PRE-PLANT': { fill: 0x103243, border: 0x5de7ff, text: '#8ef2ff' },
-      PLANTING: { fill: 0x43330e, border: 0xf1ca5a, text: '#ffe591' },
-      DEFEND: { fill: 0x3b193d, border: 0xff79df, text: '#ffd0f7' },
-      'DEFUSE ALERT': { fill: 0x4a141f, border: 0xff5b70, text: '#ffd6dc' },
-      'ROUND COMPLETE': { fill: 0x133f33, border: 0x7cffa4, text: '#ceffe0' },
-      'MISSION FAILURE': { fill: 0x4a1016, border: 0xff596e, text: '#ffd8de' },
-      'BOSS FIGHT': { fill: 0x43330e, border: 0xffca63, text: '#ffe3a1' },
-      PAUSED: { fill: 0x2a2f39, border: 0xa8c7db, text: '#e9f7ff' }
-    };
-    const phaseStyle = phaseColorMap[payload.phase] ?? phaseColorMap['PRE-PLANT'];
+    const phaseStyle = PHASE_COLOR_MAP[payload.phase] ?? PHASE_COLOR_MAP['PRE-PLANT'];
     this.phaseBadge.setFillStyle(phaseStyle.fill, 0.38).setStrokeStyle(1, phaseStyle.border, 0.86);
     const phaseIsRedundant = payload.objective.includes(payload.phase)
       || (payload.phase === 'DEFUSE ALERT' && payload.objective.includes('DEFUSE'));
     this.phaseBadge.setVisible(!phaseIsRedundant);
-    this.phaseText.setVisible(!phaseIsRedundant).setColor(phaseStyle.text).setText(payload.phase);
-    this.objectiveText.setText(payload.objective)
-      .setY(this.sectionObjective.y + this.sectionObjective.displayHeight * (phaseIsRedundant && payload.objectiveTimerMs === null ? 0.5 : 0.2))
+    this.phaseText.setVisible(!phaseIsRedundant).setColor(phaseStyle.text);
+    this.setTextIfChanged(this.phaseText, payload.phase);
+    this.setTextIfChanged(this.objectiveText, payload.objective);
+    this.objectiveText.setY(this.sectionObjective.y + this.sectionObjective.displayHeight * (phaseIsRedundant && payload.objectiveTimerMs === null ? 0.5 : 0.2))
       .setColor(payload.bombUrgent ? '#ff9daf' : '#def6ff');
-    this.objectiveTimerText.setText(formatHudCountdown(payload.objectiveTimerMs))
-      .setVisible(payload.objectiveTimerMs !== null)
+    this.setTextIfChanged(this.objectiveTimerText, formatHudCountdown(payload.objectiveTimerMs));
+    this.objectiveTimerText.setVisible(payload.objectiveTimerMs !== null)
       .setY(this.sectionObjective.y + this.sectionObjective.displayHeight * (phaseIsRedundant ? 0.6 : 0.76))
       .setColor(payload.bombUrgent ? '#ff718c' : '#9ffaff');
 
@@ -463,11 +476,13 @@ export class Hud {
     this.buffTitle.setVisible(buffsVisible);
     this.buffText.setVisible(buffsVisible);
     if (buffsVisible) {
-      const visibleBuffs = payload.buffs.slice(0, 3);
-      const extra = payload.buffs.length - visibleBuffs.length;
-      this.buffText.setText(`${visibleBuffs.join('  •  ')}${extra > 0 ? `  +${extra}` : ''}`);
+      const visibleCount = Math.min(3, payload.buffs.length);
+      let buffLabel = '';
+      for (let index = 0; index < visibleCount; index += 1) buffLabel += `${index > 0 ? '  •  ' : ''}${payload.buffs[index]}`;
+      const extra = payload.buffs.length - visibleCount;
+      this.setTextIfChanged(this.buffText, `${buffLabel}${extra > 0 ? `  +${extra}` : ''}`);
     } else {
-      this.buffText.setText('');
+      this.setTextIfChanged(this.buffText, '');
     }
 
     this.drawRadarContacts(payload.radarContacts, payload.radarRange);
@@ -481,31 +496,53 @@ export class Hud {
     const ready = !coolingDown && slot.hasEnergy && slot.underLimit;
     const previousReady = this.lastAbilityReady.get(slot.id) ?? false;
     this.lastAbilityReady.set(slot.id, ready);
-    visual.keyText.setText(slot.keybind).setFontSize(slot.keybind.length > 5 ? 8 : 10);
+    if (visual.lastKeybind !== slot.keybind) {
+      visual.lastKeybind = slot.keybind;
+      visual.keyText.setText(slot.keybind).setFontSize(slot.keybind.length > 5 ? 8 : 10);
+    }
 
     let status = '';
     if (slot.active) status = 'ACTIVE';
     else if (coolingDown) status = this.formatCooldown(cooldownMs);
     else if (!slot.hasEnergy) status = 'NO EN';
     else if (!slot.underLimit) status = 'MAX';
-    visual.statusText.setText(status).setVisible(status.length > 0);
-    visual.iconText.setAlpha(status.length > 0 ? 0.25 : 1);
-    visual.overlay.setAlpha(coolingDown || !slot.hasEnergy || !slot.underLimit ? 0.24 : 0);
-    const border = slot.selected ? 0xff7de5 : ready ? 0x6dffb8 : 0x3a8fad;
-    visual.bg.setFillStyle(ready ? 0x10231e : 0x0d1724, ready ? 0.28 : 0.2)
-      .setStrokeStyle(1, border, slot.selected ? 1 : 0.78);
-    visual.statusText.setColor(slot.active ? '#ffb5ec' : coolingDown ? '#d8ebff' : !slot.hasEnergy ? '#ffb2be' : '#ffdba3');
-
-    const ringRadius = 28;
-    visual.cooldownRing.clear();
-    visual.cooldownRing.lineStyle(1, 0x244c5c, 0.48).strokeCircle(0, 27, ringRadius);
-    if (ready || slot.active) {
-      visual.cooldownRing.lineStyle(2, slot.active ? 0xff77df : 0x6dffb8, 0.9).strokeCircle(0, 27, ringRadius);
-    } else if (coolingDown) {
-      const progress = 1 - Phaser.Math.Clamp(cooldownMs / Math.max(1, slot.cooldownDurationMs), 0, 1);
-      visual.cooldownRing.lineStyle(2, 0x52dff5, 0.9).beginPath()
-        .arc(0, 27, ringRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress, false).strokePath();
+    if (visual.lastStatus !== status) {
+      visual.lastStatus = status;
+      visual.statusText.setText(status).setVisible(status.length > 0);
     }
+
+    const visualStateChanged = visual.lastReady !== ready
+      || visual.lastCoolingDown !== coolingDown
+      || visual.lastActive !== slot.active
+      || visual.lastSelected !== slot.selected
+      || visual.lastHasEnergy !== slot.hasEnergy
+      || visual.lastUnderLimit !== slot.underLimit;
+    if (visualStateChanged) {
+      visual.iconText.setAlpha(status.length > 0 ? 0.25 : 1);
+      visual.overlay.setAlpha(coolingDown || !slot.hasEnergy || !slot.underLimit ? 0.24 : 0);
+      const border = slot.selected ? 0xff7de5 : ready ? 0x6dffb8 : 0x3a8fad;
+      visual.bg.setFillStyle(ready ? 0x10231e : 0x0d1724, ready ? 0.28 : 0.2)
+        .setStrokeStyle(1, border, slot.selected ? 1 : 0.78);
+      visual.statusText.setColor(slot.active ? '#ffb5ec' : coolingDown ? '#d8ebff' : !slot.hasEnergy ? '#ffb2be' : '#ffdba3');
+    }
+    if (coolingDown || visualStateChanged) {
+      const ringRadius = 28;
+      visual.cooldownRing.clear();
+      visual.cooldownRing.lineStyle(1, 0x244c5c, 0.48).strokeCircle(0, 27, ringRadius);
+      if (ready || slot.active) {
+        visual.cooldownRing.lineStyle(2, slot.active ? 0xff77df : 0x6dffb8, 0.9).strokeCircle(0, 27, ringRadius);
+      } else if (coolingDown) {
+        const progress = 1 - Phaser.Math.Clamp(cooldownMs / Math.max(1, slot.cooldownDurationMs), 0, 1);
+        visual.cooldownRing.lineStyle(2, 0x52dff5, 0.9).beginPath()
+          .arc(0, 27, ringRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress, false).strokePath();
+      }
+    }
+    visual.lastReady = ready;
+    visual.lastCoolingDown = coolingDown;
+    visual.lastActive = slot.active;
+    visual.lastSelected = slot.selected;
+    visual.lastHasEnergy = slot.hasEnergy;
+    visual.lastUnderLimit = slot.underLimit;
 
     if (!previousReady && ready) {
       this.scene.tweens.add({ targets: [visual.bg, visual.cooldownRing], alpha: { from: 0.65, to: 1 }, duration: 170, yoyo: true, repeat: 1 });

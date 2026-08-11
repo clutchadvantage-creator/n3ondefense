@@ -18,6 +18,7 @@ const LASER_COLORS = [0x39eeff, 0xff4ed3, 0x53ff8a, 0xffa340, 0xae6bff, 0xff5e75
 export class LaserSecuritySystem {
   private readonly graphics: Phaser.GameObjects.Graphics;
   private readonly warningText: Phaser.GameObjects.Text;
+  private readonly segments: LaserSegment[] = Array.from({ length: 6 }, () => ({ x1: 0, y1: 0, x2: 0, y2: 0 }));
   private readonly createdAt: number;
   private patternIndex = 0;
   private lastCycle = -1;
@@ -69,24 +70,27 @@ export class LaserSecuritySystem {
     const progress = telegraphing
       ? 0
       : Phaser.Math.Clamp((cycleTime - config.telegraphMs) / config.activeMs, 0, 1);
-    const segments = this.getSegments(this.patternIndex, progress);
-    this.draw(segments, now, telegraphing);
+    const segmentCount = this.buildSegments(this.patternIndex, progress);
+    this.draw(segmentCount, now, telegraphing);
 
     if (telegraphing) {
       const remaining = Math.max(0, (config.telegraphMs - cycleTime) / 1000);
-      this.warningText.setText(`SECURITY LASERS: ${PATTERN_NAMES[this.patternIndex]}  ${remaining.toFixed(1)}s`)
-        .setAlpha(0.55 + Math.sin(now * 0.018) * 0.25);
+      const warning = `SECURITY LASERS: ${PATTERN_NAMES[this.patternIndex]}  ${remaining.toFixed(1)}s`;
+      if (this.warningText.text !== warning) this.warningText.setText(warning);
+      this.warningText.setAlpha(0.55 + Math.sin(now * 0.018) * 0.25);
       return;
     }
 
-    this.warningText.setText(`SECURITY LASERS ACTIVE: ${PATTERN_NAMES[this.patternIndex]}`).setAlpha(0.72);
-    if (!playerLaserImmune && this.touchesAnySegment(player.x, player.y, config.collisionRadius + 11, segments)) {
+    const activeWarning = `SECURITY LASERS ACTIVE: ${PATTERN_NAMES[this.patternIndex]}`;
+    if (this.warningText.text !== activeWarning) this.warningText.setText(activeWarning);
+    this.warningText.setAlpha(0.72);
+    if (!playerLaserImmune && this.touchesAnySegment(player.x, player.y, config.collisionRadius + 11, segmentCount)) {
       const damage = getScaledHazardDamage(config.playerDamagePerHit, this.round, config.maximumPlayerDamagePerHit);
       if (player.takeDamage(damage)) this.onPlayerDamaged?.(damage);
     }
     const enemyDamagePerSecond = getScaledHazardDamage(config.enemyDamagePerSecond, this.round, config.maximumEnemyDamagePerSecond);
     for (const target of targets) {
-      if (target.active && this.touchesAnySegment(target.x, target.y, config.collisionRadius + target.hazardRadius, segments)) {
+      if (target.active && this.touchesAnySegment(target.x, target.y, config.collisionRadius + target.hazardRadius, segmentCount)) {
         target.takeDamage(enemyDamagePerSecond * dt, 'hazard');
       }
     }
@@ -109,40 +113,48 @@ export class LaserSecuritySystem {
     this.warningText.destroy();
   }
 
-  private getSegments(pattern: number, t: number): LaserSegment[] {
+  private setSegment(index: number, x1: number, y1: number, x2: number, y2: number): void {
+    const segment = this.segments[index];
+    segment.x1 = x1;
+    segment.y1 = y1;
+    segment.x2 = x2;
+    segment.y2 = y2;
+  }
+
+  private buildSegments(pattern: number, t: number): number {
     const w = WORLD_WIDTH;
     const h = WORLD_HEIGHT;
     if (pattern === 0) {
       const x = Phaser.Math.Linear(-80, w + 80, t);
-      return [{ x1: x, y1: 0, x2: x, y2: h }];
+      this.setSegment(0, x, 0, x, h);
+      return 1;
     }
     if (pattern === 1) {
       const separation = Math.sin(t * Math.PI) * w * 0.34;
       const center = w * 0.5;
-      return [
-        { x1: center - separation, y1: 0, x2: center - separation * 0.72, y2: h },
-        { x1: center + separation, y1: 0, x2: center + separation * 0.72, y2: h }
-      ];
+      this.setSegment(0, center - separation, 0, center - separation * 0.72, h);
+      this.setSegment(1, center + separation, 0, center + separation * 0.72, h);
+      return 2;
     }
     if (pattern === 2) {
       const angle = t * Math.PI * 2.4;
       const length = Math.hypot(w, h) * 0.62;
       const cx = w * 0.5;
       const cy = h * 0.5;
-      return [0, Math.PI / 2].map((offset) => ({
-        x1: cx - Math.cos(angle + offset) * length,
-        y1: cy - Math.sin(angle + offset) * length,
-        x2: cx + Math.cos(angle + offset) * length,
-        y2: cy + Math.sin(angle + offset) * length
-      }));
+      for (let index = 0; index < 2; index += 1) {
+        const segmentAngle = angle + index * Math.PI / 2;
+        const dx = Math.cos(segmentAngle) * length;
+        const dy = Math.sin(segmentAngle) * length;
+        this.setSegment(index, cx - dx, cy - dy, cx + dx, cy + dy);
+      }
+      return 2;
     }
 
     if (pattern === 3) {
       const sway = Math.sin(t * Math.PI * 2) * h * 0.28;
-      return [
-        { x1: 0, y1: h * 0.18 + sway, x2: w, y2: h * 0.82 - sway },
-        { x1: 0, y1: h * 0.82 - sway, x2: w, y2: h * 0.18 + sway }
-      ];
+      this.setSegment(0, 0, h * 0.18 + sway, w, h * 0.82 - sway);
+      this.setSegment(1, 0, h * 0.82 - sway, w, h * 0.18 + sway);
+      return 2;
     }
 
     if (pattern === 4) {
@@ -151,42 +163,50 @@ export class LaserSecuritySystem {
       const length = Math.hypot(w, h) * 0.58;
       const cx = w * 0.5;
       const cy = h * 0.5;
-      return Array.from({ length: 5 }, (_, index) => {
+      for (let index = 0; index < 5; index += 1) {
         const band = index - 2;
-        const angle = baseAngle + band * 0.24 * split;
+        const segmentAngle = baseAngle + band * 0.24 * split;
         const offset = band * 72 * split;
         const ox = -Math.sin(baseAngle) * offset;
         const oy = Math.cos(baseAngle) * offset;
-        return {
-          x1: cx + ox - Math.cos(angle) * length,
-          y1: cy + oy - Math.sin(angle) * length,
-          x2: cx + ox + Math.cos(angle) * length,
-          y2: cy + oy + Math.sin(angle) * length
-        };
-      });
+        const dx = Math.cos(segmentAngle) * length;
+        const dy = Math.sin(segmentAngle) * length;
+        this.setSegment(index, cx + ox - dx, cy + oy - dy, cx + ox + dx, cy + oy + dy);
+      }
+      return 5;
     }
 
     const cx = w * 0.5;
     const cy = h * 0.5;
     const radius = Math.min(w, h) * (0.2 + Math.sin(t * Math.PI) * 0.18);
     const rotation = t * Math.PI * 3;
-    const points = Array.from({ length: 6 }, (_, index) => ({
-      x: cx + Math.cos(rotation + index * Math.PI / 3) * radius,
-      y: cy + Math.sin(rotation + index * Math.PI / 3) * radius
-    }));
-    return points.map((point, index) => {
-      const opposite = points[(index + 3) % points.length];
-      return { x1: point.x, y1: point.y, x2: opposite.x, y2: opposite.y };
-    });
+    for (let index = 0; index < 6; index += 1) {
+      const angle = rotation + index * Math.PI / 3;
+      const oppositeAngle = rotation + ((index + 3) % 6) * Math.PI / 3;
+      this.setSegment(
+        index,
+        cx + Math.cos(angle) * radius,
+        cy + Math.sin(angle) * radius,
+        cx + Math.cos(oppositeAngle) * radius,
+        cy + Math.sin(oppositeAngle) * radius
+      );
+    }
+    return 6;
   }
 
-  private draw(segments: LaserSegment[], now: number, telegraphing: boolean): void {
+  private draw(segmentCount: number, now: number, telegraphing: boolean): void {
     this.graphics.clear();
     const colorShift = Math.floor(now / 420);
-    for (let index = 0; index < segments.length; index += 1) {
-      const segment = segments[index];
-      const palette = [this.theme.primary, this.theme.secondary, this.theme.accent, ...LASER_COLORS];
-      const color = palette[(this.patternIndex * 2 + index + colorShift) % palette.length];
+    for (let index = 0; index < segmentCount; index += 1) {
+      const segment = this.segments[index];
+      const paletteIndex = (this.patternIndex * 2 + index + colorShift) % (LASER_COLORS.length + 3);
+      const color = paletteIndex === 0
+        ? this.theme.primary
+        : paletteIndex === 1
+          ? this.theme.secondary
+          : paletteIndex === 2
+            ? this.theme.accent
+            : LASER_COLORS[paletteIndex - 3];
       if (telegraphing) {
         this.graphics.lineStyle(2, color, 0.3 + Math.sin(now * 0.025 + index) * 0.16);
         this.graphics.lineBetween(segment.x1, segment.y1, segment.x2, segment.y2);
@@ -216,16 +236,26 @@ export class LaserSecuritySystem {
     }
   }
 
-  private touchesAnySegment(x: number, y: number, radius: number, segments: LaserSegment[]): boolean {
-    return segments.some((segment) => this.distanceToSegment(x, y, segment) <= radius);
+  private touchesAnySegment(x: number, y: number, radius: number, segmentCount: number): boolean {
+    const radiusSquared = radius * radius;
+    for (let index = 0; index < segmentCount; index += 1) {
+      if (this.distanceSquaredToSegment(x, y, this.segments[index]) <= radiusSquared) return true;
+    }
+    return false;
   }
 
-  private distanceToSegment(x: number, y: number, segment: LaserSegment): number {
+  private distanceSquaredToSegment(x: number, y: number, segment: LaserSegment): number {
     const dx = segment.x2 - segment.x1;
     const dy = segment.y2 - segment.y1;
     const lengthSq = dx * dx + dy * dy;
-    if (lengthSq === 0) return Phaser.Math.Distance.Between(x, y, segment.x1, segment.y1);
+    if (lengthSq === 0) {
+      const pointDx = x - segment.x1;
+      const pointDy = y - segment.y1;
+      return pointDx * pointDx + pointDy * pointDy;
+    }
     const t = Phaser.Math.Clamp(((x - segment.x1) * dx + (y - segment.y1) * dy) / lengthSq, 0, 1);
-    return Phaser.Math.Distance.Between(x, y, segment.x1 + dx * t, segment.y1 + dy * t);
+    const pointDx = x - (segment.x1 + dx * t);
+    const pointDy = y - (segment.y1 + dy * t);
+    return pointDx * pointDx + pointDy * pointDy;
   }
 }

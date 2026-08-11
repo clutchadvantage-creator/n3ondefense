@@ -39,12 +39,15 @@ import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_BALANCE, normalizeRunProtocolId } from '../mods/modBalance.ts';
 import { isGuaranteedMilestone, rollModDrop } from '../mods/ModDropService.ts';
 import type { ModDropSource, ModRewardRecord, ModSlot, RunProtocolId } from '../mods/types.ts';
-import { magneticResistanceForEnemy, prioritizeTurretTargets, splitCurrentSecondaryDamage } from '../mods/ModRules.ts';
+import { magneticResistanceForEnemy, splitCurrentSecondaryDamage } from '../mods/ModRules.ts';
 import { createModCardView } from '../mods/ModCardView.ts';
 import { ModAcquisitionPresenter } from '../mods/ModAcquisitionPresenter.ts';
 import { MOD_FOCUS_CATEGORIES, RUN_CONTRACT_IDS, getContract, getRoundCompletionCredits } from '../economy/economyBalance.ts';
 import type { AccountProgressionTier, ModFocusSignalId, RunContractId } from '../economy/types.ts';
 import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
+import { ReusableObjectPool } from '../performance/ReusableObjectPool.ts';
+import { FramePerformanceMonitor } from '../performance/FramePerformanceMonitor.ts';
+import { shouldReplaceTurretTarget } from '../performance/Targeting.ts';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -60,6 +63,32 @@ interface Projectile {
   critical?: boolean;
   turretId?: string;
   bossAttack?: BossAttackKind;
+}
+
+interface ProjectileSpawn extends Omit<Projectile, 'sprite' | 'crossedFences'> {
+  x: number;
+  y: number;
+  texture: string;
+  width: number;
+  height: number;
+  tint: number;
+  rotation: number;
+  velocityX: number;
+  velocityY: number;
+  depth: number;
+  crossedFences?: ReadonlySet<Fence>;
+}
+
+interface FxCircleSpawn {
+  x: number;
+  y: number;
+  radius: number;
+  color: number;
+  alpha: number;
+  depth: number;
+  strokeWidth?: number;
+  strokeColor?: number;
+  strokeAlpha?: number;
 }
 
 interface HomingMissile {
@@ -114,6 +143,16 @@ interface PauseMenuElements {
   buttons: Phaser.GameObjects.Container[];
 }
 
+const ROUND_PHASE_LABELS: Record<RoundState, string> = {
+  [RoundState.PrePlant]: 'PRE-PLANT',
+  [RoundState.Planting]: 'PLANTING',
+  [RoundState.Defense]: 'DEFEND',
+  [RoundState.Defusing]: 'DEFUSE ALERT',
+  [RoundState.Victory]: 'ROUND COMPLETE',
+  [RoundState.Defeat]: 'MISSION FAILURE',
+  [RoundState.Paused]: 'PAUSED'
+};
+
 export class ArenaScene extends Phaser.Scene {
   private readonly state = new GameStateMachine(RoundState.PrePlant);
   private readonly audio = AudioManager.get();
@@ -127,6 +166,10 @@ export class ArenaScene extends Phaser.Scene {
 
   private enemies: Enemy[] = [];
   private projectiles: Projectile[] = [];
+  private readonly pendingSplitProjectiles: Projectile[] = [];
+  private projectilePool!: ReusableObjectPool<Projectile, ProjectileSpawn>;
+  private fxCirclePool!: ReusableObjectPool<Phaser.GameObjects.Arc, FxCircleSpawn>;
+  private readonly hazardDamageTargets: HazardDamageTarget[] = [];
   private homingMissiles: HomingMissile[] = [];
   private pickups: Pickup[] = [];
   private fences: Fence[] = [];
@@ -134,8 +177,11 @@ export class ArenaScene extends Phaser.Scene {
   private mines: Mine[] = [];
   private deathMines: DeathMine[] = [];
   private readonly defuseAssignees = new Set<Enemy>();
+  private readonly activeDefusersBySite = new Map<string, number>();
+  private readonly defuseCandidateBuffer: Enemy[] = [];
+  private readonly assignedDefusersPerSite = new Map<string, number>();
   private activeDefuserCountForTelemetry = 0;
-  private defuseTargetByEnemy = new WeakMap<Enemy, BombSiteRuntime>();
+  private readonly defuseTargetByEnemy = new Map<Enemy, BombSiteRuntime>();
   private defuserMarkedUntil = new WeakMap<Enemy, number>();
   private modRuntime!: ModRuntime;
   private protocol: RunProtocolId = 'normal';
@@ -145,6 +191,17 @@ export class ArenaScene extends Phaser.Scene {
   private upgradeCompletionPercentage = 0;
   private accountProgressionTier: AccountProgressionTier = 'new';
   private runCreditsEarned = 0;
+  private runUpgrades: Record<string, number> = {};
+  private particlesEnabled = true;
+  private prismPlayerColor = false;
+  private prismProjectileColor = false;
+  private prismTrailColor = false;
+  private prismFenceStyle = false;
+  private prismTurretSkin = false;
+  private prismBombColor = false;
+  private projectileTextureKey = 'projectile-pulse';
+  private projectileWidth = 8;
+  private projectileHeight = 8;
   private modsEarned: ModRewardRecord[] = [];
   private modDropSequence = 0;
   private runStartedAt = Date.now();
@@ -177,6 +234,7 @@ export class ArenaScene extends Phaser.Scene {
   private lastShotEnergyDeniedAt = -99_999;
   private pointerDown = false;
   private pointerLock: GameplayPointerLock | null = null;
+  private readonly aimWorldPoint = new Phaser.Math.Vector2();
   private abilityBindings!: AbilityBindings;
   private readonly pressedAbilityActions = new Set<AbilityAction>();
 
@@ -193,6 +251,25 @@ export class ArenaScene extends Phaser.Scene {
   private siteActionText!: Phaser.GameObjects.Text;
   private crosshair!: Phaser.GameObjects.Graphics;
   private balanceTelemetry: Phaser.GameObjects.Text | null = null;
+  private performanceTelemetry: Phaser.GameObjects.Text | null = null;
+  private readonly performanceMonitor = new FramePerformanceMonitor(600);
+  private nextPerformanceTelemetryAt = 0;
+  private readonly telemetryFrameBuffs = { damageBoost: false, speedBoost: false, rapidFire: false };
+  private readonly telemetryFrameInput: {
+    activeWeight: number;
+    activeCountCap: number | undefined;
+    activeWeightCap: number | undefined;
+    activeBombs: number;
+    activeDefusers: number;
+    buffs: { damageBoost: boolean; speedBoost: boolean; rapidFire: boolean };
+  } = {
+    activeWeight: 0,
+    activeCountCap: undefined,
+    activeWeightCap: undefined,
+    activeBombs: 0,
+    activeDefusers: 0,
+    buffs: this.telemetryFrameBuffs
+  };
 
   private keys!: {
     w: Phaser.Input.Keyboard.Key;
@@ -206,6 +283,8 @@ export class ArenaScene extends Phaser.Scene {
     esc: Phaser.Input.Keyboard.Key;
     f8: Phaser.Input.Keyboard.Key;
     f7: Phaser.Input.Keyboard.Key;
+    f6: Phaser.Input.Keyboard.Key;
+    f5: Phaser.Input.Keyboard.Key;
   };
 
   private selectedAbility: AbilityType = 'fence';
@@ -216,6 +295,8 @@ export class ArenaScene extends Phaser.Scene {
   private shieldPulseTween: Phaser.Tweens.Tween | null = null;
   private readonly hudBuffs: string[] = [];
   private readonly hudRadarContacts: HudRadarContact[] = [];
+  private readonly hudRadarContactPool: HudRadarContact[] = [];
+  private hudRadarContactCount = 0;
   private readonly hudPayload: HudPayload = {
     hp: 0,
     maxHp: 1,
@@ -263,6 +344,7 @@ export class ArenaScene extends Phaser.Scene {
   };
   private readonly onResumeFromOptions = (): void => {
     this.refreshAbilityBindings();
+    this.particlesEnabled = SaveSystem.get().settings.particles;
     this.resumeGameplay();
   };
   private readonly onReturnFromModCollection = (): void => {
@@ -297,7 +379,37 @@ export class ArenaScene extends Phaser.Scene {
     this.totalCreditsCollected = this.runCreditsEarned;
     this.modsEarned = [...(session?.modsEarned ?? [])];
     this.runStartedAt = session?.runStartedAt ?? Date.now();
+    const initialSave = SaveSystem.get();
+    this.runUpgrades = { ...initialSave.upgrades };
+    this.particlesEnabled = initialSave.settings.particles;
+    this.prismPlayerColor = SaveSystem.isPrismCosmetic('playerColor');
+    this.prismProjectileColor = SaveSystem.isPrismCosmetic('projectileColor');
+    this.prismTrailColor = SaveSystem.isPrismCosmetic('trailColor');
+    this.prismFenceStyle = SaveSystem.isPrismCosmetic('fenceStyle');
+    this.prismTurretSkin = SaveSystem.isPrismCosmetic('turretSkin');
+    this.prismBombColor = SaveSystem.isPrismCosmetic('bombColor');
+    this.projectileTextureKey = getCosmeticTextureKey(SaveSystem.getEquippedCosmeticId('projectileShape'), 'projectile-pulse');
+    if (this.projectileTextureKey === 'projectile-missile' || this.projectileTextureKey === 'projectile-sword') {
+      this.projectileWidth = 17;
+      this.projectileHeight = 8;
+    } else if (this.projectileTextureKey === 'projectile-lightning') {
+      this.projectileWidth = 15;
+      this.projectileHeight = 10;
+    } else if (this.projectileTextureKey === 'projectile-carrot') {
+      this.projectileWidth = 16;
+      this.projectileHeight = 9;
+    } else if (this.projectileTextureKey === 'projectile-bubbles') {
+      this.projectileWidth = 13;
+      this.projectileHeight = 11;
+    } else if (this.projectileTextureKey === 'projectile-balloons') {
+      this.projectileWidth = 14;
+      this.projectileHeight = 13;
+    } else {
+      this.projectileWidth = 8;
+      this.projectileHeight = 8;
+    }
     this.modRuntime = new ModRuntime(SaveSystem.getModCollection(), session?.equippedMods);
+    this.createCombatPools();
     if (session) {
       this.roundManager = new RoundManager(session.baseSeed, session.objectiveMode, session.round);
       this.registry.set('arena-session', session);
@@ -313,7 +425,7 @@ export class ArenaScene extends Phaser.Scene {
       protocol: this.protocol,
       contract: this.contract,
       modFocus: this.modFocus,
-      upgrades: { ...SaveSystem.get().upgrades },
+      upgrades: { ...this.runUpgrades },
       equippedMods: this.modRuntime.snapshot()
     });
 
@@ -401,7 +513,7 @@ export class ArenaScene extends Phaser.Scene {
     this.createOrMovePlayer();
     this.modRuntime.beginRound(1);
     this.defuserMarkedUntil = new WeakMap<Enemy, number>();
-    this.defuseTargetByEnemy = new WeakMap<Enemy, BombSiteRuntime>();
+    this.defuseTargetByEnemy.clear();
     this.createHudLayer();
 
     GameplayTelemetryRecorder.beginEncounter({
@@ -431,7 +543,7 @@ export class ArenaScene extends Phaser.Scene {
       this.layout.theme,
       this.layout.generation.bounds,
       (x, y) => this.hitWall(x, y),
-      SaveSystem.get().settings.particles,
+      this.particlesEnabled,
       (damage) => {
         this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
@@ -535,8 +647,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private createOrMovePlayer(): void {
-    const save = SaveSystem.get();
-    const up = save.upgrades;
+    const up = this.runUpgrades;
     const hasValidBody = !!this.player && !!this.player.active && !!this.player.body;
 
     if (!hasValidBody) {
@@ -686,16 +797,28 @@ export class ArenaScene extends Phaser.Scene {
       this.createRoundFromDefinition(this.roundManager.currentDefinition());
       return;
     }
+    if (import.meta.env.DEV && Phaser.Input.Keyboard.JustDown(this.keys.f6)) {
+      const overlay = this.ensurePerformanceTelemetry();
+      overlay.setVisible(!overlay.visible);
+    }
+    if (import.meta.env.DEV && Phaser.Input.Keyboard.JustDown(this.keys.f5)) {
+      this.activateDevPerformanceStressScenario();
+      return;
+    }
 
     if (this.state.state === RoundState.Paused || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
       return;
     }
+
+    this.performanceMonitor.record(delta);
+    this.updatePerformanceTelemetry(now);
 
     this.recordTelemetryFrame(delta, now);
     const energyBeforeRegeneration = this.player.energy;
     const requestedRegeneration = this.player.energyStats.regenPerSecond * dt;
     this.player.updateEnergy(dt);
     GameplayTelemetryRecorder.recordEnergyRegeneration(requestedRegeneration, this.player.energy - energyBeforeRegeneration);
+    this.refreshAimWorldPoint();
     this.updatePrismCosmetics(now);
     this.updatePlayerMovement(now);
     this.updatePlayerShooting(now);
@@ -722,7 +845,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.updatePlanting(delta);
-    this.bombSites.updateAmbient(this.player.x, this.player.y, now, SaveSystem.get().settings.particles);
+    this.bombSites.updateAmbient(this.player.x, this.player.y, now, this.particlesEnabled);
 
     const activeSites = this.bombSites.getActiveBombSites();
     if (activeSites.length > 0) {
@@ -771,6 +894,8 @@ export class ArenaScene extends Phaser.Scene {
       esc: kb.addKey('ESC')
       ,f8: kb.addKey('F8')
       ,f7: kb.addKey('F7')
+      ,f6: kb.addKey('F6')
+      ,f5: kb.addKey('F5')
     };
 
     this.input.on('pointerdown', this.onPointerDown);
@@ -781,7 +906,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private recordTelemetryFrame(delta: number, now: number): void {
-    const activeWeight = this.enemies.reduce((sum, enemy) => sum + ENEMY_BALANCE[enemy.stats.type].weight, 0);
+    let activeWeight = 0;
+    for (const enemy of this.enemies) activeWeight += ENEMY_BALANCE[enemy.stats.type].weight;
     let activeCountCap: number | undefined;
     let activeWeightCap: number | undefined;
     let activeBombs = 0;
@@ -792,18 +918,17 @@ export class ArenaScene extends Phaser.Scene {
       activeCountCap = pressure.activeCountCap;
       activeWeightCap = pressure.activeWeightCap;
     }
-    GameplayTelemetryRecorder.recordActiveFrame(delta, this.enemies.length, this.player.hp, this.player.energy, {
-      activeWeight,
-      activeCountCap,
-      activeWeightCap,
-      activeBombs,
-      activeDefusers: this.activeDefuserCountForTelemetry,
-      buffs: {
-        damageBoost: now < this.player.buffs.damageBoostUntil,
-        speedBoost: now < this.player.buffs.speedBoostUntil,
-        rapidFire: now < this.player.buffs.rapidFireUntil
-      }
-    });
+    this.telemetryFrameBuffs.damageBoost = now < this.player.buffs.damageBoostUntil;
+    this.telemetryFrameBuffs.speedBoost = now < this.player.buffs.speedBoostUntil;
+    this.telemetryFrameBuffs.rapidFire = now < this.player.buffs.rapidFireUntil;
+    this.telemetryFrameInput.activeWeight = activeWeight;
+    this.telemetryFrameInput.activeCountCap = activeCountCap;
+    this.telemetryFrameInput.activeWeightCap = activeWeightCap;
+    this.telemetryFrameInput.activeBombs = activeBombs;
+    this.telemetryFrameInput.activeDefusers = this.activeDefuserCountForTelemetry;
+    GameplayTelemetryRecorder.recordActiveFrame(
+      delta, this.enemies.length, this.player.hp, this.player.energy, this.telemetryFrameInput
+    );
   }
 
   private refreshAbilityBindings(): void {
@@ -840,17 +965,112 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePrismCosmetics(now: number): void {
-    if (SaveSystem.isPrismCosmetic('playerColor')) {
+    if (this.prismPlayerColor) {
       this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor', now));
     }
-    if (SaveSystem.isPrismCosmetic('fenceStyle')) {
+    if (this.prismFenceStyle) {
       const color = SaveSystem.getCosmeticColor('fenceStyle', now);
       for (const fence of this.fences) fence.setColor(color);
     }
-    if (SaveSystem.isPrismCosmetic('turretSkin')) {
+    if (this.prismTurretSkin) {
       const color = SaveSystem.getCosmeticColor('turretSkin', now);
       for (const turret of this.turrets) turret.setColor(color);
     }
+  }
+
+  private createCombatPools(): void {
+    const configureProjectile = (projectile: Projectile, state: ProjectileSpawn): void => {
+      const sprite = projectile.sprite;
+      const body = sprite.body as Phaser.Physics.Arcade.Body | null;
+      if (body) {
+        body.enable = true;
+        body.reset(state.x, state.y);
+        body.setVelocity(state.velocityX, state.velocityY);
+      }
+      sprite.setActive(true).setVisible(true).setPosition(state.x, state.y);
+      sprite.setTexture(state.texture).setScale(1).setDisplaySize(state.width, state.height);
+      sprite.clearTint().setTint(state.tint).setAlpha(1).setRotation(state.rotation).setDepth(state.depth);
+
+      projectile.damage = state.damage;
+      projectile.from = state.from;
+      projectile.lifeMs = state.lifeMs;
+      projectile.trailColor = state.trailColor;
+      projectile.splitCurrentEligible = state.splitCurrentEligible;
+      const crossedFences = projectile.crossedFences ?? (projectile.crossedFences = new Set<Fence>());
+      crossedFences.clear();
+      if (state.crossedFences) for (const fence of state.crossedFences) crossedFences.add(fence);
+      projectile.previousX = state.previousX;
+      projectile.previousY = state.previousY;
+      projectile.telemetryOwner = state.telemetryOwner;
+      projectile.critical = state.critical;
+      projectile.turretId = state.turretId;
+      projectile.bossAttack = state.bossAttack;
+    };
+
+    this.projectilePool = new ReusableObjectPool<Projectile, ProjectileSpawn>(
+      (state) => {
+        const sprite = this.physics.add.image(state.x, state.y, state.texture);
+        const projectile: Projectile = {
+          sprite,
+          damage: state.damage,
+          from: state.from,
+          lifeMs: state.lifeMs,
+          trailColor: state.trailColor,
+          crossedFences: new Set<Fence>()
+        };
+        configureProjectile(projectile, state);
+        return projectile;
+      },
+      configureProjectile,
+      (projectile) => {
+        const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
+        if (body) {
+          body.stop();
+          body.enable = false;
+        }
+        projectile.sprite.setActive(false).setVisible(false).setPosition(-10_000, -10_000).setDepth(10_000);
+        projectile.crossedFences?.clear();
+        projectile.splitCurrentEligible = undefined;
+        projectile.telemetryOwner = undefined;
+        projectile.critical = undefined;
+        projectile.turretId = undefined;
+        projectile.bossAttack = undefined;
+      }
+    );
+
+    const configureFxCircle = (circle: Phaser.GameObjects.Arc, state: FxCircleSpawn): void => {
+      circle.setActive(true).setVisible(true).setPosition(state.x, state.y).setRadius(state.radius);
+      circle.setScale(1).setAlpha(1).setFillStyle(state.color, state.alpha).setDepth(state.depth);
+      circle.setStrokeStyle(state.strokeWidth ?? 0, state.strokeColor ?? state.color, state.strokeAlpha ?? 0);
+    };
+    this.fxCirclePool = new ReusableObjectPool<Phaser.GameObjects.Arc, FxCircleSpawn>(
+      (state) => {
+        const circle = this.add.circle(state.x, state.y, state.radius, state.color, state.alpha);
+        configureFxCircle(circle, state);
+        return circle;
+      },
+      configureFxCircle,
+      (circle) => {
+        this.tweens.killTweensOf(circle);
+        circle.setActive(false).setVisible(false).setPosition(-10_000, -10_000).setDepth(10_000);
+      }
+    );
+  }
+
+  private obtainProjectile(state: ProjectileSpawn): Projectile {
+    return this.projectilePool.obtain(state);
+  }
+
+  private retireProjectile(projectile: Projectile): void {
+    this.projectilePool.release(projectile);
+  }
+
+  private obtainFxCircle(state: FxCircleSpawn): Phaser.GameObjects.Arc {
+    return this.fxCirclePool.obtain(state);
+  }
+
+  private retireFxCircle(circle: Phaser.GameObjects.Arc): void {
+    this.fxCirclePool.release(circle);
   }
 
   private updatePlayerMovement(now: number): void {
@@ -859,16 +1079,18 @@ export class ArenaScene extends Phaser.Scene {
     const forwardFacingFrame = this.player.texture.key === 'player-spaceship' || this.player.texture.key === 'player-airplane';
     this.player.setRotation(angle + (forwardFacingFrame ? 0 : Math.PI / 2));
 
-    const v = new Phaser.Math.Vector2(0, 0);
-    if (this.keys.w.isDown) v.y -= 1;
-    if (this.keys.s.isDown) v.y += 1;
-    if (this.keys.a.isDown) v.x -= 1;
-    if (this.keys.d.isDown) v.x += 1;
+    let movementX = 0;
+    let movementY = 0;
+    if (this.keys.w.isDown) movementY -= 1;
+    if (this.keys.s.isDown) movementY += 1;
+    if (this.keys.a.isDown) movementX -= 1;
+    if (this.keys.d.isDown) movementX += 1;
 
     if (now >= this.player.dashUntil) {
-      if (v.lengthSq() > 0) {
-        v.normalize().scale(this.player.speed);
-        this.player.setVelocity(v.x, v.y);
+      const movementLengthSquared = movementX * movementX + movementY * movementY;
+      if (movementLengthSquared > 0) {
+        const speedScale = this.player.speed / Math.sqrt(movementLengthSquared);
+        this.player.setVelocity(movementX * speedScale, movementY * speedScale);
       } else {
         this.player.setVelocity(0, 0);
       }
@@ -919,7 +1141,7 @@ export class ArenaScene extends Phaser.Scene {
     if (!this.modRuntime.hasInfusion('holo-afterimage') || now < this.nextHoloAfterimageAt) return;
     const body = this.player.body as Phaser.Physics.Arcade.Body | null;
     if (!body || body.velocity.lengthSq() < 36) return;
-    this.nextHoloAfterimageAt = now + (SaveSystem.get().settings.particles ? 90 : 180);
+    this.nextHoloAfterimageAt = now + (this.particlesEnabled ? 90 : 180);
     const echo = this.add.image(this.player.x, this.player.y, this.player.texture.key, this.player.frame.name)
       .setDisplaySize(this.player.displayWidth, this.player.displayHeight)
       .setRotation(this.player.rotation)
@@ -960,47 +1182,42 @@ export class ArenaScene extends Phaser.Scene {
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
     const speed = this.player.weapon.projectileSpeed;
 
-    const projectileTexture = getCosmeticTextureKey(SaveSystem.getEquippedCosmeticId('projectileShape'), 'projectile-pulse');
-    const bullet = this.physics.add.image(this.player.x + Math.cos(angle) * 14, this.player.y + Math.sin(angle) * 14, projectileTexture);
-    const projectileSize = projectileTexture === 'projectile-missile' || projectileTexture === 'projectile-sword'
-      ? { width: 17, height: 8 }
-      : projectileTexture === 'projectile-lightning'
-        ? { width: 15, height: 10 }
-        : projectileTexture === 'projectile-carrot'
-          ? { width: 16, height: 9 }
-          : projectileTexture === 'projectile-bubbles'
-            ? { width: 13, height: 11 }
-            : projectileTexture === 'projectile-balloons'
-              ? { width: 14, height: 13 }
-        : { width: 8, height: 8 };
-    bullet.setDisplaySize(projectileSize.width, projectileSize.height);
-    bullet.setTint(SaveSystem.getCosmeticColor('projectileColor', now));
-    bullet.setRotation(angle);
-    bullet.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-    bullet.setDepth(8);
-
     const crit = Math.random() < this.player.weapon.critChance;
     const criticalMultiplier = WEAPON_BALANCE.critMultiplier * this.modRuntime.multiplier('weaponCritDamage');
     const damage = this.player.weapon.damage * this.player.damageMultiplier * (crit ? criticalMultiplier : 1);
     GameplayTelemetryRecorder.recordShot(damage, shotEnergyCost, crit);
 
-    this.projectiles.push({
-      sprite: bullet,
+    const spawnX = this.player.x + Math.cos(angle) * 14;
+    const spawnY = this.player.y + Math.sin(angle) * 14;
+    this.projectiles.push(this.obtainProjectile({
+      x: spawnX,
+      y: spawnY,
+      texture: this.projectileTextureKey,
+      width: this.projectileWidth,
+      height: this.projectileHeight,
+      tint: SaveSystem.getCosmeticColor('projectileColor', now),
+      rotation: angle,
+      velocityX: Math.cos(angle) * speed,
+      velocityY: Math.sin(angle) * speed,
+      depth: 8,
       damage,
       from: 'player',
       lifeMs: 950,
       trailColor: SaveSystem.getCosmeticColor('trailColor', now),
       splitCurrentEligible: true,
-      previousX: bullet.x,
-      previousY: bullet.y,
+      previousX: spawnX,
+      previousY: spawnY,
       telemetryOwner: 'weapon',
       critical: crit
-    });
+    }));
 
     this.player.heat += this.player.weapon.heatPerShot;
 
-    const flash = this.add.circle(this.player.x + Math.cos(angle) * 18, this.player.y + Math.sin(angle) * 18, 11, 0xffffff, 0.8).setDepth(9);
-    this.tweens.add({ targets: flash, alpha: 0, scale: 2.2, duration: 110, onComplete: () => flash.destroy() });
+    const flash = this.obtainFxCircle({
+      x: this.player.x + Math.cos(angle) * 18, y: this.player.y + Math.sin(angle) * 18,
+      radius: 11, color: 0xffffff, alpha: 0.8, depth: 9
+    });
+    this.tweens.add({ targets: flash, alpha: 0, scale: 2.2, duration: 110, onComplete: () => this.retireFxCircle(flash) });
     this.audio.playSfx('shot');
   }
 
@@ -1096,8 +1313,15 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getAimWorldPoint(): Phaser.Math.Vector2 {
-    return this.pointerLock?.worldPoint(this.cameras.main)
-      ?? new Phaser.Math.Vector2(this.input.activePointer.worldX, this.input.activePointer.worldY);
+    return this.aimWorldPoint;
+  }
+
+  private refreshAimWorldPoint(): void {
+    if (this.pointerLock) {
+      this.pointerLock.worldPoint(this.cameras.main, this.aimWorldPoint);
+    } else {
+      this.aimWorldPoint.set(this.input.activePointer.worldX, this.input.activePointer.worldY);
+    }
   }
 
   private pickEnemyType(profile: ReturnType<typeof getSpawnProfile>, now: number, defensePhase: boolean): EnemyType | null {
@@ -1178,11 +1402,13 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateEnemies(now: number, dt: number): void {
     const activeSites = this.bombSites.getActiveBombSites();
-    const activeDefusersBySite = new Map<string, number>();
+    const activeDefusersBySite = this.activeDefusersBySite;
+    activeDefusersBySite.clear();
     this.refreshDefuseAssignments(activeSites, now);
 
     for (const enemy of this.enemies) {
       if (!enemy.active || enemy.isDead()) continue;
+      enemy.updateDamageFlash(now);
 
       const assignedSite = this.defuseTargetByEnemy.get(enemy);
       const targetSite = assignedSite ?? this.selectEnemyObjective(enemy, activeSites);
@@ -1202,7 +1428,8 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
-    this.activeDefuserCountForTelemetry = [...activeDefusersBySite.values()].reduce((sum, count) => sum + count, 0);
+    this.activeDefuserCountForTelemetry = 0;
+    for (const count of activeDefusersBySite.values()) this.activeDefuserCountForTelemetry += count;
 
     let anyDefusing = false;
     for (const site of activeSites) {
@@ -1240,54 +1467,91 @@ export class ArenaScene extends Phaser.Scene {
 
     this.applyEnemySeparation();
 
-    this.enemies = this.enemies.filter((e) => {
-      if (!e.isDead()) return true;
-      this.killEnemy(e);
-      return false;
-    });
+    let enemyWriteIndex = 0;
+    for (const enemy of this.enemies) {
+      if (enemy.isDead()) {
+        this.killEnemy(enemy);
+      } else {
+        this.enemies[enemyWriteIndex] = enemy;
+        enemyWriteIndex += 1;
+      }
+    }
+    this.enemies.length = enemyWriteIndex;
   }
 
   private refreshDefuseAssignments(activeSites: BombSiteRuntime[], now: number): void {
     this.defuseAssignees.clear();
-    this.defuseTargetByEnemy = new WeakMap<Enemy, BombSiteRuntime>();
+    this.defuseTargetByEnemy.clear();
     if (activeSites.length === 0) return;
 
     const desired = getDefuseAssigneeCount(this.roundManager.round) + Math.max(0, activeSites.length - 1);
-    const candidates = this.enemies
-      .filter((enemy) => enemy.active && !enemy.isDead() && now >= enemy.defuseInterruptedUntil)
-      .sort((a, b) => {
+    const candidates = this.defuseCandidateBuffer;
+    candidates.length = 0;
+    for (const enemy of this.enemies) {
+      if (enemy.active && !enemy.isDead() && now >= enemy.defuseInterruptedUntil) candidates.push(enemy);
+    }
+    candidates.sort((a, b) => {
         const specialistDifference = Number(b.stats.type === 'defuser') - Number(a.stats.type === 'defuser');
         if (specialistDifference !== 0) return specialistDifference;
-        const nearestA = Math.min(...activeSites.map((site) => Phaser.Math.Distance.Between(a.x, a.y, site.x, site.y)));
-        const nearestB = Math.min(...activeSites.map((site) => Phaser.Math.Distance.Between(b.x, b.y, site.x, site.y)));
+        let nearestA = Number.POSITIVE_INFINITY;
+        let nearestB = Number.POSITIVE_INFINITY;
+        for (const site of activeSites) {
+          const aDx = a.x - site.x;
+          const aDy = a.y - site.y;
+          nearestA = Math.min(nearestA, aDx * aDx + aDy * aDy);
+          const bDx = b.x - site.x;
+          const bDy = b.y - site.y;
+          nearestB = Math.min(nearestB, bDx * bDx + bDy * bDy);
+        }
         return nearestA - nearestB;
       });
-    const assignedPerSite = new Map<string, number>();
-    candidates.slice(0, desired).forEach((enemy) => {
-      const site = [...activeSites].sort((a, b) => {
-        const scoreA = Phaser.Math.Distance.Between(enemy.x, enemy.y, a.x, a.y) + (assignedPerSite.get(a.id) ?? 0) * 480;
-        const scoreB = Phaser.Math.Distance.Between(enemy.x, enemy.y, b.x, b.y) + (assignedPerSite.get(b.id) ?? 0) * 480;
-        return scoreA - scoreB;
-      })[0];
-      if (!site) return;
+    const assignedPerSite = this.assignedDefusersPerSite;
+    assignedPerSite.clear();
+    const assignmentCount = Math.min(desired, candidates.length);
+    for (let index = 0; index < assignmentCount; index += 1) {
+      const enemy = candidates[index];
+      let site: BombSiteRuntime | undefined;
+      let bestScore = Number.POSITIVE_INFINITY;
+      for (const candidateSite of activeSites) {
+        const dx = enemy.x - candidateSite.x;
+        const dy = enemy.y - candidateSite.y;
+        const score = Math.sqrt(dx * dx + dy * dy)
+          + (assignedPerSite.get(candidateSite.id) ?? 0) * 480;
+        if (score < bestScore) {
+          bestScore = score;
+          site = candidateSite;
+        }
+      }
+      if (!site) continue;
       this.defuseAssignees.add(enemy);
       this.defuseTargetByEnemy.set(enemy, site);
       assignedPerSite.set(site.id, (assignedPerSite.get(site.id) ?? 0) + 1);
       if (this.modRuntime.rank('priority-targeting') >= 2) {
         this.defuserMarkedUntil.set(enemy, now + MOD_BALANCE.priorityTargeting.markedDurationMs);
       }
-    });
+    }
   }
 
   private selectEnemyObjective(enemy: Enemy, activeSites: BombSiteRuntime[]): BombSiteRuntime | null {
     if (activeSites.length === 0) return null;
-    return [...activeSites].sort((a, b) => {
-      const bombDurationMs = this.getBombDefenseDurationMs();
-      const urgencyA = Math.max(0, 1 - a.timerMs / bombDurationMs);
-      const urgencyB = Math.max(0, 1 - b.timerMs / bombDurationMs);
-      return Phaser.Math.Distance.Between(enemy.x, enemy.y, a.x, a.y) - urgencyA * 180
-        - (Phaser.Math.Distance.Between(enemy.x, enemy.y, b.x, b.y) - urgencyB * 180);
-    })[0];
+    const bombDurationMs = this.getBombDefenseDurationMs();
+    let selected = activeSites[0];
+    let dx = enemy.x - selected.x;
+    let dy = enemy.y - selected.y;
+    let bestScore = Math.sqrt(dx * dx + dy * dy)
+      - Math.max(0, 1 - selected.timerMs / bombDurationMs) * 180;
+    for (let index = 1; index < activeSites.length; index += 1) {
+      const site = activeSites[index];
+      dx = enemy.x - site.x;
+      dy = enemy.y - site.y;
+      const score = Math.sqrt(dx * dx + dy * dy)
+        - Math.max(0, 1 - site.timerMs / bombDurationMs) * 180;
+      if (score < bestScore) {
+        selected = site;
+        bestScore = score;
+      }
+    }
+    return selected;
   }
 
   private activateEmergencyBombShield(site: BombSiteRuntime, now: number): void {
@@ -1299,25 +1563,33 @@ export class ArenaScene extends Phaser.Scene {
     if (!activation.knockback) return;
     for (const enemy of this.enemies) {
       if (enemy.stats.type === 'tank' || enemy.stats.type === 'star') continue;
-      const distance = Phaser.Math.Distance.Between(enemy.x, enemy.y, site.x, site.y);
-      if (distance > MOD_BALANCE.emergencyShield.knockbackRadius || distance < 1) continue;
-      const direction = new Phaser.Math.Vector2(enemy.x - site.x, enemy.y - site.y).normalize();
+      const dx = enemy.x - site.x;
+      const dy = enemy.y - site.y;
+      const distanceSquared = dx * dx + dy * dy;
+      const radius = MOD_BALANCE.emergencyShield.knockbackRadius;
+      if (distanceSquared > radius * radius || distanceSquared < 1) continue;
+      const inverseDistance = 1 / Math.sqrt(distanceSquared);
       const resistance = enemy.stats.type === 'disruptor' ? 0.5 : 1;
-      enemy.setVelocity(direction.x * MOD_BALANCE.emergencyShield.knockbackSpeed * resistance, direction.y * MOD_BALANCE.emergencyShield.knockbackSpeed * resistance);
+      const speed = MOD_BALANCE.emergencyShield.knockbackSpeed * resistance;
+      enemy.setVelocity(dx * inverseDistance * speed, dy * inverseDistance * speed);
       enemy.defuseInterruptedUntil = now + 600;
     }
   }
 
   private updateEnemyPatrol(enemy: Enemy, now: number): void {
     const target = this.patrolTargets.get(enemy) ?? { x: enemy.x, y: enemy.y };
-    if (Phaser.Math.Distance.Between(enemy.x, enemy.y, target.x, target.y) < 42 || Math.random() < 0.002) {
+    const targetDx = enemy.x - target.x;
+    const targetDy = enemy.y - target.y;
+    if (targetDx * targetDx + targetDy * targetDy < 42 * 42 || Math.random() < 0.002) {
       const bounds=this.layout.generation.bounds;
       target.x = Phaser.Math.Clamp(enemy.x + Phaser.Math.Between(-260, 260), bounds.x+60, bounds.x+bounds.w-60);
       target.y = Phaser.Math.Clamp(enemy.y + Phaser.Math.Between(-220, 220), bounds.y+60, bounds.y+bounds.h-60);
       this.patrolTargets.set(enemy, target);
     }
 
-    if (Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y) < 260) {
+    const playerDx = enemy.x - this.player.x;
+    const playerDy = enemy.y - this.player.y;
+    if (playerDx * playerDx + playerDy * playerDy < 260 * 260) {
       this.navigateEnemy(enemy, this.player.x, this.player.y, now, enemy.stats.speed * 0.95);
       return;
     }
@@ -1446,25 +1718,27 @@ export class ArenaScene extends Phaser.Scene {
     });
     GameplayTelemetryRecorder.recordProjectileFired('enemy');
 
-    const launchFlash = this.add.circle(x, y, 8, COLORS.pink, 0.28)
-      .setStrokeStyle(2, COLORS.purple, 0.95)
-      .setDepth(8);
-    this.tweens.add({ targets: launchFlash, radius: 28, alpha: 0, duration: 260, onComplete: () => launchFlash.destroy() });
+    const launchFlash = this.obtainFxCircle({
+      x, y, radius: 8, color: COLORS.pink, alpha: 0.28, depth: 8,
+      strokeWidth: 2, strokeColor: COLORS.purple, strokeAlpha: 0.95
+    });
+    this.tweens.add({ targets: launchFlash, radius: 28, alpha: 0, duration: 260, onComplete: () => this.retireFxCircle(launchFlash) });
     this.audio.playSfx('beep');
   }
 
   private updateHomingMissiles(delta: number): void {
-    this.homingMissiles = this.homingMissiles.filter((missile) => {
-      if (missile.detonated || !missile.sprite.active || !missile.sprite.body) return false;
+    let writeIndex = 0;
+    for (const missile of this.homingMissiles) {
+      if (missile.detonated || !missile.sprite.active || !missile.sprite.body) continue;
 
       missile.lifeMs -= delta;
       if (missile.lifeMs <= 0) {
         this.detonateHomingMissile(missile, 'expired');
-        return false;
+        continue;
       }
       if (this.hitWall(missile.sprite.x, missile.sprite.y)) {
         this.detonateHomingMissile(missile, 'wall');
-        return false;
+        continue;
       }
 
       const body = missile.sprite.body as Phaser.Physics.Arcade.Body;
@@ -1479,12 +1753,16 @@ export class ArenaScene extends Phaser.Scene {
       missile.sprite.setAlpha(missile.lifeMs < 1500 ? 0.7 + Math.sin(this.time.now * 0.035) * 0.3 : 1);
       this.spawnProjectileTrail(missile.sprite.x, missile.sprite.y, COLORS.pink);
 
-      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, missile.sprite.x, missile.sprite.y) <= 19) {
+      const playerDx = this.player.x - missile.sprite.x;
+      const playerDy = this.player.y - missile.sprite.y;
+      if (playerDx * playerDx + playerDy * playerDy <= 19 * 19) {
         this.detonateHomingMissile(missile, 'impact');
-        return false;
+        continue;
       }
-      return true;
-    });
+      this.homingMissiles[writeIndex] = missile;
+      writeIndex += 1;
+    }
+    this.homingMissiles.length = writeIndex;
   }
 
   private detonateHomingMissile(missile: HomingMissile, cause: 'impact' | 'expired' | 'wall' | 'intercepted'): void {
@@ -1495,15 +1773,16 @@ export class ArenaScene extends Phaser.Scene {
 
     const intercepted = cause === 'intercepted';
     const color = intercepted ? COLORS.cyan : COLORS.pink;
-    const blast = this.add.circle(x, y, 8, color, 0.3)
-      .setStrokeStyle(3, intercepted ? COLORS.cyan : COLORS.purple, 0.95)
-      .setDepth(12);
+    const blast = this.obtainFxCircle({
+      x, y, radius: 8, color, alpha: 0.3, depth: 12,
+      strokeWidth: 3, strokeColor: intercepted ? COLORS.cyan : COLORS.purple, strokeAlpha: 0.95
+    });
     this.tweens.add({
       targets: blast,
       radius: TANK_HOMING_MISSILE_BALANCE.blastRadius,
       alpha: 0,
       duration: intercepted ? 180 : 260,
-      onComplete: () => blast.destroy()
+      onComplete: () => this.retireFxCircle(blast)
     });
     this.spawnImpact(x, y, color);
     this.audio.playSfx('mine');
@@ -1513,8 +1792,10 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
-    const playerInBlast = Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y)
-      <= TANK_HOMING_MISSILE_BALANCE.blastRadius;
+    const playerDx = this.player.x - x;
+    const playerDy = this.player.y - y;
+    const playerInBlast = playerDx * playerDx + playerDy * playerDy
+      <= TANK_HOMING_MISSILE_BALANCE.blastRadius * TANK_HOMING_MISSILE_BALANCE.blastRadius;
     if (playerInBlast) {
       const hit = this.player.takeDamage(missile.damage);
       GameplayTelemetryRecorder.recordProjectileHit('enemy', hit ? missile.damage : 0, 0, false, !hit);
@@ -1533,17 +1814,18 @@ export class ArenaScene extends Phaser.Scene {
     const focusX = turretTarget?.sprite.x ?? (Math.random() < 0.25 ? site.x : this.player.x);
     const focusY = turretTarget?.sprite.y ?? (Math.random() < 0.25 ? site.y : this.player.y);
 
-    const v = new Phaser.Math.Vector2(focusX - enemy.x, focusY - enemy.y);
-    const dist = v.length();
+    const focusDeltaX = focusX - enemy.x;
+    const focusDeltaY = focusY - enemy.y;
+    const distanceSquared = focusDeltaX * focusDeltaX + focusDeltaY * focusDeltaY;
     const ideal = 230;
     const movementSpeed = enemy.effectiveSpeed(enemy.stats.speed, now);
-    if (dist > ideal + 24) {
+    if (distanceSquared > (ideal + 24) * (ideal + 24)) {
       this.navigateEnemy(enemy, focusX, focusY, now, movementSpeed);
-    } else if (dist < ideal - 22) {
-      v.normalize();
+    } else if (distanceSquared < (ideal - 22) * (ideal - 22)) {
+      const inverseDistance = distanceSquared > 0 ? 1 / Math.sqrt(distanceSquared) : 0;
       const bounds = this.layout.generation.bounds;
-      const retreatX = Phaser.Math.Clamp(enemy.x - v.x * 150, bounds.x + 55, bounds.x + bounds.w - 55);
-      const retreatY = Phaser.Math.Clamp(enemy.y - v.y * 150, bounds.y + 55, bounds.y + bounds.h - 55);
+      const retreatX = Phaser.Math.Clamp(enemy.x - focusDeltaX * inverseDistance * 150, bounds.x + 55, bounds.x + bounds.w - 55);
+      const retreatY = Phaser.Math.Clamp(enemy.y - focusDeltaY * inverseDistance * 150, bounds.y + 55, bounds.y + bounds.h - 55);
       this.navigateEnemy(enemy, retreatX, retreatY, now, movementSpeed * 0.85);
     } else {
       enemy.setVelocity(0, 0);
@@ -1552,13 +1834,12 @@ export class ArenaScene extends Phaser.Scene {
     if (now - enemy.lastShotMs > ENEMY_BALANCE.shooter.attackCooldownMs) {
       enemy.lastShotMs = now;
       const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, turretTarget?.sprite.x ?? this.player.x, turretTarget?.sprite.y ?? this.player.y);
-      const bullet = this.physics.add.image(enemy.x, enemy.y, 'circle');
-      bullet.setDisplaySize(7, 7);
-      bullet.setTint(COLORS.orange);
-      bullet.setVelocity(Math.cos(angle) * 420, Math.sin(angle) * 420);
-      bullet.setDepth(7);
       GameplayTelemetryRecorder.recordProjectileFired('enemy');
-      this.projectiles.push({ sprite: bullet, damage: enemy.stats.damage, from: 'enemy', lifeMs: 1400, trailColor: COLORS.orange, telemetryOwner: 'enemy' });
+      this.projectiles.push(this.obtainProjectile({
+        x: enemy.x, y: enemy.y, texture: 'circle', width: 7, height: 7, tint: COLORS.orange,
+        rotation: angle, velocityX: Math.cos(angle) * 420, velocityY: Math.sin(angle) * 420, depth: 7,
+        damage: enemy.stats.damage, from: 'enemy', lifeMs: 1400, trailColor: COLORS.orange, telemetryOwner: 'enemy'
+      }));
     }
   }
 
@@ -1671,10 +1952,10 @@ export class ArenaScene extends Phaser.Scene {
           const d = this.distancePointToSegment(
             w.x,
             w.y,
-            f.sprite.x - Math.cos(f.sprite.rotation) * 45,
-            f.sprite.y - Math.sin(f.sprite.rotation) * 45,
-            f.sprite.x + Math.cos(f.sprite.rotation) * 45,
-            f.sprite.y + Math.sin(f.sprite.rotation) * 45
+            f.x1,
+            f.y1,
+            f.x2,
+            f.y2
           );
           if (d < 68) p += ((68 - d) / 68) * 6;
         }
@@ -1696,20 +1977,24 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (waypoint) {
-      const v = new Phaser.Math.Vector2(waypoint.x - enemy.x, waypoint.y - enemy.y);
-      if (v.lengthSq() > 0.2) {
-        v.normalize();
-        enemy.setVelocity(v.x * speed, v.y * speed);
+      const dx = waypoint.x - enemy.x;
+      const dy = waypoint.y - enemy.y;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared > 0.2) {
+        const inverseDistance = 1 / Math.sqrt(distanceSquared);
+        enemy.setVelocity(dx * inverseDistance * speed, dy * inverseDistance * speed);
         return;
       }
     }
 
-    const direct = new Phaser.Math.Vector2(targetX - enemy.x, targetY - enemy.y);
-    if (direct.lengthSq() <= 1) {
+    const directX = targetX - enemy.x;
+    const directY = targetY - enemy.y;
+    const directDistanceSquared = directX * directX + directY * directY;
+    if (directDistanceSquared <= 1) {
       enemy.setVelocity(0, 0);
     } else {
-      direct.normalize();
-      enemy.setVelocity(direct.x * speed, direct.y * speed);
+      const inverseDistance = 1 / Math.sqrt(directDistanceSquared);
+      enemy.setVelocity(directX * inverseDistance * speed, directY * inverseDistance * speed);
     }
   }
 
@@ -1728,72 +2013,85 @@ export class ArenaScene extends Phaser.Scene {
         const ny = dy / d;
         const bodyA = a.body as Phaser.Physics.Arcade.Body | null;
         const bodyB = b.body as Phaser.Physics.Arcade.Body | null;
-        if (bodyA) bodyA.velocity.add(new Phaser.Math.Vector2(-nx * push, -ny * push));
-        if (bodyB) bodyB.velocity.add(new Phaser.Math.Vector2(nx * push, ny * push));
+        if (bodyA) {
+          bodyA.velocity.x -= nx * push;
+          bodyA.velocity.y -= ny * push;
+        }
+        if (bodyB) {
+          bodyB.velocity.x += nx * push;
+          bodyB.velocity.y += ny * push;
+        }
       }
     }
   }
 
   private updateProjectiles(delta: number): void {
-    const fenceSplitProjectiles: Projectile[] = [];
-    const prismProjectileColor = SaveSystem.isPrismCosmetic('projectileColor');
-    const prismTrailColor = SaveSystem.isPrismCosmetic('trailColor');
-    this.projectiles = this.projectiles.filter((p) => {
+    this.pendingSplitProjectiles.length = 0;
+    const prismaticRounds = this.modRuntime.hasInfusion('prismatic-rounds');
+    const jailbrokeTurrets = this.modRuntime.has('jailbroke-turrets');
+    const now = this.time.now;
+    let writeIndex = 0;
+    for (let readIndex = 0; readIndex < this.projectiles.length; readIndex += 1) {
+      const p = this.projectiles[readIndex];
       p.lifeMs -= delta;
       if (p.lifeMs <= 0 || !p.sprite.body) {
         if (p.lifeMs <= 0 && p.telemetryOwner) GameplayTelemetryRecorder.recordProjectileMiss(p.telemetryOwner, 'expired');
-        p.sprite.destroy();
-        return false;
+        this.retireProjectile(p);
+        continue;
       }
 
       if (this.hitWall(p.sprite.x, p.sprite.y)) {
         if (p.telemetryOwner) GameplayTelemetryRecorder.recordProjectileMiss(p.telemetryOwner, 'wall');
         this.spawnImpact(p.sprite.x, p.sprite.y, p.trailColor);
-        p.sprite.destroy();
-        return false;
+        this.retireProjectile(p);
+        continue;
       }
 
       let visualTrailColor = p.trailColor;
       const friendlyProjectile = p.from === 'player' || p.from === 'turret';
-      const colorTime = this.time.now + (p.sprite.x + p.sprite.y) * 1.5;
-      if (friendlyProjectile && prismProjectileColor) {
+      const colorTime = now + (p.sprite.x + p.sprite.y) * 1.5;
+      if (friendlyProjectile && this.prismProjectileColor) {
         p.sprite.setTint(SaveSystem.getCosmeticColor('projectileColor', colorTime));
       }
-      if (friendlyProjectile && prismTrailColor) {
+      if (friendlyProjectile && this.prismTrailColor) {
         visualTrailColor = SaveSystem.getCosmeticColor('trailColor', colorTime);
       }
-      if (friendlyProjectile && this.modRuntime.hasInfusion('prismatic-rounds')) {
+      if (friendlyProjectile && prismaticRounds) {
         visualTrailColor = this.infusionSpectrumColor((p.sprite.x + p.sprite.y) * 0.0007);
         p.sprite.setTint(visualTrailColor);
       }
       this.spawnProjectileTrail(p.sprite.x, p.sprite.y, visualTrailColor);
 
       const canSplitAtFence = (p.crossedFences?.size ?? 0) < MAX_DISTINCT_FENCE_SPLITS && (p.from === 'player'
-        || (p.from === 'turret' && this.modRuntime.has('jailbroke-turrets')));
+        || (p.from === 'turret' && jailbrokeTurrets));
       if (canSplitAtFence) {
-        const split = this.splitProjectileAtFence(p);
-        if (split.length > 0) {
-          GameplayTelemetryRecorder.recordProjectileMiss(p.from === 'turret' ? 'turret' : 'weapon', 'fence-split', split.length);
-          fenceSplitProjectiles.push(...split);
-          p.sprite.destroy();
-          return false;
+        const splitCount = this.splitProjectileAtFence(p, this.pendingSplitProjectiles);
+        if (splitCount > 0) {
+          GameplayTelemetryRecorder.recordProjectileMiss(p.from === 'turret' ? 'turret' : 'weapon', 'fence-split', splitCount);
+          this.retireProjectile(p);
+          continue;
         }
       }
 
       if (p.from === 'player' || p.from === 'turret') {
         if (p.from === 'player') {
-          const hitMissile = this.homingMissiles.find((missile) =>
-            !missile.detonated
-            && missile.sprite.active
-            && Phaser.Math.Distance.Between(missile.sprite.x, missile.sprite.y, p.sprite.x, p.sprite.y) <= 16
-          );
+          let hitMissile: HomingMissile | null = null;
+          for (const missile of this.homingMissiles) {
+            if (missile.detonated || !missile.sprite.active) continue;
+            const dx = missile.sprite.x - p.sprite.x;
+            const dy = missile.sprite.y - p.sprite.y;
+            if (dx * dx + dy * dy <= 16 * 16) {
+              hitMissile = missile;
+              break;
+            }
+          }
           if (hitMissile) {
             const applied = Math.min(hitMissile.hp, p.damage);
             const overkill = Math.max(0, p.damage - applied);
             hitMissile.hp = Math.max(0, hitMissile.hp - applied);
             GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
             this.spawnImpact(p.sprite.x, p.sprite.y, COLORS.cyan);
-            p.sprite.destroy();
+            this.retireProjectile(p);
             this.audio.playSfx('hit');
             if (hitMissile.hp <= 0) {
               this.detonateHomingMissile(hitMissile, 'intercepted');
@@ -1803,25 +2101,25 @@ export class ArenaScene extends Phaser.Scene {
                 if (hitMissile.sprite.active) hitMissile.sprite.setTint(COLORS.pink);
               });
             }
-            return false;
+            continue;
           }
         }
 
         const boss = this.bossEncounter?.boss;
         if (boss?.active && !boss.isDefeated
-          && Phaser.Math.Distance.Between(boss.x, boss.y, p.sprite.x, p.sprite.y) < boss.hazardRadius + 8) {
+          && (boss.x - p.sprite.x) ** 2 + (boss.y - p.sprite.y) ** 2 < (boss.hazardRadius + 8) ** 2) {
           const applied = boss.takeDamage(p.damage, p.from === 'player' ? 'weapon' : 'turret');
           const overkill = Math.max(0, p.damage - applied);
           if (p.from === 'turret') GameplayTelemetryRecorder.recordTurretHit(p.turretId ?? '', applied, overkill);
           else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
           this.spawnImpact(p.sprite.x, p.sprite.y, p.sprite.tintTopLeft);
-          p.sprite.destroy();
+          this.retireProjectile(p);
           this.audio.playSfx('hit');
-          return false;
+          continue;
         }
-        const hitEnemy = this.enemies.find((e) => Phaser.Math.Distance.Between(e.x, e.y, p.sprite.x, p.sprite.y) < e.stats.size * 0.5 + 5);
+        const hitEnemy = this.findProjectileHitEnemy(p.sprite.x, p.sprite.y);
         if (hitEnemy) {
-          const markedForTurret = this.defuseAssignees.has(hitEnemy) || this.time.now < (this.defuserMarkedUntil.get(hitEnemy) ?? 0);
+          const markedForTurret = this.defuseAssignees.has(hitEnemy) || now < (this.defuserMarkedUntil.get(hitEnemy) ?? 0);
           const conditionalBonus = p.from === 'turret' && this.modRuntime.rank('priority-targeting') === 3 && markedForTurret
             ? this.modRuntime.conditionalDamageBonus([MOD_BALANCE.priorityTargeting.rank3TurretDamageBonus])
             : 0;
@@ -1832,19 +2130,19 @@ export class ArenaScene extends Phaser.Scene {
           if (p.from === 'turret') GameplayTelemetryRecorder.recordTurretHit(p.turretId ?? '', applied, overkill);
           else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
           hitEnemy.defuseProgressMs = 0;
-          hitEnemy.defuseInterruptedUntil = this.time.now + 800;
+          hitEnemy.defuseInterruptedUntil = now + 800;
           if (wasAlive && hitEnemy.isDead() && p.from === 'player' && p.splitCurrentEligible) {
             this.triggerSplitCurrent(hitEnemy, finalDamage);
           }
           this.spawnImpact(p.sprite.x, p.sprite.y, p.sprite.tintTopLeft);
-          p.sprite.destroy();
+          this.retireProjectile(p);
           this.audio.playSfx('hit');
-          return false;
+          continue;
         }
       }
 
       if (p.from === 'enemy') {
-        if (Phaser.Math.Distance.Between(this.player.x, this.player.y, p.sprite.x, p.sprite.y) < 16) {
+        if ((this.player.x - p.sprite.x) ** 2 + (this.player.y - p.sprite.y) ** 2 < 16 * 16) {
           const hit = this.player.takeDamage(p.damage);
           if (p.telemetryOwner) GameplayTelemetryRecorder.recordProjectileHit(p.telemetryOwner, hit ? p.damage : 0, 0, false, !hit);
           if (p.bossAttack) GameplayTelemetryRecorder.recordBossAttackIntersection(p.bossAttack, hit ? p.damage : 0, !hit);
@@ -1852,92 +2150,100 @@ export class ArenaScene extends Phaser.Scene {
             this.audio.playSfx('playerDamage');
             GameplayTelemetryRecorder.recordPlayerDamage(p.bossAttack ? 'boss' : 'enemy-projectile', p.damage);
           }
-          p.sprite.destroy();
-          return false;
+          this.retireProjectile(p);
+          continue;
         }
 
+        let hitTurret = false;
         for (const t of this.turrets) {
-          if (Phaser.Math.Distance.Between(t.sprite.x, t.sprite.y, p.sprite.x, p.sprite.y) < 18) {
+          if ((t.sprite.x - p.sprite.x) ** 2 + (t.sprite.y - p.sprite.y) ** 2 < 18 * 18) {
             const applied = t.takeDamage(p.damage);
             GameplayTelemetryRecorder.recordTurretDamaged(t.telemetryId, applied);
             if (p.telemetryOwner) GameplayTelemetryRecorder.recordProjectileHit(p.telemetryOwner, applied);
-            p.sprite.destroy();
-            return false;
+            this.retireProjectile(p);
+            hitTurret = true;
+            break;
           }
         }
+        if (hitTurret) continue;
       }
 
       p.previousX = p.sprite.x;
       p.previousY = p.sprite.y;
-      return true;
-    });
-    this.projectiles.push(...fenceSplitProjectiles);
+      this.projectiles[writeIndex] = p;
+      writeIndex += 1;
+    }
+    this.projectiles.length = writeIndex;
+    for (const split of this.pendingSplitProjectiles) this.projectiles.push(split);
   }
 
-  private splitProjectileAtFence(projectile: Projectile): Projectile[] {
+  private splitProjectileAtFence(projectile: Projectile, spawned: Projectile[]): number {
     const previousX = projectile.previousX ?? projectile.sprite.x;
     const previousY = projectile.previousY ?? projectile.sprite.y;
-    const crossedFence = this.fences.find((fence) => {
-      if (projectile.crossedFences?.has(fence)) return false;
-      const half = fence.width * 0.5;
-      const cos = Math.cos(fence.sprite.rotation);
-      const sin = Math.sin(fence.sprite.rotation);
-      const x1 = fence.sprite.x - cos * half;
-      const y1 = fence.sprite.y - sin * half;
-      const x2 = fence.sprite.x + cos * half;
-      const y2 = fence.sprite.y + sin * half;
-      return this.segmentsIntersect(previousX, previousY, projectile.sprite.x, projectile.sprite.y, x1, y1, x2, y2)
-        || this.distancePointToSegment(projectile.sprite.x, projectile.sprite.y, x1, y1, x2, y2) <= 8;
-    });
-    if (!crossedFence) return [];
+    let crossedFence: Fence | null = null;
+    for (const fence of this.fences) {
+      if (projectile.crossedFences?.has(fence)) continue;
+      if (this.segmentsIntersect(
+        previousX, previousY, projectile.sprite.x, projectile.sprite.y,
+        fence.x1, fence.y1, fence.x2, fence.y2
+      ) || this.distancePointToSegment(
+        projectile.sprite.x, projectile.sprite.y,
+        fence.x1, fence.y1, fence.x2, fence.y2
+      ) <= 8) {
+        crossedFence = fence;
+        break;
+      }
+    }
+    if (!crossedFence) return 0;
 
     const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
-    if (!body) return [];
+    if (!body) return 0;
     const baseAngle = Math.atan2(body.velocity.y, body.velocity.x);
     const speed = Math.max(1, body.velocity.length());
     const turretFan = projectile.from === 'turret' ? this.modRuntime.jailbrokeTurretFan() : null;
-    if (projectile.from === 'turret' && !turretFan) return [];
+    if (projectile.from === 'turret' && !turretFan) return 0;
     const splitStage = resolveFenceSplitStage(
       turretFan?.streamCount ?? ABILITY_BALANCE.fence.projectileFanCount,
       turretFan?.damageShare ?? ABILITY_BALANCE.fence.projectileFanDamageShare,
       projectile.crossedFences?.size ?? 0
     );
-    if (!splitStage) return [];
+    if (!splitStage) return 0;
     const { streamCount: count, damageShare } = splitStage;
     const spacing = ABILITY_BALANCE.fence.projectileFanSpacingRadians;
     const texture = projectile.sprite.texture.key;
     const tint = projectile.sprite.tintTopLeft;
     const width = projectile.sprite.displayWidth;
     const height = projectile.sprite.displayHeight;
-    const crossedFences = new Set(projectile.crossedFences);
+    const crossedFences = projectile.crossedFences ?? new Set<Fence>();
     crossedFences.add(crossedFence);
-    const spawned: Projectile[] = [];
     for (let index = 0; index < count; index += 1) {
       const angle = baseAngle + (index - (count - 1) * 0.5) * spacing;
       const x = projectile.sprite.x + Math.cos(angle) * 11;
       const y = projectile.sprite.y + Math.sin(angle) * 11;
-      const sprite = this.physics.add.image(x, y, texture);
-      sprite.setDisplaySize(width, height).setTint(tint).setRotation(angle).setDepth(8);
-      sprite.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-      spawned.push({
-        sprite,
+      spawned.push(this.obtainProjectile({
+        x, y, texture, width, height, tint, rotation: angle,
+        velocityX: Math.cos(angle) * speed, velocityY: Math.sin(angle) * speed, depth: 8,
         damage: projectile.damage * damageShare,
         from: projectile.from,
         lifeMs: projectile.lifeMs,
         trailColor: projectile.trailColor,
         splitCurrentEligible: projectile.splitCurrentEligible,
-        crossedFences: new Set(crossedFences),
+        crossedFences,
         previousX: x,
         previousY: y,
         telemetryOwner: projectile.telemetryOwner,
         critical: projectile.critical,
         turretId: projectile.turretId
-      });
+      }));
     }
-    const pulse = this.add.circle(projectile.sprite.x, projectile.sprite.y, 8, SaveSystem.getCosmeticColor('fenceStyle', this.time.now), 0.25)
-      .setStrokeStyle(2, 0xffffff, 0.8).setDepth(9);
-    this.tweens.add({ targets: pulse, radius: 28, alpha: 0, duration: 220, onComplete: () => pulse.destroy() });
-    return spawned;
+    const pulse = this.obtainFxCircle({
+      x: projectile.sprite.x, y: projectile.sprite.y, radius: 8,
+      color: SaveSystem.getCosmeticColor('fenceStyle', this.time.now), alpha: 0.25, depth: 9,
+      strokeWidth: 2, strokeColor: 0xffffff, strokeAlpha: 0.8
+    });
+    this.tweens.add({ targets: pulse, radius: 28, alpha: 0, duration: 220, onComplete: () => this.retireFxCircle(pulse) });
+    crossedFences.delete(crossedFence);
+    return count;
   }
 
   private segmentsIntersect(
@@ -1959,16 +2265,16 @@ export class ArenaScene extends Phaser.Scene {
 
   private spawnProjectileTrail(x: number, y: number, color: number): void {
     if (Math.random() < 0.45) return;
-    const spark = this.add.circle(x, y, Phaser.Math.Between(1, 3), color, 0.62).setDepth(5);
-    this.tweens.add({ targets: spark, alpha: 0, scale: 0.3, duration: 130, onComplete: () => spark.destroy() });
+    const spark = this.obtainFxCircle({ x, y, radius: Phaser.Math.Between(1, 3), color, alpha: 0.62, depth: 5 });
+    this.tweens.add({ targets: spark, alpha: 0, scale: 0.3, duration: 130, onComplete: () => this.retireFxCircle(spark) });
   }
 
   private spawnImpact(x: number, y: number, color: number): void {
-    const ring = this.add.circle(x, y, 6, color, 0.4).setDepth(8);
-    this.tweens.add({ targets: ring, radius: 22, alpha: 0, duration: 190, onComplete: () => ring.destroy() });
+    const ring = this.obtainFxCircle({ x, y, radius: 6, color, alpha: 0.4, depth: 8 });
+    this.tweens.add({ targets: ring, radius: 22, alpha: 0, duration: 190, onComplete: () => this.retireFxCircle(ring) });
 
     for (let i = 0; i < 6; i += 1) {
-      const d = this.add.circle(x, y, Phaser.Math.Between(2, 4), color, 0.9).setDepth(8);
+      const d = this.obtainFxCircle({ x, y, radius: Phaser.Math.Between(2, 4), color, alpha: 0.9, depth: 8 });
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const sp = Phaser.Math.Between(40, 160);
       this.tweens.add({
@@ -1977,7 +2283,7 @@ export class ArenaScene extends Phaser.Scene {
         y: y + Math.sin(a) * sp * 0.2,
         alpha: 0,
         duration: 210,
-        onComplete: () => d.destroy()
+        onComplete: () => this.retireFxCircle(d)
       });
     }
   }
@@ -2035,14 +2341,11 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateAbilities(now: number, dt: number): void {
-    const turretShots: Projectile[] = [];
-
     for (const turret of this.turrets) {
-      turret.updateVisual();
       const enemyTarget = this.getNearestEnemy(turret.sprite.x, turret.sprite.y, turret.range);
       const bossTarget = this.bossEncounter?.boss;
       const bossInRange = Boolean(bossTarget?.active && !bossTarget.isDefeated
-        && Phaser.Math.Distance.Between(turret.sprite.x, turret.sprite.y, bossTarget.x, bossTarget.y) <= turret.range);
+        && (bossTarget.x - turret.sprite.x) ** 2 + (bossTarget.y - turret.sprite.y) ** 2 <= turret.range * turret.range);
       const target: { x: number; y: number } | null = bossInRange ? bossTarget! : enemyTarget;
       if (!target) continue;
       const angle = Phaser.Math.Angle.Between(turret.sprite.x, turret.sprite.y, target.x, target.y);
@@ -2050,22 +2353,36 @@ export class ArenaScene extends Phaser.Scene {
       if (!turret.canFire(now)) continue;
 
       turret.lastShotMs = now;
-      const b = this.physics.add.image(turret.sprite.x, turret.sprite.y, 'circle');
-      b.setDisplaySize(6, 6);
-      b.setTint(SaveSystem.getCosmeticColor('projectileColor', now));
-      b.setVelocity(Math.cos(angle) * 560, Math.sin(angle) * 560);
       GameplayTelemetryRecorder.recordTurretShot(turret.telemetryId);
-      turretShots.push({ sprite: b, damage: turret.damage, from: 'turret', lifeMs: 1150, trailColor: SaveSystem.getCosmeticColor('trailColor', now), telemetryOwner: 'turret', turretId: turret.telemetryId });
+      this.projectiles.push(this.obtainProjectile({
+        x: turret.sprite.x, y: turret.sprite.y, texture: 'circle', width: 6, height: 6,
+        tint: SaveSystem.getCosmeticColor('projectileColor', now), rotation: angle,
+        velocityX: Math.cos(angle) * 560, velocityY: Math.sin(angle) * 560, depth: 0,
+        damage: turret.damage, from: 'turret', lifeMs: 1150,
+        trailColor: SaveSystem.getCosmeticColor('trailColor', now), telemetryOwner: 'turret', turretId: turret.telemetryId
+      }));
     }
-    this.projectiles.push(...turretShots);
 
     for (const mine of this.mines) {
       mine.update(now);
       if (!mine.armed) continue;
       const bossTarget = this.bossEncounter?.boss;
+      const radiusSquared = mine.radius * mine.radius;
+      const bossDx = (bossTarget?.x ?? 0) - mine.sprite.x;
+      const bossDy = (bossTarget?.y ?? 0) - mine.sprite.y;
       const bossInRange = Boolean(bossTarget?.active && !bossTarget.isDefeated
-        && Phaser.Math.Distance.Between(bossTarget.x, bossTarget.y, mine.sprite.x, mine.sprite.y) <= mine.radius);
-      const trigger = bossInRange || this.enemies.some((e) => Phaser.Math.Distance.Between(e.x, e.y, mine.sprite.x, mine.sprite.y) <= mine.radius);
+        && bossDx * bossDx + bossDy * bossDy <= radiusSquared);
+      let trigger = bossInRange;
+      if (!trigger) {
+        for (const enemy of this.enemies) {
+          const dx = enemy.x - mine.sprite.x;
+          const dy = enemy.y - mine.sprite.y;
+          if (dx * dx + dy * dy <= radiusSquared) {
+            trigger = true;
+            break;
+          }
+        }
+      }
       if (trigger && mine.detonateAt === 0) {
         mine.beginDetonation(now, this.modRuntime.has('magnetic-payload') ? MOD_BALANCE.magneticPayload.preDetonationMs : 0);
       }
@@ -2074,11 +2391,14 @@ export class ArenaScene extends Phaser.Scene {
       if (!mine.readyToDetonate(now)) continue;
 
       this.audio.playSfx('mine');
-      const blast = this.add.circle(mine.sprite.x, mine.sprite.y, 10, COLORS.orange, 0.35).setDepth(7);
-      this.tweens.add({ targets: blast, radius: mine.radius, alpha: 0, duration: 280, onComplete: () => blast.destroy() });
+      const blast = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 10, color: COLORS.orange, alpha: 0.35, depth: 7 });
+      this.tweens.add({ targets: blast, radius: mine.radius, alpha: 0, duration: 280, onComplete: () => this.retireFxCircle(blast) });
       for (const e of this.enemies) {
-        const d = Phaser.Math.Distance.Between(e.x, e.y, mine.sprite.x, mine.sprite.y);
-        if (d <= mine.radius) {
+        const dx = e.x - mine.sprite.x;
+        const dy = e.y - mine.sprite.y;
+        const distanceSquared = dx * dx + dy * dy;
+        if (distanceSquared <= radiusSquared) {
+          const d = Math.sqrt(distanceSquared);
           e.takeDamage(mine.damage * (1 - d / (mine.radius + 1)), 'mine');
           if (!e.isDead() && this.modRuntime.rank('magnetic-payload') === 3) {
             e.slowFactor = MOD_BALANCE.magneticPayload.rank3SlowFactor;
@@ -2087,8 +2407,11 @@ export class ArenaScene extends Phaser.Scene {
         }
       }
       if (bossTarget?.active && !bossTarget.isDefeated) {
-        const d = Phaser.Math.Distance.Between(bossTarget.x, bossTarget.y, mine.sprite.x, mine.sprite.y);
-        if (d <= mine.radius) bossTarget.takeDamage(mine.damage * (1 - d / (mine.radius + 1)), 'mine');
+        const distanceSquared = bossDx * bossDx + bossDy * bossDy;
+        if (distanceSquared <= radiusSquared) {
+          const d = Math.sqrt(distanceSquared);
+          bossTarget.takeDamage(mine.damage * (1 - d / (mine.radius + 1)), 'mine');
+        }
       }
 
       mine.destroy();
@@ -2096,15 +2419,14 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     for (const fence of this.fences) {
-      const half = fence.width * 0.5;
       for (const enemy of this.enemies) {
         const d = this.distancePointToSegment(
           enemy.x,
           enemy.y,
-          fence.sprite.x - Math.cos(fence.sprite.rotation) * half,
-          fence.sprite.y - Math.sin(fence.sprite.rotation) * half,
-          fence.sprite.x + Math.cos(fence.sprite.rotation) * half,
-          fence.sprite.y + Math.sin(fence.sprite.rotation) * half
+          fence.x1,
+          fence.y1,
+          fence.x2,
+          fence.y2
         );
         if (d < 11) {
           enemy.takeDamage(fence.dps * dt, 'fence');
@@ -2118,10 +2440,10 @@ export class ArenaScene extends Phaser.Scene {
         const distance = this.distancePointToSegment(
           bossTarget.x,
           bossTarget.y,
-          fence.sprite.x - Math.cos(fence.sprite.rotation) * half,
-          fence.sprite.y - Math.sin(fence.sprite.rotation) * half,
-          fence.sprite.x + Math.cos(fence.sprite.rotation) * half,
-          fence.sprite.y + Math.sin(fence.sprite.rotation) * half
+          fence.x1,
+          fence.y1,
+          fence.x2,
+          fence.y2
         );
         if (distance < bossTarget.hazardRadius + 8) {
           bossTarget.takeDamage(fence.dps * dt, 'fence');
@@ -2130,91 +2452,132 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
-    this.fences = this.fences.filter((f) => {
-      if (!f.isExpired(now)) return true;
-      f.destroy();
-      return false;
-    });
+    let fenceWriteIndex = 0;
+    for (const fence of this.fences) {
+      if (fence.isExpired(now)) {
+        fence.destroy();
+      } else {
+        this.fences[fenceWriteIndex] = fence;
+        fenceWriteIndex += 1;
+      }
+    }
+    this.fences.length = fenceWriteIndex;
 
-    this.turrets = this.turrets.filter((t) => {
-      if (t.hp > 0) return true;
-      GameplayTelemetryRecorder.recordTurretDestroyed(t.telemetryId);
-      this.spawnImpact(t.sprite.x, t.sprite.y, SaveSystem.getCosmeticColor('turretSkin', now));
-      const collapse = this.add.circle(t.sprite.x, t.sprite.y, 8, COLORS.orange, 0.35).setDepth(8);
-      this.tweens.add({ targets: collapse, radius: 32, alpha: 0, duration: 260, onComplete: () => collapse.destroy() });
-      t.destroy();
-      return false;
-    });
+    let turretWriteIndex = 0;
+    for (const turret of this.turrets) {
+      if (turret.hp > 0) {
+        this.turrets[turretWriteIndex] = turret;
+        turretWriteIndex += 1;
+        continue;
+      }
+      GameplayTelemetryRecorder.recordTurretDestroyed(turret.telemetryId);
+      this.spawnImpact(turret.sprite.x, turret.sprite.y, SaveSystem.getCosmeticColor('turretSkin', now));
+      const collapse = this.obtainFxCircle({ x: turret.sprite.x, y: turret.sprite.y, radius: 8, color: COLORS.orange, alpha: 0.35, depth: 8 });
+      this.tweens.add({ targets: collapse, radius: 32, alpha: 0, duration: 260, onComplete: () => this.retireFxCircle(collapse) });
+      turret.destroy();
+    }
+    this.turrets.length = turretWriteIndex;
 
-    this.mines = this.mines.filter((m) => m.armed || now < m.armAt || m.sprite.active);
+    let mineWriteIndex = 0;
+    for (const mine of this.mines) {
+      if (!mine.armed && now >= mine.armAt && !mine.sprite.active) continue;
+      this.mines[mineWriteIndex] = mine;
+      mineWriteIndex += 1;
+    }
+    this.mines.length = mineWriteIndex;
   }
 
   private updateDeathMines(now: number): void {
-    this.deathMines = this.deathMines.filter((mine) => {
-      if (now < mine.detonateAt) return true;
+    let writeIndex = 0;
+    for (const mine of this.deathMines) {
+      if (now < mine.detonateAt) {
+        this.deathMines[writeIndex] = mine;
+        writeIndex += 1;
+        continue;
+      }
 
       this.audio.playSfx('mine');
-      const blast = this.add.circle(mine.sprite.x, mine.sprite.y, 16, COLORS.cyan, 0.28).setDepth(8);
-      const ring = this.add.circle(mine.sprite.x, mine.sprite.y, 14, 0xffffff, 0.2).setDepth(8);
-      this.tweens.add({ targets: blast, radius: mine.radius, alpha: 0, duration: 360, onComplete: () => blast.destroy() });
-      this.tweens.add({ targets: ring, radius: mine.radius * 0.82, alpha: 0, duration: 320, onComplete: () => ring.destroy() });
+      const blast = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 16, color: COLORS.cyan, alpha: 0.28, depth: 8 });
+      const ring = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 14, color: 0xffffff, alpha: 0.2, depth: 8 });
+      this.tweens.add({ targets: blast, radius: mine.radius, alpha: 0, duration: 360, onComplete: () => this.retireFxCircle(blast) });
+      this.tweens.add({ targets: ring, radius: mine.radius * 0.82, alpha: 0, duration: 320, onComplete: () => this.retireFxCircle(ring) });
 
-      const playerDist = Phaser.Math.Distance.Between(this.player.x, this.player.y, mine.sprite.x, mine.sprite.y);
-      if (playerDist <= mine.radius) {
+      const playerDx = this.player.x - mine.sprite.x;
+      const playerDy = this.player.y - mine.sprite.y;
+      const playerDistanceSquared = playerDx * playerDx + playerDy * playerDy;
+      if (playerDistanceSquared <= mine.radius * mine.radius) {
+        const playerDist = Math.sqrt(playerDistanceSquared);
         const falloff = 1 - playerDist / (mine.radius + 1);
         const damage = mine.damage * falloff;
         if (this.player.takeDamage(damage)) GameplayTelemetryRecorder.recordPlayerDamage('enemy-death-mine', damage);
       }
 
       for (const turret of this.turrets) {
-        const d = Phaser.Math.Distance.Between(turret.sprite.x, turret.sprite.y, mine.sprite.x, mine.sprite.y);
-        if (d <= mine.radius) {
+        const dx = turret.sprite.x - mine.sprite.x;
+        const dy = turret.sprite.y - mine.sprite.y;
+        const distanceSquared = dx * dx + dy * dy;
+        if (distanceSquared <= mine.radius * mine.radius) {
+          const d = Math.sqrt(distanceSquared);
           const applied = turret.takeDamage(mine.damage * 0.5 * (1 - d / (mine.radius + 1)));
           GameplayTelemetryRecorder.recordTurretDamaged(turret.telemetryId, applied);
         }
       }
 
       for (const fence of this.fences) {
-        const d = Phaser.Math.Distance.Between(fence.sprite.x, fence.sprite.y, mine.sprite.x, mine.sprite.y);
-        if (d <= mine.radius) fence.hp -= mine.damage * 0.38 * (1 - d / (mine.radius + 1));
+        const dx = fence.sprite.x - mine.sprite.x;
+        const dy = fence.sprite.y - mine.sprite.y;
+        const distanceSquared = dx * dx + dy * dy;
+        if (distanceSquared <= mine.radius * mine.radius) {
+          const d = Math.sqrt(distanceSquared);
+          fence.hp -= mine.damage * 0.38 * (1 - d / (mine.radius + 1));
+        }
       }
 
       mine.sprite.destroy();
-      return false;
-    });
+    }
+    this.deathMines.length = writeIndex;
   }
 
   private updatePickups(now: number, dt: number): void {
-    for (const p of this.pickups) p.sprite.rotation += dt * 2;
     const collectionRadius = this.player.stats.pickupRadius;
+    const collectionRadiusSquared = collectionRadius * collectionRadius;
     const magneticField = this.modRuntime.magneticServiceField(collectionRadius);
-
-    this.pickups = this.pickups.filter((p) => {
+    const attractionRadiusSquared = magneticField.attractionRadius * magneticField.attractionRadius;
+    let writeIndex = 0;
+    for (const p of this.pickups) {
+      p.sprite.rotation += dt * 2;
       if (now > p.expiresAt) {
         GameplayTelemetryRecorder.recordPickupExpired(p.type);
         p.sprite.destroy();
-        return false;
+        continue;
       }
-      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, p.sprite.x, p.sprite.y);
+      const dx = this.player.x - p.sprite.x;
+      const dy = this.player.y - p.sprite.y;
+      const distanceSquared = dx * dx + dy * dy;
       const energyCollectionBlocked = p.type === 'energy'
         && this.player.energy > this.player.energyStats.max * (1 - PICKUP_BALANCE.energyAutoCollectMissingFraction);
-      if (d < collectionRadius) {
+      if (distanceSquared < collectionRadiusSquared) {
         if (energyCollectionBlocked) {
-          return true;
+          this.pickups[writeIndex] = p;
+          writeIndex += 1;
+          continue;
         }
         this.collectPickup(p.type, p.source);
         p.sprite.destroy();
-        return false;
+        continue;
       }
-      if (!energyCollectionBlocked && magneticField.pullSpeed > 0 && d < magneticField.attractionRadius) {
+      if (!energyCollectionBlocked && magneticField.pullSpeed > 0 && distanceSquared < attractionRadiusSquared) {
+        const d = Math.sqrt(distanceSquared);
         const step = Math.min(Math.max(0, d - collectionRadius * 0.7), magneticField.pullSpeed * dt);
-        if (step > 0) {
-          p.sprite.x += ((this.player.x - p.sprite.x) / d) * step;
-          p.sprite.y += ((this.player.y - p.sprite.y) / d) * step;
+        if (step > 0 && d > 0) {
+          p.sprite.x += (dx / d) * step;
+          p.sprite.y += (dy / d) * step;
         }
       }
-      return true;
-    });
+      this.pickups[writeIndex] = p;
+      writeIndex += 1;
+    }
+    this.pickups.length = writeIndex;
   }
 
   private infusionSpectrumColor(offset = 0): number {
@@ -2229,16 +2592,29 @@ export class ArenaScene extends Phaser.Scene {
     const pullRadius = MOD_BALANCE.magneticPayload.pullRadius[rank];
     const pullStrength = MOD_BALANCE.magneticPayload.pullStrength[rank];
     for (const enemy of this.enemies) {
-      const distance = Phaser.Math.Distance.Between(enemy.x, enemy.y, mine.sprite.x, mine.sprite.y);
-      if (distance > pullRadius || distance < 4) continue;
+      const dx = mine.sprite.x - enemy.x;
+      const dy = mine.sprite.y - enemy.y;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared > pullRadius * pullRadius || distanceSquared < 16) continue;
+      const inverseDistance = 1 / Math.sqrt(distanceSquared);
       const resistance = magneticResistanceForEnemy(enemy.stats.type);
-      const direction = new Phaser.Math.Vector2(mine.sprite.x - enemy.x, mine.sprite.y - enemy.y).normalize();
-      enemy.setVelocity(direction.x * pullStrength * resistance, direction.y * pullStrength * resistance);
+      const speed = pullStrength * resistance;
+      enemy.setVelocity(dx * inverseDistance * speed, dy * inverseDistance * speed);
     }
     if (now - mine.lastMagneticPulseAt >= 80) {
       mine.lastMagneticPulseAt = now;
-      const ring = this.add.circle(mine.sprite.x, mine.sprite.y, pullRadius, COLORS.cyan, 0.015).setStrokeStyle(1, COLORS.cyan, 0.28).setDepth(5);
-      this.tweens.add({ targets: ring, radius: 12, alpha: 0, duration: 180, onComplete: () => ring.destroy() });
+      const ring = this.obtainFxCircle({
+        x: mine.sprite.x,
+        y: mine.sprite.y,
+        radius: pullRadius,
+        color: COLORS.cyan,
+        alpha: 0.015,
+        depth: 5,
+        strokeWidth: 1,
+        strokeColor: COLORS.cyan,
+        strokeAlpha: 0.28
+      });
+      this.tweens.add({ targets: ring, radius: 12, alpha: 0, duration: 180, onComplete: () => this.retireFxCircle(ring) });
     }
   }
 
@@ -2269,11 +2645,19 @@ export class ArenaScene extends Phaser.Scene {
     const radius = corruptedShare > standardShare
       ? MOD_BALANCE.fracturedCurrent.radius[corruptedRank]
       : MOD_BALANCE.splitCurrent.radius[standardRank];
-    const target = this.enemies
-      .filter((enemy) => enemy !== killedEnemy && !enemy.isDead())
-      .map((enemy) => ({ enemy, distance: Phaser.Math.Distance.Between(killedEnemy.x, killedEnemy.y, enemy.x, enemy.y) }))
-      .filter(({ distance }) => distance <= radius)
-      .sort((a, b) => a.distance - b.distance)[0]?.enemy;
+    let target: Enemy | null = null;
+    let targetDistanceSquared = radius * radius;
+    for (const enemy of this.enemies) {
+      if (enemy === killedEnemy || enemy.isDead()) continue;
+      const dx = enemy.x - killedEnemy.x;
+      const dy = enemy.y - killedEnemy.y;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared <= targetDistanceSquared) {
+        if (distanceSquared === targetDistanceSquared && target) continue;
+        target = enemy;
+        targetDistanceSquared = distanceSquared;
+      }
+    }
     if (!target) return;
     const damage = corruptedShare > standardShare
       ? finalKillingDamage * corruptedShare
@@ -2300,7 +2684,7 @@ export class ArenaScene extends Phaser.Scene {
     const emitBurst = (): void => {
       const bx = x + Phaser.Math.Between(-155, 155);
       const by = y + Phaser.Math.Between(-145, 35);
-      const rays = SaveSystem.get().settings.particles ? config.sparksPerBurst : Math.ceil(config.sparksPerBurst / 2);
+      const rays = this.particlesEnabled ? config.sparksPerBurst : Math.ceil(config.sparksPerBurst / 2);
       for (let ray = 0; ray < rays; ray += 1) {
         const angle = ray / rays * Math.PI * 2 + Phaser.Math.FloatBetween(-0.08, 0.08);
         const distance = Phaser.Math.Between(52, 88);
@@ -2371,11 +2755,20 @@ export class ArenaScene extends Phaser.Scene {
       : enemy.stats.type === 'tank' ? 0.28
         : enemy.stats.type === 'shooter' ? 0.18
           : 0.14;
-    const nearby = this.turrets
-      .filter((turret) => turret.hp > 0 && Phaser.Math.Distance.Between(enemy.x, enemy.y, turret.sprite.x, turret.sprite.y) <= 380)
-      .sort((a, b) => Phaser.Math.Distance.Between(enemy.x, enemy.y, a.sprite.x, a.sprite.y)
-        - Phaser.Math.Distance.Between(enemy.x, enemy.y, b.sprite.x, b.sprite.y));
-    const turret = nearby.length > 0 && Math.random() < chance ? nearby[0] : null;
+    let nearestTurret: Turret | null = null;
+    let nearestDistanceSquared = 380 * 380;
+    for (const turret of this.turrets) {
+      if (turret.hp <= 0) continue;
+      const dx = turret.sprite.x - enemy.x;
+      const dy = turret.sprite.y - enemy.y;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared <= nearestDistanceSquared) {
+        if (distanceSquared === nearestDistanceSquared && nearestTurret) continue;
+        nearestTurret = turret;
+        nearestDistanceSquared = distanceSquared;
+      }
+    }
+    const turret = nearestTurret && Math.random() < chance ? nearestTurret : null;
     this.enemyTurretTargets.set(enemy, {
       turret,
       reconsiderAt: now + (turret ? Phaser.Math.Between(2200, 4200) : Phaser.Math.Between(1800, 3200))
@@ -2583,7 +2976,7 @@ export class ArenaScene extends Phaser.Scene {
     this.tweens.add({ targets: core, radius: 40 * scale, alpha: 0, duration: 220, ease: 'Quad.easeOut', onComplete: () => core.destroy() });
     this.tweens.add({ targets: ring, radius: 55 * scale, alpha: 0, duration: 320, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
 
-    if (!SaveSystem.get().settings.particles) return;
+    if (!this.particlesEnabled) return;
     const shardCount = playerDeath ? 12 : 7;
     for (let i = 0; i < shardCount; i += 1) {
       const angle = (Math.PI * 2 * i) / shardCount + Phaser.Math.FloatBetween(-0.18, 0.18);
@@ -2717,7 +3110,7 @@ export class ArenaScene extends Phaser.Scene {
     this.state.set(this.bombSites.activeBombCount() > 1 ? RoundState.Defense : RoundState.Victory);
 
     const color = SaveSystem.getCosmeticColor('bombColor', this.time.now);
-    const prismBomb = SaveSystem.isPrismCosmetic('bombColor');
+    const prismBomb = this.prismBombColor;
     this.audio.playSfx('bomb');
     this.cameras.main.shake(760, 0.02);
     this.physics.world.timeScale = 0.35;
@@ -2757,13 +3150,18 @@ export class ArenaScene extends Phaser.Scene {
       return false;
     });
 
-    this.projectiles = this.projectiles.filter((p) => {
-      if (Phaser.Math.Distance.Between(p.sprite.x, p.sprite.y, site.x, site.y) < 330) {
-        p.sprite.destroy();
-        return false;
+    let projectileWriteIndex = 0;
+    for (const projectile of this.projectiles) {
+      const dx = projectile.sprite.x - site.x;
+      const dy = projectile.sprite.y - site.y;
+      if (dx * dx + dy * dy < 330 * 330) {
+        this.retireProjectile(projectile);
+      } else {
+        this.projectiles[projectileWriteIndex] = projectile;
+        projectileWriteIndex += 1;
       }
-      return true;
-    });
+    }
+    this.projectiles.length = projectileWriteIndex;
     this.homingMissiles = this.homingMissiles.filter((missile) => {
       if (Phaser.Math.Distance.Between(missile.sprite.x, missile.sprite.y, site.x, site.y) >= 330) return true;
       this.detonateHomingMissile(missile, 'intercepted');
@@ -2907,7 +3305,7 @@ export class ArenaScene extends Phaser.Scene {
       this.layout.theme,
       this.layout.generation.bounds,
       (x, y) => this.hitWall(x, y),
-      SaveSystem.get().settings.particles,
+      this.particlesEnabled,
       (damage) => {
         this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
@@ -2967,13 +3365,11 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private spawnBossProjectile(spec: BossProjectileSpec): void {
-    const projectile = this.physics.add.image(spec.x, spec.y, 'projectile-orb');
-    projectile.setDisplaySize(spec.size ?? 9, spec.size ?? 9);
-    projectile.setTint(spec.color).setRotation(spec.angle).setDepth(8);
-    projectile.setVelocity(Math.cos(spec.angle) * spec.speed, Math.sin(spec.angle) * spec.speed);
     GameplayTelemetryRecorder.recordBossProjectileFired(spec.attack);
-    this.projectiles.push({
-      sprite: projectile,
+    this.projectiles.push(this.obtainProjectile({
+      x: spec.x, y: spec.y, texture: 'projectile-orb', width: spec.size ?? 9, height: spec.size ?? 9,
+      tint: spec.color, rotation: spec.angle,
+      velocityX: Math.cos(spec.angle) * spec.speed, velocityY: Math.sin(spec.angle) * spec.speed, depth: 8,
       damage: spec.damage,
       from: 'enemy',
       lifeMs: 2600,
@@ -2982,7 +3378,7 @@ export class ArenaScene extends Phaser.Scene {
       previousY: spec.y,
       telemetryOwner: 'boss',
       bossAttack: spec.attack
-    });
+    }));
   }
 
   private applyBossAreaDamage(x: number, y: number, radius: number, damage: number, attack: BossAttackKind): void {
@@ -3154,52 +3550,58 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
+  private refreshHudBuffs(now: number): void {
+    this.hudBuffs.length = 0;
+    this.appendHudBuff('DAMAGE+', this.player.buffs.damageBoostUntil, now);
+    this.appendHudBuff('SPEED+', this.player.buffs.speedBoostUntil, now);
+    this.appendHudBuff('RAPID FIRE+', this.player.buffs.rapidFireUntil, now);
+  }
+
+  private appendHudBuff(label: string, until: number, now: number): void {
+    const seconds = Math.max(0, (until - now) / 1000);
+    if (seconds <= 0) return;
+    const shown = seconds < 1 ? seconds.toFixed(1) : `${Math.ceil(seconds)}`;
+    this.hudBuffs.push(`${label} ${shown}s`);
+  }
+
   private updateHud(now: number): void {
     if (this.bossEncounter) {
       this.updateBossHud(now);
       return;
     }
     const activeSites = this.bombSites.getActiveBombSites();
-    const defusingSites = activeSites.filter((site) => site.state === BombSiteState.BeingDefused);
-    const hudFocus = [...(defusingSites.length > 0 ? defusingSites : activeSites)].sort((a, b) => a.timerMs - b.timerMs)[0] ?? null;
-    const targetSite = this.bombSites.sites
-      .filter((site) => site.state === BombSiteState.Available || site.state === BombSiteState.Planting)
-      .sort((a, b) => Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y)
-        - Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y))[0] ?? null;
+    let defusingCount = 0;
+    let defusingFocus: BombSiteRuntime | null = null;
+    let activeFocus: BombSiteRuntime | null = null;
+    for (const site of activeSites) {
+      if (!activeFocus || site.timerMs < activeFocus.timerMs) activeFocus = site;
+      if (site.state !== BombSiteState.BeingDefused) continue;
+      defusingCount += 1;
+      if (!defusingFocus || site.timerMs < defusingFocus.timerMs) defusingFocus = site;
+    }
+    const hudFocus = defusingFocus ?? activeFocus;
+    let targetSite: BombSiteRuntime | null = null;
+    let targetDistanceSquared = Number.POSITIVE_INFINITY;
+    for (const site of this.bombSites.sites) {
+      if (site.state !== BombSiteState.Available && site.state !== BombSiteState.Planting) continue;
+      const dx = site.x - this.player.x;
+      const dy = site.y - this.player.y;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared < targetDistanceSquared) {
+        targetSite = site;
+        targetDistanceSquared = distanceSquared;
+      }
+    }
     const activeSummary = activeSites.length > 1 ? ` • ${activeSites.length} ACTIVE` : '';
     const objectiveText = hudFocus
-      ? defusingSites.length > 0
+      ? defusingCount > 0
         ? `SITE ${hudFocus.letter} — DEFUSE${activeSummary}`
         : `SITE ${hudFocus.letter} — DEFEND${activeSummary}`
       : targetSite
         ? `SITE ${targetSite.letter} ${targetSite.state === BombSiteState.Planting ? '— PLANTING' : 'AVAILABLE'}`
         : this.state.state === RoundState.Victory ? 'ALL SITES SECURED' : 'OBJECTIVE COMPLETE';
 
-    const phaseMap: Record<RoundState, string> = {
-      [RoundState.PrePlant]: 'PRE-PLANT',
-      [RoundState.Planting]: 'PLANTING',
-      [RoundState.Defense]: 'DEFEND',
-      [RoundState.Defusing]: 'DEFUSE ALERT',
-      [RoundState.Victory]: 'ROUND COMPLETE',
-      [RoundState.Defeat]: 'MISSION FAILURE',
-      [RoundState.Paused]: 'PAUSED'
-    };
-
-    const fmtBuff = (label: string, until: number): string => {
-      const sec = Math.max(0, (until - now) / 1000);
-      if (sec <= 0) return '';
-      const shown = sec < 1 ? sec.toFixed(1) : `${Math.ceil(sec)}`;
-      return `${label} ${shown}s`;
-    };
-
-    this.hudBuffs.length = 0;
-    for (const buff of [
-      fmtBuff('DAMAGE+', this.player.buffs.damageBoostUntil),
-      fmtBuff('SPEED+', this.player.buffs.speedBoostUntil),
-      fmtBuff('RAPID FIRE+', this.player.buffs.rapidFireUntil)
-    ]) {
-      if (buff.length > 0) this.hudBuffs.push(buff);
-    }
+    this.refreshHudBuffs(now);
 
     const fenceCfg = this.getAbilityConfig('fence');
     const turretCfg = this.getAbilityConfig('turret');
@@ -3217,10 +3619,10 @@ export class ArenaScene extends Phaser.Scene {
     this.hudPayload.level = this.roundManager.round;
     this.hudPayload.enemies = this.enemies.length;
     this.hudPayload.credits = this.totalCreditsCollected;
-    this.hudPayload.phase = phaseMap[this.state.state];
+    this.hudPayload.phase = ROUND_PHASE_LABELS[this.state.state];
     this.hudPayload.objective = objectiveText;
     this.hudPayload.objectiveTimerMs = hudFocus?.timerMs ?? null;
-    this.hudPayload.defuseAlert = defusingSites.length > 0;
+    this.hudPayload.defuseAlert = defusingCount > 0;
     this.hudPayload.bombUrgent = Boolean(hudFocus && hudFocus.timerMs <= 15_000);
     this.hudPayload.bombActive = Boolean(hudFocus);
     this.hudPayload.bombProgress = hudFocus
@@ -3260,16 +3662,7 @@ export class ArenaScene extends Phaser.Scene {
   private updateBossHud(now: number): void {
     const encounter = this.bossEncounter;
     if (!encounter) return;
-    const fmtBuff = (label: string, until: number): string => {
-      const sec = Math.max(0, (until - now) / 1000);
-      return sec <= 0 ? '' : `${label} ${sec < 1 ? sec.toFixed(1) : Math.ceil(sec)}s`;
-    };
-    this.hudBuffs.length = 0;
-    for (const buff of [
-      fmtBuff('DAMAGE+', this.player.buffs.damageBoostUntil),
-      fmtBuff('SPEED+', this.player.buffs.speedBoostUntil),
-      fmtBuff('RAPID FIRE+', this.player.buffs.rapidFireUntil)
-    ]) if (buff) this.hudBuffs.push(buff);
+    this.refreshHudBuffs(now);
 
     const fenceCfg = this.getAbilityConfig('fence');
     const turretCfg = this.getAbilityConfig('turret');
@@ -3318,27 +3711,17 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private refreshHudRadarContacts(): void {
-    this.hudRadarContacts.length = 0;
+    this.hudRadarContactCount = 0;
     const playerX = this.player.x;
     const playerY = this.player.y;
 
     for (const enemy of this.enemies) {
       if (!enemy.active || enemy.isDead()) continue;
-      this.hudRadarContacts.push({
-        kind: 'enemy',
-        state: 'normal',
-        dx: enemy.x - playerX,
-        dy: enemy.y - playerY
-      });
+      this.appendHudRadarContact('enemy', 'normal', enemy.x - playerX, enemy.y - playerY);
     }
 
     if (this.bossEncounter?.boss.active && !this.bossEncounter.boss.isDefeated) {
-      this.hudRadarContacts.push({
-        kind: 'boss',
-        state: 'normal',
-        dx: this.bossEncounter.boss.x - playerX,
-        dy: this.bossEncounter.boss.y - playerY
-      });
+      this.appendHudRadarContact('boss', 'normal', this.bossEncounter.boss.x - playerX, this.bossEncounter.boss.y - playerY);
     } else if (this.bombSites) {
       for (const site of this.bombSites.sites) {
         if (site.state === BombSiteState.Destroyed || site.state === BombSiteState.Detonated) continue;
@@ -3346,12 +3729,30 @@ export class ArenaScene extends Phaser.Scene {
           : site.state === BombSiteState.Armed ? 'active'
             : site.state === BombSiteState.Available || site.state === BombSiteState.Planting ? 'available'
               : 'locked';
-        this.hudRadarContacts.push({ kind: 'objective', state, dx: site.x - playerX, dy: site.y - playerY });
+        this.appendHudRadarContact('objective', state, site.x - playerX, site.y - playerY);
       }
     }
+    this.hudRadarContacts.length = this.hudRadarContactCount;
 
     const bounds = this.layout.generation.bounds;
     this.hudPayload.radarRange = Math.max(600, Math.min(bounds.w, bounds.h) * 0.42);
+  }
+
+  private appendHudRadarContact(
+    kind: HudRadarContact['kind'],
+    state: HudRadarContact['state'],
+    dx: number,
+    dy: number
+  ): void {
+    const index = this.hudRadarContactCount;
+    const contact = this.hudRadarContactPool[index] ?? { kind, state, dx, dy };
+    contact.kind = kind;
+    contact.state = state;
+    contact.dx = dx;
+    contact.dy = dy;
+    if (!this.hudRadarContactPool[index]) this.hudRadarContactPool[index] = contact;
+    this.hudRadarContacts[index] = contact;
+    this.hudRadarContactCount += 1;
   }
 
   private currentCombatRound(): number {
@@ -3371,9 +3772,140 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getHazardDamageTargets(): HazardDamageTarget[] {
-    const targets: HazardDamageTarget[] = [...this.enemies];
-    if (this.bossEncounter?.boss.active && !this.bossEncounter.boss.isDefeated) targets.push(this.bossEncounter.boss);
-    return targets;
+    this.hazardDamageTargets.length = 0;
+    for (const enemy of this.enemies) this.hazardDamageTargets.push(enemy);
+    if (this.bossEncounter?.boss.active && !this.bossEncounter.boss.isDefeated) this.hazardDamageTargets.push(this.bossEncounter.boss);
+    return this.hazardDamageTargets;
+  }
+
+  private ensurePerformanceTelemetry(): Phaser.GameObjects.Text {
+    if (!this.performanceTelemetry) {
+      this.performanceTelemetry = this.add.text(12, 112, '', {
+        fontFamily: 'monospace', fontSize: '13px', color: '#9ffcff',
+        backgroundColor: '#020711dd', padding: { x: 8, y: 6 }
+      }).setScrollFactor(0).setDepth(5000).setVisible(false);
+    }
+    return this.performanceTelemetry;
+  }
+
+  /** DEV-only Round 30 workload; never registered as a production menu path. */
+  private activateDevPerformanceStressScenario(): void {
+    if (!import.meta.env.DEV) return;
+
+    this.roundManager = new RoundManager(this.roundManager.seedBase, this.roundManager.mode, 30);
+    this.createRoundFromDefinition(this.roundManager.currentDefinition());
+    const now = this.time.now;
+    const site = this.bombSites.sites.find((candidate) => candidate.state === BombSiteState.Available);
+    if (site) this.bombSites.armSite(site, this.getBombDefenseDurationMs(), now);
+
+    const stressEnemyTypes: EnemyType[] = ['grunt', 'shooter', 'grunt', 'defuser', 'tank', 'disruptor', 'star'];
+    const pressure = getConcurrentSpawnPressure(getSpawnProfile(30, 0), site ? 1 : 0);
+    for (let index = 0; index < pressure.activeCountCap; index += 1) {
+      this.spawnEnemy(stressEnemyTypes[index % stressEnemyTypes.length], Boolean(site));
+    }
+
+    const fenceCfg = this.getAbilityConfig('fence');
+    const bounds = this.layout.generation.bounds;
+    for (const xOffset of [55, 110]) {
+      const x = Phaser.Math.Clamp(this.player.x + xOffset, bounds.x + 50, bounds.x + bounds.w - 50);
+      this.fences.push(new Fence(
+        this, x, this.player.y, Math.PI / 2,
+        SaveSystem.getCosmeticColor('fenceStyle', now), ABILITY_BALANCE.fence.width,
+        fenceCfg.durationMs, fenceCfg.hp, fenceCfg.damage, ABILITY_BALANCE.fence.slowFactor
+      ));
+    }
+
+    const turretCfg = this.getAbilityConfig('turret');
+    for (let index = 0; index < 3; index += 1) {
+      const angle = index / 3 * Math.PI * 2;
+      const turret = new Turret(
+        this,
+        this.player.x + Math.cos(angle) * 72,
+        this.player.y + Math.sin(angle) * 72,
+        SaveSystem.getCosmeticColor('turretSkin', now),
+        turretCfg.hp, turretCfg.damage, turretCfg.fireRate, turretCfg.range
+      );
+      turret.telemetryId = `turret-${++this.turretTelemetrySequence}`;
+      this.turrets.push(turret);
+      GameplayTelemetryRecorder.recordTurretPlaced(turret.telemetryId, {
+        maximumHealth: turretCfg.hp,
+        damage: turretCfg.damage,
+        fireRate: turretCfg.fireRate,
+        range: turretCfg.range
+      });
+    }
+
+    const mineCfg = this.getAbilityConfig('mine');
+    for (let index = 0; index < 4; index += 1) {
+      const angle = index / 4 * Math.PI * 2 + Math.PI / 4;
+      this.mines.push(new Mine(
+        this,
+        this.player.x + Math.cos(angle) * 115,
+        this.player.y + Math.sin(angle) * 115,
+        COLORS.orange,
+        mineCfg.armMs,
+        mineCfg.damage,
+        mineCfg.radius
+      ));
+    }
+
+    for (let index = 0; index < 18; index += 1) {
+      const angle = index / 18 * Math.PI * 2;
+      this.dropPickup(this.player.x + Math.cos(angle) * 165, this.player.y + Math.sin(angle) * 165);
+    }
+
+    const projectileColor = SaveSystem.getCosmeticColor('projectileColor', now);
+    const trailColor = SaveSystem.getCosmeticColor('trailColor', now);
+    for (let index = 0; index < 180; index += 1) {
+      const y = this.player.y - 38 + index % 19 * 4;
+      this.projectiles.push(this.obtainProjectile({
+        x: this.player.x, y, texture: this.projectileTextureKey,
+        width: this.projectileWidth, height: this.projectileHeight,
+        tint: projectileColor, rotation: 0, velocityX: this.player.weapon.projectileSpeed, velocityY: 0, depth: 8,
+        damage: this.player.weapon.damage, from: 'player', lifeMs: 950, trailColor,
+        splitCurrentEligible: true, previousX: this.player.x, previousY: y,
+        telemetryOwner: 'weapon', critical: false
+      }));
+      GameplayTelemetryRecorder.recordProjectileFired('weapon');
+    }
+
+    const enemyDamage = this.enemies.find((enemy) => enemy.stats.type === 'shooter')?.stats.damage
+      ?? baseEnemyStats.shooter.damage;
+    for (let index = 0; index < 240; index += 1) {
+      const angle = index / 240 * Math.PI * 2;
+      const x = this.player.x + Math.cos(angle) * 330;
+      const y = this.player.y + Math.sin(angle) * 330;
+      const inwardAngle = angle + Math.PI;
+      this.projectiles.push(this.obtainProjectile({
+        x, y, texture: 'circle', width: 7, height: 7, tint: COLORS.orange,
+        rotation: inwardAngle, velocityX: Math.cos(inwardAngle) * 420, velocityY: Math.sin(inwardAngle) * 420, depth: 7,
+        damage: enemyDamage, from: 'enemy', lifeMs: 1400, trailColor: COLORS.orange, telemetryOwner: 'enemy'
+      }));
+      GameplayTelemetryRecorder.recordProjectileFired('enemy');
+    }
+
+    this.player.buffs.damageBoostUntil = now + 120_000;
+    this.player.buffs.speedBoostUntil = now + 120_000;
+    this.player.buffs.rapidFireUntil = now + 120_000;
+    this.player.invulnUntil = now + 120_000;
+    this.ensurePerformanceTelemetry().setVisible(true);
+    this.nextPerformanceTelemetryAt = 0;
+    this.showBanner('DEV PERFORMANCE STRESS // ROUND 30\nF5 RESET  â€¢  F6 METRICS');
+  }
+
+  private updatePerformanceTelemetry(now: number): void {
+    if (!import.meta.env.DEV || !this.performanceTelemetry?.visible || now < this.nextPerformanceTelemetryAt) return;
+    this.nextPerformanceTelemetryAt = now + 500;
+    const frames = this.performanceMonitor.snapshot();
+    const projectiles = this.projectilePool.stats();
+    const fx = this.fxCirclePool.stats();
+    this.performanceTelemetry.setText(
+      `PERF DEV (F6)  avg ${frames.averageMs.toFixed(1)}ms  p95 ${frames.p95Ms.toFixed(1)}ms  max ${frames.maximumMs.toFixed(1)}ms\n`
+      + `>33ms ${frames.framesOver33Ms}/${frames.samples}  >50ms ${frames.framesOver50Ms}/${frames.samples}\n`
+      + `Enemies ${this.enemies.length}  Projectiles ${this.projectiles.length}  Missiles ${this.homingMissiles.length}\n`
+      + `Projectile pool new ${projectiles.created} reuse ${projectiles.reused} free ${projectiles.available}\n`
+      + `FX pool new ${fx.created} reuse ${fx.reused} active ${fx.active}`
+    );
   }
 
   private updateBalanceTelemetry(): void {
@@ -3420,7 +3952,7 @@ export class ArenaScene extends Phaser.Scene {
     armMs: number;
     radius: number;
   } {
-    const up = SaveSystem.get().upgrades;
+    const up = this.runUpgrades;
     if (type === 'fence') {
       const upgradedDamage = ABILITY_BALANCE.fence.damage + getUpgradeLevel(up, 'fence.damage') * 4;
       const upgradedHealth = ABILITY_BALANCE.fence.hp + getUpgradeLevel(up, 'fence.health') * 16;
@@ -3471,7 +4003,7 @@ export class ArenaScene extends Phaser.Scene {
   private getShieldDurationMs(): number {
     const upgraded = Math.min(
       ABILITY_BALANCE.shield.maximumDurationMs,
-      ABILITY_BALANCE.shield.durationMs + getUpgradeEffect(SaveSystem.get().upgrades, 'player.shieldDuration')
+      ABILITY_BALANCE.shield.durationMs + getUpgradeEffect(this.runUpgrades, 'player.shieldDuration')
     );
     return upgraded * this.modRuntime.multiplier('shieldDuration');
   }
@@ -3493,7 +4025,10 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private hitWall(x: number, y: number): boolean {
-    return this.wallRects.some((w) => x >= w.x && x <= w.x + w.w && y >= w.y && y <= w.y + w.h);
+    for (const wall of this.wallRects) {
+      if (x >= wall.x && x <= wall.x + wall.w && y >= wall.y && y <= wall.y + wall.h) return true;
+    }
+    return false;
   }
 
   private isValidPlacement(x: number, y: number): boolean {
@@ -3506,12 +4041,44 @@ export class ArenaScene extends Phaser.Scene {
     return true;
   }
 
+  private findProjectileHitEnemy(x: number, y: number): Enemy | null {
+    for (const enemy of this.enemies) {
+      const dx = enemy.x - x;
+      const dy = enemy.y - y;
+      const radius = enemy.stats.size * 0.5 + 5;
+      if (dx * dx + dy * dy < radius * radius) return enemy;
+    }
+    return null;
+  }
+
   private getNearestEnemy(x: number, y: number, range: number): Enemy | null {
     const priorityRank = this.modRuntime.has('priority-targeting') ? this.modRuntime.rank('priority-targeting') : -1;
-    return prioritizeTurretTargets(this.enemies
-      .filter((enemy) => !enemy.isDead())
-      .map((enemy) => ({ enemy, distance: Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y), activelyDefusing: this.defuseAssignees.has(enemy), marked: this.time.now < (this.defuserMarkedUntil.get(enemy) ?? 0) }))
-      .filter(({ distance }) => distance < range), priorityRank)[0]?.enemy ?? null;
+    const rangeSquared = range * range;
+    const now = this.time.now;
+    let selected: Enemy | null = null;
+    let selectedDistanceSquared = Number.POSITIVE_INFINITY;
+    let selectedPriority = false;
+    let selectedIndex = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < this.enemies.length; index += 1) {
+      const enemy = this.enemies[index];
+      if (enemy.isDead()) continue;
+      const dx = enemy.x - x;
+      const dy = enemy.y - y;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared >= rangeSquared) continue;
+      const priority = priorityRank >= 0 && (this.defuseAssignees.has(enemy)
+        || (priorityRank >= 2 && now < (this.defuserMarkedUntil.get(enemy) ?? 0)));
+      if (shouldReplaceTurretTarget(
+        priority, distanceSquared, index, selected !== null,
+        selectedPriority, selectedDistanceSquared, selectedIndex
+      )) {
+        selected = enemy;
+        selectedDistanceSquared = distanceSquared;
+        selectedPriority = priority;
+        selectedIndex = index;
+      }
+    }
+    return selected;
   }
 
   private getBlockers(): RectSpec[] {
@@ -3789,7 +4356,9 @@ export class ArenaScene extends Phaser.Scene {
     this.bombletHazard?.destroy();
     this.bombletHazard = null;
     for (const e of this.enemies) e.destroy();
-    for (const p of this.projectiles) p.sprite.destroy();
+    for (const p of this.projectiles) this.retireProjectile(p);
+    this.projectilePool.releaseAll();
+    this.fxCirclePool.releaseAll();
     for (const missile of this.homingMissiles) missile.sprite.destroy();
     for (const p of this.pickups) p.sprite.destroy();
     for (const f of this.fences) f.destroy();
@@ -3807,12 +4376,17 @@ export class ArenaScene extends Phaser.Scene {
     this.turrets.length = 0;
     this.mines.length = 0;
     this.deathMines.length = 0;
+    this.pendingSplitProjectiles.length = 0;
     this.defuseAssignees.clear();
     this.nextHoloAfterimageAt = 0;
     this.arcadePopSequence = 0;
 
     this.children.list
-      .filter((obj) => 'depth' in obj && (obj as { depth: number }).depth <= 4 && obj !== this.player)
+      .filter((obj) => 'depth' in obj
+        && (obj as { depth: number }).depth <= 4
+        && obj !== this.player
+        && !this.projectilePool.owns(obj)
+        && !this.fxCirclePool.owns(obj))
       .forEach((obj) => obj.destroy());
   }
 
@@ -3830,6 +4404,8 @@ export class ArenaScene extends Phaser.Scene {
     this.crosshair?.destroy();
     this.balanceTelemetry?.destroy();
     this.balanceTelemetry = null;
+    this.performanceTelemetry?.destroy();
+    this.performanceTelemetry = null;
     this.hidePauseMenu();
     this.hideEquippedModsViewer();
     this.bombSites?.destroy();
@@ -3840,6 +4416,9 @@ export class ArenaScene extends Phaser.Scene {
     this.bossEncounter?.destroy();
     this.bossEncounter = null;
     this.destroyShieldOrb();
+    this.projectilePool?.destroy((projectile) => projectile.sprite.destroy());
+    this.fxCirclePool?.destroy((circle) => circle.destroy());
+    this.pendingSplitProjectiles.length = 0;
     this.input.off('pointerdown', this.onPointerDown);
     this.input.off('pointerup', this.onPointerUp);
     window.removeEventListener('keydown', this.onAbilityKeyDown);

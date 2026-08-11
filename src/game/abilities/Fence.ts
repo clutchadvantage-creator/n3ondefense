@@ -3,6 +3,10 @@ import Phaser from 'phaser';
 export class Fence {
   readonly sprite: Phaser.GameObjects.Rectangle;
   readonly width: number;
+  readonly x1: number;
+  readonly y1: number;
+  readonly x2: number;
+  readonly y2: number;
   hp: number;
   dps: number;
   slowFactor: number;
@@ -14,6 +18,13 @@ export class Fence {
     this.sprite.setStrokeStyle(2, color, 1);
     this.sprite.setRotation(angle);
     this.sprite.setDepth(4);
+    const halfWidth = width * 0.5;
+    const offsetX = Math.cos(angle) * halfWidth;
+    const offsetY = Math.sin(angle) * halfWidth;
+    this.x1 = x - offsetX;
+    this.y1 = y - offsetY;
+    this.x2 = x + offsetX;
+    this.y2 = y + offsetY;
 
     scene.tweens.add({
       targets: this.sprite,

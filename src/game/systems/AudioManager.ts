@@ -1,5 +1,5 @@
 import { SaveSystem } from './SaveSystem';
-import type { AudioSfxName } from '../config/audio';
+import { SFX_DEFINITIONS, type AudioSfxName } from '../config/audio';
 
 export class AudioManager {
   private static instance: AudioManager | null = null;
@@ -28,6 +28,9 @@ export class AudioManager {
   private explosionSfxCursor = 0;
   private enemyDeathSfxCursor = 0;
   private playerDeathSfxCursor = 0;
+  private cachedMusicVolume = 0.51;
+  private cachedSfxVolume = 0.6375;
+  private readonly cachedSoundVolumes = {} as Record<AudioSfxName, number>;
 
   private clampVolume(value: number): number {
     return Math.max(0, Math.min(1, value));
@@ -35,6 +38,7 @@ export class AudioManager {
 
   private constructor() {
     this.context = new AudioContext();
+    this.refreshVolumeCache();
     this.initShotSfxPool();
     this.initBoostSfxPool();
     this.initExplosionSfxPool();
@@ -49,14 +53,22 @@ export class AudioManager {
   }
 
   private getVolume(kind: 'music' | 'sfx', sound?: AudioSfxName): number {
+    if (kind === 'music') return this.cachedMusicVolume;
+    return sound ? this.cachedSoundVolumes[sound] ?? this.cachedSfxVolume : this.cachedSfxVolume;
+  }
+
+  private refreshVolumeCache(): void {
     try {
       const settings = SaveSystem.get().settings;
-      const local = kind === 'music' ? settings.musicVolume : settings.sfxVolume;
-      const individual = kind === 'sfx' && sound ? settings.soundVolumes[sound] : 1;
-      return settings.masterVolume * local * individual;
+      this.cachedMusicVolume = settings.masterVolume * settings.musicVolume;
+      this.cachedSfxVolume = settings.masterVolume * settings.sfxVolume;
+      for (const definition of SFX_DEFINITIONS) {
+        this.cachedSoundVolumes[definition.key] = this.cachedSfxVolume * settings.soundVolumes[definition.key];
+      }
     } catch {
-      const local = kind === 'music' ? 0.6 : 0.75;
-      return 0.85 * local;
+      this.cachedMusicVolume = 0.85 * 0.6;
+      this.cachedSfxVolume = 0.85 * 0.75;
+      for (const definition of SFX_DEFINITIONS) this.cachedSoundVolumes[definition.key] = this.cachedSfxVolume;
     }
   }
 
@@ -335,6 +347,7 @@ export class AudioManager {
   }
 
   refreshMix(): void {
+    this.refreshVolumeCache();
     if (this.musicAudio) {
       this.musicAudio.volume = this.clampVolume(this.getVolume('music'));
     }
