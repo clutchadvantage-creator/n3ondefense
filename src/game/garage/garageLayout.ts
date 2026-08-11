@@ -20,7 +20,8 @@ export const calculateGarageLayout = (width: number, height: number): GarageLayo
   const compact = width < 900 || height < 620;
   const spacious = width >= 1200 && height >= 720;
   const dockGap = clamp(width * 0.009, 6, 13);
-  const cardWidth = Math.floor(clamp((width - safe * 2 - dockGap * 4) / 5, 84, compact ? 118 : 132));
+  const compactCardMaximum = height < 540 ? 98 : 118;
+  const cardWidth = Math.floor(clamp((width - safe * 2 - dockGap * 4) / 5, 84, compact ? compactCardMaximum : 132));
   const cardHeight = Math.round(cardWidth * 1.4);
   const totalDockWidth = cardWidth * 5 + dockGap * 4;
   const dockStartX = (width - totalDockWidth) / 2 + cardWidth / 2;
@@ -37,7 +38,7 @@ export const calculateGarageLayout = (width: number, height: number): GarageLayo
   const terminalInset = safe + Math.round(compact ? 6 : clamp(width * 0.025, 20, 48));
   const dockY = clamp(Math.max(
     preferredDockY,
-    terminalY + terminalHeight + cardHeight / 2 + (compact ? 24 : 28)
+    terminalY + terminalHeight + cardHeight / 2 + (compact ? 32 : 46)
   ), 224, height - 128);
   const previewWidth = Math.floor(clamp(width * (spacious ? 0.25 : 0.22), 150, spacious ? 340 : 270));
   const previewHeight = compact ? 96 : Math.round(spacious ? clamp(height * 0.205, 174, 200) : 138);

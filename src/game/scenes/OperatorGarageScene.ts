@@ -5,6 +5,12 @@ import { MOD_FOCUS_CATEGORIES, MOD_FOCUS_LABELS, RUN_CONTRACT_IDS, RUN_CONTRACTS
 import { getRunSetupCost } from '../economy/EconomyService.ts';
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys.ts';
 import { calculateGarageLayout, type GarageRect } from '../garage/garageLayout.ts';
+import {
+  addTerminalMount,
+  createGarageEnvironment,
+  createModWorkbench,
+  createStationHousing
+} from '../garage/GarageEnvironment.ts';
 import { getGarageDockModels, getModLibraryEntries, getModLibraryProgress } from '../garage/GarageState.ts';
 import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
 import { MOD_RARITY_COLORS, createModCardView } from '../mods/ModCardView.ts';
@@ -72,7 +78,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.audio.startMusicLoop();
     const { width, height } = this.scale;
     const layout = calculateGarageLayout(width, height);
-    this.createGarageRoom(width, height);
+    createGarageEnvironment(this, layout);
+    createModWorkbench(this, layout.cardWidth, layout.cardHeight, layout.dockCenters, layout.compact);
 
     createButton(this, layout.safe + 72, 34, 'BACK', () => this.returnToPrevious(), 132).setDepth(80);
     this.add.text(width / 2, 18, 'OPERATOR GARAGE', {
@@ -106,59 +113,34 @@ export class OperatorGarageScene extends Phaser.Scene {
     });
   }
 
-  private createGarageRoom(width: number, height: number): void {
-    this.add.rectangle(width / 2, height / 2, width, height, 0x03070c, 1);
-    this.add.grid(width / 2, height * 0.43, width, height * 0.76, 46, 46, 0x07111b, 0.15, 0x1c4453, 0.12);
-    const room = this.add.graphics();
-    room.fillStyle(0x07111a, 0.98).fillRect(0, height * 0.72, width, height * 0.28);
-    room.lineStyle(2, 0x174452, 0.48);
-    const vanishingX = width / 2;
-    for (let x = -width; x <= width * 2; x += Math.max(70, width / 12)) room.lineBetween(x, height, vanishingX, height * 0.72);
-    for (let y = height * 0.74; y < height; y += Math.max(24, height * 0.045)) room.lineBetween(0, y, width, y);
-    room.lineStyle(6, 0x0e2631, 0.9).lineBetween(0, 66, width, 66);
-    room.lineStyle(2, 0x42eafb, 0.35).lineBetween(0, 69, width, 69);
-    room.lineStyle(8, 0x111a25, 1);
-    room.lineBetween(width * 0.08, 70, width * 0.08, height * 0.69);
-    room.lineBetween(width * 0.92, 70, width * 0.92, height * 0.69);
-    room.lineStyle(3, 0xff4ac6, 0.26);
-    room.beginPath(); room.moveTo(width * 0.07, 72); room.lineTo(width * 0.16, height * 0.22); room.lineTo(width * 0.13, height * 0.5); room.strokePath();
-    room.lineStyle(3, 0x4bf5ff, 0.22);
-    room.beginPath(); room.moveTo(width * 0.93, 72); room.lineTo(width * 0.84, height * 0.24); room.lineTo(width * 0.88, height * 0.51); room.strokePath();
-
-    const ceilingLight = this.add.rectangle(width / 2, 73, Math.min(420, width * 0.42), 5, 0x56f2ff, 0.65).setDepth(2);
-    this.tweens.add({ targets: ceilingLight, alpha: { from: 0.32, to: 0.85 }, duration: 2700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    const fan = this.add.container(width * 0.86, height * 0.16).setDepth(2);
-    fan.add(this.add.circle(0, 0, 29, 0x07121b, 0.85).setStrokeStyle(2, 0x2d7582, 0.42));
-    const blades = this.add.graphics();
-    blades.fillStyle(0x2e6874, 0.34);
-    for (let index = 0; index < 4; index += 1) {
-      const angle = Phaser.Math.DegToRad(index * 90);
-      const rotate = (x: number, y: number): Phaser.Math.Vector2 => new Phaser.Math.Vector2(
-        x * Math.cos(angle) - y * Math.sin(angle),
-        x * Math.sin(angle) + y * Math.cos(angle)
-      );
-      const a = rotate(-4, -4);
-      const b = rotate(5, -25);
-      const c = rotate(8, -5);
-      blades.fillTriangle(a.x, a.y, b.x, b.y, c.x, c.y);
-    }
-    fan.add(blades);
-    this.tweens.add({ targets: blades, angle: 360, duration: 5400, repeat: -1, ease: 'Linear' });
-    const scan = this.add.rectangle(width / 2, 74, width, 2, 0x67f7ff, 0.08).setDepth(5);
-    this.tweens.add({ targets: scan, y: height * 0.7, duration: 4100, repeat: -1, ease: 'Linear' });
-  }
-
   private terminalFrame(rect: GarageRect, title: string, color = 0x55efff): Phaser.GameObjects.Container {
     const root = this.add.container(rect.x, rect.y).setDepth(40);
     const roomy = rect.height >= 180;
     const headerHeight = roomy ? 35 : 29;
-    const panel = this.add.rectangle(0, 0, rect.width, rect.height, 0x07131d, 0.9).setOrigin(0).setStrokeStyle(2, color, 0.58);
+    const panel = this.add.rectangle(0, 0, rect.width, rect.height, 0x06111a, 0.94).setOrigin(0).setStrokeStyle(2, color, 0.62);
+    const glass = this.add.rectangle(6, headerHeight + 5, rect.width - 12, rect.height - headerHeight - 11, color, 0.018)
+      .setOrigin(0)
+      .setStrokeStyle(1, 0x345563, 0.3);
+    const scanlines = this.add.grid(
+      7,
+      headerHeight + 6,
+      rect.width - 14,
+      rect.height - headerHeight - 13,
+      rect.width,
+      roomy ? 8 : 6,
+      0x000000,
+      0,
+      color,
+      0.025
+    ).setOrigin(0);
     const header = this.add.rectangle(0, 0, rect.width, headerHeight, color, 0.1).setOrigin(0).setStrokeStyle(1, color, 0.35);
     const label = this.add.text(13, roomy ? 8 : 7, title, {
       fontFamily: 'Orbitron, sans-serif', fontSize: roomy ? '15px' : '12px', color: Phaser.Display.Color.IntegerToColor(color).rgba
     }).setOrigin(0);
     const led = this.add.circle(rect.width - 14, headerHeight / 2, roomy ? 4 : 3, 0x68ffac, 0.9);
-    root.add([panel, header, label, led]);
+    const footerRail = this.add.rectangle(9, rect.height - 7, rect.width - 18, 2, color, 0.13).setOrigin(0);
+    root.add([panel, glass, scanlines, header, label, led, footerRail]);
+    addTerminalMount(this, root, rect, color);
     this.tweens.add({ targets: led, alpha: { from: 0.35, to: 1 }, duration: 1100, yoyo: true, repeat: -1 });
     return root;
   }
@@ -180,12 +162,12 @@ export class OperatorGarageScene extends Phaser.Scene {
     rows.forEach((row, index) => {
       const y = startY + index * rowGap;
       const hit = this.add.rectangle(7, y - 1, rect.width - 14, rowGap - 4, 0x102331, 0.5).setOrigin(0).setInteractive({ useHandCursor: true });
-      const label = this.add.text(15, y + (roomy ? 7 : 5), row.label, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '14px' : '11px', color: '#78adbf'
+      const label = this.add.text(15, y + (roomy ? 7 : 1), row.label, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '14px' : '9px', color: '#78adbf'
       }).setOrigin(0);
-      const value = this.add.text(rect.width - 15, y + (roomy ? 4 : 3), row.value, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '17px' : '12px', fontStyle: 'bold', color: '#d6fbff'
-      }).setOrigin(1, 0).setMaxLines(1);
+      const value = this.add.text(roomy ? rect.width - 15 : 15, y + (roomy ? 4 : 10), row.value, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '17px' : '10px', fontStyle: 'bold', color: '#d6fbff'
+      }).setOrigin(roomy ? 1 : 0, 0).setMaxLines(1);
       hit.on('pointerover', () => hit.setFillStyle(0x17374a, 0.75));
       hit.on('pointerout', () => hit.setFillStyle(0x102331, 0.5));
       hit.on('pointerdown', row.action);
@@ -237,10 +219,33 @@ export class OperatorGarageScene extends Phaser.Scene {
     const centerY = rect.y + rect.height * (large ? 0.48 : 0.52);
     const root = this.add.container(centerX, centerY).setDepth(35);
     const liftY = large ? 58 : compact ? 35 : 45;
-    const lift = this.add.ellipse(0, liftY, large ? 198 : compact ? 120 : 154, large ? 38 : compact ? 24 : 31, 0x142a35, 0.82).setStrokeStyle(2, 0x58efff, 0.62);
-    const glow = this.add.ellipse(0, liftY - (large ? 9 : 7), large ? 154 : compact ? 92 : 118, large ? 23 : compact ? 14 : 18, 0x5cf6ff, 0.2);
+    const bayWidth = large ? 258 : compact ? 142 : 192;
+    const bayTop = large ? -82 : compact ? -44 : -61;
+    const bayBottom = liftY + (large ? 27 : compact ? 18 : 22);
+    const bay = this.add.graphics();
+    bay.fillStyle(0x030910, 0.58).fillRoundedRect(-bayWidth / 2, bayTop, bayWidth, bayBottom - bayTop, large ? 10 : 6);
+    bay.fillStyle(0x0e1d27, 0.72).fillRect(-bayWidth / 2 + 8, bayTop + 8, bayWidth - 16, bayBottom - bayTop - 17);
+    bay.lineStyle(2, 0x31525f, 0.56).strokeRoundedRect(-bayWidth / 2, bayTop, bayWidth, bayBottom - bayTop, large ? 10 : 6);
+    bay.lineStyle(2, 0x58efff, 0.25);
+    bay.lineBetween(-bayWidth / 2 + 9, bayTop + 15, -bayWidth / 2 + 9, bayBottom - 12);
+    bay.lineStyle(2, 0xff5bcf, 0.2);
+    bay.lineBetween(bayWidth / 2 - 9, bayTop + 15, bayWidth / 2 - 9, bayBottom - 12);
+    bay.lineStyle(1, 0x456977, 0.34);
+    bay.lineBetween(-bayWidth * 0.32, bayTop + 12, -bayWidth * 0.32, bayBottom - 13);
+    bay.lineBetween(bayWidth * 0.32, bayTop + 12, bayWidth * 0.32, bayBottom - 13);
+    bay.fillStyle(0x58efff, 0.045).fillTriangle(-bayWidth * 0.34, bayTop + 10, -38, liftY - 4, 0, liftY - 4);
+    bay.fillStyle(0xff5bcf, 0.035).fillTriangle(bayWidth * 0.34, bayTop + 10, 38, liftY - 4, 0, liftY - 4);
+    const bayTag = this.add.text(0, bayTop + (large ? 8 : 6), 'BAY 01 // OPERATIVE LINK', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: large ? '9px' : compact ? '6px' : '8px', color: '#74b7c3', letterSpacing: 1
+    }).setOrigin(0.5, 0);
+    const liftShadow = this.add.ellipse(0, liftY + (large ? 8 : 5), large ? 220 : compact ? 132 : 172, large ? 42 : compact ? 26 : 34, 0x000000, 0.48);
+    const liftBase = this.add.ellipse(0, liftY + (large ? 5 : 3), large ? 208 : compact ? 126 : 162, large ? 40 : compact ? 25 : 33, 0x0a151e, 0.96).setStrokeStyle(2, 0x294a56, 0.78);
+    const lift = this.add.ellipse(0, liftY, large ? 198 : compact ? 120 : 154, large ? 38 : compact ? 24 : 31, 0x142a35, 0.86).setStrokeStyle(2, 0x58efff, 0.7);
+    const glow = this.add.ellipse(0, liftY - (large ? 9 : 7), large ? 154 : compact ? 92 : 118, large ? 23 : compact ? 14 : 18, 0x5cf6ff, 0.23);
     const ringY = large ? -11 : -5;
-    const ring = this.add.circle(0, ringY, large ? 60 : compact ? 38 : 49, 0x08131c, 0.44).setStrokeStyle(2, 0xff5bcf, 0.42);
+    const outerRing = this.add.circle(0, ringY, large ? 67 : compact ? 42 : 54, 0x000000, 0).setStrokeStyle(1, 0x58efff, 0.24);
+    const ring = this.add.circle(0, ringY, large ? 60 : compact ? 38 : 49, 0x08131c, 0.38).setStrokeStyle(2, 0xff5bcf, 0.48);
+    const projectionScan = this.add.rectangle(0, bayTop + (large ? 29 : 19), large ? 112 : compact ? 68 : 88, 2, 0x6af6ff, 0.28);
     const shapeId = SaveSystem.getEquippedCosmeticId('playerShape') ?? 'player-circle';
     const texture = this.textures.exists(shapeId) ? shapeId : 'player-circle';
     const operative = this.add.image(0, ringY, texture).setScale(large ? 2.75 : compact ? 1.72 : 2.2);
@@ -250,10 +255,20 @@ export class OperatorGarageScene extends Phaser.Scene {
     const caption = this.add.text(0, large ? 82 : compact ? 43 : 64, shape.toUpperCase(), {
       fontFamily: 'Rajdhani, sans-serif', fontSize: large ? '15px' : compact ? '11px' : '13px', fontStyle: 'bold', color: '#c9f3ff'
     }).setOrigin(0.5);
-    root.add([lift, glow, ring, operative, caption]);
+    root.add([bay, bayTag, liftShadow, liftBase, lift, glow, outerRing, ring, projectionScan, operative, caption]);
     this.operatorPreviewRoot = root;
     this.tweens.add({ targets: operative, y: { from: ringY - 4, to: ringY + 3 }, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.tweens.add({ targets: ring, angle: 360, alpha: { from: 0.28, to: 0.62 }, duration: 4800, repeat: -1, ease: 'Linear' });
+    this.tweens.add({ targets: ring, alpha: { from: 0.28, to: 0.62 }, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: outerRing, scale: { from: 0.96, to: 1.05 }, alpha: { from: 0.12, to: 0.42 }, duration: 2800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({
+      targets: projectionScan,
+      y: { from: bayTop + (large ? 29 : 19), to: liftY - (large ? 15 : 10) },
+      alpha: { from: 0.08, to: 0.34 },
+      duration: large ? 2600 : 2200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
     if (SaveSystem.isPrismCosmetic('playerColor')) {
       this.operatorPreviewColorTimer = this.time.addEvent({
         delay: 90,
@@ -284,6 +299,16 @@ export class OperatorGarageScene extends Phaser.Scene {
       const definition = dock.card ? MOD_BY_ID.get(dock.card.modId) : undefined;
       const color = definition ? MOD_RARITY_COLORS[definition.rarity] : 0x3e8999;
       const backing = this.add.rectangle(center.x, center.y, cardWidth + 12, cardHeight + 12, 0x06111a, 0.94).setStrokeStyle(2, color, dock.empty ? 0.42 : 0.8).setDepth(24);
+      const rails = this.add.graphics().setDepth(25);
+      const railLeft = center.x - cardWidth / 2 - 8;
+      const railRight = center.x + cardWidth / 2 + 8;
+      const railTop = center.y - cardHeight / 2 - 7;
+      const railBottom = center.y + cardHeight / 2 + 7;
+      rails.fillStyle(0x172832, 0.98).fillRect(railLeft, railTop, 5, cardHeight + 14).fillRect(railRight - 5, railTop, 5, cardHeight + 14);
+      rails.fillStyle(color, dock.empty ? 0.16 : 0.3).fillRect(railLeft + 1, railTop + 5, 1, cardHeight + 4).fillRect(railRight - 2, railTop + 5, 1, cardHeight + 4);
+      rails.fillStyle(0x273e48, 0.92).fillRect(railLeft - 2, railTop, 9, 5).fillRect(railRight - 7, railTop, 9, 5);
+      rails.fillStyle(0x273e48, 0.92).fillRect(railLeft - 2, railBottom - 5, 9, 5).fillRect(railRight - 7, railBottom - 5, 9, 5);
+      const lock = this.add.circle(railRight - 2, railBottom + 5, compact ? 2 : 3, dock.empty ? 0x416572 : 0x69ffae, dock.empty ? 0.42 : 0.9).setDepth(27);
       this.add.text(center.x, center.y - cardHeight / 2 - (compact ? 14 : 18), dock.label, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, fontStyle: 'bold', color: definition ? Phaser.Display.Color.IntegerToColor(color).rgba : '#79a9b6', align: 'center'
       }).setOrigin(0.5).setDepth(27).setWordWrapWidth(cardWidth + 18, true).setMaxLines(2);
@@ -308,6 +333,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         } else this.openCollection();
       }, cardWidth).setDepth(28);
       this.tweens.add({ targets: backing, alpha: { from: 0.7, to: 1 }, duration: 1800 + index * 170, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.tweens.add({ targets: lock, alpha: { from: dock.empty ? 0.18 : 0.4, to: dock.empty ? 0.48 : 1 }, duration: 950 + index * 130, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     });
   }
 
@@ -320,6 +346,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       { label: 'CONFIG PRESETS', action: () => this.showPresets() }
     ];
     stations.forEach((station, index) => {
+      createStationHousing(this, centers[index], width, index);
       const button = createButton(this, centers[index].x, centers[index].y, station.label, () => {
         this.audio.playSfx('menu');
         station.action();
