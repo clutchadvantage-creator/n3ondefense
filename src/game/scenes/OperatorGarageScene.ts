@@ -287,7 +287,9 @@ export class OperatorGarageScene extends Phaser.Scene {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${narrow ? 18 : Phaser.Math.Clamp(width * 0.027, 21, 30)}px`, color: '#65f5ff', fontStyle: 'bold'
     }).setOrigin(0.5, 0);
     const closeWidth = narrow ? 104 : 128;
-    const close = createButton(this, width - closeWidth / 2 - 8, 38, 'CLOSE', () => this.closeOverlay(), closeWidth);
+    const closeRightInset = narrow ? 18 : 30;
+    const closeY = narrow ? 48 : 50;
+    const close = createButton(this, width - closeWidth / 2 - closeRightInset, closeY, 'CLOSE', () => this.closeOverlay(), closeWidth);
     root.add([blocker, panel, scanlines, heading, close]);
     this.overlay = root;
     return root;

@@ -3679,8 +3679,8 @@ export class ArenaScene extends Phaser.Scene {
       createButton(this, width * 0.5, height * 0.5 - 16, 'Equipped Mod Cards', () => this.showEquippedModsViewer(), 280),
       createButton(this, width * 0.5, height * 0.5 + 36, 'Mod Collection (Next Run)', () => {
         this.hidePauseMenu();
-        this.scene.launch(SceneKeys.Mods, { returnScene: SceneKeys.Arena, resumePausedScene: true });
         this.scene.pause();
+        this.scene.launch(SceneKeys.Mods, { returnScene: SceneKeys.Arena, resumePausedScene: true });
       }, 280),
       createButton(this, width * 0.5, height * 0.5 + 88, 'Restart From Round 1', () => this.restartFromRoundOne(), 280),
       createButton(this, width * 0.5, height * 0.5 + 140, 'Options', () => {

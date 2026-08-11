@@ -11,6 +11,7 @@ import { rollModDrop } from '../mods/ModDropService.ts';
 import { MOD_INFUSIONS } from '../mods/infusions.ts';
 import { getModCopyCounts, getRecyclableUnupgradedDuplicates } from '../mods/ModInventoryService.ts';
 import { showConfirmDialog, type LocalModalHandle } from '../utils/localSaveUi.ts';
+import { resolveModCollectionReturnRoute, type ModCollectionReturnRequest } from '../mods/ModCollectionNavigation.ts';
 
 type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
 type FilterMode = 'all' | 'duplicates';
@@ -19,9 +20,7 @@ const SORTS: SortMode[] = ['acquired', 'type', 'rank', 'rarity'];
 const FILTERS: FilterMode[] = ['all', 'duplicates'];
 const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 } as const;
 
-interface ModCollectionSceneData {
-  returnScene?: SceneKeyValue;
-  resumePausedScene?: boolean;
+interface ModCollectionSceneData extends ModCollectionReturnRequest {
   selectedCardId?: string;
 }
 
@@ -48,8 +47,10 @@ export class ModCollectionScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Mods); }
 
   create(data?: ModCollectionSceneData): void {
-    this.returnScene = data?.returnScene ?? SceneKeys.MainMenu;
-    this.resumePausedScene = data?.resumePausedScene === true;
+    const arenaCanResume = this.scene.isPaused(SceneKeys.Arena) && this.registry.has('arena-session');
+    const returnRoute = resolveModCollectionReturnRoute(data, arenaCanResume);
+    this.returnScene = returnRoute.returnScene;
+    this.resumePausedScene = returnRoute.resumePausedScene;
     if (data?.selectedCardId) this.selectedCardId = data.selectedCardId;
     const { width, height } = this.scale;
     const mods = SaveSystem.getModCollection();
@@ -302,7 +303,14 @@ export class ModCollectionScene extends Phaser.Scene {
   }
 
   private returnToPreviousScene(): void {
-    if (this.resumePausedScene && this.scene.isPaused(this.returnScene)) {
+    if (this.returnScene === SceneKeys.Arena && this.resumePausedScene) {
+      const arenaCanResume = this.scene.isPaused(SceneKeys.Arena) && this.registry.has('arena-session');
+      if (!arenaCanResume) {
+        this.returnScene = SceneKeys.MainMenu;
+        this.resumePausedScene = false;
+        this.scene.start(SceneKeys.MainMenu);
+        return;
+      }
       const returnTarget = this.scene.get(this.returnScene);
       this.scene.resume(this.returnScene);
       returnTarget.events.emit('return-from-mod-collection');
