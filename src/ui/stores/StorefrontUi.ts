@@ -24,7 +24,8 @@ export interface StorefrontUiOptions {
   particlesEnabled: boolean;
   getSnapshot(): StoreSnapshot;
   onBack(): void;
-  onReturnToGame?(): void;
+  onReturn?(): void;
+  returnLabel?: string;
   onUnlock?(item: CosmeticOption): StoreActionResult;
   onEquip?(item: CosmeticOption): StoreActionResult;
   onUpgrade?(definition: UpgradeDefinition, level: number): StoreActionResult;
@@ -139,12 +140,12 @@ export class StorefrontUi {
     wallet.innerHTML = `<span class="credits"><b>◆</b> ${snapshot.credits.toLocaleString()} <small>CREDITS</small></span><span class="tokens"><b>⬡</b> ${snapshot.coreTokens.toLocaleString()} <small>CORE TOKENS</small></span>`;
     const actions = document.createElement('div');
     actions.className = 'store-header-actions';
-    if (this.options.onReturnToGame) {
+    if (this.options.onReturn) {
       const returnToGame = document.createElement('button');
       returnToGame.type = 'button';
       returnToGame.className = 'store-back game';
-      returnToGame.textContent = 'BACK TO GAME';
-      returnToGame.addEventListener('click', this.options.onReturnToGame);
+      returnToGame.textContent = this.options.returnLabel ?? 'BACK';
+      returnToGame.addEventListener('click', this.options.onReturn);
       actions.append(returnToGame);
     }
     const back = document.createElement('button');
@@ -435,7 +436,7 @@ export class StorefrontUi {
   }
 
   private handleKey(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && !this.dialogOpen) { (this.options.onReturnToGame ?? this.options.onBack)(); return; }
+    if (event.key === 'Escape' && !this.dialogOpen) { (this.options.onReturn ?? this.options.onBack)(); return; }
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
     const cards = Array.from(this.options.root.querySelectorAll<HTMLButtonElement>('.store-card'));
     if (cards.length === 0) return;

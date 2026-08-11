@@ -54,6 +54,8 @@ export class MainMenuScene extends Phaser.Scene {
     this.audio.startMusicLoop();
 
     const { width, height } = this.scale;
+    if (this.scene.isActive(SceneKeys.Arena) || this.scene.isPaused(SceneKeys.Arena)) this.scene.stop(SceneKeys.Arena);
+    this.registry.remove('arena-session');
     RunTransitionManager.clearForMenu(this);
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x070b11, 1);
@@ -273,7 +275,10 @@ export class MainMenuScene extends Phaser.Scene {
         message: 'Building explicitly local operation...'
       });
     }, pairButtonWidth);
-    createButton(this, width / 2, menuStartY + menuRowGap, 'Store', () => this.scene.start(SceneKeys.Upgrades), singleButtonWidth);
+    createButton(this, width / 2, menuStartY + menuRowGap, 'Store', () => this.scene.start(SceneKeys.Upgrades, {
+      returnScene: SceneKeys.MainMenu,
+      resumePausedScene: false
+    }), singleButtonWidth);
     createButton(this, width / 2 - pairOffset, menuStartY + menuRowGap * 2, 'Operator Garage', () => this.scene.start(SceneKeys.Garage, { returnScene: SceneKeys.MainMenu }), pairButtonWidth);
     createButton(this, width / 2 + pairOffset, menuStartY + menuRowGap * 2, 'Mod Collection', () => this.scene.start(SceneKeys.Mods, {
       returnScene: SceneKeys.MainMenu,

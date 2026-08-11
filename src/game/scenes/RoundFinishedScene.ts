@@ -113,7 +113,7 @@ export class RoundFinishedScene extends Phaser.Scene {
     }, 320);
 
     createButton(this, width / 2, firstButtonY + buttonSpacing, 'Store', () => {
-      this.scene.start(SceneKeys.Upgrades, { returnScene: SceneKeys.RoundFinished });
+      this.scene.start(SceneKeys.Upgrades, { returnScene: SceneKeys.RoundFinished, resumePausedScene: false });
     }, 320);
 
     createButton(this, width / 2, firstButtonY + buttonSpacing * 2, 'Mod Collection', () => {

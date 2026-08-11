@@ -108,7 +108,10 @@ export class ResultScene extends Phaser.Scene {
         message: 'Rebuilding mission arena...'
       });
     });
-    createButton(this, width / 2, firstButtonY + buttonSpacing, 'Store', () => this.scene.start(SceneKeys.Upgrades));
+    createButton(this, width / 2, firstButtonY + buttonSpacing, 'Store', () => this.scene.start(SceneKeys.Upgrades, {
+      returnScene: SceneKeys.MainMenu,
+      resumePausedScene: false
+    }));
     createButton(this, width / 2, firstButtonY + buttonSpacing * 2, 'Export Gameplay Metrics', () => {
       GameplayTelemetryRecorder.exportToJsonFile();
     });

@@ -350,6 +350,10 @@ export class ArenaScene extends Phaser.Scene {
   private readonly onReturnFromModCollection = (): void => {
     if (this.state.state === RoundState.Paused) this.showPauseMenu();
   };
+  private readonly onReturnFromStore = (): void => {
+    if (this.state.state === RoundState.Paused) this.showPauseMenu();
+  };
+  private readonly onQuitFromStore = (): void => this.quitToMenu();
   private readonly onAbilityKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat || !this.scene.isActive() || this.state.state === RoundState.Paused) return;
     const action = this.actionForBinding(`Keyboard:${event.code}`);
@@ -450,6 +454,8 @@ export class ArenaScene extends Phaser.Scene {
     this.scale.on('resize', this.handleResize, this);
     this.events.on('resume-from-options', this.onResumeFromOptions);
     this.events.on('return-from-mod-collection', this.onReturnFromModCollection);
+    this.events.on('return-from-store', this.onReturnFromStore);
+    this.events.on('quit-from-store', this.onQuitFromStore);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.pointerLock = new GameplayPointerLock(this.game, {
       onLocked: () => this.resumeFromPointerLock(),
@@ -4255,7 +4261,11 @@ export class ArenaScene extends Phaser.Scene {
         this.scene.launch(SceneKeys.Options, { returnScene: SceneKeys.Arena, resumeGameplay: true });
         this.scene.pause();
       }, 280),
-      createButton(this, width * 0.5, height * 0.5 + 192, 'Store', () => this.scene.start(SceneKeys.Upgrades), 280),
+      createButton(this, width * 0.5, height * 0.5 + 192, 'Store', () => {
+        this.hidePauseMenu();
+        this.scene.pause();
+        this.scene.launch(SceneKeys.Upgrades, { returnScene: SceneKeys.Arena, resumePausedScene: true });
+      }, 280),
       createButton(this, width * 0.5, height * 0.5 + 244, 'Quit To Main Menu', () => this.quitToMenu(), 280)
     ];
     buttons.forEach((btn) => {
@@ -4398,6 +4408,8 @@ export class ArenaScene extends Phaser.Scene {
     this.scale.off('resize', this.handleResize, this);
     this.events.off('resume-from-options', this.onResumeFromOptions);
     this.events.off('return-from-mod-collection', this.onReturnFromModCollection);
+    this.events.off('return-from-store', this.onReturnFromStore);
+    this.events.off('quit-from-store', this.onQuitFromStore);
     this.hud?.destroy();
     this.siteActionText?.destroy();
     this.bannerText?.destroy();

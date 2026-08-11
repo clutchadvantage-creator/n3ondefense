@@ -3,16 +3,17 @@ import { COSMETICS } from '../../data/cosmetics';
 import { getGameUiRoot } from '../../ui/getGameUiRoot';
 import { StorefrontUi } from '../../ui/stores/StorefrontUi';
 import { SceneKeys } from '../flow/SceneKeys';
+import { RunTransitionManager } from '../flow/RunTransitionManager.ts';
+import { resolveStoreReturnRoute, type StoreReturnRequest, type StoreReturnRoute } from '../stores/StoreNavigation.ts';
 import { AudioManager } from '../systems/AudioManager';
+import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
 import { SaveSystem } from '../systems/SaveSystem';
 import type { CosmeticOption } from '../types';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { UPGRADE_DEFINITIONS, getUpgradeCost, getUpgradeLevel } from '../../data/upgrades';
 import type { UpgradeDefinition } from '../types';
 
-interface StoreSceneData {
-  returnScene?: string;
-}
+interface StoreSceneData extends StoreReturnRequest {}
 
 export class CosmeticsStoreScene extends Phaser.Scene {
   private storefront: StorefrontUi | null = null;
@@ -30,6 +31,8 @@ export class CosmeticsStoreScene extends Phaser.Scene {
       return;
     }
 
+    const arenaCanResume = this.scene.isPaused(SceneKeys.Arena) && this.registry.has('arena-session');
+    const returnRoute = resolveStoreReturnRoute(data, arenaCanResume);
     this.add.rectangle(this.scale.width * 0.5, this.scale.height * 0.5, this.scale.width, this.scale.height, 0x05040d, 1);
     this.storefront = new StorefrontUi({
       root: getGameUiRoot(),
@@ -47,11 +50,9 @@ export class CosmeticsStoreScene extends Phaser.Scene {
           equippedCosmetics: current.equippedCosmetics
         };
       },
-      onBack: () => {
-        if (data?.returnScene) OnlineRunManager.complete('quit');
-        this.scene.start(SceneKeys.MainMenu);
-      },
-      onReturnToGame: data?.returnScene ? () => this.scene.start(data.returnScene as string) : undefined,
+      onBack: () => this.returnToMainMenu(returnRoute),
+      onReturn: returnRoute.returnScene === SceneKeys.MainMenu ? undefined : () => this.returnToPreviousScene(returnRoute),
+      returnLabel: returnRoute.returnScene === SceneKeys.Arena ? 'BACK TO GAME' : 'BACK TO RESULTS',
       onUnlock: (item) => this.unlockCosmetic(item),
       onEquip: (item) => this.equipCosmetic(item),
       onUpgrade: (definition, level) => this.purchaseUpgrade(definition, level)
@@ -61,6 +62,38 @@ export class CosmeticsStoreScene extends Phaser.Scene {
       this.storefront?.destroy();
       this.storefront = null;
     });
+  }
+
+  private returnToPreviousScene(route: StoreReturnRoute): void {
+    if (route.returnScene === SceneKeys.Arena && route.resumePausedScene) {
+      const arenaCanResume = this.scene.isPaused(SceneKeys.Arena) && this.registry.has('arena-session');
+      if (!arenaCanResume) {
+        this.scene.start(SceneKeys.MainMenu);
+        return;
+      }
+      const arena = this.scene.get(SceneKeys.Arena);
+      this.scene.resume(SceneKeys.Arena);
+      arena.events.emit('return-from-store');
+      this.scene.stop();
+      return;
+    }
+    this.scene.start(route.returnScene);
+  }
+
+  private returnToMainMenu(route: StoreReturnRoute): void {
+    if (route.returnScene === SceneKeys.Arena && route.resumePausedScene && this.scene.isPaused(SceneKeys.Arena)) {
+      this.scene.get(SceneKeys.Arena).events.emit('quit-from-store');
+      this.scene.stop();
+      return;
+    }
+    if (route.returnScene === SceneKeys.RoundFinished) {
+      OnlineRunManager.complete('quit');
+      GameplayTelemetryRecorder.finishRun('quit');
+      this.registry.remove('arena-session');
+      this.registry.remove('round-finished');
+      RunTransitionManager.clearForMenu(this);
+    }
+    this.scene.start(SceneKeys.MainMenu);
   }
 
   private unlockCosmetic(item: CosmeticOption): { ok: boolean; message: string } {
