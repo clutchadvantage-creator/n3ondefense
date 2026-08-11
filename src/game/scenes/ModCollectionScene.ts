@@ -22,6 +22,7 @@ const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 } 
 interface ModCollectionSceneData {
   returnScene?: SceneKeyValue;
   resumePausedScene?: boolean;
+  selectedCardId?: string;
 }
 
 export class ModCollectionScene extends Phaser.Scene {
@@ -49,6 +50,7 @@ export class ModCollectionScene extends Phaser.Scene {
   create(data?: ModCollectionSceneData): void {
     this.returnScene = data?.returnScene ?? SceneKeys.MainMenu;
     this.resumePausedScene = data?.resumePausedScene === true;
+    if (data?.selectedCardId) this.selectedCardId = data.selectedCardId;
     const { width, height } = this.scale;
     const mods = SaveSystem.getModCollection();
     const category = CATEGORIES[this.categoryIndex];
@@ -90,7 +92,9 @@ export class ModCollectionScene extends Phaser.Scene {
       ? 'Back To Pause Menu'
       : this.returnScene === SceneKeys.RoundFinished
         ? 'Back To Level Complete'
-        : 'Main Menu';
+        : this.returnScene === SceneKeys.Garage
+          ? 'Back To Garage'
+          : 'Main Menu';
     createButton(this, width - returnWidth / 2 - 16, 104, returnLabel, () => this.returnToPreviousScene(), returnWidth);
 
     const detailWidth = Math.min(360, width * 0.3);

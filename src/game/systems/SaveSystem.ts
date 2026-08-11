@@ -4,6 +4,7 @@ import type { CosmeticOption, GameSaveData } from '../types';
 import type { OnlineProgressSnapshot } from '../../online/onlineTypes';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
+import type { GaragePresetId } from '../garage/types.ts';
 
 export class SaveSystem {
   static get(): GameSaveData {
@@ -127,6 +128,11 @@ export class SaveSystem {
   static canAffordRunSetup(selection: RunSetupSelection): boolean { return PlayerProfileStore.canAffordRunSetup(selection); }
   static purchaseRunSetup(selection: RunSetupSelection) { return PlayerProfileStore.purchaseRunSetup(selection); }
   static buildRunEconomySnapshot(selection: RunSetupSelection, creditsSpentBeforeRun: number) { return PlayerProfileStore.buildRunEconomySnapshot(selection, creditsSpentBeforeRun); }
+  static getGarageState() { return PlayerProfileStore.getGarageState(); }
+  static getNextRunSetupSelection(): RunSetupSelection { return PlayerProfileStore.getNextRunSetupSelection(); }
+  static setNextRunSetupSelection(selection: RunSetupSelection) { return PlayerProfileStore.setNextRunSetupSelection(selection); }
+  static saveGaragePreset(presetId: GaragePresetId) { return PlayerProfileStore.saveGaragePreset(presetId); }
+  static loadGaragePreset(presetId: GaragePresetId) { return PlayerProfileStore.loadGaragePreset(presetId); }
   static purchaseAdditionalModLoadoutSlot() { return PlayerProfileStore.purchaseAdditionalModLoadoutSlot(); }
 
   static getLeaderboardEntries() {

@@ -301,7 +301,7 @@ export class BootScene extends Phaser.Scene {
     createEnemyPolygon('enemy-tank', [{ x: 7, y: 2 }, { x: 25, y: 2 }, { x: 30, y: 7 }, { x: 30, y: 25 }, { x: 25, y: 30 }, { x: 7, y: 30 }, { x: 2, y: 25 }, { x: 2, y: 7 }]);
     createEnemyPolygon('enemy-disruptor', [{ x: 16, y: 2 }, { x: 30, y: 12 }, { x: 25, y: 29 }, { x: 7, y: 29 }, { x: 2, y: 12 }]);
 
-    const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, legendaryRevealModule, upgradeModule, cosmeticModule, modModule, resultModule, optionsModule, roundFinishedModule, loadingModule] = await Promise.all([
+    const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, legendaryRevealModule, upgradeModule, cosmeticModule, modModule, garageModule, resultModule, optionsModule, roundFinishedModule, loadingModule] = await Promise.all([
       import('./SplashScene'),
       import('./LeaderboardsScene'),
       import('./OnlineLeaderboardsScene'),
@@ -312,6 +312,7 @@ export class BootScene extends Phaser.Scene {
       import('./UpgradeStoreScene'),
       import('./CosmeticsStoreScene'),
       import('./ModCollectionScene'),
+      import('./OperatorGarageScene'),
       import('./ResultScene'),
       import('./OptionsScene'),
       import('./RoundFinishedScene'),
@@ -328,6 +329,7 @@ export class BootScene extends Phaser.Scene {
     this.scene.add(SceneKeys.Upgrades, upgradeModule.UpgradeStoreScene, false);
     this.scene.add(SceneKeys.Cosmetics, cosmeticModule.CosmeticsStoreScene, false);
     this.scene.add(SceneKeys.Mods, modModule.ModCollectionScene, false);
+    this.scene.add(SceneKeys.Garage, garageModule.OperatorGarageScene, false);
     this.scene.add(SceneKeys.Results, resultModule.ResultScene, false);
     this.scene.add(SceneKeys.Options, optionsModule.OptionsScene, false);
     this.scene.add(SceneKeys.RoundFinished, roundFinishedModule.RoundFinishedScene, false);

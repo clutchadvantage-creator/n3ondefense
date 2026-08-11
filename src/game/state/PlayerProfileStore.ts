@@ -8,6 +8,8 @@ import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
 import { buildRunEconomySnapshot, getNextLoadoutSlotCost, getRunSetupCost, purchaseRunSetup, spendCreditsAtomic } from '../economy/EconomyService.ts';
 import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
+import { loadGaragePreset, normalizeRunSetupSelection, saveCurrentGaragePreset } from '../garage/GarageState.ts';
+import type { GaragePresetId, PlayerGarageState } from '../garage/types.ts';
 
 export interface PurchaseResult {
   ok: boolean;
@@ -317,6 +319,42 @@ export class PlayerProfileStore {
   static buildRunEconomySnapshot(selection: RunSetupSelection, creditsSpentBeforeRun: number) {
     const save = PlayerProfileStore.getActiveSave();
     return buildRunEconomySnapshot(save.upgrades, selection, creditsSpentBeforeRun);
+  }
+
+  static getGarageState(): PlayerGarageState {
+    return structuredClone(PlayerProfileStore.getActiveSave().garage);
+  }
+
+  static getNextRunSetupSelection(): RunSetupSelection {
+    return { ...PlayerProfileStore.getActiveSave().garage.nextRun };
+  }
+
+  static setNextRunSetupSelection(selection: RunSetupSelection): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    save.garage.nextRun = normalizeRunSetupSelection(selection);
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return { ok: true, message: 'Next deployment configuration updated.' };
+  }
+
+  static saveGaragePreset(presetId: GaragePresetId): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = saveCurrentGaragePreset(save, presetId);
+    if (result.ok) {
+      save.profile.lastPlayedAt = new Date().toISOString();
+      PlayerProfileStore.save();
+    }
+    return result;
+  }
+
+  static loadGaragePreset(presetId: GaragePresetId): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = loadGaragePreset(save, presetId);
+    if (result.ok) {
+      save.profile.lastPlayedAt = new Date().toISOString();
+      PlayerProfileStore.save();
+    }
+    return result;
   }
 
   static purchaseAdditionalModLoadoutSlot(): PurchaseResult & { cost?: number } {

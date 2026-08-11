@@ -13,7 +13,7 @@ import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, getUnlockedProt
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { ECONOMY_BALANCE, MOD_FOCUS_CATEGORIES, MOD_FOCUS_LABELS, RUN_CONTRACT_IDS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
-import type { ModFocusSignalId, RunContractId, RunSetupSelection } from '../economy/types.ts';
+import type { RunSetupSelection } from '../economy/types.ts';
 
 const MAIN_MENU_TIPS = [
   'Shoot through a placed fence to split and multiply your projectiles.',
@@ -37,6 +37,7 @@ const MAIN_MENU_TIPS = [
   'The Store and Mod Collection are available after each completed round before you continue.',
   'Open Leaderboards from the main menu to review rankings from eligible online runs.',
   'The pause menu provides access to Options and your Mod Collection without ending the run.',
+  'Visit the Operator Garage to inspect your equipped Mods, owned cosmetics, presets, and Overdrive progress.',
   'You can replay the animated splash screen from the Options menu.',
   'Use the protocol arrows on the main menu to choose among your unlocked starting tiers.',
   'Run Signals and Contracts are optional and charge their listed fee only when the run starts.'
@@ -44,8 +45,6 @@ const MAIN_MENU_TIPS = [
 
 export class MainMenuScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
-  private selectedModFocus: ModFocusSignalId | null = null;
-  private selectedContract: RunContractId | null = null;
 
   constructor() {
     super(SceneKeys.MainMenu);
@@ -168,6 +167,8 @@ export class MainMenuScene extends Phaser.Scene {
     }
 
     const setupSelection = this.getRunSetupSelection();
+    const selectedModFocus = setupSelection.modFocus;
+    const selectedContract = setupSelection.contract;
     const setupCost = getRunSetupCost(setupSelection);
     const setupX = Math.max(170, width * 0.15);
     this.add.rectangle(setupX, 325, 315, 300, 0x081521, 0.88)
@@ -178,25 +179,25 @@ export class MainMenuScene extends Phaser.Scene {
     this.add.text(setupX, 222, 'Optional pursuits are charged only when a run starts.', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#a8c7d4', align: 'center'
     }).setOrigin(0.5).setDepth(13).setWordWrapWidth(270, true);
-    createButton(this, setupX, 266, `Signal: ${this.selectedModFocus ? MOD_FOCUS_LABELS[this.selectedModFocus] : 'None'}`, () => {
-      const current = this.selectedModFocus ? MOD_FOCUS_CATEGORIES.indexOf(this.selectedModFocus) : -1;
-      this.selectedModFocus = current >= MOD_FOCUS_CATEGORIES.length - 1 ? null : MOD_FOCUS_CATEGORIES[current + 1];
+    createButton(this, setupX, 266, `Signal: ${selectedModFocus ? MOD_FOCUS_LABELS[selectedModFocus] : 'None'}`, () => {
+      const current = selectedModFocus ? MOD_FOCUS_CATEGORIES.indexOf(selectedModFocus) : -1;
+      SaveSystem.setNextRunSetupSelection({ ...setupSelection, modFocus: current >= MOD_FOCUS_CATEGORIES.length - 1 ? null : MOD_FOCUS_CATEGORIES[current + 1] });
       this.scene.restart();
     }, 276).setDepth(13);
-    createButton(this, setupX, 320, `Contract: ${this.selectedContract ? RUN_CONTRACTS[this.selectedContract].label : 'None'}`, () => {
-      const current = this.selectedContract ? RUN_CONTRACT_IDS.indexOf(this.selectedContract) : -1;
-      this.selectedContract = current >= RUN_CONTRACT_IDS.length - 1 ? null : RUN_CONTRACT_IDS[current + 1];
+    createButton(this, setupX, 320, `Contract: ${selectedContract ? RUN_CONTRACTS[selectedContract].label : 'None'}`, () => {
+      const current = selectedContract ? RUN_CONTRACT_IDS.indexOf(selectedContract) : -1;
+      SaveSystem.setNextRunSetupSelection({ ...setupSelection, contract: current >= RUN_CONTRACT_IDS.length - 1 ? null : RUN_CONTRACT_IDS[current + 1] });
       this.scene.restart();
     }, 276).setDepth(13);
     this.add.text(setupX, 365, setupCost > 0
-      ? `RUN FEE  ${setupCost.toLocaleString()} CREDITS\nSignal ${this.selectedModFocus ? `${ECONOMY_BALANCE.modFocus.categoryWeightMultiplier}x category weighting` : 'off'}  •  Contract ${this.selectedContract ? 'active' : 'off'}`
+      ? `RUN FEE  ${setupCost.toLocaleString()} CREDITS\nSignal ${selectedModFocus ? `${ECONOMY_BALANCE.modFocus.categoryWeightMultiplier}x category weighting` : 'off'}  •  Contract ${selectedContract ? 'active' : 'off'}`
       : 'RUN FEE  FREE\nStandard drop and challenge rules', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: setupCost > 0 ? '#ffd66b' : '#9fe8c2', align: 'center'
     }).setOrigin(0.5).setDepth(13);
-    this.add.text(setupX, 414, this.selectedContract
-      ? RUN_CONTRACTS[this.selectedContract].description
-      : this.selectedModFocus
-        ? `${MOD_FOCUS_LABELS[this.selectedModFocus]} favors that category while preserving rarity and total drop quantity.`
+    this.add.text(setupX, 414, selectedContract
+      ? RUN_CONTRACTS[selectedContract].description
+      : selectedModFocus
+        ? `${MOD_FOCUS_LABELS[selectedModFocus]} favors that category while preserving rarity and total drop quantity.`
         : 'No Contract or focused Mod hunt selected.', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', color: '#a8c7d4', align: 'center'
     }).setOrigin(0.5).setDepth(13).setWordWrapWidth(276, true);
@@ -273,12 +274,13 @@ export class MainMenuScene extends Phaser.Scene {
       });
     }, pairButtonWidth);
     createButton(this, width / 2, menuStartY + menuRowGap, 'Store', () => this.scene.start(SceneKeys.Upgrades), singleButtonWidth);
-    createButton(this, width / 2 - pairOffset, menuStartY + menuRowGap * 2, 'Mod Collection', () => this.scene.start(SceneKeys.Mods), pairButtonWidth);
-    createButton(this, width / 2 + pairOffset, menuStartY + menuRowGap * 2, 'Leaderboards', () => this.scene.start(SceneKeys.OnlineLeaderboards), pairButtonWidth);
-    createButton(this, width / 2, menuStartY + menuRowGap * 3, 'Options', () => this.scene.start(SceneKeys.Options), singleButtonWidth);
-    createButton(this, width / 2, menuStartY + menuRowGap * 4, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), singleButtonWidth);
-    const lastMenuY = menuStartY + menuRowGap * 5;
-    createButton(this, width / 2, lastMenuY, 'Local Save Information', () => {
+    createButton(this, width / 2 - pairOffset, menuStartY + menuRowGap * 2, 'Operator Garage', () => this.scene.start(SceneKeys.Garage, { returnScene: SceneKeys.MainMenu }), pairButtonWidth);
+    createButton(this, width / 2 + pairOffset, menuStartY + menuRowGap * 2, 'Mod Collection', () => this.scene.start(SceneKeys.Mods), pairButtonWidth);
+    createButton(this, width / 2 - pairOffset, menuStartY + menuRowGap * 3, 'Leaderboards', () => this.scene.start(SceneKeys.OnlineLeaderboards), pairButtonWidth);
+    createButton(this, width / 2 + pairOffset, menuStartY + menuRowGap * 3, 'Options', () => this.scene.start(SceneKeys.Options), pairButtonWidth);
+    createButton(this, width / 2 - pairOffset, menuStartY + menuRowGap * 4, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), pairButtonWidth);
+    const lastMenuY = menuStartY + menuRowGap * 4;
+    createButton(this, width / 2 + pairOffset, lastMenuY, 'Local Save Information', () => {
       showInfoModal(
         this,
         'LOCAL SAVE INFORMATION',
@@ -305,7 +307,7 @@ export class MainMenuScene extends Phaser.Scene {
           }
         ]
       );
-    }, singleButtonWidth);
+    }, pairButtonWidth);
 
     const bindings = save?.settings.abilityBindings;
     const abilityControls = bindings
@@ -374,12 +376,11 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private getRunSetupSelection(): RunSetupSelection {
-    return { modFocus: this.selectedModFocus, contract: this.selectedContract };
+    return SaveSystem.getNextRunSetupSelection();
   }
 
   private clearRunSetupSelection(): void {
-    this.selectedModFocus = null;
-    this.selectedContract = null;
+    SaveSystem.setNextRunSetupSelection({ modFocus: null, contract: null });
   }
 
   private createAnimatedBackground(width: number, height: number): void {

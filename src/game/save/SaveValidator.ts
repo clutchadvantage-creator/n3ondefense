@@ -7,6 +7,7 @@ import { DEFAULT_ABILITY_BINDINGS, normalizeAbilityBindings } from '../config/co
 import { normalizeModCollection, normalizeProtocolPreference } from '../mods/ModSaveNormalizer.ts';
 import { createEmptyCreditSpendBreakdown } from '../economy/EconomyService.ts';
 import type { CreditSpendCategory } from '../economy/types.ts';
+import { createDefaultGarageState, normalizeGarageState } from '../garage/GarageState.ts';
 
 const defaultSettings: LocalPlayerSettings = {
   masterVolume: 0.8,
@@ -171,6 +172,7 @@ export const createDefaultLocalSave = (profileId: string, profileName: string, s
       equipped: normalizeEquippedCosmetics(source?.cosmetics?.equipped, owned)
     },
     mods: normalizeModCollection(source?.mods),
+    garage: normalizeGarageState(source?.garage),
     protocol: normalizeProtocolPreference(source?.protocol),
     progress: normalizeProgress(source?.progress),
     settings: normalizeSettings(source?.settings),
@@ -219,6 +221,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       totalPlaytimeSeconds: 0,
       initialDeploymentBriefingSeen: false
     };
+    current.garage = createDefaultGarageState();
     current.settings = {
       ...defaultSettings,
       ...(isObject(v1.settings) ? {
@@ -232,7 +235,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;
@@ -253,6 +256,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       equipped: normalizeEquippedCosmetics(candidate.cosmetics?.equipped, owned)
     };
     current.mods = normalizeModCollection(candidate.mods);
+    current.garage = normalizeGarageState(candidate.garage);
     current.protocol = normalizeProtocolPreference(candidate.protocol);
     current.progress = normalizeProgress(candidate.progress);
     current.settings = normalizeSettings(candidate.settings);
@@ -266,6 +270,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
   if (!Object.keys(current.upgrades ?? {}).every((id) => upgradeIds.has(id))) return null;
 
   current.mods = normalizeModCollection(current.mods);
+  current.garage = normalizeGarageState(current.garage);
   current.protocol = normalizeProtocolPreference(current.protocol);
   return current as LocalPlayerSave;
 };

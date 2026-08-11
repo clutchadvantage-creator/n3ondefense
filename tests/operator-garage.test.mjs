@@ -1,0 +1,227 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { COSMETICS } from '../src/data/cosmetics.ts';
+import {
+  GARAGE_MOD_SLOTS,
+  createDefaultGarageState,
+  getGarageDockModels,
+  getGarageWallet,
+  getModLibraryEntries,
+  getModLibraryProgress,
+  getOwnedGarageCosmetics,
+  loadGaragePreset,
+  normalizeGarageState,
+  saveCurrentGaragePreset
+} from '../src/game/garage/GarageState.ts';
+import { calculateGarageLayout } from '../src/game/garage/garageLayout.ts';
+import { MOD_BY_ID, MOD_DEFINITIONS } from '../src/game/mods/definitions.ts';
+import { addModDrop, deleteModCard, equipMod, unequipMod } from '../src/game/mods/ModInventoryService.ts';
+import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
+import { RUN_PROTOCOLS } from '../src/game/mods/modBalance.ts';
+import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
+
+const categorySlots = {
+  weapon: 'weapon',
+  player: 'player',
+  defense: 'defense',
+  bombSite: 'bombSite',
+  utility: 'wildcard'
+};
+
+const addCategoryLoadout = (save) => {
+  const cards = {};
+  for (const [category, slot] of Object.entries(categorySlots)) {
+    const definition = MOD_DEFINITIONS.find((entry) => entry.category === category && entry.rarity !== 'legendary');
+    assert.ok(definition, `missing ${category} fixture Mod`);
+    assert.equal(addModDrop(save.mods, definition.id).ok, true);
+    const card = save.mods.cards.findLast((entry) => entry.modId === definition.id);
+    assert.ok(card);
+    assert.equal(equipMod(save.mods, slot, definition.id, card.instanceId).ok, true);
+    cards[slot] = card;
+  }
+  return cards;
+};
+
+test('Garage defaults provide five attractive empty category docks', () => {
+  const save = createDefaultLocalSave('garage-empty', 'Garage Empty');
+  const docks = getGarageDockModels(save.mods);
+  assert.deepEqual(docks.map((dock) => dock.slot), GARAGE_MOD_SLOTS);
+  assert.equal(docks.length, 5);
+  assert.ok(docks.every((dock) => dock.empty && dock.card === null));
+  assert.match(docks[4].label, /UTILITY \/ WILDCARD/);
+});
+
+test('Garage dock models preserve the exact equipped card, rank, and infusion', () => {
+  const save = createDefaultLocalSave('garage-equipped', 'Garage Equipped');
+  const cards = addCategoryLoadout(save);
+  cards.weapon.upgradeLevel = 2;
+  cards.weapon.infusionId = 'arcade-pop';
+  const docks = getGarageDockModels(save.mods);
+  assert.ok(docks.every((dock) => !dock.empty));
+  assert.equal(docks.find((dock) => dock.slot === 'weapon').card, cards.weapon);
+  assert.equal(docks.find((dock) => dock.slot === 'weapon').card.upgradeLevel, 2);
+  assert.equal(docks.find((dock) => dock.slot === 'weapon').card.infusionId, 'arcade-pop');
+});
+
+test('Garage uses existing Mod category validation instead of inventing equip rules', () => {
+  const save = createDefaultLocalSave('garage-category', 'Garage Category');
+  const definition = MOD_DEFINITIONS.find((entry) => entry.category === 'weapon' && entry.rarity !== 'legendary');
+  addModDrop(save.mods, definition.id);
+  const card = save.mods.cards[0];
+  assert.equal(equipMod(save.mods, 'player', definition.id, card.instanceId).ok, false);
+  assert.equal(equipMod(save.mods, 'weapon', definition.id, card.instanceId).ok, true);
+});
+
+test('Garage presets save and immediately restore five Mod and deployment references', () => {
+  const save = createDefaultLocalSave('garage-preset', 'Garage Preset');
+  const cards = addCategoryLoadout(save);
+  save.progress.highestRound = 60;
+  save.protocol.preferred = 'overdrive-draco';
+  save.garage.nextRun = { contract: 'elite-hunt', modFocus: 'defense' };
+  assert.equal(saveCurrentGaragePreset(save, 'config-a', '2026-08-10T00:00:00.000Z').ok, true);
+
+  for (const slot of GARAGE_MOD_SLOTS) unequipMod(save.mods, slot);
+  save.protocol.preferred = 'normal';
+  save.garage.nextRun = { contract: null, modFocus: null };
+  const result = loadGaragePreset(save, 'config-a');
+  assert.equal(result.ok, true);
+  assert.equal(result.missingCards, 0);
+  assert.equal(result.ignoredProtocol, false);
+  assert.equal(save.protocol.preferred, 'overdrive-draco');
+  assert.deepEqual(save.garage.nextRun, { contract: 'elite-hunt', modFocus: 'defense' });
+  const loadout = save.mods.loadouts[0];
+  for (const slot of GARAGE_MOD_SLOTS) assert.equal(loadout.cardSlots[slot], cards[slot].instanceId);
+});
+
+test('a preset safely skips a missing card reference', () => {
+  const save = createDefaultLocalSave('garage-missing', 'Garage Missing');
+  const cards = addCategoryLoadout(save);
+  saveCurrentGaragePreset(save, 'config-a');
+  save.garage.presets[0].cardSlots.weapon = 'missing-card-instance';
+  const result = loadGaragePreset(save, 'config-a');
+  assert.equal(result.ok, true);
+  assert.equal(result.missingCards, 1);
+  assert.equal(save.mods.loadouts[0].cardSlots.weapon, null);
+  assert.equal(save.mods.loadouts[0].cardSlots.player, cards.player.instanceId);
+});
+
+test('a recycled or deleted preset card becomes an empty slot without crashing', () => {
+  const save = createDefaultLocalSave('garage-deleted', 'Garage Deleted');
+  const cards = addCategoryLoadout(save);
+  saveCurrentGaragePreset(save, 'config-b');
+  assert.equal(deleteModCard(save.mods, cards.defense.instanceId).ok, true);
+  const result = loadGaragePreset(save, 'config-b');
+  assert.equal(result.ok, true);
+  assert.equal(result.missingCards, 1);
+  assert.equal(save.mods.loadouts[0].cardSlots.defense, null);
+});
+
+test('invalid Contract and Signal references are ignored when a preset loads', () => {
+  const save = createDefaultLocalSave('garage-invalid-setup', 'Garage Invalid Setup');
+  save.garage.presets[0] = {
+    ...save.garage.presets[0], saved: true, contract: 'removed-contract', modFocus: 'removed-signal'
+  };
+  const result = loadGaragePreset(save, 'config-a');
+  assert.equal(result.ok, true);
+  assert.deepEqual(save.garage.nextRun, { contract: null, modFocus: null });
+  assert.deepEqual(normalizeGarageState({ nextRun: { contract: 'bad', modFocus: 'bad' } }).nextRun, { contract: null, modFocus: null });
+});
+
+test('a preset never restores a locked Overdrive protocol', () => {
+  const save = createDefaultLocalSave('garage-locked', 'Garage Locked');
+  save.garage.presets[0] = { ...save.garage.presets[0], saved: true, protocol: 'overdrive-draco' };
+  assert.ok(save.progress.highestRound < RUN_PROTOCOLS['overdrive-draco'].unlockHighestRound);
+  const result = loadGaragePreset(save, 'config-a');
+  assert.equal(result.ok, true);
+  assert.equal(result.ignoredProtocol, true);
+  assert.equal(save.protocol.preferred, 'normal');
+});
+
+test('version-seven profiles migrate to empty Garage presets without losing data', () => {
+  const existing = createDefaultLocalSave('garage-migrate', 'Garage Migrate');
+  existing.wallet.credits = 4567;
+  existing.mods.plasmaChips = 33;
+  const legacy = { ...existing, version: 7 };
+  delete legacy.garage;
+  const migrated = normalizeLocalSave(legacy);
+  assert.ok(migrated);
+  assert.equal(migrated.version, 8);
+  assert.equal(migrated.wallet.credits, 4567);
+  assert.equal(migrated.mods.plasmaChips, 33);
+  assert.deepEqual(migrated.garage, createDefaultGarageState());
+});
+
+test('Mod Library count and owned/unowned state come directly from the definition registry', () => {
+  const save = createDefaultLocalSave('garage-library', 'Garage Library');
+  const ownedDefinition = MOD_DEFINITIONS[7];
+  addModDrop(save.mods, ownedDefinition.id);
+  const entries = getModLibraryEntries(save.mods);
+  const progress = getModLibraryProgress(save.mods);
+  assert.equal(entries.length, MOD_DEFINITIONS.length);
+  assert.equal(progress.total, MOD_DEFINITIONS.length);
+  assert.equal(progress.discovered, 1);
+  assert.equal(entries.find((entry) => entry.definition.id === ownedDefinition.id).owned, true);
+  assert.equal(entries.find((entry) => entry.definition.id !== ownedDefinition.id).owned, false);
+  assert.equal(MOD_BY_ID.size, progress.total);
+});
+
+test('owned cosmetics, equipped cosmetics, and wallet values remain profile-owned state', () => {
+  const save = createDefaultLocalSave('garage-owned', 'Garage Owned');
+  const cosmetic = COSMETICS.find((entry) => entry.id === 'player-clover');
+  save.cosmetics.owned.push(cosmetic.id);
+  save.cosmetics.equipped.playerShape = cosmetic.id;
+  save.wallet.credits = 12_345;
+  save.wallet.coreTokens = 678;
+  save.mods.plasmaChips = 90;
+  const normalized = normalizeLocalSave(save);
+  assert.equal(getOwnedGarageCosmetics(normalized).some((entry) => entry.id === cosmetic.id), true);
+  assert.equal(normalized.cosmetics.equipped.playerShape, cosmetic.id);
+  assert.deepEqual(getGarageWallet(normalized), { credits: 12_345, coreTokens: 678, plasmaChips: 90 });
+});
+
+test('Garage responsive layout keeps critical docks, terminals, and stations on screen', () => {
+  for (const [width, height] of [[640, 480], [1024, 640], [1920, 1080], [720, 900]]) {
+    const layout = calculateGarageLayout(width, height);
+    assert.equal(layout.dockCenters.length, 5);
+    assert.equal(layout.stationCenters.length, 5);
+    assert.ok(layout.cardWidth >= 84);
+    for (const point of layout.dockCenters) {
+      assert.ok(point.x - layout.cardWidth / 2 >= layout.safe - 1);
+      assert.ok(point.x + layout.cardWidth / 2 <= width - layout.safe + 1);
+      assert.ok(point.y - layout.cardHeight / 2 > 65);
+      assert.ok(point.y + layout.cardHeight / 2 < height - 45);
+    }
+    for (const rect of [layout.configTerminal, layout.walletTerminal, layout.operatorPreview]) {
+      assert.ok(rect.x >= 0 && rect.y >= 0);
+      assert.ok(rect.x + rect.width <= width);
+      assert.ok(rect.y + rect.height <= height);
+    }
+    assert.ok(layout.stationCenters.every((point) => point.x > 0 && point.x < width && point.y < height));
+  }
+});
+
+test('Garage navigation is registered and Mod Collection preserves its return route', () => {
+  const sceneKeys = readFileSync(new URL('../src/game/flow/SceneKeys.ts', import.meta.url), 'utf8');
+  const boot = readFileSync(new URL('../src/game/scenes/BootScene.ts', import.meta.url), 'utf8');
+  const menu = readFileSync(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8');
+  const collection = readFileSync(new URL('../src/game/scenes/ModCollectionScene.ts', import.meta.url), 'utf8');
+  const garage = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
+  assert.match(sceneKeys, /Garage: 'garage'/);
+  assert.match(boot, /OperatorGarageScene/);
+  assert.match(menu, /Operator Garage/);
+  assert.match(collection, /Back To Garage/);
+  assert.match(garage, /createModCardView/);
+  assert.match(garage, /returnScene: SceneKeys\.Garage/);
+});
+
+test('loading a Garage preset cannot mutate an already-created encounter Mod snapshot', () => {
+  const save = createDefaultLocalSave('garage-snapshot', 'Garage Snapshot');
+  addCategoryLoadout(save);
+  const encounterSnapshot = new ModRuntime(save.mods).snapshot();
+  const frozenCopy = structuredClone(encounterSnapshot);
+  saveCurrentGaragePreset(save, 'config-c');
+  for (const slot of GARAGE_MOD_SLOTS) unequipMod(save.mods, slot);
+  loadGaragePreset(save, 'config-c');
+  assert.deepEqual(encounterSnapshot, frozenCopy);
+});

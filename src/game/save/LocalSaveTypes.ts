@@ -4,11 +4,12 @@ import { GAME_VERSION } from '../config/version.ts';
 import type { AbilityBindings } from '../config/controls.ts';
 import type { LocalModCollection, ProtocolPreference } from '../mods/types.ts';
 import type { CreditSpendBreakdown } from '../economy/types.ts';
+import type { PlayerGarageState } from '../garage/types.ts';
 
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 7;
+export const CURRENT_SAVE_VERSION = 8;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -65,6 +66,7 @@ export interface LocalPlayerSave {
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
   mods: LocalModCollection;
+  garage: PlayerGarageState;
   protocol: ProtocolPreference;
   progress: LocalPlayerProgress;
   settings: LocalPlayerSettings;
