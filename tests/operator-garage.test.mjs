@@ -201,6 +201,25 @@ test('Garage responsive layout keeps critical docks, terminals, and stations on 
   }
 });
 
+test('desktop Garage gives the deployment, wallet, and operative displays readable space', () => {
+  const layout = calculateGarageLayout(1920, 1080);
+  assert.ok(layout.configTerminal.width >= 320);
+  assert.ok(layout.configTerminal.height >= 174);
+  assert.equal(layout.walletTerminal.width, layout.configTerminal.width);
+  assert.equal(layout.walletTerminal.height, layout.configTerminal.height);
+  assert.ok(layout.operatorPreview.width >= 330);
+  assert.ok(layout.operatorPreview.height >= 174);
+  assert.ok(layout.operatorPreview.y >= 88);
+});
+
+test('equipping an operative frame or color refreshes the Garage showcase', () => {
+  const source = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
+  assert.match(source, /item\.category === 'playerShape' \|\| item\.category === 'playerColor'/);
+  assert.match(source, /this\.refreshOperatorPreview\(\)/);
+  assert.match(source, /getEquippedCosmeticId\('playerShape'\)/);
+  assert.match(source, /getCosmeticColor\('playerColor'/);
+});
+
 test('Garage navigation is registered and Mod Collection preserves its return route', () => {
   const sceneKeys = readFileSync(new URL('../src/game/flow/SceneKeys.ts', import.meta.url), 'utf8');
   const boot = readFileSync(new URL('../src/game/scenes/BootScene.ts', import.meta.url), 'utf8');

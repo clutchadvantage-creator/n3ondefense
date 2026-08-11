@@ -37,6 +37,9 @@ export class OperatorGarageScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
   private overlay: Phaser.GameObjects.Container | null = null;
+  private operatorPreviewRoot: Phaser.GameObjects.Container | null = null;
+  private operatorPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
+  private operatorPreviewLayout: { rect: GarageRect; compact: boolean } | null = null;
   private status = '';
   private libraryCategoryIndex = 0;
   private libraryRarityIndex = 0;
@@ -96,6 +99,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
       this.scale.off('resize', this.handleResize, this);
       this.closeOverlay();
+      this.destroyOperatorPreview();
     });
   }
 
@@ -143,10 +147,14 @@ export class OperatorGarageScene extends Phaser.Scene {
 
   private terminalFrame(rect: GarageRect, title: string, color = 0x55efff): Phaser.GameObjects.Container {
     const root = this.add.container(rect.x, rect.y).setDepth(40);
+    const roomy = rect.height >= 150;
+    const headerHeight = roomy ? 31 : 27;
     const panel = this.add.rectangle(0, 0, rect.width, rect.height, 0x07131d, 0.9).setOrigin(0).setStrokeStyle(2, color, 0.58);
-    const header = this.add.rectangle(0, 0, rect.width, 25, color, 0.1).setOrigin(0).setStrokeStyle(1, color, 0.35);
-    const label = this.add.text(10, 5, title, { fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: Phaser.Display.Color.IntegerToColor(color).rgba }).setOrigin(0);
-    const led = this.add.circle(rect.width - 13, 12, 3, 0x68ffac, 0.9);
+    const header = this.add.rectangle(0, 0, rect.width, headerHeight, color, 0.1).setOrigin(0).setStrokeStyle(1, color, 0.35);
+    const label = this.add.text(11, roomy ? 7 : 6, title, {
+      fontFamily: 'Orbitron, sans-serif', fontSize: roomy ? '13px' : '11px', color: Phaser.Display.Color.IntegerToColor(color).rgba
+    }).setOrigin(0);
+    const led = this.add.circle(rect.width - 14, headerHeight / 2, roomy ? 4 : 3, 0x68ffac, 0.9);
     root.add([panel, header, label, led]);
     this.tweens.add({ targets: led, alpha: { from: 0.35, to: 1 }, duration: 1100, yoyo: true, repeat: -1 });
     return root;
@@ -154,6 +162,7 @@ export class OperatorGarageScene extends Phaser.Scene {
 
   private createConfigurationTerminal(rect: GarageRect, compact: boolean): void {
     const root = this.terminalFrame(rect, 'DEPLOYMENT CONFIGURATION');
+    const roomy = !compact && rect.height >= 150;
     const highestRound = SaveSystem.getHighestRound();
     const requested = SaveSystem.getPreferredProtocol();
     const protocol = highestRound >= RUN_PROTOCOLS[requested].unlockHighestRound ? requested : 'normal';
@@ -163,28 +172,33 @@ export class OperatorGarageScene extends Phaser.Scene {
       { label: 'CONTRACT', value: setup.contract ? RUN_CONTRACTS[setup.contract].label : 'NO CONTRACT ACTIVE', action: () => this.cycleContract() },
       { label: 'SIGNAL', value: setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus] : 'NO SIGNAL ACTIVE', action: () => this.cycleSignal() }
     ];
-    const startY = compact ? 27 : 34;
-    const rowGap = compact ? 21 : 31;
+    const startY = roomy ? 38 : 30;
+    const rowGap = roomy ? 37 : 24;
     rows.forEach((row, index) => {
       const y = startY + index * rowGap;
-      const hit = this.add.rectangle(6, y - 1, rect.width - 12, rowGap - 3, 0x102331, 0.5).setOrigin(0).setInteractive({ useHandCursor: true });
-      const label = this.add.text(12, y + 3, row.label, { fontFamily: 'Rajdhani, sans-serif', fontSize: compact ? '9px' : '10px', color: '#6ea2b4' }).setOrigin(0);
-      const value = this.add.text(rect.width - 11, y + 2, row.value, { fontFamily: 'Rajdhani, sans-serif', fontSize: compact ? '10px' : '12px', fontStyle: 'bold', color: '#d6fbff' }).setOrigin(1, 0).setMaxLines(1);
+      const hit = this.add.rectangle(7, y - 1, rect.width - 14, rowGap - 4, 0x102331, 0.5).setOrigin(0).setInteractive({ useHandCursor: true });
+      const label = this.add.text(13, y + (roomy ? 6 : 4), row.label, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '12px' : '10px', color: '#78adbf'
+      }).setOrigin(0);
+      const value = this.add.text(rect.width - 13, y + (roomy ? 4 : 3), row.value, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '14px' : '11px', fontStyle: 'bold', color: '#d6fbff'
+      }).setOrigin(1, 0).setMaxLines(1);
       hit.on('pointerover', () => hit.setFillStyle(0x17374a, 0.75));
       hit.on('pointerout', () => hit.setFillStyle(0x102331, 0.5));
       hit.on('pointerdown', row.action);
       root.add([hit, label, value]);
     });
-    if (!compact) {
+    if (roomy) {
       const cost = getRunSetupCost(setup);
       root.add(this.add.text(rect.width / 2, rect.height - 18, cost > 0 ? `NEXT RUN FEE // ${cost.toLocaleString()} CREDITS` : 'NEXT RUN FEE // FREE', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', color: cost > 0 ? '#ffd077' : '#7fffc2'
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', fontStyle: 'bold', color: cost > 0 ? '#ffd077' : '#7fffc2'
       }).setOrigin(0.5));
     }
   }
 
   private createWalletTerminal(rect: GarageRect, compact: boolean): void {
     const root = this.terminalFrame(rect, 'DIGITAL WALLET', 0xff5bcf);
+    const roomy = !compact && rect.height >= 150;
     const save = SaveSystem.get();
     const plasma = SaveSystem.getModCollection().plasmaChips;
     const values = [
@@ -193,31 +207,70 @@ export class OperatorGarageScene extends Phaser.Scene {
       ['PLASMA CHIPS', plasma.toLocaleString(), '#db8fff']
     ] as const;
     values.forEach(([label, value, color], index) => {
-      const y = (compact ? 31 : 39) + index * (compact ? 21 : 31);
-      root.add(this.add.text(12, y, label, { fontFamily: 'Rajdhani, sans-serif', fontSize: compact ? '10px' : '11px', color: '#718fa1' }).setOrigin(0));
-      root.add(this.add.text(rect.width - 12, y - 2, value, { fontFamily: 'Orbitron, sans-serif', fontSize: compact ? '12px' : '15px', color }).setOrigin(1, 0));
+      const y = (roomy ? 44 : 34) + index * (roomy ? 37 : 24);
+      root.add(this.add.text(13, y, label, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '13px' : '10px', color: '#7c9dad'
+      }).setOrigin(0));
+      root.add(this.add.text(rect.width - 13, y - 3, value, {
+        fontFamily: 'Orbitron, sans-serif', fontSize: roomy ? '18px' : '13px', color
+      }).setOrigin(1, 0));
     });
-    if (!compact) root.add(this.add.text(rect.width / 2, rect.height - 17, `HIGHEST ROUND // ${SaveSystem.getHighestRound()}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', color: '#93b6c6' }).setOrigin(0.5));
+    if (roomy) root.add(this.add.text(rect.width / 2, rect.height - 18, `HIGHEST ROUND // ${SaveSystem.getHighestRound()}`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', fontStyle: 'bold', color: '#9bc4d3'
+    }).setOrigin(0.5));
   }
 
   private createOperatorPreview(rect: GarageRect, compact: boolean): void {
+    this.operatorPreviewLayout = { rect: { ...rect }, compact };
+    this.renderOperatorPreview();
+  }
+
+  private renderOperatorPreview(): void {
+    if (!this.operatorPreviewLayout) return;
+    this.destroyOperatorPreview();
+    const { rect, compact } = this.operatorPreviewLayout;
+    const large = !compact && rect.width >= 300 && rect.height >= 170;
     const centerX = rect.x + rect.width / 2;
-    const centerY = rect.y + rect.height * 0.52;
+    const centerY = rect.y + rect.height * (large ? 0.48 : 0.52);
     const root = this.add.container(centerX, centerY).setDepth(35);
-    const lift = this.add.ellipse(0, compact ? 33 : 45, compact ? 108 : 145, compact ? 22 : 30, 0x142a35, 0.82).setStrokeStyle(2, 0x58efff, 0.55);
-    const glow = this.add.ellipse(0, compact ? 28 : 38, compact ? 84 : 112, compact ? 13 : 18, 0x5cf6ff, 0.16);
-    const ring = this.add.circle(0, -5, compact ? 36 : 48, 0x08131c, 0.44).setStrokeStyle(2, 0xff5bcf, 0.38);
+    const liftY = large ? 58 : compact ? 35 : 45;
+    const lift = this.add.ellipse(0, liftY, large ? 198 : compact ? 120 : 154, large ? 38 : compact ? 24 : 31, 0x142a35, 0.82).setStrokeStyle(2, 0x58efff, 0.62);
+    const glow = this.add.ellipse(0, liftY - (large ? 9 : 7), large ? 154 : compact ? 92 : 118, large ? 23 : compact ? 14 : 18, 0x5cf6ff, 0.2);
+    const ringY = large ? -11 : -5;
+    const ring = this.add.circle(0, ringY, large ? 60 : compact ? 38 : 49, 0x08131c, 0.44).setStrokeStyle(2, 0xff5bcf, 0.42);
     const shapeId = SaveSystem.getEquippedCosmeticId('playerShape') ?? 'player-circle';
     const texture = this.textures.exists(shapeId) ? shapeId : 'player-circle';
-    const operative = this.add.image(0, -5, texture).setScale(compact ? 1.55 : 2.15);
+    const operative = this.add.image(0, ringY, texture).setScale(large ? 2.75 : compact ? 1.72 : 2.2);
     const tint = SaveSystem.getCosmeticColor('playerColor', this.time.now);
     operative.setTint(tint);
     const shape = COSMETICS.find((item) => item.id === shapeId)?.label ?? 'Operative';
-    const caption = this.add.text(0, compact ? 39 : 63, shape.toUpperCase(), { fontFamily: 'Rajdhani, sans-serif', fontSize: compact ? '10px' : '12px', color: '#bfeaff' }).setOrigin(0.5);
+    const caption = this.add.text(0, large ? 82 : compact ? 43 : 64, shape.toUpperCase(), {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: large ? '15px' : compact ? '11px' : '13px', fontStyle: 'bold', color: '#c9f3ff'
+    }).setOrigin(0.5);
     root.add([lift, glow, ring, operative, caption]);
-    this.tweens.add({ targets: operative, y: { from: -8, to: -2 }, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.operatorPreviewRoot = root;
+    this.tweens.add({ targets: operative, y: { from: ringY - 4, to: ringY + 3 }, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.tweens.add({ targets: ring, angle: 360, alpha: { from: 0.28, to: 0.62 }, duration: 4800, repeat: -1, ease: 'Linear' });
-    if (SaveSystem.isPrismCosmetic('playerColor')) this.time.addEvent({ delay: 90, loop: true, callback: () => operative.active && operative.setTint(SaveSystem.getCosmeticColor('playerColor', this.time.now)) });
+    if (SaveSystem.isPrismCosmetic('playerColor')) {
+      this.operatorPreviewColorTimer = this.time.addEvent({
+        delay: 90,
+        loop: true,
+        callback: () => operative.active && operative.setTint(SaveSystem.getCosmeticColor('playerColor', this.time.now))
+      });
+    }
+  }
+
+  private refreshOperatorPreview(): void {
+    this.renderOperatorPreview();
+  }
+
+  private destroyOperatorPreview(): void {
+    this.operatorPreviewColorTimer?.remove(false);
+    this.operatorPreviewColorTimer = null;
+    if (!this.operatorPreviewRoot) return;
+    this.tweens.killTweensOf(this.operatorPreviewRoot.list);
+    this.operatorPreviewRoot.destroy(true);
+    this.operatorPreviewRoot = null;
   }
 
   private createModDocks(cardWidth: number, cardHeight: number, centers: Array<{ x: number; y: number }>, compact: boolean): void {
@@ -400,6 +453,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       const state = this.add.text(x, y + 35, equipped ? 'EQUIPPED' : 'OWNED // CLICK TO EQUIP', { fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: equipped ? '#70ffac' : '#89abba' }).setOrigin(0.5);
       panel.on('pointerdown', () => {
         SaveSystem.equipCosmetic(item.category, item.id);
+        if (item.category === 'playerShape' || item.category === 'playerColor') this.refreshOperatorPreview();
         this.audio.playSfx('menu');
         this.status = `SUCCESS // ${item.label.toUpperCase()} EQUIPPED`;
         this.showCosmetics();
