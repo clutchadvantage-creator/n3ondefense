@@ -15,7 +15,6 @@ export const GAS_HAZARD_BALANCE = {
   playerDamagePerRound: 0.5,
   maximumPlayerDamage: 24,
   damageTickIntervalMs: 1100,
-  damageRetryWindowMs: 650,
   cloudRadius: 260,
   tunnelRadius: 68,
   densityCellSize: 40,

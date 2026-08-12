@@ -48,8 +48,10 @@ test('gas phases remain occasional, suppress lasers, permit bomblets, and carve 
   assert.match(gas, /gasLayer\.erase\(this\.tunnelBrush\)/);
   assert.match(gas, /GAS_SKULL_TEXTURE/);
   assert.match(gas, /updateGasAnimation\(now, dissipateProgress\)/);
-  assert.match(gas, /gasExposureUntil = now \+ config\.damageRetryWindowMs/);
-  assert.match(gas, /this\.density\[row \* this\.densityColumns \+ column\] = 0/);
+  assert.match(gas, /Persistent logical footprint: tunneling never removes gas exposure/);
+  assert.match(gas, /this\.tunnelMask\[row \* this\.densityColumns \+ column\] = 255/);
+  assert.doesNotMatch(gas, /this\.density\[row \* this\.densityColumns \+ column\] = 0/);
+  assert.match(gas, /if \(playerEnteredGas && now >= this\.nextGasDamageAt\)/);
   assert.match(gas, /return this\.active \|\| now < this\.recoveryUntil/);
   assert.match(arena, /isDangerWindow\(now, gasSuppressesLasers\)/);
   assert.match(arena, /bombletHazard\?\.update\(now, this\.player, hazardTargets, laserDangerWindow\)/);
