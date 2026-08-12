@@ -5,6 +5,8 @@ export const BOMBLET_HAZARD_BALANCE = {
   fallMs: 850,
   staggerMs: 70,
   blastVisualMs: 360,
+  cameraShakeDurationMs: 150,
+  cameraShakeIntensity: 0.0045,
   baseCooldownMs: 17_000,
   minimumCooldownMs: 11_000,
   cooldownReductionPerRoundMs: 280,

@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { AIR_DROP_PATTERN_NAMES, createAirDropPattern } from '../src/game/systems/AirDropPatterns.ts';
 import { SeededRandom } from '../src/game/systems/SeededRandom.ts';
 import { GAS_HAZARD_BALANCE, getGasExposureDamage } from '../src/game/config/gasHazards.ts';
+import { BOMBLET_HAZARD_BALANCE } from '../src/game/config/bombletHazards.ts';
 import { SFX_DEFINITIONS } from '../src/game/config/audio.ts';
 
 test('shared air-drop patterns provide deterministic bomblet and gas-canister layouts', () => {
@@ -105,4 +106,12 @@ test('security laser and per-bomblet audio use active-state and pooled playback'
   assert.match(arena, /startSecurityLaserLoop\(\).*stopSecurityLaserLoop\(\)/);
   assert.match(arena, /\(\) => this\.audio\.playSfx\('bomblet'\)/);
   assert.match(arena, /laserSecurity\?\.silence\(\)/);
+});
+
+test('bomblet detonations apply a restrained non-restarting camera shake', () => {
+  const bomblets = readFileSync(new URL('../src/game/systems/BombletHazardSystem.ts', import.meta.url), 'utf8');
+  assert.ok(BOMBLET_HAZARD_BALANCE.cameraShakeDurationMs > 0);
+  assert.ok(BOMBLET_HAZARD_BALANCE.cameraShakeIntensity > 0);
+  assert.ok(BOMBLET_HAZARD_BALANCE.cameraShakeIntensity < 0.01);
+  assert.match(bomblets, /cameras\.main\.shake\(config\.cameraShakeDurationMs, config\.cameraShakeIntensity, false\)/);
 });

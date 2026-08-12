@@ -154,6 +154,8 @@ export class BombletHazardSystem {
     const config = BOMBLET_HAZARD_BALANCE;
     target.exploded = true;
     this.onBombletExploded?.();
+    // Do not force-restart an in-progress shake when staggered bomblets overlap.
+    this.scene.cameras.main.shake(config.cameraShakeDurationMs, config.cameraShakeIntensity, false);
     target.marker.setAlpha(0);
     target.bomb.setAlpha(0);
     const color = target.color;
