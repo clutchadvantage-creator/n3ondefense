@@ -48,6 +48,8 @@ test('gas phases remain occasional, suppress lasers, permit bomblets, and carve 
   assert.match(gas, /gasLayer\.erase\(this\.tunnelBrush\)/);
   assert.match(gas, /GAS_SKULL_TEXTURE/);
   assert.match(gas, /updateGasAnimation\(now, dissipateProgress\)/);
+  assert.match(gas, /Three batched bubbles per cloud; no sprites, tweens, physics, or allocations/);
+  assert.match(gas, /this\.drawGasBubbles\(target, index, now, time\)/);
   assert.match(gas, /Persistent logical footprint: tunneling never removes gas exposure/);
   assert.match(gas, /this\.tunnelMask\[row \* this\.densityColumns \+ column\] = 255/);
   assert.doesNotMatch(gas, /this\.density\[row \* this\.densityColumns \+ column\] = 0/);

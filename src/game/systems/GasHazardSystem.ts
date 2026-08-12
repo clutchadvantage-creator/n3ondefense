@@ -386,6 +386,29 @@ export class GasHazardSystem {
         this.wispGraphics.fillStyle(0xd7ffa3, 0.026);
         this.wispGraphics.fillCircle(x - radius * 0.18, y - radius * 0.16, radius * 0.58);
       }
+      this.drawGasBubbles(target, index, now, time);
+    }
+  }
+
+  /** Three batched bubbles per cloud; no sprites, tweens, physics, or allocations. */
+  private drawGasBubbles(target: GasCanisterTarget, cloudIndex: number, now: number, time: number): void {
+    for (let bubble = 0; bubble < 3; bubble += 1) {
+      const phase = target.wispPhase + bubble * 2.17 + cloudIndex * 0.43;
+      const orbit = GAS_HAZARD_BALANCE.cloudRadius * (0.13 + bubble * 0.065);
+      const x = target.x + Math.sin(time * (1.1 + bubble * 0.08) + phase) * orbit;
+      const y = target.y
+        + Math.sin(time * (1.55 + bubble * 0.11) + phase * 1.31) * orbit * 0.72
+        - Math.sin(time * 0.47 + phase) * 24;
+      if (!this.hasVisibleGasAt(x, y)) continue;
+      const pulse = 0.72 + Math.sin(now * 0.0055 + phase) * 0.28;
+      const radius = (4.5 + bubble * 1.8) * pulse;
+      const color = bubble % 2 === 0 ? 0xbfff37 : 0x64ff52;
+      this.wispGraphics.fillStyle(color, 0.16 + pulse * 0.08);
+      this.wispGraphics.fillCircle(x, y, radius);
+      this.wispGraphics.lineStyle(1.5, bubble % 2 === 0 ? 0xf1ff72 : 0xafff68, 0.4);
+      this.wispGraphics.strokeCircle(x, y, radius + 1.5);
+      this.wispGraphics.fillStyle(0xf1ffb0, 0.3);
+      this.wispGraphics.fillCircle(x - radius * 0.3, y - radius * 0.34, Math.max(1, radius * 0.2));
     }
   }
 
