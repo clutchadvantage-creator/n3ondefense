@@ -243,13 +243,17 @@ export class OptionsScene extends Phaser.Scene {
       const hit = this.add.rectangle(x + 62, y, 164, 29, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
       hit.on('pointerover', () => bg.setStrokeStyle(2, 0x69f4ff, 1));
       hit.on('pointerout', () => bg.setStrokeStyle(1, 0xff7adf, 0.8));
-      hit.on('pointerdown', () => this.beginBindingCapture(action, bindings, valueLabels, status));
+      hit.on('pointerdown', () => {
+        AudioManager.get().playSfx('menu');
+        this.beginBindingCapture(action, bindings, valueLabels, status);
+      });
     });
 
     const reset = this.add.text(centerX + panelWidth * 0.25 + 62, topY + 204, 'RESET DEFAULTS', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#ffcf91', backgroundColor: '#172238', padding: { x: 18, y: 5 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     reset.on('pointerdown', () => {
+      AudioManager.get().playSfx('menu');
       this.cancelBindingCapture?.();
       Object.assign(bindings, DEFAULT_ABILITY_BINDINGS);
       for (const { action } of ABILITY_ACTIONS) valueLabels.get(action)?.setText(bindingLabel(bindings[action]));

@@ -14,9 +14,10 @@
 .store-wallet small { display:block; font-size:.62rem; letter-spacing:.14em; color:#8caabd; }
 .store-wallet .credits { color:#ffd66e; }.store-wallet .tokens { color:#e18cff; }.store-wallet b { margin-right:5px; }
 .store-back,.store-action,.store-dialog button { min-height:44px; padding:9px 18px; border:1px solid var(--accent); background:rgba(7,20,31,.92); color:#e9fbff; font:700 .88rem/1.25 'Rajdhani'; letter-spacing:.1em; cursor:pointer; transition:140ms ease; white-space:normal; overflow-wrap:anywhere; }
+.store-action[aria-disabled="true"] { cursor:not-allowed; opacity:.56; border-color:#596879; color:#8091a2; box-shadow:none; }
 .store-header-actions { display:flex; gap:9px; justify-content:flex-end; }
 .store-back.game { border-color:var(--good); color:#caffdd; }
-.store-back:hover,.store-back:focus-visible,.store-action:hover:not(:disabled),.store-action:focus-visible { outline:none; transform:translateY(-1px); box-shadow:0 0 18px color-mix(in srgb,var(--accent) 28%,transparent); }
+.store-back:hover,.store-back:focus-visible,.store-action:hover:not([aria-disabled="true"]),.store-action:focus-visible:not([aria-disabled="true"]) { outline:none; transform:translateY(-1px); box-shadow:0 0 18px color-mix(in srgb,var(--accent) 28%,transparent); }
 .store-body { min-height:0; display:grid; grid-template-columns:190px minmax(380px,1fr) minmax(300px,380px); }
 .store-categories,.store-grid-panel,.store-details { min-height:0; box-sizing:border-box; }
 .store-categories { padding:22px 16px; border-right:1px solid rgba(95,207,239,.2); background:rgba(3,10,19,.74); overflow:auto; }

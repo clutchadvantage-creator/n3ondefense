@@ -170,7 +170,10 @@ export class OperatorGarageScene extends Phaser.Scene {
       }).setOrigin(roomy ? 1 : 0, 0).setMaxLines(1);
       hit.on('pointerover', () => hit.setFillStyle(0x17374a, 0.75));
       hit.on('pointerout', () => hit.setFillStyle(0x102331, 0.5));
-      hit.on('pointerdown', row.action);
+      hit.on('pointerdown', () => {
+        row.action();
+        this.audio.playSfx('menu');
+      });
       root.add([hit, label, value]);
     });
     if (roomy) {
@@ -314,20 +317,25 @@ export class OperatorGarageScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(27).setWordWrapWidth(cardWidth + 18, true).setMaxLines(2);
       if (dock.card) {
         const view = createModCardView(this, center.x, center.y, dock.card, dock.card.upgradeLevel, { width: cardWidth, height: cardHeight, compact: true, equipped: true });
-        view.setDepth(26).on('pointerdown', () => this.openCollection(dock.card?.instanceId));
+        view.setDepth(26).on('pointerdown', () => {
+          this.audio.playSfx('menu');
+          this.openCollection(dock.card?.instanceId);
+        });
       } else {
         const emptyHit = this.add.rectangle(center.x, center.y, cardWidth, cardHeight, 0x0a1923, 0.78).setStrokeStyle(1, 0x4bd7e9, 0.25).setInteractive({ useHandCursor: true }).setDepth(26);
         this.add.text(center.x, center.y - 13, '+', { fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 25 : 34}px`, color: '#376979' }).setOrigin(0.5).setDepth(27);
         this.add.text(center.x, center.y + 22, 'AWAITING\nMODULE', { fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, color: '#638795', align: 'center' }).setOrigin(0.5).setDepth(27);
         emptyHit.on('pointerover', () => emptyHit.setStrokeStyle(2, 0x62efff, 0.72));
         emptyHit.on('pointerout', () => emptyHit.setStrokeStyle(1, 0x4bd7e9, 0.25));
-        emptyHit.on('pointerdown', () => this.openCollection());
+        emptyHit.on('pointerdown', () => {
+          this.audio.playSfx('menu');
+          this.openCollection();
+        });
       }
       const actionY = center.y + cardHeight / 2 + 31;
       createButton(this, center.x, actionY, dock.card ? 'UNEQUIP' : 'BROWSE', () => {
         if (dock.card) {
           SaveSystem.unequipMod(dock.slot);
-          this.audio.playSfx('menu');
           this.status = `SUCCESS // ${dock.label.replace('SLOT ', '').replace(' // ', ' ')} CLEARED`;
           this.scene.restart({ returnScene: this.returnScene });
         } else this.openCollection();
@@ -348,7 +356,6 @@ export class OperatorGarageScene extends Phaser.Scene {
     stations.forEach((station, index) => {
       createStationHousing(this, centers[index], width, index);
       const button = createButton(this, centers[index].x, centers[index].y, station.label, () => {
-        this.audio.playSfx('menu');
         station.action();
       }, width).setDepth(80);
       const led = this.add.circle(centers[index].x - width / 2 + 9, centers[index].y, 2, index % 2 ? 0xff5bcf : 0x62f4ff, 0.9).setDepth(82);
@@ -420,7 +427,11 @@ export class OperatorGarageScene extends Phaser.Scene {
       const y = gridTop + cardHeight / 2 + Math.floor(index / columns) * (cardHeight + cardGap);
       const card = entry.card ?? syntheticLibraryCard(entry.definition);
       const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: cardWidth, height: cardHeight, compact: true, selected: entry.definition.id === this.librarySelectedId });
-      view.setDepth(2002).setAlpha(entry.owned ? 1 : 0.48).on('pointerdown', () => { this.librarySelectedId = entry.definition.id; this.showLibrary(); });
+      view.setDepth(2002).setAlpha(entry.owned ? 1 : 0.48).on('pointerdown', () => {
+        this.audio.playSfx('menu');
+        this.librarySelectedId = entry.definition.id;
+        this.showLibrary();
+      });
       root.add(view);
       if (!entry.owned) {
         const marker = this.add.text(x, y + cardHeight * 0.35, 'NOT OWNED', { fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.max(7, cardWidth * 0.07)}px`, color: '#ff9cac', backgroundColor: '#160812' }).setOrigin(0.5).setDepth(2004);
@@ -558,10 +569,14 @@ export class OperatorGarageScene extends Phaser.Scene {
       const y = 96 + cardHeight / 2 + row * (cardHeight + gap);
       const panel = this.add.rectangle(x, y, cardWidth, cardHeight, unlocked ? 0x0b2425 : 0x10141d, 0.95)
         .setStrokeStyle(selected ? 3 : 1, selected ? 0xffb14d : unlocked ? 0x61ffab : 0x445765, selected ? 1 : 0.58);
-      if (unlocked) panel.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      panel.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+        if (!unlocked) {
+          this.audio.playSfx('itemLocked');
+          return;
+        }
         const result = SaveSystem.setPreferredProtocol(id);
         this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? `${definition.label} SELECTED`}`;
-        this.audio.playSfx('menu');
+        this.audio.playSfx(result.ok ? 'menu' : 'itemLocked');
         this.showOverdrive();
       });
       root.add(panel);
@@ -599,33 +614,32 @@ export class OperatorGarageScene extends Phaser.Scene {
       root.add(createButton(this, x, y + panelHeight / 2 - 74, 'SAVE CURRENT CONFIG', () => {
         const result = SaveSystem.saveGaragePreset(preset.id);
         this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? ''}`;
-        this.audio.playSfx('menu');
         this.showPresets();
+        return result.ok;
       }, panelWidth - 22));
       const load = createButton(this, x, y + panelHeight / 2 - 28, 'LOAD CONFIG', () => {
         const result = SaveSystem.loadGaragePreset(preset.id);
         this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? ''}`;
-        this.audio.playSfx('menu');
         this.scene.restart({ returnScene: this.returnScene });
+        return result.ok;
       }, panelWidth - 22);
       if (!preset.saved) disableButton(load);
       root.add(load);
     });
   }
 
-  private cycleProtocol(current: RunProtocolId): void {
+  private cycleProtocol(current: RunProtocolId): boolean {
     const next = cycleUnlockedProtocol(current, SaveSystem.getHighestRound(), 1);
     const result = SaveSystem.setPreferredProtocol(next);
     this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? RUN_PROTOCOLS[next].label}`;
-    this.audio.playSfx('menu');
     this.scene.restart({ returnScene: this.returnScene });
+    return result.ok;
   }
 
   private cycleContract(): void {
     const setup = SaveSystem.getNextRunSetupSelection();
     const current = setup.contract ? RUN_CONTRACT_IDS.indexOf(setup.contract) : -1;
     SaveSystem.setNextRunSetupSelection({ ...setup, contract: current >= RUN_CONTRACT_IDS.length - 1 ? null : RUN_CONTRACT_IDS[current + 1] });
-    this.audio.playSfx('menu');
     this.scene.restart({ returnScene: this.returnScene });
   }
 
@@ -633,7 +647,6 @@ export class OperatorGarageScene extends Phaser.Scene {
     const setup = SaveSystem.getNextRunSetupSelection();
     const current = setup.modFocus ? MOD_FOCUS_CATEGORIES.indexOf(setup.modFocus) : -1;
     SaveSystem.setNextRunSetupSelection({ ...setup, modFocus: current >= MOD_FOCUS_CATEGORIES.length - 1 ? null : MOD_FOCUS_CATEGORIES[current + 1] });
-    this.audio.playSfx('menu');
     this.scene.restart({ returnScene: this.returnScene });
   }
 

@@ -12,6 +12,7 @@ import { MOD_INFUSIONS } from '../mods/infusions.ts';
 import { getModCopyCounts, getRecyclableUnupgradedDuplicates } from '../mods/ModInventoryService.ts';
 import { showConfirmDialog, type LocalModalHandle } from '../utils/localSaveUi.ts';
 import { resolveModCollectionReturnRoute, type ModCollectionReturnRequest } from '../mods/ModCollectionNavigation.ts';
+import { AudioManager } from '../systems/AudioManager.ts';
 
 type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
 type FilterMode = 'all' | 'duplicates';
@@ -112,7 +113,11 @@ export class ModCollectionScene extends Phaser.Scene {
       const x = gridLeft + cardWidth / 2 + (index % columns) * (cardWidth + 14);
       const y = 154 + cardHeight / 2 + Math.floor(index / columns) * (cardHeight + 14);
       const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: cardWidth, height: cardHeight, selected: card.instanceId === this.selectedCardId, compact: true, equipped: equippedCardIds.has(card.instanceId), duplicateCount: Math.max(0, (copyCounts.get(card.modId) ?? 1) - 1) });
-      view.on('pointerdown', () => { this.selectedCardId = card.instanceId; this.restartCollection(); });
+      view.on('pointerdown', () => {
+        AudioManager.get().playSfx('menu');
+        this.selectedCardId = card.instanceId;
+        this.restartCollection();
+      });
     });
     if (!cards.length) this.add.text((gridLeft + gridRight) / 2, height / 2, filter === 'duplicates' ? 'NO DUPLICATE CARDS IN THIS GROUP' : 'NO COLLECTED CARDS IN THIS GROUP', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#607a8c' }).setOrigin(0.5);
     createButton(this, gridLeft + 70, height - 36, '◀', () => { this.page = Math.max(0, this.page - 1); this.restartCollection(); }, 90);
@@ -168,7 +173,7 @@ export class ModCollectionScene extends Phaser.Scene {
       ? `Upgrade — ${MOD_BALANCE.rankCreditCosts[nextUpgrade].toLocaleString()} Credits${coreTokenCost > 0 ? `\n+ ${coreTokenCost.toLocaleString()} Core Tokens` : ''}`
       : 'Upgrade Card — MAX LEVEL';
     const upgradeButton = createButton(this, x, buttonY + buttonGap * 2, upgradeLabel, () => {
-      if (nextUpgrade) this.apply(() => SaveSystem.rankUpMod(definition.id, card.instanceId));
+      return nextUpgrade ? this.apply(() => SaveSystem.rankUpMod(definition.id, card.instanceId)) : false;
     }, width - 40);
     if (!nextUpgrade) disableButton(upgradeButton);
     const sell = MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity];
@@ -254,7 +259,7 @@ export class ModCollectionScene extends Phaser.Scene {
       }).setOrigin(0, 0).setWordWrapWidth(copyWidth, true).setMaxLines(2));
       root.add(this.add.text(copyX, rowY + rowHeight / 2 - 15, installed ? 'INSTALLED' : `${infusion.plasmaCost} PLASMA CHIPS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', fontStyle: 'bold', color: installed ? '#70ffad' : affordable ? '#ffd98a' : '#ff91a4' }).setOrigin(0, 0.5));
       const install = createButton(this, installX, rowY, installed ? 'Installed' : affordable ? 'Install' : 'Not Enough Chips', () => {
-        if (!installed) this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion.id));
+        return !installed && affordable ? this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion.id)) : false;
       }, installWidth);
       if (installed || !affordable) disableButton(install);
       root.add(install);
@@ -296,7 +301,7 @@ export class ModCollectionScene extends Phaser.Scene {
     });
   }
 
-  private apply(operation: () => { ok: boolean; message?: string }): void { const result = operation(); this.status = `${result.ok ? 'Success' : 'Blocked'}: ${result.message ?? ''}`; this.restartCollection(); }
+  private apply(operation: () => { ok: boolean; message?: string }): boolean { const result = operation(); this.status = `${result.ok ? 'Success' : 'Blocked'}: ${result.message ?? ''}`; this.restartCollection(); return result.ok; }
 
   private restartCollection(): void {
     this.scene.restart({ returnScene: this.returnScene, resumePausedScene: this.resumePausedScene });

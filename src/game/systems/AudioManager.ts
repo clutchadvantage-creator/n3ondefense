@@ -4,8 +4,11 @@ import { publicAssetUrl } from '../utils/assetUrl';
 
 const audioAssetUrl = (path: string): string => publicAssetUrl(`assets/audio/${path}`);
 const BOMBLET_SFX_POOL_SIZE = 8;
+const ENEMY_DEATH_SFX_MAX_CONCURRENT = 4;
+const ENEMY_DEATH_SFX_MIN_INTERVAL_MS = 45;
 const HIT_DAMAGE_SFX_POOL_SIZE = 6;
 const HIT_DAMAGE_SFX_MIN_INTERVAL_MS = 55;
+const MENU_SFX_POOL_SIZE = 4;
 
 export class AudioManager {
   private static instance: AudioManager | null = null;
@@ -26,6 +29,8 @@ export class AudioManager {
   private readonly playerDeathSfxPool: HTMLAudioElement[] = [];
   private readonly bombletSfxPool: HTMLAudioElement[] = [];
   private readonly hitDamageSfxPool: HTMLAudioElement[] = [];
+  private readonly menuClickSfxPool: HTMLAudioElement[] = [];
+  private readonly itemLockedSfxPool: HTMLAudioElement[] = [];
   private securityLaserAudio: HTMLAudioElement | null = null;
   private securityLaserLoopRequested = false;
   private gasSfx: HTMLAudioElement | null = null;
@@ -42,6 +47,9 @@ export class AudioManager {
   private playerDeathSfxCursor = 0;
   private bombletSfxCursor = 0;
   private hitDamageSfxCursor = 0;
+  private menuClickSfxCursor = 0;
+  private itemLockedSfxCursor = 0;
+  private lastEnemyDeathSfxAt = -Infinity;
   private lastHitDamageSfxAt = -Infinity;
   private cachedMusicVolume = 0.51;
   private cachedSfxVolume = 0.6375;
@@ -62,6 +70,7 @@ export class AudioManager {
     this.initShieldActivationSfx();
     this.initHitDamageSfxPool();
     this.initModRevealSfx();
+    this.initMenuSfxPools();
   }
 
   static get(): AudioManager {
@@ -223,6 +232,50 @@ export class AudioManager {
     this.legendaryModSfx.load();
   }
 
+  private initMenuSfxPools(): void {
+    const menuClickSource = audioAssetUrl('soundeffects/menuclick.mp3');
+    const itemLockedSource = audioAssetUrl('soundeffects/itemlocked.mp3');
+    for (let index = 0; index < MENU_SFX_POOL_SIZE; index += 1) {
+      const menuClick = new Audio(menuClickSource);
+      menuClick.preload = 'auto';
+      menuClick.volume = this.getSfxVolume('menu');
+      menuClick.load();
+      this.menuClickSfxPool.push(menuClick);
+
+      const itemLocked = new Audio(itemLockedSource);
+      itemLocked.preload = 'auto';
+      itemLocked.volume = this.getSfxVolume('itemLocked');
+      itemLocked.load();
+      this.itemLockedSfxPool.push(itemLocked);
+    }
+  }
+
+  private playMenuSfx(name: 'menu' | 'itemLocked'): void {
+    const pool = name === 'menu' ? this.menuClickSfxPool : this.itemLockedSfxPool;
+    if (pool.length === 0) return;
+    const cursor = name === 'menu' ? this.menuClickSfxCursor : this.itemLockedSfxCursor;
+    let availableIndex = -1;
+    for (let offset = 0; offset < pool.length; offset += 1) {
+      const candidateIndex = (cursor + offset) % pool.length;
+      const candidate = pool[candidateIndex];
+      if (candidate.paused || candidate.ended) {
+        availableIndex = candidateIndex;
+        break;
+      }
+    }
+    if (availableIndex < 0) return;
+    if (name === 'menu') this.menuClickSfxCursor = (availableIndex + 1) % pool.length;
+    else this.itemLockedSfxCursor = (availableIndex + 1) % pool.length;
+    const audio = pool[availableIndex];
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Metadata may still be loading on the first menu interaction.
+    }
+    audio.volume = this.getSfxVolume(name);
+    void audio.play().catch(() => undefined);
+  }
+
   private playModRevealSfx(kind: 'modCollection' | 'legendaryMod'): void {
     const audio = kind === 'legendaryMod' ? this.legendaryModSfx : this.modCollectionSfx;
     if (!audio) return;
@@ -313,7 +366,7 @@ export class AudioManager {
 
   private initDeathSfxPools(): void {
     const src = audioAssetUrl('soundeffects/bang.mp3');
-    for (let i = 0; i < 10; i += 1) {
+    for (let i = 0; i < ENEMY_DEATH_SFX_MAX_CONCURRENT; i += 1) {
       const audio = new Audio(src);
       audio.preload = 'auto';
       audio.load();
@@ -330,25 +383,59 @@ export class AudioManager {
   }
 
   private playDeathSfx(name: 'enemyDeath' | 'playerDeath'): void {
-    const pool = name === 'enemyDeath' ? this.enemyDeathSfxPool : this.playerDeathSfxPool;
-    if (pool.length === 0) return;
-
-    const cursor = name === 'enemyDeath' ? this.enemyDeathSfxCursor : this.playerDeathSfxCursor;
-    const nextIndex = cursor % pool.length;
     if (name === 'enemyDeath') {
-      this.enemyDeathSfxCursor = (cursor + 1) % pool.length;
-    } else {
-      this.playerDeathSfxCursor = (cursor + 1) % pool.length;
+      this.playEnemyDeathSfx();
+      return;
     }
 
-    const audio = pool[nextIndex];
+    this.playPlayerDeathSfx();
+  }
+
+  private playEnemyDeathSfx(): void {
+    const now = performance.now();
+    if (
+      this.enemyDeathSfxPool.length === 0
+      || now - this.lastEnemyDeathSfxAt < ENEMY_DEATH_SFX_MIN_INTERVAL_MS
+    ) return;
+
+    let availableIndex = -1;
+    for (let offset = 0; offset < this.enemyDeathSfxPool.length; offset += 1) {
+      const candidateIndex = (this.enemyDeathSfxCursor + offset) % this.enemyDeathSfxPool.length;
+      const candidate = this.enemyDeathSfxPool[candidateIndex];
+      if (candidate.paused || candidate.ended) {
+        availableIndex = candidateIndex;
+        break;
+      }
+    }
+
+    // Never interrupt an active kill sound. If all voices are occupied, this
+    // kill is intentionally folded into the existing burst.
+    if (availableIndex < 0) return;
+
+    const audio = this.enemyDeathSfxPool[availableIndex];
+    this.enemyDeathSfxCursor = (availableIndex + 1) % this.enemyDeathSfxPool.length;
+    this.lastEnemyDeathSfxAt = now;
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Some browsers may reject seeks before metadata is ready.
+    }
+    audio.volume = this.getSfxVolume('enemyDeath');
+    void audio.play().catch(() => undefined);
+  }
+
+  private playPlayerDeathSfx(): void {
+    if (this.playerDeathSfxPool.length === 0) return;
+    const nextIndex = this.playerDeathSfxCursor % this.playerDeathSfxPool.length;
+    this.playerDeathSfxCursor = (this.playerDeathSfxCursor + 1) % this.playerDeathSfxPool.length;
+    const audio = this.playerDeathSfxPool[nextIndex];
     audio.pause();
     try {
       audio.currentTime = 0;
     } catch {
       // Some browsers may reject seeks before metadata is ready.
     }
-    audio.volume = this.getSfxVolume(name);
+    audio.volume = this.getSfxVolume('playerDeath');
     void audio.play().catch(() => undefined);
   }
 
@@ -444,6 +531,8 @@ export class AudioManager {
     for (const hitDamage of this.hitDamageSfxPool) {
       hitDamage.volume = this.getSfxVolume('playerDamage');
     }
+    for (const menuClick of this.menuClickSfxPool) menuClick.volume = this.getSfxVolume('menu');
+    for (const itemLocked of this.itemLockedSfxPool) itemLocked.volume = this.getSfxVolume('itemLocked');
     if (this.securityLaserAudio) this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
     if (this.gasSfx) this.gasSfx.volume = this.getSfxVolume('gas');
     if (this.shieldActivationSfx) this.shieldActivationSfx.volume = this.getSfxVolume('shieldOn');
@@ -565,7 +654,8 @@ export class AudioManager {
         this.playModRevealSfx(name);
         break;
       case 'menu':
-        this.beep('sfx', 520, 60, 0.04, name);
+      case 'itemLocked':
+        this.playMenuSfx(name);
         break;
     }
   }

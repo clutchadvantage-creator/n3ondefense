@@ -147,17 +147,18 @@ export class MainMenuScene extends Phaser.Scene {
     const pairButtonWidth = Math.max(170, Math.min(250, (width - pairGap - 48) / 2));
     const pairOffset = (pairButtonWidth + pairGap) / 2;
     const singleButtonWidth = Math.max(220, Math.min(280, width - 48));
-    const selectProtocol = (direction: 1 | -1): void => {
-      if (!profile) return;
+    const selectProtocol = (direction: 1 | -1): boolean => {
+      if (!profile) return true;
       const next = cycleUnlockedProtocol(protocol, SaveSystem.getHighestRound(), direction);
       if (next === protocol && unlockedProtocols.length === 1) {
         const nextLocked = RUN_PROTOCOL_IDS.find((id) => SaveSystem.getHighestRound() < RUN_PROTOCOLS[id].unlockHighestRound);
         if (nextLocked) onlineStatus.setText(`${RUN_PROTOCOLS[nextLocked].label} UNLOCKS AT ROUND ${RUN_PROTOCOLS[nextLocked].unlockHighestRound}`).setColor('#ffbd85');
-        return;
+        return false;
       }
       const result = SaveSystem.setPreferredProtocol(next);
       if (result.ok) this.scene.restart();
       else onlineStatus.setText(result.message ?? 'PROTOCOL LOCKED').setColor('#ffbd85');
+      return result.ok;
     };
     const protocolButton = createButton(this, width / 2, protocolY, `${protocolDefinition.label}\nSTART ROUND ${protocolDefinition.startingRound}`, () => selectProtocol(1), protocolWidth);
     const previousProtocolButton = createButton(this, width / 2 - protocolArrowOffset, protocolY, '<', () => selectProtocol(-1), protocolArrowWidth);
@@ -209,14 +210,13 @@ export class MainMenuScene extends Phaser.Scene {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
       }
+      const selection = this.getRunSetupSelection();
+      if (!SaveSystem.canAffordRunSetup(selection)) {
+        onlineStatus.setText(`RUN SETUP REQUIRES ${getRunSetupCost(selection).toLocaleString()} CREDITS.`).setColor('#ff9aab');
+        return false;
+      }
       disableButton(startButton);
       void (async () => {
-        const selection = this.getRunSetupSelection();
-        if (!SaveSystem.canAffordRunSetup(selection)) {
-          onlineStatus.setText(`RUN SETUP REQUIRES ${getRunSetupCost(selection).toLocaleString()} CREDITS.`).setColor('#ff9aab');
-          enableButton(startButton);
-          return;
-        }
         onlineStatus.setText('CREATING SERVER-AUTHORIZED RUN...').setColor('#9fc8d8');
         const result = await OnlineRunManager.beginRun(profile.id, profile.name, protocol, equippedMods);
         if (!result.ok || result.seed === undefined) {
@@ -249,6 +249,7 @@ export class MainMenuScene extends Phaser.Scene {
           message: 'Deploying server-authorized online operation...'
         });
       })();
+      return true;
     }, pairButtonWidth);
     const localStartButton = createButton(this, width / 2 + pairOffset, menuStartY, 'Start Local', () => {
       if (!profile) {
@@ -261,7 +262,7 @@ export class MainMenuScene extends Phaser.Scene {
       if (!purchase.ok) {
         onlineStatus.setText(purchase.message.toUpperCase()).setColor('#ff9aab');
         enableButton(localStartButton);
-        return;
+        return false;
       }
       const economySnapshot = SaveSystem.buildRunEconomySnapshot(selection, purchase.cost);
       this.clearRunSetupSelection();
@@ -274,6 +275,7 @@ export class MainMenuScene extends Phaser.Scene {
         },
         message: 'Building explicitly local operation...'
       });
+      return true;
     }, pairButtonWidth);
     createButton(this, width / 2, menuStartY + menuRowGap, 'Store', () => this.scene.start(SceneKeys.Upgrades, {
       returnScene: SceneKeys.MainMenu,

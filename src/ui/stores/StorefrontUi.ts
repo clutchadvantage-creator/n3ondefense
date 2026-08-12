@@ -2,6 +2,7 @@ import type { CosmeticOption, UpgradeDefinition } from '../../game/types';
 import { getUpgradeCost, getUpgradeLevel } from '../../data/upgrades';
 import { getUpgradeComparison } from './upgradePresentation';
 import { getCosmeticPriceTier } from '../../data/cosmetics.ts';
+import { AudioManager } from '../../game/systems/AudioManager.ts';
 import './storefront.css';
 
 export type StoreMode = 'cosmetics' | 'upgrades';
@@ -233,7 +234,7 @@ export class StorefrontUi {
     const owned = snapshot.ownedCosmetics.includes(item.id) || item.cost === 0;
     const equipped = snapshot.equippedCosmetics[item.category] === item.id;
     const affordable = item.currency === 'credits' ? snapshot.credits >= item.cost : snapshot.coreTokens >= item.cost;
-    const card = this.cardButton(item.id, `cosmetic-card tier-${getCosmeticPriceTier(item)} ${owned ? 'owned' : 'locked'} ${equipped ? 'equipped' : ''}`);
+    const card = this.cardButton(item.id, `cosmetic-card tier-${getCosmeticPriceTier(item)} ${owned ? 'owned' : 'locked'} ${equipped ? 'equipped' : ''}`, !owned && !affordable);
     const visual = this.renderCosmeticVisual(item, false);
     const badge = document.createElement('span');
     badge.className = 'card-badge';
@@ -271,11 +272,12 @@ export class StorefrontUi {
     return card;
   }
 
-  private cardButton(id: string, classes: string): HTMLButtonElement {
+  private cardButton(id: string, classes: string, locked = false): HTMLButtonElement {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = `store-card ${classes} ${id === this.selectedId ? 'selected' : ''}`;
     card.dataset.itemId = id;
+    if (locked) card.dataset.locked = 'true';
     card.addEventListener('click', () => {
       this.selectedId = id;
       this.message = '';
@@ -317,11 +319,15 @@ export class StorefrontUi {
     const action = document.createElement('button');
     action.type = 'button';
     action.className = 'store-action';
-    action.disabled = equipped || (!owned && !affordable) || this.actionLocked;
+    const unavailable = equipped || (!owned && !affordable) || this.actionLocked;
+    action.dataset.menuAudio = 'deferred';
+    action.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
     action.textContent = equipped ? 'EQUIPPED' : owned ? 'EQUIP' : affordable
       ? `UNLOCK — ${item.cost.toLocaleString()} ${item.currency === 'credits' ? 'CREDITS' : 'CORE TOKENS'}`
       : `NEED ${(item.cost - balance).toLocaleString()} MORE ${item.currency === 'credits' ? 'CREDITS' : 'TOKENS'}`;
     action.addEventListener('click', () => {
+      AudioManager.get().playSfx(unavailable ? 'itemLocked' : 'menu');
+      if (unavailable) return;
       if (owned) this.perform(() => this.options.onEquip?.(item));
       else if (item.currency === 'coreTokens' || item.cost >= 650) this.confirm(`UNLOCK ${item.label.toUpperCase()}?`, `Cost: ${item.cost} ${item.currency === 'credits' ? 'Credits' : 'Core Tokens'}`, 'UNLOCK', () => this.perform(() => this.options.onUnlock?.(item)));
       else this.perform(() => this.options.onUnlock?.(item));
@@ -355,9 +361,13 @@ export class StorefrontUi {
     const action = document.createElement('button');
     action.type = 'button';
     action.className = 'store-action';
-    action.disabled = maxed || !affordable || this.actionLocked;
+    const unavailable = maxed || !affordable || this.actionLocked;
+    action.dataset.menuAudio = 'deferred';
+    action.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
     action.textContent = maxed ? 'MAX LEVEL' : affordable ? `PURCHASE UPGRADE — ${cost.toLocaleString()} CREDITS` : `NEED ${(cost - snapshot.credits).toLocaleString()} MORE CREDITS`;
     action.addEventListener('click', () => {
+      AudioManager.get().playSfx(unavailable ? 'itemLocked' : 'menu');
+      if (unavailable) return;
       const purchase = () => this.perform(() => this.options.onUpgrade?.(item, level));
       if (cost >= 650) this.confirm(`UPGRADE ${item.label.toUpperCase()}?`, `Level ${level} → ${level + 1}\n${comparison.current} → ${comparison.next}\nCost: ${cost} Credits`, 'PURCHASE', purchase);
       else purchase();

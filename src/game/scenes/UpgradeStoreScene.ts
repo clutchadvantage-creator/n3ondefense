@@ -5,7 +5,6 @@ import { StorefrontUi } from '../../ui/stores/StorefrontUi';
 import { SceneKeys } from '../flow/SceneKeys';
 import { RunTransitionManager } from '../flow/RunTransitionManager.ts';
 import { resolveStoreReturnRoute, type StoreReturnRequest, type StoreReturnRoute } from '../stores/StoreNavigation.ts';
-import { AudioManager } from '../systems/AudioManager';
 import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
 import { SaveSystem } from '../systems/SaveSystem';
 import type { UpgradeDefinition } from '../types';
@@ -106,7 +105,6 @@ export class UpgradeStoreScene extends Phaser.Scene {
       return { ok: false, message: `NEED ${(cost - save.credits).toLocaleString()} MORE CREDITS` };
     }
     SaveSystem.setUpgradeLevel(definition.id, currentLevel + 1);
-    AudioManager.get().playSfx('menu');
     return { ok: true, message: 'UPGRADE INSTALLED' };
   }
 
@@ -120,7 +118,6 @@ export class UpgradeStoreScene extends Phaser.Scene {
     }
     SaveSystem.unlockCosmetic(item.id);
     SaveSystem.equipCosmetic(item.category, item.id);
-    AudioManager.get().playSfx('menu');
     return { ok: true, message: 'ITEM UNLOCKED • EQUIPPED' };
   }
 
@@ -129,7 +126,6 @@ export class UpgradeStoreScene extends Phaser.Scene {
     if (!save.unlockedCosmetics.includes(item.id) && item.cost !== 0) return { ok: false, message: 'ITEM IS LOCKED' };
     SaveSystem.unlockCosmetic(item.id);
     SaveSystem.equipCosmetic(item.category, item.id);
-    AudioManager.get().playSfx('menu');
     return { ok: true, message: 'COSMETIC EQUIPPED' };
   }
 }

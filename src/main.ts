@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import './style.css';
 import { createGameConfig } from './game/config/gameConfig';
+import { installMenuAudio } from './ui/installMenuAudio';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -15,4 +16,5 @@ app.innerHTML = `
   </div>
 `;
 
+installMenuAudio();
 new Phaser.Game(createGameConfig('phaser-game'));
