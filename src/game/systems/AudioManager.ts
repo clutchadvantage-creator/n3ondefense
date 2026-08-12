@@ -22,6 +22,7 @@ export class AudioManager {
   private readonly explosionSfxPool: HTMLAudioElement[] = [];
   private readonly enemyDeathSfxPool: HTMLAudioElement[] = [];
   private readonly playerDeathSfxPool: HTMLAudioElement[] = [];
+  private gasSfx: HTMLAudioElement | null = null;
   private plantingAudio: HTMLAudioElement | null = null;
   private plantingLoopRequested = false;
   private disarmAudio: HTMLAudioElement | null = null;
@@ -46,6 +47,7 @@ export class AudioManager {
     this.initBoostSfxPool();
     this.initExplosionSfxPool();
     this.initDeathSfxPools();
+    this.initGasSfx();
   }
 
   static get(): AudioManager {
@@ -187,6 +189,25 @@ export class AudioManager {
     void audio.play().catch(() => {
       fallbackOneShot();
     });
+  }
+
+  private initGasSfx(): void {
+    this.gasSfx = new Audio(audioAssetUrl('soundeffects/gassound.mp3'));
+    this.gasSfx.preload = 'auto';
+    this.gasSfx.volume = this.getSfxVolume('gas');
+    this.gasSfx.load();
+  }
+
+  private playGasSfx(): void {
+    if (!this.gasSfx) return;
+    this.gasSfx.pause();
+    try {
+      this.gasSfx.currentTime = 0;
+    } catch {
+      // Metadata can still be loading on the first gas phase.
+    }
+    this.gasSfx.volume = this.getSfxVolume('gas');
+    void this.gasSfx.play().catch(() => undefined);
   }
 
   private playShieldOnSfx(): void {
@@ -370,6 +391,7 @@ export class AudioManager {
     for (const playerDeath of this.playerDeathSfxPool) {
       playerDeath.volume = this.getSfxVolume('playerDeath');
     }
+    if (this.gasSfx) this.gasSfx.volume = this.getSfxVolume('gas');
     if (this.plantingAudio) this.plantingAudio.volume = this.getSfxVolume('planting');
     if (this.disarmAudio) this.disarmAudio.volume = this.getSfxVolume('disarm');
   }
@@ -475,6 +497,9 @@ export class AudioManager {
         break;
       case 'bomb':
         this.playExplosionSfx();
+        break;
+      case 'gas':
+        this.playGasSfx();
         break;
       case 'pickup':
         this.beep('sfx', 840, 90, 0.05, name);

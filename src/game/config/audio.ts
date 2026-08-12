@@ -13,6 +13,7 @@ export const SFX_DEFINITIONS = [
   { key: 'defuseAlarm', label: 'Defuse Alarm' },
   { key: 'disarm', label: 'Enemy Disarming' },
   { key: 'bomb', label: 'Explosion' },
+  { key: 'gas', label: 'Gas Release' },
   { key: 'pickup', label: 'Pickup' },
   { key: 'legendaryMod', label: 'Legendary Mod' },
   { key: 'menu', label: 'Menu Select' }

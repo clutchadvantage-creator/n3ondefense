@@ -46,6 +46,7 @@ export class GasHazardSystem {
   private phaseStartedAt = 0;
   private phaseIndex = 0;
   private patternIndex = 0;
+  private releasedCanisterCount = 0;
   private recoveryUntil = 0;
   private nextGasDamageAt = 0;
   private lastWispDrawAt = -Infinity;
@@ -59,7 +60,8 @@ export class GasHazardSystem {
     private readonly bounds: RectSpec,
     private readonly isBlocked: (x: number, y: number) => boolean,
     private readonly particlesEnabled: boolean,
-    private readonly onPlayerDamaged?: (damage: number) => void
+    private readonly onPlayerDamaged?: (damage: number) => void,
+    private readonly onGasReleased?: () => void
   ) {
     this.random = new SeededRandom((seed ^ Math.imul(round + 31, 0x85ebca6b) ^ 0x6a55e11) >>> 0);
     this.nextPhaseAt = scene.time.now + GAS_HAZARD_BALANCE.initialDelayMs + this.random.int(0, 5000);
@@ -269,6 +271,7 @@ export class GasHazardSystem {
     this.lastTunnelY = Number.NaN;
     this.nextGasDamageAt = 0;
     this.lastWispDrawAt = -Infinity;
+    this.releasedCanisterCount = 0;
     this.canisters = points.map((point, index) => {
       const marker = this.scene.add.circle(point.x, point.y, 31, GAS_COLOR, 0.06)
         .setStrokeStyle(3, GAS_COLOR, 0.9)
@@ -294,6 +297,7 @@ export class GasHazardSystem {
 
   private releaseGas(target: GasCanisterTarget): void {
     target.released = true;
+    this.releasedCanisterCount += 1;
     target.marker.setAlpha(0);
     target.canister.setAlpha(0);
     this.cloudBrush.setPosition(target.x - this.bounds.x, target.y - this.bounds.y);
@@ -306,6 +310,7 @@ export class GasHazardSystem {
       this.gasLayer.draw(this.skullBrush);
     }
     this.stampDensity(target.x, target.y, GAS_HAZARD_BALANCE.cloudRadius);
+    if (this.releasedCanisterCount === this.canisters.length) this.onGasReleased?.();
 
     const ring = this.scene.add.circle(target.x, target.y, 12, GAS_COLOR, 0.1)
       .setStrokeStyle(4, 0xb6ff70, 0.92)
@@ -493,6 +498,7 @@ export class GasHazardSystem {
       target.canister.destroy();
     }
     this.canisters = [];
+    this.releasedCanisterCount = 0;
     this.wispGraphics.clear();
     this.lastTunnelX = Number.NaN;
     this.lastTunnelY = Number.NaN;

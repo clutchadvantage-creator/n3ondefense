@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { AIR_DROP_PATTERN_NAMES, createAirDropPattern } from '../src/game/systems/AirDropPatterns.ts';
 import { SeededRandom } from '../src/game/systems/SeededRandom.ts';
 import { GAS_HAZARD_BALANCE, getGasExposureDamage } from '../src/game/config/gasHazards.ts';
+import { SFX_DEFINITIONS } from '../src/game/config/audio.ts';
 
 test('shared air-drop patterns provide deterministic bomblet and gas-canister layouts', () => {
   const bounds = { x: 100, y: 80, w: 1200, h: 800 };
@@ -70,4 +71,17 @@ test('gas exposure starts light and scales substantially but safely with round p
   assert.ok(roundThirtyDamage > roundTenDamage * 1.5);
   assert.equal(extremeRoundDamage, GAS_HAZARD_BALANCE.maximumPlayerDamage);
   assert.ok(extremeRoundDamage < 100);
+});
+
+test('gas release audio is reused and fires once after the complete canister pattern lands', () => {
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/gassound.mp3', import.meta.url)));
+  assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'gas'));
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const gas = readFileSync(new URL('../src/game/systems/GasHazardSystem.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(audio, /audioAssetUrl\('soundeffects\/gassound\.mp3'\)/);
+  assert.match(audio, /private gasSfx: HTMLAudioElement \| null = null/);
+  assert.match(gas, /this\.releasedCanisterCount === this\.canisters\.length/);
+  assert.match(gas, /this\.onGasReleased\?\.\(\)/);
+  assert.match(arena, /\(\) => this\.audio\.playSfx\('gas'\)/);
 });

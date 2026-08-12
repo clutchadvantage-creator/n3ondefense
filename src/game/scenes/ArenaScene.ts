@@ -569,7 +569,8 @@ export class ArenaScene extends Phaser.Scene {
         (damage) => {
           this.audio.playSfx('playerDamage');
           GameplayTelemetryRecorder.recordPlayerDamage('gas', damage);
-        }
+        },
+        () => this.audio.playSfx('gas')
       );
     }
 
@@ -3349,7 +3350,8 @@ export class ArenaScene extends Phaser.Scene {
         (damage) => {
           this.audio.playSfx('playerDamage');
           GameplayTelemetryRecorder.recordPlayerDamage('gas', damage);
-        }
+        },
+        () => this.audio.playSfx('gas')
       );
     }
 
