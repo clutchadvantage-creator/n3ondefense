@@ -87,8 +87,38 @@ export class GasHazardSystem {
     return this.canisters.length > 0;
   }
 
+  get visualGasActive(): boolean {
+    return this.gasLayer.visible;
+  }
+
   isLaserSuppressed(now: number): boolean {
     return this.active || now < this.recoveryUntil;
+  }
+
+  /**
+   * Low-cost moving-entity tunnel. The byte-grid gate ensures each gas cell is
+   * erased once even when thousands of projectiles reuse the same route.
+   */
+  carveVisualTunnel(x: number, y: number, radius: number): boolean {
+    if (!this.gasLayer.visible || !this.hasVisibleGasAt(x, y)) return false;
+    this.eraseGasAt(x, y, radius, false);
+    return true;
+  }
+
+  /** Explosive displacement checks the full blast, not only its center cell. */
+  carveVisualBlast(x: number, y: number, radius: number): boolean {
+    if (!this.gasLayer.visible || !this.hasVisibleGasWithin(x, y, radius)) return false;
+    this.eraseGasAt(x, y, radius, false);
+    return true;
+  }
+
+  /** Mines consume both the visual cloud and persistent damage footprint. */
+  igniteFromMine(x: number, y: number, mineRadius: number): boolean {
+    if (!this.gasLayer.visible || !this.hasGasAt(x, y)) return false;
+    const ignitionRadius = mineRadius * GAS_HAZARD_BALANCE.mineIgnitionRadiusMultiplier;
+    this.eraseGasAt(x, y, ignitionRadius, true);
+    this.playIgnitionEffect(x, y, ignitionRadius);
+    return true;
   }
 
   update(now: number, player: Player, gasDamageMultiplier = 1): void {
@@ -420,7 +450,7 @@ export class GasHazardSystem {
   private carvePlayerTunnel(x: number, y: number): void {
     const radius = GAS_HAZARD_BALANCE.tunnelRadius;
     if (!Number.isFinite(this.lastTunnelX) || !Number.isFinite(this.lastTunnelY)) {
-      this.eraseTunnelAt(x, y);
+      this.carveVisualTunnel(x, y, radius);
       this.lastTunnelX = x;
       this.lastTunnelY = y;
       return;
@@ -431,16 +461,18 @@ export class GasHazardSystem {
     const steps = Math.max(1, Math.min(12, Math.ceil(distance / (radius * 0.55))));
     for (let step = 1; step <= steps; step += 1) {
       const progress = step / steps;
-      this.eraseTunnelAt(this.lastTunnelX + dx * progress, this.lastTunnelY + dy * progress);
+      this.carveVisualTunnel(this.lastTunnelX + dx * progress, this.lastTunnelY + dy * progress, radius);
     }
     this.lastTunnelX = x;
     this.lastTunnelY = y;
   }
 
-  private eraseTunnelAt(x: number, y: number): void {
-    this.tunnelBrush.setPosition(x - this.bounds.x, y - this.bounds.y);
+  private eraseGasAt(x: number, y: number, radius: number, removeHazard: boolean): void {
+    const scale = Math.max(0.1, radius / GAS_HAZARD_BALANCE.tunnelRadius);
+    this.tunnelBrush
+      .setPosition(x - this.bounds.x, y - this.bounds.y)
+      .setScale(scale);
     this.gasLayer.erase(this.tunnelBrush);
-    const radius = GAS_HAZARD_BALANCE.tunnelRadius;
     const cellSize = GAS_HAZARD_BALANCE.densityCellSize;
     const minimumColumn = Math.max(0, Math.floor((x - radius) / cellSize));
     const maximumColumn = Math.min(this.densityColumns - 1, Math.floor((x + radius) / cellSize));
@@ -453,9 +485,78 @@ export class GasHazardSystem {
         const cellX = (column + 0.5) * cellSize;
         const dx = cellX - x;
         const dy = cellY - y;
-        if (dx * dx + dy * dy <= radiusSquared) this.tunnelMask[row * this.densityColumns + column] = 255;
+        if (dx * dx + dy * dy <= radiusSquared) {
+          const densityIndex = row * this.densityColumns + column;
+          this.tunnelMask[densityIndex] = 255;
+          if (removeHazard) this.density[densityIndex] = 0;
+        }
       }
     }
+  }
+
+  private hasVisibleGasWithin(x: number, y: number, radius: number): boolean {
+    const cellSize = GAS_HAZARD_BALANCE.densityCellSize;
+    const minimumColumn = Math.max(0, Math.floor((x - radius) / cellSize));
+    const maximumColumn = Math.min(this.densityColumns - 1, Math.floor((x + radius) / cellSize));
+    const minimumRow = Math.max(0, Math.floor((y - radius) / cellSize));
+    const maximumRow = Math.min(this.densityRows - 1, Math.floor((y + radius) / cellSize));
+    const radiusSquared = radius * radius;
+    for (let row = minimumRow; row <= maximumRow; row += 1) {
+      const cellY = (row + 0.5) * cellSize;
+      for (let column = minimumColumn; column <= maximumColumn; column += 1) {
+        const cellX = (column + 0.5) * cellSize;
+        const dx = cellX - x;
+        const dy = cellY - y;
+        if (dx * dx + dy * dy > radiusSquared) continue;
+        const densityIndex = row * this.densityColumns + column;
+        if (this.density[densityIndex] > 0 && this.tunnelMask[densityIndex] === 0) return true;
+      }
+    }
+    return false;
+  }
+
+  private playIgnitionEffect(x: number, y: number, radius: number): void {
+    const fire = this.scene.add.graphics({ x, y })
+      .setDepth(10)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setScale(0.16);
+    fire.fillStyle(0xff5b19, 0.24);
+    fire.fillCircle(0, 0, radius * 0.42);
+    fire.fillStyle(0xffd43b, 0.28);
+    fire.fillCircle(0, 0, radius * 0.24);
+    fire.lineStyle(8, 0xff781f, 0.9);
+    fire.strokeCircle(0, 0, radius * 0.72);
+    fire.lineStyle(4, 0xf3ff52, 0.86);
+    fire.strokeCircle(0, 0, radius * 0.53);
+    for (let index = 0; index < 10; index += 1) {
+      const angle = index / 10 * Math.PI * 2;
+      const innerRadius = radius * 0.36;
+      const outerRadius = radius * (0.64 + (index % 3) * 0.07);
+      const spread = 0.12;
+      fire.fillStyle(index % 2 === 0 ? 0xff9d24 : 0xe9ff38, 0.56);
+      fire.fillTriangle(
+        Math.cos(angle - spread) * innerRadius,
+        Math.sin(angle - spread) * innerRadius,
+        Math.cos(angle) * outerRadius,
+        Math.sin(angle) * outerRadius,
+        Math.cos(angle + spread) * innerRadius,
+        Math.sin(angle + spread) * innerRadius
+      );
+    }
+    this.effects.add(fire);
+    this.scene.tweens.add({
+      targets: fire,
+      scaleX: 1,
+      scaleY: 1,
+      angle: 18,
+      alpha: 0,
+      duration: GAS_HAZARD_BALANCE.mineIgnitionVisualMs,
+      ease: 'Cubic.Out',
+      onComplete: () => {
+        this.effects.delete(fire);
+        fire.destroy();
+      }
+    });
   }
 
   private hasGasAt(x: number, y: number): boolean {

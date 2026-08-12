@@ -36,7 +36,7 @@ export class BombletHazardSystem {
     private readonly isBlocked: (x: number, y: number) => boolean,
     private readonly particlesEnabled: boolean,
     private readonly onPlayerDamaged?: (damage: number) => void,
-    private readonly onBombletExploded?: () => void
+    private readonly onBombletExploded?: (x: number, y: number, blastRadius: number) => void
   ) {
     this.random = new SeededRandom((seed ^ Math.imul(round + 17, 0x9e3779b1) ^ 0xb04b1e7) >>> 0);
     this.nextStrikeAt = scene.time.now + BOMBLET_HAZARD_BALANCE.initialDelayMs + this.random.int(0, 1200);
@@ -153,7 +153,7 @@ export class BombletHazardSystem {
   private detonate(target: TargetPoint, player: Player, damageTargets: HazardDamageTarget[]): void {
     const config = BOMBLET_HAZARD_BALANCE;
     target.exploded = true;
-    this.onBombletExploded?.();
+    this.onBombletExploded?.(target.x, target.y, config.blastRadius);
     // Do not force-restart an in-progress shake when staggered bomblets overlap.
     this.scene.cameras.main.shake(config.cameraShakeDurationMs, config.cameraShakeIntensity, false);
     target.marker.setAlpha(0);

@@ -563,7 +563,14 @@ export class ArenaScene extends Phaser.Scene {
         this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
       },
-      () => this.audio.playSfx('bomblet')
+      (x, y, blastRadius) => {
+        this.audio.playSfx('bomblet');
+        this.gasHazard?.carveVisualBlast(
+          x,
+          y,
+          blastRadius * GAS_HAZARD_BALANCE.bombletTunnelRadiusMultiplier
+        );
+      }
     );
     if (def.round >= GAS_HAZARD_BALANCE.unlockRound) {
       this.gasHazard = new GasHazardSystem(
@@ -856,6 +863,13 @@ export class ArenaScene extends Phaser.Scene {
 
     if (this.bossEncounter) {
       this.bossEncounter.update(delta, this.player);
+      if (this.gasHazard?.visualGasActive && this.bossEncounter.boss.active && !this.bossEncounter.boss.isDefeated) {
+        this.gasHazard.carveVisualTunnel(
+          this.bossEncounter.boss.x,
+          this.bossEncounter.boss.y,
+          Math.max(GAS_HAZARD_BALANCE.enemyTunnelRadius, this.bossEncounter.boss.hazardRadius + 10)
+        );
+      }
       const bossHazardTargets = this.getHazardDamageTargets();
       const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
       this.gasHazard?.update(now, this.player, this.modRuntime.multiplier('gasDamageTaken'));
@@ -1437,6 +1451,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateEnemies(now: number, dt: number): void {
     const activeSites = this.bombSites.getActiveBombSites();
+    const gasHazard = this.gasHazard?.visualGasActive ? this.gasHazard : null;
     const activeDefusersBySite = this.activeDefusersBySite;
     activeDefusersBySite.clear();
     this.refreshDefuseAssignments(activeSites, now);
@@ -1461,6 +1476,11 @@ export class ArenaScene extends Phaser.Scene {
       } else {
         this.updateMelee(enemy, targetSite, now);
       }
+      gasHazard?.carveVisualTunnel(
+        enemy.x,
+        enemy.y,
+        Math.max(GAS_HAZARD_BALANCE.enemyTunnelRadius, enemy.hazardRadius + 6)
+      );
     }
 
     this.activeDefuserCountForTelemetry = 0;
@@ -1762,6 +1782,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateHomingMissiles(delta: number): void {
+    const gasHazard = this.gasHazard?.visualGasActive ? this.gasHazard : null;
     let writeIndex = 0;
     for (const missile of this.homingMissiles) {
       if (missile.detonated || !missile.sprite.active || !missile.sprite.body) continue;
@@ -1787,6 +1808,11 @@ export class ArenaScene extends Phaser.Scene {
       missile.sprite.setRotation(angle);
       missile.sprite.setAlpha(missile.lifeMs < 1500 ? 0.7 + Math.sin(this.time.now * 0.035) * 0.3 : 1);
       this.spawnProjectileTrail(missile.sprite.x, missile.sprite.y, COLORS.pink);
+      gasHazard?.carveVisualTunnel(
+        missile.sprite.x,
+        missile.sprite.y,
+        GAS_HAZARD_BALANCE.projectileTunnelRadius
+      );
 
       const playerDx = this.player.x - missile.sprite.x;
       const playerDy = this.player.y - missile.sprite.y;
@@ -2065,6 +2091,7 @@ export class ArenaScene extends Phaser.Scene {
     const prismaticRounds = this.modRuntime.hasInfusion('prismatic-rounds');
     const jailbrokeTurrets = this.modRuntime.has('jailbroke-turrets');
     const now = this.time.now;
+    const gasHazard = this.gasHazard?.visualGasActive ? this.gasHazard : null;
     let writeIndex = 0;
     for (let readIndex = 0; readIndex < this.projectiles.length; readIndex += 1) {
       const p = this.projectiles[readIndex];
@@ -2081,6 +2108,12 @@ export class ArenaScene extends Phaser.Scene {
         this.retireProjectile(p);
         continue;
       }
+
+      gasHazard?.carveVisualTunnel(
+        p.sprite.x,
+        p.sprite.y,
+        GAS_HAZARD_BALANCE.projectileTunnelRadius
+      );
 
       let visualTrailColor = p.trailColor;
       const friendlyProjectile = p.from === 'player' || p.from === 'turret';
@@ -2425,6 +2458,7 @@ export class ArenaScene extends Phaser.Scene {
       this.applyMagneticPayload(mine, now);
       if (!mine.readyToDetonate(now)) continue;
 
+      this.gasHazard?.igniteFromMine(mine.sprite.x, mine.sprite.y, mine.radius);
       this.audio.playSfx('mine');
       const blast = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 10, color: COLORS.orange, alpha: 0.35, depth: 7 });
       this.tweens.add({ targets: blast, radius: mine.radius, alpha: 0, duration: 280, onComplete: () => this.retireFxCircle(blast) });
@@ -2531,6 +2565,7 @@ export class ArenaScene extends Phaser.Scene {
         continue;
       }
 
+      this.gasHazard?.igniteFromMine(mine.sprite.x, mine.sprite.y, mine.radius);
       this.audio.playSfx('mine');
       const blast = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 16, color: COLORS.cyan, alpha: 0.28, depth: 8 });
       const ring = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 14, color: 0xffffff, alpha: 0.2, depth: 8 });
@@ -3352,7 +3387,14 @@ export class ArenaScene extends Phaser.Scene {
         this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
       },
-      () => this.audio.playSfx('bomblet')
+      (x, y, blastRadius) => {
+        this.audio.playSfx('bomblet');
+        this.gasHazard?.carveVisualBlast(
+          x,
+          y,
+          blastRadius * GAS_HAZARD_BALANCE.bombletTunnelRadiusMultiplier
+        );
+      }
     );
     if (this.bossRound >= GAS_HAZARD_BALANCE.unlockRound) {
       this.gasHazard = new GasHazardSystem(

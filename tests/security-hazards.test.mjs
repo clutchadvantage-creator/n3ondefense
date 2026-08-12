@@ -53,8 +53,9 @@ test('gas phases remain occasional, suppress lasers, permit bomblets, and carve 
   assert.match(gas, /Three batched bubbles per cloud; no sprites, tweens, physics, or allocations/);
   assert.match(gas, /this\.drawGasBubbles\(target, index, now, time\)/);
   assert.match(gas, /Persistent logical footprint: tunneling never removes gas exposure/);
-  assert.match(gas, /this\.tunnelMask\[row \* this\.densityColumns \+ column\] = 255/);
-  assert.doesNotMatch(gas, /this\.density\[row \* this\.densityColumns \+ column\] = 0/);
+  assert.match(gas, /this\.tunnelMask\[densityIndex\] = 255/);
+  assert.match(gas, /this\.eraseGasAt\(x, y, radius, false\)/);
+  assert.match(gas, /if \(removeHazard\) this\.density\[densityIndex\] = 0/);
   assert.match(gas, /if \(playerEnteredGas && now >= this\.nextGasDamageAt\)/);
   assert.match(gas, /return this\.active \|\| now < this\.recoveryUntil/);
   assert.match(arena, /isDangerWindow\(now, gasSuppressesLasers\)/);
@@ -102,10 +103,26 @@ test('security laser and per-bomblet audio use active-state and pooled playback'
   assert.match(audio, /this\.securityLaserAudio\.loop = true/);
   assert.match(lasers, /this\.setAudioActive\(true\)/);
   assert.match(lasers, /this\.setAudioActive\(false\)/);
-  assert.match(bomblets, /this\.onBombletExploded\?\.\(\)/);
+  assert.match(bomblets, /this\.onBombletExploded\?\.\(target\.x, target\.y, config\.blastRadius\)/);
   assert.match(arena, /startSecurityLaserLoop\(\).*stopSecurityLaserLoop\(\)/);
-  assert.match(arena, /\(\) => this\.audio\.playSfx\('bomblet'\)/);
+  assert.match(arena, /\(x, y, blastRadius\) => \{[\s\S]*?this\.audio\.playSfx\('bomblet'\)/);
   assert.match(arena, /laserSecurity\?\.silence\(\)/);
+});
+
+test('moving entities tunnel gas visually while mine ignition consumes the damaging footprint', () => {
+  const gas = readFileSync(new URL('../src/game/systems/GasHazardSystem.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const lasers = readFileSync(new URL('../src/game/systems/LaserSecuritySystem.ts', import.meta.url), 'utf8');
+  assert.equal(GAS_HAZARD_BALANCE.mineIgnitionRadiusMultiplier, 3);
+  assert.match(gas, /carveVisualTunnel\(x: number, y: number, radius: number\)/);
+  assert.match(gas, /if \(!this\.gasLayer\.visible \|\| !this\.hasVisibleGasAt\(x, y\)\) return false/);
+  assert.match(gas, /const ignitionRadius = mineRadius \* GAS_HAZARD_BALANCE\.mineIgnitionRadiusMultiplier/);
+  assert.match(gas, /this\.eraseGasAt\(x, y, ignitionRadius, true\)/);
+  assert.match(gas, /this\.playIgnitionEffect\(x, y, ignitionRadius\)/);
+  assert.match(arena, /gasHazard\?\.carveVisualTunnel\(/);
+  assert.match(arena, /this\.gasHazard\?\.carveVisualBlast\(/);
+  assert.match(arena, /this\.gasHazard\?\.igniteFromMine\(mine\.sprite\.x, mine\.sprite\.y, mine\.radius\)/);
+  assert.doesNotMatch(lasers, /carveVisualTunnel|carveVisualBlast|igniteFromMine/);
 });
 
 test('bomblet detonations apply a restrained non-restarting camera shake', () => {
