@@ -182,7 +182,7 @@ export class AudioManager {
   }
 
   private initHitDamageSfxPool(): void {
-    const source = audioAssetUrl('soundeffects/hitdamage.mp3');
+    const source = audioAssetUrl('soundeffects/punch impact.mp3');
     for (let index = 0; index < HIT_DAMAGE_SFX_POOL_SIZE; index += 1) {
       const audio = new Audio(source);
       audio.preload = 'auto';
