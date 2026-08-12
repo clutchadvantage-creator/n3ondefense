@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { AudioManager } from '../systems/AudioManager.ts';
 
 export class Turret {
   readonly sprite: Phaser.GameObjects.Container;
@@ -46,6 +47,7 @@ export class Turret {
   takeDamage(amount: number): number {
     const applied = Math.min(this.hp, Math.max(0, amount));
     this.hp = Math.max(0, this.hp - applied);
+    if (applied > 0) AudioManager.get().playSfx('hit');
     this.updateVisual();
     return applied;
   }

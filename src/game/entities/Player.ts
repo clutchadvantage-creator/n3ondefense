@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { EnergyStats, PlayerStats, WeaponStats } from '../types';
 import { PLAYER_BALANCE, WEAPON_BALANCE } from '../config/balance';
 import { applyOperativeSpeedMultipliers } from '../mods/ModRules.ts';
+import { AudioManager } from '../systems/AudioManager.ts';
 
 export interface BuffState {
   damageBoostUntil: number;
@@ -109,6 +110,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const now = this.scene.time.now;
     if (now < this.invulnUntil) return false;
     this.hp = Math.max(0, this.hp - amount);
+    AudioManager.get().playSfx('playerDamage');
     this.invulnUntil = now + this.stats.invulnMs;
     this.damageFlashUntil = now + 90;
     this.setTintFill(0xffffff);

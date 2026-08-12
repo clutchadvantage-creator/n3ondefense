@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossHealth, type BossArchetype } from '../config/bossBalance';
+import { AudioManager } from '../systems/AudioManager.ts';
 
 export type BossDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard';
 
@@ -36,6 +37,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     const applied = Math.min(this.hp, amount * (source === 'hazard' ? BOSS_BALANCE.hazardDamageMultiplier : 1));
     if (applied <= 0) return 0;
     this.hp = Math.max(0, this.hp - applied);
+    AudioManager.get().playSfx('hit');
     this.onDamaged(applied, source);
     this.setTintFill(0xffffff);
     this.scene.time.delayedCall(55, () => {

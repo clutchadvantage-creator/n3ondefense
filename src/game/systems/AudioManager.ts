@@ -4,6 +4,8 @@ import { publicAssetUrl } from '../utils/assetUrl';
 
 const audioAssetUrl = (path: string): string => publicAssetUrl(`assets/audio/${path}`);
 const BOMBLET_SFX_POOL_SIZE = 8;
+const HIT_DAMAGE_SFX_POOL_SIZE = 6;
+const HIT_DAMAGE_SFX_MIN_INTERVAL_MS = 55;
 
 export class AudioManager {
   private static instance: AudioManager | null = null;
@@ -23,9 +25,12 @@ export class AudioManager {
   private readonly enemyDeathSfxPool: HTMLAudioElement[] = [];
   private readonly playerDeathSfxPool: HTMLAudioElement[] = [];
   private readonly bombletSfxPool: HTMLAudioElement[] = [];
+  private readonly hitDamageSfxPool: HTMLAudioElement[] = [];
   private securityLaserAudio: HTMLAudioElement | null = null;
   private securityLaserLoopRequested = false;
   private gasSfx: HTMLAudioElement | null = null;
+  private modCollectionSfx: HTMLAudioElement | null = null;
+  private legendaryModSfx: HTMLAudioElement | null = null;
   private plantingAudio: HTMLAudioElement | null = null;
   private plantingLoopRequested = false;
   private disarmAudio: HTMLAudioElement | null = null;
@@ -35,6 +40,8 @@ export class AudioManager {
   private enemyDeathSfxCursor = 0;
   private playerDeathSfxCursor = 0;
   private bombletSfxCursor = 0;
+  private hitDamageSfxCursor = 0;
+  private lastHitDamageSfxAt = -Infinity;
   private cachedMusicVolume = 0.51;
   private cachedSfxVolume = 0.6375;
   private readonly cachedSoundVolumes = {} as Record<AudioSfxName, number>;
@@ -51,6 +58,8 @@ export class AudioManager {
     this.initDeathSfxPools();
     this.initSecurityHazardSfx();
     this.initGasSfx();
+    this.initHitDamageSfxPool();
+    this.initModRevealSfx();
   }
 
   static get(): AudioManager {
@@ -172,6 +181,59 @@ export class AudioManager {
     void this.gasSfx.play().catch(() => undefined);
   }
 
+  private initHitDamageSfxPool(): void {
+    const source = audioAssetUrl('soundeffects/hitdamage.mp3');
+    for (let index = 0; index < HIT_DAMAGE_SFX_POOL_SIZE; index += 1) {
+      const audio = new Audio(source);
+      audio.preload = 'auto';
+      audio.volume = this.getSfxVolume('hit');
+      audio.load();
+      this.hitDamageSfxPool.push(audio);
+    }
+  }
+
+  private playHitDamageSfx(volumeKey: 'hit' | 'playerDamage'): void {
+    const now = performance.now();
+    if (now - this.lastHitDamageSfxAt < HIT_DAMAGE_SFX_MIN_INTERVAL_MS || this.hitDamageSfxPool.length === 0) return;
+    this.lastHitDamageSfxAt = now;
+    const nextIndex = this.hitDamageSfxCursor % this.hitDamageSfxPool.length;
+    this.hitDamageSfxCursor = (this.hitDamageSfxCursor + 1) % this.hitDamageSfxPool.length;
+    const audio = this.hitDamageSfxPool[nextIndex];
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Metadata can still be loading during the first combat exchange.
+    }
+    audio.volume = this.getSfxVolume(volumeKey);
+    void audio.play().catch(() => undefined);
+  }
+
+  private initModRevealSfx(): void {
+    this.modCollectionSfx = new Audio(audioAssetUrl('soundeffects/modcollectionsound.mp3'));
+    this.modCollectionSfx.preload = 'auto';
+    this.modCollectionSfx.volume = this.getSfxVolume('modCollection');
+    this.modCollectionSfx.load();
+
+    this.legendaryModSfx = new Audio(audioAssetUrl('soundeffects/legendarymodsound.mp3'));
+    this.legendaryModSfx.preload = 'auto';
+    this.legendaryModSfx.volume = this.getSfxVolume('legendaryMod');
+    this.legendaryModSfx.load();
+  }
+
+  private playModRevealSfx(kind: 'modCollection' | 'legendaryMod'): void {
+    const audio = kind === 'legendaryMod' ? this.legendaryModSfx : this.modCollectionSfx;
+    if (!audio) return;
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Metadata can still be loading when the reveal begins.
+    }
+    audio.volume = this.getSfxVolume(kind);
+    void audio.play().catch(() => undefined);
+  }
+
   private initSecurityHazardSfx(): void {
     this.securityLaserAudio = new Audio(audioAssetUrl('soundeffects/lasersound.mp3'));
     this.securityLaserAudio.preload = 'auto';
@@ -235,48 +297,6 @@ export class AudioManager {
     void audio.play().catch(() => {
       this.beep('sfx', 720, 180, 0.06, 'shieldOn');
     });
-  }
-
-  private playLegendaryModSfx(): void {
-    if (this.context.state === 'suspended') {
-      this.context.resume().catch(() => undefined);
-    }
-    const start = this.context.currentTime;
-    const mix = this.getVolume('sfx', 'legendaryMod');
-    const master = this.context.createGain();
-    master.gain.setValueAtTime(0.0001, start);
-    master.gain.exponentialRampToValueAtTime(Math.max(0.0001, 0.11 * mix), start + 0.035);
-    master.gain.exponentialRampToValueAtTime(0.0001, start + 0.9);
-    master.connect(this.context.destination);
-
-    const notes = [164.81, 246.94, 329.63, 493.88];
-    notes.forEach((frequency, index) => {
-      const noteStart = start + index * 0.085;
-      const oscillator = this.context.createOscillator();
-      const gain = this.context.createGain();
-      oscillator.type = index % 2 === 0 ? 'square' : 'sawtooth';
-      oscillator.frequency.setValueAtTime(frequency, noteStart);
-      oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.5, noteStart + 0.28);
-      gain.gain.setValueAtTime(0.0001, noteStart);
-      gain.gain.exponentialRampToValueAtTime(0.18, noteStart + 0.018);
-      gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.42);
-      oscillator.connect(gain);
-      gain.connect(master);
-      oscillator.start(noteStart);
-      oscillator.stop(noteStart + 0.45);
-    });
-
-    const impact = this.context.createOscillator();
-    const impactGain = this.context.createGain();
-    impact.type = 'sine';
-    impact.frequency.setValueAtTime(95, start);
-    impact.frequency.exponentialRampToValueAtTime(48, start + 0.5);
-    impactGain.gain.setValueAtTime(0.34, start);
-    impactGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.58);
-    impact.connect(impactGain);
-    impactGain.connect(master);
-    impact.start(start);
-    impact.stop(start + 0.6);
   }
 
   private initDeathSfxPools(): void {
@@ -409,8 +429,13 @@ export class AudioManager {
     for (const bomblet of this.bombletSfxPool) {
       bomblet.volume = this.getSfxVolume('bomblet');
     }
+    for (const hitDamage of this.hitDamageSfxPool) {
+      hitDamage.volume = this.getSfxVolume('hit');
+    }
     if (this.securityLaserAudio) this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
     if (this.gasSfx) this.gasSfx.volume = this.getSfxVolume('gas');
+    if (this.modCollectionSfx) this.modCollectionSfx.volume = this.getSfxVolume('modCollection');
+    if (this.legendaryModSfx) this.legendaryModSfx.volume = this.getSfxVolume('legendaryMod');
     if (this.plantingAudio) this.plantingAudio.volume = this.getSfxVolume('planting');
     if (this.disarmAudio) this.disarmAudio.volume = this.getSfxVolume('disarm');
   }
@@ -493,10 +518,8 @@ export class AudioManager {
         this.playShieldOnSfx();
         break;
       case 'hit':
-        this.beep('sfx', 180, 50, 0.06, name);
-        break;
       case 'playerDamage':
-        this.beep('sfx', 120, 110, 0.08, name);
+        this.playHitDamageSfx(name);
         break;
       case 'enemyDeath':
       case 'playerDeath':
@@ -522,8 +545,9 @@ export class AudioManager {
       case 'pickup':
         this.beep('sfx', 840, 90, 0.05, name);
         break;
+      case 'modCollection':
       case 'legendaryMod':
-        this.playLegendaryModSfx();
+        this.playModRevealSfx(name);
         break;
       case 'menu':
         this.beep('sfx', 520, 60, 0.04, name);

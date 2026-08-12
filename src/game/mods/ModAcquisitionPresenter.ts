@@ -130,7 +130,7 @@ export class ModAcquisitionPresenter {
     root.add([backdrop, halo, card, title, duplicate]);
     this.activeRoot = root;
     this.activeBackdrop = backdrop;
-    AudioManager.get().playSfx('pickup');
+    AudioManager.get().playSfx('modCollection');
 
     this.scene.tweens.add({ targets: backdrop, alpha: 0.16, duration: 260, ease: 'Quad.Out' });
     this.scene.tweens.add({ targets: halo, alpha: 0.22, scale: { from: 0.65, to: 1.12 }, duration: 520, ease: 'Cubic.Out' });

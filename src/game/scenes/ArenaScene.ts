@@ -546,7 +546,6 @@ export class ArenaScene extends Phaser.Scene {
       def.round,
       this.layout.theme,
       (damage) => {
-        this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
       },
       (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop()
@@ -560,7 +559,6 @@ export class ArenaScene extends Phaser.Scene {
       (x, y) => this.hitWall(x, y),
       this.particlesEnabled,
       (damage) => {
-        this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
       },
       (x, y, blastRadius, shouldPlaySound) => {
@@ -581,7 +579,6 @@ export class ArenaScene extends Phaser.Scene {
         (x, y) => this.hitWall(x, y),
         this.particlesEnabled,
         (damage) => {
-          this.audio.playSfx('playerDamage');
           GameplayTelemetryRecorder.recordPlayerDamage('gas', damage);
         },
         () => this.audio.playSfx('gas')
@@ -1430,7 +1427,6 @@ export class ArenaScene extends Phaser.Scene {
     this.physics.add.collider(enemy, this.player, () => {
       const hit = this.player.takeDamage(enemy.stats.damage);
       if (hit) {
-        this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('enemy-contact', enemy.stats.damage);
       }
     });
@@ -1861,7 +1857,6 @@ export class ArenaScene extends Phaser.Scene {
       const hit = this.player.takeDamage(missile.damage);
       GameplayTelemetryRecorder.recordProjectileHit('enemy', hit ? missile.damage : 0, 0, false, !hit);
       if (hit) {
-        this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('enemy-missile', missile.damage);
       }
       return;
@@ -2182,7 +2177,6 @@ export class ArenaScene extends Phaser.Scene {
           else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
           this.spawnImpact(p.sprite.x, p.sprite.y, p.sprite.tintTopLeft);
           this.retireProjectile(p);
-          this.audio.playSfx('hit');
           continue;
         }
         const hitEnemy = this.findProjectileHitEnemy(p.sprite.x, p.sprite.y);
@@ -2204,7 +2198,6 @@ export class ArenaScene extends Phaser.Scene {
           }
           this.spawnImpact(p.sprite.x, p.sprite.y, p.sprite.tintTopLeft);
           this.retireProjectile(p);
-          this.audio.playSfx('hit');
           continue;
         }
       }
@@ -2215,7 +2208,6 @@ export class ArenaScene extends Phaser.Scene {
           if (p.telemetryOwner) GameplayTelemetryRecorder.recordProjectileHit(p.telemetryOwner, hit ? p.damage : 0, 0, false, !hit);
           if (p.bossAttack) GameplayTelemetryRecorder.recordBossAttackIntersection(p.bossAttack, hit ? p.damage : 0, !hit);
           if (hit) {
-            this.audio.playSfx('playerDamage');
             GameplayTelemetryRecorder.recordPlayerDamage(p.bossAttack ? 'boss' : 'enemy-projectile', p.damage);
           }
           this.retireProjectile(p);
@@ -3370,7 +3362,6 @@ export class ArenaScene extends Phaser.Scene {
       this.bossRound,
       this.layout.theme,
       (damage) => {
-        this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
       },
       (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop()
@@ -3384,7 +3375,6 @@ export class ArenaScene extends Phaser.Scene {
       (x, y) => this.hitWall(x, y),
       this.particlesEnabled,
       (damage) => {
-        this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
       },
       (x, y, blastRadius, shouldPlaySound) => {
@@ -3405,7 +3395,6 @@ export class ArenaScene extends Phaser.Scene {
         (x, y) => this.hitWall(x, y),
         this.particlesEnabled,
         (damage) => {
-          this.audio.playSfx('playerDamage');
           GameplayTelemetryRecorder.recordPlayerDamage('gas', damage);
         },
         () => this.audio.playSfx('gas')
@@ -3486,7 +3475,6 @@ export class ArenaScene extends Phaser.Scene {
       const hit = this.player.takeDamage(damage);
       GameplayTelemetryRecorder.recordBossAttackIntersection(attack, hit ? damage : 0, !hit);
       if (hit) {
-        this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('boss', damage);
       }
     }

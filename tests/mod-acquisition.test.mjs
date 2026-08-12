@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
 import {
   LEGENDARY_MOD_REVEAL_HOLD_MS,
   NORMAL_MOD_REVEAL_HOLD_MS,
@@ -49,6 +50,21 @@ test('Mod reveal cards retain their full aspect ratio inside supported and compa
 
 test('Legendary Mod audio uses the central SFX mixer and reveal scene is registered', () => {
   assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'legendaryMod'));
+  assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'modCollection'));
   assert.equal(createDefaultSoundVolumes().legendaryMod, 1);
+  assert.equal(createDefaultSoundVolumes().modCollection, 1);
   assert.ok(SceneStatusOrder.includes(SceneKeys.LegendaryModReveal));
+});
+
+test('standard and Legendary gameplay reveals use their dedicated recordings', () => {
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/modcollectionsound.mp3', import.meta.url)));
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/legendarymodsound.mp3', import.meta.url)));
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const presenter = readFileSync(new URL('../src/game/mods/ModAcquisitionPresenter.ts', import.meta.url), 'utf8');
+  const legendary = readFileSync(new URL('../src/game/scenes/LegendaryModRevealScene.ts', import.meta.url), 'utf8');
+  assert.match(audio, /audioAssetUrl\('soundeffects\/modcollectionsound\.mp3'\)/);
+  assert.match(audio, /audioAssetUrl\('soundeffects\/legendarymodsound\.mp3'\)/);
+  assert.doesNotMatch(audio, /playLegendaryModSfx|const notes = \[164\.81/);
+  assert.match(presenter, /AudioManager\.get\(\)\.playSfx\('modCollection'\)/);
+  assert.match(legendary, /AudioManager\.get\(\)\.playSfx\('legendaryMod'\)/);
 });
