@@ -122,7 +122,7 @@ export class AudioManager {
   }
 
   private initBoostSfxPool(): void {
-    const src = audioAssetUrl('soundeffects/boost.mp3');
+    const src = audioAssetUrl('soundeffects/boostsound.mp3');
     for (let i = 0; i < 4; i += 1) {
       const audio = new Audio(src);
       audio.preload = 'auto';
@@ -134,7 +134,7 @@ export class AudioManager {
 
   private playBoostSfx(): void {
     const fallbackOneShot = (): void => {
-      const direct = new Audio(audioAssetUrl('soundeffects/boost.mp3'));
+      const direct = new Audio(audioAssetUrl('soundeffects/boostsound.mp3'));
       direct.preload = 'auto';
       direct.volume = this.getSfxVolume('boost');
       void direct.play().catch(() => {

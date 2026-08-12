@@ -9,7 +9,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.audio('sfx-boost', publicAssetUrl('assets/audio/soundeffects/boost.mp3'));
+    this.load.audio('sfx-boost', publicAssetUrl('assets/audio/soundeffects/boostsound.mp3'));
   }
 
   async create(): Promise<void> {

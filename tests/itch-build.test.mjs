@@ -24,5 +24,5 @@ test('runtime audio paths use the shared Vite base instead of root-relative asse
   const boot = readFileSync(new URL('../src/game/scenes/BootScene.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(audio, /['"]\/assets\//);
   assert.match(audio, /publicAssetUrl/);
-  assert.match(boot, /publicAssetUrl\('assets\/audio\/soundeffects\/boost\.mp3'\)/);
+  assert.match(boot, /publicAssetUrl\('assets\/audio\/soundeffects\/boostsound\.mp3'\)/);
 });

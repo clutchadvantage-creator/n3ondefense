@@ -23,3 +23,12 @@ test('universal hit-damage audio is pooled, throttled, and owned by damage recei
   assert.match(arena, /hitMissile[\s\S]*?this\.audio\.playSfx\('hit'\)/);
   assert.doesNotMatch(arena, /playSfx\('playerDamage'\)/);
 });
+
+test('boost activation preload and pooled fallback use the dedicated boost recording', () => {
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/boostsound.mp3', import.meta.url)));
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const boot = readFileSync(new URL('../src/game/scenes/BootScene.ts', import.meta.url), 'utf8');
+  assert.match(boot, /assets\/audio\/soundeffects\/boostsound\.mp3/);
+  assert.match(audio, /audioAssetUrl\('soundeffects\/boostsound\.mp3'\)/);
+  assert.doesNotMatch(`${boot}\n${audio}`, /soundeffects\/boost\.mp3/);
+});
