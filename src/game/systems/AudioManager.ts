@@ -29,6 +29,7 @@ export class AudioManager {
   private securityLaserAudio: HTMLAudioElement | null = null;
   private securityLaserLoopRequested = false;
   private gasSfx: HTMLAudioElement | null = null;
+  private shieldActivationSfx: HTMLAudioElement | null = null;
   private modCollectionSfx: HTMLAudioElement | null = null;
   private legendaryModSfx: HTMLAudioElement | null = null;
   private plantingAudio: HTMLAudioElement | null = null;
@@ -58,6 +59,7 @@ export class AudioManager {
     this.initDeathSfxPools();
     this.initSecurityHazardSfx();
     this.initGasSfx();
+    this.initShieldActivationSfx();
     this.initHitDamageSfxPool();
     this.initModRevealSfx();
   }
@@ -186,13 +188,13 @@ export class AudioManager {
     for (let index = 0; index < HIT_DAMAGE_SFX_POOL_SIZE; index += 1) {
       const audio = new Audio(source);
       audio.preload = 'auto';
-      audio.volume = this.getSfxVolume('hit');
+      audio.volume = this.getSfxVolume('playerDamage');
       audio.load();
       this.hitDamageSfxPool.push(audio);
     }
   }
 
-  private playHitDamageSfx(volumeKey: 'hit' | 'playerDamage'): void {
+  private playHitDamageSfx(): void {
     const now = performance.now();
     if (now - this.lastHitDamageSfxAt < HIT_DAMAGE_SFX_MIN_INTERVAL_MS || this.hitDamageSfxPool.length === 0) return;
     this.lastHitDamageSfxAt = now;
@@ -205,7 +207,7 @@ export class AudioManager {
     } catch {
       // Metadata can still be loading during the first combat exchange.
     }
-    audio.volume = this.getSfxVolume(volumeKey);
+    audio.volume = this.getSfxVolume('playerDamage');
     void audio.play().catch(() => undefined);
   }
 
@@ -290,13 +292,23 @@ export class AudioManager {
     void audio.play().catch(() => undefined);
   }
 
+  private initShieldActivationSfx(): void {
+    this.shieldActivationSfx = new Audio(audioAssetUrl('soundeffects/shieldactivate.mp3'));
+    this.shieldActivationSfx.preload = 'auto';
+    this.shieldActivationSfx.volume = this.getSfxVolume('shieldOn');
+    this.shieldActivationSfx.load();
+  }
+
   private playShieldOnSfx(): void {
-    const audio = new Audio(audioAssetUrl('soundeffects/shieldon.mp3'));
-    audio.preload = 'auto';
-    audio.volume = this.getSfxVolume('shieldOn');
-    void audio.play().catch(() => {
-      this.beep('sfx', 720, 180, 0.06, 'shieldOn');
-    });
+    if (!this.shieldActivationSfx) return;
+    this.shieldActivationSfx.pause();
+    try {
+      this.shieldActivationSfx.currentTime = 0;
+    } catch {
+      // Metadata may still be loading on the first activation.
+    }
+    this.shieldActivationSfx.volume = this.getSfxVolume('shieldOn');
+    void this.shieldActivationSfx.play().catch(() => undefined);
   }
 
   private initDeathSfxPools(): void {
@@ -430,10 +442,11 @@ export class AudioManager {
       bomblet.volume = this.getSfxVolume('bomblet');
     }
     for (const hitDamage of this.hitDamageSfxPool) {
-      hitDamage.volume = this.getSfxVolume('hit');
+      hitDamage.volume = this.getSfxVolume('playerDamage');
     }
     if (this.securityLaserAudio) this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
     if (this.gasSfx) this.gasSfx.volume = this.getSfxVolume('gas');
+    if (this.shieldActivationSfx) this.shieldActivationSfx.volume = this.getSfxVolume('shieldOn');
     if (this.modCollectionSfx) this.modCollectionSfx.volume = this.getSfxVolume('modCollection');
     if (this.legendaryModSfx) this.legendaryModSfx.volume = this.getSfxVolume('legendaryMod');
     if (this.plantingAudio) this.plantingAudio.volume = this.getSfxVolume('planting');
@@ -518,8 +531,10 @@ export class AudioManager {
         this.playShieldOnSfx();
         break;
       case 'hit':
+        this.beep('sfx', 180, 50, 0.06, name);
+        break;
       case 'playerDamage':
-        this.playHitDamageSfx(name);
+        this.playHitDamageSfx();
         break;
       case 'enemyDeath':
       case 'playerDeath':

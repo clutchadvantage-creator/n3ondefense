@@ -109,8 +109,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   takeDamage(amount: number): boolean {
     const now = this.scene.time.now;
     if (now < this.invulnUntil) return false;
+    const previousHp = this.hp;
     this.hp = Math.max(0, this.hp - amount);
-    AudioManager.get().playSfx('playerDamage');
+    if (this.hp < previousHp) AudioManager.get().playSfx('playerDamage');
     this.invulnUntil = now + this.stats.invulnMs;
     this.damageFlashUntil = now + 90;
     this.setTintFill(0xffffff);

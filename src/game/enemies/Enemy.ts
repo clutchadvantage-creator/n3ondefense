@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import type { EnemyType } from '../types';
 import { ENEMY_BALANCE } from '../config/balance';
 import { GameplayTelemetryRecorder, type CombatDamageSource } from '../telemetry/GameplayTelemetryRecorder.ts';
-import { AudioManager } from '../systems/AudioManager.ts';
 
 export interface EnemyStats {
   type: EnemyType;
@@ -59,7 +58,6 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const applied = Math.min(this.hp, amount);
     const overkill = Math.max(0, amount - applied);
     this.hp = Math.max(0, this.hp - applied);
-    AudioManager.get().playSfx('hit');
     this.lastDamageSource = source;
     this.damageTakenBySource[source] = (this.damageTakenBySource[source] ?? 0) + applied;
     GameplayTelemetryRecorder.recordEnemyDamage(this.stats.type, source, applied, overkill);

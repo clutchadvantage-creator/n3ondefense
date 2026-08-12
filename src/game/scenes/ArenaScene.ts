@@ -137,6 +137,15 @@ interface TurretTargetDecision {
   reconsiderAt: number;
 }
 
+interface OperativeShieldVisual {
+  root: Phaser.GameObjects.Container;
+  shell: Phaser.GameObjects.Arc;
+  innerField: Phaser.GameObjects.Arc;
+  orbitArcs: Phaser.GameObjects.Graphics;
+  crackleA: Phaser.GameObjects.Graphics;
+  crackleB: Phaser.GameObjects.Graphics;
+}
+
 interface PauseMenuElements {
   backdrop: Phaser.GameObjects.Rectangle;
   panel: Phaser.GameObjects.Rectangle;
@@ -294,8 +303,8 @@ export class ArenaScene extends Phaser.Scene {
   private abilityCooldownUntil: Record<AbilityType, number> = { fence: 0, turret: 0, mine: 0 };
   private shieldCooldownUntil = 0;
   private shieldActiveUntil = 0;
-  private shieldOrb: Phaser.GameObjects.Arc | null = null;
-  private shieldPulseTween: Phaser.Tweens.Tween | null = null;
+  private shieldVisual: OperativeShieldVisual | null = null;
+  private readonly shieldTweens: Phaser.Tweens.Tween[] = [];
   private readonly hudBuffs: string[] = [];
   private readonly hudRadarContacts: HudRadarContact[] = [];
   private readonly hudRadarContactPool: HudRadarContact[] = [];
@@ -1703,41 +1712,113 @@ export class ArenaScene extends Phaser.Scene {
     this.shieldCooldownUntil = now + cooldownMs;
     this.player.invulnUntil = Math.max(this.player.invulnUntil, this.shieldActiveUntil);
 
-    if (!this.shieldOrb) {
-      this.shieldOrb = this.add.circle(this.player.x, this.player.y, 30, COLORS.cyan, 0.22)
-        .setStrokeStyle(2, COLORS.cyan, 0.8)
-        .setDepth(12);
-      this.shieldPulseTween = this.tweens.add({
-        targets: this.shieldOrb,
-        radius: { from: 28, to: 34 },
-        alpha: { from: 0.14, to: 0.32 },
-        duration: 260,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
-    }
-
-    this.shieldOrb.setVisible(true);
+    if (!this.shieldVisual) this.createShieldVisual();
     this.audio.playSfx('shieldOn');
   }
 
   private updateShieldState(now: number): void {
-    if (!this.shieldOrb) return;
+    const shield = this.shieldVisual;
+    if (!shield) return;
     if (now >= this.shieldActiveUntil) {
       this.destroyShieldOrb();
       return;
     }
 
-    this.shieldOrb.setPosition(this.player.x, this.player.y);
+    shield.root.setPosition(this.player.x, this.player.y);
+    shield.orbitArcs.setRotation(now * 0.0011);
+    shield.crackleA.setRotation(-now * 0.0018);
+    shield.crackleB.setRotation(now * 0.0023);
+    shield.crackleA.setAlpha(0.42 + Math.sin(now * 0.031) * 0.24);
+    shield.crackleB.setAlpha(0.36 + Math.sin(now * 0.043 + 1.7) * 0.2);
     this.player.invulnUntil = Math.max(this.player.invulnUntil, this.shieldActiveUntil);
   }
 
+  private createShieldVisual(): void {
+    const root = this.add.container(this.player.x, this.player.y).setDepth(12).setAlpha(0).setScale(0.18);
+    const rearGlow = this.add.ellipse(0, 5, 84, 69, COLORS.purple, 0.035)
+      .setStrokeStyle(1, COLORS.purple, 0.24)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const innerField = this.add.circle(0, 0, 36, COLORS.cyan, 0.065)
+      .setStrokeStyle(1, 0xffffff, 0.16)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const shell = this.add.circle(0, 0, 41, COLORS.cyan, 0.045)
+      .setStrokeStyle(3, COLORS.cyan, 0.78)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const lensGlow = this.add.ellipse(-11, -13, 34, 15, 0xffffff, 0.095)
+      .setRotation(-0.45)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    const orbitArcs = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    orbitArcs.lineStyle(2, 0xffffff, 0.72);
+    for (let index = 0; index < 6; index += 1) {
+      const start = index * Math.PI / 3 + 0.08;
+      orbitArcs.beginPath();
+      orbitArcs.arc(0, 0, 42, start, start + 0.48, false);
+      orbitArcs.strokePath();
+    }
+    orbitArcs.lineStyle(1, COLORS.purple, 0.48);
+    for (let index = 0; index < 3; index += 1) {
+      const start = index * Math.PI * 2 / 3 + 0.35;
+      orbitArcs.beginPath();
+      orbitArcs.arc(0, 0, 45, start, start + 0.7, false);
+      orbitArcs.strokePath();
+    }
+
+    const drawCrackle = (graphics: Phaser.GameObjects.Graphics, offset: number, color: number): void => {
+      graphics.setBlendMode(Phaser.BlendModes.ADD).lineStyle(2, color, 0.9);
+      for (let index = 0; index < 7; index += 1) {
+        const angle = offset + index * Math.PI * 2 / 7;
+        const tangentX = -Math.sin(angle);
+        const tangentY = Math.cos(angle);
+        const innerX = Math.cos(angle) * 36;
+        const innerY = Math.sin(angle) * 36;
+        const outerX = Math.cos(angle) * 45;
+        const outerY = Math.sin(angle) * 45;
+        graphics.beginPath();
+        graphics.moveTo(innerX, innerY);
+        graphics.lineTo(
+          Math.cos(angle) * 40 + tangentX * (index % 2 === 0 ? 5 : -5),
+          Math.sin(angle) * 40 + tangentY * (index % 2 === 0 ? 5 : -5)
+        );
+        graphics.lineTo(outerX, outerY);
+        graphics.strokePath();
+      }
+    };
+    const crackleA = this.add.graphics();
+    const crackleB = this.add.graphics();
+    drawCrackle(crackleA, 0.12, 0xffffff);
+    drawCrackle(crackleB, 0.48, COLORS.cyan);
+
+    root.add([rearGlow, innerField, shell, lensGlow, orbitArcs, crackleA, crackleB]);
+    this.shieldVisual = { root, shell, innerField, orbitArcs, crackleA, crackleB };
+    this.shieldTweens.push(
+      this.tweens.add({ targets: root, alpha: 1, scaleX: 1, scaleY: 1, duration: 260, ease: 'Back.Out' }),
+      this.tweens.add({
+        targets: shell,
+        scaleX: { from: 0.97, to: 1.04 },
+        scaleY: { from: 0.97, to: 1.04 },
+        alpha: { from: 0.58, to: 0.94 },
+        duration: 310,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      }),
+      this.tweens.add({
+        targets: innerField,
+        alpha: { from: 0.42, to: 0.75 },
+        duration: 430,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      })
+    );
+  }
+
   private destroyShieldOrb(): void {
-    this.shieldPulseTween?.remove();
-    this.shieldPulseTween = null;
-    this.shieldOrb?.destroy();
-    this.shieldOrb = null;
+    for (const tween of this.shieldTweens) tween.remove();
+    this.shieldTweens.length = 0;
+    this.shieldVisual?.root.destroy(true);
+    this.shieldVisual = null;
   }
 
   private updateTankHomingMissile(enemy: Enemy, now: number): void {
@@ -2155,7 +2236,6 @@ export class ArenaScene extends Phaser.Scene {
             GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
             this.spawnImpact(p.sprite.x, p.sprite.y, COLORS.cyan);
             this.retireProjectile(p);
-            this.audio.playSfx('hit');
             if (hitMissile.hp <= 0) {
               this.detonateHomingMissile(hitMissile, 'intercepted');
             } else {
