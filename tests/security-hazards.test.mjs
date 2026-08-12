@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { AIR_DROP_PATTERN_NAMES, createAirDropPattern } from '../src/game/systems/AirDropPatterns.ts';
 import { SeededRandom } from '../src/game/systems/SeededRandom.ts';
-import { GAS_HAZARD_BALANCE } from '../src/game/config/gasHazards.ts';
+import { GAS_HAZARD_BALANCE, getGasExposureDamage } from '../src/game/config/gasHazards.ts';
 
 test('shared air-drop patterns provide deterministic bomblet and gas-canister layouts', () => {
   const bounds = { x: 100, y: 80, w: 1200, h: 800 };
@@ -46,9 +46,24 @@ test('gas phases remain occasional, suppress lasers, permit bomblets, and carve 
   assert.match(gas, /createAirDropPattern/);
   assert.match(gas, /Uint8Array/);
   assert.match(gas, /gasLayer\.erase\(this\.tunnelBrush\)/);
+  assert.match(gas, /GAS_SKULL_TEXTURE/);
+  assert.match(gas, /updateGasAnimation\(now, dissipateProgress\)/);
+  assert.match(gas, /gasExposureUntil = now \+ config\.damageRetryWindowMs/);
   assert.match(gas, /this\.density\[row \* this\.densityColumns \+ column\] = 0/);
   assert.match(gas, /return this\.active \|\| now < this\.recoveryUntil/);
   assert.match(arena, /isDangerWindow\(now, gasSuppressesLasers\)/);
   assert.match(arena, /bombletHazard\?\.update\(now, this\.player, hazardTargets, laserDangerWindow\)/);
   assert.match(arena, /recordPlayerDamage\('gas', damage\)/);
+});
+
+test('gas exposure starts light and scales substantially but safely with round progression', () => {
+  const unlockDamage = getGasExposureDamage(GAS_HAZARD_BALANCE.unlockRound);
+  const roundTenDamage = getGasExposureDamage(10);
+  const roundThirtyDamage = getGasExposureDamage(30);
+  const extremeRoundDamage = getGasExposureDamage(999);
+  assert.equal(unlockDamage, GAS_HAZARD_BALANCE.playerDamageAtUnlock);
+  assert.ok(roundTenDamage > unlockDamage);
+  assert.ok(roundThirtyDamage > roundTenDamage * 1.5);
+  assert.equal(extremeRoundDamage, GAS_HAZARD_BALANCE.maximumPlayerDamage);
+  assert.ok(extremeRoundDamage < 100);
 });

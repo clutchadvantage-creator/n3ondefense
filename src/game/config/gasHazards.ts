@@ -11,8 +11,11 @@ export const GAS_HAZARD_BALANCE = {
   minimumCooldownMs: 54_000,
   cooldownReductionPerRoundMs: 180,
   cooldownVarianceMs: 9000,
-  playerDamageBase: 7,
-  maximumPlayerDamage: 13,
+  playerDamageAtUnlock: 5,
+  playerDamagePerRound: 0.5,
+  maximumPlayerDamage: 24,
+  damageTickIntervalMs: 1100,
+  damageRetryWindowMs: 650,
   cloudRadius: 260,
   tunnelRadius: 68,
   densityCellSize: 40,
@@ -22,3 +25,11 @@ export const GAS_HAZARD_BALANCE = {
   safeEdgeInset: 72,
   fallHeight: 230
 } as const;
+
+export const getGasExposureDamage = (round: number): number => {
+  const roundsPastUnlock = Math.max(0, Math.floor(round) - GAS_HAZARD_BALANCE.unlockRound);
+  return Math.min(
+    GAS_HAZARD_BALANCE.maximumPlayerDamage,
+    GAS_HAZARD_BALANCE.playerDamageAtUnlock + roundsPastUnlock * GAS_HAZARD_BALANCE.playerDamagePerRound
+  );
+};

@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
-import { GAS_HAZARD_BALANCE } from '../config/gasHazards';
-import { getScaledHazardDamage } from '../config/hazardScaling';
+import { GAS_HAZARD_BALANCE, getGasExposureDamage } from '../config/gasHazards';
 import type { Player } from '../entities/Player';
 import type { RectSpec } from '../types';
 import { AIR_DROP_PATTERN_NAMES, createAirDropPattern } from './AirDropPatterns';
 import { SeededRandom } from './SeededRandom';
 
-const GAS_CLOUD_TEXTURE = 'hazard-gas-cloud-brush';
+const GAS_CLOUD_TEXTURE = 'hazard-gas-cloud-brush-v2';
+const GAS_SKULL_TEXTURE = 'hazard-gas-skull-brush';
 const GAS_TUNNEL_TEXTURE = 'hazard-gas-tunnel-brush';
 const GAS_COLOR = 0x55ff36;
 
@@ -16,6 +16,8 @@ interface GasCanisterTarget {
   y: number;
   delayMs: number;
   released: boolean;
+  showSkull: boolean;
+  wispPhase: number;
   marker: Phaser.GameObjects.Arc;
   canister: Phaser.GameObjects.Container;
 }
@@ -29,7 +31,9 @@ export class GasHazardSystem {
   private readonly warningText: Phaser.GameObjects.Text;
   private readonly gasLayer: Phaser.GameObjects.RenderTexture;
   private readonly cloudBrush: Phaser.GameObjects.Image;
+  private readonly skullBrush: Phaser.GameObjects.Image;
   private readonly tunnelBrush: Phaser.GameObjects.Image;
+  private readonly wispGraphics: Phaser.GameObjects.Graphics;
   private readonly effects = new Set<Phaser.GameObjects.GameObject>();
   private readonly densityColumns = Math.ceil(WORLD_WIDTH / GAS_HAZARD_BALANCE.densityCellSize);
   private readonly densityRows = Math.ceil(WORLD_HEIGHT / GAS_HAZARD_BALANCE.densityCellSize);
@@ -40,6 +44,9 @@ export class GasHazardSystem {
   private phaseIndex = 0;
   private patternIndex = 0;
   private recoveryUntil = 0;
+  private gasExposureUntil = 0;
+  private nextGasDamageAt = 0;
+  private lastWispDrawAt = -Infinity;
   private lastTunnelX = Number.NaN;
   private lastTunnelY = Number.NaN;
 
@@ -58,10 +65,11 @@ export class GasHazardSystem {
     this.gasLayer = scene.add.renderTexture(this.bounds.x, this.bounds.y, Math.ceil(this.bounds.w), Math.ceil(this.bounds.h))
       .setOrigin(0)
       .setDepth(7)
-      .setBlendMode(Phaser.BlendModes.ADD)
       .setVisible(false);
     this.cloudBrush = scene.make.image({ x: 0, y: 0, key: GAS_CLOUD_TEXTURE, add: false }).setOrigin(0.5);
+    this.skullBrush = scene.make.image({ x: 0, y: 0, key: GAS_SKULL_TEXTURE, add: false }).setOrigin(0.5);
     this.tunnelBrush = scene.make.image({ x: 0, y: 0, key: GAS_TUNNEL_TEXTURE, add: false }).setOrigin(0.5);
+    this.wispGraphics = scene.add.graphics().setDepth(8).setBlendMode(Phaser.BlendModes.ADD);
     this.warningText = scene.add.text(scene.scale.width * 0.5, 248, '', {
       fontFamily: 'Orbitron, sans-serif',
       fontSize: '17px',
@@ -139,12 +147,20 @@ export class GasHazardSystem {
       const dissipateProgress = elapsed <= dissipateAt
         ? 0
         : Phaser.Math.Clamp((elapsed - dissipateAt) / config.dissipateMs, 0, 1);
-      this.gasLayer.setAlpha(0.9 * (1 - dissipateProgress));
+      this.updateGasAnimation(now, dissipateProgress);
       const playerEnteredGas = this.hasGasAt(player.x, player.y);
-      if (playerEnteredGas) {
-        const baseDamage = getScaledHazardDamage(config.playerDamageBase, this.round, config.maximumPlayerDamage);
-        const damage = baseDamage * Math.max(0.05, gasDamageMultiplier) * (1 - dissipateProgress);
-        if (damage > 0 && player.takeDamage(damage)) this.onPlayerDamaged?.(damage);
+      if (playerEnteredGas && dissipateProgress < 0.95) {
+        this.gasExposureUntil = now + config.damageRetryWindowMs;
+      }
+      if (now <= this.gasExposureUntil && now >= this.nextGasDamageAt) {
+        const damage = getGasExposureDamage(this.round)
+          * Math.max(0.05, gasDamageMultiplier)
+          * (1 - dissipateProgress);
+        if (damage > 0 && player.takeDamage(damage)) {
+          this.onPlayerDamaged?.(damage);
+          this.nextGasDamageAt = now + config.damageTickIntervalMs;
+          this.gasExposureUntil = 0;
+        }
       }
       this.carvePlayerTunnel(player.x, player.y);
     }
@@ -161,7 +177,9 @@ export class GasHazardSystem {
     this.effects.clear();
     this.warningText.destroy();
     this.gasLayer.destroy();
+    this.wispGraphics.destroy();
     this.cloudBrush.destroy();
+    this.skullBrush.destroy();
     this.tunnelBrush.destroy();
     this.density.fill(0);
   }
@@ -172,17 +190,50 @@ export class GasHazardSystem {
       const size = config.cloudRadius * 2;
       const center = size * 0.5;
       const graphics = this.scene.make.graphics({ x: 0, y: 0 });
-      graphics.fillStyle(GAS_COLOR, 0.11);
-      graphics.fillCircle(center, center, config.cloudRadius);
-      graphics.fillStyle(0x72ff3f, 0.09);
-      graphics.fillCircle(center - 54, center + 22, config.cloudRadius * 0.72);
-      graphics.fillCircle(center + 67, center - 31, config.cloudRadius * 0.61);
-      graphics.fillStyle(0xc4ff65, 0.08);
-      graphics.fillCircle(center - 102, center - 63, config.cloudRadius * 0.34);
-      graphics.fillCircle(center + 116, center + 78, config.cloudRadius * 0.31);
-      graphics.lineStyle(4, 0x8dff54, 0.24);
-      graphics.strokeCircle(center, center, config.cloudRadius * 0.82);
+      const lobes = [
+        [0, 0, 0.72], [-0.38, 0.08, 0.5], [0.34, -0.13, 0.54],
+        [-0.2, -0.34, 0.4], [0.16, 0.34, 0.45], [-0.5, -0.28, 0.29],
+        [0.53, 0.22, 0.32], [0.02, -0.55, 0.28], [-0.04, 0.56, 0.3]
+      ] as const;
+      for (const [offsetX, offsetY, scale] of lobes) {
+        const x = center + offsetX * config.cloudRadius;
+        const y = center + offsetY * config.cloudRadius;
+        const radius = config.cloudRadius * scale;
+        graphics.fillStyle(0x37d72d, 0.055);
+        graphics.fillCircle(x, y, radius);
+        graphics.fillStyle(GAS_COLOR, 0.075);
+        graphics.fillCircle(x - radius * 0.04, y + radius * 0.03, radius * 0.78);
+        graphics.fillStyle(0xb5ff65, 0.055);
+        graphics.fillCircle(x + radius * 0.08, y - radius * 0.08, radius * 0.52);
+      }
       graphics.generateTexture(GAS_CLOUD_TEXTURE, size, size);
+      graphics.destroy();
+    }
+    if (!this.scene.textures.exists(GAS_SKULL_TEXTURE)) {
+      const size = 128;
+      const graphics = this.scene.make.graphics({ x: 0, y: 0 });
+      graphics.lineStyle(8, 0xb8ff79, 0.34);
+      graphics.lineBetween(22, 106, 106, 32);
+      graphics.lineBetween(22, 32, 106, 106);
+      for (const [x, y] of [[20, 108], [108, 30], [20, 30], [108, 108]] as const) {
+        graphics.fillStyle(0xb8ff79, 0.28);
+        graphics.fillCircle(x, y, 8);
+      }
+      graphics.fillStyle(0x64ef3c, 0.18);
+      graphics.fillCircle(64, 55, 34);
+      graphics.fillRect(42, 55, 44, 31);
+      graphics.lineStyle(4, 0xd9ffa5, 0.45);
+      graphics.strokeCircle(64, 55, 34);
+      graphics.strokeRect(42, 55, 44, 31);
+      graphics.fillStyle(0x07150a, 0.75);
+      graphics.fillCircle(52, 55, 8);
+      graphics.fillCircle(76, 55, 8);
+      graphics.fillTriangle(64, 62, 58, 73, 70, 73);
+      graphics.lineStyle(3, 0x07150a, 0.72);
+      graphics.lineBetween(53, 76, 53, 86);
+      graphics.lineBetween(64, 76, 64, 86);
+      graphics.lineBetween(75, 76, 75, 86);
+      graphics.generateTexture(GAS_SKULL_TEXTURE, size, size);
       graphics.destroy();
     }
     if (!this.scene.textures.exists(GAS_TUNNEL_TEXTURE)) {
@@ -214,8 +265,12 @@ export class GasHazardSystem {
     });
     this.density.fill(0);
     this.gasLayer.clear().setAlpha(0.9).setVisible(false);
+    this.wispGraphics.clear().setAlpha(1);
     this.lastTunnelX = Number.NaN;
     this.lastTunnelY = Number.NaN;
+    this.gasExposureUntil = 0;
+    this.nextGasDamageAt = 0;
+    this.lastWispDrawAt = -Infinity;
     this.canisters = points.map((point, index) => {
       const marker = this.scene.add.circle(point.x, point.y, 31, GAS_COLOR, 0.06)
         .setStrokeStyle(3, GAS_COLOR, 0.9)
@@ -227,7 +282,15 @@ export class GasHazardSystem {
       const canister = this.scene.add.container(point.x, point.y - config.fallHeight, [shell, capTop, capBottom, core])
         .setDepth(9)
         .setAlpha(0);
-      return { ...point, delayMs: index * config.staggerMs, released: false, marker, canister };
+      return {
+        ...point,
+        delayMs: index * config.staggerMs,
+        released: false,
+        showSkull: index % 3 === 0,
+        wispPhase: this.random.float(0, Math.PI * 2),
+        marker,
+        canister
+      };
     });
   }
 
@@ -237,6 +300,13 @@ export class GasHazardSystem {
     target.canister.setAlpha(0);
     this.cloudBrush.setPosition(target.x - this.bounds.x, target.y - this.bounds.y);
     this.gasLayer.draw(this.cloudBrush).setVisible(true);
+    if (target.showSkull) {
+      this.skullBrush
+        .setPosition(target.x - this.bounds.x, target.y - this.bounds.y)
+        .setRotation(target.wispPhase * 0.16)
+        .setScale(0.92 + Math.sin(target.wispPhase) * 0.08);
+      this.gasLayer.draw(this.skullBrush);
+    }
     this.stampDensity(target.x, target.y, GAS_HAZARD_BALANCE.cloudRadius);
 
     const ring = this.scene.add.circle(target.x, target.y, 12, GAS_COLOR, 0.1)
@@ -282,6 +352,37 @@ export class GasHazardSystem {
         const dx = cellX - x;
         const dy = cellY - y;
         if (dx * dx + dy * dy <= radiusSquared) this.density[row * this.densityColumns + column] = 255;
+      }
+    }
+  }
+
+  /** Redraws a small fixed set of drifting wisps at 12.5 Hz, not every frame. */
+  private updateGasAnimation(now: number, dissipateProgress: number): void {
+    const fade = 1 - dissipateProgress;
+    const breathing = 0.82 + Math.sin(now * 0.0018) * 0.08 + Math.sin(now * 0.00071) * 0.04;
+    this.gasLayer.setAlpha(breathing * fade);
+    if (now - this.lastWispDrawAt < 80) {
+      this.wispGraphics.setAlpha(fade);
+      return;
+    }
+    this.lastWispDrawAt = now;
+    this.wispGraphics.clear().setAlpha(fade);
+    const time = now * 0.00032;
+    for (let index = 0; index < this.canisters.length; index += 1) {
+      const target = this.canisters[index];
+      if (!target.released) continue;
+      for (let wisp = 0; wisp < 3; wisp += 1) {
+        const direction = wisp % 2 === 0 ? 1 : -1;
+        const angle = target.wispPhase + wisp * 2.094 + time * direction;
+        const orbit = GAS_HAZARD_BALANCE.cloudRadius * (0.14 + wisp * 0.075);
+        const x = target.x + Math.cos(angle) * orbit;
+        const y = target.y + Math.sin(angle * 1.17) * orbit * 0.64 - Math.sin(time * 1.7 + target.wispPhase) * 18;
+        if (!this.hasGasAt(x, y)) continue;
+        const radius = 24 + wisp * 7 + Math.sin(time * 2.3 + index + wisp) * 5;
+        this.wispGraphics.fillStyle(wisp === 1 ? 0xb8ff68 : GAS_COLOR, 0.045);
+        this.wispGraphics.fillCircle(x, y, radius);
+        this.wispGraphics.fillStyle(0xd7ffa3, 0.026);
+        this.wispGraphics.fillCircle(x - radius * 0.18, y - radius * 0.16, radius * 0.58);
       }
     }
   }
@@ -339,6 +440,7 @@ export class GasHazardSystem {
     const config = GAS_HAZARD_BALANCE;
     this.clearCanisters();
     this.gasLayer.clear().setVisible(false);
+    this.wispGraphics.clear();
     this.density.fill(0);
     this.warningText.setAlpha(0);
     this.recoveryUntil = now + config.laserRecoveryDelayMs;
@@ -356,6 +458,8 @@ export class GasHazardSystem {
       target.canister.destroy();
     }
     this.canisters = [];
+    this.wispGraphics.clear();
+    this.gasExposureUntil = 0;
     this.lastTunnelX = Number.NaN;
     this.lastTunnelY = Number.NaN;
   }
