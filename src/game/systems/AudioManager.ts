@@ -3,6 +3,7 @@ import { SFX_DEFINITIONS, type AudioSfxName } from '../config/audio';
 import { publicAssetUrl } from '../utils/assetUrl';
 
 const audioAssetUrl = (path: string): string => publicAssetUrl(`assets/audio/${path}`);
+const BOMBLET_SFX_POOL_SIZE = 15;
 
 export class AudioManager {
   private static instance: AudioManager | null = null;
@@ -22,6 +23,9 @@ export class AudioManager {
   private readonly explosionSfxPool: HTMLAudioElement[] = [];
   private readonly enemyDeathSfxPool: HTMLAudioElement[] = [];
   private readonly playerDeathSfxPool: HTMLAudioElement[] = [];
+  private readonly bombletSfxPool: HTMLAudioElement[] = [];
+  private securityLaserAudio: HTMLAudioElement | null = null;
+  private securityLaserLoopRequested = false;
   private gasSfx: HTMLAudioElement | null = null;
   private plantingAudio: HTMLAudioElement | null = null;
   private plantingLoopRequested = false;
@@ -32,6 +36,7 @@ export class AudioManager {
   private explosionSfxCursor = 0;
   private enemyDeathSfxCursor = 0;
   private playerDeathSfxCursor = 0;
+  private bombletSfxCursor = 0;
   private cachedMusicVolume = 0.51;
   private cachedSfxVolume = 0.6375;
   private readonly cachedSoundVolumes = {} as Record<AudioSfxName, number>;
@@ -47,6 +52,7 @@ export class AudioManager {
     this.initBoostSfxPool();
     this.initExplosionSfxPool();
     this.initDeathSfxPools();
+    this.initSecurityHazardSfx();
     this.initGasSfx();
   }
 
@@ -208,6 +214,62 @@ export class AudioManager {
     }
     this.gasSfx.volume = this.getSfxVolume('gas');
     void this.gasSfx.play().catch(() => undefined);
+  }
+
+  private initSecurityHazardSfx(): void {
+    this.securityLaserAudio = new Audio(audioAssetUrl('soundeffects/lasersound.mp3'));
+    this.securityLaserAudio.preload = 'auto';
+    this.securityLaserAudio.loop = true;
+    this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
+    this.securityLaserAudio.load();
+
+    const bombletSource = audioAssetUrl('soundeffects/bomblets.mp3');
+    for (let index = 0; index < BOMBLET_SFX_POOL_SIZE; index += 1) {
+      const audio = new Audio(bombletSource);
+      audio.preload = 'auto';
+      audio.volume = this.getSfxVolume('bomblet');
+      audio.load();
+      this.bombletSfxPool.push(audio);
+    }
+  }
+
+  startSecurityLaserLoop(): void {
+    if (this.securityLaserLoopRequested) return;
+    this.securityLaserLoopRequested = true;
+    if (!this.securityLaserAudio || !this.securityLaserAudio.paused) return;
+    try {
+      this.securityLaserAudio.currentTime = 0;
+    } catch {
+      // Metadata can still be loading when the first laser cycle starts.
+    }
+    this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
+    void this.securityLaserAudio.play().catch(() => undefined);
+  }
+
+  stopSecurityLaserLoop(): void {
+    this.securityLaserLoopRequested = false;
+    if (!this.securityLaserAudio) return;
+    this.securityLaserAudio.pause();
+    try {
+      this.securityLaserAudio.currentTime = 0;
+    } catch {
+      // Seeking is optional while metadata is unavailable.
+    }
+  }
+
+  private playBombletSfx(): void {
+    if (this.bombletSfxPool.length === 0) return;
+    const nextIndex = this.bombletSfxCursor % this.bombletSfxPool.length;
+    this.bombletSfxCursor = (this.bombletSfxCursor + 1) % this.bombletSfxPool.length;
+    const audio = this.bombletSfxPool[nextIndex];
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Metadata can still be loading on the first strike.
+    }
+    audio.volume = this.getSfxVolume('bomblet');
+    void audio.play().catch(() => undefined);
   }
 
   private playShieldOnSfx(): void {
@@ -391,6 +453,10 @@ export class AudioManager {
     for (const playerDeath of this.playerDeathSfxPool) {
       playerDeath.volume = this.getSfxVolume('playerDeath');
     }
+    for (const bomblet of this.bombletSfxPool) {
+      bomblet.volume = this.getSfxVolume('bomblet');
+    }
+    if (this.securityLaserAudio) this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
     if (this.gasSfx) this.gasSfx.volume = this.getSfxVolume('gas');
     if (this.plantingAudio) this.plantingAudio.volume = this.getSfxVolume('planting');
     if (this.disarmAudio) this.disarmAudio.volume = this.getSfxVolume('disarm');
@@ -462,7 +528,7 @@ export class AudioManager {
     this.disarmAudio.currentTime = 0;
   }
 
-  playSfx(name: Exclude<AudioSfxName, 'planting' | 'disarm'>): void {
+  playSfx(name: Exclude<AudioSfxName, 'planting' | 'disarm' | 'securityLaser'>): void {
     switch (name) {
       case 'shot':
         this.playShotSfx();
@@ -488,6 +554,9 @@ export class AudioManager {
         break;
       case 'mine':
         this.beep('sfx', 90, 240, 0.1, name);
+        break;
+      case 'bomblet':
+        this.playBombletSfx();
         break;
       case 'beep':
         this.beep('sfx', 620, 80, 0.05, name);

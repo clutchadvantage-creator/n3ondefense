@@ -35,7 +35,8 @@ export class BombletHazardSystem {
     private readonly bounds: RectSpec,
     private readonly isBlocked: (x: number, y: number) => boolean,
     private readonly particlesEnabled: boolean,
-    private readonly onPlayerDamaged?: (damage: number) => void
+    private readonly onPlayerDamaged?: (damage: number) => void,
+    private readonly onBombletExploded?: () => void
   ) {
     this.random = new SeededRandom((seed ^ Math.imul(round + 17, 0x9e3779b1) ^ 0xb04b1e7) >>> 0);
     this.nextStrikeAt = scene.time.now + BOMBLET_HAZARD_BALANCE.initialDelayMs + this.random.int(0, 1200);
@@ -152,6 +153,7 @@ export class BombletHazardSystem {
   private detonate(target: TargetPoint, player: Player, damageTargets: HazardDamageTarget[]): void {
     const config = BOMBLET_HAZARD_BALANCE;
     target.exploded = true;
+    this.onBombletExploded?.();
     target.marker.setAlpha(0);
     target.bomb.setAlpha(0);
     const color = target.color;

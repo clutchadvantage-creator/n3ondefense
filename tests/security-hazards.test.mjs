@@ -85,3 +85,24 @@ test('gas release audio is reused and fires once after the complete canister pat
   assert.match(gas, /this\.onGasReleased\?\.\(\)/);
   assert.match(arena, /\(\) => this\.audio\.playSfx\('gas'\)/);
 });
+
+test('security laser and per-bomblet audio use active-state and pooled playback', () => {
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/lasersound.mp3', import.meta.url)));
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/bomblets.mp3', import.meta.url)));
+  assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'securityLaser'));
+  assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'bomblet'));
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const lasers = readFileSync(new URL('../src/game/systems/LaserSecuritySystem.ts', import.meta.url), 'utf8');
+  const bomblets = readFileSync(new URL('../src/game/systems/BombletHazardSystem.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(audio, /audioAssetUrl\('soundeffects\/lasersound\.mp3'\)/);
+  assert.match(audio, /audioAssetUrl\('soundeffects\/bomblets\.mp3'\)/);
+  assert.match(audio, /BOMBLET_SFX_POOL_SIZE = 15/);
+  assert.match(audio, /this\.securityLaserAudio\.loop = true/);
+  assert.match(lasers, /this\.setAudioActive\(true\)/);
+  assert.match(lasers, /this\.setAudioActive\(false\)/);
+  assert.match(bomblets, /this\.onBombletExploded\?\.\(\)/);
+  assert.match(arena, /startSecurityLaserLoop\(\).*stopSecurityLaserLoop\(\)/);
+  assert.match(arena, /\(\) => this\.audio\.playSfx\('bomblet'\)/);
+  assert.match(arena, /laserSecurity\?\.silence\(\)/);
+});

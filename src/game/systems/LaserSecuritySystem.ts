@@ -33,12 +33,14 @@ export class LaserSecuritySystem {
   private readonly createdAt: number;
   private patternIndex = 0;
   private lastCycle = -1;
+  private audioActive = false;
 
   constructor(
     scene: Phaser.Scene,
     private readonly round: number,
     private readonly theme: ArenaTheme,
-    private readonly onPlayerDamaged?: (damage: number) => void
+    private readonly onPlayerDamaged?: (damage: number) => void,
+    private readonly onActiveChanged?: (active: boolean) => void
   ) {
     this.createdAt = scene.time.now;
     this.graphics = scene.add.graphics().setDepth(6).setBlendMode(Phaser.BlendModes.ADD);
@@ -60,6 +62,7 @@ export class LaserSecuritySystem {
     suppressed = false
   ): void {
     if (suppressed) {
+      this.setAudioActive(false);
       this.graphics.clear();
       this.warningText.setAlpha(0);
       return;
@@ -71,6 +74,7 @@ export class LaserSecuritySystem {
     );
     const elapsed = now - this.createdAt - config.initialDelayMs;
     if (elapsed < 0) {
+      this.setAudioActive(false);
       this.graphics.clear();
       return;
     }
@@ -84,6 +88,7 @@ export class LaserSecuritySystem {
     }
 
     if (cycleTime >= config.telegraphMs + config.activeMs) {
+      this.setAudioActive(false);
       this.graphics.clear();
       this.warningText.setAlpha(0);
       return;
@@ -97,6 +102,7 @@ export class LaserSecuritySystem {
     this.draw(segmentCount, now, telegraphing);
 
     if (telegraphing) {
+      this.setAudioActive(false);
       const remaining = Math.max(0, (config.telegraphMs - cycleTime) / 1000);
       const warning = `SECURITY LASERS: ${LASER_PATTERN_NAMES[this.patternIndex]}  ${remaining.toFixed(1)}s`;
       if (this.warningText.text !== warning) this.warningText.setText(warning);
@@ -104,6 +110,7 @@ export class LaserSecuritySystem {
       return;
     }
 
+    this.setAudioActive(true);
     const activeWarning = `SECURITY LASERS ACTIVE: ${LASER_PATTERN_NAMES[this.patternIndex]}`;
     if (this.warningText.text !== activeWarning) this.warningText.setText(activeWarning);
     this.warningText.setAlpha(0.72);
@@ -133,8 +140,20 @@ export class LaserSecuritySystem {
   }
 
   destroy(): void {
+    this.setAudioActive(false);
     this.graphics.destroy();
     this.warningText.destroy();
+  }
+
+  /** Stops external loop audio during scene pauses; active updates restart it. */
+  silence(): void {
+    this.setAudioActive(false);
+  }
+
+  private setAudioActive(active: boolean): void {
+    if (this.audioActive === active) return;
+    this.audioActive = active;
+    this.onActiveChanged?.(active);
   }
 
   private setSegment(index: number, x1: number, y1: number, x2: number, y2: number): void {

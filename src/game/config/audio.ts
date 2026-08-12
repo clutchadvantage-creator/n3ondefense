@@ -9,6 +9,8 @@ export const SFX_DEFINITIONS = [
   { key: 'playerDeath', label: 'Player Death' },
   { key: 'place', label: 'Ability Place' },
   { key: 'mine', label: 'Mine Detonation' },
+  { key: 'securityLaser', label: 'Security Lasers' },
+  { key: 'bomblet', label: 'Bomblet Explosion' },
   { key: 'beep', label: 'Charge Beep' },
   { key: 'defuseAlarm', label: 'Defuse Alarm' },
   { key: 'disarm', label: 'Enemy Disarming' },

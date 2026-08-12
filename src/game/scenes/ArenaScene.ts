@@ -541,10 +541,16 @@ export class ArenaScene extends Phaser.Scene {
 
     this.bombSites = new BombSiteManager(def.objectiveMode, OBJECTIVE_CONFIG.maxActiveBombs);
     this.bombSites.initialize(this, this.layout.bombSites, this.layout.theme);
-    this.laserSecurity = new LaserSecuritySystem(this, def.round, this.layout.theme, (damage) => {
-      this.audio.playSfx('playerDamage');
-      GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
-    });
+    this.laserSecurity = new LaserSecuritySystem(
+      this,
+      def.round,
+      this.layout.theme,
+      (damage) => {
+        this.audio.playSfx('playerDamage');
+        GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
+      },
+      (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop()
+    );
     this.bombletHazard = new BombletHazardSystem(
       this,
       def.round,
@@ -556,7 +562,8 @@ export class ArenaScene extends Phaser.Scene {
       (damage) => {
         this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
-      }
+      },
+      () => this.audio.playSfx('bomblet')
     );
     if (def.round >= GAS_HAZARD_BALANCE.unlockRound) {
       this.gasHazard = new GasHazardSystem(
@@ -3136,6 +3143,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.detonatingSiteIds.has(site.id)) return;
     this.detonatingSiteIds.add(site.id);
     this.state.set(this.bombSites.activeBombCount() > 1 ? RoundState.Defense : RoundState.Victory);
+    if (this.state.state === RoundState.Victory) this.laserSecurity?.silence();
 
     const color = SaveSystem.getCosmeticColor('bombColor', this.time.now);
     const prismBomb = this.prismBombColor;
@@ -3322,10 +3330,16 @@ export class ArenaScene extends Phaser.Scene {
 
     this.bombSites = new BombSiteManager('open', 1);
     this.bombSites.initialize(this, [], this.layout.theme);
-    this.laserSecurity = new LaserSecuritySystem(this, this.bossRound, this.layout.theme, (damage) => {
-      this.audio.playSfx('playerDamage');
-      GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
-    });
+    this.laserSecurity = new LaserSecuritySystem(
+      this,
+      this.bossRound,
+      this.layout.theme,
+      (damage) => {
+        this.audio.playSfx('playerDamage');
+        GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
+      },
+      (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop()
+    );
     this.bombletHazard = new BombletHazardSystem(
       this,
       this.bossRound,
@@ -3337,7 +3351,8 @@ export class ArenaScene extends Phaser.Scene {
       (damage) => {
         this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
-      }
+      },
+      () => this.audio.playSfx('bomblet')
     );
     if (this.bossRound >= GAS_HAZARD_BALANCE.unlockRound) {
       this.gasHazard = new GasHazardSystem(
@@ -3496,6 +3511,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bossVictoryHandled = true;
     this.state.set(RoundState.Victory);
     this.pointerDown = false;
+    this.laserSecurity?.silence();
     this.physics.pause();
     this.audio.playSfx('enemyDeath');
     this.createDeathExplosion(this.bossEncounter.boss.x, this.bossEncounter.boss.y, BOSS_ARCHETYPES[this.bossEncounter.archetype].color, true);
@@ -3546,6 +3562,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.state.set(RoundState.Defeat);
     this.audio.stopDisarmLoop();
+    this.laserSecurity?.silence();
     this.physics.pause();
 
     const currentCombatRound = this.currentCombatRound();
@@ -4147,6 +4164,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
+    this.laserSecurity?.silence();
 
     this.state.set(RoundState.Paused);
     this.physics.pause();
@@ -4166,6 +4184,7 @@ export class ArenaScene extends Phaser.Scene {
     this.legendaryRevealPhysicsWasPaused = this.physics.world.isPaused;
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
+    this.laserSecurity?.silence();
     this.clearGameplayInput();
     this.crosshair?.setVisible(false);
     this.physics.pause();
@@ -4188,6 +4207,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) return;
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
+    this.laserSecurity?.silence();
     this.clearGameplayInput();
     this.state.set(RoundState.Paused);
     this.physics.pause();
