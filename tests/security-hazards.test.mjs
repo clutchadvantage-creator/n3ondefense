@@ -99,14 +99,29 @@ test('security laser and per-bomblet audio use active-state and pooled playback'
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   assert.match(audio, /audioAssetUrl\('soundeffects\/lasersound\.mp3'\)/);
   assert.match(audio, /audioAssetUrl\('soundeffects\/bomblets\.mp3'\)/);
-  assert.match(audio, /BOMBLET_SFX_POOL_SIZE = 15/);
+  assert.match(audio, /BOMBLET_SFX_POOL_SIZE = 8/);
   assert.match(audio, /this\.securityLaserAudio\.loop = true/);
   assert.match(lasers, /this\.setAudioActive\(true\)/);
   assert.match(lasers, /this\.setAudioActive\(false\)/);
-  assert.match(bomblets, /this\.onBombletExploded\?\.\(target\.x, target\.y, config\.blastRadius\)/);
+  assert.match(bomblets, /const shouldPlaySound = this\.strikeDetonationCount % 2 === 0/);
+  assert.match(bomblets, /this\.onBombletExploded\?\.\(target\.x, target\.y, config\.blastRadius, shouldPlaySound\)/);
   assert.match(arena, /startSecurityLaserLoop\(\).*stopSecurityLaserLoop\(\)/);
-  assert.match(arena, /\(x, y, blastRadius\) => \{[\s\S]*?this\.audio\.playSfx\('bomblet'\)/);
+  assert.match(arena, /\(x, y, blastRadius, shouldPlaySound\) => \{[\s\S]*?if \(shouldPlaySound\) this\.audio\.playSfx\('bomblet'\)/);
   assert.match(arena, /laserSecurity\?\.silence\(\)/);
+});
+
+test('every gameplay explosion shares the bomblet recording while volleys sound once per pair', () => {
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const bomblets = readFileSync(new URL('../src/game/systems/BombletHazardSystem.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(audio, /soundeffects\/explosion\.mp3|playExplosionSfx|explosionSfxPool/);
+  assert.match(audio, /case 'bomblet':[\s\S]*?case 'mine':[\s\S]*?case 'bomb':[\s\S]*?this\.playBombletSfx\(name\)/);
+  assert.match(bomblets, /this\.strikeDetonationCount = 0/);
+  assert.match(bomblets, /this\.strikeDetonationCount \+= 1/);
+  assert.match(arena, /this\.audio\.playSfx\('bomblet'\)/);
+  assert.match(arena, /this\.audio\.playSfx\('mine'\)/);
+  assert.match(arena, /this\.audio\.playSfx\('bomb'\)/);
+  assert.match(arena, /this\.audio\.playSfx\('enemyDeath'\)/);
 });
 
 test('moving entities tunnel gas visually while mine ignition consumes the damaging footprint', () => {

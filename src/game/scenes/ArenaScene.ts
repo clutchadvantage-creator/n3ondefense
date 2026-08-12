@@ -563,8 +563,8 @@ export class ArenaScene extends Phaser.Scene {
         this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
       },
-      (x, y, blastRadius) => {
-        this.audio.playSfx('bomblet');
+      (x, y, blastRadius, shouldPlaySound) => {
+        if (shouldPlaySound) this.audio.playSfx('bomblet');
         this.gasHazard?.carveVisualBlast(
           x,
           y,
@@ -1846,7 +1846,7 @@ export class ArenaScene extends Phaser.Scene {
       onComplete: () => this.retireFxCircle(blast)
     });
     this.spawnImpact(x, y, color);
-    this.audio.playSfx('mine');
+    this.audio.playSfx('bomblet');
 
     if (intercepted) {
       GameplayTelemetryRecorder.recordProjectileHit('enemy', 0, 0, false, true);
@@ -3387,8 +3387,8 @@ export class ArenaScene extends Phaser.Scene {
         this.audio.playSfx('playerDamage');
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
       },
-      (x, y, blastRadius) => {
-        this.audio.playSfx('bomblet');
+      (x, y, blastRadius, shouldPlaySound) => {
+        if (shouldPlaySound) this.audio.playSfx('bomblet');
         this.gasHazard?.carveVisualBlast(
           x,
           y,

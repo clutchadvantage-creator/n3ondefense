@@ -26,6 +26,7 @@ export class BombletHazardSystem {
   private strikeStartedAt = 0;
   private strikeIndex = 0;
   private patternIndex = 0;
+  private strikeDetonationCount = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -36,7 +37,12 @@ export class BombletHazardSystem {
     private readonly isBlocked: (x: number, y: number) => boolean,
     private readonly particlesEnabled: boolean,
     private readonly onPlayerDamaged?: (damage: number) => void,
-    private readonly onBombletExploded?: (x: number, y: number, blastRadius: number) => void
+    private readonly onBombletExploded?: (
+      x: number,
+      y: number,
+      blastRadius: number,
+      shouldPlaySound: boolean
+    ) => void
   ) {
     this.random = new SeededRandom((seed ^ Math.imul(round + 17, 0x9e3779b1) ^ 0xb04b1e7) >>> 0);
     this.nextStrikeAt = scene.time.now + BOMBLET_HAZARD_BALANCE.initialDelayMs + this.random.int(0, 1200);
@@ -120,6 +126,7 @@ export class BombletHazardSystem {
   private startStrike(now: number): void {
     const config = BOMBLET_HAZARD_BALANCE;
     this.strikeStartedAt = now;
+    this.strikeDetonationCount = 0;
     this.patternIndex = (this.strikeIndex + this.random.int(0, AIR_DROP_PATTERN_NAMES.length - 1)) % AIR_DROP_PATTERN_NAMES.length;
     const count = Math.min(
       config.maximumBomblets,
@@ -153,7 +160,9 @@ export class BombletHazardSystem {
   private detonate(target: TargetPoint, player: Player, damageTargets: HazardDamageTarget[]): void {
     const config = BOMBLET_HAZARD_BALANCE;
     target.exploded = true;
-    this.onBombletExploded?.(target.x, target.y, config.blastRadius);
+    const shouldPlaySound = this.strikeDetonationCount % 2 === 0;
+    this.strikeDetonationCount += 1;
+    this.onBombletExploded?.(target.x, target.y, config.blastRadius, shouldPlaySound);
     // Do not force-restart an in-progress shake when staggered bomblets overlap.
     this.scene.cameras.main.shake(config.cameraShakeDurationMs, config.cameraShakeIntensity, false);
     target.marker.setAlpha(0);

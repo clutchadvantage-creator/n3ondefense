@@ -3,7 +3,7 @@ import { SFX_DEFINITIONS, type AudioSfxName } from '../config/audio';
 import { publicAssetUrl } from '../utils/assetUrl';
 
 const audioAssetUrl = (path: string): string => publicAssetUrl(`assets/audio/${path}`);
-const BOMBLET_SFX_POOL_SIZE = 15;
+const BOMBLET_SFX_POOL_SIZE = 8;
 
 export class AudioManager {
   private static instance: AudioManager | null = null;
@@ -20,7 +20,6 @@ export class AudioManager {
   private musicStarted = false;
   private readonly shotSfxPool: HTMLAudioElement[] = [];
   private readonly boostSfxPool: HTMLAudioElement[] = [];
-  private readonly explosionSfxPool: HTMLAudioElement[] = [];
   private readonly enemyDeathSfxPool: HTMLAudioElement[] = [];
   private readonly playerDeathSfxPool: HTMLAudioElement[] = [];
   private readonly bombletSfxPool: HTMLAudioElement[] = [];
@@ -33,7 +32,6 @@ export class AudioManager {
   private disarmLoopRequested = false;
   private shotSfxCursor = 0;
   private boostSfxCursor = 0;
-  private explosionSfxCursor = 0;
   private enemyDeathSfxCursor = 0;
   private playerDeathSfxCursor = 0;
   private bombletSfxCursor = 0;
@@ -50,7 +48,6 @@ export class AudioManager {
     this.refreshVolumeCache();
     this.initShotSfxPool();
     this.initBoostSfxPool();
-    this.initExplosionSfxPool();
     this.initDeathSfxPools();
     this.initSecurityHazardSfx();
     this.initGasSfx();
@@ -156,47 +153,6 @@ export class AudioManager {
     });
   }
 
-  private initExplosionSfxPool(): void {
-    const src = audioAssetUrl('soundeffects/explosion.mp3');
-    for (let i = 0; i < 3; i += 1) {
-      const audio = new Audio(src);
-      audio.preload = 'auto';
-      audio.load();
-      audio.volume = this.getSfxVolume('bomb');
-      this.explosionSfxPool.push(audio);
-    }
-  }
-
-  private playExplosionSfx(): void {
-    const fallbackOneShot = (): void => {
-      const direct = new Audio(audioAssetUrl('soundeffects/explosion.mp3'));
-      direct.preload = 'auto';
-      direct.volume = this.getSfxVolume('bomb');
-      void direct.play().catch(() => {
-        this.beep('sfx', 60, 650, 0.2, 'bomb');
-      });
-    };
-
-    if (this.explosionSfxPool.length === 0) {
-      fallbackOneShot();
-      return;
-    }
-
-    const nextIndex = this.explosionSfxCursor % this.explosionSfxPool.length;
-    this.explosionSfxCursor = (this.explosionSfxCursor + 1) % this.explosionSfxPool.length;
-    const audio = this.explosionSfxPool[nextIndex];
-    audio.pause();
-    try {
-      audio.currentTime = 0;
-    } catch {
-      // Some browsers may reject seeks before metadata is ready.
-    }
-    audio.volume = this.getSfxVolume('bomb');
-    void audio.play().catch(() => {
-      fallbackOneShot();
-    });
-  }
-
   private initGasSfx(): void {
     this.gasSfx = new Audio(audioAssetUrl('soundeffects/gassound.mp3'));
     this.gasSfx.preload = 'auto';
@@ -257,7 +213,7 @@ export class AudioManager {
     }
   }
 
-  private playBombletSfx(): void {
+  private playBombletSfx(volumeKey: 'bomblet' | 'mine' | 'bomb' = 'bomblet'): void {
     if (this.bombletSfxPool.length === 0) return;
     const nextIndex = this.bombletSfxCursor % this.bombletSfxPool.length;
     this.bombletSfxCursor = (this.bombletSfxCursor + 1) % this.bombletSfxPool.length;
@@ -268,7 +224,7 @@ export class AudioManager {
     } catch {
       // Metadata can still be loading on the first strike.
     }
-    audio.volume = this.getSfxVolume('bomblet');
+    audio.volume = this.getSfxVolume(volumeKey);
     void audio.play().catch(() => undefined);
   }
 
@@ -444,9 +400,6 @@ export class AudioManager {
     for (const boost of this.boostSfxPool) {
       boost.volume = this.getSfxVolume('boost');
     }
-    for (const explosion of this.explosionSfxPool) {
-      explosion.volume = this.getSfxVolume('bomb');
-    }
     for (const enemyDeath of this.enemyDeathSfxPool) {
       enemyDeath.volume = this.getSfxVolume('enemyDeath');
     }
@@ -552,20 +505,16 @@ export class AudioManager {
       case 'place':
         this.beep('sfx', 350, 90, 0.05, name);
         break;
-      case 'mine':
-        this.beep('sfx', 90, 240, 0.1, name);
-        break;
       case 'bomblet':
-        this.playBombletSfx();
+      case 'mine':
+      case 'bomb':
+        this.playBombletSfx(name);
         break;
       case 'beep':
         this.beep('sfx', 620, 80, 0.05, name);
         break;
       case 'defuseAlarm':
         this.beep('sfx', 780, 120, 0.08, name);
-        break;
-      case 'bomb':
-        this.playExplosionSfx();
         break;
       case 'gas':
         this.playGasSfx();
