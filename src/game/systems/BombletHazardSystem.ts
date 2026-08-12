@@ -4,8 +4,7 @@ import type { Player } from '../entities/Player';
 import type { ArenaTheme, RectSpec } from '../types';
 import { getScaledHazardDamage, type HazardDamageTarget } from '../config/hazardScaling';
 import { SeededRandom } from './SeededRandom';
-
-const PATTERN_NAMES = ['LANE DROP', 'CHECKER BURST', 'ORBITAL RING', 'SPIRAL RAIN', 'CROSS DROP', 'SCATTER GRID'] as const;
+import { AIR_DROP_PATTERN_NAMES, createAirDropPattern } from './AirDropPatterns';
 
 interface TargetPoint {
   x: number;
@@ -15,11 +14,6 @@ interface TargetPoint {
   color: number;
   delayMs: number;
   exploded: boolean;
-}
-
-interface Point {
-  x: number;
-  y: number;
 }
 
 /** Telegraphs deterministic air-dropped bomblet patterns without changing arena navigation. */
@@ -77,7 +71,7 @@ export class BombletHazardSystem {
     }
 
     const elapsed = now - this.strikeStartedAt;
-    const patternName = PATTERN_NAMES[this.patternIndex];
+    const patternName = AIR_DROP_PATTERN_NAMES[this.patternIndex];
     if (elapsed < config.telegraphMs) {
       const remaining = (config.telegraphMs - elapsed) / 1000;
       const warning = `BOMBLET DROP: ${patternName}  ${remaining.toFixed(1)}s`;
@@ -125,12 +119,20 @@ export class BombletHazardSystem {
   private startStrike(now: number): void {
     const config = BOMBLET_HAZARD_BALANCE;
     this.strikeStartedAt = now;
-    this.patternIndex = (this.strikeIndex + this.random.int(0, PATTERN_NAMES.length - 1)) % PATTERN_NAMES.length;
+    this.patternIndex = (this.strikeIndex + this.random.int(0, AIR_DROP_PATTERN_NAMES.length - 1)) % AIR_DROP_PATTERN_NAMES.length;
     const count = Math.min(
       config.maximumBomblets,
       config.minimumBomblets + Math.floor((this.round - config.unlockRound) / config.roundsPerAdditionalBomblet)
     );
-    const points = this.createPattern(this.patternIndex, count);
+    const points = createAirDropPattern({
+      pattern: this.patternIndex,
+      count,
+      bounds: this.bounds,
+      safeEdgeInset: config.safeEdgeInset,
+      minimumSpacing: 58,
+      random: this.random,
+      isBlocked: this.isBlocked
+    });
     this.targets = points.map((point, index) => {
       const color = [this.theme.accent, this.theme.secondary, 0xffa340, 0xff5e75][index % 4];
       const marker = this.scene.add.circle(point.x, point.y, config.blastRadius, color, 0.08)
@@ -145,98 +147,6 @@ export class BombletHazardSystem {
         .setAlpha(0);
       return { ...point, marker, bomb, color, delayMs: index * config.staggerMs, exploded: false };
     });
-  }
-
-  private createPattern(pattern: number, count: number): Point[] {
-    const inset = BOMBLET_HAZARD_BALANCE.safeEdgeInset;
-    const left = this.bounds.x + inset;
-    const right = this.bounds.x + this.bounds.w - inset;
-    const top = this.bounds.y + inset;
-    const bottom = this.bounds.y + this.bounds.h - inset;
-    const width = Math.max(1, right - left);
-    const height = Math.max(1, bottom - top);
-    const center = {
-      x: this.random.float(left + width * 0.2, right - width * 0.2),
-      y: this.random.float(top + height * 0.2, bottom - height * 0.2)
-    };
-    const candidates: Point[] = [];
-
-    if (pattern === 0) {
-      const vertical = this.random.bool();
-      const lane = this.random.float(0.22, 0.78);
-      for (let i = 0; i < count; i += 1) {
-        const progress = count === 1 ? 0.5 : i / (count - 1);
-        candidates.push(vertical
-          ? { x: left + width * lane + Math.sin(i * 1.7) * 34, y: top + height * progress }
-          : { x: left + width * progress, y: top + height * lane + Math.sin(i * 1.7) * 34 });
-      }
-    } else if (pattern === 1) {
-      const columns = Math.max(3, Math.ceil(Math.sqrt(count * 1.5)));
-      const rows = Math.ceil(count / columns);
-      for (let i = 0; i < count; i += 1) {
-        const column = i % columns;
-        const row = Math.floor(i / columns);
-        candidates.push({
-          x: left + width * ((column + 0.5) / columns),
-          y: top + height * ((row + 0.5) / rows) + (column % 2 === 0 ? -22 : 22)
-        });
-      }
-    } else if (pattern === 2) {
-      const radius = Math.min(width, height) * this.random.float(0.2, 0.36);
-      for (let i = 0; i < count; i += 1) {
-        const angle = i / count * Math.PI * 2 + this.random.float(-0.12, 0.12);
-        candidates.push({ x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius });
-      }
-    } else if (pattern === 3) {
-      for (let i = 0; i < count; i += 1) {
-        const progress = (i + 1) / count;
-        const radius = Math.min(width, height) * 0.38 * progress;
-        const angle = progress * Math.PI * 4.5;
-        candidates.push({ x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius });
-      }
-    } else if (pattern === 4) {
-      for (let i = 0; i < count; i += 1) {
-        const progress = count === 1 ? 0.5 : i / (count - 1);
-        const alternate = i % 2 === 0;
-        candidates.push({
-          x: left + width * progress,
-          y: alternate ? top + height * progress : bottom - height * progress
-        });
-      }
-    } else {
-      for (let i = 0; i < count * 2; i += 1) {
-        candidates.push({ x: this.random.float(left, right), y: this.random.float(top, bottom) });
-      }
-    }
-
-    const accepted: Point[] = [];
-    for (const point of candidates) {
-      const resolved = this.resolvePlayablePoint(point, left, right, top, bottom);
-      if (!resolved || accepted.some((other) => Phaser.Math.Distance.Between(other.x, other.y, resolved.x, resolved.y) < 58)) continue;
-      accepted.push(resolved);
-      if (accepted.length >= count) break;
-    }
-    for (let tries = 0; accepted.length < count && tries < 80; tries += 1) {
-      const fallback = this.resolvePlayablePoint({ x: this.random.float(left, right), y: this.random.float(top, bottom) }, left, right, top, bottom);
-      if (fallback && accepted.every((other) => Phaser.Math.Distance.Between(other.x, other.y, fallback.x, fallback.y) >= 58)) accepted.push(fallback);
-    }
-    return accepted;
-  }
-
-  private resolvePlayablePoint(point: Point, left: number, right: number, top: number, bottom: number): Point | null {
-    const clamped = { x: Phaser.Math.Clamp(point.x, left, right), y: Phaser.Math.Clamp(point.y, top, bottom) };
-    if (!this.isBlocked(clamped.x, clamped.y)) return clamped;
-    for (let radius = 40; radius <= 160; radius += 40) {
-      for (let step = 0; step < 8; step += 1) {
-        const angle = step / 8 * Math.PI * 2;
-        const candidate = {
-          x: Phaser.Math.Clamp(clamped.x + Math.cos(angle) * radius, left, right),
-          y: Phaser.Math.Clamp(clamped.y + Math.sin(angle) * radius, top, bottom)
-        };
-        if (!this.isBlocked(candidate.x, candidate.y)) return candidate;
-      }
-    }
-    return null;
   }
 
   private detonate(target: TargetPoint, player: Player, damageTargets: HazardDamageTarget[]): void {

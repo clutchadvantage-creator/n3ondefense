@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type UserConfig } from 'vite';
 
-export default defineConfig({
+export const n3onViteConfig: UserConfig = {
   server: {
     watch: {
       // Some Windows setups lock active audio files and crash chokidar with EBUSY.
@@ -19,4 +19,6 @@ export default defineConfig({
       }
     }
   }
-});
+};
+
+export default defineConfig(n3onViteConfig);

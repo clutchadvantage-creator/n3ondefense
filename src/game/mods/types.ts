@@ -43,6 +43,7 @@ export type ModStat =
   | 'playerDashDistance'
   | 'playerPickupRadius'
   | 'playerInvulnerability'
+  | 'gasDamageTaken'
   | 'fenceDamage'
   | 'fenceHealth'
   | 'fenceDuration'

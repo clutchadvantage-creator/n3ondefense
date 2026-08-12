@@ -75,6 +75,18 @@ npx tsc --noEmit
 npm run build
 ```
 
+The website build keeps Vite's root base and writes to `dist/`. The separate itch.io HTML5 build uses a relative asset base and writes to `dist-itch/`:
+
+```bash
+npm run build:itch
+```
+
+Create an itch.io-ready archive (with `index.html` at the ZIP root) at `release/n3ondefense-itch.zip`:
+
+```bash
+npm run package:itch
+```
+
 Local leaderboard API development uses:
 
 ```env

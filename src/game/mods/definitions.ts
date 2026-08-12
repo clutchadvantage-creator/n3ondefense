@@ -82,6 +82,13 @@ const CORE_MOD_DEFINITIONS: readonly ModDefinition[] = [
     description: 'Accelerated priming firmware reduces mine arming time after permanent arm-speed upgrades are applied.',
     rankDescriptions: { 0: 'Mine arming time -15%.', 1: 'Mine arming time -25%.', 2: 'Mine arming time -35%.', 3: 'Mine arming time -50%.' },
     tags: ['mine', 'arming-time', 'stacking-upgrade']
+  },
+  {
+    id: 'gas-mask', name: 'Gas Mask', icon: '☣', iconColor: 0x62ff3f, category: 'player', rarity: 'uncommon', maxRank: 3, dropWeight: 0.82,
+    description: 'A sealed neon filtration mask reduces damage taken when the operative pushes through security gas clouds.',
+    rankDescriptions: { 0: 'Gas damage -35%.', 1: 'Gas damage -50%.', 2: 'Gas damage -65%.', 3: 'Gas damage -80%.' },
+    tags: ['player', 'gas', 'hazard', 'survival'],
+    modifiers: [{ stat: 'gasDamageTaken', mode: 'multiply', values: { 0: 0.65, 1: 0.5, 2: 0.35, 3: 0.2 } }]
   }
 ] as const;
 

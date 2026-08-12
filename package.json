@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:itch": "tsc && vite build --config vite.itch.config.ts --mode production",
+    "package:itch": "npm run build:itch && node scripts/package-itch.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "balance:report": "node --experimental-strip-types scripts/analyze-balance.ts",
     "economy:report": "node --experimental-strip-types scripts/analyze-economy.ts",

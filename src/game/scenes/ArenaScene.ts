@@ -26,6 +26,8 @@ import { SaveSystem } from '../systems/SaveSystem';
 import { ArenaGenerator } from '../systems/ArenaGenerator';
 import { LaserSecuritySystem } from '../systems/LaserSecuritySystem';
 import { BombletHazardSystem } from '../systems/BombletHazardSystem';
+import { GasHazardSystem } from '../systems/GasHazardSystem';
+import { GAS_HAZARD_BALANCE } from '../config/gasHazards';
 import type { HazardDamageTarget } from '../config/hazardScaling';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossRewards, isBossRound, selectBossArchetype, type BossArchetype } from '../config/bossBalance';
 import { BossEncounter, type BossAttackKind, type BossProjectileSpec } from '../bosses/BossEncounter';
@@ -216,6 +218,7 @@ export class ArenaScene extends Phaser.Scene {
   private bombSites!: BombSiteManager;
   private laserSecurity: LaserSecuritySystem | null = null;
   private bombletHazard: BombletHazardSystem | null = null;
+  private gasHazard: GasHazardSystem | null = null;
   private bossEncounter: BossEncounter | null = null;
   private bossRound = 0;
   private pendingRoundPayload: RoundFinishedPayload | null = null;
@@ -555,6 +558,20 @@ export class ArenaScene extends Phaser.Scene {
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
       }
     );
+    if (def.round >= GAS_HAZARD_BALANCE.unlockRound) {
+      this.gasHazard = new GasHazardSystem(
+        this,
+        def.round,
+        def.seed,
+        this.layout.generation.bounds,
+        (x, y) => this.hitWall(x, y),
+        this.particlesEnabled,
+        (damage) => {
+          this.audio.playSfx('playerDamage');
+          GameplayTelemetryRecorder.recordPlayerDamage('gas', damage);
+        }
+      );
+    }
 
     this.registerBombSiteEvents();
 
@@ -833,8 +850,10 @@ export class ArenaScene extends Phaser.Scene {
       this.bossEncounter.update(delta, this.player);
       const bossHazardTargets = this.getHazardDamageTargets();
       const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
-      const laserDangerWindow = this.laserSecurity?.isDangerWindow(now) ?? false;
-      this.laserSecurity?.update(now, dt, this.player, bossHazardTargets, playerLaserImmune);
+      this.gasHazard?.update(now, this.player, this.modRuntime.multiplier('gasDamageTaken'));
+      const gasSuppressesLasers = this.gasHazard?.isLaserSuppressed(now) ?? false;
+      const laserDangerWindow = this.laserSecurity?.isDangerWindow(now, gasSuppressesLasers) ?? false;
+      this.laserSecurity?.update(now, dt, this.player, bossHazardTargets, playerLaserImmune, gasSuppressesLasers);
       this.bombletHazard?.update(now, this.player, bossHazardTargets, laserDangerWindow);
       this.updateProjectiles(delta);
       this.updateAbilities(now, dt);
@@ -862,9 +881,11 @@ export class ArenaScene extends Phaser.Scene {
     this.updateRelentlessSpawns(now, activeSites.length > 0);
 
     const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
-    const laserDangerWindow = this.laserSecurity?.isDangerWindow(now) ?? false;
     const hazardTargets = this.getHazardDamageTargets();
-    this.laserSecurity?.update(now, dt, this.player, hazardTargets, playerLaserImmune);
+    this.gasHazard?.update(now, this.player, this.modRuntime.multiplier('gasDamageTaken'));
+    const gasSuppressesLasers = this.gasHazard?.isLaserSuppressed(now) ?? false;
+    const laserDangerWindow = this.laserSecurity?.isDangerWindow(now, gasSuppressesLasers) ?? false;
+    this.laserSecurity?.update(now, dt, this.player, hazardTargets, playerLaserImmune, gasSuppressesLasers);
     this.bombletHazard?.update(now, this.player, hazardTargets, laserDangerWindow);
     this.updateEnemies(now, dt);
     this.updateHomingMissiles(delta);
@@ -3317,6 +3338,20 @@ export class ArenaScene extends Phaser.Scene {
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
       }
     );
+    if (this.bossRound >= GAS_HAZARD_BALANCE.unlockRound) {
+      this.gasHazard = new GasHazardSystem(
+        this,
+        this.bossRound,
+        bossSeed,
+        this.layout.generation.bounds,
+        (x, y) => this.hitWall(x, y),
+        this.particlesEnabled,
+        (damage) => {
+          this.audio.playSfx('playerDamage');
+          GameplayTelemetryRecorder.recordPlayerDamage('gas', damage);
+        }
+      );
+    }
 
     GameplayTelemetryRecorder.beginEncounter({
       kind: 'boss',
@@ -4365,6 +4400,8 @@ export class ArenaScene extends Phaser.Scene {
     this.laserSecurity = null;
     this.bombletHazard?.destroy();
     this.bombletHazard = null;
+    this.gasHazard?.destroy();
+    this.gasHazard = null;
     for (const e of this.enemies) e.destroy();
     for (const p of this.projectiles) this.retireProjectile(p);
     this.projectilePool.releaseAll();
@@ -4425,6 +4462,8 @@ export class ArenaScene extends Phaser.Scene {
     this.laserSecurity = null;
     this.bombletHazard?.destroy();
     this.bombletHazard = null;
+    this.gasHazard?.destroy();
+    this.gasHazard = null;
     this.bossEncounter?.destroy();
     this.bossEncounter = null;
     this.destroyShieldOrb();

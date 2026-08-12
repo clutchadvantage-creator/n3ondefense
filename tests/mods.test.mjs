@@ -20,13 +20,13 @@ const equippedRuntimeAtRank = (modId, rank) => {
 };
 
 test('the expanded collection adds at least ten discoveries to every rarity', () => {
-  const expectedMinimums = { common: 13, uncommon: 13, rare: 13, epic: 12, legendary: 12 };
+  const expectedMinimums = { common: 13, uncommon: 14, rare: 13, epic: 12, legendary: 12 };
   const counts = Object.fromEntries(Object.keys(expectedMinimums).map((rarity) => [
     rarity,
     MOD_DEFINITIONS.filter((definition) => definition.rarity === rarity).length
   ]));
   assert.deepEqual(counts, expectedMinimums);
-  assert.equal(MOD_DEFINITIONS.length, 63);
+  assert.equal(MOD_DEFINITIONS.length, 64);
   assert.equal(new Set(MOD_DEFINITIONS.map((definition) => definition.id)).size, MOD_DEFINITIONS.length);
 });
 
@@ -42,7 +42,7 @@ test('every Mod has a colored icon, ranked copy, and reachable positive drop wei
 
 test('data-driven modifiers are finite, ranked, and use safe multiplier values', () => {
   const definitionsWithModifiers = MOD_DEFINITIONS.filter((definition) => definition.modifiers?.length);
-  assert.equal(definitionsWithModifiers.length, 50);
+  assert.equal(definitionsWithModifiers.length, 51);
   for (const definition of definitionsWithModifiers) {
     for (const modifier of definition.modifiers) {
       assert.deepEqual(Object.keys(modifier.values), ['0', '1', '2', '3']);
@@ -52,6 +52,15 @@ test('data-driven modifiers are finite, ranked, and use safe multiplier values',
       }
     }
   }
+});
+
+test('Gas Mask is a ranked uncommon survival Mod that only reduces gas exposure', () => {
+  const definition = MOD_BY_ID.get('gas-mask');
+  assert.equal(definition.rarity, 'uncommon');
+  assert.equal(definition.category, 'player');
+  assert.ok(definition.tags.includes('gas'));
+  assert.deepEqual([0, 1, 2, 3].map((rank) => equippedRuntimeAtRank('gas-mask', rank).multiplier('gasDamageTaken')), [0.65, 0.5, 0.35, 0.2]);
+  assert.equal(equippedRuntimeAtRank('gas-mask', 3).multiplier('playerMaxHealth'), 1);
 });
 
 test('new corrupted cards pair exceptional positives with explicit mechanical penalties', () => {

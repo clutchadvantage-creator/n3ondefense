@@ -1,16 +1,19 @@
 import { SaveSystem } from './SaveSystem';
 import { SFX_DEFINITIONS, type AudioSfxName } from '../config/audio';
+import { publicAssetUrl } from '../utils/assetUrl';
+
+const audioAssetUrl = (path: string): string => publicAssetUrl(`assets/audio/${path}`);
 
 export class AudioManager {
   private static instance: AudioManager | null = null;
   private readonly context: AudioContext;
   private readonly playlist = [
-    '/assets/audio/music/Arc Grid SiegeV1.mp3',
-    '/assets/audio/music/Arc Grid SiegeV3.mp3',
-    '/assets/audio/music/Arc Grid Siege4.mp3',
-    '/assets/audio/music/Arc Grid Siege5.mp3',
-    '/assets/audio/music/Arc Grid Siege6.mp3'
-  ];
+    'music/Arc Grid SiegeV1.mp3',
+    'music/Arc Grid SiegeV3.mp3',
+    'music/Arc Grid Siege4.mp3',
+    'music/Arc Grid Siege5.mp3',
+    'music/Arc Grid Siege6.mp3'
+  ].map(audioAssetUrl);
   private musicAudio: HTMLAudioElement | null = null;
   private playlistIndex = 0;
   private musicStarted = false;
@@ -81,7 +84,7 @@ export class AudioManager {
   }
 
   private initShotSfxPool(): void {
-    const src = '/assets/audio/soundeffects/Laser.mp3';
+    const src = audioAssetUrl('soundeffects/Laser.mp3');
     for (let i = 0; i < 8; i += 1) {
       const audio = new Audio(src);
       audio.preload = 'auto';
@@ -105,7 +108,7 @@ export class AudioManager {
   }
 
   private initBoostSfxPool(): void {
-    const src = '/assets/audio/soundeffects/boost.mp3';
+    const src = audioAssetUrl('soundeffects/boost.mp3');
     for (let i = 0; i < 4; i += 1) {
       const audio = new Audio(src);
       audio.preload = 'auto';
@@ -117,7 +120,7 @@ export class AudioManager {
 
   private playBoostSfx(): void {
     const fallbackOneShot = (): void => {
-      const direct = new Audio('/assets/audio/soundeffects/boost.mp3');
+      const direct = new Audio(audioAssetUrl('soundeffects/boost.mp3'));
       direct.preload = 'auto';
       direct.volume = this.getSfxVolume('boost');
       void direct.play().catch(() => {
@@ -146,7 +149,7 @@ export class AudioManager {
   }
 
   private initExplosionSfxPool(): void {
-    const src = '/assets/audio/soundeffects/explosion.mp3';
+    const src = audioAssetUrl('soundeffects/explosion.mp3');
     for (let i = 0; i < 3; i += 1) {
       const audio = new Audio(src);
       audio.preload = 'auto';
@@ -158,7 +161,7 @@ export class AudioManager {
 
   private playExplosionSfx(): void {
     const fallbackOneShot = (): void => {
-      const direct = new Audio('/assets/audio/soundeffects/explosion.mp3');
+      const direct = new Audio(audioAssetUrl('soundeffects/explosion.mp3'));
       direct.preload = 'auto';
       direct.volume = this.getSfxVolume('bomb');
       void direct.play().catch(() => {
@@ -187,7 +190,7 @@ export class AudioManager {
   }
 
   private playShieldOnSfx(): void {
-    const audio = new Audio('/assets/audio/soundeffects/shieldon.mp3');
+    const audio = new Audio(audioAssetUrl('soundeffects/shieldon.mp3'));
     audio.preload = 'auto';
     audio.volume = this.getSfxVolume('shieldOn');
     void audio.play().catch(() => {
@@ -238,7 +241,7 @@ export class AudioManager {
   }
 
   private initDeathSfxPools(): void {
-    const src = '/assets/audio/soundeffects/bang.mp3';
+    const src = audioAssetUrl('soundeffects/bang.mp3');
     for (let i = 0; i < 10; i += 1) {
       const audio = new Audio(src);
       audio.preload = 'auto';
@@ -399,7 +402,7 @@ export class AudioManager {
     if (this.plantingLoopRequested) return;
     this.plantingLoopRequested = true;
     if (!this.plantingAudio) {
-      this.plantingAudio = new Audio('/assets/audio/soundeffects/planting.mp3');
+      this.plantingAudio = new Audio(audioAssetUrl('soundeffects/planting.mp3'));
       this.plantingAudio.preload = 'auto';
       this.plantingAudio.loop = true;
     }
@@ -420,7 +423,7 @@ export class AudioManager {
     if (this.disarmLoopRequested) return;
     this.disarmLoopRequested = true;
     if (!this.disarmAudio) {
-      this.disarmAudio = new Audio('/assets/audio/soundeffects/disarm.mp3');
+      this.disarmAudio = new Audio(audioAssetUrl('soundeffects/disarm.mp3'));
       this.disarmAudio.preload = 'auto';
       this.disarmAudio.loop = true;
     }

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/constants';
 import { SceneKeys } from '../flow/SceneKeys';
+import { publicAssetUrl } from '../utils/assetUrl';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -8,7 +9,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.audio('sfx-boost', 'assets/audio/soundeffects/boost.mp3');
+    this.load.audio('sfx-boost', publicAssetUrl('assets/audio/soundeffects/boost.mp3'));
   }
 
   async create(): Promise<void> {
