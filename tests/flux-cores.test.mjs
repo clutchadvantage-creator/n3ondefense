@@ -17,6 +17,8 @@ test('Flux Core durability scales without becoming unbounded', () => {
   assert.ok(getFluxCoreHealth(15) > getFluxCoreHealth(1));
   assert.equal(getFluxCoreHealth(999), FLUX_CORE_BALANCE.maximumHealth);
   assert.ok(FLUX_CORE_BALANCE.laserShutdownMs > FLUX_CORE_BALANCE.recoveryAlarmLeadMs);
+  assert.ok(FLUX_CORE_BALANCE.floorRiseMs >= 1000);
+  assert.ok(FLUX_CORE_BALANCE.windowOpenMs > 0);
 });
 
 test('Flux Cores use capped manual collision, proximity-only pulses, and deterministic cleanup', () => {
@@ -27,9 +29,20 @@ test('Flux Cores use capped manual collision, proximity-only pulses, and determi
   assert.match(source, /damageAlongSegment\(/);
   assert.doesNotMatch(source, /physics\.add\.overlap|physics\.add\.collider/);
   assert.match(source, /closestDistanceSquared > radius \* radius/);
-  assert.match(source, /this\.onProximityPulse\?\.\(strength\)/);
+  assert.match(source, /this\.onProximityChanged\?\.\(strength\)/);
   assert.match(source, /this\.onRecoveryAlarm\?\.\(\)/);
-  assert.match(source, /for \(const core of this\.cores\) core\.root\.destroy\(\)/);
+  assert.match(source, /for \(const core of this\.cores\) this\.destroyCoreVisual\(core\)/);
+});
+
+test('Flux Core deployment rises from a floor hatch before opening its window shutters', () => {
+  const source = readFileSync(new URL('../src/game/systems/FluxCoreSystem.ts', import.meta.url), 'utf8');
+  assert.match(source, /floorHatch/);
+  assert.match(source, /hatchLip/);
+  assert.match(source, /floorRiseDistance/);
+  assert.match(source, /upperWindowShutter/);
+  assert.match(source, /lowerWindowShutter/);
+  assert.match(source, /easedWindow/);
+  assert.doesNotMatch(source, /delayedCall\([^)]*window|setTimeout\([^)]*window/);
 });
 
 test('Arena integrates Flux Cores with shared laser suppression and major damage sources', () => {
@@ -44,9 +57,11 @@ test('Arena integrates Flux Cores with shared laser suppression and major damage
   assert.match(arena, /this\.fluxCores\?\.destroy\(\)/);
 });
 
-test('Flux Core electrical pulses are synthesized on demand rather than looped globally', () => {
+test('Flux Core electrical energy uses one proximity-faded reusable loop', () => {
   const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
-  assert.match(audio, /playFluxCorePulse\(strength: number\)/);
-  assert.match(audio, /this\.beep\('sfx', 145 \+ proximity \* 95/);
-  assert.doesNotMatch(audio, /fluxCoreAudio.*loop = true/);
+  assert.match(audio, /audioAssetUrl\('soundeffects\/electricalenergy\.mp3'\)/);
+  assert.match(audio, /this\.fluxCoreAudio\.loop = true/);
+  assert.match(audio, /setFluxCoreProximity\(strength: number\)/);
+  assert.match(audio, /audio\.volume \+ \(targetVolume - audio\.volume\) \* smoothing/);
+  assert.match(audio, /stopFluxCoreLoop\(\)/);
 });

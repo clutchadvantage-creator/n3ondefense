@@ -9,6 +9,7 @@ const ENEMY_DEATH_SFX_MIN_INTERVAL_MS = 45;
 const HIT_DAMAGE_SFX_POOL_SIZE = 6;
 const HIT_DAMAGE_SFX_MIN_INTERVAL_MS = 55;
 const MENU_SFX_POOL_SIZE = 4;
+const PICKUP_SFX_POOL_SIZE = 4;
 
 export class AudioManager {
   private static instance: AudioManager | null = null;
@@ -31,10 +32,14 @@ export class AudioManager {
   private readonly hitDamageSfxPool: HTMLAudioElement[] = [];
   private readonly menuClickSfxPool: HTMLAudioElement[] = [];
   private readonly itemLockedSfxPool: HTMLAudioElement[] = [];
+  private readonly pickupSfxPool: HTMLAudioElement[] = [];
   private runStartSfx: HTMLAudioElement | null = null;
   private securityLaserAudio: HTMLAudioElement | null = null;
   private securityLaserLoopRequested = false;
   private gasSfx: HTMLAudioElement | null = null;
+  private fluxCoreAudio: HTMLAudioElement | null = null;
+  private fluxCoreLoopRequested = false;
+  private fluxCoreProximity = 0;
   private shieldActivationSfx: HTMLAudioElement | null = null;
   private modCollectionSfx: HTMLAudioElement | null = null;
   private legendaryModSfx: HTMLAudioElement | null = null;
@@ -50,6 +55,7 @@ export class AudioManager {
   private hitDamageSfxCursor = 0;
   private menuClickSfxCursor = 0;
   private itemLockedSfxCursor = 0;
+  private pickupSfxCursor = 0;
   private lastEnemyDeathSfxAt = -Infinity;
   private lastHitDamageSfxAt = -Infinity;
   private cachedMusicVolume = 0.51;
@@ -68,6 +74,8 @@ export class AudioManager {
     this.initDeathSfxPools();
     this.initSecurityHazardSfx();
     this.initGasSfx();
+    this.initPickupSfxPool();
+    this.initFluxCoreAudio();
     this.initShieldActivationSfx();
     this.initHitDamageSfxPool();
     this.initModRevealSfx();
@@ -180,6 +188,48 @@ export class AudioManager {
     this.gasSfx.preload = 'auto';
     this.gasSfx.volume = this.getSfxVolume('gas');
     this.gasSfx.load();
+  }
+
+  private initPickupSfxPool(): void {
+    const source = audioAssetUrl('soundeffects/pickupsound.mp3');
+    for (let index = 0; index < PICKUP_SFX_POOL_SIZE; index += 1) {
+      const audio = new Audio(source);
+      audio.preload = 'auto';
+      audio.volume = this.getSfxVolume('pickup');
+      audio.load();
+      this.pickupSfxPool.push(audio);
+    }
+  }
+
+  private playPickupSfx(): void {
+    if (this.pickupSfxPool.length === 0) return;
+    let availableIndex = -1;
+    for (let offset = 0; offset < this.pickupSfxPool.length; offset += 1) {
+      const candidateIndex = (this.pickupSfxCursor + offset) % this.pickupSfxPool.length;
+      const candidate = this.pickupSfxPool[candidateIndex];
+      if (candidate.paused || candidate.ended) {
+        availableIndex = candidateIndex;
+        break;
+      }
+    }
+    if (availableIndex < 0) return;
+    this.pickupSfxCursor = (availableIndex + 1) % this.pickupSfxPool.length;
+    const audio = this.pickupSfxPool[availableIndex];
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Metadata may still be loading on the first pickup.
+    }
+    audio.volume = this.getSfxVolume('pickup');
+    void audio.play().catch(() => undefined);
+  }
+
+  private initFluxCoreAudio(): void {
+    this.fluxCoreAudio = new Audio(audioAssetUrl('soundeffects/electricalenergy.mp3'));
+    this.fluxCoreAudio.preload = 'auto';
+    this.fluxCoreAudio.loop = true;
+    this.fluxCoreAudio.volume = 0;
+    this.fluxCoreAudio.load();
   }
 
   private playGasSfx(): void {
@@ -554,9 +604,11 @@ export class AudioManager {
     }
     for (const menuClick of this.menuClickSfxPool) menuClick.volume = this.getSfxVolume('menu');
     for (const itemLocked of this.itemLockedSfxPool) itemLocked.volume = this.getSfxVolume('itemLocked');
+    for (const pickup of this.pickupSfxPool) pickup.volume = this.getSfxVolume('pickup');
     if (this.runStartSfx) this.runStartSfx.volume = this.getSfxVolume('runStart');
     if (this.securityLaserAudio) this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
     if (this.gasSfx) this.gasSfx.volume = this.getSfxVolume('gas');
+    if (this.fluxCoreAudio) this.fluxCoreAudio.volume = this.fluxCoreTargetVolume(this.fluxCoreProximity);
     if (this.shieldActivationSfx) this.shieldActivationSfx.volume = this.getSfxVolume('shieldOn');
     if (this.modCollectionSfx) this.modCollectionSfx.volume = this.getSfxVolume('modCollection');
     if (this.legendaryModSfx) this.legendaryModSfx.volume = this.getSfxVolume('legendaryMod');
@@ -588,10 +640,49 @@ export class AudioManager {
     osc.stop(this.context.currentTime + durationMs / 1000 + 0.02);
   }
 
-  /** A short synthesized electrical heartbeat, requested only near an active Flux Core. */
-  playFluxCorePulse(strength: number): void {
+  /** Keeps one electrical loop alive only while the operative is near a Flux Core. */
+  setFluxCoreProximity(strength: number): void {
     const proximity = Math.max(0, Math.min(1, strength));
-    this.beep('sfx', 145 + proximity * 95, 105, 0.025 + proximity * 0.025, 'beep');
+    this.fluxCoreProximity = proximity;
+    const audio = this.fluxCoreAudio;
+    if (!audio) return;
+
+    const targetVolume = this.fluxCoreTargetVolume(proximity);
+    const smoothing = targetVolume > audio.volume ? 0.16 : 0.09;
+    audio.volume = this.clampVolume(audio.volume + (targetVolume - audio.volume) * smoothing);
+
+    if (proximity > 0.005) {
+      if (this.fluxCoreLoopRequested) return;
+      this.fluxCoreLoopRequested = true;
+      void audio.play().catch(() => undefined);
+      return;
+    }
+
+    this.fluxCoreLoopRequested = false;
+    if (audio.volume > 0.004) return;
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Seeking is optional while metadata is unavailable.
+    }
+  }
+
+  stopFluxCoreLoop(): void {
+    this.fluxCoreLoopRequested = false;
+    this.fluxCoreProximity = 0;
+    if (!this.fluxCoreAudio) return;
+    this.fluxCoreAudio.pause();
+    this.fluxCoreAudio.volume = 0;
+    try {
+      this.fluxCoreAudio.currentTime = 0;
+    } catch {
+      // Seeking is optional while metadata is unavailable.
+    }
+  }
+
+  private fluxCoreTargetVolume(proximity: number): number {
+    return this.clampVolume(this.getSfxVolume('fluxCore') * Math.pow(proximity, 1.35) * 0.78);
   }
 
   startPlantingLoop(): void {
@@ -636,7 +727,7 @@ export class AudioManager {
     this.disarmAudio.currentTime = 0;
   }
 
-  playSfx(name: Exclude<AudioSfxName, 'planting' | 'disarm' | 'securityLaser'>): void {
+  playSfx(name: Exclude<AudioSfxName, 'planting' | 'disarm' | 'securityLaser' | 'fluxCore'>): void {
     switch (name) {
       case 'shot':
         this.playShotSfx();
@@ -675,7 +766,7 @@ export class AudioManager {
         this.playGasSfx();
         break;
       case 'pickup':
-        this.beep('sfx', 840, 90, 0.05, name);
+        this.playPickupSfx();
         break;
       case 'modCollection':
       case 'legendaryMod':

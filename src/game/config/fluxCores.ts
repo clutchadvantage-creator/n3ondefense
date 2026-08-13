@@ -13,11 +13,12 @@ export const FLUX_CORE_BALANCE = {
   collisionRadius: 22,
   spawnEdgeInset: 84,
   minimumCoreSpacing: 150,
+  floorRiseMs: 1200,
+  windowOpenMs: 620,
+  floorRiseDistance: 29,
   laserShutdownMs: 9000,
   recoveryAlarmLeadMs: 1500,
-  proximitySoundRadius: 245,
-  proximityPulseFarMs: 850,
-  proximityPulseNearMs: 430
+  proximitySoundRadius: 245
 } as const;
 
 /** Low rounds support up to three cores; one more comes online every seven rounds. */

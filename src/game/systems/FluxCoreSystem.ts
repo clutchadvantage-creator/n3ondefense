@@ -14,10 +14,16 @@ interface FluxCoreVisual {
   hp: number;
   maximumHp: number;
   root: Phaser.GameObjects.Container;
+  floorHatch: Phaser.GameObjects.Ellipse;
+  hatchGlow: Phaser.GameObjects.Ellipse;
+  hatchLip: Phaser.GameObjects.Ellipse;
   coreGlow: Phaser.GameObjects.Arc;
   coreOrb: Phaser.GameObjects.Arc;
   electricity: Phaser.GameObjects.Graphics;
+  upperWindowShutter: Phaser.GameObjects.Rectangle;
+  lowerWindowShutter: Phaser.GameObjects.Rectangle;
   healthFill: Phaser.GameObjects.Rectangle;
+  spawnedAt: number;
   nextArcAt: number;
   arcPhase: number;
 }
@@ -38,7 +44,6 @@ export class FluxCoreSystem {
   private nextCoreId = 1;
   private laserSuppressedUntil = 0;
   private recoveryAlarmPlayed = false;
-  private nextProximityPulseAt = 0;
   private announcementUntil = 0;
 
   constructor(
@@ -49,7 +54,7 @@ export class FluxCoreSystem {
     private readonly bounds: RectSpec,
     private readonly isBlocked: (x: number, y: number) => boolean,
     private readonly onDestroyed?: (x: number, y: number) => void,
-    private readonly onProximityPulse?: (strength: number) => void,
+    private readonly onProximityChanged?: (strength: number) => void,
     private readonly onRecoveryAlarm?: () => void
   ) {
     this.random = new SeededRandom((seed ^ Math.imul(round + 31, 0x85ebca6b) ^ 0xf10cc0de) >>> 0);
@@ -81,12 +86,14 @@ export class FluxCoreSystem {
     let closestDistanceSquared = Number.POSITIVE_INFINITY;
     for (let index = 0; index < this.cores.length; index += 1) {
       const core = this.cores[index];
-      const dx = player.x - core.x;
-      const dy = player.y - core.y;
-      closestDistanceSquared = Math.min(closestDistanceSquared, dx * dx + dy * dy);
       this.updateVisual(core, index, now);
+      if (now >= core.spawnedAt + FLUX_CORE_BALANCE.floorRiseMs + FLUX_CORE_BALANCE.windowOpenMs * 0.5) {
+        const dx = player.x - core.x;
+        const dy = player.y - core.y;
+        closestDistanceSquared = Math.min(closestDistanceSquared, dx * dx + dy * dy);
+      }
     }
-    this.updateProximityAudio(now, closestDistanceSquared);
+    this.updateProximityAudio(closestDistanceSquared);
     this.updateSuppressionPresentation(now);
   }
 
@@ -175,7 +182,8 @@ export class FluxCoreSystem {
   }
 
   destroy(): void {
-    for (const core of this.cores) core.root.destroy();
+    this.onProximityChanged?.(0);
+    for (const core of this.cores) this.destroyCoreVisual(core);
     this.cores.length = 0;
     for (const effect of this.effects) {
       this.scene.tweens.killTweensOf(effect);
@@ -192,7 +200,7 @@ export class FluxCoreSystem {
     for (let coreIndex = 0; coreIndex < count; coreIndex += 1) {
       const point = this.findSpawnPoint(playerX, playerY);
       if (!point) break;
-      this.cores.push(this.createCore(point.x, point.y, this.nextCoreId));
+      this.cores.push(this.createCore(point.x, point.y, this.nextCoreId, now));
       this.nextCoreId += 1;
       spawned += 1;
     }
@@ -227,9 +235,20 @@ export class FluxCoreSystem {
     return null;
   }
 
-  private createCore(x: number, y: number, id: number): FluxCoreVisual {
+  private createCore(x: number, y: number, id: number, now: number): FluxCoreVisual {
     const color = CORE_COLORS[(id + this.round + this.random.int(0, CORE_COLORS.length - 1)) % CORE_COLORS.length];
-    const shadow = this.scene.add.ellipse(0, 31, 46, 13, 0x000000, 0.48);
+    const floorHatch = this.scene.add.ellipse(x, y + 29, 56, 18, 0x02070d, 0.92)
+      .setStrokeStyle(2, this.theme.secondary, 0.72)
+      .setDepth(7);
+    const hatchGlow = this.scene.add.ellipse(x, y + 29, 66, 24, color, 0.13)
+      .setStrokeStyle(2, color, 0.76)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(7);
+    // This front lip stays above the cylinder and makes the body appear to
+    // emerge through the floor instead of merely scaling into existence.
+    const hatchLip = this.scene.add.ellipse(x, y + 31, 51, 14, 0x030910, 0.25)
+      .setStrokeStyle(3, color, 0.76)
+      .setDepth(9);
     const glow = this.scene.add.ellipse(0, 0, 56, 76, color, 0.09).setBlendMode(Phaser.BlendModes.ADD);
     const shell = this.scene.add.rectangle(0, 0, 38, 58, 0x0b1420, 0.96).setStrokeStyle(2, color, 0.94);
     const leftRail = this.scene.add.rectangle(-15, 0, 4, 50, this.theme.primary, 0.95).setStrokeStyle(1, color, 0.7);
@@ -240,25 +259,70 @@ export class FluxCoreSystem {
     const coreGlow = this.scene.add.circle(0, -1, 10, color, 0.23).setBlendMode(Phaser.BlendModes.ADD);
     const coreOrb = this.scene.add.circle(0, -1, 5, color, 0.95).setStrokeStyle(1, 0xffffff, 0.9).setBlendMode(Phaser.BlendModes.ADD);
     const electricity = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    const upperWindowShutter = this.scene.add.rectangle(0, -8, 22, 13, 0x101b29, 1)
+      .setStrokeStyle(1, color, 0.84);
+    const lowerWindowShutter = this.scene.add.rectangle(0, 6, 22, 13, 0x101b29, 1)
+      .setStrokeStyle(1, color, 0.84);
     const label = this.scene.add.text(0, 18, 'FLUX', {
       fontFamily: 'Orbitron, sans-serif', fontSize: '7px', color: '#d9faff'
     }).setOrigin(0.5);
     const healthBack = this.scene.add.rectangle(0, 39, 40, 4, 0x02060c, 0.95).setStrokeStyle(1, color, 0.72);
     const healthFill = this.scene.add.rectangle(-19, 39, 38, 2, color, 0.95).setOrigin(0, 0.5);
-    const root = this.scene.add.container(x, y, [shadow, glow, shell, leftRail, rightRail, topCap, bottomCap, window, coreGlow, coreOrb, electricity, label, healthBack, healthFill])
-      .setDepth(8);
+    const root = this.scene.add.container(
+      x,
+      y + FLUX_CORE_BALANCE.floorRiseDistance,
+      [glow, shell, leftRail, rightRail, topCap, bottomCap, window, coreGlow, coreOrb, electricity, upperWindowShutter, lowerWindowShutter, label, healthBack, healthFill]
+    ).setDepth(8).setScale(1, 0.12).setAlpha(0.45);
+    coreGlow.setAlpha(0);
+    coreOrb.setAlpha(0);
+    electricity.setAlpha(0);
     const maximumHp = getFluxCoreHealth(this.round);
     return {
-      id, x, y, color, hp: maximumHp, maximumHp, root, coreGlow, coreOrb, electricity, healthFill,
+      id, x, y, color, hp: maximumHp, maximumHp, root, floorHatch, hatchGlow, hatchLip,
+      coreGlow, coreOrb, electricity, upperWindowShutter, lowerWindowShutter, healthFill, spawnedAt: now,
       nextArcAt: 0, arcPhase: this.random.float(0, Math.PI * 2)
     };
   }
 
   private updateVisual(core: FluxCoreVisual, index: number, now: number): void {
+    const deploymentElapsed = Math.max(0, now - core.spawnedAt);
+    const riseProgress = Phaser.Math.Clamp(deploymentElapsed / FLUX_CORE_BALANCE.floorRiseMs, 0, 1);
+    const easedRise = Phaser.Math.Easing.Sine.Out(riseProgress);
+    const windowProgress = Phaser.Math.Clamp(
+      (deploymentElapsed - FLUX_CORE_BALANCE.floorRiseMs) / FLUX_CORE_BALANCE.windowOpenMs,
+      0,
+      1
+    );
+    const easedWindow = Phaser.Math.Easing.Sine.InOut(windowProgress);
     const pulse = 0.72 + Math.sin(now * 0.008 + core.arcPhase) * 0.24;
-    core.coreGlow.setScale(0.88 + pulse * 0.32).setAlpha(0.16 + pulse * 0.23);
-    core.coreOrb.setFillStyle(core.color, 0.95).setScale(0.9 + pulse * 0.18).setAlpha(0.78 + pulse * 0.2);
-    core.root.setY(core.y + Math.sin(now * 0.0018 + index) * 2.5);
+    const idleFloat = riseProgress >= 1 ? Math.sin(now * 0.0018 + index) * 2.5 : 0;
+    core.root
+      .setY(core.y + (1 - easedRise) * FLUX_CORE_BALANCE.floorRiseDistance + idleFloat)
+      .setScale(1, 0.12 + easedRise * 0.88)
+      .setAlpha(0.45 + easedRise * 0.55);
+    core.hatchGlow
+      .setScale(0.86 + easedRise * 0.14 + pulse * 0.04)
+      .setAlpha(0.12 + (1 - easedRise) * 0.35 + pulse * 0.08);
+    core.floorHatch.setScale(0.9 + easedRise * 0.1);
+    core.hatchLip.setAlpha(0.3 + easedRise * 0.5);
+
+    core.upperWindowShutter
+      .setY(-8 - easedWindow * 11)
+      .setScale(1, 1 - easedWindow * 0.72)
+      .setAlpha(1 - easedWindow * 0.82)
+      .setVisible(windowProgress < 1);
+    core.lowerWindowShutter
+      .setY(6 + easedWindow * 11)
+      .setScale(1, 1 - easedWindow * 0.72)
+      .setAlpha(1 - easedWindow * 0.82)
+      .setVisible(windowProgress < 1);
+    core.coreGlow.setScale(0.88 + pulse * 0.32).setAlpha((0.16 + pulse * 0.23) * easedWindow);
+    core.coreOrb
+      .setFillStyle(core.color, 0.95)
+      .setScale(0.9 + pulse * 0.18)
+      .setAlpha((0.78 + pulse * 0.2) * easedWindow);
+    core.electricity.setAlpha(easedWindow);
+    if (windowProgress <= 0) return;
     if (now < core.nextArcAt) return;
     core.nextArcAt = now + 75 + this.random.int(0, 55);
     core.electricity.clear();
@@ -274,17 +338,15 @@ export class FluxCoreSystem {
     }
   }
 
-  private updateProximityAudio(now: number, closestDistanceSquared: number): void {
+  private updateProximityAudio(closestDistanceSquared: number): void {
     const radius = FLUX_CORE_BALANCE.proximitySoundRadius;
-    if (closestDistanceSquared > radius * radius || now < this.nextProximityPulseAt) return;
+    if (closestDistanceSquared > radius * radius) {
+      this.onProximityChanged?.(0);
+      return;
+    }
     const distance = Math.sqrt(closestDistanceSquared);
     const strength = Phaser.Math.Clamp(1 - distance / radius, 0, 1);
-    this.onProximityPulse?.(strength);
-    this.nextProximityPulseAt = now + Phaser.Math.Linear(
-      FLUX_CORE_BALANCE.proximityPulseFarMs,
-      FLUX_CORE_BALANCE.proximityPulseNearMs,
-      strength
-    );
+    this.onProximityChanged?.(strength);
   }
 
   private updateSuppressionPresentation(now: number): void {
@@ -317,7 +379,7 @@ export class FluxCoreSystem {
 
     const now = this.scene.time.now;
     this.cores.splice(index, 1);
-    core.root.destroy();
+    this.destroyCoreVisual(core);
     this.playDestroyedEffect(core.x, core.y, core.color);
     this.onDestroyed?.(core.x, core.y);
     this.laserSuppressedUntil = Math.max(this.laserSuppressedUntil, now + FLUX_CORE_BALANCE.laserShutdownMs);
@@ -341,5 +403,12 @@ export class FluxCoreSystem {
       targets: ring, radius: 82, alpha: 0, duration: 380,
       onComplete: () => { this.effects.delete(ring); ring.destroy(); }
     });
+  }
+
+  private destroyCoreVisual(core: FluxCoreVisual): void {
+    core.root.destroy();
+    core.floorHatch.destroy();
+    core.hatchGlow.destroy();
+    core.hatchLip.destroy();
   }
 }

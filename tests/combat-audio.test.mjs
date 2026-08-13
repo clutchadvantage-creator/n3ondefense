@@ -67,3 +67,15 @@ test('enemy death audio caps concurrent voices without interrupting active clips
   assert.doesNotMatch(enemyPlayback, /\.pause\(\)/);
   assert.match(enemyPlayback, /this\.enemyDeathSfxCursor = \(availableIndex \+ 1\)/);
 });
+
+test('enemy resource pickups use the dedicated recording and never share Mod reveal audio', () => {
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/pickupsound.mp3', import.meta.url)));
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(audio, /PICKUP_SFX_POOL_SIZE = 4/);
+  assert.match(audio, /audioAssetUrl\('soundeffects\/pickupsound\.mp3'\)/);
+  assert.match(audio, /case 'pickup':[\s\S]*?this\.playPickupSfx\(\)/);
+  assert.match(arena, /if \(source === 'enemy'\) this\.audio\.playSfx\('pickup'\)/);
+  assert.doesNotMatch(arena, /tryAwardMod[\s\S]{0,500}playSfx\('pickup'\)/);
+  assert.match(audio, /case 'modCollection':[\s\S]*?this\.playModRevealSfx\(name\)/);
+});

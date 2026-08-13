@@ -604,7 +604,7 @@ export class ArenaScene extends Phaser.Scene {
       this.layout.generation.bounds,
       (x, y) => this.hitWall(x, y),
       () => this.audio.playSfx('bomblet'),
-      (strength) => this.audio.playFluxCorePulse(strength),
+      (strength) => this.audio.setFluxCoreProximity(strength),
       () => this.audio.playSfx('defuseAlarm')
     );
 
@@ -2972,7 +2972,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private collectPickup(type: PickupType, source: Pickup['source']): void {
-    this.audio.playSfx('pickup');
+    if (source === 'enemy') this.audio.playSfx('pickup');
     let requestedRestoration = 0;
     let appliedRestoration = 0;
     if (type === 'health') {
@@ -3290,7 +3290,10 @@ export class ArenaScene extends Phaser.Scene {
     if (this.detonatingSiteIds.has(site.id)) return;
     this.detonatingSiteIds.add(site.id);
     this.state.set(this.bombSites.activeBombCount() > 1 ? RoundState.Defense : RoundState.Victory);
-    if (this.state.state === RoundState.Victory) this.laserSecurity?.silence();
+    if (this.state.state === RoundState.Victory) {
+      this.laserSecurity?.silence();
+      this.audio.stopFluxCoreLoop();
+    }
 
     const color = SaveSystem.getCosmeticColor('bombColor', this.time.now);
     const prismBomb = this.prismBombColor;
@@ -3531,7 +3534,7 @@ export class ArenaScene extends Phaser.Scene {
       this.layout.generation.bounds,
       (x, y) => this.hitWall(x, y),
       () => this.audio.playSfx('bomblet'),
-      (strength) => this.audio.playFluxCorePulse(strength),
+      (strength) => this.audio.setFluxCoreProximity(strength),
       () => this.audio.playSfx('defuseAlarm')
     );
 
@@ -3677,6 +3680,7 @@ export class ArenaScene extends Phaser.Scene {
     this.state.set(RoundState.Victory);
     this.pointerDown = false;
     this.laserSecurity?.silence();
+    this.audio.stopFluxCoreLoop();
     this.physics.pause();
     this.audio.playSfx('enemyDeath');
     this.createDeathExplosion(this.bossEncounter.boss.x, this.bossEncounter.boss.y, BOSS_ARCHETYPES[this.bossEncounter.archetype].color, true);
@@ -3728,6 +3732,7 @@ export class ArenaScene extends Phaser.Scene {
     this.state.set(RoundState.Defeat);
     this.audio.stopDisarmLoop();
     this.laserSecurity?.silence();
+    this.audio.stopFluxCoreLoop();
     this.physics.pause();
 
     const currentCombatRound = this.currentCombatRound();
@@ -4330,6 +4335,7 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
     this.laserSecurity?.silence();
+    this.audio.stopFluxCoreLoop();
 
     this.state.set(RoundState.Paused);
     this.physics.pause();
@@ -4350,6 +4356,7 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
     this.laserSecurity?.silence();
+    this.audio.stopFluxCoreLoop();
     this.clearGameplayInput();
     this.crosshair?.setVisible(false);
     this.physics.pause();
@@ -4373,6 +4380,7 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
     this.laserSecurity?.silence();
+    this.audio.stopFluxCoreLoop();
     this.clearGameplayInput();
     this.state.set(RoundState.Paused);
     this.physics.pause();
@@ -4581,6 +4589,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private cleanupRoundObjects(): void {
+    this.audio.stopFluxCoreLoop();
     this.bossEncounter?.destroy();
     this.bossEncounter = null;
     this.laserSecurity?.destroy();
@@ -4629,6 +4638,7 @@ export class ArenaScene extends Phaser.Scene {
   private cleanup(): void {
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
+    this.audio.stopFluxCoreLoop();
     this.modAcquisitionPresenter?.destroy();
     this.modAcquisitionPresenter = null;
     this.scale.off('resize', this.handleResize, this);
