@@ -111,6 +111,16 @@ interface Pickup {
   source: 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support';
 }
 
+interface CreditPickupVisual {
+  glow: Phaser.GameObjects.Arc;
+  scanRing: Phaser.GameObjects.Arc;
+  orbitRig: Phaser.GameObjects.Container;
+  glyphGlow: Phaser.GameObjects.Text;
+  glyph: Phaser.GameObjects.Text;
+  leftBracket: Phaser.GameObjects.Polygon;
+  rightBracket: Phaser.GameObjects.Polygon;
+}
+
 interface DeathMine {
   sprite: Phaser.GameObjects.Arc;
   detonateAt: number;
@@ -198,6 +208,7 @@ export class ArenaScene extends Phaser.Scene {
   private readonly hazardDamageTargets: HazardDamageTarget[] = [];
   private homingMissiles: HomingMissile[] = [];
   private pickups: Pickup[] = [];
+  private readonly creditPickupVisuals = new WeakMap<Phaser.GameObjects.Container, CreditPickupVisual>();
   private fences: Fence[] = [];
   private turrets: Turret[] = [];
   private mines: Mine[] = [];
@@ -2937,7 +2948,9 @@ export class ArenaScene extends Phaser.Scene {
     const attractionRadiusSquared = magneticField.attractionRadius * magneticField.attractionRadius;
     let writeIndex = 0;
     for (const p of this.pickups) {
-      p.sprite.rotation += dt * 2;
+      const creditVisual = this.creditPickupVisuals.get(p.sprite);
+      if (creditVisual) this.updateCreditPickupVisual(p.sprite, creditVisual, now);
+      else p.sprite.rotation += dt * 2;
       if (now > p.expiresAt) {
         GameplayTelemetryRecorder.recordPickupExpired(p.type);
         p.sprite.destroy();
@@ -3477,9 +3490,61 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (type === 'credits') {
-      const diamond = this.add.polygon(0, 0, [0, -11, 10, 0, 0, 11, -10, 0], color, 0.9)
-        .setStrokeStyle(2, 0xffffff, 0.8);
-      container.add(diamond);
+      const neonYellow = 0xf5ff58;
+      const warmYellow = 0xffcf3f;
+      const glow = this.add.circle(0, 0, 22, neonYellow, 0.13)
+        .setStrokeStyle(1, neonYellow, 0.32)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      const backing = this.add.polygon(0, 0, [0, -16, 13, -8, 13, 8, 0, 16, -13, 8, -13, -8], 0x171506, 0.96)
+        .setStrokeStyle(2.5, neonYellow, 0.95);
+      const scanRing = this.add.circle(0, 0, 18, 0x000000, 0)
+        .setStrokeStyle(1.5, warmYellow, 0.72)
+        .setBlendMode(Phaser.BlendModes.ADD);
+
+      const arcSegments = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+      arcSegments.lineStyle(2, 0xffffff, 0.72);
+      for (let index = 0; index < 4; index += 1) {
+        const start = index * Math.PI / 2 + 0.12;
+        arcSegments.beginPath();
+        arcSegments.arc(0, 0, 20, start, start + 0.52, false);
+        arcSegments.strokePath();
+      }
+
+      const orbitRig = this.add.container(0, 0);
+      const orbitPath = this.add.circle(0, 0, 24, 0x000000, 0).setStrokeStyle(1, neonYellow, 0.3);
+      const satellites: Phaser.GameObjects.GameObject[] = [0, 1, 2].map((index) => {
+        const angle = index * Math.PI * 2 / 3;
+        return this.add.polygon(
+          Math.cos(angle) * 24,
+          Math.sin(angle) * 24,
+          [0, -3.8, 3.8, 0, 0, 3.8, -3.8, 0],
+          index === 0 ? 0xffffff : neonYellow,
+          0.95
+        ).setStrokeStyle(1, warmYellow, 0.92).setBlendMode(Phaser.BlendModes.ADD);
+      });
+      orbitRig.add([orbitPath, ...satellites]);
+
+      const glyphGlow = this.add.text(0, 0, '¢', {
+        fontFamily: 'Orbitron, Rajdhani, sans-serif',
+        fontSize: '27px',
+        fontStyle: 'bold',
+        color: '#fff36a',
+        stroke: '#f5ff58',
+        strokeThickness: 5
+      }).setOrigin(0.5).setAlpha(0.34).setBlendMode(Phaser.BlendModes.ADD);
+      const glyph = this.add.text(0, -1, '¢', {
+        fontFamily: 'Orbitron, Rajdhani, sans-serif',
+        fontSize: '25px',
+        fontStyle: 'bold',
+        color: '#ffffa8',
+        stroke: '#8e7300',
+        strokeThickness: 2
+      }).setOrigin(0.5).setShadow(0, 0, '#f5ff58', 7, true, true);
+
+      const leftBracket = this.add.polygon(-19, 0, [0, -7, 3, -7, 3, -3, 7, 0, 3, 3, 3, 7, 0, 7], warmYellow, 0.88);
+      const rightBracket = this.add.polygon(19, 0, [0, -7, -3, -7, -3, -3, -7, 0, -3, 3, -3, 7, 0, 7], warmYellow, 0.88);
+      container.add([glow, orbitRig, backing, scanRing, arcSegments, glyphGlow, glyph, leftBracket, rightBracket]);
+      this.creditPickupVisuals.set(container, { glow, scanRing, orbitRig, glyphGlow, glyph, leftBracket, rightBracket });
       return container;
     }
 
@@ -3494,6 +3559,25 @@ export class ArenaScene extends Phaser.Scene {
     const circle = this.add.circle(0, 0, 8, color, 0.85).setStrokeStyle(2, color, 1);
     container.add(circle);
     return container;
+  }
+
+  private updateCreditPickupVisual(
+    container: Phaser.GameObjects.Container,
+    visual: CreditPickupVisual,
+    now: number
+  ): void {
+    const pulse = 0.5 + Math.sin(now * 0.008) * 0.5;
+    container.setRotation(Math.sin(now * 0.0022) * 0.055);
+    visual.orbitRig.setRotation(now * 0.0034);
+    visual.scanRing.setScale(0.86 + pulse * 0.24).setAlpha(0.38 + pulse * 0.52);
+    visual.glow.setScale(0.9 + pulse * 0.3).setAlpha(0.08 + pulse * 0.17);
+    visual.glyphGlow.setScale(1.02 + pulse * 0.18).setAlpha(0.18 + pulse * 0.28);
+    // Counter-rotate the currency mark so it stays immediately recognizable.
+    visual.glyph.setRotation(-container.rotation).setScale(0.96 + pulse * 0.08);
+    visual.glyphGlow.setRotation(-container.rotation);
+    const bracketOffset = 18 + pulse * 3;
+    visual.leftBracket.setX(-bracketOffset);
+    visual.rightBracket.setX(bracketOffset);
   }
 
   private detonateSite(site: BombSiteRuntime): void {
