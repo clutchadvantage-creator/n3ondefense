@@ -602,7 +602,7 @@ export class ArenaScene extends Phaser.Scene {
       def.seed,
       this.layout.theme,
       this.layout.generation.bounds,
-      (x, y) => this.hitWall(x, y),
+      (x, y, halfWidth, halfHeight) => this.intersectsWallGeometry(x, y, halfWidth, halfHeight),
       () => this.audio.playSfx('bomblet'),
       (strength) => this.audio.setFluxCoreProximity(strength),
       () => this.audio.playSfx('defuseAlarm')
@@ -893,8 +893,8 @@ export class ArenaScene extends Phaser.Scene {
       const bossHazardTargets = this.getHazardDamageTargets();
       const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
       this.gasHazard?.update(now, this.player, this.modRuntime.multiplier('gasDamageTaken'));
-      this.fluxCores?.update(now, this.player);
       const gasSuppressesLasers = this.gasHazard?.isLaserSuppressed(now) ?? false;
+      this.fluxCores?.update(now, this.player, gasSuppressesLasers);
       const fluxSuppressesLasers = this.fluxCores?.isLaserSuppressed(now) ?? false;
       const securityLasersSuppressed = gasSuppressesLasers || fluxSuppressesLasers;
       const laserDangerWindow = this.laserSecurity?.isDangerWindow(now, securityLasersSuppressed) ?? false;
@@ -928,8 +928,8 @@ export class ArenaScene extends Phaser.Scene {
     const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
     const hazardTargets = this.getHazardDamageTargets();
     this.gasHazard?.update(now, this.player, this.modRuntime.multiplier('gasDamageTaken'));
-    this.fluxCores?.update(now, this.player);
     const gasSuppressesLasers = this.gasHazard?.isLaserSuppressed(now) ?? false;
+    this.fluxCores?.update(now, this.player, gasSuppressesLasers);
     const fluxSuppressesLasers = this.fluxCores?.isLaserSuppressed(now) ?? false;
     const securityLasersSuppressed = gasSuppressesLasers || fluxSuppressesLasers;
     const laserDangerWindow = this.laserSecurity?.isDangerWindow(now, securityLasersSuppressed) ?? false;
@@ -3532,7 +3532,7 @@ export class ArenaScene extends Phaser.Scene {
       bossSeed,
       this.layout.theme,
       this.layout.generation.bounds,
-      (x, y) => this.hitWall(x, y),
+      (x, y, halfWidth, halfHeight) => this.intersectsWallGeometry(x, y, halfWidth, halfHeight),
       () => this.audio.playSfx('bomblet'),
       (strength) => this.audio.setFluxCoreProximity(strength),
       () => this.audio.playSfx('defuseAlarm')
@@ -4257,6 +4257,18 @@ export class ArenaScene extends Phaser.Scene {
   private hitWall(x: number, y: number): boolean {
     for (const wall of this.wallRects) {
       if (x >= wall.x && x <= wall.x + wall.w && y >= wall.y && y <= wall.y + wall.h) return true;
+    }
+    return false;
+  }
+
+  private intersectsWallGeometry(x: number, y: number, halfWidth: number, halfHeight: number): boolean {
+    for (const wall of this.wallRects) {
+      if (
+        x + halfWidth >= wall.x
+        && x - halfWidth <= wall.x + wall.w
+        && y + halfHeight >= wall.y
+        && y - halfHeight <= wall.y + wall.h
+      ) return true;
     }
     return false;
   }

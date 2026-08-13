@@ -21,6 +21,38 @@ test('Flux Core durability scales without becoming unbounded', () => {
   assert.ok(FLUX_CORE_BALANCE.windowOpenMs > 0);
 });
 
+test('Flux Core deployments are staggered and wait for a continuous laser-online recovery window', () => {
+  assert.ok(FLUX_CORE_BALANCE.perCoreSpawnMinMs > 0);
+  assert.ok(FLUX_CORE_BALANCE.perCoreSpawnMaxMs > FLUX_CORE_BALANCE.perCoreSpawnMinMs);
+  assert.ok(FLUX_CORE_BALANCE.laserOnlineGraceMs >= 15_000);
+  assert.ok(FLUX_CORE_BALANCE.nextCycleVarianceMinMs > 0);
+
+  const source = readFileSync(new URL('../src/game/systems/FluxCoreSystem.ts', import.meta.url), 'utf8');
+  assert.match(source, /this\.plannedCoreCount = this\.random\.int\(1, this\.capacity\)/);
+  assert.match(source, /this\.spawnedCoreCount >= this\.plannedCoreCount/);
+  assert.match(source, /FLUX_CORE_BALANCE\.perCoreSpawnMinMs/);
+  assert.match(source, /externalLaserSuppressed[\s\S]*?this\.nextSpawnAt = Number\.POSITIVE_INFINITY/);
+  assert.match(source, /FLUX_CORE_BALANCE\.laserOnlineGraceMs/);
+  assert.doesNotMatch(source, /spawnWave\(/);
+});
+
+test('Flux Core shutdown requires the complete planned deployment to be destroyed', () => {
+  const source = readFileSync(new URL('../src/game/systems/FluxCoreSystem.ts', import.meta.url), 'utf8');
+  assert.match(source, /this\.cyclePhase = 'engaged'/);
+  assert.match(source, /if \(this\.cyclePhase === 'engaged' && this\.cores\.length === 0\) \{/);
+  assert.match(source, /this\.cyclePhase = 'shutdown'/);
+  assert.match(source, /this\.laserSuppressedUntil = now \+ FLUX_CORE_BALANCE\.laserShutdownMs/);
+});
+
+test('Flux Core locations reserve full geometry and avoid recent deployment positions', () => {
+  const source = readFileSync(new URL('../src/game/systems/FluxCoreSystem.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(source, /this\.isBlocked\(x, y, FLUX_CORE_BALANCE\.geometryHalfWidth, FLUX_CORE_BALANCE\.geometryHalfHeight\)/);
+  assert.match(source, /for \(const previous of this\.recentSpawnLocations\)/);
+  assert.match(arena, /intersectsWallGeometry\(x, y, halfWidth, halfHeight\)/);
+  assert.match(arena, /x \+ halfWidth >= wall\.x[\s\S]*?y - halfHeight <= wall\.y \+ wall\.h/);
+});
+
 test('Flux Cores use capped manual collision, proximity-only pulses, and deterministic cleanup', () => {
   const source = readFileSync(new URL('../src/game/systems/FluxCoreSystem.ts', import.meta.url), 'utf8');
   assert.match(source, /private readonly cores: FluxCoreVisual\[\] = \[\]/);
@@ -49,6 +81,7 @@ test('Arena integrates Flux Cores with shared laser suppression and major damage
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   assert.match(arena, /new FluxCoreSystem\(/);
   assert.match(arena, /securityLasersSuppressed = gasSuppressesLasers \|\| fluxSuppressesLasers/);
+  assert.match(arena, /fluxCores\?\.update\(now, this\.player, gasSuppressesLasers\)/);
   assert.match(arena, /damagePoint\(p\.sprite\.x, p\.sprite\.y, 7, p\.damage, fluxSource\)/);
   assert.match(arena, /damageArea\(mine\.sprite\.x, mine\.sprite\.y, mine\.radius, mine\.damage, 'mine'\)/);
   assert.match(arena, /damageAlongSegment\(fence\.x1, fence\.y1, fence\.x2, fence\.y2, 11, fence\.dps \* dt\)/);

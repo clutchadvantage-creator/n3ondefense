@@ -29,6 +29,7 @@ interface FluxCoreVisual {
 }
 
 const CORE_COLORS = [0x39eeff, 0xff4ed3, 0x53ff8a, 0xffc247, 0xae6bff, 0xff5e75] as const;
+type FluxCoreCyclePhase = 'waiting' | 'spawning' | 'engaged' | 'shutdown';
 
 /**
  * Small, capped security objective system. Cores use manual point/area tests so
@@ -40,8 +41,14 @@ export class FluxCoreSystem {
   private readonly cores: FluxCoreVisual[] = [];
   private readonly effects = new Set<Phaser.GameObjects.GameObject>();
   private readonly capacity: number;
+  private readonly recentSpawnLocations: Array<{ x: number; y: number }> = [];
   private nextSpawnAt: number;
   private nextCoreId = 1;
+  private cyclePhase: FluxCoreCyclePhase = 'waiting';
+  private plannedCoreCount = 0;
+  private spawnedCoreCount = 0;
+  private requiresOnlineGrace = false;
+  private lasersOnlineSince = 0;
   private laserSuppressedUntil = 0;
   private recoveryAlarmPlayed = false;
   private announcementUntil = 0;
@@ -52,7 +59,7 @@ export class FluxCoreSystem {
     seed: number,
     private readonly theme: ArenaTheme,
     private readonly bounds: RectSpec,
-    private readonly isBlocked: (x: number, y: number) => boolean,
+    private readonly isBlocked: (x: number, y: number, halfWidth: number, halfHeight: number) => boolean,
     private readonly onDestroyed?: (x: number, y: number) => void,
     private readonly onProximityChanged?: (strength: number) => void,
     private readonly onRecoveryAlarm?: () => void
@@ -76,12 +83,9 @@ export class FluxCoreSystem {
     return this.cores.length;
   }
 
-  update(now: number, player: Player): void {
+  update(now: number, player: Player, externalLaserSuppressed = false): void {
     if (this.round < FLUX_CORE_BALANCE.unlockRound) return;
-
-    if (now >= this.nextSpawnAt && this.cores.length < this.capacity) {
-      this.spawnWave(now, player.x, player.y);
-    }
+    this.updateCycle(now, player.x, player.y, externalLaserSuppressed);
 
     let closestDistanceSquared = Number.POSITIVE_INFINITY;
     for (let index = 0; index < this.cores.length; index += 1) {
@@ -193,31 +197,83 @@ export class FluxCoreSystem {
     this.warningText.destroy();
   }
 
-  private spawnWave(now: number, playerX: number, playerY: number): void {
-    const available = this.capacity - this.cores.length;
-    const count = this.random.int(1, Math.max(1, available));
-    let spawned = 0;
-    for (let coreIndex = 0; coreIndex < count; coreIndex += 1) {
-      const point = this.findSpawnPoint(playerX, playerY);
-      if (!point) break;
-      this.cores.push(this.createCore(point.x, point.y, this.nextCoreId, now));
-      this.nextCoreId += 1;
-      spawned += 1;
+  private updateCycle(now: number, playerX: number, playerY: number, externalLaserSuppressed: boolean): void {
+    if (this.cyclePhase === 'shutdown') {
+      if (now < this.laserSuppressedUntil) return;
+      this.cyclePhase = 'waiting';
+      this.requiresOnlineGrace = true;
+      this.lasersOnlineSince = 0;
+      this.nextSpawnAt = Number.POSITIVE_INFINITY;
     }
-    if (spawned > 0) {
-      this.warningText.setText(`FLUX SIGNATURES DETECTED // ${this.cores.length} CORE${this.cores.length === 1 ? '' : 'S'} ONLINE`);
-      this.warningText.setAlpha(0.72);
-      this.announcementUntil = now + 1900;
+
+    if (this.cyclePhase === 'engaged') return;
+
+    // Gas is the other legitimate security-grid suppression. No new core may
+    // emerge during it, and the continuous 15-second laser-online requirement
+    // restarts after the atmosphere clears.
+    if (externalLaserSuppressed) {
+      this.requiresOnlineGrace = true;
+      this.lasersOnlineSince = 0;
+      this.nextSpawnAt = Number.POSITIVE_INFINITY;
+      return;
     }
-    this.nextSpawnAt = now + this.random.int(FLUX_CORE_BALANCE.respawnMinMs, FLUX_CORE_BALANCE.respawnMaxMs);
+
+    if (this.requiresOnlineGrace) {
+      if (this.lasersOnlineSince <= 0) {
+        this.lasersOnlineSince = now;
+        this.nextSpawnAt = now
+          + FLUX_CORE_BALANCE.laserOnlineGraceMs
+          + this.random.int(FLUX_CORE_BALANCE.nextCycleVarianceMinMs, FLUX_CORE_BALANCE.nextCycleVarianceMaxMs);
+      }
+      if (now < this.nextSpawnAt) return;
+      this.requiresOnlineGrace = false;
+      this.lasersOnlineSince = 0;
+    }
+
+    if (now < this.nextSpawnAt) return;
+    if (this.cyclePhase === 'waiting') this.beginCycle(now, playerX, playerY);
+    else if (this.cyclePhase === 'spawning') this.spawnNextCore(now, playerX, playerY);
+  }
+
+  private beginCycle(now: number, playerX: number, playerY: number): void {
+    this.plannedCoreCount = this.random.int(1, this.capacity);
+    this.spawnedCoreCount = 0;
+    this.cyclePhase = 'spawning';
+    this.spawnNextCore(now, playerX, playerY);
+  }
+
+  private spawnNextCore(now: number, playerX: number, playerY: number): void {
+    const point = this.findSpawnPoint(playerX, playerY);
+    if (!point) {
+      this.nextSpawnAt = now + 900;
+      return;
+    }
+
+    this.cores.push(this.createCore(point.x, point.y, this.nextCoreId, now));
+    this.rememberSpawnLocation(point.x, point.y);
+    this.nextCoreId += 1;
+    this.spawnedCoreCount += 1;
+    this.warningText.setText(`FLUX DEPLOYMENT // ${this.spawnedCoreCount} / ${this.plannedCoreCount}`);
+    this.warningText.setAlpha(0.72);
+    this.announcementUntil = now + 1900;
+
+    if (this.spawnedCoreCount >= this.plannedCoreCount) {
+      this.cyclePhase = 'engaged';
+      this.nextSpawnAt = Number.POSITIVE_INFINITY;
+      return;
+    }
+    this.nextSpawnAt = now + this.random.int(
+      FLUX_CORE_BALANCE.perCoreSpawnMinMs,
+      FLUX_CORE_BALANCE.perCoreSpawnMaxMs
+    );
   }
 
   private findSpawnPoint(playerX: number, playerY: number): { x: number; y: number } | null {
     const inset = FLUX_CORE_BALANCE.spawnEdgeInset;
-    for (let attempt = 0; attempt < 42; attempt += 1) {
+    for (let attempt = 0; attempt < 72; attempt += 1) {
       const x = this.random.float(this.bounds.x + inset, this.bounds.x + this.bounds.w - inset);
       const y = this.random.float(this.bounds.y + inset, this.bounds.y + this.bounds.h - inset);
-      if (this.isBlocked(x, y)) continue;
+      if (this.isBlocked(x, y, FLUX_CORE_BALANCE.geometryHalfWidth, FLUX_CORE_BALANCE.geometryHalfHeight)) continue;
       const playerDx = x - playerX;
       const playerDy = y - playerY;
       if (playerDx * playerDx + playerDy * playerDy < 120 * 120) continue;
@@ -228,6 +284,16 @@ export class FluxCoreSystem {
         if (dx * dx + dy * dy < FLUX_CORE_BALANCE.minimumCoreSpacing * FLUX_CORE_BALANCE.minimumCoreSpacing) {
           tooClose = true;
           break;
+        }
+      }
+      if (!tooClose) {
+        for (const previous of this.recentSpawnLocations) {
+          const dx = previous.x - x;
+          const dy = previous.y - y;
+          if (dx * dx + dy * dy < FLUX_CORE_BALANCE.recentLocationSpacing * FLUX_CORE_BALANCE.recentLocationSpacing) {
+            tooClose = true;
+            break;
+          }
         }
       }
       if (!tooClose) return { x, y };
@@ -382,12 +448,16 @@ export class FluxCoreSystem {
     this.destroyCoreVisual(core);
     this.playDestroyedEffect(core.x, core.y, core.color);
     this.onDestroyed?.(core.x, core.y);
-    this.laserSuppressedUntil = Math.max(this.laserSuppressedUntil, now + FLUX_CORE_BALANCE.laserShutdownMs);
-    this.recoveryAlarmPlayed = false;
-    this.nextSpawnAt = Math.min(
-      this.nextSpawnAt,
-      now + this.random.int(FLUX_CORE_BALANCE.respawnMinMs, FLUX_CORE_BALANCE.respawnMaxMs)
-    );
+    // A partial clear never affects the lasers. Shutdown begins only after the
+    // complete, already-planned deployment has emerged and every core is gone.
+    if (this.cyclePhase === 'engaged' && this.cores.length === 0) {
+      this.cyclePhase = 'shutdown';
+      this.laserSuppressedUntil = now + FLUX_CORE_BALANCE.laserShutdownMs;
+      this.recoveryAlarmPlayed = false;
+      this.nextSpawnAt = Number.POSITIVE_INFINITY;
+      this.plannedCoreCount = 0;
+      this.spawnedCoreCount = 0;
+    }
   }
 
   private playDestroyedEffect(x: number, y: number, color: number): void {
@@ -410,5 +480,12 @@ export class FluxCoreSystem {
     core.floorHatch.destroy();
     core.hatchGlow.destroy();
     core.hatchLip.destroy();
+  }
+
+  private rememberSpawnLocation(x: number, y: number): void {
+    this.recentSpawnLocations.push({ x, y });
+    if (this.recentSpawnLocations.length > FLUX_CORE_BALANCE.recentLocationMemory) {
+      this.recentSpawnLocations.shift();
+    }
   }
 }
