@@ -20,7 +20,8 @@ export const SFX_DEFINITIONS = [
   { key: 'modCollection', label: 'Mod Acquired' },
   { key: 'legendaryMod', label: 'Legendary Mod' },
   { key: 'menu', label: 'Menu Select' },
-  { key: 'itemLocked', label: 'Locked / Unavailable' }
+  { key: 'itemLocked', label: 'Locked / Unavailable' },
+  { key: 'runStart', label: 'Deployment Start' }
 ] as const;
 
 export type AudioSfxName = typeof SFX_DEFINITIONS[number]['key'];

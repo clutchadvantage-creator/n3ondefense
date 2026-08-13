@@ -31,6 +31,7 @@ export class AudioManager {
   private readonly hitDamageSfxPool: HTMLAudioElement[] = [];
   private readonly menuClickSfxPool: HTMLAudioElement[] = [];
   private readonly itemLockedSfxPool: HTMLAudioElement[] = [];
+  private runStartSfx: HTMLAudioElement | null = null;
   private securityLaserAudio: HTMLAudioElement | null = null;
   private securityLaserLoopRequested = false;
   private gasSfx: HTMLAudioElement | null = null;
@@ -71,6 +72,7 @@ export class AudioManager {
     this.initHitDamageSfxPool();
     this.initModRevealSfx();
     this.initMenuSfxPools();
+    this.initRunStartSfx();
   }
 
   static get(): AudioManager {
@@ -274,6 +276,25 @@ export class AudioManager {
     }
     audio.volume = this.getSfxVolume(name);
     void audio.play().catch(() => undefined);
+  }
+
+  private initRunStartSfx(): void {
+    this.runStartSfx = new Audio(audioAssetUrl('soundeffects/startsound.mp3'));
+    this.runStartSfx.preload = 'auto';
+    this.runStartSfx.volume = this.getSfxVolume('runStart');
+    this.runStartSfx.load();
+  }
+
+  private playRunStartSfx(): void {
+    if (!this.runStartSfx) return;
+    this.runStartSfx.pause();
+    try {
+      this.runStartSfx.currentTime = 0;
+    } catch {
+      // Metadata may still be loading on the first deployment.
+    }
+    this.runStartSfx.volume = this.getSfxVolume('runStart');
+    void this.runStartSfx.play().catch(() => undefined);
   }
 
   private playModRevealSfx(kind: 'modCollection' | 'legendaryMod'): void {
@@ -533,6 +554,7 @@ export class AudioManager {
     }
     for (const menuClick of this.menuClickSfxPool) menuClick.volume = this.getSfxVolume('menu');
     for (const itemLocked of this.itemLockedSfxPool) itemLocked.volume = this.getSfxVolume('itemLocked');
+    if (this.runStartSfx) this.runStartSfx.volume = this.getSfxVolume('runStart');
     if (this.securityLaserAudio) this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
     if (this.gasSfx) this.gasSfx.volume = this.getSfxVolume('gas');
     if (this.shieldActivationSfx) this.shieldActivationSfx.volume = this.getSfxVolume('shieldOn');
@@ -656,6 +678,9 @@ export class AudioManager {
       case 'menu':
       case 'itemLocked':
         this.playMenuSfx(name);
+        break;
+      case 'runStart':
+        this.playRunStartSfx();
         break;
     }
   }

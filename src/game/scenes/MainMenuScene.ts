@@ -250,7 +250,7 @@ export class MainMenuScene extends Phaser.Scene {
         });
       })();
       return true;
-    }, pairButtonWidth);
+    }, pairButtonWidth, 'runStart');
     const localStartButton = createButton(this, width / 2 + pairOffset, menuStartY, 'Start Local', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
@@ -276,7 +276,7 @@ export class MainMenuScene extends Phaser.Scene {
         message: 'Building explicitly local operation...'
       });
       return true;
-    }, pairButtonWidth);
+    }, pairButtonWidth, 'runStart');
     createButton(this, width / 2, menuStartY + menuRowGap, 'Store', () => this.scene.start(SceneKeys.Upgrades, {
       returnScene: SceneKeys.MainMenu,
       resumePausedScene: false

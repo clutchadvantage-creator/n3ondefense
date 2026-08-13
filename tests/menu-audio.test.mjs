@@ -6,10 +6,13 @@ import { SFX_DEFINITIONS, createDefaultSoundVolumes } from '../src/game/config/a
 test('menu interaction recordings are registered with backward-compatible volume defaults', () => {
   assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/menuclick.mp3', import.meta.url)));
   assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/itemlocked.mp3', import.meta.url)));
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/startsound.mp3', import.meta.url)));
   assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'menu'));
   assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'itemLocked'));
+  assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'runStart'));
   assert.equal(createDefaultSoundVolumes().menu, 1);
   assert.equal(createDefaultSoundVolumes().itemLocked, 1);
+  assert.equal(createDefaultSoundVolumes().runStart, 1);
 });
 
 test('central audio manager pools the real menu recordings instead of synthesizing menu beeps', () => {
@@ -24,8 +27,20 @@ test('central audio manager pools the real menu recordings instead of synthesizi
 test('shared Phaser buttons use normal audio for accepted actions and locked audio when disabled or rejected', () => {
   const ui = readFileSync(new URL('../src/game/utils/ui.ts', import.meta.url), 'utf8');
   assert.match(ui, /if \(!state\.enabled\) \{[\s\S]*?playSfx\('itemLocked'\)/);
-  assert.match(ui, /accepted === false \? 'itemLocked' : 'menu'/);
+  assert.match(ui, /accepted === false \? 'itemLocked' : buttonSound/);
   assert.match(ui, /if \(state\) state\.enabled = false/);
+});
+
+test('deployment start recording is restricted to Start Online and Start Local buttons', () => {
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const menu = readFileSync(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8');
+  const ui = readFileSync(new URL('../src/game/utils/ui.ts', import.meta.url), 'utf8');
+  assert.match(audio, /soundeffects\/startsound\.mp3/);
+  assert.match(audio, /case 'runStart':[\s\S]*?this\.playRunStartSfx\(\)/);
+  assert.match(ui, /buttonSound: Extract<AudioSfxName, 'menu' \| 'runStart'> = 'menu'/);
+  assert.equal((menu.match(/pairButtonWidth, 'runStart'/g) ?? []).length, 2);
+  assert.match(menu, /'Start Online'[\s\S]*?pairButtonWidth, 'runStart'/);
+  assert.match(menu, /'Start Local'[\s\S]*?pairButtonWidth, 'runStart'/);
 });
 
 test('HTML menus are centrally covered while unaffordable Store actions defer to locked feedback', () => {

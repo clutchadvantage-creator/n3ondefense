@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/constants';
 import { AudioManager } from '../systems/AudioManager';
+import type { AudioSfxName } from '../config/audio';
 
 interface ButtonAudioState { enabled: boolean }
 const buttonAudioStates = new WeakMap<Phaser.GameObjects.Container, ButtonAudioState>();
@@ -11,7 +12,8 @@ export const createButton = (
   y: number,
   text: string,
   onClick: () => unknown,
-  width = 220
+  width = 220,
+  buttonSound: Extract<AudioSfxName, 'menu' | 'runStart'> = 'menu'
 ): Phaser.GameObjects.Container => {
   const bg = scene.add.rectangle(0, 0, width, 40, 0x121a2b, 0.95).setStrokeStyle(2, COLORS.cyan, 0.9);
   const labelFontSize = text.length > 28 || (width < 190 && text.length > 20) ? 14 : 16;
@@ -35,7 +37,7 @@ export const createButton = (
       return;
     }
     const accepted = onClick();
-    AudioManager.get().playSfx(accepted === false ? 'itemLocked' : 'menu');
+    AudioManager.get().playSfx(accepted === false ? 'itemLocked' : buttonSound);
   });
 
   const button = scene.add.container(x, y, [bg, label, hit]);
