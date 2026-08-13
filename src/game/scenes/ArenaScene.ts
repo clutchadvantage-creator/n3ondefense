@@ -27,6 +27,7 @@ import { ArenaGenerator } from '../systems/ArenaGenerator';
 import { LaserSecuritySystem } from '../systems/LaserSecuritySystem';
 import { BombletHazardSystem } from '../systems/BombletHazardSystem';
 import { GasHazardSystem } from '../systems/GasHazardSystem';
+import { FluxCoreSystem } from '../systems/FluxCoreSystem';
 import { GAS_HAZARD_BALANCE } from '../config/gasHazards';
 import type { HazardDamageTarget } from '../config/hazardScaling';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossRewards, isBossRound, selectBossArchetype, type BossArchetype } from '../config/bossBalance';
@@ -228,6 +229,7 @@ export class ArenaScene extends Phaser.Scene {
   private laserSecurity: LaserSecuritySystem | null = null;
   private bombletHazard: BombletHazardSystem | null = null;
   private gasHazard: GasHazardSystem | null = null;
+  private fluxCores: FluxCoreSystem | null = null;
   private bossEncounter: BossEncounter | null = null;
   private bossRound = 0;
   private pendingRoundPayload: RoundFinishedPayload | null = null;
@@ -572,6 +574,7 @@ export class ArenaScene extends Phaser.Scene {
       },
       (x, y, blastRadius, shouldPlaySound) => {
         if (shouldPlaySound) this.audio.playSfx('bomblet');
+        this.fluxCores?.damageArea(x, y, blastRadius, 9999, 'bomblet');
         this.gasHazard?.carveVisualBlast(
           x,
           y,
@@ -593,6 +596,17 @@ export class ArenaScene extends Phaser.Scene {
         () => this.audio.playSfx('gas')
       );
     }
+    this.fluxCores = new FluxCoreSystem(
+      this,
+      def.round,
+      def.seed,
+      this.layout.theme,
+      this.layout.generation.bounds,
+      (x, y) => this.hitWall(x, y),
+      () => this.audio.playSfx('bomblet'),
+      (strength) => this.audio.playFluxCorePulse(strength),
+      () => this.audio.playSfx('defuseAlarm')
+    );
 
     this.registerBombSiteEvents();
 
@@ -879,9 +893,12 @@ export class ArenaScene extends Phaser.Scene {
       const bossHazardTargets = this.getHazardDamageTargets();
       const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
       this.gasHazard?.update(now, this.player, this.modRuntime.multiplier('gasDamageTaken'));
+      this.fluxCores?.update(now, this.player);
       const gasSuppressesLasers = this.gasHazard?.isLaserSuppressed(now) ?? false;
-      const laserDangerWindow = this.laserSecurity?.isDangerWindow(now, gasSuppressesLasers) ?? false;
-      this.laserSecurity?.update(now, dt, this.player, bossHazardTargets, playerLaserImmune, gasSuppressesLasers);
+      const fluxSuppressesLasers = this.fluxCores?.isLaserSuppressed(now) ?? false;
+      const securityLasersSuppressed = gasSuppressesLasers || fluxSuppressesLasers;
+      const laserDangerWindow = this.laserSecurity?.isDangerWindow(now, securityLasersSuppressed) ?? false;
+      this.laserSecurity?.update(now, dt, this.player, bossHazardTargets, playerLaserImmune, securityLasersSuppressed);
       this.bombletHazard?.update(now, this.player, bossHazardTargets, laserDangerWindow);
       this.updateProjectiles(delta);
       this.updateAbilities(now, dt);
@@ -911,9 +928,12 @@ export class ArenaScene extends Phaser.Scene {
     const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
     const hazardTargets = this.getHazardDamageTargets();
     this.gasHazard?.update(now, this.player, this.modRuntime.multiplier('gasDamageTaken'));
+    this.fluxCores?.update(now, this.player);
     const gasSuppressesLasers = this.gasHazard?.isLaserSuppressed(now) ?? false;
-    const laserDangerWindow = this.laserSecurity?.isDangerWindow(now, gasSuppressesLasers) ?? false;
-    this.laserSecurity?.update(now, dt, this.player, hazardTargets, playerLaserImmune, gasSuppressesLasers);
+    const fluxSuppressesLasers = this.fluxCores?.isLaserSuppressed(now) ?? false;
+    const securityLasersSuppressed = gasSuppressesLasers || fluxSuppressesLasers;
+    const laserDangerWindow = this.laserSecurity?.isDangerWindow(now, securityLasersSuppressed) ?? false;
+    this.laserSecurity?.update(now, dt, this.player, hazardTargets, playerLaserImmune, securityLasersSuppressed);
     this.bombletHazard?.update(now, this.player, hazardTargets, laserDangerWindow);
     this.updateEnemies(now, dt);
     this.updateHomingMissiles(delta);
@@ -1924,6 +1944,13 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.spawnImpact(x, y, color);
     this.audio.playSfx('bomblet');
+    this.fluxCores?.damageArea(
+      x,
+      y,
+      TANK_HOMING_MISSILE_BALANCE.blastRadius,
+      missile.damage,
+      'enemy-projectile'
+    );
 
     if (intercepted) {
       GameplayTelemetryRecorder.recordProjectileHit('enemy', 0, 0, false, true);
@@ -2217,6 +2244,15 @@ export class ArenaScene extends Phaser.Scene {
         }
       }
 
+      const fluxSource = p.from === 'player'
+        ? 'weapon'
+        : p.from === 'turret' ? 'turret' : 'enemy-projectile';
+      if (this.fluxCores?.damagePoint(p.sprite.x, p.sprite.y, 7, p.damage, fluxSource)) {
+        this.spawnImpact(p.sprite.x, p.sprite.y, p.sprite.tintTopLeft);
+        this.retireProjectile(p);
+        continue;
+      }
+
       if (p.from === 'player' || p.from === 'turret') {
         if (p.from === 'player') {
           let hitMissile: HomingMissile | null = null;
@@ -2486,7 +2522,8 @@ export class ArenaScene extends Phaser.Scene {
       const bossTarget = this.bossEncounter?.boss;
       const bossInRange = Boolean(bossTarget?.active && !bossTarget.isDefeated
         && (bossTarget.x - turret.sprite.x) ** 2 + (bossTarget.y - turret.sprite.y) ** 2 <= turret.range * turret.range);
-      const target: { x: number; y: number } | null = bossInRange ? bossTarget! : enemyTarget;
+      const fluxTarget = this.fluxCores?.getNearestCore(turret.sprite.x, turret.sprite.y, turret.range) ?? null;
+      const target: { x: number; y: number } | null = bossInRange ? bossTarget! : enemyTarget ?? fluxTarget;
       if (!target) continue;
       const angle = Phaser.Math.Angle.Between(turret.sprite.x, turret.sprite.y, target.x, target.y);
       turret.aimAt(angle);
@@ -2512,7 +2549,7 @@ export class ArenaScene extends Phaser.Scene {
       const bossDy = (bossTarget?.y ?? 0) - mine.sprite.y;
       const bossInRange = Boolean(bossTarget?.active && !bossTarget.isDefeated
         && bossDx * bossDx + bossDy * bossDy <= radiusSquared);
-      let trigger = bossInRange;
+      let trigger = bossInRange || Boolean(this.fluxCores?.hasCoreWithin(mine.sprite.x, mine.sprite.y, mine.radius));
       if (!trigger) {
         for (const enemy of this.enemies) {
           const dx = enemy.x - mine.sprite.x;
@@ -2532,6 +2569,7 @@ export class ArenaScene extends Phaser.Scene {
 
       this.gasHazard?.igniteFromMine(mine.sprite.x, mine.sprite.y, mine.radius);
       this.audio.playSfx('mine');
+      this.fluxCores?.damageArea(mine.sprite.x, mine.sprite.y, mine.radius, mine.damage, 'mine');
       const blast = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 10, color: COLORS.orange, alpha: 0.35, depth: 7 });
       this.tweens.add({ targets: blast, radius: mine.radius, alpha: 0, duration: 280, onComplete: () => this.retireFxCircle(blast) });
       for (const e of this.enemies) {
@@ -2560,6 +2598,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     for (const fence of this.fences) {
+      this.fluxCores?.damageAlongSegment(fence.x1, fence.y1, fence.x2, fence.y2, 11, fence.dps * dt);
       for (const enemy of this.enemies) {
         const d = this.distancePointToSegment(
           enemy.x,
@@ -2639,6 +2678,7 @@ export class ArenaScene extends Phaser.Scene {
 
       this.gasHazard?.igniteFromMine(mine.sprite.x, mine.sprite.y, mine.radius);
       this.audio.playSfx('mine');
+      this.fluxCores?.damageArea(mine.sprite.x, mine.sprite.y, mine.radius, mine.damage, 'mine');
       const blast = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 16, color: COLORS.cyan, alpha: 0.28, depth: 8 });
       const ring = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 14, color: 0xffffff, alpha: 0.2, depth: 8 });
       this.tweens.add({ targets: blast, radius: mine.radius, alpha: 0, duration: 360, onComplete: () => this.retireFxCircle(blast) });
@@ -3283,6 +3323,8 @@ export class ArenaScene extends Phaser.Scene {
 
     if (this.modRuntime.hasInfusion('detonation-fireworks')) this.playDetonationFireworks(site.x, site.y);
 
+    this.fluxCores?.damageArea(site.x, site.y, 360, 9999, 'bomb');
+
     for (const e of this.enemies) {
       const d = Phaser.Math.Distance.Between(e.x, e.y, site.x, site.y);
       if (d < 360) e.takeDamage(9999, 'bomb');
@@ -3459,6 +3501,7 @@ export class ArenaScene extends Phaser.Scene {
       },
       (x, y, blastRadius, shouldPlaySound) => {
         if (shouldPlaySound) this.audio.playSfx('bomblet');
+        this.fluxCores?.damageArea(x, y, blastRadius, 9999, 'bomblet');
         this.gasHazard?.carveVisualBlast(
           x,
           y,
@@ -3480,6 +3523,17 @@ export class ArenaScene extends Phaser.Scene {
         () => this.audio.playSfx('gas')
       );
     }
+    this.fluxCores = new FluxCoreSystem(
+      this,
+      this.bossRound,
+      bossSeed,
+      this.layout.theme,
+      this.layout.generation.bounds,
+      (x, y) => this.hitWall(x, y),
+      () => this.audio.playSfx('bomblet'),
+      (strength) => this.audio.playFluxCorePulse(strength),
+      () => this.audio.playSfx('defuseAlarm')
+    );
 
     GameplayTelemetryRecorder.beginEncounter({
       kind: 'boss',
@@ -3551,6 +3605,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private applyBossAreaDamage(x: number, y: number, radius: number, damage: number, attack: BossAttackKind): void {
+    this.fluxCores?.damageArea(x, y, radius, damage, 'boss');
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) <= radius + 12) {
       const hit = this.player.takeDamage(damage);
       GameplayTelemetryRecorder.recordBossAttackIntersection(attack, hit ? damage : 0, !hit);
@@ -4534,6 +4589,8 @@ export class ArenaScene extends Phaser.Scene {
     this.bombletHazard = null;
     this.gasHazard?.destroy();
     this.gasHazard = null;
+    this.fluxCores?.destroy();
+    this.fluxCores = null;
     for (const e of this.enemies) e.destroy();
     for (const p of this.projectiles) this.retireProjectile(p);
     this.projectilePool.releaseAll();
@@ -4596,6 +4653,8 @@ export class ArenaScene extends Phaser.Scene {
     this.bombletHazard = null;
     this.gasHazard?.destroy();
     this.gasHazard = null;
+    this.fluxCores?.destroy();
+    this.fluxCores = null;
     this.bossEncounter?.destroy();
     this.bossEncounter = null;
     this.destroyShieldOrb();

@@ -58,7 +58,8 @@ test('gas phases remain occasional, suppress lasers, permit bomblets, and carve 
   assert.match(gas, /if \(removeHazard\) this\.density\[densityIndex\] = 0/);
   assert.match(gas, /if \(playerEnteredGas && now >= this\.nextGasDamageAt\)/);
   assert.match(gas, /return this\.active \|\| now < this\.recoveryUntil/);
-  assert.match(arena, /isDangerWindow\(now, gasSuppressesLasers\)/);
+  assert.match(arena, /securityLasersSuppressed = gasSuppressesLasers \|\| fluxSuppressesLasers/);
+  assert.match(arena, /isDangerWindow\(now, securityLasersSuppressed\)/);
   assert.match(arena, /bombletHazard\?\.update\(now, this\.player, hazardTargets, laserDangerWindow\)/);
   assert.match(arena, /recordPlayerDamage\('gas', damage\)/);
 });

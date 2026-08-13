@@ -588,6 +588,12 @@ export class AudioManager {
     osc.stop(this.context.currentTime + durationMs / 1000 + 0.02);
   }
 
+  /** A short synthesized electrical heartbeat, requested only near an active Flux Core. */
+  playFluxCorePulse(strength: number): void {
+    const proximity = Math.max(0, Math.min(1, strength));
+    this.beep('sfx', 145 + proximity * 95, 105, 0.025 + proximity * 0.025, 'beep');
+  }
+
   startPlantingLoop(): void {
     if (this.plantingLoopRequested) return;
     this.plantingLoopRequested = true;
