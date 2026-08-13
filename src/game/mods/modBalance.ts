@@ -52,7 +52,13 @@ export const MOD_BALANCE = {
   emergencyCapacitor: { healthThreshold: 0.25, energyShare: { 0: 0.1, 1: 0.2, 2: 0.35, 3: 0.5 }, rank3SpeedMultiplier: 1.18, rank3SpeedDurationMs: 2500 },
   priorityTargeting: { markedDurationMs: 2500, rank3TurretDamageBonus: 0.1 },
   emergencyShield: { durationMs: { 0: 500, 1: 1000, 2: 2000, 3: 2000 }, cooldownMs: 30_000, knockbackRadius: 125, knockbackSpeed: 260 },
-  magneticPayload: { preDetonationMs: 240, pullRadius: { 0: 90, 1: 105, 2: 125, 3: 140 }, pullStrength: { 0: 75, 1: 105, 2: 155, 3: 195 }, rank3SlowFactor: 0.72, rank3SlowDurationMs: 1400 }
+  magneticPayload: { preDetonationMs: 240, pullRadius: { 0: 90, 1: 105, 2: 125, 3: 140 }, pullStrength: { 0: 75, 1: 105, 2: 155, 3: 195 }, rank3SlowFactor: 0.72, rank3SlowDurationMs: 1400 },
+  fullRackSalvo: {
+    spacing: 72,
+    staggerMs: 42,
+    energyCostMultiplier: { 0: 1, 1: 0.92, 2: 0.84, 3: 0.75 },
+    flightMs: { 0: 460, 1: 410, 2: 355, 3: 300 }
+  }
 } as const;
 
 export interface RunProtocolDefinition {

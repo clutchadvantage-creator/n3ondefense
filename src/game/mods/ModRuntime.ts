@@ -115,6 +115,16 @@ export class ModRuntime {
   mineArmTimeMultiplier(): number {
     return this.has('quick-fuse') ? MOD_BALANCE.quickFuse.armTimeMultiplier[this.rank('quick-fuse')] : 1;
   }
+  fullRackSalvo(): { spacing: number; staggerMs: number; energyCostMultiplier: number; flightMs: number } | null {
+    if (!this.has('full-rack-salvo')) return null;
+    const rank = this.rank('full-rack-salvo');
+    return {
+      spacing: MOD_BALANCE.fullRackSalvo.spacing,
+      staggerMs: MOD_BALANCE.fullRackSalvo.staggerMs,
+      energyCostMultiplier: MOD_BALANCE.fullRackSalvo.energyCostMultiplier[rank],
+      flightMs: MOD_BALANCE.fullRackSalvo.flightMs[rank]
+    };
+  }
   hasInfusion(infusionId: ModInfusionId): boolean { return this.infusions.has(infusionId); }
   snapshot(): EquippedModSnapshot[] {
     return Array.from(this.equipped, ([id, rank]) => ({ id, rank, infusionId: this.infusionByModId.get(id) }));

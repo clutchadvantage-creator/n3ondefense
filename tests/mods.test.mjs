@@ -20,13 +20,13 @@ const equippedRuntimeAtRank = (modId, rank) => {
 };
 
 test('the expanded collection adds at least ten discoveries to every rarity', () => {
-  const expectedMinimums = { common: 13, uncommon: 14, rare: 13, epic: 12, legendary: 12 };
+  const expectedMinimums = { common: 13, uncommon: 14, rare: 13, epic: 13, legendary: 12 };
   const counts = Object.fromEntries(Object.keys(expectedMinimums).map((rarity) => [
     rarity,
     MOD_DEFINITIONS.filter((definition) => definition.rarity === rarity).length
   ]));
   assert.deepEqual(counts, expectedMinimums);
-  assert.equal(MOD_DEFINITIONS.length, 64);
+  assert.equal(MOD_DEFINITIONS.length, 65);
   assert.equal(new Set(MOD_DEFINITIONS.map((definition) => definition.id)).size, MOD_DEFINITIONS.length);
 });
 

@@ -8,6 +8,7 @@ import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAY
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
 import { Mine } from '../abilities/Mine';
+import { getMineRackEnergyCost, getMineRackPatternOffsets } from '../abilities/MineRackSalvo';
 import { Turret } from '../abilities/Turret';
 import { Fence } from '../abilities/Fence';
 import { MAX_DISTINCT_FENCE_SPLITS, resolveFenceSplitStage } from '../abilities/FenceSplitRules.ts';
@@ -131,6 +132,19 @@ interface NavState {
 interface PatrolPoint {
   x: number;
   y: number;
+}
+
+interface AbilityRuntimeConfig {
+  energyCost: number;
+  cooldownMs: number;
+  maxActive: number;
+  damage: number;
+  hp: number;
+  durationMs: number;
+  range: number;
+  fireRate: number;
+  armMs: number;
+  radius: number;
 }
 
 interface TurretTargetDecision {
@@ -1116,6 +1130,7 @@ export class ArenaScene extends Phaser.Scene {
     const configureFxCircle = (circle: Phaser.GameObjects.Arc, state: FxCircleSpawn): void => {
       circle.setActive(true).setVisible(true).setPosition(state.x, state.y).setRadius(state.radius);
       circle.setScale(1).setAlpha(1).setFillStyle(state.color, state.alpha).setDepth(state.depth);
+      circle.setBlendMode(Phaser.BlendModes.NORMAL);
       circle.setStrokeStyle(state.strokeWidth ?? 0, state.strokeColor ?? state.color, state.strokeAlpha ?? 0);
     };
     this.fxCirclePool = new ReusableObjectPool<Phaser.GameObjects.Arc, FxCircleSpawn>(
@@ -2464,18 +2479,124 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  private playMineExplosion(x: number, y: number, radius: number): void {
+    // Mines are deliberately the loudest deployable detonation: layered plasma
+    // fronts provide the bomb-site scale without changing the damage footprint.
+    this.cameras.main.shake(380, 0.013, false);
+    const layers = [
+      { radius: 9, target: radius * 0.42, color: 0xffffff, alpha: 0.88, duration: 230 },
+      { radius: 13, target: radius * 0.72, color: 0xffa340, alpha: 0.68, duration: 350 },
+      { radius: 18, target: radius, color: 0xff4e27, alpha: 0.52, duration: 470 },
+      { radius: 22, target: radius * 1.28, color: 0xff174f, alpha: 0.28, duration: 620 }
+    ] as const;
+    for (const layer of layers) {
+      const wave = this.obtainFxCircle({
+        x, y, radius: layer.radius, color: layer.color, alpha: layer.alpha, depth: 14,
+        strokeWidth: layer.color === 0xffffff ? 0 : 3,
+        strokeColor: layer.color,
+        strokeAlpha: 0.95
+      });
+      wave.setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: wave,
+        radius: layer.target,
+        alpha: 0,
+        duration: layer.duration,
+        ease: 'Cubic.Out',
+        onComplete: () => {
+          wave.setBlendMode(Phaser.BlendModes.NORMAL);
+          this.retireFxCircle(wave);
+        }
+      });
+    }
+
+    const rays = this.add.graphics({ x, y }).setDepth(15).setBlendMode(Phaser.BlendModes.ADD);
+    const rayCount = this.particlesEnabled ? 24 : 12;
+    for (let index = 0; index < rayCount; index += 1) {
+      const angle = index * Math.PI * 2 / rayCount + (index % 3) * 0.035;
+      const inner = radius * (0.08 + (index % 4) * 0.012);
+      const outer = radius * (0.68 + (index % 5) * 0.075);
+      const color = index % 3 === 0 ? 0xffffff : index % 2 === 0 ? COLORS.orange : COLORS.red;
+      rays.lineStyle(index % 3 === 0 ? 2 : 4, color, index % 3 === 0 ? 0.92 : 0.72);
+      rays.lineBetween(Math.cos(angle) * inner, Math.sin(angle) * inner, Math.cos(angle) * outer, Math.sin(angle) * outer);
+    }
+    this.tweens.add({
+      targets: rays,
+      scaleX: 1.38,
+      scaleY: 1.38,
+      rotation: 0.3,
+      alpha: 0,
+      duration: 540,
+      ease: 'Quad.Out',
+      onComplete: () => rays.destroy()
+    });
+
+    const arcStorm = this.add.graphics({ x, y }).setDepth(15).setBlendMode(Phaser.BlendModes.ADD);
+    for (let index = 0; index < 7; index += 1) {
+      const arcRadius = radius * (0.2 + index * 0.075);
+      const start = index * 1.73;
+      arcStorm.lineStyle(2 + index % 2, index % 2 === 0 ? 0xff3b32 : 0xffb33c, 0.86);
+      arcStorm.beginPath();
+      arcStorm.arc(0, 0, arcRadius, start, start + 0.72 + (index % 3) * 0.28, false);
+      arcStorm.strokePath();
+    }
+    this.tweens.add({
+      targets: arcStorm,
+      rotation: -1.2,
+      scaleX: 1.5,
+      scaleY: 1.5,
+      alpha: 0,
+      duration: 680,
+      ease: 'Cubic.Out',
+      onComplete: () => arcStorm.destroy()
+    });
+
+    const emberCount = this.particlesEnabled ? 14 : 6;
+    for (let index = 0; index < emberCount; index += 1) {
+      const angle = index * Math.PI * 2 / emberCount + Phaser.Math.FloatBetween(-0.12, 0.12);
+      const distance = radius * Phaser.Math.FloatBetween(0.7, 1.35);
+      const ember = this.obtainFxCircle({
+        x, y,
+        radius: Phaser.Math.FloatBetween(1.8, 4.2),
+        color: index % 3 === 0 ? 0xfff0b0 : index % 2 === 0 ? COLORS.orange : COLORS.red,
+        alpha: 0.95,
+        depth: 16
+      });
+      ember.setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: ember,
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance,
+        scaleX: 0.2,
+        scaleY: 0.2,
+        alpha: 0,
+        duration: Phaser.Math.Between(430, 720),
+        ease: 'Quad.Out',
+        onComplete: () => {
+          ember.setBlendMode(Phaser.BlendModes.NORMAL);
+          this.retireFxCircle(ember);
+        }
+      });
+    }
+  }
+
   private placeAbility(type: AbilityType, now: number): void {
     const cfg = this.getAbilityConfig(type);
     if (now < this.abilityCooldownUntil[type]) {
       GameplayTelemetryRecorder.recordAbilityDenied(type, 'cooldown');
       return;
     }
+    const { x, y } = this.getAimWorldPoint();
+    if (type === 'mine' && this.modRuntime.has('full-rack-salvo')) {
+      this.placeFullRackSalvo(now, cfg, x, y);
+      return;
+    }
+
     if (!this.player.canSpendEnergy(cfg.energyCost)) {
       GameplayTelemetryRecorder.recordEnergyDenied(type, cfg.energyCost, this.player.energy);
       return;
     }
 
-    const { x, y } = this.getAimWorldPoint();
     if (!this.isValidPlacement(x, y)) {
       GameplayTelemetryRecorder.recordAbilityDenied(type, 'invalid-placement');
       return;
@@ -2513,7 +2634,97 @@ export class ArenaScene extends Phaser.Scene {
     this.player.spendEnergy(cfg.energyCost);
     GameplayTelemetryRecorder.recordAbilityUse(type, cfg.energyCost);
     this.abilityCooldownUntil[type] = now + cfg.cooldownMs;
+      this.audio.playSfx('place');
+  }
+
+  private placeFullRackSalvo(now: number, cfg: AbilityRuntimeConfig, aimX: number, aimY: number): void {
+    const salvo = this.modRuntime.fullRackSalvo();
+    if (!salvo) return;
+    const availableMines = Math.max(0, cfg.maxActive - this.mines.length);
+    if (availableMines === 0) {
+      GameplayTelemetryRecorder.recordAbilityDenied('mine', 'active-limit');
+      return;
+    }
+
+    const totalEnergyCost = getMineRackEnergyCost(cfg.energyCost, availableMines, salvo.energyCostMultiplier);
+    if (!this.player.canSpendEnergy(totalEnergyCost)) {
+      GameplayTelemetryRecorder.recordEnergyDenied('mine', totalEnergyCost, this.player.energy);
+      return;
+    }
+
+    const points = this.resolveMineRackPattern(aimX, aimY, availableMines, salvo.spacing);
+    if (!points) {
+      GameplayTelemetryRecorder.recordAbilityDenied('mine', 'invalid-placement');
+      return;
+    }
+
+    points.forEach((point, index) => {
+      this.mines.push(new Mine(
+        this,
+        point.x,
+        point.y,
+        COLORS.orange,
+        cfg.armMs,
+        cfg.damage,
+        cfg.radius,
+        {
+          fromX: this.player.x,
+          fromY: this.player.y,
+          durationMs: salvo.flightMs,
+          delayMs: index * salvo.staggerMs
+        }
+      ));
+    });
+    this.player.spendEnergy(totalEnergyCost);
+    GameplayTelemetryRecorder.recordAbilityUse('mine', totalEnergyCost);
+    this.abilityCooldownUntil.mine = now + cfg.cooldownMs;
     this.audio.playSfx('place');
+  }
+
+  private resolveMineRackPattern(
+    aimX: number,
+    aimY: number,
+    count: number,
+    spacing: number
+  ): Array<{ x: number; y: number }> | null {
+    const rotation = Phaser.Math.Angle.Between(this.player.x, this.player.y, aimX, aimY) + Math.PI / 4;
+    const centerCandidates: Array<{ x: number; y: number }> = [{ x: aimX, y: aimY }];
+    for (const distance of [30, 60, 90]) {
+      for (let index = 0; index < 8; index += 1) {
+        const angle = index * Math.PI / 4;
+        centerCandidates.push({ x: aimX + Math.cos(angle) * distance, y: aimY + Math.sin(angle) * distance });
+      }
+    }
+
+    for (const center of centerCandidates) {
+      for (const scale of [1, 0.84, 0.68, 0.52]) {
+        const offsets = getMineRackPatternOffsets(count, spacing * scale, rotation);
+        const points = offsets.map((offset) => ({ x: center.x + offset.x, y: center.y + offset.y }));
+        if (points.every((point, index) => this.isValidMineRackPoint(point.x, point.y, points, index))) return points;
+      }
+    }
+    return null;
+  }
+
+  private isValidMineRackPoint(
+    x: number,
+    y: number,
+    points: Array<{ x: number; y: number }>,
+    pointIndex: number
+  ): boolean {
+    if (!this.isValidPlacement(x, y) || this.intersectsWallGeometry(x, y, 18, 18)) return false;
+    const minimumSpacingSquared = 30 * 30;
+    for (const mine of this.mines) {
+      const dx = mine.sprite.x - x;
+      const dy = mine.sprite.y - y;
+      if (dx * dx + dy * dy < minimumSpacingSquared) return false;
+    }
+    for (let index = 0; index < pointIndex; index += 1) {
+      const dx = points[index].x - x;
+      const dy = points[index].y - y;
+      if (dx * dx + dy * dy < minimumSpacingSquared) return false;
+    }
+    return true;
   }
 
   private updateAbilities(now: number, dt: number): void {
@@ -2570,8 +2781,7 @@ export class ArenaScene extends Phaser.Scene {
       this.gasHazard?.igniteFromMine(mine.sprite.x, mine.sprite.y, mine.radius);
       this.audio.playSfx('mine');
       this.fluxCores?.damageArea(mine.sprite.x, mine.sprite.y, mine.radius, mine.damage, 'mine');
-      const blast = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 10, color: COLORS.orange, alpha: 0.35, depth: 7 });
-      this.tweens.add({ targets: blast, radius: mine.radius, alpha: 0, duration: 280, onComplete: () => this.retireFxCircle(blast) });
+      this.playMineExplosion(mine.sprite.x, mine.sprite.y, mine.radius);
       for (const e of this.enemies) {
         const dx = e.x - mine.sprite.x;
         const dy = e.y - mine.sprite.y;
@@ -4170,18 +4380,7 @@ export class ArenaScene extends Phaser.Scene {
     this.crosshair.fillCircle(x, y, 1.8);
   }
 
-  private getAbilityConfig(type: AbilityType): {
-    energyCost: number;
-    cooldownMs: number;
-    maxActive: number;
-    damage: number;
-    hp: number;
-    durationMs: number;
-    range: number;
-    fireRate: number;
-    armMs: number;
-    radius: number;
-  } {
+  private getAbilityConfig(type: AbilityType): AbilityRuntimeConfig {
     const up = this.runUpgrades;
     if (type === 'fence') {
       const upgradedDamage = ABILITY_BALANCE.fence.damage + getUpgradeLevel(up, 'fence.damage') * 4;
