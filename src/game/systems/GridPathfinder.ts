@@ -77,31 +77,56 @@ export class GridPathfinder {
     return this.blocked[this.index(cx, cy)] === 0;
   }
 
-  findNearestWalkableWorld(wx: number, wy: number, minimumRing = 0, maximumRing = 5): Phaser.Math.Vector2 | null {
+  private findNearestWalkableCell(
+    wx: number,
+    wy: number,
+    minimumRing = 0,
+    maximumRing = 5
+  ): Phaser.Math.Vector2 | null {
     const origin = this.worldToCell(wx, wy);
     for (let ring = minimumRing; ring <= maximumRing; ring += 1) {
-      const candidates: Array<{ x: number; y: number }> = [];
+      let bestX = -1;
+      let bestY = -1;
+      let bestDistanceSquared = Number.POSITIVE_INFINITY;
       for (let dy = -ring; dy <= ring; dy += 1) {
         for (let dx = -ring; dx <= ring; dx += 1) {
           if (ring > 0 && Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
-          if (this.isWalkable(origin.x + dx, origin.y + dy)) candidates.push({ x: origin.x + dx, y: origin.y + dy });
+          const cx = origin.x + dx;
+          const cy = origin.y + dy;
+          if (!this.isWalkable(cx, cy)) continue;
+          const centerX = cx * this.cellSize + this.cellSize * 0.5;
+          const centerY = cy * this.cellSize + this.cellSize * 0.5;
+          const worldDx = centerX - wx;
+          const worldDy = centerY - wy;
+          const distanceSquared = worldDx * worldDx + worldDy * worldDy;
+          if (distanceSquared >= bestDistanceSquared) continue;
+          bestDistanceSquared = distanceSquared;
+          bestX = cx;
+          bestY = cy;
         }
       }
-      if (candidates.length > 0) {
-        candidates.sort((a, b) => Math.hypot(a.x - origin.x, a.y - origin.y) - Math.hypot(b.x - origin.x, b.y - origin.y));
-        return this.cellToWorld(candidates[0].x, candidates[0].y);
-      }
+      if (bestX >= 0) return new Phaser.Math.Vector2(bestX, bestY);
     }
     return null;
   }
 
-  findPath(fromX: number, fromY: number, toX: number, toY: number, options?: PathQueryOptions): Phaser.Math.Vector2[] {
-    const start = this.worldToCell(fromX, fromY);
-    const goal = this.worldToCell(toX, toY);
+  findNearestWalkableWorld(wx: number, wy: number, minimumRing = 0, maximumRing = 5): Phaser.Math.Vector2 | null {
+    const cell = this.findNearestWalkableCell(wx, wy, minimumRing, maximumRing);
+    return cell ? this.cellToWorld(cell.x, cell.y) : null;
+  }
 
-    if (!this.isWalkable(goal.x, goal.y) || !this.isWalkable(start.x, start.y)) {
-      return [];
-    }
+  findPath(fromX: number, fromY: number, toX: number, toY: number, options?: PathQueryOptions): Phaser.Math.Vector2[] {
+    const requestedStart = this.worldToCell(fromX, fromY);
+    const requestedGoal = this.worldToCell(toX, toY);
+    const start = this.isWalkable(requestedStart.x, requestedStart.y)
+      ? requestedStart
+      : this.findNearestWalkableCell(fromX, fromY, 1, 8);
+    const goal = this.isWalkable(requestedGoal.x, requestedGoal.y)
+      ? requestedGoal
+      : this.findNearestWalkableCell(toX, toY, 1, 8);
+
+    if (!start || !goal) return [];
+    if (start.x === goal.x && start.y === goal.y) return [this.cellToWorld(goal.x, goal.y)];
 
     const open: Node[] = [{ x: start.x, y: start.y, g: 0, f: 0 }];
     const came = new Map<string, string>();
@@ -185,6 +210,13 @@ export class GridPathfinder {
     const cells = worldPath.map((p) => this.worldToCell(p.x, p.y));
     const smoothedCells = this.smoothCells(cells);
     return smoothedCells.map((cell) => this.cellToWorld(cell.x, cell.y));
+  }
+
+  hasLineOfSightWorld(fromX: number, fromY: number, toX: number, toY: number): boolean {
+    const start = this.worldToCell(fromX, fromY);
+    const goal = this.worldToCell(toX, toY);
+    if (!this.isWalkable(start.x, start.y) || !this.isWalkable(goal.x, goal.y)) return false;
+    return this.hasLineOfSightCells(start.x, start.y, goal.x, goal.y);
   }
 
   private smoothCells(cells: Phaser.Math.Vector2[]): Phaser.Math.Vector2[] {

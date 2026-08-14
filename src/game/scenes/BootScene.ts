@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { COLORS } from '../config/constants';
 import { SceneKeys } from '../flow/SceneKeys';
 import { publicAssetUrl } from '../utils/assetUrl';
+import { ENEMY_ROBOT_FRAMES } from '../enemies/EnemyRobotFrames.ts';
+import type { EnemyType } from '../types';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -297,31 +299,134 @@ export class BootScene extends Phaser.Scene {
       graphics.strokeRect(23, 24, 26, 24);
     });
 
-    createPlayerTexture('enemy-star', (graphics) => {
-      const points: Phaser.Types.Math.Vector2Like[] = [];
-      for (let i = 0; i < 10; i += 1) {
-        const outer = i % 2 === 0;
-        const radius = outer ? 13.5 : 6;
-        const angle = -Math.PI / 2 + (Math.PI / 5) * i;
-        points.push({ x: 16 + Math.cos(angle) * radius, y: 16 + Math.sin(angle) * radius });
-      }
-      graphics.fillPoints(points, true);
-      graphics.strokePoints(points, true);
+    const createEnemyRobot = (type: EnemyType, draw: (graphics: Phaser.GameObjects.Graphics) => void): void => {
+      g.clear();
+      g.fillStyle(0x04070d, 0);
+      g.fillRect(0, 0, 48, 48);
+      draw(g);
+      g.generateTexture(ENEMY_ROBOT_FRAMES[type].textureKey, 48, 48);
+    };
+
+    const armor = 0xffffff;
+    const secondaryArmor = 0xc4cad6;
+    const recess = 0x121a2b;
+    const lens = 0xe9faff;
+    const outline = 0x070b13;
+
+    createEnemyRobot('grunt', (graphics) => {
+      graphics.lineStyle(2, outline, 1);
+      graphics.fillStyle(secondaryArmor, 1);
+      graphics.fillRoundedRect(4, 17, 10, 15, 3).strokeRoundedRect(4, 17, 10, 15, 3);
+      graphics.fillRoundedRect(34, 17, 10, 15, 3).strokeRoundedRect(34, 17, 10, 15, 3);
+      graphics.fillStyle(armor, 1);
+      graphics.fillPoints([{ x: 14, y: 15 }, { x: 24, y: 8 }, { x: 34, y: 15 }, { x: 32, y: 39 }, { x: 24, y: 44 }, { x: 16, y: 39 }], true);
+      graphics.strokePoints([{ x: 14, y: 15 }, { x: 24, y: 8 }, { x: 34, y: 15 }, { x: 32, y: 39 }, { x: 24, y: 44 }, { x: 16, y: 39 }], true);
+      graphics.fillStyle(recess, 1).fillRoundedRect(17, 15, 14, 8, 3);
+      graphics.fillStyle(lens, 1).fillRect(19, 18, 4, 2).fillRect(25, 18, 4, 2);
+      graphics.fillStyle(recess, 1).fillTriangle(19, 29, 29, 29, 24, 37);
+      graphics.fillStyle(lens, 0.9).fillCircle(24, 31, 2);
     });
 
-    const createEnemyPolygon = (key: string, points: Phaser.Types.Math.Vector2Like[]): void => {
-      g.clear();
-      g.fillStyle(0xffffff, 1);
-      g.fillPoints(points, true);
-      g.lineStyle(2, 0x172033, 1);
-      g.strokePoints(points, true);
-      g.generateTexture(key, 32, 32);
-    };
-    createEnemyPolygon('enemy-grunt', [{ x: 16, y: 4 }, { x: 29, y: 27 }, { x: 3, y: 27 }]);
-    createEnemyPolygon('enemy-shooter', [{ x: 16, y: 2 }, { x: 30, y: 16 }, { x: 16, y: 30 }, { x: 2, y: 16 }]);
-    createEnemyPolygon('enemy-defuser', [{ x: 9, y: 3 }, { x: 23, y: 3 }, { x: 30, y: 16 }, { x: 23, y: 29 }, { x: 9, y: 29 }, { x: 2, y: 16 }]);
-    createEnemyPolygon('enemy-tank', [{ x: 7, y: 2 }, { x: 25, y: 2 }, { x: 30, y: 7 }, { x: 30, y: 25 }, { x: 25, y: 30 }, { x: 7, y: 30 }, { x: 2, y: 25 }, { x: 2, y: 7 }]);
-    createEnemyPolygon('enemy-disruptor', [{ x: 16, y: 2 }, { x: 30, y: 12 }, { x: 25, y: 29 }, { x: 7, y: 29 }, { x: 2, y: 12 }]);
+    createEnemyRobot('shooter', (graphics) => {
+      graphics.lineStyle(2, outline, 1);
+      graphics.fillStyle(secondaryArmor, 1);
+      graphics.fillRoundedRect(31, 5, 8, 24, 3).strokeRoundedRect(31, 5, 8, 24, 3);
+      graphics.fillRect(34, 1, 3, 11);
+      graphics.fillStyle(armor, 1);
+      const chassis = [{ x: 7, y: 23 }, { x: 18, y: 9 }, { x: 33, y: 16 }, { x: 40, y: 33 }, { x: 24, y: 43 }, { x: 8, y: 35 }];
+      graphics.fillPoints(chassis, true).strokePoints(chassis, true);
+      graphics.fillStyle(recess, 1).fillCircle(23, 26, 10);
+      graphics.fillStyle(lens, 1).fillCircle(23, 26, 5).fillCircle(23, 26, 2);
+      graphics.fillStyle(secondaryArmor, 1);
+      graphics.fillTriangle(7, 23, 2, 14, 15, 18).fillTriangle(8, 35, 3, 42, 18, 39);
+      graphics.lineStyle(1, recess, 1).strokeTriangle(7, 23, 2, 14, 15, 18).strokeTriangle(8, 35, 3, 42, 18, 39);
+    });
+
+    createEnemyRobot('defuser', (graphics) => {
+      graphics.lineStyle(2, outline, 1);
+      graphics.fillStyle(secondaryArmor, 1);
+      graphics.fillTriangle(13, 17, 3, 12, 6, 23).strokeTriangle(13, 17, 3, 12, 6, 23);
+      graphics.fillTriangle(35, 17, 45, 12, 42, 23).strokeTriangle(35, 17, 45, 12, 42, 23);
+      graphics.fillTriangle(13, 32, 3, 37, 6, 26).strokeTriangle(13, 32, 3, 37, 6, 26);
+      graphics.fillTriangle(35, 32, 45, 37, 42, 26).strokeTriangle(35, 32, 45, 37, 42, 26);
+      graphics.fillStyle(armor, 1);
+      const body = [{ x: 13, y: 7 }, { x: 35, y: 7 }, { x: 42, y: 24 }, { x: 35, y: 41 }, { x: 13, y: 41 }, { x: 6, y: 24 }];
+      graphics.fillPoints(body, true).strokePoints(body, true);
+      graphics.fillStyle(recess, 1).fillRoundedRect(13, 13, 22, 20, 4);
+      graphics.fillStyle(lens, 1).fillRect(17, 17, 14, 4);
+      graphics.fillStyle(secondaryArmor, 1).fillRect(18, 25, 12, 3).fillRect(22, 21, 4, 12);
+      graphics.fillStyle(lens, 0.9).fillCircle(24, 35, 2);
+    });
+
+    createEnemyRobot('tank', (graphics) => {
+      graphics.lineStyle(2, outline, 1);
+      graphics.fillStyle(secondaryArmor, 1);
+      graphics.fillRoundedRect(2, 8, 11, 32, 4).strokeRoundedRect(2, 8, 11, 32, 4);
+      graphics.fillRoundedRect(35, 8, 11, 32, 4).strokeRoundedRect(35, 8, 11, 32, 4);
+      graphics.lineStyle(2, recess, 1);
+      for (const y of [13, 20, 27, 34]) {
+        graphics.lineBetween(4, y, 11, y);
+        graphics.lineBetween(37, y, 44, y);
+      }
+      graphics.lineStyle(3, outline, 1);
+      graphics.fillStyle(armor, 1).fillRoundedRect(10, 5, 28, 38, 7).strokeRoundedRect(10, 5, 28, 38, 7);
+      graphics.fillStyle(recess, 1).fillRoundedRect(15, 11, 18, 12, 4);
+      graphics.fillStyle(lens, 1).fillRect(18, 15, 12, 4);
+      graphics.fillStyle(secondaryArmor, 1).fillRoundedRect(15, 27, 18, 10, 3);
+      graphics.fillStyle(recess, 1).fillCircle(24, 32, 4);
+      graphics.fillStyle(lens, 1).fillCircle(24, 32, 2);
+      graphics.fillStyle(secondaryArmor, 1).fillCircle(11, 8, 4).fillCircle(37, 8, 4);
+    });
+
+    createEnemyRobot('disruptor', (graphics) => {
+      graphics.lineStyle(2, outline, 1);
+      graphics.fillStyle(secondaryArmor, 1);
+      for (let index = 0; index < 5; index += 1) {
+        const angle = -Math.PI / 2 + index * Math.PI * 2 / 5;
+        const tangentX = -Math.sin(angle) * 5;
+        const tangentY = Math.cos(angle) * 5;
+        const innerX = 24 + Math.cos(angle) * 15;
+        const innerY = 24 + Math.sin(angle) * 15;
+        const outerX = 24 + Math.cos(angle) * 23;
+        const outerY = 24 + Math.sin(angle) * 23;
+        const prong = [
+          { x: innerX + tangentX, y: innerY + tangentY },
+          { x: outerX, y: outerY },
+          { x: innerX - tangentX, y: innerY - tangentY }
+        ];
+        graphics.fillPoints(prong, true).strokePoints(prong, true);
+      }
+      graphics.fillStyle(armor, 1).fillCircle(24, 24, 16).strokeCircle(24, 24, 16);
+      graphics.fillStyle(recess, 1).fillCircle(24, 24, 10);
+      graphics.lineStyle(2, lens, 1).strokeCircle(24, 24, 7);
+      graphics.fillStyle(lens, 1).fillCircle(24, 24, 3);
+      graphics.lineStyle(1, recess, 1);
+      graphics.lineBetween(24, 8, 24, 16).lineBetween(10, 32, 17, 28).lineBetween(38, 32, 31, 28);
+    });
+
+    createEnemyRobot('star', (graphics) => {
+      graphics.lineStyle(2, outline, 1);
+      graphics.fillStyle(secondaryArmor, 1);
+      for (let index = 0; index < 8; index += 1) {
+        const angle = -Math.PI / 2 + index * Math.PI / 4;
+        const tangentX = -Math.sin(angle) * 4.5;
+        const tangentY = Math.cos(angle) * 4.5;
+        const innerX = 24 + Math.cos(angle) * 13;
+        const innerY = 24 + Math.sin(angle) * 13;
+        const outerX = 24 + Math.cos(angle) * (index % 2 === 0 ? 23 : 19);
+        const outerY = 24 + Math.sin(angle) * (index % 2 === 0 ? 23 : 19);
+        const arm = [
+          { x: innerX + tangentX, y: innerY + tangentY },
+          { x: outerX, y: outerY },
+          { x: innerX - tangentX, y: innerY - tangentY }
+        ];
+        graphics.fillPoints(arm, true).strokePoints(arm, true);
+      }
+      graphics.fillStyle(armor, 1).fillCircle(24, 24, 14).strokeCircle(24, 24, 14);
+      graphics.fillStyle(recess, 1).fillPoints([{ x: 24, y: 12 }, { x: 36, y: 24 }, { x: 24, y: 36 }, { x: 12, y: 24 }], true);
+      graphics.fillStyle(lens, 1).fillCircle(24, 24, 6);
+      graphics.fillStyle(recess, 1).fillCircle(24, 24, 2);
+    });
 
     const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, legendaryRevealModule, upgradeModule, cosmeticModule, modModule, garageModule, resultModule, optionsModule, roundFinishedModule, loadingModule] = await Promise.all([
       import('./SplashScene'),

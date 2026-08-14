@@ -16,6 +16,7 @@ import { MAX_DISTINCT_FENCE_SPLITS, resolveFenceSplitStage } from '../abilities/
 import { Player } from '../entities/Player';
 import { baseEnemyStats, Enemy } from '../enemies/Enemy';
 import { getTankHomingMissileSpeed, steerTankHomingMissile } from '../enemies/HomingMissile.ts';
+import { ENEMY_ROBOT_FRAMES } from '../enemies/EnemyRobotFrames.ts';
 import { BombSiteState, RoundState, type AbilityType, type ArenaLayout, type ArenaReward, type ArenaSessionState, type ArenaTemplate, type BombSiteRuntime, type EnemyType, type PickupType, type RectSpec, type RoundFinishedPayload } from '../types';
 import { AudioManager } from '../systems/AudioManager';
 import { BombSiteManager } from '../systems/BombSiteManager';
@@ -159,6 +160,8 @@ interface NavState {
   lastSampleY: number;
   lastSampleAt: number;
   stuckTicks: number;
+  preferObjective: boolean;
+  nextFocusDecisionAt: number;
 }
 
 interface PatrolPoint {
@@ -206,6 +209,7 @@ const ROUND_PHASE_LABELS: Record<RoundState, string> = {
 type MineExplosionPalette = readonly [core: number, primary: number, secondary: number, outer: number];
 const PLAYER_MINE_EXPLOSION_PALETTE: MineExplosionPalette = [0xffffff, 0xffa340, 0xff4e27, 0xff174f];
 const STAR_MINE_EXPLOSION_PALETTE: MineExplosionPalette = [0xf4ffff, COLORS.pink, COLORS.cyan, 0xff24d4];
+const ENEMY_NAVIGATION_PADDING = 22;
 
 export class ArenaScene extends Phaser.Scene {
   private readonly state = new GameStateMachine(RoundState.PrePlant);
@@ -630,7 +634,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.layout = ArenaGenerator.generate(def.seed, def.template, def.round, def.siteCount);
     this.drawProceduralArena(this.layout);
-    this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 32, this.getBlockers(), 8);
+    this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 32, this.getBlockers(), ENEMY_NAVIGATION_PADDING);
 
     this.createOrMovePlayer();
     this.modRuntime.beginRound(1);
@@ -1553,7 +1557,7 @@ export class ArenaScene extends Phaser.Scene {
       damage: Math.round(base.damage * (1 + (curve.damageMultiplier - 1) * phaseScale))
     };
 
-    const enemyTexture = type === 'star' ? 'enemy-star' : `enemy-${type}`;
+    const enemyTexture = ENEMY_ROBOT_FRAMES[type].textureKey;
     const enemy = new Enemy(this, spawn.x, spawn.y, enemyTexture, stats);
     enemy.telemetrySpawnedAtActiveMs = GameplayTelemetryRecorder.recordEnemySpawn(type, stats.hp);
     if (type === 'tank') {
@@ -1582,7 +1586,9 @@ export class ArenaScene extends Phaser.Scene {
       lastSampleX: enemy.x,
       lastSampleY: enemy.y,
       lastSampleAt: this.time.now,
-      stuckTicks: 0
+      stuckTicks: 0,
+      preferObjective: false,
+      nextFocusDecisionAt: 0
     });
     this.patrolTargets.set(enemy, { x: spawn.x, y: spawn.y });
   }
@@ -1810,6 +1816,16 @@ export class ArenaScene extends Phaser.Scene {
     this.navigateEnemy(enemy, target.x, target.y, now, enemy.stats.speed * 0.82);
   }
 
+  private enemyPrefersObjective(enemy: Enemy, now: number, chance: number): boolean {
+    const nav = this.navState.get(enemy);
+    if (!nav) return Math.random() < chance;
+    if (now >= nav.nextFocusDecisionAt) {
+      nav.preferObjective = Math.random() < chance;
+      nav.nextFocusDecisionAt = now + Phaser.Math.Between(900, 1400);
+    }
+    return nav.preferObjective;
+  }
+
   private updateMelee(enemy: Enemy, site: BombSiteRuntime, now: number): void {
     const turretTarget = this.getSecondaryTurretTarget(enemy, now);
     if (turretTarget) {
@@ -1827,8 +1843,9 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const toBomb = Phaser.Math.Distance.Between(enemy.x, enemy.y, site.x, site.y);
-    const tx = toBomb < 260 || Math.random() < 0.42 ? site.x : this.player.x;
-    const ty = toBomb < 260 || Math.random() < 0.42 ? site.y : this.player.y;
+    const focusBombSite = toBomb < 260 || this.enemyPrefersObjective(enemy, now, 0.42);
+    const tx = focusBombSite ? site.x : this.player.x;
+    const ty = focusBombSite ? site.y : this.player.y;
 
     this.navigateEnemy(enemy, tx, ty, now, enemy.stats.speed);
 
@@ -2109,8 +2126,9 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateShooter(enemy: Enemy, now: number, site: BombSiteRuntime): void {
     const turretTarget = this.getSecondaryTurretTarget(enemy, now);
-    const focusX = turretTarget?.sprite.x ?? (Math.random() < 0.25 ? site.x : this.player.x);
-    const focusY = turretTarget?.sprite.y ?? (Math.random() < 0.25 ? site.y : this.player.y);
+    const focusBombSite = this.enemyPrefersObjective(enemy, now, 0.25);
+    const focusX = turretTarget?.sprite.x ?? (focusBombSite ? site.x : this.player.x);
+    const focusY = turretTarget?.sprite.y ?? (focusBombSite ? site.y : this.player.y);
 
     const focusDeltaX = focusX - enemy.x;
     const focusDeltaY = focusY - enemy.y;
@@ -2188,22 +2206,18 @@ export class ArenaScene extends Phaser.Scene {
 
     const body = enemy.body as Phaser.Physics.Arcade.Body | null;
     if (body && (body.blocked.left || body.blocked.right || body.blocked.up || body.blocked.down)) {
-      const bounceX = (body.blocked.left ? 1 : 0) + (body.blocked.right ? -1 : 0);
-      const bounceY = (body.blocked.up ? 1 : 0) + (body.blocked.down ? -1 : 0);
-      enemy.setVelocity(
-        (bounceX + Phaser.Math.FloatBetween(-0.25, 0.25)) * speed,
-        (bounceY + Phaser.Math.FloatBetween(-0.25, 0.25)) * speed
-      );
       nav.path.length = 0;
       nav.waypointIndex = 0;
-      nav.nextRepathAt = now + 70;
-      return;
+      nav.nextRepathAt = 0;
+      nav.stuckTicks = Math.max(1, nav.stuckTicks);
     }
 
     if (now - nav.lastSampleAt >= 240) {
-      const moved = Phaser.Math.Distance.Between(enemy.x, enemy.y, nav.lastSampleX, nav.lastSampleY);
-      const targetDist = Phaser.Math.Distance.Between(enemy.x, enemy.y, targetX, targetY);
-      if (targetDist > 46 && moved < 5) {
+      const movedX = enemy.x - nav.lastSampleX;
+      const movedY = enemy.y - nav.lastSampleY;
+      const targetDx = enemy.x - targetX;
+      const targetDy = enemy.y - targetY;
+      if (targetDx * targetDx + targetDy * targetDy > 46 * 46 && movedX * movedX + movedY * movedY < 5 * 5) {
         nav.stuckTicks += 1;
       } else {
         nav.stuckTicks = Math.max(0, nav.stuckTicks - 1);
@@ -2216,22 +2230,21 @@ export class ArenaScene extends Phaser.Scene {
       if (nav.stuckTicks >= 2) {
         nav.path.length = 0;
         nav.waypointIndex = 0;
-        nav.nextRepathAt = now + 45;
-        enemy.setVelocity(
-          Phaser.Math.FloatBetween(-1, 1) * speed * 0.7,
-          Phaser.Math.FloatBetween(-1, 1) * speed * 0.7
-        );
-        if (nav.stuckTicks >= 3) {
-          const recovery = this.pathfinder.findNearestWalkableWorld(enemy.x, enemy.y, 1, 4);
+        nav.nextRepathAt = 0;
+        if (nav.stuckTicks >= 4) {
+          const recovery = this.pathfinder.findNearestWalkableWorld(enemy.x, enemy.y, 0, 4);
           if (recovery) {
-            enemy.setPosition(recovery.x, recovery.y);
-            body?.reset(recovery.x, recovery.y);
-            nav.lastSampleX = recovery.x;
-            nav.lastSampleY = recovery.y;
+            const recoveryDx = recovery.x - enemy.x;
+            const recoveryDy = recovery.y - enemy.y;
+            if (recoveryDx * recoveryDx + recoveryDy * recoveryDy > 24 * 24) {
+              enemy.setPosition(recovery.x, recovery.y);
+              body?.reset(recovery.x, recovery.y);
+              nav.lastSampleX = recovery.x;
+              nav.lastSampleY = recovery.y;
+            }
           }
-          nav.stuckTicks = 0;
+          nav.stuckTicks = 1;
         }
-        return;
       }
     }
 
@@ -2265,12 +2278,16 @@ export class ArenaScene extends Phaser.Scene {
       nav.targetKey = key;
     }
 
-    let waypoint = nav.path[nav.waypointIndex];
-    if (waypoint) {
-      const d = Phaser.Math.Distance.Between(enemy.x, enemy.y, waypoint.x, waypoint.y);
-      if (d < 18 && nav.waypointIndex < nav.path.length - 1) {
+    let waypoint: Phaser.Math.Vector2 | undefined = nav.path[nav.waypointIndex];
+    while (waypoint) {
+      const dx = enemy.x - waypoint.x;
+      const dy = enemy.y - waypoint.y;
+      if (dx * dx + dy * dy >= 18 * 18) break;
+      if (nav.waypointIndex < nav.path.length - 1) {
         nav.waypointIndex += 1;
         waypoint = nav.path[nav.waypointIndex];
+      } else {
+        waypoint = undefined;
       }
     }
 
@@ -2290,9 +2307,14 @@ export class ArenaScene extends Phaser.Scene {
     const directDistanceSquared = directX * directX + directY * directY;
     if (directDistanceSquared <= 1) {
       enemy.setVelocity(0, 0);
-    } else {
+    } else if (this.pathfinder.hasLineOfSightWorld(enemy.x, enemy.y, targetX, targetY)) {
       const inverseDistance = 1 / Math.sqrt(directDistanceSquared);
       enemy.setVelocity(directX * inverseDistance * speed, directY * inverseDistance * speed);
+    } else {
+      // Never fall back to driving directly into geometry when a path query
+      // temporarily fails. The next staggered repath will try again.
+      enemy.setVelocity(0, 0);
+      nav.nextRepathAt = Math.min(nav.nextRepathAt, now + 90);
     }
   }
 
@@ -4085,7 +4107,7 @@ export class ArenaScene extends Phaser.Scene {
     const bossSeed = (payload.completedSeed ^ Math.imul(this.bossRound, 0x6c8e9cf5) ^ 0xb055a11e) >>> 0;
     this.layout = ArenaGenerator.generate(bossSeed, arenaByBoss[archetype], this.bossRound, 1);
     this.drawProceduralArena(this.layout);
-    this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 32, this.getBlockers(), 8);
+    this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 32, this.getBlockers(), ENEMY_NAVIGATION_PADDING);
     this.createOrMovePlayer();
     this.modRuntime.beginRound(1);
     this.createHudLayer();
