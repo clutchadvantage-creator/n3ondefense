@@ -1,14 +1,28 @@
 import Phaser from 'phaser';
+import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
-import type { ArenaSessionState, RoundFinishedPayload } from '../types';
-import { startArenaLoad } from '../utils/runFlow';
-import { createButton, disableButton } from '../utils/ui';
-import { OnlineRunManager } from '../../online/OnlineRunManager';
-import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
 import { RUN_PROTOCOLS, normalizeRunProtocolId } from '../mods/modBalance.ts';
+import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
+import type { ArenaSessionState, RoundFinishedPayload } from '../types';
+import { calculateDebriefLayout, splitDebriefPrimary } from '../ui/DebriefLayout.ts';
+import {
+  createDebriefActions,
+  createDebriefHighlight,
+  createDebriefShell,
+  createOperationReadout,
+  createRewardSummary
+} from '../ui/DebriefUi.ts';
+import { startArenaLoad } from '../utils/runFlow';
+import { disableButton } from '../utils/ui';
+
+const displayId = (value: string | null | undefined): string => value
+  ? value.replace(/([A-Z])/g, ' $1').replace(/-/g, ' ').trim().toUpperCase()
+  : 'NONE';
 
 export class RoundFinishedScene extends Phaser.Scene {
+  private readonly handleResize = (): void => { this.scene.restart(); };
+
   constructor() {
     super(SceneKeys.RoundFinished);
   }
@@ -17,136 +31,93 @@ export class RoundFinishedScene extends Phaser.Scene {
     const payload = this.registry.get('round-finished') as RoundFinishedPayload | undefined;
     const protocolDefinition = RUN_PROTOCOLS[normalizeRunProtocolId(payload?.protocol)];
     const { width, height } = this.scale;
+    const layout = calculateDebriefLayout(width, height);
+    const sections = splitDebriefPrimary(layout.primary, layout.compact);
+    const completedRound = payload?.completedRound ?? '-';
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x040811, 1);
-    const panelWidth = Math.min(920, width - 48);
-    const panelHeight = Math.min(700, height - 36);
-    const panelTop = (height - panelHeight) / 2;
-    const panelBottom = panelTop + panelHeight;
-    this.add.rectangle(width / 2, height / 2, panelWidth, panelHeight, 0x091421, 0.94)
-      .setStrokeStyle(2, 0x55dff4, 0.7);
+    createDebriefShell(this, layout, 'complete', 'ROUND FINISHED', `ROUND ${completedRound} // OPERATION COMPLETE`);
+    createRewardSummary(this, sections.rewards, [
+      { kind: 'credits', value: payload?.creditsGained ?? 0 },
+      { kind: 'coreTokens', value: payload?.coreTokensGained ?? 0 },
+      { kind: 'plasmaChips', value: payload?.plasmaChipsGained ?? 0 },
+      { kind: 'fluxCores', value: payload?.fluxCoresGained ?? 0 }
+    ], layout.compact);
 
-    this.add.text(width / 2, panelTop + 32, 'ROUND FINISHED', {
-      fontFamily: 'Orbitron, sans-serif',
-      fontSize: `${Phaser.Math.Clamp(width * 0.038, 32, 46)}px`,
-      color: '#6bfffb',
-      align: 'center',
-      wordWrap: { width: panelWidth - 64, useAdvancedWrap: true }
-    }).setOrigin(0.5, 0);
+    const operationFields = [
+      { label: 'PROTOCOL', value: protocolDefinition.label.toUpperCase() },
+      { label: 'CONTRACT', value: displayId(payload?.contract) },
+      { label: 'SIGNAL', value: displayId(payload?.modFocus) },
+      { label: 'MODS ACQUIRED', value: String(payload?.modsEarned.length ?? 0) },
+      { label: 'LAYOUT', value: displayId(payload?.completedTemplate) },
+      { label: 'COMPLETED SEED', value: String(payload?.completedSeed ?? '-') }
+    ];
+    if (payload?.bossDefeated) operationFields.push({ label: 'BOSS DEFEATED', value: displayId(payload.bossDefeated) });
+    createOperationReadout(this, sections.operation, operationFields, layout.compact);
 
-    this.add.text(width / 2, panelTop + 88, `Round ${payload?.completedRound ?? '-'} complete`, {
-      fontFamily: 'Rajdhani, sans-serif',
-      fontSize: `${height < 700 ? 25 : 30}px`,
-      color: '#d8f8ff'
-    }).setOrigin(0.5, 0);
+    createDebriefHighlight(this, sections.highlight, {
+      eyebrow: 'NEXT DEPLOYMENT // ARENA PREVIEW',
+      primary: `ROUND ${payload?.nextRound ?? '-'}`,
+      details: [`LAYOUT ${displayId(payload?.nextTemplate)}`, `SEED ${payload?.nextSeed ?? '-'}`],
+      tone: 'complete'
+    }, layout.compact);
 
-    const completedSummary = this.add.text(
-      width / 2,
-      panelTop + 132,
-      `Credits Gained: ${payload?.creditsGained ?? 0}\nCore Tokens Gained: ${payload?.coreTokensGained ?? 0}\nPlasma Chips Gained: ${payload?.plasmaChipsGained ?? 0}${payload?.bossDefeated ? `\nBoss Defeated: ${payload.bossDefeated.replace(/-/g, ' ').toUpperCase()}` : ''}\nProtocol: ${protocolDefinition.label}  •  Contract: ${(payload?.contract ?? 'none').replace(/-/g, ' ').toUpperCase()}\nMod Signal: ${(payload?.modFocus ?? 'none').replace(/([A-Z])/g, ' $1').toUpperCase()}  •  Mods Earned: ${payload?.modsEarned.length ?? 0}\nCompleted Seed: ${payload?.completedSeed ?? '-'}\nCompleted Layout: ${payload?.completedTemplate ?? '-'}`,
+    let continueButton!: Phaser.GameObjects.Container;
+    const actions = createDebriefActions(this, layout.actions, [
       {
-        fontFamily: 'Rajdhani, sans-serif',
-        fontSize: `${height < 700 ? 19 : 22}px`,
-        color: '#d6eeff',
-        align: 'center',
-        lineSpacing: 3,
-        wordWrap: { width: panelWidth - 72, useAdvancedWrap: true }
-      }
-    ).setOrigin(0.5, 0);
-
-    if ((payload?.fluxCoresGained ?? 0) > 0) {
-      completedSummary.setText(completedSummary.text.replace(
-        `Plasma Chips Gained: ${payload?.plasmaChipsGained ?? 0}`,
-        `Plasma Chips Gained: ${payload?.plasmaChipsGained ?? 0}\nFlux Cores Recovered: ${payload?.fluxCoresGained ?? 0}`
-      ));
-    }
-
-    const nextSummary = this.add.text(
-      width / 2,
-      completedSummary.y + completedSummary.height + 18,
-      `Next Round: ${payload?.nextRound ?? '-'}\nNext Seed: ${payload?.nextSeed ?? '-'}\nNext Layout: ${payload?.nextTemplate ?? '-'}`,
+        label: 'CONTINUE TO NEXT ROUND',
+        primary: true,
+        onClick: () => {
+          disableButton(continueButton);
+          if (!payload) {
+            startArenaLoad(this, { reason: 'continue-next-round', message: 'Building next arena...' });
+            return;
+          }
+          const session: ArenaSessionState = {
+            baseSeed: payload.baseSeed,
+            round: payload.nextRound,
+            objectiveMode: payload.objectiveMode,
+            protocol: payload.protocol,
+            runStartedAt: payload.runStartedAt,
+            equippedMods: payload.equippedMods,
+            modsEarned: payload.modsEarned,
+            modFocus: payload.modFocus,
+            contract: payload.contract,
+            creditsSpentBeforeRun: payload.creditsSpentBeforeRun,
+            upgradeCompletionPercentage: payload.upgradeCompletionPercentage,
+            accountProgressionTier: payload.accountProgressionTier,
+            runCreditsEarned: payload.runCreditsEarned
+          };
+          startArenaLoad(this, { reason: 'continue-next-round', session, message: 'Deploying next round arena...' });
+        }
+      },
       {
-        fontFamily: 'Rajdhani, sans-serif',
-        fontSize: `${height < 700 ? 20 : 24}px`,
-        color: '#ffc89a',
-        align: 'center',
-        lineSpacing: 3,
-        wordWrap: { width: panelWidth - 72, useAdvancedWrap: true }
+        label: 'STORE',
+        onClick: () => this.scene.start(SceneKeys.Upgrades, { returnScene: SceneKeys.RoundFinished, resumePausedScene: false })
+      },
+      {
+        label: 'MOD COLLECTION',
+        onClick: () => this.scene.start(SceneKeys.Mods, { returnScene: SceneKeys.RoundFinished })
+      },
+      {
+        label: 'EXPORT GAMEPLAY METRICS',
+        onClick: () => GameplayTelemetryRecorder.exportToJsonFile()
+      },
+      {
+        label: 'QUIT TO MAIN MENU',
+        warning: true,
+        onClick: () => {
+          OnlineRunManager.complete('quit', payload?.completedRound);
+          GameplayTelemetryRecorder.finishRun('quit');
+          this.registry.remove('arena-session');
+          RunTransitionManager.clearForMenu(this);
+          this.scene.start(SceneKeys.MainMenu);
+        }
       }
-    ).setOrigin(0.5, 0);
+    ], layout.compact, 'ENDLESS FLOW // NEXT ARENA READY');
+    continueButton = actions.get('CONTINUE TO NEXT ROUND')!;
 
-    const buttonSpacing = 48;
-    const buttonHalfHeight = 20;
-    const footerFontSize = height < 700 ? 16 : 18;
-    const footerEstimatedHeight = footerFontSize + 6;
-    const minimumFirstButtonY = nextSummary.y + nextSummary.height + 24;
-    const preferredFirstButtonY = Math.max(minimumFirstButtonY, panelBottom - 288);
-    const preferredFooterBottom = panelBottom - 12;
-    const preferredFooterTop = preferredFooterBottom - footerEstimatedHeight;
-    const preferredButtonStackBottom = preferredFirstButtonY + buttonSpacing * 4 + buttonHalfHeight;
-    const footerBottom = preferredButtonStackBottom + 10 <= preferredFooterTop
-      ? preferredFooterBottom
-      : Math.min(height - 8, panelBottom + 14);
-    const footerTop = footerBottom - footerEstimatedHeight;
-    const latestFirstButtonY = footerTop - 10 - buttonSpacing * 4 - buttonHalfHeight;
-    const footerFits = latestFirstButtonY >= minimumFirstButtonY;
-    const firstButtonY = footerFits
-      ? Math.min(preferredFirstButtonY, latestFirstButtonY)
-      : preferredFirstButtonY;
-
-    const continueButton = createButton(this, width / 2, firstButtonY, 'Continue To Next Round', () => {
-      disableButton(continueButton);
-      if (!payload) {
-        startArenaLoad(this, { reason: 'continue-next-round', message: 'Building next arena...' });
-        return;
-      }
-
-      const session: ArenaSessionState = {
-        baseSeed: payload.baseSeed,
-        round: payload.nextRound,
-        objectiveMode: payload.objectiveMode,
-        protocol: payload.protocol,
-        runStartedAt: payload.runStartedAt,
-        equippedMods: payload.equippedMods,
-        modsEarned: payload.modsEarned,
-        modFocus: payload.modFocus,
-        contract: payload.contract,
-        creditsSpentBeforeRun: payload.creditsSpentBeforeRun,
-        upgradeCompletionPercentage: payload.upgradeCompletionPercentage,
-        accountProgressionTier: payload.accountProgressionTier,
-        runCreditsEarned: payload.runCreditsEarned
-      };
-      startArenaLoad(this, { reason: 'continue-next-round', session, message: 'Deploying next round arena...' });
-    }, 320);
-
-    createButton(this, width / 2, firstButtonY + buttonSpacing, 'Store', () => {
-      this.scene.start(SceneKeys.Upgrades, { returnScene: SceneKeys.RoundFinished, resumePausedScene: false });
-    }, 320);
-
-    createButton(this, width / 2, firstButtonY + buttonSpacing * 2, 'Mod Collection', () => {
-      this.scene.start(SceneKeys.Mods, { returnScene: SceneKeys.RoundFinished });
-    }, 320);
-
-    createButton(this, width / 2, firstButtonY + buttonSpacing * 3, 'Export Gameplay Metrics', () => {
-      GameplayTelemetryRecorder.exportToJsonFile();
-    }, 320);
-
-    createButton(this, width / 2, firstButtonY + buttonSpacing * 4, 'Quit To Main Menu', () => {
-      OnlineRunManager.complete('quit', payload?.completedRound);
-      GameplayTelemetryRecorder.finishRun('quit');
-      this.registry.remove('arena-session');
-      RunTransitionManager.clearForMenu(this);
-      this.scene.start(SceneKeys.MainMenu);
-    }, 320);
-
-    if (footerFits) {
-      this.add.text(width / 2, footerBottom, 'Endless flow: continue to generate a new arena each round.', {
-        fontFamily: 'Rajdhani, sans-serif',
-        fontSize: `${footerFontSize}px`,
-        color: '#9eb8d4',
-        align: 'center',
-        wordWrap: { width: panelWidth - 56, useAdvancedWrap: true }
-      }).setOrigin(0.5, 1);
-    }
+    this.scale.off('resize', this.handleResize, this);
+    this.scale.on('resize', this.handleResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', this.handleResize, this));
   }
 }
