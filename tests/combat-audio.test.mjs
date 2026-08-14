@@ -43,6 +43,17 @@ test('shield activation uses its dedicated reusable recording', () => {
   assert.doesNotMatch(audio, /soundeffects\/shieldon\.mp3/);
 });
 
+test('shield deactivation audio follows the final runtime shield expiry', () => {
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/shielddown.mp3', import.meta.url)));
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(audio, /audioAssetUrl\('soundeffects\/shielddown\.mp3'\)/);
+  assert.match(audio, /case 'shieldOff':[\s\S]*?this\.playShieldOffSfx\(\)/);
+  assert.match(arena, /this\.shieldActiveUntil = now \+ durationMs/);
+  assert.match(arena, /getShieldDurationMs\(\)[\s\S]*?getUpgradeEffect\(this\.runUpgrades, 'player\.shieldDuration'\)[\s\S]*?this\.modRuntime\.multiplier\('shieldDuration'\)/);
+  assert.match(arena, /if \(now >= this\.shieldActiveUntil\) \{[\s\S]*?playSfx\('shieldOff'\)[\s\S]*?destroyShieldOrb\(\)/);
+});
+
 test('operative shield is a reusable layered energy field with bounded crackle geometry', () => {
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   assert.match(arena, /interface OperativeShieldVisual/);

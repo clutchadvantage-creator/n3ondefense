@@ -168,7 +168,10 @@ export class OperatorGarageScene extends Phaser.Scene {
       const value = this.add.text(roomy ? rect.width - 15 : 15, y + (roomy ? 4 : 10), row.value, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '17px' : '10px', fontStyle: 'bold', color: '#d6fbff'
       }).setOrigin(roomy ? 1 : 0, 0).setMaxLines(1);
-      hit.on('pointerover', () => hit.setFillStyle(0x17374a, 0.75));
+      hit.on('pointerover', () => {
+        hit.setFillStyle(0x17374a, 0.75);
+        this.audio.playSfx('menuHover');
+      });
       hit.on('pointerout', () => hit.setFillStyle(0x102331, 0.5));
       hit.on('pointerdown', () => {
         row.action();
@@ -325,7 +328,10 @@ export class OperatorGarageScene extends Phaser.Scene {
         const emptyHit = this.add.rectangle(center.x, center.y, cardWidth, cardHeight, 0x0a1923, 0.78).setStrokeStyle(1, 0x4bd7e9, 0.25).setInteractive({ useHandCursor: true }).setDepth(26);
         this.add.text(center.x, center.y - 13, '+', { fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 25 : 34}px`, color: '#376979' }).setOrigin(0.5).setDepth(27);
         this.add.text(center.x, center.y + 22, 'AWAITING\nMODULE', { fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, color: '#638795', align: 'center' }).setOrigin(0.5).setDepth(27);
-        emptyHit.on('pointerover', () => emptyHit.setStrokeStyle(2, 0x62efff, 0.72));
+        emptyHit.on('pointerover', () => {
+          emptyHit.setStrokeStyle(2, 0x62efff, 0.72);
+          this.audio.playSfx('menuHover');
+        });
         emptyHit.on('pointerout', () => emptyHit.setStrokeStyle(1, 0x4bd7e9, 0.25));
         emptyHit.on('pointerdown', () => {
           this.audio.playSfx('menu');
@@ -492,6 +498,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       const visual = this.createLockerCosmeticVisual(item, x, y - 20, Math.min(76, itemWidth * 0.55), 38);
       const label = this.add.text(x, y + 7, item.label.toUpperCase(), { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', fontStyle: 'bold', color: '#e4faff', align: 'center' }).setOrigin(0.5).setWordWrapWidth(itemWidth - 12, true).setMaxLines(2);
       const state = this.add.text(x, y + 35, equipped ? 'EQUIPPED' : 'OWNED // CLICK TO EQUIP', { fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: equipped ? '#70ffac' : '#89abba' }).setOrigin(0.5);
+      panel.on('pointerover', () => this.audio.playSfx('menuHover'));
       panel.on('pointerdown', () => {
         SaveSystem.equipCosmetic(item.category, item.id);
         if (item.category === 'playerShape' || item.category === 'playerColor') this.refreshOperatorPreview();
@@ -569,7 +576,9 @@ export class OperatorGarageScene extends Phaser.Scene {
       const y = 96 + cardHeight / 2 + row * (cardHeight + gap);
       const panel = this.add.rectangle(x, y, cardWidth, cardHeight, unlocked ? 0x0b2425 : 0x10141d, 0.95)
         .setStrokeStyle(selected ? 3 : 1, selected ? 0xffb14d : unlocked ? 0x61ffab : 0x445765, selected ? 1 : 0.58);
-      panel.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      panel.setInteractive({ useHandCursor: true });
+      panel.on('pointerover', () => this.audio.playSfx('menuHover'));
+      panel.on('pointerdown', () => {
         if (!unlocked) {
           this.audio.playSfx('itemLocked');
           return;

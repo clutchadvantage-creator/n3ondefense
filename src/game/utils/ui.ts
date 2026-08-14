@@ -29,7 +29,10 @@ export const createButton = (
   const hit = scene.add.rectangle(0, 0, width, 40, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
   hit.setName('button-hit');
   const state: ButtonAudioState = { enabled: true };
-  hit.on('pointerover', () => bg.setStrokeStyle(2, state.enabled ? COLORS.pink : 0xff7f9f, 1));
+  hit.on('pointerover', () => {
+    bg.setStrokeStyle(2, state.enabled ? COLORS.pink : 0xff7f9f, 1);
+    AudioManager.get().playSfx('menuHover');
+  });
   hit.on('pointerout', () => bg.setStrokeStyle(2, COLORS.cyan, 0.9));
   hit.on('pointerdown', () => {
     if (!state.enabled) {

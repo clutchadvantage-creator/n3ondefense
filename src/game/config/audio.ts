@@ -2,6 +2,7 @@ export const SFX_DEFINITIONS = [
   { key: 'shot', label: 'Weapon Fire' },
   { key: 'boost', label: 'Boost' },
   { key: 'shieldOn', label: 'Shield Activation' },
+  { key: 'shieldOff', label: 'Shield Deactivation' },
   { key: 'planting', label: 'Planting' },
   { key: 'hit', label: 'Enemy Hit' },
   { key: 'playerDamage', label: 'Player Damage' },
@@ -20,6 +21,7 @@ export const SFX_DEFINITIONS = [
   { key: 'fluxCore', label: 'Flux Core Energy' },
   { key: 'modCollection', label: 'Mod Acquired' },
   { key: 'legendaryMod', label: 'Legendary Mod' },
+  { key: 'menuHover', label: 'Menu Hover' },
   { key: 'menu', label: 'Menu Select' },
   { key: 'itemLocked', label: 'Locked / Unavailable' },
   { key: 'runStart', label: 'Deployment Start' }

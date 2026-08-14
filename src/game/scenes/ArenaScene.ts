@@ -1775,6 +1775,7 @@ export class ArenaScene extends Phaser.Scene {
     const shield = this.shieldVisual;
     if (!shield) return;
     if (now >= this.shieldActiveUntil) {
+      this.audio.playSfx('shieldOff');
       this.destroyShieldOrb();
       return;
     }

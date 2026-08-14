@@ -246,7 +246,10 @@ export class OptionsScene extends Phaser.Scene {
       }).setOrigin(0.5);
       valueLabels.set(action, value);
       const hit = this.add.rectangle(x + 62, y, 164, 29, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
-      hit.on('pointerover', () => bg.setStrokeStyle(2, 0x69f4ff, 1));
+      hit.on('pointerover', () => {
+        bg.setStrokeStyle(2, 0x69f4ff, 1);
+        AudioManager.get().playSfx('menuHover');
+      });
       hit.on('pointerout', () => bg.setStrokeStyle(1, 0xff7adf, 0.8));
       hit.on('pointerdown', () => {
         AudioManager.get().playSfx('menu');
@@ -257,6 +260,7 @@ export class OptionsScene extends Phaser.Scene {
     const reset = this.add.text(centerX + panelWidth * 0.25 + 62, topY + 204, 'RESET DEFAULTS', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#ffcf91', backgroundColor: '#172238', padding: { x: 18, y: 5 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    reset.on('pointerover', () => AudioManager.get().playSfx('menuHover'));
     reset.on('pointerdown', () => {
       AudioManager.get().playSfx('menu');
       this.cancelBindingCapture?.();
@@ -436,6 +440,7 @@ export class OptionsScene extends Phaser.Scene {
       onChange(value);
       AudioManager.get().refreshMix();
     };
+    hit.on('pointerover', () => AudioManager.get().playSfx('menuHover'));
     hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => updateFromPointer(pointer.worldX));
     hit.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (pointer.isDown) updateFromPointer(pointer.worldX);

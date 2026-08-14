@@ -9,6 +9,7 @@ const ENEMY_DEATH_SFX_MIN_INTERVAL_MS = 45;
 const HIT_DAMAGE_SFX_POOL_SIZE = 6;
 const HIT_DAMAGE_SFX_MIN_INTERVAL_MS = 55;
 const MENU_SFX_POOL_SIZE = 4;
+const MENU_HOVER_SFX_MIN_INTERVAL_MS = 45;
 const PICKUP_SFX_POOL_SIZE = 4;
 
 export class AudioManager {
@@ -30,6 +31,7 @@ export class AudioManager {
   private readonly playerDeathSfxPool: HTMLAudioElement[] = [];
   private readonly bombletSfxPool: HTMLAudioElement[] = [];
   private readonly hitDamageSfxPool: HTMLAudioElement[] = [];
+  private readonly menuHoverSfxPool: HTMLAudioElement[] = [];
   private readonly menuClickSfxPool: HTMLAudioElement[] = [];
   private readonly itemLockedSfxPool: HTMLAudioElement[] = [];
   private readonly pickupSfxPool: HTMLAudioElement[] = [];
@@ -41,6 +43,7 @@ export class AudioManager {
   private fluxCoreLoopRequested = false;
   private fluxCoreProximity = 0;
   private shieldActivationSfx: HTMLAudioElement | null = null;
+  private shieldDeactivationSfx: HTMLAudioElement | null = null;
   private modCollectionSfx: HTMLAudioElement | null = null;
   private legendaryModSfx: HTMLAudioElement | null = null;
   private plantingAudio: HTMLAudioElement | null = null;
@@ -53,11 +56,13 @@ export class AudioManager {
   private playerDeathSfxCursor = 0;
   private bombletSfxCursor = 0;
   private hitDamageSfxCursor = 0;
+  private menuHoverSfxCursor = 0;
   private menuClickSfxCursor = 0;
   private itemLockedSfxCursor = 0;
   private pickupSfxCursor = 0;
   private lastEnemyDeathSfxAt = -Infinity;
   private lastHitDamageSfxAt = -Infinity;
+  private lastMenuHoverSfxAt = -Infinity;
   private cachedMusicVolume = 0.51;
   private cachedSfxVolume = 0.6375;
   private readonly cachedSoundVolumes = {} as Record<AudioSfxName, number>;
@@ -76,7 +81,7 @@ export class AudioManager {
     this.initGasSfx();
     this.initPickupSfxPool();
     this.initFluxCoreAudio();
-    this.initShieldActivationSfx();
+    this.initShieldSfx();
     this.initHitDamageSfxPool();
     this.initModRevealSfx();
     this.initMenuSfxPools();
@@ -285,9 +290,16 @@ export class AudioManager {
   }
 
   private initMenuSfxPools(): void {
+    const menuHoverSource = audioAssetUrl('soundeffects/hoversound.mp3');
     const menuClickSource = audioAssetUrl('soundeffects/menuclick.mp3');
     const itemLockedSource = audioAssetUrl('soundeffects/itemlocked.mp3');
     for (let index = 0; index < MENU_SFX_POOL_SIZE; index += 1) {
+      const menuHover = new Audio(menuHoverSource);
+      menuHover.preload = 'auto';
+      menuHover.volume = this.getSfxVolume('menuHover');
+      menuHover.load();
+      this.menuHoverSfxPool.push(menuHover);
+
       const menuClick = new Audio(menuClickSource);
       menuClick.preload = 'auto';
       menuClick.volume = this.getSfxVolume('menu');
@@ -302,10 +314,23 @@ export class AudioManager {
     }
   }
 
-  private playMenuSfx(name: 'menu' | 'itemLocked'): void {
-    const pool = name === 'menu' ? this.menuClickSfxPool : this.itemLockedSfxPool;
+  private playMenuSfx(name: 'menuHover' | 'menu' | 'itemLocked'): void {
+    if (name === 'menuHover') {
+      const now = performance.now();
+      if (now - this.lastMenuHoverSfxAt < MENU_HOVER_SFX_MIN_INTERVAL_MS) return;
+      this.lastMenuHoverSfxAt = now;
+    }
+    const pool = name === 'menuHover'
+      ? this.menuHoverSfxPool
+      : name === 'menu'
+        ? this.menuClickSfxPool
+        : this.itemLockedSfxPool;
     if (pool.length === 0) return;
-    const cursor = name === 'menu' ? this.menuClickSfxCursor : this.itemLockedSfxCursor;
+    const cursor = name === 'menuHover'
+      ? this.menuHoverSfxCursor
+      : name === 'menu'
+        ? this.menuClickSfxCursor
+        : this.itemLockedSfxCursor;
     let availableIndex = -1;
     for (let offset = 0; offset < pool.length; offset += 1) {
       const candidateIndex = (cursor + offset) % pool.length;
@@ -316,7 +341,8 @@ export class AudioManager {
       }
     }
     if (availableIndex < 0) return;
-    if (name === 'menu') this.menuClickSfxCursor = (availableIndex + 1) % pool.length;
+    if (name === 'menuHover') this.menuHoverSfxCursor = (availableIndex + 1) % pool.length;
+    else if (name === 'menu') this.menuClickSfxCursor = (availableIndex + 1) % pool.length;
     else this.itemLockedSfxCursor = (availableIndex + 1) % pool.length;
     const audio = pool[availableIndex];
     try {
@@ -416,11 +442,16 @@ export class AudioManager {
     void audio.play().catch(() => undefined);
   }
 
-  private initShieldActivationSfx(): void {
+  private initShieldSfx(): void {
     this.shieldActivationSfx = new Audio(audioAssetUrl('soundeffects/shieldactivate.mp3'));
     this.shieldActivationSfx.preload = 'auto';
     this.shieldActivationSfx.volume = this.getSfxVolume('shieldOn');
     this.shieldActivationSfx.load();
+
+    this.shieldDeactivationSfx = new Audio(audioAssetUrl('soundeffects/shielddown.mp3'));
+    this.shieldDeactivationSfx.preload = 'auto';
+    this.shieldDeactivationSfx.volume = this.getSfxVolume('shieldOff');
+    this.shieldDeactivationSfx.load();
   }
 
   private playShieldOnSfx(): void {
@@ -433,6 +464,18 @@ export class AudioManager {
     }
     this.shieldActivationSfx.volume = this.getSfxVolume('shieldOn');
     void this.shieldActivationSfx.play().catch(() => undefined);
+  }
+
+  private playShieldOffSfx(): void {
+    if (!this.shieldDeactivationSfx) return;
+    this.shieldDeactivationSfx.pause();
+    try {
+      this.shieldDeactivationSfx.currentTime = 0;
+    } catch {
+      // Metadata may still be loading on the first deactivation.
+    }
+    this.shieldDeactivationSfx.volume = this.getSfxVolume('shieldOff');
+    void this.shieldDeactivationSfx.play().catch(() => undefined);
   }
 
   private initDeathSfxPools(): void {
@@ -602,6 +645,7 @@ export class AudioManager {
     for (const hitDamage of this.hitDamageSfxPool) {
       hitDamage.volume = this.getSfxVolume('playerDamage');
     }
+    for (const menuHover of this.menuHoverSfxPool) menuHover.volume = this.getSfxVolume('menuHover');
     for (const menuClick of this.menuClickSfxPool) menuClick.volume = this.getSfxVolume('menu');
     for (const itemLocked of this.itemLockedSfxPool) itemLocked.volume = this.getSfxVolume('itemLocked');
     for (const pickup of this.pickupSfxPool) pickup.volume = this.getSfxVolume('pickup');
@@ -610,6 +654,7 @@ export class AudioManager {
     if (this.gasSfx) this.gasSfx.volume = this.getSfxVolume('gas');
     if (this.fluxCoreAudio) this.fluxCoreAudio.volume = this.fluxCoreTargetVolume(this.fluxCoreProximity);
     if (this.shieldActivationSfx) this.shieldActivationSfx.volume = this.getSfxVolume('shieldOn');
+    if (this.shieldDeactivationSfx) this.shieldDeactivationSfx.volume = this.getSfxVolume('shieldOff');
     if (this.modCollectionSfx) this.modCollectionSfx.volume = this.getSfxVolume('modCollection');
     if (this.legendaryModSfx) this.legendaryModSfx.volume = this.getSfxVolume('legendaryMod');
     if (this.plantingAudio) this.plantingAudio.volume = this.getSfxVolume('planting');
@@ -738,6 +783,9 @@ export class AudioManager {
       case 'shieldOn':
         this.playShieldOnSfx();
         break;
+      case 'shieldOff':
+        this.playShieldOffSfx();
+        break;
       case 'hit':
         this.beep('sfx', 180, 50, 0.06, name);
         break;
@@ -772,6 +820,7 @@ export class AudioManager {
       case 'legendaryMod':
         this.playModRevealSfx(name);
         break;
+      case 'menuHover':
       case 'menu':
       case 'itemLocked':
         this.playMenuSfx(name);

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { MOD_BY_ID } from './definitions.ts';
 import type { ModCardInstance, ModRank } from './types.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
+import { AudioManager } from '../systems/AudioManager.ts';
 
 export const MOD_RARITY_COLORS = {
   common: 0xffffff,
@@ -224,6 +225,7 @@ export const createModCardView = (
     };
     container.setSize(width, height).setInteractive({ useHandCursor: true });
     container.on('pointerover', () => {
+      AudioManager.get().playSfx('menuHover');
       scene.tweens.killTweensOf(container);
       scene.tweens.killTweensOf(shadow);
       sheenTween?.stop();
