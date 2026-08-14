@@ -16,6 +16,81 @@ export interface CollectionReadout {
 
 export type CollectionButtonTone = 'standard' | 'utility' | 'warning' | 'return';
 
+export interface ModCollectionChromeLayout {
+  compact: boolean;
+  shellMargin: number;
+  statusY: number;
+  statusSideInset: number;
+  titleSize: number;
+  titleY: number;
+  subtitleY: number;
+  resourceRailY: number;
+  resourceRailHeight: number;
+  toolbarTop: number;
+  toolbarHeight: number;
+  toolbarButtonY: number;
+  toolbarButtonHeight: number;
+  contentTop: number;
+  returnInset: number;
+}
+
+const MOD_COLLECTION_SPACING = {
+  shellMargin: { compact: 10, regular: 14 },
+  statusTopInset: 13,
+  statusSideInset: { compact: 32, regular: 40 },
+  titleTop: { compact: 16, regular: 18, stackedCompact: 32, stackedRegular: 38 },
+  titleSubtitleGap: { compact: 4, regular: 5 },
+  subtitleRailGap: { compact: 27, regular: 32 },
+  resourceRailHeight: { compact: 30, regular: 34 },
+  resourceToolbarGap: { compact: 10, regular: 12 },
+  toolbarHeight: { compact: 76, regular: 84 },
+  toolbarContentGap: 10,
+  toolbarButtonHeight: { compact: 34, regular: 40 },
+  frameHeaderHeight: { compact: 34, regular: 38 },
+  returnInset: { narrow: 26, regular: 34 }
+} as const;
+
+/**
+ * Keeps the collection's top chrome and scene-owned controls on one responsive
+ * spacing model so header polish does not turn into scattered per-scene offsets.
+ */
+export const getModCollectionChromeLayout = (width: number, height: number): ModCollectionChromeLayout => {
+  const compact = width < 920 || height < 690;
+  const stackedStatus = width < 1050;
+  const shellMargin = compact ? MOD_COLLECTION_SPACING.shellMargin.compact : MOD_COLLECTION_SPACING.shellMargin.regular;
+  const titleSize = compact ? 25 : Phaser.Math.Clamp(width * 0.021, 30, 40);
+  const titleY = stackedStatus
+    ? (compact ? MOD_COLLECTION_SPACING.titleTop.stackedCompact : MOD_COLLECTION_SPACING.titleTop.stackedRegular)
+    : (compact ? MOD_COLLECTION_SPACING.titleTop.compact : MOD_COLLECTION_SPACING.titleTop.regular);
+  const subtitleY = titleY + titleSize + (compact ? MOD_COLLECTION_SPACING.titleSubtitleGap.compact : MOD_COLLECTION_SPACING.titleSubtitleGap.regular);
+  const resourceRailHeight = compact ? MOD_COLLECTION_SPACING.resourceRailHeight.compact : MOD_COLLECTION_SPACING.resourceRailHeight.regular;
+  const resourceRailY = subtitleY + (compact ? MOD_COLLECTION_SPACING.subtitleRailGap.compact : MOD_COLLECTION_SPACING.subtitleRailGap.regular);
+  const toolbarTop = resourceRailY + resourceRailHeight / 2
+    + (compact ? MOD_COLLECTION_SPACING.resourceToolbarGap.compact : MOD_COLLECTION_SPACING.resourceToolbarGap.regular);
+  const toolbarHeight = compact ? MOD_COLLECTION_SPACING.toolbarHeight.compact : MOD_COLLECTION_SPACING.toolbarHeight.regular;
+  const frameHeaderHeight = compact ? MOD_COLLECTION_SPACING.frameHeaderHeight.compact : MOD_COLLECTION_SPACING.frameHeaderHeight.regular;
+  const toolbarButtonHeight = compact ? MOD_COLLECTION_SPACING.toolbarButtonHeight.compact : MOD_COLLECTION_SPACING.toolbarButtonHeight.regular;
+  const toolbarButtonY = toolbarTop + frameHeaderHeight + (toolbarHeight - frameHeaderHeight) / 2;
+
+  return {
+    compact,
+    shellMargin,
+    statusY: shellMargin + MOD_COLLECTION_SPACING.statusTopInset,
+    statusSideInset: compact ? MOD_COLLECTION_SPACING.statusSideInset.compact : MOD_COLLECTION_SPACING.statusSideInset.regular,
+    titleSize,
+    titleY,
+    subtitleY,
+    resourceRailY,
+    resourceRailHeight,
+    toolbarTop,
+    toolbarHeight,
+    toolbarButtonY,
+    toolbarButtonHeight,
+    contentTop: toolbarTop + toolbarHeight + MOD_COLLECTION_SPACING.toolbarContentGap,
+    returnInset: width < 800 ? MOD_COLLECTION_SPACING.returnInset.narrow : MOD_COLLECTION_SPACING.returnInset.regular
+  };
+};
+
 const chamferedPoints = (width: number, height: number, cut: number): number[] => [
   cut, 0, width - cut, 0,
   width, cut, width, height - cut,
@@ -47,7 +122,8 @@ export const createModCollectionShell = (
   height: number,
   readouts: readonly CollectionReadout[]
 ): void => {
-  const compact = width < 920 || height < 690;
+  const layout = getModCollectionChromeLayout(width, height);
+  const { compact } = layout;
   scene.add.rectangle(width / 2, height / 2, width, height, 0x03070d, 1);
   scene.add.grid(width / 2, height / 2, width, height, compact ? 42 : 54, compact ? 42 : 54, 0x040a12, 0.14, 0x174257, 0.12);
 
@@ -63,7 +139,7 @@ export const createModCollectionShell = (
     ease: 'Sine.easeInOut'
   });
 
-  const margin = compact ? 8 : 12;
+  const margin = layout.shellMargin;
   const shellWidth = width - margin * 2;
   const shellHeight = height - margin * 2;
   const shell = scene.add.container(0, 0).setAlpha(0);
@@ -77,8 +153,8 @@ export const createModCollectionShell = (
   const rightRail = scene.add.rectangle(width - margin - 7, height / 2, 3, shellHeight - 42, 0x55efff, 0.4);
   shell.add([shadow, chassis, glass, topRail, leftRail, rightRail]);
 
-  const titleSize = compact ? 25 : Phaser.Math.Clamp(width * 0.021, 30, 40);
-  const titleY = compact ? 10 : 12;
+  const titleSize = layout.titleSize;
+  const titleY = layout.titleY;
   const ghost = scene.add.text(width / 2 + 2, titleY + 2, 'MOD CARD COLLECTION', {
     fontFamily: 'Orbitron, sans-serif', fontSize: `${titleSize}px`, color: '#ff48ca', fontStyle: 'bold'
   }).setOrigin(0.5, 0).setAlpha(0.18).setBlendMode(Phaser.BlendModes.ADD);
@@ -86,20 +162,20 @@ export const createModCollectionShell = (
     fontFamily: 'Orbitron, sans-serif', fontSize: `${titleSize}px`, color: '#75f4ff', fontStyle: 'bold',
     shadow: { color: '#39eeff', blur: 9, fill: true }, letterSpacing: 1
   }).setOrigin(0.5, 0);
-  const subtitle = scene.add.text(width / 2, compact ? 43 : 51, 'OPERATIVE ARCHIVE // MODULAR INVENTORY CONTROL', {
+  const subtitle = scene.add.text(width / 2, layout.subtitleY, 'OPERATIVE ARCHIVE // MODULAR INVENTORY CONTROL', {
     fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 13}px`, color: '#d28abb', fontStyle: 'bold', letterSpacing: 2
   }).setOrigin(0.5, 0);
-  const leftStatus = scene.add.text(margin + 24, compact ? 20 : 24, 'N3ON ARMORY // LOCAL VAULT', {
+  const leftStatus = scene.add.text(margin + layout.statusSideInset, layout.statusY, 'N3ON ARMORY // LOCAL VAULT', {
     fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, color: '#73c7d4', fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(0, 0);
-  const rightStatus = scene.add.text(width - margin - 24, compact ? 20 : 24, 'COLLECTION LINK // SYNCED', {
+  const rightStatus = scene.add.text(width - margin - layout.statusSideInset, layout.statusY, 'COLLECTION LINK // SYNCED', {
     fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, color: '#76ffb0', fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(1, 0);
   shell.add([ghost, title, subtitle, leftStatus, rightStatus]);
 
   const railWidth = Math.min(width - (compact ? 38 : 100), 1160);
-  const railHeight = compact ? 26 : 31;
-  const railY = compact ? 75 : 82;
+  const railHeight = layout.resourceRailHeight;
+  const railY = layout.resourceRailY;
   const railLeft = width / 2 - railWidth / 2;
   const cellGap = compact ? 4 : 7;
   const cellWidth = (railWidth - cellGap * (readouts.length - 1)) / readouts.length;
@@ -107,11 +183,11 @@ export const createModCollectionShell = (
     const x = railLeft + index * (cellWidth + cellGap);
     const cell = scene.add.rectangle(x, railY - railHeight / 2, cellWidth, railHeight, 0x07141f, 0.94)
       .setOrigin(0, 0).setStrokeStyle(1, readout.color, 0.31);
-    const edge = scene.add.rectangle(x + 3, railY, 3, railHeight - 8, readout.color, 0.7);
-    const label = scene.add.text(x + 12, railY, readout.label, {
+    const edge = scene.add.rectangle(x + 4, railY, 3, railHeight - 12, readout.color, 0.7);
+    const label = scene.add.text(x + 15, railY, readout.label, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 8 : 10}px`, color: '#7faebb', fontStyle: 'bold', letterSpacing: compact ? 0 : 1
     }).setOrigin(0, 0.5);
-    const value = scene.add.text(x + cellWidth - 9, railY, readout.value, {
+    const value = scene.add.text(x + cellWidth - 12, railY, readout.value, {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 11 : 14}px`, color: Phaser.Display.Color.IntegerToColor(readout.color).rgba, fontStyle: 'bold'
     }).setOrigin(1, 0.5).setMaxLines(1);
     shell.add([cell, edge, label, value]);
@@ -134,16 +210,20 @@ export const createModCollectionFrame = (
   const root = scene.add.container(rect.x, rect.y);
   const shadow = scene.add.rectangle(5, 6, rect.width, rect.height, 0x000000, 0.4).setOrigin(0, 0);
   const frame = scene.add.rectangle(0, 0, rect.width, rect.height, 0x071621, 0.89).setOrigin(0, 0).setStrokeStyle(1, accent, 0.46);
-  const headerHeight = Math.min(34, Math.max(26, rect.height * 0.22));
+  const compactHeader = rect.height < 80;
+  const headerHeight = compactHeader
+    ? MOD_COLLECTION_SPACING.frameHeaderHeight.compact
+    : MOD_COLLECTION_SPACING.frameHeaderHeight.regular;
   const header = scene.add.rectangle(0, 0, rect.width, headerHeight, 0x0c2330, 0.94).setOrigin(0, 0);
-  const rail = scene.add.rectangle(8, 5, rect.width - 16, 3, accent, 0.6).setOrigin(0, 0);
+  const rail = scene.add.rectangle(12, 5, rect.width - 24, 3, accent, 0.6).setOrigin(0, 0);
+  const headerDivider = scene.add.rectangle(12, headerHeight - 3, rect.width - 24, 1, accent, 0.28).setOrigin(0, 0);
   const leftEdge = scene.add.rectangle(4, headerHeight + 8, 2, Math.max(0, rect.height - headerHeight - 16), 0xff5bcf, 0.28).setOrigin(0, 0);
-  const label = scene.add.text(14, 11, title, {
+  const label = scene.add.text(18, 14, title, {
     fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(rect.width / 62, 10, 14)}px`,
     color: Phaser.Display.Color.IntegerToColor(accent).rgba, fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(0, 0).setMaxLines(1);
-  const led = scene.add.circle(rect.width - 16, 17, 3, accent, 0.92);
-  root.add([shadow, frame, header, rail, leftEdge, label, led]);
+  const led = scene.add.circle(rect.width - 18, 21, 3, accent, 0.92);
+  root.add([shadow, frame, header, rail, headerDivider, leftEdge, label, led]);
   scene.tweens.add({ targets: led, alpha: { from: 0.24, to: 1 }, duration: 780, yoyo: true, repeat: -1 });
   return root;
 };

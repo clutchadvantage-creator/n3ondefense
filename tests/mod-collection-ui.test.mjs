@@ -9,6 +9,7 @@ test('Mod Collection uses the shared cyber-console visual language without repla
   assert.match(scene, /createModCollectionShell\(this, width, height/);
   assert.match(scene, /createModCollectionFrame\(this/);
   assert.match(scene, /createModCollectionButton\(this/);
+  assert.match(scene, /getModCollectionChromeLayout\(width, height\)/);
   assert.match(scene, /createModCardView\(this/);
   assert.match(presentation, /chamferedPoints/);
   assert.match(presentation, /MOD CARD COLLECTION/);
@@ -16,6 +17,9 @@ test('Mod Collection uses the shared cyber-console visual language without repla
   assert.match(presentation, /leftRail/);
   assert.match(presentation, /rightRail/);
   assert.match(presentation, /COLLECTION LINK \/\/ SYNCED/);
+  assert.match(presentation, /MOD_COLLECTION_SPACING/);
+  assert.match(presentation, /statusSideInset/);
+  assert.match(presentation, /headerDivider/);
 });
 
 test('collection presentation delegates to existing buttons and preserves disabled and locked feedback', () => {

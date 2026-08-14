@@ -16,7 +16,8 @@ import { AudioManager } from '../systems/AudioManager.ts';
 import {
   createModCollectionButton,
   createModCollectionFrame,
-  createModCollectionShell
+  createModCollectionShell,
+  getModCollectionChromeLayout
 } from '../ui/ModCollectionUi.ts';
 
 type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
@@ -86,15 +87,11 @@ export class ModCollectionScene extends Phaser.Scene {
       { label: 'CREDITS', value: wallet.credits.toLocaleString(), color: 0xffed67 }
     ]);
 
-    const compact = height < 700;
-    const toolbarTop = compact ? 94 : 102;
-    const toolbarHeight = compact ? 66 : 74;
-    const toolbarButtonY = toolbarTop + (compact ? 41 : 46);
-    const toolbarButtonHeight = compact ? 34 : 40;
+    const chromeLayout = getModCollectionChromeLayout(width, height);
+    const { compact, toolbarTop, toolbarHeight, toolbarButtonY, toolbarButtonHeight, contentTop, returnInset } = chromeLayout;
     const narrow = width < 800;
     const returnWidth = narrow ? 120 : Phaser.Math.Clamp(width * 0.18, 160, 220);
-    const returnInset = narrow ? 12 : 16;
-    const toolbarGap = narrow ? 6 : 10;
+    const toolbarGap = narrow ? 8 : 12;
     const toolbarStart = narrow ? 18 : 24;
     const toolbarAvailableWidth = width - returnWidth - toolbarStart - returnInset * 2 - 8;
     const toolbarButtonWidth = Phaser.Math.Clamp((toolbarAvailableWidth - toolbarGap * 3) / 4, narrow ? 80 : 108, 230);
@@ -114,7 +111,6 @@ export class ModCollectionScene extends Phaser.Scene {
           : 'Main Menu';
     createModCollectionButton(this, width - returnWidth / 2 - returnInset, toolbarButtonY, returnLabel, () => this.returnToPreviousScene(), returnWidth, 'return', { height: toolbarButtonHeight, fontSize: narrow ? 11 : 16 });
 
-    const contentTop = toolbarTop + toolbarHeight + 8;
     const detailWidth = Math.min(390, width * 0.3);
     const gridLeft = 34;
     const gridRight = width - detailWidth - 46;
