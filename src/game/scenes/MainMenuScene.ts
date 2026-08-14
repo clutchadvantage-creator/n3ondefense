@@ -41,6 +41,28 @@ const MAIN_MENU_TIPS = [
   'Use the protocol arrows to choose among your unlocked starting tiers.'
 ] as const;
 
+// Phaser applies the display origin after measuring polygon geometry. Keeping
+// points inside positive local bounds makes x/y the true visual center.
+const createChamferedFramePoints = (width: number, height: number, cut: number): number[] => [
+  cut, 0,
+  width - cut, 0,
+  width, cut,
+  width, height - cut,
+  width - cut, height,
+  cut, height,
+  0, height - cut,
+  0, cut
+];
+
+const createCenteredHexagonPoints = (radius: number): number[] => {
+  const points: number[] = [];
+  for (let point = 0; point < 6; point += 1) {
+    const angle = Math.PI / 3 * point - Math.PI / 2;
+    points.push((Math.cos(angle) + 1) * radius, (Math.sin(angle) + 1) * radius);
+  }
+  return points;
+};
+
 export class MainMenuScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
   private readonly handleResize = (): void => { this.scene.restart(); };
@@ -96,15 +118,15 @@ export class MainMenuScene extends Phaser.Scene {
     this.createOperativeBriefing(briefingX, briefingTop, briefingWidth, briefingHeight, profile?.name ?? null);
 
     const unlockedProtocols = profile ? getUnlockedProtocolIds(SaveSystem.getHighestRound()) : ['normal'] as const;
-    const protocolLabelY = tiny ? 100 : short ? 142 : 194;
     const protocolY = tiny ? 128 : short ? 177 : 235;
     const protocolArrowWidth = tiny ? 42 : short ? 50 : 58;
     const protocolGap = tiny ? 7 : 10;
     const protocolWidth = Phaser.Math.Clamp(width * (narrow ? 0.35 : 0.21), narrow ? 220 : 340, narrow ? 390 : 410);
+    const protocolHeight = tiny ? 42 : short ? 54 : 68;
     const protocolArrowOffset = protocolWidth / 2 + protocolGap + protocolArrowWidth / 2;
-    this.add.text(centerX, protocolLabelY, 'DEPLOYMENT PROTOCOL', {
+    this.add.text(centerX, protocolY - protocolHeight / 2 - (tiny ? 14 : short ? 18 : 22), 'DEPLOYMENT PROTOCOL', {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${tiny ? 11 : short ? 14 : 17}px`, color: '#78ddeb', letterSpacing: 2
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(21);
 
     const selectProtocol = (direction: 1 | -1): boolean => {
       if (!profile) return true;
@@ -124,7 +146,6 @@ export class MainMenuScene extends Phaser.Scene {
       return result.ok;
     };
 
-    const protocolHeight = tiny ? 42 : short ? 54 : 68;
     this.createProtocolChassis(centerX, protocolY, protocolWidth + protocolArrowWidth * 2 + protocolGap * 4, protocolHeight + (tiny ? 12 : 18));
     const protocolButton = this.createCommandButton(centerX, protocolY, `${protocolDefinition.label}\nSTART ROUND ${protocolDefinition.startingRound}`, () => selectProtocol(1), protocolWidth, protocolHeight, 'protocol', 'menu', tiny ? 13 : short ? 16 : 19);
     const previousProtocolButton = this.createCommandButton(centerX - protocolArrowOffset, protocolY, '<', () => selectProtocol(-1), protocolArrowWidth, protocolHeight, 'selector', 'menu', tiny ? 16 : 21);
@@ -279,16 +300,7 @@ export class MainMenuScene extends Phaser.Scene {
     const outerWidth = width + (style === 'primary' ? 16 : 10);
     const outerHeight = height + (style === 'primary' ? 14 : 10);
     const cut = Math.min(12, outerHeight * 0.24);
-    const points = [
-      -outerWidth / 2 + cut, -outerHeight / 2,
-      outerWidth / 2 - cut, -outerHeight / 2,
-      outerWidth / 2, -outerHeight / 2 + cut,
-      outerWidth / 2, outerHeight / 2 - cut,
-      outerWidth / 2 - cut, outerHeight / 2,
-      -outerWidth / 2 + cut, outerHeight / 2,
-      -outerWidth / 2, outerHeight / 2 - cut,
-      -outerWidth / 2, -outerHeight / 2 + cut
-    ];
+    const points = createChamferedFramePoints(outerWidth, outerHeight, cut);
     const housing = this.add.container(x, y).setDepth(22);
     const shadow = this.add.polygon(4, 5, points, 0x000000, 0.5);
     const chassis = this.add.polygon(0, 0, points, style === 'primary' ? 0x0c2638 : 0x091521, 0.96)
@@ -323,16 +335,7 @@ export class MainMenuScene extends Phaser.Scene {
 
   private createProtocolChassis(x: number, y: number, width: number, height: number): void {
     const cut = Math.min(18, height * 0.28);
-    const points = [
-      -width / 2 + cut, -height / 2,
-      width / 2 - cut, -height / 2,
-      width / 2, -height / 2 + cut,
-      width / 2, height / 2 - cut,
-      width / 2 - cut, height / 2,
-      -width / 2 + cut, height / 2,
-      -width / 2, height / 2 - cut,
-      -width / 2, -height / 2 + cut
-    ];
+    const points = createChamferedFramePoints(width, height, cut);
     this.add.polygon(x + 5, y + 7, points, 0x000000, 0.52).setDepth(17);
     const plate = this.add.polygon(x, y, points, 0x07131f, 0.92).setStrokeStyle(2, 0x26768d, 0.6).setDepth(18);
     this.add.rectangle(x, y - height / 2 + 4, width - cut * 2, 3, 0x55efff, 0.35).setDepth(19);
@@ -372,12 +375,7 @@ export class MainMenuScene extends Phaser.Scene {
     const cut = dense ? 10 : 17;
     const halfW = panelWidth / 2;
     const halfH = panelHeight / 2;
-    const framePoints = [
-      -halfW + cut, -halfH, halfW - cut, -halfH,
-      halfW, -halfH + cut, halfW, halfH - cut,
-      halfW - cut, halfH, -halfW + cut, halfH,
-      -halfW, halfH - cut, -halfW, -halfH + cut
-    ];
+    const framePoints = createChamferedFramePoints(panelWidth, panelHeight, cut);
     const shadow = this.add.polygon(6, halfH + 8, framePoints, 0x000000, 0.62);
     const chassis = this.add.polygon(0, halfH, framePoints, 0x08111b, 0.99).setStrokeStyle(2, 0x3caec4, 0.78);
     const innerGlass = this.add.rectangle(0, 10, panelWidth - 24, panelHeight - 20, 0x081a27, 0.88)
@@ -449,11 +447,7 @@ export class MainMenuScene extends Phaser.Scene {
 
       const iconRadius = Math.max(10, Math.min(spacious ? 21 : 17, rowHeight * 0.25));
       const iconX = -cardWidth / 2 + (dense ? 25 : 34);
-      const hexPoints: number[] = [];
-      for (let point = 0; point < 6; point += 1) {
-        const angle = Math.PI / 3 * point - Math.PI / 2;
-        hexPoints.push(Math.cos(angle) * iconRadius, Math.sin(angle) * iconRadius);
-      }
+      const hexPoints = createCenteredHexagonPoints(iconRadius);
       const iconHalo = this.add.circle(iconX, cardCenterY, iconRadius + (dense ? 4 : 7), accent, objective.complete ? 0.12 : 0.045);
       const icon = this.add.polygon(iconX, cardCenterY, hexPoints, objective.complete ? 0x163c2b : 0x102838, 0.98)
         .setStrokeStyle(2, accent, objective.complete ? 0.95 : 0.62);
@@ -528,16 +522,7 @@ export class MainMenuScene extends Phaser.Scene {
     const panelHeight = Math.min(compact ? 58 : 82, availableHeight);
     const y = (availableTop + availableBottom) / 2;
     const cut = Math.min(12, panelHeight * 0.22);
-    const framePoints = [
-      -panelWidth / 2 + cut, -panelHeight / 2,
-      panelWidth / 2 - cut, -panelHeight / 2,
-      panelWidth / 2, -panelHeight / 2 + cut,
-      panelWidth / 2, panelHeight / 2 - cut,
-      panelWidth / 2 - cut, panelHeight / 2,
-      -panelWidth / 2 + cut, panelHeight / 2,
-      -panelWidth / 2, panelHeight / 2 - cut,
-      -panelWidth / 2, -panelHeight / 2 + cut
-    ];
+    const framePoints = createChamferedFramePoints(panelWidth, panelHeight, cut);
     this.add.polygon(centerX + 4, y + 5, framePoints, 0x000000, 0.48).setDepth(13);
     const panel = this.add.polygon(centerX, y, framePoints, 0x07131f, 0.92)
       .setStrokeStyle(1, 0x58f4ff, 0.5).setDepth(14);

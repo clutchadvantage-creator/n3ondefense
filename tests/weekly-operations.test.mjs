@@ -109,12 +109,20 @@ test('Main Menu second-pass presentation uses responsive command modules and a l
   assert.match(menu, /createProtocolChassis\(/);
   assert.match(menu, /Phaser\.Math\.Clamp\(width \* \(narrow \? 0\.42 : 0\.23\)/);
   assert.match(menu, /WEEKLY OPERATIONS \/\/ MISSION DECK/);
-  assert.match(menu, /const framePoints = \[/);
-  assert.match(menu, /const hexPoints: number\[\] = \[\]/);
+  assert.match(menu, /createChamferedFramePoints\(panelWidth, panelHeight, cut\)/);
+  assert.match(menu, /createCenteredHexagonPoints\(iconRadius\)/);
   assert.match(menu, /for \(let segment = 1; segment < 8; segment \+= 1\)/);
   assert.match(menu, /OPERATIVE INTEL \/\/ LIVE FEED/);
   assert.match(menu, /this\.scale\.on\('resize', this\.handleResize, this\)/);
   assert.match(menu, /this\.scale\.off\('resize', this\.handleResize, this\)/);
+});
+
+test('Main Menu polygon frames use positive local geometry so their visual centers stay aligned', () => {
+  const menu = readFileSync(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8');
+  assert.match(menu, /const createChamferedFramePoints[\s\S]*?cut, 0,[\s\S]*?width - cut, 0/);
+  assert.match(menu, /points\.push\(\(Math\.cos\(angle\) \+ 1\) \* radius, \(Math\.sin\(angle\) \+ 1\) \* radius\)/);
+  assert.doesNotMatch(menu, /const points = \[\s*-outerWidth \/ 2/);
+  assert.match(menu, /protocolY - protocolHeight \/ 2/);
 });
 
 test('Options Gameplay owns the readable core and active-profile control reference', () => {
