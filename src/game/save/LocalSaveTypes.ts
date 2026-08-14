@@ -5,6 +5,7 @@ import type { AbilityBindings } from '../config/controls.ts';
 import type { LocalModCollection, ProtocolPreference } from '../mods/types.ts';
 import type { CreditSpendBreakdown } from '../economy/types.ts';
 import type { PlayerGarageState } from '../garage/types.ts';
+import type { WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
@@ -38,6 +39,7 @@ export interface LocalPlayerProgress {
   totalFluxCoresEarned: number;
   totalPlaytimeSeconds: number;
   initialDeploymentBriefingSeen: boolean;
+  weeklyOperations: WeeklyOperationsState;
 }
 
 export interface LocalPlayerSettings {
@@ -81,7 +83,7 @@ export interface LocalPlayerSaveV1 {
   wallet: Omit<LocalPlayerWallet, 'fluxCores'> & { fluxCores?: number };
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
-  progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned'>;
+  progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'weeklyOperations'>;
   settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }

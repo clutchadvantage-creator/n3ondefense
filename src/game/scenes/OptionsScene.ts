@@ -281,13 +281,36 @@ export class OptionsScene extends Phaser.Scene {
   private createGameplayTab(container: Phaser.GameObjects.Container): void {
     const centerX = this.viewport.left + this.viewport.width * 0.5;
     const top = this.viewport.top + 26;
-    this.addSectionHeader(container, centerX, top, 'PLAYER INPUT', 'GAMEPLAY CONTROLS');
-    const keybindBottom = this.createKeybindPanel(container, centerX, top + 34, this.viewport.width - 48);
+    this.addSectionHeader(container, centerX, top, 'CONTROLS / GAMEPLAY REFERENCE', 'CURRENT PROFILE BINDINGS');
+    const referenceBottom = this.createGameplayReferencePanel(container, centerX, top + 34, this.viewport.width - 48);
+    const keybindBottom = this.createKeybindPanel(container, centerX, referenceBottom + 12, this.viewport.width - 48);
     if (keybindBottom + 42 < this.viewport.bottom) {
       container.add(this.add.text(centerX, keybindBottom + 27, 'ADDITIONAL GAMEPLAY SETTINGS COMING ONLINE', {
         fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#628796'
       }).setOrigin(0.5));
     }
+  }
+
+  private createGameplayReferencePanel(container: Phaser.GameObjects.Container, centerX: number, topY: number, contentWidth: number): number {
+    const panelWidth = Math.min(contentWidth, 900);
+    const compact = this.viewport.height < 620;
+    const panelHeight = compact ? 82 : 108;
+    container.add(this.add.rectangle(centerX, topY + panelHeight * 0.5, panelWidth, panelHeight, 0x091522, 0.9)
+      .setStrokeStyle(1, 0x3a9db2, 0.58));
+    container.add(this.add.text(centerX, topY + 13, 'CORE CONTROLS', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 13 : 16}px`, color: '#69f4ff'
+    }).setOrigin(0.5, 0));
+    container.add(this.add.text(centerX, topY + (compact ? 34 : 39), 'WASD  MOVE    ·    MOUSE  AIM    ·    LMB  FIRE    ·    E  PLANT / INTERACT    ·    1 / 2 / 3  SELECT ABILITY    ·    ESC  PAUSE', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 12 : 15}px`, color: '#dff8ff', align: 'center', fontStyle: 'bold',
+      wordWrap: { width: panelWidth - 34, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0).setMaxLines(2));
+    const bindings = SaveSystem.get().settings.abilityBindings;
+    const abilities = ABILITY_ACTIONS.map(({ action, label }) => `${bindingLabel(bindings[action])} ${label.toUpperCase()}`).join('    ·    ');
+    container.add(this.add.text(centerX, topY + (compact ? 62 : 78), abilities, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 14}px`, color: '#ffb9e5', align: 'center',
+      wordWrap: { width: panelWidth - 34, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0).setMaxLines(2));
+    return topY + panelHeight;
   }
 
   private createInterfaceTab(container: Phaser.GameObjects.Container): void {
@@ -484,7 +507,7 @@ export class OptionsScene extends Phaser.Scene {
 
   private createKeybindPanel(container: Phaser.GameObjects.Container, centerX: number, topY: number, contentWidth: number): number {
     const panelWidth = Math.min(contentWidth, 900);
-    const panelHeight = Math.min(260, this.viewport.height - 82);
+    const panelHeight = Math.min(260, Math.max(210, this.viewport.bottom - topY - 14));
     const panelCenterY = topY + panelHeight * 0.5;
     container.add(this.add.rectangle(centerX, panelCenterY, panelWidth, panelHeight, 0x0b1422, 0.92)
       .setStrokeStyle(2, 0x53dfff, 0.72));

@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { COSMETICS, getCosmeticDisplayColor, getCosmeticTextureKey } from '../../data/cosmetics.ts';
 import { createCosmeticPreview } from '../cosmetics/CosmeticPreview.ts';
-import { MOD_FOCUS_CATEGORIES, MOD_FOCUS_LABELS, RUN_CONTRACT_IDS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
+import { ECONOMY_BALANCE, MOD_FOCUS_CATEGORIES, MOD_FOCUS_LABELS, RUN_CONTRACT_IDS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
+import type { RunSetupSelection } from '../economy/types.ts';
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys.ts';
 import { calculateGarageLayout, type GarageRect } from '../garage/garageLayout.ts';
 import {
@@ -182,8 +183,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     const setup = SaveSystem.getNextRunSetupSelection();
     const rows = [
       { label: 'PROTOCOL', value: RUN_PROTOCOLS[protocol].label, action: () => this.cycleProtocol(protocol) },
-      { label: 'CONTRACT', value: setup.contract ? RUN_CONTRACTS[setup.contract].label : 'NO CONTRACT ACTIVE', action: () => this.cycleContract() },
-      { label: 'SIGNAL', value: setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus] : 'NO SIGNAL ACTIVE', action: () => this.cycleSignal() }
+      { label: 'CONTRACT', value: `${setup.contract ? RUN_CONTRACTS[setup.contract].label : 'NO CONTRACT ACTIVE'}  [CHANGE]`, action: () => this.showRunConfiguration() },
+      { label: 'SIGNAL', value: `${setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus] : 'NO SIGNAL ACTIVE'}  [CHANGE]`, action: () => this.showRunConfiguration() }
     ];
     const startY = roomy ? Math.round(43 * contentScale) : 33;
     const rowGap = roomy ? Math.round(43 * contentScale) : 27;
@@ -442,6 +443,89 @@ export class OperatorGarageScene extends Phaser.Scene {
     return root;
   }
 
+  private showRunConfiguration(): void {
+    const root = this.createOverlay('RUN CONFIGURATION // ONE-RUN SETUP');
+    const { width, height } = this.scale;
+    const setup = SaveSystem.getNextRunSetupSelection();
+    const totalCost = getRunSetupCost(setup);
+    const narrow = width < 900;
+    const columnGap = narrow ? 12 : 28;
+    const columnWidth = Math.min(narrow ? (width - 40 - columnGap) * 0.5 : 620, (width - 64 - columnGap) * 0.5);
+    const leftX = width / 2 - (columnWidth + columnGap) / 2;
+    const rightX = width / 2 + (columnWidth + columnGap) / 2;
+    const panelTop = narrow ? 98 : 112;
+    const panelHeight = height - panelTop - 24;
+
+    const summary = totalCost > 0
+      ? `CURRENT RUN FEE // ${totalCost.toLocaleString()} CREDITS  ·  CHARGED ONCE WHEN DEPLOYMENT STARTS`
+      : 'CURRENT RUN FEE // FREE  ·  STANDARD DROP AND CHALLENGE RULES';
+    root.add(this.add.text(width / 2, narrow ? 70 : 76, summary, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 13 : 17}px`, fontStyle: 'bold',
+      color: totalCost > 0 ? '#ffd17f' : '#82ffc1', align: 'center'
+    }).setOrigin(0.5).setWordWrapWidth(width - 180, true).setMaxLines(2));
+
+    const createColumn = (centerX: number, title: string, accent: number): void => {
+      root.add(this.add.rectangle(centerX, panelTop, columnWidth, panelHeight, 0x091725, 0.92)
+        .setOrigin(0.5, 0).setStrokeStyle(2, accent, 0.58));
+      root.add(this.add.text(centerX, panelTop + 16, title, {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${narrow ? 14 : 19}px`, color: Phaser.Display.Color.IntegerToColor(accent).rgba, fontStyle: 'bold'
+      }).setOrigin(0.5, 0));
+    };
+    createColumn(leftX, 'SIGNAL // FOCUSED MOD HUNT', 0x55efff);
+    createColumn(rightX, 'CONTRACT // ENGAGEMENT RULES', 0xff5bcf);
+
+    root.add(this.add.text(leftX, panelTop + (narrow ? 42 : 50), `Signals weight one Mod category ${ECONOMY_BALANCE.modFocus.categoryWeightMultiplier}x without changing rarity or total drop quantity.`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 11 : 15}px`, color: '#a9d3df', align: 'center',
+      wordWrap: { width: columnWidth - 34, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0).setMaxLines(3));
+
+    const signalOptions: Array<{ id: RunSetupSelection['modFocus']; label: string }> = [
+      { id: null, label: 'NO SIGNAL // STANDARD DROPS' },
+      ...MOD_FOCUS_CATEGORIES.map((id) => ({ id, label: MOD_FOCUS_LABELS[id].toUpperCase() }))
+    ];
+    const signalStartY = panelTop + (narrow ? 92 : 108);
+    const signalGap = Phaser.Math.Clamp((panelHeight - (narrow ? 112 : 136)) / signalOptions.length, narrow ? 39 : 46, 56);
+    signalOptions.forEach((option, index) => {
+      const selected = setup.modFocus === option.id;
+      const fee = option.id ? `${ECONOMY_BALANCE.modFocus.cost.toLocaleString()}C` : 'FREE';
+      const button = createButton(this, leftX, signalStartY + index * signalGap, `${selected ? '● ' : ''}${option.label}  //  ${fee}`, () => {
+        SaveSystem.setNextRunSetupSelection({ ...setup, modFocus: option.id });
+        this.status = `SUCCESS // ${option.id ? MOD_FOCUS_LABELS[option.id] : 'Signal removed'} configured for next deployment.`;
+        this.scene.restart({ returnScene: this.returnScene });
+        return true;
+      }, columnWidth - 30, 'menu', { height: Math.min(40, signalGap - 5), fontSize: narrow ? 10 : 14 });
+      if (selected) button.setAlpha(1);
+      root.add(button);
+    });
+
+    root.add(this.add.text(rightX, panelTop + (narrow ? 42 : 50), 'Contracts modify encounter rules and rewards for the next deployment only.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 11 : 15}px`, color: '#d6b3ce', align: 'center',
+      wordWrap: { width: columnWidth - 34, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0).setMaxLines(2));
+
+    const contractOptions: Array<{ id: RunSetupSelection['contract']; label: string; description: string; cost: number }> = [
+      { id: null, label: 'NO CONTRACT', description: 'Standard enemy, reward, and drop rules.', cost: 0 },
+      ...RUN_CONTRACT_IDS.map((id) => ({ id, label: RUN_CONTRACTS[id].label.toUpperCase(), description: RUN_CONTRACTS[id].description, cost: RUN_CONTRACTS[id].cost }))
+    ];
+    const contractStartY = panelTop + (narrow ? 88 : 102);
+    const contractGap = Phaser.Math.Clamp((panelHeight - (narrow ? 102 : 120)) / contractOptions.length, narrow ? 66 : 82, 106);
+    contractOptions.forEach((option, index) => {
+      const selected = setup.contract === option.id;
+      const y = contractStartY + index * contractGap;
+      const button = createButton(this, rightX, y, `${selected ? '● ' : ''}${option.label}  //  ${option.cost > 0 ? `${option.cost.toLocaleString()}C` : 'FREE'}`, () => {
+        SaveSystem.setNextRunSetupSelection({ ...setup, contract: option.id });
+        this.status = `SUCCESS // ${option.id ? RUN_CONTRACTS[option.id].label : 'Contract removed'} configured for next deployment.`;
+        this.scene.restart({ returnScene: this.returnScene });
+        return true;
+      }, columnWidth - 30, 'menu', { height: narrow ? 34 : 40, fontSize: narrow ? 10 : 14 });
+      root.add(button);
+      root.add(this.add.text(rightX, y + (narrow ? 20 : 24), option.description, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 13}px`, color: '#9fb9c5', align: 'center',
+        wordWrap: { width: columnWidth - 40, useAdvancedWrap: true }
+      }).setOrigin(0.5, 0).setMaxLines(narrow ? 2 : 3));
+    });
+  }
+
   private showLibrary(): void {
     const root = this.createOverlay('MOD LIBRARY // SYSTEM DATABASE');
     const { width, height } = this.scale;
@@ -694,20 +778,6 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? RUN_PROTOCOLS[next].label}`;
     this.scene.restart({ returnScene: this.returnScene });
     return result.ok;
-  }
-
-  private cycleContract(): void {
-    const setup = SaveSystem.getNextRunSetupSelection();
-    const current = setup.contract ? RUN_CONTRACT_IDS.indexOf(setup.contract) : -1;
-    SaveSystem.setNextRunSetupSelection({ ...setup, contract: current >= RUN_CONTRACT_IDS.length - 1 ? null : RUN_CONTRACT_IDS[current + 1] });
-    this.scene.restart({ returnScene: this.returnScene });
-  }
-
-  private cycleSignal(): void {
-    const setup = SaveSystem.getNextRunSetupSelection();
-    const current = setup.modFocus ? MOD_FOCUS_CATEGORIES.indexOf(setup.modFocus) : -1;
-    SaveSystem.setNextRunSetupSelection({ ...setup, modFocus: current >= MOD_FOCUS_CATEGORIES.length - 1 ? null : MOD_FOCUS_CATEGORIES[current + 1] });
-    this.scene.restart({ returnScene: this.returnScene });
   }
 
   private openCollection(selectedCardId?: string): void {

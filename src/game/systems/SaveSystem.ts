@@ -128,6 +128,7 @@ export class SaveSystem {
   static getPreferredProtocol(): RunProtocolId { return PlayerProfileStore.getActiveSave().protocol.preferred; }
   static setPreferredProtocol(protocol: RunProtocolId) { return PlayerProfileStore.setPreferredProtocol(protocol); }
   static getHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.highestRound; }
+  static getWeeklyOperations(nowMs = Date.now()) { return PlayerProfileStore.getWeeklyOperations(nowMs); }
   static getInitialDeploymentBriefingState() { return PlayerProfileStore.getInitialDeploymentBriefingState(); }
   static markInitialDeploymentBriefingSeen(): void { PlayerProfileStore.markInitialDeploymentBriefingSeen(); }
   static canAffordRunSetup(selection: RunSetupSelection): boolean { return PlayerProfileStore.canAffordRunSetup(selection); }

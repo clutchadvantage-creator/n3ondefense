@@ -8,6 +8,7 @@ import { normalizeModCollection, normalizeProtocolPreference } from '../mods/Mod
 import { createEmptyCreditSpendBreakdown } from '../economy/EconomyService.ts';
 import type { CreditSpendCategory } from '../economy/types.ts';
 import { createDefaultGarageState, normalizeGarageState } from '../garage/GarageState.ts';
+import { createDefaultWeeklyOperationsState, normalizeWeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 
 const defaultSettings: LocalPlayerSettings = {
   masterVolume: DEFAULT_AUDIO_VOLUME,
@@ -104,7 +105,8 @@ const normalizeProgress = (progress: unknown): LocalPlayerProgress => {
     totalCoreTokensEarned: toInteger(candidate.totalCoreTokensEarned),
     totalFluxCoresEarned: toInteger(candidate.totalFluxCoresEarned),
     totalPlaytimeSeconds: toInteger(candidate.totalPlaytimeSeconds),
-    initialDeploymentBriefingSeen: toBoolean(candidate.initialDeploymentBriefingSeen, false)
+    initialDeploymentBriefingSeen: toBoolean(candidate.initialDeploymentBriefingSeen, false),
+    weeklyOperations: normalizeWeeklyOperationsState(candidate.weeklyOperations)
   };
 };
 
@@ -223,7 +225,8 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       totalCoreTokensEarned: toInteger(v1.progress?.totalCoreTokensEarned),
       totalFluxCoresEarned: 0,
       totalPlaytimeSeconds: 0,
-      initialDeploymentBriefingSeen: false
+      initialDeploymentBriefingSeen: false,
+      weeklyOperations: createDefaultWeeklyOperationsState()
     };
     current.garage = createDefaultGarageState();
     current.settings = {

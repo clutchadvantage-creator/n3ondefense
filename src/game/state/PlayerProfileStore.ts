@@ -10,6 +10,7 @@ import { buildRunEconomySnapshot, getNextLoadoutSlotCost, getRunSetupCost, purch
 import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
 import { loadGaragePreset, normalizeRunSetupSelection, saveCurrentGaragePreset } from '../garage/GarageState.ts';
 import type { GaragePresetId, PlayerGarageState } from '../garage/types.ts';
+import { resolveWeeklyOperations, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
 
 export interface PurchaseResult {
   ok: boolean;
@@ -210,6 +211,21 @@ export class PlayerProfileStore {
     save.progress.bombSitesDestroyed = Math.max(0, save.progress.bombSitesDestroyed + Math.max(0, Math.floor(count)));
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
+  }
+
+  static getWeeklyOperations(nowMs = Date.now()): WeeklyOperationsSnapshot {
+    const save = PlayerProfileStore.getActiveSave();
+    const resolution = resolveWeeklyOperations(save.progress, save.progress.weeklyOperations, nowMs);
+    save.progress.weeklyOperations = resolution.state;
+    if (resolution.rewardToGrant) {
+      save.wallet.credits += resolution.rewardToGrant.credits;
+      save.wallet.coreTokens += resolution.rewardToGrant.coreTokens;
+      save.progress.totalCreditsEarned += resolution.rewardToGrant.credits;
+      save.progress.totalCoreTokensEarned += resolution.rewardToGrant.coreTokens;
+      save.profile.lastPlayedAt = new Date(nowMs).toISOString();
+    }
+    if (resolution.stateChanged) PlayerProfileStore.save();
+    return resolution.snapshot;
   }
 
   static getInitialDeploymentBriefingState(): { seen: boolean; highestRound: number } {
