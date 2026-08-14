@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { ARENA_ARCHETYPES } from '../src/game/config/arenaGeneration.ts';
 import {
   NEON_CITY_ARCHETYPE_PROFILES,
@@ -50,3 +51,16 @@ test('different accepted seeds can select distinct city districts without changi
   assert.ok(districts.size >= 3);
 });
 
+test('scene shutdown does not tear down Phaser-owned visuals or physics twice', () => {
+  const source = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const roundCleanup = source.slice(
+    source.indexOf('private cleanupRoundObjects(): void'),
+    source.indexOf('private cleanup(): void')
+  );
+  const sceneCleanup = source.slice(source.indexOf('private cleanup(): void'));
+
+  assert.match(roundCleanup, /this\.arenaVisuals\?\.destroy\(\)/);
+  assert.match(roundCleanup, /this\.walls\?\.clear\(true, true\)/);
+  assert.doesNotMatch(sceneCleanup, /this\.arenaVisuals\?\.destroy\(\)/);
+  assert.doesNotMatch(sceneCleanup, /this\.walls\?\.clear\(true, true\)/);
+});

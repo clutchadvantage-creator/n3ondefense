@@ -5278,9 +5278,11 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private cleanup(): void {
-    this.arenaVisuals?.destroy();
+    // Phaser shuts down the display list, tweens, and Arcade Physics before
+    // emitting the Scene shutdown event handled here. Only release our
+    // references at this point; cleanupRoundObjects handles explicit teardown
+    // while the Arena scene and its plugins are still active.
     this.arenaVisuals = null;
-    this.walls?.clear(true, true);
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
     this.audio.stopFluxCoreLoop();
