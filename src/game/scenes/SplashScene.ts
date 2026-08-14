@@ -9,6 +9,7 @@ interface SplashSceneData {
   replay?: boolean;
   returnScene?: SceneKeyValue;
   resumeGameplay?: boolean;
+  returnToOptions?: boolean;
 }
 
 export class SplashScene extends Phaser.Scene {
@@ -45,6 +46,7 @@ export class SplashScene extends Phaser.Scene {
 
     const replay = data?.replay === true;
     const returnScene = data?.returnScene ?? SceneKeys.MainMenu;
+    if (replay) this.scene.bringToTop();
     if (!replay && sessionStorage.getItem(SPLASH_SESSION_KEY) === '1') {
       this.scene.start(SceneKeys.LocalProfiles);
       return;
@@ -154,6 +156,13 @@ export class SplashScene extends Phaser.Scene {
           this.scene.resume(SceneKeys.Arena);
           if (data?.resumeGameplay === true) this.scene.get(SceneKeys.Arena).events.emit('resume-from-options');
           this.scene.stop();
+          return;
+        }
+        if (data?.returnToOptions === true) {
+          this.scene.start(SceneKeys.Options, {
+            returnScene: returnScene === SceneKeys.Arena ? SceneKeys.MainMenu : returnScene,
+            resumeGameplay: false
+          });
           return;
         }
         this.scene.start(returnScene);

@@ -287,7 +287,10 @@ export class MainMenuScene extends Phaser.Scene {
       resumePausedScene: false
     }), pairButtonWidth);
     createButton(this, width / 2 - pairOffset, menuStartY + menuRowGap * 3, 'Leaderboards', () => this.scene.start(SceneKeys.OnlineLeaderboards), pairButtonWidth);
-    createButton(this, width / 2 + pairOffset, menuStartY + menuRowGap * 3, 'Options', () => this.scene.start(SceneKeys.Options), pairButtonWidth);
+    createButton(this, width / 2 + pairOffset, menuStartY + menuRowGap * 3, 'Options', () => this.scene.start(SceneKeys.Options, {
+      returnScene: SceneKeys.MainMenu,
+      resumeGameplay: false
+    }), pairButtonWidth);
     createButton(this, width / 2 - pairOffset, menuStartY + menuRowGap * 4, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), pairButtonWidth);
     const lastMenuY = menuStartY + menuRowGap * 4;
     createButton(this, width / 2 + pairOffset, lastMenuY, 'Local Save Information', () => {

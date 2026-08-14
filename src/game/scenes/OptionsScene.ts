@@ -118,11 +118,14 @@ export class OptionsScene extends Phaser.Scene {
 
     const navigationY = soundStartY + soundRowGap * soundRows + 22;
     createButton(this, centerX, navigationY, 'Replay Splash Screen', () => {
-      this.scene.start(SceneKeys.Splash, {
+      this.scene.launch(SceneKeys.Splash, {
         replay: true,
         returnScene: this.returnScene,
-        resumeGameplay: this.resumeGameplayOnEsc
+        resumeGameplay: this.resumeGameplayOnEsc,
+        returnToOptions: this.returnScene !== SceneKeys.Arena
       });
+      this.scene.bringToTop(SceneKeys.Splash);
+      this.scene.stop();
     }, 280);
     createButton(this, centerX, navigationY + 50, 'Back to Main Menu', () => this.scene.start(SceneKeys.MainMenu), 280);
 
