@@ -10,6 +10,8 @@ export interface HudAbilitySlot {
   label: string;
   cooldownMs: number;
   cooldownDurationMs: number;
+  /** A sequential charge is filling, but an existing charge may still be used. */
+  recharging?: boolean;
   active?: boolean;
   selected: boolean;
   hasEnergy: boolean;
@@ -87,6 +89,7 @@ interface AbilitySlotVisual {
   lastStatus?: string;
   lastReady?: boolean;
   lastCoolingDown?: boolean;
+  lastRecharging?: boolean;
   lastActive?: boolean;
   lastSelected?: boolean;
   lastHasEnergy?: boolean;
@@ -783,7 +786,8 @@ export class Hud {
     if (!visual) return;
     const cooldownMs = slot.cooldownMs <= COOLDOWN_READY_EPSILON_MS ? 0 : slot.cooldownMs;
     const coolingDown = cooldownMs > 0;
-    const ready = !coolingDown && slot.hasEnergy && slot.underLimit;
+    const recharging = Boolean(slot.recharging && coolingDown);
+    const ready = (!coolingDown || recharging) && slot.hasEnergy && slot.underLimit;
     const previousReady = this.lastAbilityReady.get(slot.id) ?? false;
     this.lastAbilityReady.set(slot.id, ready);
     if (visual.lastKeybind !== slot.keybind) {
@@ -797,9 +801,10 @@ export class Hud {
     this.setTextIfChanged(visual.countText, countLabel);
     let status = '';
     if (slot.active) status = 'ACTIVE';
+    else if (recharging && slot.underLimit) status = `+${this.formatCooldown(cooldownMs)}`;
     else if (coolingDown) status = this.formatCooldown(cooldownMs);
     else if (!slot.hasEnergy) status = 'LOW EN';
-    else if (!slot.underLimit) status = 'FULL';
+    else if (!slot.underLimit) status = slot.id === 'mine' ? 'EMPTY' : 'FULL';
     if (visual.lastStatus !== status) {
       visual.lastStatus = status;
       visual.statusText.setText(status).setVisible(status.length > 0);
@@ -807,6 +812,7 @@ export class Hud {
 
     const visualStateChanged = visual.lastReady !== ready
       || visual.lastCoolingDown !== coolingDown
+      || visual.lastRecharging !== recharging
       || visual.lastActive !== slot.active
       || visual.lastSelected !== slot.selected
       || visual.lastHasEnergy !== slot.hasEnergy
@@ -814,29 +820,32 @@ export class Hud {
       || visual.lastCount !== slot.count
       || visual.lastCapacity !== slot.capacity;
     if (visualStateChanged) {
-      const muted = coolingDown || !slot.hasEnergy || !slot.underLimit;
-      visual.icon.setAlpha(status.length > 0 ? 0.22 : 1);
+      const muted = (coolingDown && !recharging) || !slot.hasEnergy || !slot.underLimit;
+      visual.icon.setAlpha((status.length > 0 && !recharging) || !slot.underLimit ? 0.22 : 1);
       visual.overlay.setAlpha(muted ? 0.25 : 0);
       const border = slot.selected ? MAGENTA : ready ? GREEN : 0x3a8fad;
       this.drawAbilityModuleFrame(visual.frame, border, ready, slot.selected);
       visual.keyChip.setStrokeStyle(1, slot.selected ? MAGENTA : CYAN, slot.selected ? 0.9 : 0.52);
       visual.labelText.setColor(slot.selected ? '#ffb7eb' : ready ? '#baffd6' : '#9ac8d4');
-      visual.statusText.setColor(slot.active ? '#ffb5ec' : coolingDown ? '#d8ebff' : !slot.hasEnergy ? '#ffb2be' : '#ffdba3');
+      visual.statusText.setColor(slot.active ? '#ffb5ec' : recharging ? '#8ef7ff' : coolingDown ? '#d8ebff' : !slot.hasEnergy ? '#ffb2be' : '#ffdba3');
       this.drawAbilitySegments(visual.segments, slot, ready);
     }
     if (coolingDown || visualStateChanged) {
       const ringRadius = 21;
       visual.cooldownRing.clear().lineStyle(1, 0x244c5c, 0.5).strokeCircle(50, 35, ringRadius);
-      if (ready || slot.active) {
-        visual.cooldownRing.lineStyle(2, slot.active ? MAGENTA : GREEN, 0.92).strokeCircle(50, 35, ringRadius);
+      if (slot.active) {
+        visual.cooldownRing.lineStyle(2, MAGENTA, 0.92).strokeCircle(50, 35, ringRadius);
       } else if (coolingDown) {
         const progress = 1 - Phaser.Math.Clamp(cooldownMs / Math.max(1, slot.cooldownDurationMs), 0, 1);
         visual.cooldownRing.lineStyle(2, CYAN, 0.94).beginPath()
           .arc(50, 35, ringRadius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress, false).strokePath();
+      } else if (ready) {
+        visual.cooldownRing.lineStyle(2, GREEN, 0.92).strokeCircle(50, 35, ringRadius);
       }
     }
     visual.lastReady = ready;
     visual.lastCoolingDown = coolingDown;
+    visual.lastRecharging = recharging;
     visual.lastActive = slot.active;
     visual.lastSelected = slot.selected;
     visual.lastHasEnergy = slot.hasEnergy;

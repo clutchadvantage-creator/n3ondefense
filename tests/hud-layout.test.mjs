@@ -45,7 +45,9 @@ test('combat HUD uses one icon-led cyber deck with truthful resource and deploya
   assert.match(hud, /slot\.selected \? MAGENTA/);
   assert.match(arena, /fenceSlot\.count = this\.fences\.length/);
   assert.match(arena, /turretSlot\.capacity = turretCfg\.maxActive/);
-  assert.match(arena, /mineSlot\.count = this\.mines\.length/);
+  assert.match(arena, /const rack = this\.mineChargeRack\.snapshot/);
+  assert.match(arena, /slot\.count = rack\.currentCharges/);
+  assert.match(arena, /slot\.capacity = rack\.maxCharges/);
   assert.match(arena, /shieldSlot\.active \? 1 : 0/);
 });
 

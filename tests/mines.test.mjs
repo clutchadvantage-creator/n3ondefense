@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { getMineRackEnergyCost, getMineRackPatternOffsets } from '../src/game/abilities/MineRackSalvo.ts';
+import { MINE_DEPLOYMENT_DELAY_MS, MineChargeRack } from '../src/game/abilities/MineChargeRack.ts';
 import { addModDrop, createDefaultModCollection, equipMod } from '../src/game/mods/ModInventoryService.ts';
 import { MOD_BY_ID } from '../src/game/mods/definitions.ts';
 import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
@@ -13,6 +14,69 @@ const runtimeAtRank = (rank) => {
   equipMod(mods, 'defense', 'full-rack-salvo', mods.cards[0].instanceId);
   return new ModRuntime(mods);
 };
+
+test('base mine rack spends charges rapidly and recharges them sequentially', () => {
+  const rack = new MineChargeRack();
+  rack.reset(3);
+
+  assert.equal(rack.spend(0, 4200), true);
+  assert.equal(rack.spend(MINE_DEPLOYMENT_DELAY_MS - 1, 4200), false);
+  assert.equal(rack.spend(MINE_DEPLOYMENT_DELAY_MS, 4200), true);
+  assert.equal(rack.spend(MINE_DEPLOYMENT_DELAY_MS * 2, 4200), true);
+  assert.equal(rack.spend(MINE_DEPLOYMENT_DELAY_MS * 3, 4200), false);
+  assert.deepEqual(rack.snapshot(4199, 4200), {
+    currentCharges: 0,
+    maxCharges: 3,
+    nextChargeRemainingMs: 1,
+    rechargeDurationMs: 4200
+  });
+  assert.equal(rack.snapshot(4200, 4200).currentCharges, 1);
+  assert.equal(rack.snapshot(8400, 4200).currentCharges, 2);
+  assert.equal(rack.snapshot(12600, 4200).currentCharges, 3);
+});
+
+test('spending a partial mine charge does not reset existing recharge progress', () => {
+  const rack = new MineChargeRack();
+  rack.reset(3);
+  assert.equal(rack.spend(0, 4200), true);
+  assert.equal(rack.spend(150, 4200), true);
+  assert.equal(rack.spend(300, 4200), true);
+
+  assert.equal(rack.snapshot(4200, 4200).currentCharges, 1);
+  assert.equal(rack.spend(4200, 4200), true);
+  assert.equal(rack.snapshot(8399, 4200).currentCharges, 0);
+  assert.equal(rack.snapshot(8400, 4200).currentCharges, 1);
+});
+
+test('single and upgraded mine capacities clamp correctly and honor recharge modifiers', () => {
+  const single = new MineChargeRack();
+  single.reset(1);
+  assert.equal(single.spend(0, 4200), true);
+  assert.equal(single.snapshot(4199, 4200).currentCharges, 0);
+  assert.equal(single.snapshot(4200, 4200).currentCharges, 1);
+  assert.equal(single.snapshot(99_999, 4200).currentCharges, 1);
+
+  const upgraded = new MineChargeRack();
+  upgraded.reset(5);
+  assert.equal(upgraded.snapshot(0, 2100).maxCharges, 5);
+  assert.equal(upgraded.snapshot(0, 2100).currentCharges, 5);
+  assert.equal(upgraded.spend(0, 2100), true);
+  assert.equal(upgraded.snapshot(2099, 2100).currentCharges, 4);
+  assert.equal(upgraded.snapshot(2100, 2100).currentCharges, 5);
+});
+
+test('base mine placement validates energy and geometry before consuming a charge', () => {
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const energyCheck = arena.indexOf('if (!this.player.canSpendEnergy(cfg.energyCost))');
+  const placementCheck = arena.indexOf('if (!this.isValidPlacement(x, y))');
+  const chargeSpend = arena.indexOf('if (!this.mineChargeRack.spend(now, cfg.cooldownMs))');
+  assert.ok(energyCheck >= 0 && placementCheck > energyCheck && chargeSpend > placementCheck);
+  assert.doesNotMatch(arena, /if \(this\.mines\.length >= cfg\.maxActive\)[\s\S]{0,180}recordAbilityDenied\('mine'/);
+  const basePlacement = arena.slice(arena.indexOf('private placeAbility('), arena.indexOf('private placeFullRackSalvo('));
+  assert.equal([...basePlacement.matchAll(/this\.player\.spendEnergy\(cfg\.energyCost\)/g)].length, 1);
+  assert.match(arena, /private readonly pressedAbilityActions = new Set<AbilityAction>\(\)/);
+  assert.match(arena, /this\.pressedAbilityActions\.delete\(action\)/);
+});
 
 test('mine rack formations preserve requested capacity and use the five-pip layout', () => {
   for (let count = 1; count <= 9; count += 1) {

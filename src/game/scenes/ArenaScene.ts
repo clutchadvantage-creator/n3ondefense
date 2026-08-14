@@ -8,6 +8,7 @@ import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAY
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
 import { Mine, STAR_DEATH_MINE_VISUAL_THEME } from '../abilities/Mine';
+import { MineChargeRack } from '../abilities/MineChargeRack.ts';
 import { getMineRackEnergyCost, getMineRackPatternOffsets } from '../abilities/MineRackSalvo';
 import { Turret } from '../abilities/Turret';
 import { Fence } from '../abilities/Fence';
@@ -21,7 +22,7 @@ import { BombSiteManager } from '../systems/BombSiteManager';
 import { GameStateMachine } from '../systems/GameStateMachine';
 import { GridPathfinder } from '../systems/GridPathfinder';
 import { Hud } from '../systems/Hud';
-import type { HudPayload, HudRadarContact } from '../systems/Hud';
+import type { HudAbilitySlot, HudPayload, HudRadarContact } from '../systems/Hud';
 import { RoundManager } from '../systems/RoundManager';
 import { SaveSystem } from '../systems/SaveSystem';
 import { ArenaGenerator } from '../systems/ArenaGenerator';
@@ -349,7 +350,9 @@ export class ArenaScene extends Phaser.Scene {
   };
 
   private selectedAbility: AbilityType = 'fence';
-  private abilityCooldownUntil: Record<AbilityType, number> = { fence: 0, turret: 0, mine: 0 };
+  private abilityCooldownUntil: Record<'fence' | 'turret', number> = { fence: 0, turret: 0 };
+  private readonly mineChargeRack = new MineChargeRack();
+  private mineSalvoCooldownUntil = 0;
   private shieldCooldownUntil = 0;
   private shieldActiveUntil = 0;
   private shieldVisual: OperativeShieldVisual | null = null;
@@ -609,6 +612,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.createOrMovePlayer();
     this.modRuntime.beginRound(1);
+    this.mineChargeRack.reset(this.getAbilityConfig('mine').maxActive);
     this.defuserMarkedUntil = new WeakMap<Enemy, number>();
     this.defuseTargetByEnemy.clear();
     this.createHudLayer();
@@ -2654,12 +2658,22 @@ export class ArenaScene extends Phaser.Scene {
 
   private placeAbility(type: AbilityType, now: number): void {
     const cfg = this.getAbilityConfig(type);
-    if (now < this.abilityCooldownUntil[type]) {
+    const isMineSalvo = type === 'mine' && this.modRuntime.has('full-rack-salvo');
+    if (type !== 'mine' && now < this.abilityCooldownUntil[type]) {
       GameplayTelemetryRecorder.recordAbilityDenied(type, 'cooldown');
       return;
     }
+    if (isMineSalvo && now < this.mineSalvoCooldownUntil) {
+      GameplayTelemetryRecorder.recordAbilityDenied('mine', 'cooldown');
+      return;
+    }
+    if (type === 'mine' && !isMineSalvo && this.mineChargeRack.availability(now, cfg.cooldownMs) !== 'ready') {
+      GameplayTelemetryRecorder.recordAbilityDenied('mine', 'cooldown');
+      return;
+    }
+
     const { x, y } = this.getAimWorldPoint();
-    if (type === 'mine' && this.modRuntime.has('full-rack-salvo')) {
+    if (isMineSalvo) {
       this.placeFullRackSalvo(now, cfg, x, y);
       return;
     }
@@ -2695,8 +2709,10 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (type === 'mine') {
-      if (this.mines.length >= cfg.maxActive) {
-        GameplayTelemetryRecorder.recordAbilityDenied('mine', 'active-limit');
+      // Energy and placement are validated before the authoritative rack is
+      // consumed, so a failed placement never loses a charge.
+      if (!this.mineChargeRack.spend(now, cfg.cooldownMs)) {
+        GameplayTelemetryRecorder.recordAbilityDenied('mine', 'cooldown');
         return;
       }
       const mine = new Mine(this, x, y, COLORS.orange, cfg.armMs, cfg.damage, cfg.radius);
@@ -2705,8 +2721,8 @@ export class ArenaScene extends Phaser.Scene {
 
     this.player.spendEnergy(cfg.energyCost);
     GameplayTelemetryRecorder.recordAbilityUse(type, cfg.energyCost);
-    this.abilityCooldownUntil[type] = now + cfg.cooldownMs;
-      this.audio.playSfx('place');
+    if (type !== 'mine') this.abilityCooldownUntil[type] = now + cfg.cooldownMs;
+    this.audio.playSfx('place');
   }
 
   private placeFullRackSalvo(now: number, cfg: AbilityRuntimeConfig, aimX: number, aimY: number): void {
@@ -2749,7 +2765,7 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.player.spendEnergy(totalEnergyCost);
     GameplayTelemetryRecorder.recordAbilityUse('mine', totalEnergyCost);
-    this.abilityCooldownUntil.mine = now + cfg.cooldownMs;
+    this.mineSalvoCooldownUntil = now + cfg.cooldownMs;
     this.audio.playSfx('place');
   }
 
@@ -3920,7 +3936,11 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.recordResourceGain('energy', 'site-recovery-direct', REWARD_BALANCE.siteRecoveryEnergy, this.player.energy - energyBefore);
     this.abilityCooldownUntil.fence = Math.min(this.abilityCooldownUntil.fence, this.time.now + 900);
     this.abilityCooldownUntil.turret = Math.min(this.abilityCooldownUntil.turret, this.time.now + 900);
-    this.abilityCooldownUntil.mine = Math.min(this.abilityCooldownUntil.mine, this.time.now + 900);
+    if (this.modRuntime.has('full-rack-salvo')) {
+      this.mineSalvoCooldownUntil = Math.min(this.mineSalvoCooldownUntil, this.time.now + 900);
+    } else {
+      this.mineChargeRack.accelerateRecharge(this.time.now, 900);
+    }
 
     const recoveryCredits = this.scaleModCredits(REWARD_BALANCE.siteRecoveryCredits);
     this.roundCredits += recoveryCredits;
@@ -4130,7 +4150,9 @@ export class ArenaScene extends Phaser.Scene {
     this.nextBossSupportPickupAt = this.time.now + BOSS_BALANCE.supportPickupFirstDelayMs;
     this.shieldActiveUntil = 0;
     this.shieldCooldownUntil = 0;
-    this.abilityCooldownUntil = { fence: 0, turret: 0, mine: 0 };
+    this.abilityCooldownUntil = { fence: 0, turret: 0 };
+    this.mineSalvoCooldownUntil = 0;
+    this.mineChargeRack.reset(this.getAbilityConfig('mine').maxActive);
     this.destroyShieldOrb();
     this.activePlantingSite = null;
     this.plantingProgressMs = 0;
@@ -4399,7 +4421,6 @@ export class ArenaScene extends Phaser.Scene {
 
     const fenceCdMs = Math.max(0, this.abilityCooldownUntil.fence - now);
     const turretCdMs = Math.max(0, this.abilityCooldownUntil.turret - now);
-    const mineCdMs = Math.max(0, this.abilityCooldownUntil.mine - now);
     const shieldCdMs = Math.max(0, this.shieldCooldownUntil - now);
 
     this.hudPayload.hp = this.player.hp;
@@ -4440,13 +4461,7 @@ export class ArenaScene extends Phaser.Scene {
     turretSlot.count = this.turrets.length;
     turretSlot.capacity = turretCfg.maxActive;
 
-    mineSlot.cooldownMs = mineCdMs;
-    mineSlot.cooldownDurationMs = mineCfg.cooldownMs;
-    mineSlot.selected = this.selectedAbility === 'mine';
-    mineSlot.hasEnergy = this.player.energy >= mineCfg.energyCost;
-    mineSlot.underLimit = this.mines.length < mineCfg.maxActive;
-    mineSlot.count = this.mines.length;
-    mineSlot.capacity = mineCfg.maxActive;
+    this.updateMineHudSlot(mineSlot, now, mineCfg);
 
     shieldSlot.cooldownMs = now < this.shieldActiveUntil ? this.shieldActiveUntil - now : shieldCdMs;
     shieldSlot.cooldownDurationMs = now < this.shieldActiveUntil
@@ -4502,13 +4517,7 @@ export class ArenaScene extends Phaser.Scene {
     turretSlot.underLimit = this.turrets.length < turretCfg.maxActive;
     turretSlot.count = this.turrets.length;
     turretSlot.capacity = turretCfg.maxActive;
-    mineSlot.cooldownMs = Math.max(0, this.abilityCooldownUntil.mine - now);
-    mineSlot.cooldownDurationMs = mineCfg.cooldownMs;
-    mineSlot.selected = this.selectedAbility === 'mine';
-    mineSlot.hasEnergy = this.player.energy >= mineCfg.energyCost;
-    mineSlot.underLimit = this.mines.length < mineCfg.maxActive;
-    mineSlot.count = this.mines.length;
-    mineSlot.capacity = mineCfg.maxActive;
+    this.updateMineHudSlot(mineSlot, now, mineCfg);
     shieldSlot.cooldownMs = now < this.shieldActiveUntil
       ? this.shieldActiveUntil - now
       : Math.max(0, this.shieldCooldownUntil - now);
@@ -4520,6 +4529,31 @@ export class ArenaScene extends Phaser.Scene {
     shieldSlot.count = shieldSlot.active ? 1 : 0;
     shieldSlot.capacity = null;
     this.hud.update(this.hudPayload);
+  }
+
+  private updateMineHudSlot(slot: HudAbilitySlot, now: number, cfg: AbilityRuntimeConfig): void {
+    slot.cooldownDurationMs = cfg.cooldownMs;
+    slot.selected = this.selectedAbility === 'mine';
+    slot.hasEnergy = this.player.energy >= cfg.energyCost;
+
+    // Full Rack Salvo intentionally retains its existing active-mine capacity
+    // and one-cooldown behavior. The base ability alone uses sequential charges.
+    if (this.modRuntime.has('full-rack-salvo')) {
+      slot.cooldownMs = Math.max(0, this.mineSalvoCooldownUntil - now);
+      slot.recharging = false;
+      slot.underLimit = this.mines.length < cfg.maxActive;
+      slot.count = this.mines.length;
+      slot.capacity = cfg.maxActive;
+      return;
+    }
+
+    const rack = this.mineChargeRack.snapshot(now, cfg.cooldownMs);
+    slot.cooldownMs = rack.nextChargeRemainingMs;
+    slot.cooldownDurationMs = rack.rechargeDurationMs;
+    slot.recharging = rack.currentCharges < rack.maxCharges;
+    slot.underLimit = rack.currentCharges > 0;
+    slot.count = rack.currentCharges;
+    slot.capacity = rack.maxCharges;
   }
 
   private refreshHudRadarContacts(): void {
