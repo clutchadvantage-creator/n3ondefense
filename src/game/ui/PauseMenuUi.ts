@@ -57,7 +57,10 @@ const createActionControl = (
   const outerWidth = width + (tone === 'primary' ? 16 : 10);
   const outerHeight = height + (tone === 'primary' ? 12 : 8);
   const points = chamferedPoints(outerWidth, outerHeight, Math.min(11, outerHeight * 0.22));
-  const root = scene.add.container(x, y);
+  // InputManager reads the interactive child's scroll factor even when its
+  // visual parent is screen-fixed. Keep both sides in screen space so Arena
+  // camera scroll cannot offset hover/click coordinates from the rendered UI.
+  const root = scene.add.container(x, y).setScrollFactor(0);
   const shadow = scene.add.polygon(4, 5, points, 0x000000, 0.54);
   const chassis = scene.add.polygon(0, 0, points, toneFill(tone), 0.98)
     .setStrokeStyle(tone === 'primary' ? 2 : 1, accent, tone === 'primary' ? 0.82 : 0.54);
