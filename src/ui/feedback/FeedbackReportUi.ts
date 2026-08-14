@@ -2,25 +2,30 @@ import './feedback-report.css';
 import { GAME_VERSION } from '../../game/config/version';
 
 export interface FeedbackReportHandle {
+  open(): void;
   destroy(): void;
+}
+
+interface FeedbackReportOptions {
+  showLaunchButton?: boolean;
 }
 
 const REPORT_EMAIL = 'runtwerkx.dev@gmail.com';
 
-export const mountFeedbackReportUi = (root: HTMLElement): FeedbackReportHandle => {
+export const mountFeedbackReportUi = (root: HTMLElement, options: FeedbackReportOptions = {}): FeedbackReportHandle => {
   const launchButton = document.createElement('button');
   launchButton.type = 'button';
   launchButton.className = 'feedback-launch';
   launchButton.textContent = 'Suggestions / Bug Reports';
   launchButton.setAttribute('aria-haspopup', 'dialog');
-  root.append(launchButton);
+  if (options.showLaunchButton !== false) root.append(launchButton);
 
   let backdrop: HTMLDivElement | null = null;
 
   const close = (): void => {
     backdrop?.remove();
     backdrop = null;
-    launchButton.focus();
+    if (launchButton.isConnected) launchButton.focus();
   };
 
   const open = (): void => {
@@ -108,6 +113,7 @@ export const mountFeedbackReportUi = (root: HTMLElement): FeedbackReportHandle =
 
   launchButton.addEventListener('click', open);
   return {
+    open,
     destroy: () => {
       backdrop?.remove();
       backdrop = null;
