@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/constants.ts';
-import { createButton } from '../utils/ui.ts';
+import { AudioManager } from '../systems/AudioManager.ts';
 import { PAUSE_MENU_BASE_HEIGHT, PAUSE_MENU_BASE_WIDTH, calculatePauseMenuLayout } from './PauseMenuLayout.ts';
 
 export type PauseMenuActionTone = 'primary' | 'standard' | 'utility' | 'warning';
@@ -61,14 +61,41 @@ const createActionControl = (
   const shadow = scene.add.polygon(4, 5, points, 0x000000, 0.54);
   const chassis = scene.add.polygon(0, 0, points, toneFill(tone), 0.98)
     .setStrokeStyle(tone === 'primary' ? 2 : 1, accent, tone === 'primary' ? 0.82 : 0.54);
-  const button = createButton(scene, 0, 0, action.label.toUpperCase(), action.onClick, width, 'menu', {
-    height,
-    fontSize: action.label.length > 25 ? 15 : 17,
-    horizontalPadding: 30
-  });
+  const label = scene.add.text(0, 0, action.label.toUpperCase(), {
+    color: '#d6f7ff',
+    fontSize: `${action.label.length > 25 ? 15 : 17}px`,
+    fontFamily: 'Rajdhani, sans-serif',
+    fontStyle: 'bold',
+    align: 'center',
+    wordWrap: { width: Math.max(40, width - 30), useAdvancedWrap: true }
+  }).setOrigin(0.5).setMaxLines(2);
   const edge = scene.add.rectangle(0, -height * 0.5 + 2, width - 22, 2, accent, tone === 'primary' ? 0.72 : 0.38);
   const led = scene.add.circle(-width * 0.5 + 13, 0, 2.7, accent, 0.95);
-  root.add([shadow, chassis, button, edge, led]);
+  root.add([shadow, chassis, label, edge, led]);
+
+  // Keep the command itself as the hit target. This avoids relying on a hit
+  // rectangle buried inside multiple scaled Containers, which Phaser can sort
+  // behind a fullscreen overlay during pointer hit testing.
+  root.setSize(width, height).setInteractive(
+    new Phaser.Geom.Rectangle(-width * 0.5, -height * 0.5, width, height),
+    Phaser.Geom.Rectangle.Contains
+  );
+  if (root.input) root.input.cursor = 'pointer';
+  root.on('pointerover', () => {
+    chassis.setStrokeStyle(2, COLORS.pink, 1);
+    label.setColor('#ffffff');
+    edge.setAlpha(1);
+    AudioManager.get().playSfx('menuHover');
+  });
+  root.on('pointerout', () => {
+    chassis.setStrokeStyle(tone === 'primary' ? 2 : 1, accent, tone === 'primary' ? 0.82 : 0.54);
+    label.setColor('#d6f7ff');
+    edge.setAlpha(tone === 'primary' ? 0.72 : 0.38);
+  });
+  root.on('pointerdown', () => {
+    const accepted = action.onClick();
+    AudioManager.get().playSfx(accepted === false ? 'itemLocked' : 'menu');
+  });
 
   scene.tweens.add({ targets: led, alpha: { from: 0.24, to: 1 }, duration: 760, yoyo: true, repeat: -1 });
   animatedTargets.push(led);
@@ -117,7 +144,9 @@ export const createPauseMenuView = (
 ): PauseMenuView => {
   const animatedTargets: Phaser.GameObjects.GameObject[] = [];
   const backdropRoot = scene.add.container(0, 0).setScrollFactor(0).setDepth(1185);
-  const backdrop = scene.add.rectangle(0, 0, 1, 1, 0x02050b, 0.82).setInteractive();
+  // Decorative only: making this fullscreen object interactive prevents the
+  // command hit areas from receiving hover/click events on some Phaser builds.
+  const backdrop = scene.add.rectangle(0, 0, 1, 1, 0x02050b, 0.82);
   const grid = scene.add.graphics();
   const leftRing = scene.add.circle(0, 0, 132, COLORS.cyan, 0.018).setStrokeStyle(2, COLORS.cyan, 0.14);
   const rightRing = scene.add.circle(0, 0, 104, COLORS.pink, 0.018).setStrokeStyle(2, COLORS.pink, 0.14);

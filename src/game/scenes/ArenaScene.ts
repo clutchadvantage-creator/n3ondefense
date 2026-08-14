@@ -305,6 +305,7 @@ export class ArenaScene extends Phaser.Scene {
   private turretTelemetrySequence = 0;
 
   private pauseMenu: PauseMenuView | null = null;
+  private pauseMenuOpenedAt = Number.NEGATIVE_INFINITY;
   private equippedModsViewer: Phaser.GameObjects.Container | null = null;
   private modAcquisitionPresenter: ModAcquisitionPresenter | null = null;
   private legendaryRevealPhysicsWasPaused = false;
@@ -341,7 +342,6 @@ export class ArenaScene extends Phaser.Scene {
     one: Phaser.Input.Keyboard.Key;
     two: Phaser.Input.Keyboard.Key;
     three: Phaser.Input.Keyboard.Key;
-    esc: Phaser.Input.Keyboard.Key;
     f8: Phaser.Input.Keyboard.Key;
     f7: Phaser.Input.Keyboard.Key;
     f6: Phaser.Input.Keyboard.Key;
@@ -426,7 +426,24 @@ export class ArenaScene extends Phaser.Scene {
   };
   private readonly onQuitFromStore = (): void => this.quitToMenu();
   private readonly onAbilityKeyDown = (event: KeyboardEvent): void => {
-    if (event.repeat || !this.scene.isActive() || this.state.state === RoundState.Paused) return;
+    if (event.repeat || !this.scene.isActive()) return;
+    if (event.code === 'Escape') {
+      // Pointer-lock loss may deliver the same Escape after its asynchronous
+      // unlock callback has already opened the menu. Ignore only that duplicate
+      // edge. Escape itself is not a browser user-activation gesture, so an
+      // already-paused operation returns to the explicit click-to-resume gate.
+      if (this.state.state === RoundState.Paused && this.pauseMenu && Date.now() - this.pauseMenuOpenedAt < 150) return;
+      event.preventDefault();
+      if (this.state.state === RoundState.Paused) {
+        this.hideEquippedModsViewer();
+        this.hidePauseMenu();
+        this.pointerLock?.showResume();
+      } else {
+        this.togglePause();
+      }
+      return;
+    }
+    if (this.state.state === RoundState.Paused) return;
     const action = this.actionForBinding(`Keyboard:${event.code}`);
     if (action) this.pressedAbilityActions.add(action);
   };
@@ -911,9 +928,6 @@ export class ArenaScene extends Phaser.Scene {
     const now = this.time.now;
     const dt = delta / 1000;
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.esc)) {
-      this.togglePause();
-    }
     if (import.meta.env.DEV && Phaser.Input.Keyboard.JustDown(this.keys.f8)) {
       this.balanceTelemetry?.setVisible(!this.balanceTelemetry.visible);
     }
@@ -1031,8 +1045,7 @@ export class ArenaScene extends Phaser.Scene {
       e: kb.addKey('E'),
       one: kb.addKey('ONE'),
       two: kb.addKey('TWO'),
-      three: kb.addKey('THREE'),
-      esc: kb.addKey('ESC')
+      three: kb.addKey('THREE')
       ,f8: kb.addKey('F8')
       ,f7: kb.addKey('F7')
       ,f6: kb.addKey('F6')
@@ -5016,6 +5029,7 @@ export class ArenaScene extends Phaser.Scene {
   private showPauseMenu(): void {
     this.hidePauseMenu();
     this.setMenuCursorMode();
+    this.pauseMenuOpenedAt = Date.now();
 
     this.pauseMenu = createPauseMenuView(this, {
       encounter: this.bossEncounter ? `Boss Gate ${this.bossRound}` : `Round ${this.roundManager.round}`,
