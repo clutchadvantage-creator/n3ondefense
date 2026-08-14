@@ -64,3 +64,23 @@ test('scene shutdown does not tear down Phaser-owned visuals or physics twice', 
   assert.doesNotMatch(sceneCleanup, /this\.arenaVisuals\?\.destroy\(\)/);
   assert.doesNotMatch(sceneCleanup, /this\.walls\?\.clear\(true, true\)/);
 });
+
+test('a restarted Arena scene skips teardown of the previous disposed round', () => {
+  const source = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const prepareRound = source.slice(
+    source.indexOf('private prepareForRoundCreation(): void'),
+    source.indexOf('private clearRoundCollections(): void')
+  );
+  const createRound = source.slice(
+    source.indexOf('private createRoundFromDefinition'),
+    source.indexOf('private drawProceduralArena')
+  );
+  const sceneCleanup = source.slice(source.indexOf('private cleanup(): void'));
+
+  assert.match(createRound, /this\.prepareForRoundCreation\(\)/);
+  assert.match(prepareRound, /if \(this\.hasLiveRoundObjects\)/);
+  assert.match(prepareRound, /this\.cleanupRoundObjects\(\)/);
+  assert.match(prepareRound, /this\.clearRoundCollections\(\)/);
+  assert.match(sceneCleanup, /this\.hasLiveRoundObjects = false/);
+  assert.match(sceneCleanup, /this\.clearRoundCollections\(\)/);
+});

@@ -221,6 +221,12 @@ export class ArenaScene extends Phaser.Scene {
 
   private walls!: Phaser.Physics.Arcade.StaticGroup;
   private wallRects: RectSpec[] = [];
+  /**
+   * Phaser reuses the ArenaScene instance after it has been stopped. Scene
+   * shutdown has already disposed its physics groups, so a subsequent create
+   * must not run the between-round teardown against those stale objects.
+   */
+  private hasLiveRoundObjects = false;
 
   private enemies: Enemy[] = [];
   private projectiles: Projectile[] = [];
@@ -623,7 +629,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private createRoundFromDefinition(def: ReturnType<RoundManager['currentDefinition']>): void {
-    this.cleanupRoundObjects();
+    this.prepareForRoundCreation();
     this.pendingRoundPayload = null;
     this.bossRound = 0;
     this.bossPickupRandom = null;
@@ -755,6 +761,7 @@ export class ArenaScene extends Phaser.Scene {
     this.roundFluxCores = 0;
 
     this.state.set(RoundState.PrePlant);
+    this.hasLiveRoundObjects = true;
 
     this.showBanner(`ROUND ${def.round} - ${def.template.toUpperCase()}\nSeed ${def.seed}`);
   }
@@ -4083,7 +4090,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private beginBossFight(payload: RoundFinishedPayload): void {
-    this.cleanupRoundObjects();
+    this.prepareForRoundCreation();
     this.pendingRoundPayload = payload;
     this.bossRound = payload.completedRound;
     this.bossVictoryHandled = false;
@@ -4224,6 +4231,7 @@ export class ArenaScene extends Phaser.Scene {
     this.activePlantingSite = null;
     this.plantingProgressMs = 0;
     this.state.set(RoundState.Defense);
+    this.hasLiveRoundObjects = true;
     this.cameras.main.flash(450, 40, 10, 60);
     this.showBanner(`BOSS INTERCEPT\n${BOSS_ARCHETYPES[archetype].label}`);
   }
@@ -5243,6 +5251,49 @@ export class ArenaScene extends Phaser.Scene {
     this.scene.start(SceneKeys.MainMenu);
   }
 
+  private prepareForRoundCreation(): void {
+    if (this.hasLiveRoundObjects) {
+      this.cleanupRoundObjects();
+      return;
+    }
+
+    // A stopped Phaser scene is restarted using the same class instance. Its
+    // display list and physics world are already gone at this point, so only
+    // discard our plain references. In particular, never call clear() on the
+    // previous run's disposed StaticGroup here.
+    this.clearRoundCollections();
+  }
+
+  private clearRoundCollections(): void {
+    this.wallRects.length = 0;
+    this.enemies.length = 0;
+    this.projectiles.length = 0;
+    this.pendingSplitProjectiles.length = 0;
+    this.hazardDamageTargets.length = 0;
+    this.homingMissiles.length = 0;
+    this.pickups.length = 0;
+    this.fences.length = 0;
+    this.turrets.length = 0;
+    this.mines.length = 0;
+    this.deathMines.length = 0;
+    this.defuseAssignees.clear();
+    this.activeDefusersBySite.clear();
+    this.activeDefuserEnemiesBySite.clear();
+    this.defuseCandidateBuffer.length = 0;
+    this.assignedDefusersPerSite.clear();
+    this.defuseTargetByEnemy.clear();
+    this.detonatingSiteIds.clear();
+    this.pressedAbilityActions.clear();
+    this.hudBuffs.length = 0;
+    this.hudRadarContacts.length = 0;
+    this.hudRadarContactPool.length = 0;
+    this.hudRadarContactCount = 0;
+    this.nextHoloAfterimageAt = 0;
+    this.arcadePopSequence = 0;
+    this.navState = new WeakMap<Enemy, NavState>();
+    this.patrolTargets = new WeakMap<Enemy, PatrolPoint>();
+  }
+
   private cleanupRoundObjects(): void {
     this.arenaVisuals?.destroy();
     this.arenaVisuals = null;
@@ -5276,19 +5327,8 @@ export class ArenaScene extends Phaser.Scene {
     this.bombSites?.destroy();
     this.destroyShieldOrb();
 
-    this.enemies.length = 0;
-    this.projectiles.length = 0;
-    this.homingMissiles.length = 0;
-    this.pickups.length = 0;
-    this.fences.length = 0;
-    this.turrets.length = 0;
-    this.mines.length = 0;
-    this.deathMines.length = 0;
-    this.pendingSplitProjectiles.length = 0;
-    this.defuseAssignees.clear();
-    this.activeDefuserEnemiesBySite.clear();
-    this.nextHoloAfterimageAt = 0;
-    this.arcadePopSequence = 0;
+    this.clearRoundCollections();
+    this.hasLiveRoundObjects = false;
 
     this.children.list
       .filter((obj) => 'depth' in obj
@@ -5304,6 +5344,7 @@ export class ArenaScene extends Phaser.Scene {
     // emitting the Scene shutdown event handled here. Only release our
     // references at this point; cleanupRoundObjects handles explicit teardown
     // while the Arena scene and its plugins are still active.
+    this.hasLiveRoundObjects = false;
     this.arenaVisuals = null;
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
@@ -5341,7 +5382,7 @@ export class ArenaScene extends Phaser.Scene {
     this.boostVisual?.destroy();
     this.projectilePool?.destroy((projectile) => projectile.sprite.destroy());
     this.fxCirclePool?.destroy((circle) => circle.destroy());
-    this.pendingSplitProjectiles.length = 0;
+    this.clearRoundCollections();
     this.input.off('pointerdown', this.onPointerDown);
     this.input.off('pointerup', this.onPointerUp);
     window.removeEventListener('keydown', this.onAbilityKeyDown);
