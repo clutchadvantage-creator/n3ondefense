@@ -7,7 +7,7 @@ import {
   calculateModRevealCardWidth,
   enqueueModAcquisition
 } from '../src/game/mods/ModAcquisition.ts';
-import { SFX_DEFINITIONS, createDefaultSoundVolumes } from '../src/game/config/audio.ts';
+import { DEFAULT_AUDIO_VOLUME, SFX_DEFINITIONS, createDefaultSoundVolumes } from '../src/game/config/audio.ts';
 import { SceneKeys, SceneStatusOrder } from '../src/game/flow/SceneKeys.ts';
 
 const request = (id, rarity) => ({
@@ -51,8 +51,8 @@ test('Mod reveal cards retain their full aspect ratio inside supported and compa
 test('Legendary Mod audio uses the central SFX mixer and reveal scene is registered', () => {
   assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'legendaryMod'));
   assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'modCollection'));
-  assert.equal(createDefaultSoundVolumes().legendaryMod, 1);
-  assert.equal(createDefaultSoundVolumes().modCollection, 1);
+  assert.equal(createDefaultSoundVolumes().legendaryMod, DEFAULT_AUDIO_VOLUME);
+  assert.equal(createDefaultSoundVolumes().modCollection, DEFAULT_AUDIO_VOLUME);
   assert.ok(SceneStatusOrder.includes(SceneKeys.LegendaryModReveal));
 });
 

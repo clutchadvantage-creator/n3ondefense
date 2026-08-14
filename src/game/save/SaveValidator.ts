@@ -1,7 +1,7 @@
 import { COSMETICS } from '../../data/cosmetics.ts';
 import { UPGRADE_DEFINITIONS } from '../../data/upgrades.ts';
 import type { CosmeticOption } from '../types.ts';
-import { SFX_DEFINITIONS, createDefaultSoundVolumes } from '../config/audio.ts';
+import { DEFAULT_AUDIO_VOLUME, SFX_DEFINITIONS, createDefaultSoundVolumes } from '../config/audio.ts';
 import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type LocalPlayerMetadata, type LocalPlayerProgress, type LocalPlayerSave, type LocalPlayerSaveV1, type LocalPlayerSettings, type ProfileSummary } from './LocalSaveTypes.ts';
 import { DEFAULT_ABILITY_BINDINGS, normalizeAbilityBindings } from '../config/controls.ts';
 import { normalizeModCollection, normalizeProtocolPreference } from '../mods/ModSaveNormalizer.ts';
@@ -10,9 +10,9 @@ import type { CreditSpendCategory } from '../economy/types.ts';
 import { createDefaultGarageState, normalizeGarageState } from '../garage/GarageState.ts';
 
 const defaultSettings: LocalPlayerSettings = {
-  masterVolume: 0.8,
-  musicVolume: 0.6,
-  sfxVolume: 0.85,
+  masterVolume: DEFAULT_AUDIO_VOLUME,
+  musicVolume: DEFAULT_AUDIO_VOLUME,
+  sfxVolume: DEFAULT_AUDIO_VOLUME,
   soundVolumes: createDefaultSoundVolumes(),
   screenShake: true,
   particles: true,
@@ -113,7 +113,7 @@ const normalizeSettings = (settings: unknown): LocalPlayerSettings => {
   const soundCandidates = isObject(candidate.soundVolumes) ? candidate.soundVolumes : {};
   const soundVolumes = createDefaultSoundVolumes();
   for (const definition of SFX_DEFINITIONS) {
-    soundVolumes[definition.key] = clamp(toFiniteNumber(soundCandidates[definition.key], 1), 0, 1);
+    soundVolumes[definition.key] = clamp(toFiniteNumber(soundCandidates[definition.key], soundVolumes[definition.key]), 0, 1);
   }
   return {
     masterVolume: clamp(toFiniteNumber(candidate.masterVolume, defaultSettings.masterVolume), 0, 1),

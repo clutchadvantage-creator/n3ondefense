@@ -29,8 +29,10 @@ export const SFX_DEFINITIONS = [
 
 export type AudioSfxName = typeof SFX_DEFINITIONS[number]['key'];
 
+export const DEFAULT_AUDIO_VOLUME = 0.25;
+
 export const createDefaultSoundVolumes = (): Record<AudioSfxName, number> => {
   const volumes = {} as Record<AudioSfxName, number>;
-  for (const definition of SFX_DEFINITIONS) volumes[definition.key] = 1;
+  for (const definition of SFX_DEFINITIONS) volumes[definition.key] = DEFAULT_AUDIO_VOLUME;
   return volumes;
 };

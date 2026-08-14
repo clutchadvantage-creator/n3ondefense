@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { SFX_DEFINITIONS, createDefaultSoundVolumes } from '../src/game/config/audio.ts';
+import { DEFAULT_AUDIO_VOLUME, SFX_DEFINITIONS, createDefaultSoundVolumes } from '../src/game/config/audio.ts';
+import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 
-test('menu interaction recordings are registered with backward-compatible volume defaults', () => {
+test('menu interaction recordings are registered with the standard audio default', () => {
   assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/menuclick.mp3', import.meta.url)));
   assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/hoversound.mp3', import.meta.url)));
   assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/itemlocked.mp3', import.meta.url)));
@@ -12,10 +13,42 @@ test('menu interaction recordings are registered with backward-compatible volume
   assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'menuHover'));
   assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'itemLocked'));
   assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'runStart'));
-  assert.equal(createDefaultSoundVolumes().menu, 1);
-  assert.equal(createDefaultSoundVolumes().menuHover, 1);
-  assert.equal(createDefaultSoundVolumes().itemLocked, 1);
-  assert.equal(createDefaultSoundVolumes().runStart, 1);
+  assert.equal(createDefaultSoundVolumes().menu, DEFAULT_AUDIO_VOLUME);
+  assert.equal(createDefaultSoundVolumes().menuHover, DEFAULT_AUDIO_VOLUME);
+  assert.equal(createDefaultSoundVolumes().itemLocked, DEFAULT_AUDIO_VOLUME);
+  assert.equal(createDefaultSoundVolumes().runStart, DEFAULT_AUDIO_VOLUME);
+});
+
+test('new profiles default every global and individual audio slider to 25 percent', () => {
+  const save = createDefaultLocalSave('audio-defaults', 'Audio Defaults');
+  assert.equal(save.settings.masterVolume, DEFAULT_AUDIO_VOLUME);
+  assert.equal(save.settings.musicVolume, DEFAULT_AUDIO_VOLUME);
+  assert.equal(save.settings.sfxVolume, DEFAULT_AUDIO_VOLUME);
+  for (const definition of SFX_DEFINITIONS) {
+    assert.equal(save.settings.soundVolumes[definition.key], DEFAULT_AUDIO_VOLUME, definition.key);
+  }
+});
+
+test('audio normalization preserves existing choices while missing sound fields receive the new default', () => {
+  const save = createDefaultLocalSave('audio-existing', 'Existing Audio');
+  const soundVolumes = { ...save.settings.soundVolumes, menu: 0.73 };
+  delete soundVolumes.pickup;
+  const normalized = normalizeLocalSave({
+    ...save,
+    settings: {
+      ...save.settings,
+      masterVolume: 0.9,
+      musicVolume: 0.4,
+      sfxVolume: 0.8,
+      soundVolumes
+    }
+  });
+  assert.ok(normalized);
+  assert.equal(normalized.settings.masterVolume, 0.9);
+  assert.equal(normalized.settings.musicVolume, 0.4);
+  assert.equal(normalized.settings.sfxVolume, 0.8);
+  assert.equal(normalized.settings.soundVolumes.menu, 0.73);
+  assert.equal(normalized.settings.soundVolumes.pickup, DEFAULT_AUDIO_VOLUME);
 });
 
 test('central audio manager pools the real menu recordings instead of synthesizing menu beeps', () => {

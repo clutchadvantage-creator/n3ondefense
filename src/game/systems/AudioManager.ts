@@ -1,5 +1,5 @@
 import { SaveSystem } from './SaveSystem';
-import { SFX_DEFINITIONS, type AudioSfxName } from '../config/audio';
+import { DEFAULT_AUDIO_VOLUME, SFX_DEFINITIONS, type AudioSfxName } from '../config/audio';
 import { publicAssetUrl } from '../utils/assetUrl';
 
 const audioAssetUrl = (path: string): string => publicAssetUrl(`assets/audio/${path}`);
@@ -63,8 +63,8 @@ export class AudioManager {
   private lastEnemyDeathSfxAt = -Infinity;
   private lastHitDamageSfxAt = -Infinity;
   private lastMenuHoverSfxAt = -Infinity;
-  private cachedMusicVolume = 0.51;
-  private cachedSfxVolume = 0.6375;
+  private cachedMusicVolume = DEFAULT_AUDIO_VOLUME * DEFAULT_AUDIO_VOLUME;
+  private cachedSfxVolume = DEFAULT_AUDIO_VOLUME * DEFAULT_AUDIO_VOLUME;
   private readonly cachedSoundVolumes = {} as Record<AudioSfxName, number>;
 
   private clampVolume(value: number): number {
@@ -109,9 +109,11 @@ export class AudioManager {
         this.cachedSoundVolumes[definition.key] = this.cachedSfxVolume * settings.soundVolumes[definition.key];
       }
     } catch {
-      this.cachedMusicVolume = 0.85 * 0.6;
-      this.cachedSfxVolume = 0.85 * 0.75;
-      for (const definition of SFX_DEFINITIONS) this.cachedSoundVolumes[definition.key] = this.cachedSfxVolume;
+      this.cachedMusicVolume = DEFAULT_AUDIO_VOLUME * DEFAULT_AUDIO_VOLUME;
+      this.cachedSfxVolume = DEFAULT_AUDIO_VOLUME * DEFAULT_AUDIO_VOLUME;
+      for (const definition of SFX_DEFINITIONS) {
+        this.cachedSoundVolumes[definition.key] = this.cachedSfxVolume * DEFAULT_AUDIO_VOLUME;
+      }
     }
   }
 
