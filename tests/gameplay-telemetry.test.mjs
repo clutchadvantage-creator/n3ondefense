@@ -35,6 +35,8 @@ test('live telemetry aggregates enemy TTK, kill sources, drops, pickups, and pla
   GameplayTelemetryRecorder.recordBombArmed('site-A');
   GameplayTelemetryRecorder.recordDefuseStarted('site-A');
   GameplayTelemetryRecorder.recordDefuseProgress('site-A', 300, 100, 1);
+  GameplayTelemetryRecorder.recordModEffect('kill-switch', 'countdownMs', 850);
+  GameplayTelemetryRecorder.recordModEffect('arc-surge', 'damage', 18);
   GameplayTelemetryRecorder.recordSpawnAttempt('count-cap', 900);
   GameplayTelemetryRecorder.recordActiveFrame(800, 4, 111, 0, {
     activeWeight: 5, activeCountCap: 4, activeWeightCap: 5, activeBombs: 1,
@@ -79,6 +81,8 @@ test('live telemetry aggregates enemy TTK, kill sources, drops, pickups, and pla
   assert.equal(encounter.objectives.defuseAttempts, 1);
   assert.equal(encounter.objectives.defuseInterruptions, 1);
   assert.equal(encounter.objectives.defuseProgressBlockedMs, 100);
+  assert.equal(encounter.modEffects['kill-switch'].countdownMs, 850);
+  assert.equal(encounter.modEffects['arc-surge'].damage, 18);
   assert.equal(encounter.buffUptimeMs.damageBoost, 450);
   assert.equal(encounter.playerDamageBySource['enemy-projectile'], 9);
   assert.equal(encounter.derived.pickupCollectionRate, 1);

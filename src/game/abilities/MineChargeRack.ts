@@ -75,6 +75,11 @@ export class MineChargeRack {
     this.nextChargeAt = Math.min(this.nextChargeAt, now + Math.max(0, maximumRemainingMs));
   }
 
+  accelerateRechargeBy(amountMs: number): void {
+    if (this.currentCharges >= this.maxCharges || this.nextChargeAt <= 0) return;
+    this.nextChargeAt -= Math.max(0, Number.isFinite(amountMs) ? amountMs : 0);
+  }
+
   private advance(now: number, rechargeDurationMs: number): void {
     if (this.currentCharges >= this.maxCharges) {
       this.currentCharges = this.maxCharges;

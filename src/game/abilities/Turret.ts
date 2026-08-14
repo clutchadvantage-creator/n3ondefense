@@ -59,8 +59,8 @@ export class Turret {
     this.healthFill.setVisible(ratio < 0.999);
   }
 
-  canFire(now: number): boolean {
-    return now >= this.disabledUntil && now - this.lastShotMs >= 1000 / this.fireRate;
+  canFire(now: number, fireRateMultiplier = 1): boolean {
+    return now >= this.disabledUntil && now - this.lastShotMs >= 1000 / (this.fireRate * Math.max(0.05, fireRateMultiplier));
   }
 
   setColor(color: number): void {

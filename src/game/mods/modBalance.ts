@@ -58,6 +58,87 @@ export const MOD_BALANCE = {
     staggerMs: 42,
     energyCostMultiplier: { 0: 1, 1: 0.92, 2: 0.84, 3: 0.75 },
     flightMs: { 0: 460, 1: 410, 2: 355, 3: 300 }
+  },
+  bombsite: {
+    fieldRadius: 230,
+    fieldScanIntervalMs: 120,
+    arcSurge: {
+      intervalMs: { 0: 11_000, 1: 10_000, 2: 8_000, 3: 6_000 },
+      weaponDamageMultiplier: { 0: 0.32, 1: 0.42, 2: 0.54, 3: 0.68 }
+    },
+    defuseFeedback: {
+      weaponDamageMultiplier: { 0: 0.35, 1: 0.5, 2: 0.68, 3: 0.85 },
+      staggerMs: { 0: 0, 1: 0, 2: 220, 3: 360 }
+    },
+    pressureField: {
+      slowFactor: { 0: 0.92, 1: 0.9, 2: 0.85, 3: 0.8 },
+      refreshMs: 190
+    },
+    combatUplink: { fireRateBonus: { 0: 0.04, 1: 0.05, 2: 0.08, 3: 0.12 } },
+    countermeasureArray: {
+      charges: { 0: 1, 1: 1, 2: 2, 3: 3 },
+      threshold: 0.7,
+      radius: 265,
+      knockbackSpeed: { 0: 265, 1: 300, 2: 335, 3: 380 },
+      staggerMs: 650
+    },
+    killSwitch: {
+      killsRequired: { 0: 5, 1: 5, 2: 4, 3: 3 },
+      countdownReductionMs: { 0: 500, 1: 650, 2: 850, 3: 1100 }
+    },
+    hotZone: {
+      tickMs: 900,
+      maxStacks: { 0: 4, 1: 4, 2: 5, 3: 6 },
+      weaponDamageMultiplierPerStack: { 0: 0.045, 1: 0.06, 2: 0.075, 3: 0.09 }
+    },
+    finalCountdown: {
+      thresholdMs: 15_000,
+      bonus: { 0: 0.06, 1: 0.08, 2: 0.12, 3: 0.16 }
+    },
+    capacitorField: { fenceDamageBonus: { 0: 0.08, 1: 0.1, 2: 0.15, 3: 0.2 } },
+    sentryUplink: { turretFireRateBonus: { 0: 0.08, 1: 0.1, 2: 0.15, 3: 0.2 } },
+    munitionsRelay: { rechargeBonus: { 0: 0.08, 1: 0.1, 2: 0.15, 3: 0.2 } },
+    emergencyShielding: { rechargeBonus: { 0: 0.06, 1: 0.08, 2: 0.12, 3: 0.18 } },
+    dangerClose: { creditMultiplier: { 0: 1.1, 1: 1.15, 2: 1.25, 3: 1.35 } },
+    criticalMass: { spawnCadenceMultiplier: { 0: 1 / 1.15, 1: 1 / 1.16, 2: 1 / 1.18, 3: 1 / 1.2 } },
+    unstableReactor: {
+      intervalMs: { 0: 9000, 1: 8000, 2: 7000, 3: 6000 },
+      warningMs: 760,
+      outerRadius: 275,
+      innerRadius: 92,
+      enemyWeaponDamageMultiplier: { 0: 0.82, 1: 0.98, 2: 1.16, 3: 1.35 },
+      playerDamage: { 0: 5, 1: 6, 2: 7, 3: 8 }
+    },
+    bloodBeacon: {
+      creditMultiplier: { 0: 1.35, 1: 1.45, 2: 1.6, 3: 1.75 },
+      objectiveAssigneeBonus: { 0: 1, 1: 1, 2: 2, 3: 3 }
+    },
+    groundZero: {
+      threshold: 0.84,
+      radius: 340,
+      knockbackSpeed: { 0: 420, 1: 470, 2: 520, 3: 580 },
+      staggerMs: { 0: 1300, 1: 1550, 2: 1800, 3: 2200 },
+      weaponDamageMultiplier: { 0: 1.15, 1: 1.35, 2: 1.55, 3: 1.8 },
+      chargedDurationMs: { 0: 3000, 1: 4000, 2: 5000, 3: 6000 },
+      chargedTickMs: 650,
+      chargedDamageMultiplier: 0.22
+    },
+    eventHorizon: {
+      intervalMs: { 0: 12_000, 1: 11_000, 2: 9000, 3: 8000 },
+      warningMs: 780,
+      outerRadius: 390,
+      killRingRadius: 185,
+      pullDurationMs: { 0: 620, 1: 720, 2: 820, 3: 920 },
+      pullSpeed: { 0: 170, 1: 205, 2: 245, 3: 285 }
+    },
+    secondSun: {
+      thresholdsMs: [15_000, 10_000, 5_000] as const,
+      radius: [175, 225, 290] as const,
+      weaponDamageMultiplier: [0.28, 0.5, 0.9] as const,
+      rankDamageMultiplier: { 0: 1, 1: 1.12, 2: 1.25, 3: 1.42 },
+      slowFactor: 0.72,
+      slowDurationMs: 900
+    }
   }
 } as const;
 

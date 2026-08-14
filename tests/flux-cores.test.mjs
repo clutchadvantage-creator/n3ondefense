@@ -103,7 +103,8 @@ test('Arena integrates Flux Cores with shared laser suppression and major damage
   assert.match(arena, /fluxCores\?\.update\(now, this\.player, gasSuppressesLasers\)/);
   assert.match(arena, /damagePoint\(p\.sprite\.x, p\.sprite\.y, 7, p\.damage, fluxSource\)/);
   assert.match(arena, /damageArea\(mine\.sprite\.x, mine\.sprite\.y, mine\.radius, mine\.damage, 'mine'\)/);
-  assert.match(arena, /damageAlongSegment\(fence\.x1, fence\.y1, fence\.x2, fence\.y2, 11, fence\.dps \* dt\)/);
+  assert.match(arena, /const effectiveDps = fence\.dps \* fieldDamage/);
+  assert.match(arena, /damageAlongSegment\(fence\.x1, fence\.y1, fence\.x2, fence\.y2, 11, effectiveDps \* dt\)/);
   assert.match(arena, /damageArea\(x, y, blastRadius, 9999, 'bomblet'\)/);
   assert.match(arena, /damageArea\(site\.x, site\.y, 360, 9999, 'bomb'\)/);
   assert.match(arena, /this\.fluxCores\?\.destroy\(\)/);

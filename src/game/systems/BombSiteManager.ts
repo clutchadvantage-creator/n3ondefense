@@ -204,6 +204,20 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     return site.defuseMs >= requiredMs;
   }
 
+  interruptDefuse(site: BombSiteRuntime, resetProgress = true): void {
+    if (resetProgress) site.defuseMs = 0;
+    this.stopDefuse(site);
+  }
+
+  reduceCountdown(site: BombSiteRuntime, amountMs: number): number {
+    if ((site.state !== BombSiteState.Armed && site.state !== BombSiteState.BeingDefused) || amountMs <= 0 || site.timerMs <= 250) return 0;
+    const previous = site.timerMs;
+    // Countdown Mods may accelerate the objective, but detonation still passes
+    // through tickActive on the following update instead of skipping its state.
+    site.timerMs = Math.max(250, site.timerMs - Math.max(0, amountMs));
+    return previous - site.timerMs;
+  }
+
   onDetonated(site: BombSiteRuntime, theme: ArenaTheme): void {
     this.destroyArmedEffect(site.id);
     site.state = BombSiteState.Destroyed;

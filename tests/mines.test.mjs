@@ -66,6 +66,15 @@ test('single and upgraded mine capacities clamp correctly and honor recharge mod
   assert.equal(upgraded.snapshot(2100, 2100).currentCharges, 5);
 });
 
+test('Bombsite recharge acceleration advances the same authoritative Mine charge rack', () => {
+  const rack = new MineChargeRack();
+  rack.reset(3);
+  assert.equal(rack.spend(0, 4000), true);
+  rack.accelerateRechargeBy(800);
+  assert.equal(rack.snapshot(3199, 4000).currentCharges, 2);
+  assert.equal(rack.snapshot(3200, 4000).currentCharges, 3);
+});
+
 test('Full Rack Salvo input resolves a tap or hold exactly once', () => {
   const input = new MineSalvoInput();
   assert.equal(input.press('Keyboard:KeyR', 1000), true);

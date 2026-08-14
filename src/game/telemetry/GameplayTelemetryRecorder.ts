@@ -4,8 +4,8 @@ import type { BossArchetype } from '../config/bossBalance.ts';
 import type { ModDropSource, RunProtocolId, EquippedModSnapshot } from '../mods/types.ts';
 import type { ModFocusSignalId, RunContractId } from '../economy/types.ts';
 
-export type CombatDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard' | 'bomb' | 'splitCurrent' | 'unknown';
-export type PlayerDamageSource = 'enemy-contact' | 'enemy-projectile' | 'enemy-missile' | 'enemy-death-mine' | 'laser' | 'bomblet' | 'gas' | 'boss';
+export type CombatDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard' | 'bomb' | 'bombSite' | 'splitCurrent' | 'unknown';
+export type PlayerDamageSource = 'enemy-contact' | 'enemy-projectile' | 'enemy-missile' | 'enemy-death-mine' | 'laser' | 'bomblet' | 'gas' | 'bombsite-reactor' | 'boss';
 export type PickupDropSource = 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support' | 'flux-core';
 export type EncounterKind = 'round' | 'boss';
 export type EncounterOutcome = 'completed' | 'playerDead' | 'bombDefused' | 'bossDefeated' | 'quit' | 'replaced';
@@ -15,6 +15,7 @@ export type AbilityDenialReason = 'energy' | 'cooldown' | 'active-limit' | 'inva
 export type ProjectileOwner = 'weapon' | 'turret' | 'enemy' | 'boss';
 export type ProjectileMissReason = 'expired' | 'wall' | 'fence-split';
 export type SpawnBlockReason = 'count-cap' | 'weight-cap' | 'composition';
+export type ModEffectMetric = 'triggers' | 'damage' | 'playerDamage' | 'countdownMs' | 'credits' | 'pulls';
 export type ResourceGainSource = PickupDropSource | 'natural-regen' | 'site-recovery-direct' | 'emergency-capacitor';
 export type BuffName = 'damageBoost' | 'speedBoost' | 'rapidFire';
 export type BossAttackKind =
@@ -224,6 +225,7 @@ export interface GameplayEncounterMetrics {
   restoration: { health: ResourceRestorationMetrics; energy: ResourceRestorationMetrics };
   buffUptimeMs: Partial<Record<BuffName, number>>;
   modDrops: Array<{ modId: string; rarity: string; source: ModDropSource; duplicate: boolean }>;
+  modEffects: Record<string, Partial<Record<ModEffectMetric, number>>>;
   playerDamageBySource: Partial<Record<PlayerDamageSource, number>>;
   playerHitsBySource: Partial<Record<PlayerDamageSource, number>>;
   minimumPlayerHealth: number;
@@ -312,6 +314,7 @@ const ensureEncounterRevision = (encounter: GameplayEncounterMetrics): GameplayE
   encounter.pickupsActiveAtEnd ??= {};
   encounter.restoration ??= { health: emptyRestoration(), energy: emptyRestoration() };
   encounter.buffUptimeMs ??= {};
+  encounter.modEffects ??= {};
   encounter.turrets ??= emptyTurretMetrics();
   encounter.spawnPressure ??= emptySpawnPressure();
   encounter.objectives ??= emptyObjectiveMetrics();
@@ -389,7 +392,7 @@ export class GameplayTelemetryRecorder {
       energyRegenPerSecond: input.energyRegenPerSecond,
       energy: { starting: input.maximumPlayerEnergy, ending: input.maximumPlayerEnergy, timeAtZeroMs: 0, timeBelow25PercentMs: 0, regenerationRequested: 0, regenerationApplied: 0, regenerationWasted: 0, deniedActions: {}, deniedEnergyShortfall: {}, abilityDenials: {} },
       abilitiesUsed: {}, abilityEnergySpent: {}, pickupDrops: {}, pickupDropsBySource: {}, pickupDropsBySourceAndType: {}, pickupsCollected: {}, pickupsExpired: {}, pickupsActiveAtEnd: {},
-      restoration: { health: emptyRestoration(), energy: emptyRestoration() }, buffUptimeMs: {}, modDrops: [],
+      restoration: { health: emptyRestoration(), energy: emptyRestoration() }, buffUptimeMs: {}, modDrops: [], modEffects: {},
       playerDamageBySource: {}, playerHitsBySource: {}, minimumPlayerHealth: input.maximumPlayerHealth, minimumPlayerEnergy: input.maximumPlayerEnergy,
       turrets: emptyTurretMetrics(), spawnPressure: emptySpawnPressure(), objectives: emptyObjectiveMetrics(),
       creditsEarned: 0, coreTokensEarned: 0, plasmaChipsEarned: 0, fluxCoresEarned: 0, boss: null,
@@ -610,6 +613,13 @@ export class GameplayTelemetryRecorder {
     if (!encounter) return;
     encounter.modDrops.push({ modId, rarity, source, duplicate });
     this.persistSoon();
+  }
+
+  static recordModEffect(modId: string, metric: ModEffectMetric, amount = 1): void {
+    const encounter = this.activeEncounter();
+    if (!encounter || !Number.isFinite(amount) || amount <= 0) return;
+    const modMetrics = encounter.modEffects[modId] ?? (encounter.modEffects[modId] = {});
+    increment(modMetrics, metric, amount);
   }
 
   static recordPlayerDamage(source: PlayerDamageSource, amount: number): void {

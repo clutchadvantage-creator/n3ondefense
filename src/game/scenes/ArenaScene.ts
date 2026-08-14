@@ -52,6 +52,7 @@ import type { ModDropSource, ModRewardRecord, ModSlot, RunProtocolId } from '../
 import { magneticResistanceForEnemy, splitCurrentSecondaryDamage } from '../mods/ModRules.ts';
 import { createModCardView } from '../mods/ModCardView.ts';
 import { ModAcquisitionPresenter } from '../mods/ModAcquisitionPresenter.ts';
+import { BombsiteModSystem } from '../mods/BombsiteModSystem.ts';
 import { MOD_FOCUS_CATEGORIES, RUN_CONTRACT_IDS, getContract, getRoundCompletionCredits } from '../economy/economyBalance.ts';
 import type { AccountProgressionTier, ModFocusSignalId, RunContractId } from '../economy/types.ts';
 import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
@@ -232,6 +233,7 @@ export class ArenaScene extends Phaser.Scene {
   private deathMines: DeathMine[] = [];
   private readonly defuseAssignees = new Set<Enemy>();
   private readonly activeDefusersBySite = new Map<string, number>();
+  private readonly activeDefuserEnemiesBySite = new Map<string, Enemy[]>();
   private readonly defuseCandidateBuffer: Enemy[] = [];
   private readonly assignedDefusersPerSite = new Map<string, number>();
   private activeDefuserCountForTelemetry = 0;
@@ -268,6 +270,7 @@ export class ArenaScene extends Phaser.Scene {
   private layout!: ArenaLayout;
   private pathfinder!: GridPathfinder;
   private bombSites!: BombSiteManager;
+  private bombsiteMods!: BombsiteModSystem;
   private laserSecurity: LaserSecuritySystem | null = null;
   private bombletHazard: BombletHazardSystem | null = null;
   private gasHazard: GasHazardSystem | null = null;
@@ -639,6 +642,22 @@ export class ArenaScene extends Phaser.Scene {
 
     this.bombSites = new BombSiteManager(def.objectiveMode, OBJECTIVE_CONFIG.maxActiveBombs);
     this.bombSites.initialize(this, this.layout.bombSites, this.layout.theme);
+    this.bombsiteMods = new BombsiteModSystem(this, this.modRuntime, {
+      reduceCountdown: (site, amountMs) => this.bombSites.reduceCountdown(site, amountMs),
+      interruptDefuse: (site) => this.bombSites.interruptDefuse(site, true),
+      damagePlayer: (amount) => {
+        const hit = this.player.takeDamage(amount);
+        if (hit) GameplayTelemetryRecorder.recordPlayerDamage('bombsite-reactor', amount);
+        return hit;
+      },
+      announce: (message) => this.showBanner(message),
+      playCue: (cue) => {
+        if (cue === 'heavy') this.audio.playSfx('bomblet');
+        else if (cue === 'warning') this.audio.playSfx('defuseAlarm');
+        else if (cue === 'gravity') this.audio.playSfx('shieldOn');
+        else this.audio.playSfx('beep');
+      }
+    });
     this.laserSecurity = new LaserSecuritySystem(
       this,
       def.round,
@@ -896,6 +915,7 @@ export class ArenaScene extends Phaser.Scene {
   private registerBombSiteEvents(): void {
     this.bombSites.on('bomb-site-armed', (site: BombSiteRuntime) => {
       GameplayTelemetryRecorder.recordBombArmed(site.id);
+      this.bombsiteMods.onBombArmed(site, this.getBombDefenseDurationMs(), this.time.now);
       this.state.set(RoundState.Defense);
       this.bombSites.refreshVisuals(this.layout.theme);
       const graceMs = getSpawnProfile(this.roundManager.round, this.bombSites.destroyedCount()).initialGraceMs;
@@ -924,6 +944,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.bombSites.on('bomb-site-destroyed', (site: BombSiteRuntime) => {
       GameplayTelemetryRecorder.recordBombDestroyed(site.id);
+      this.bombsiteMods.onBombDestroyed(site);
       this.audio.stopDisarmLoop();
       SaveSystem.recordBombSiteDestroyed();
       this.recoveryAfterSiteDestroy();
@@ -1011,6 +1032,7 @@ export class ArenaScene extends Phaser.Scene {
     if (activeSites.length > 0) {
       const detonated = this.bombSites.tickActive(delta);
       for (const site of detonated) this.detonateSite(site);
+      this.applyBombsiteCooldownAcceleration(delta);
     }
 
     this.updateRelentlessSpawns(now, activeSites.length > 0);
@@ -1026,6 +1048,7 @@ export class ArenaScene extends Phaser.Scene {
     this.laserSecurity?.update(now, dt, this.player, hazardTargets, playerLaserImmune, securityLasersSuppressed);
     this.bombletHazard?.update(now, this.player, hazardTargets, laserDangerWindow);
     this.updateEnemies(now, dt);
+    this.bombsiteMods.update(now, delta, this.bombSites.getActiveBombSites(), this.enemies, this.player);
     this.updateHomingMissiles(delta);
     this.updateProjectiles(delta);
     this.updateAbilities(now, dt);
@@ -1286,7 +1309,8 @@ export class ArenaScene extends Phaser.Scene {
     if (now >= this.player.dashUntil) {
       const movementLengthSquared = movementX * movementX + movementY * movementY;
       if (movementLengthSquared > 0) {
-        const speedScale = this.player.speed / Math.sqrt(movementLengthSquared);
+        const fieldSpeed = this.bombsiteMods?.playerMoveSpeedMultiplier(this.player.x, this.player.y) ?? 1;
+        const speedScale = this.player.speed * fieldSpeed / Math.sqrt(movementLengthSquared);
         this.player.setVelocity(movementX * speedScale, movementY * speedScale);
       } else {
         this.player.setVelocity(0, 0);
@@ -1367,7 +1391,8 @@ export class ArenaScene extends Phaser.Scene {
     if (!this.pointerDown) return;
     if (this.player.heat >= this.player.weapon.maxHeat) return;
 
-    const cadence = 1000 / this.player.fireRate;
+    const fieldFireRate = this.bombsiteMods?.playerFireRateMultiplier(this.player.x, this.player.y) ?? 1;
+    const cadence = 1000 / (this.player.fireRate * fieldFireRate);
     if (now - this.lastPlayerShotMs < cadence) return;
     const corruptedShotCost = this.modRuntime.has('fractured-current') ? MOD_BALANCE.fracturedCurrent.extraShotEnergyCost : 0;
     const shotEnergyCost = (WEAPON_BALANCE.energyCostPerShot + corruptedShotCost) * this.modRuntime.multiplier('weaponEnergyCost');
@@ -1488,7 +1513,8 @@ export class ArenaScene extends Phaser.Scene {
     if (phaseMultiplier === null) return;
     const concurrentPressure = getConcurrentSpawnPressure(profile, activeSites.length);
     const contractCadence = defensePhase ? getContract(this.contract)?.spawnCadenceMultiplier ?? 1 : 1;
-    const cadenceMs = Math.round((defensePhase ? profile.defenseCadenceMs : profile.prePlantCadenceMs) * phaseMultiplier * concurrentPressure.cadenceMultiplier * contractCadence);
+    const bombsiteCadence = defensePhase ? this.bombsiteMods.spawnCadenceMultiplier() : 1;
+    const cadenceMs = Math.round((defensePhase ? profile.defenseCadenceMs : profile.prePlantCadenceMs) * phaseMultiplier * concurrentPressure.cadenceMultiplier * contractCadence * bombsiteCadence);
     const { activeCountCap, activeWeightCap } = concurrentPressure;
 
     if (now < this.nextSpawnAt) return;
@@ -1607,6 +1633,7 @@ export class ArenaScene extends Phaser.Scene {
     const gasHazard = this.gasHazard?.visualGasActive ? this.gasHazard : null;
     const activeDefusersBySite = this.activeDefusersBySite;
     activeDefusersBySite.clear();
+    for (const defusers of this.activeDefuserEnemiesBySite.values()) defusers.length = 0;
     this.refreshDefuseAssignments(activeSites, now);
 
     for (const enemy of this.enemies) {
@@ -1621,6 +1648,9 @@ export class ArenaScene extends Phaser.Scene {
       } else if (assignedSite && this.defuseAssignees.has(enemy)) {
         if (this.updateDefuser(enemy, assignedSite, now, dt)) {
           activeDefusersBySite.set(assignedSite.id, (activeDefusersBySite.get(assignedSite.id) ?? 0) + 1);
+          const defusers = this.activeDefuserEnemiesBySite.get(assignedSite.id) ?? [];
+          defusers.push(enemy);
+          this.activeDefuserEnemiesBySite.set(assignedSite.id, defusers);
         }
       } else if (enemy.stats.type === 'shooter') {
         this.updateShooter(enemy, now, targetSite);
@@ -1636,24 +1666,36 @@ export class ArenaScene extends Phaser.Scene {
       );
     }
 
-    this.activeDefuserCountForTelemetry = 0;
-    for (const count of activeDefusersBySite.values()) this.activeDefuserCountForTelemetry += count;
-
     let anyDefusing = false;
     for (const site of activeSites) {
       const activeDefusers = activeDefusersBySite.get(site.id) ?? 0;
       if (activeDefusers > 0) {
         if (site.state === BombSiteState.Armed) this.activateEmergencyBombShield(site, now);
         this.bombSites.startDefuse(site);
-        anyDefusing = true;
-        const cooperationMultiplier = 1 + Math.min(0.75, (activeDefusers - 1) * 0.25);
-        const requestedProgressMs = dt * 1000 * cooperationMultiplier;
         const shieldBlocked = this.modRuntime.bombShieldBlocks(site.id, now);
+        const resolution = this.bombsiteMods.processDefuse(
+          site,
+          this.activeDefuserEnemiesBySite.get(site.id) ?? [],
+          dt * 1000,
+          OBJECTIVE_CONFIG.defuseRequiredMs,
+          now,
+          this.player.weapon.damage * this.player.damageMultiplier,
+          this.enemies,
+          shieldBlocked
+        );
+        const requestedProgressMs = resolution.requestedProgressMs;
+        activeDefusersBySite.set(site.id, resolution.activeDefusers);
+        if (resolution.interrupted || resolution.activeDefusers <= 0) {
+          GameplayTelemetryRecorder.recordDefuseProgress(site.id, 0, requestedProgressMs, activeDefusers);
+          if (!resolution.interrupted) this.bombSites.stopDefuse(site);
+          continue;
+        }
+        anyDefusing = true;
         GameplayTelemetryRecorder.recordDefuseProgress(
           site.id,
           shieldBlocked ? 0 : requestedProgressMs,
           shieldBlocked ? requestedProgressMs : 0,
-          activeDefusers
+          resolution.activeDefusers
         );
         if (!shieldBlocked
           && this.bombSites.applyDefuse(site, requestedProgressMs, OBJECTIVE_CONFIG.defuseRequiredMs)) {
@@ -1665,6 +1707,8 @@ export class ArenaScene extends Phaser.Scene {
         this.bombSites.stopDefuse(site);
       }
     }
+    this.activeDefuserCountForTelemetry = 0;
+    for (const count of activeDefusersBySite.values()) this.activeDefuserCountForTelemetry += count;
     if (anyDefusing) {
       this.state.set(RoundState.Defusing);
       this.audio.startDisarmLoop();
@@ -1692,7 +1736,9 @@ export class ArenaScene extends Phaser.Scene {
     this.defuseTargetByEnemy.clear();
     if (activeSites.length === 0) return;
 
-    const desired = getDefuseAssigneeCount(this.roundManager.round) + Math.max(0, activeSites.length - 1);
+    const desired = getDefuseAssigneeCount(this.roundManager.round)
+      + Math.max(0, activeSites.length - 1)
+      + this.bombsiteMods.objectiveAssigneeBonus();
     const candidates = this.defuseCandidateBuffer;
     candidates.length = 0;
     for (const enemy of this.enemies) {
@@ -2864,7 +2910,8 @@ export class ArenaScene extends Phaser.Scene {
       if (!target) continue;
       const angle = Phaser.Math.Angle.Between(turret.sprite.x, turret.sprite.y, target.x, target.y);
       turret.aimAt(angle);
-      if (!turret.canFire(now)) continue;
+      const fieldFireRate = this.bombsiteMods.turretFireRateMultiplier(turret.sprite.x, turret.sprite.y);
+      if (!turret.canFire(now, fieldFireRate)) continue;
 
       turret.lastShotMs = now;
       GameplayTelemetryRecorder.recordTurretShot(turret.telemetryId);
@@ -2934,7 +2981,9 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     for (const fence of this.fences) {
-      this.fluxCores?.damageAlongSegment(fence.x1, fence.y1, fence.x2, fence.y2, 11, fence.dps * dt);
+      const fieldDamage = this.bombsiteMods.fenceDamageMultiplier(fence.x1, fence.y1, fence.x2, fence.y2);
+      const effectiveDps = fence.dps * fieldDamage;
+      this.fluxCores?.damageAlongSegment(fence.x1, fence.y1, fence.x2, fence.y2, 11, effectiveDps * dt);
       for (const enemy of this.enemies) {
         const d = this.distancePointToSegment(
           enemy.x,
@@ -2945,7 +2994,7 @@ export class ArenaScene extends Phaser.Scene {
           fence.y2
         );
         if (d < 11) {
-          enemy.takeDamage(fence.dps * dt, 'fence');
+          enemy.takeDamage(effectiveDps * dt, 'fence');
           const body = enemy.body as Phaser.Physics.Arcade.Body | null;
           if (body) enemy.setVelocity(body.velocity.x * fence.slowFactor, body.velocity.y * fence.slowFactor);
           if (enemy.stats.type === 'tank') fence.hp -= 16 * dt;
@@ -2962,7 +3011,7 @@ export class ArenaScene extends Phaser.Scene {
           fence.y2
         );
         if (distance < bossTarget.hazardRadius + 8) {
-          bossTarget.takeDamage(fence.dps * dt, 'fence');
+          bossTarget.takeDamage(effectiveDps * dt, 'fence');
           fence.hp -= 10 * dt;
         }
       }
@@ -3476,7 +3525,10 @@ export class ArenaScene extends Phaser.Scene {
 
   private killEnemy(enemy: Enemy): void {
     this.audio.playSfx('enemyDeath');
-    const enemyCredits = this.scaleModCredits(enemy.stats.valueCredits);
+    const standardCredits = this.scaleModCredits(enemy.stats.valueCredits);
+    const bombsiteCreditMultiplier = this.bombsiteMods.onEnemyKilled(enemy.x, enemy.y);
+    const enemyCredits = this.scaleModCredits(enemy.stats.valueCredits * bombsiteCreditMultiplier);
+    this.bombsiteMods.recordBonusCredits(Math.max(0, enemyCredits - standardCredits));
     this.roundCredits += enemyCredits;
     this.roundCoreTokens += enemy.stats.valueCoreTokens;
     this.totalCreditsCollected += enemyCredits;
@@ -4438,13 +4490,17 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
     const activeSummary = activeSites.length > 1 ? ` • ${activeSites.length} ACTIVE` : '';
-    const objectiveText = hudFocus
+    const objectiveBase = hudFocus
       ? defusingCount > 0
         ? `SITE ${hudFocus.letter} — DEFUSE${activeSummary}`
         : `SITE ${hudFocus.letter} — DEFEND${activeSummary}`
       : targetSite
         ? `SITE ${targetSite.letter} ${targetSite.state === BombSiteState.Planting ? '— PLANTING' : 'AVAILABLE'}`
         : this.state.state === RoundState.Victory ? 'ALL SITES SECURED' : 'OBJECTIVE COMPLETE';
+    const countermeasures = this.bombsiteMods.countermeasureCharges(hudFocus);
+    const objectiveText = countermeasures === null
+      ? objectiveBase
+      : `${objectiveBase} // COUNTERMEASURES ${countermeasures}`;
 
     this.refreshHudBuffs(now);
 
@@ -4799,6 +4855,20 @@ export class ArenaScene extends Phaser.Scene {
     if (this.crosshairValid === valid) return;
     this.crosshairValid = valid;
     drawReticle(this.crosshair, 0, 0, this.aimSettings.reticle, valid ? undefined : COLORS.red);
+  }
+
+  private applyBombsiteCooldownAcceleration(deltaMs: number): void {
+    const x = this.player.x;
+    const y = this.player.y;
+    const defenseBonus = this.bombsiteMods.cooldownAccelerationBonus(x, y, 'defense');
+    if (defenseBonus > 0) {
+      this.abilityCooldownUntil.fence -= deltaMs * defenseBonus;
+      this.abilityCooldownUntil.turret -= deltaMs * defenseBonus;
+    }
+    const mineBonus = this.bombsiteMods.cooldownAccelerationBonus(x, y, 'mine');
+    if (mineBonus > 0) this.mineChargeRack.accelerateRechargeBy(deltaMs * mineBonus);
+    const shieldBonus = this.bombsiteMods.cooldownAccelerationBonus(x, y, 'shield');
+    if (shieldBonus > 0) this.shieldCooldownUntil -= deltaMs * shieldBonus;
   }
 
   private getAbilityConfig(type: AbilityType): AbilityRuntimeConfig {
@@ -5204,6 +5274,7 @@ export class ArenaScene extends Phaser.Scene {
     this.gasHazard = null;
     this.fluxCores?.destroy();
     this.fluxCores = null;
+    this.bombsiteMods?.destroy();
     for (const e of this.enemies) e.destroy();
     for (const p of this.projectiles) this.retireProjectile(p);
     this.projectilePool.releaseAll();
@@ -5227,6 +5298,7 @@ export class ArenaScene extends Phaser.Scene {
     this.deathMines.length = 0;
     this.pendingSplitProjectiles.length = 0;
     this.defuseAssignees.clear();
+    this.activeDefuserEnemiesBySite.clear();
     this.nextHoloAfterimageAt = 0;
     this.arcadePopSequence = 0;
 
@@ -5260,6 +5332,7 @@ export class ArenaScene extends Phaser.Scene {
     this.performanceTelemetry = null;
     this.hidePauseMenu();
     this.hideEquippedModsViewer();
+    this.bombsiteMods?.destroy();
     this.bombSites?.destroy();
     this.laserSecurity?.destroy();
     this.laserSecurity = null;

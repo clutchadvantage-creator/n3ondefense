@@ -9,6 +9,7 @@ import { normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import { MOD_BY_ID, MOD_DEFINITIONS } from '../src/game/mods/definitions.ts';
 import { MOD_INFUSIONS } from '../src/game/mods/infusions.ts';
 import { MOD_BALANCE, RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol } from '../src/game/mods/modBalance.ts';
+import { advanceKillSwitch, countdownStagesCrossed, defuseCrossesThreshold, isInsideBombsiteField, segmentIntersectsBombsiteField } from '../src/game/mods/BombsiteModRules.ts';
 
 const equippedRuntimeAtRank = (modId, rank) => {
   const mods = createDefaultModCollection();
@@ -19,14 +20,14 @@ const equippedRuntimeAtRank = (modId, rank) => {
   return new ModRuntime(mods);
 };
 
-test('the expanded collection adds at least ten discoveries to every rarity', () => {
-  const expectedMinimums = { common: 13, uncommon: 14, rare: 13, epic: 13, legendary: 12 };
-  const counts = Object.fromEntries(Object.keys(expectedMinimums).map((rarity) => [
+test('the expanded collection includes the full Bombsite roster without duplicate IDs', () => {
+  const expectedCounts = { common: 13, uncommon: 18, rare: 20, epic: 18, legendary: 15 };
+  const counts = Object.fromEntries(Object.keys(expectedCounts).map((rarity) => [
     rarity,
     MOD_DEFINITIONS.filter((definition) => definition.rarity === rarity).length
   ]));
-  assert.deepEqual(counts, expectedMinimums);
-  assert.equal(MOD_DEFINITIONS.length, 65);
+  assert.deepEqual(counts, expectedCounts);
+  assert.equal(MOD_DEFINITIONS.length, 84);
   assert.equal(new Set(MOD_DEFINITIONS.map((definition) => definition.id)).size, MOD_DEFINITIONS.length);
 });
 
@@ -42,7 +43,7 @@ test('every Mod has a colored icon, ranked copy, and reachable positive drop wei
 
 test('data-driven modifiers are finite, ranked, and use safe multiplier values', () => {
   const definitionsWithModifiers = MOD_DEFINITIONS.filter((definition) => definition.modifiers?.length);
-  assert.equal(definitionsWithModifiers.length, 51);
+  assert.equal(definitionsWithModifiers.length, 52);
   for (const definition of definitionsWithModifiers) {
     for (const modifier of definition.modifiers) {
       assert.deepEqual(Object.keys(modifier.values), ['0', '1', '2', '3']);
@@ -302,7 +303,7 @@ test('Nanite Fuel is a rare legendary Player Mod with three upgrades', () => {
 test('Nanite Fuel can drop in both protocols and is favored by boss rewards', () => {
   const findNaniteFuelSeed = (source, protocol) => {
     for (let seed = 0; seed < 1_000_000; seed += 1) {
-      if (rollModDrop({ source, round: 10, seed, sequence: 0, protocol })?.id === 'nanite-fuel') return seed;
+      if (rollModDrop({ source, round: 100, seed, sequence: 0, protocol, guaranteed: true, focus: 'player' })?.id === 'nanite-fuel') return seed;
     }
     return null;
   };
@@ -312,6 +313,49 @@ test('Nanite Fuel can drop in both protocols and is favored by boss rewards', ()
   }
   assert.ok(MOD_BALANCE.dropChance.boss > MOD_BALANCE.dropChance.milestone);
   assert.ok(MOD_BALANCE.raritySourceMultipliers.boss.legendary > MOD_BALANCE.raritySourceMultipliers.milestone.legendary);
+});
+
+test('Bombsite Mods form a distinct ranked roster across standard, corrupted, and Legendary tiers', () => {
+  const ids = [
+    'arc-surge', 'defuse-feedback', 'pressure-field', 'combat-uplink', 'countermeasure-array',
+    'kill-switch', 'hot-zone', 'capacitor-field', 'sentry-uplink', 'munitions-relay',
+    'emergency-shielding', 'final-countdown', 'danger-close', 'critical-mass-charge',
+    'unstable-reactor', 'blood-beacon', 'ground-zero', 'event-horizon-array', 'second-sun'
+  ];
+  for (const id of ids) {
+    const definition = MOD_BY_ID.get(id);
+    assert.ok(definition, `${id} is missing`);
+    assert.equal(definition.category, 'bombSite');
+    assert.equal(definition.maxRank, 3);
+    assert.ok(definition.tags.includes('bomb-site'));
+  }
+  for (const id of ['critical-mass-charge', 'unstable-reactor', 'blood-beacon']) {
+    assert.equal(MOD_BY_ID.get(id).variant, 'corrupted');
+    assert.ok(MOD_BY_ID.get(id).positiveEffect);
+    assert.ok(MOD_BY_ID.get(id).negativeEffect);
+  }
+  for (const id of ['ground-zero', 'event-horizon-array', 'second-sun']) {
+    assert.equal(MOD_BY_ID.get(id).rarity, 'legendary');
+  }
+});
+
+test('Bombsite field, threshold, staged countdown, and kill-switch rules are deterministic', () => {
+  const site = { x: 100, y: 100 };
+  assert.equal(isInsideBombsiteField(site, 130, 140, 50), true);
+  assert.equal(isInsideBombsiteField(site, 151, 100, 50), false);
+  assert.equal(segmentIntersectsBombsiteField(site, 0, 100, 200, 100, 40), true);
+  assert.equal(segmentIntersectsBombsiteField(site, 0, 200, 200, 200, 40), false);
+  assert.equal(defuseCrossesThreshold(6800, 300, 10_000, 0.7), true);
+  assert.equal(defuseCrossesThreshold(7100, 300, 10_000, 0.7), false);
+  assert.deepEqual(countdownStagesCrossed(16_000, 9_800, [15_000, 10_000, 5_000], new Set()), [0, 1]);
+  assert.deepEqual(countdownStagesCrossed(10_500, 4_800, [15_000, 10_000, 5_000], new Set([0])), [1, 2]);
+  assert.deepEqual(advanceKillSwitch(2, 5, 3), { remainingKills: 1, triggers: 2 });
+});
+
+test('Critical Mass preserves the existing bomb-duration pipeline while centralizing its pressure tradeoff', () => {
+  const runtime = equippedRuntimeAtRank('critical-mass-charge', 3);
+  assert.equal(runtime.multiplier('bombDuration'), 0.75);
+  assert.ok(MOD_BALANCE.bombsite.criticalMass.spawnCadenceMultiplier[3] < 1);
 });
 
 test('Nanite Fuel stacks after purchased speed and with temporary speed effects', () => {
