@@ -4,26 +4,45 @@ import { readFileSync } from 'node:fs';
 
 const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
 
-test('Credits use an explicit upright neon currency emblem instead of the old square-like diamond', () => {
-  assert.match(arena, /const neonYellow = 0xf5ff58/);
-  assert.match(arena, /const glyphGlow = this\.add\.text\(0, 0, '¢'/);
-  assert.match(arena, /const glyph = this\.add\.text\(0, -1, '¢'/);
-  assert.match(arena, /fontStyle: 'bold'/);
-  assert.doesNotMatch(arena, /const diamond = this\.add\.polygon/);
+test('Every pickup type uses the same compact neon shell with a distinct center icon', () => {
+  assert.match(arena, /const visualColor = type === 'credits' \? 0xf5ff58 : color/);
+  assert.match(arena, /const visual = this\.createPickupVisualShell\(container, visualColor, x, y, type\)/);
+  assert.match(arena, /const haloRadius = 18/);
+  assert.match(arena, /const scanRing = this\.add\.circle\(0, 0, 15/);
+  assert.match(arena, /const orbitPath = this\.add\.circle\(0, 0, 20/);
+  for (const type of ['health', 'energy', 'damageBoost', 'speedBoost', 'rapidFire', 'credits', 'coreToken']) {
+    assert.match(arena, new RegExp(`type === '${type}'`));
+  }
+  assert.match(arena, /this\.add\.text\(0, -1, '\\u00a2'/);
+  assert.doesNotMatch(arena, /this\.add\.circle\(0, 0, 22/);
 });
 
-test('Credit pickup accents use bounded shared-frame animation rather than extra permanent tweens', () => {
-  assert.match(arena, /private readonly creditPickupVisuals = new WeakMap/);
+test('Pickup accents use bounded shared-frame animation and preserve Loot Satellites', () => {
+  assert.match(arena, /private readonly pickupVisuals = new WeakMap/);
   assert.match(arena, /const satellites:[\s\S]*?\[0, 1, 2\]\.map/);
-  assert.match(arena, /private updateCreditPickupVisual\(/);
-  assert.match(arena, /visual\.orbitRig\.setRotation\(now \* 0\.0034\)/);
-  assert.match(arena, /visual\.glyph\.setRotation\(-container\.rotation\)/);
-  const updater = arena.match(/private updateCreditPickupVisual\([\s\S]*?\n  \}/)?.[0] ?? '';
+  assert.match(arena, /hasInfusion\('pickup-orbit'\)/);
+  assert.match(arena, /visual\.infusionOrbit\?\.setRotation/);
+  assert.match(arena, /private updatePickupVisual\(/);
+  assert.match(arena, /visual\.iconRig\.setRotation\(-container\.rotation\)/);
+  const updater = arena.match(/private updatePickupVisual\([\s\S]*?\n  \}/)?.[0] ?? '';
   assert.doesNotMatch(updater, /tweens\.add|time\.addEvent|new /);
 });
 
-test('Credit pickup rewards and collection behavior remain unchanged', () => {
-  assert.match(arena, /credits: 0xf2ff72/);
+test('Pickups drift, respect arena geometry, and softly separate without physics bodies', () => {
+  assert.match(arena, /private readonly pickupMotion = new WeakMap/);
+  assert.match(arena, /this\.updateFloatingPickupMotion\(now, dt\)/);
+  assert.match(arena, /this\.separateFloatingPickups\(\)/);
+  assert.match(arena, /motion\.velocityX = Phaser\.Math\.Clamp/);
+  assert.match(arena, /for \(const wall of this\.wallRects\)/);
+  assert.match(arena, /const separationDistance = 35/);
+  assert.match(arena, /const impulse = \(secondNormalSpeed - firstNormalSpeed\) \* 0\.42/);
+  const motionUpdater = arena.match(/private updateFloatingPickupMotion\([\s\S]*?\n  \}/)?.[0] ?? '';
+  assert.doesNotMatch(motionUpdater, /physics\.add|add\.overlap|add\.collider/);
+});
+
+test('Pickup rewards, telemetry, and the existing enemy-drop sound remain unchanged', () => {
+  assert.match(arena, /if \(source === 'enemy'\) this\.audio\.playSfx\('pickup'\)/);
   assert.match(arena, /if \(type === 'credits'\) \{[\s\S]*?this\.roundCredits \+= credits;[\s\S]*?this\.totalCreditsCollected \+= credits;/);
+  assert.match(arena, /GameplayTelemetryRecorder\.recordPickupCollected\(type, source, requestedRestoration, appliedRestoration\)/);
   assert.match(arena, /this\.pickups\.push\(\{ type, sprite: p, expiresAt:[\s\S]*?source: 'enemy' \}\)/);
 });

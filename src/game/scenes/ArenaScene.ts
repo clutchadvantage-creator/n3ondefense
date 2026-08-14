@@ -111,14 +111,21 @@ interface Pickup {
   source: 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support';
 }
 
-interface CreditPickupVisual {
+interface PickupVisual {
   glow: Phaser.GameObjects.Arc;
   scanRing: Phaser.GameObjects.Arc;
   orbitRig: Phaser.GameObjects.Container;
-  glyphGlow: Phaser.GameObjects.Text;
-  glyph: Phaser.GameObjects.Text;
+  infusionOrbit: Phaser.GameObjects.Container | null;
+  iconRig: Phaser.GameObjects.Container;
   leftBracket: Phaser.GameObjects.Polygon;
   rightBracket: Phaser.GameObjects.Polygon;
+  phase: number;
+}
+
+interface PickupMotion {
+  velocityX: number;
+  velocityY: number;
+  phase: number;
 }
 
 interface DeathMine {
@@ -208,7 +215,8 @@ export class ArenaScene extends Phaser.Scene {
   private readonly hazardDamageTargets: HazardDamageTarget[] = [];
   private homingMissiles: HomingMissile[] = [];
   private pickups: Pickup[] = [];
-  private readonly creditPickupVisuals = new WeakMap<Phaser.GameObjects.Container, CreditPickupVisual>();
+  private readonly pickupVisuals = new WeakMap<Phaser.GameObjects.Container, PickupVisual>();
+  private readonly pickupMotion = new WeakMap<Phaser.GameObjects.Container, PickupMotion>();
   private fences: Fence[] = [];
   private turrets: Turret[] = [];
   private mines: Mine[] = [];
@@ -2946,10 +2954,12 @@ export class ArenaScene extends Phaser.Scene {
     const collectionRadiusSquared = collectionRadius * collectionRadius;
     const magneticField = this.modRuntime.magneticServiceField(collectionRadius);
     const attractionRadiusSquared = magneticField.attractionRadius * magneticField.attractionRadius;
+    this.updateFloatingPickupMotion(now, dt);
+    this.separateFloatingPickups();
     let writeIndex = 0;
     for (const p of this.pickups) {
-      const creditVisual = this.creditPickupVisuals.get(p.sprite);
-      if (creditVisual) this.updateCreditPickupVisual(p.sprite, creditVisual, now);
+      const visual = this.pickupVisuals.get(p.sprite);
+      if (visual) this.updatePickupVisual(p.sprite, visual, now);
       else p.sprite.rotation += dt * 2;
       if (now > p.expiresAt) {
         GameplayTelemetryRecorder.recordPickupExpired(p.type);
@@ -2983,6 +2993,129 @@ export class ArenaScene extends Phaser.Scene {
       writeIndex += 1;
     }
     this.pickups.length = writeIndex;
+  }
+
+  private updateFloatingPickupMotion(now: number, dt: number): void {
+    const bounds = this.layout.generation.bounds;
+    const padding = 24;
+    const minimumX = bounds.x + padding;
+    const maximumX = bounds.x + bounds.w - padding;
+    const minimumY = bounds.y + padding;
+    const maximumY = bounds.y + bounds.h - padding;
+
+    for (const pickup of this.pickups) {
+      const motion = this.pickupMotion.get(pickup.sprite);
+      if (!motion) continue;
+
+      const breezeX = Math.sin(now * 0.00072 + motion.phase) * 1.8;
+      const breezeY = Math.cos(now * 0.00061 + motion.phase * 1.37) * 1.55;
+      motion.velocityX = Phaser.Math.Clamp((motion.velocityX + breezeX * dt) * Math.pow(0.992, dt * 60), -13, 13);
+      motion.velocityY = Phaser.Math.Clamp((motion.velocityY + breezeY * dt) * Math.pow(0.992, dt * 60), -13, 13);
+
+      const previousX = pickup.sprite.x;
+      const previousY = pickup.sprite.y;
+      pickup.sprite.x += motion.velocityX * dt;
+      pickup.sprite.y += motion.velocityY * dt;
+
+      if (pickup.sprite.x <= minimumX || pickup.sprite.x >= maximumX) {
+        pickup.sprite.x = Phaser.Math.Clamp(pickup.sprite.x, minimumX, maximumX);
+        motion.velocityX *= -0.82;
+      }
+      if (pickup.sprite.y <= minimumY || pickup.sprite.y >= maximumY) {
+        pickup.sprite.y = Phaser.Math.Clamp(pickup.sprite.y, minimumY, maximumY);
+        motion.velocityY *= -0.82;
+      }
+
+      for (const wall of this.wallRects) {
+        const left = wall.x - padding;
+        const right = wall.x + wall.w + padding;
+        const top = wall.y - padding;
+        const bottom = wall.y + wall.h + padding;
+        if (pickup.sprite.x <= left || pickup.sprite.x >= right || pickup.sprite.y <= top || pickup.sprite.y >= bottom) continue;
+        pickup.sprite.setPosition(previousX, previousY);
+        motion.velocityX *= -0.72;
+        motion.velocityY *= -0.72;
+        break;
+      }
+    }
+  }
+
+  private separateFloatingPickups(): void {
+    const separationDistance = 35;
+    const separationDistanceSquared = separationDistance * separationDistance;
+    for (let firstIndex = 0; firstIndex < this.pickups.length; firstIndex += 1) {
+      const first = this.pickups[firstIndex];
+      const firstMotion = this.pickupMotion.get(first.sprite);
+      if (!firstMotion) continue;
+      for (let secondIndex = firstIndex + 1; secondIndex < this.pickups.length; secondIndex += 1) {
+        const second = this.pickups[secondIndex];
+        const secondMotion = this.pickupMotion.get(second.sprite);
+        if (!secondMotion) continue;
+        let dx = second.sprite.x - first.sprite.x;
+        let dy = second.sprite.y - first.sprite.y;
+        let distanceSquared = dx * dx + dy * dy;
+        if (distanceSquared >= separationDistanceSquared) continue;
+        if (distanceSquared < 0.0001) {
+          const fallbackAngle = (firstIndex * 2.399 + secondIndex * 1.713) % (Math.PI * 2);
+          dx = Math.cos(fallbackAngle);
+          dy = Math.sin(fallbackAngle);
+          distanceSquared = 1;
+        }
+        const distance = Math.sqrt(distanceSquared);
+        const normalX = dx / distance;
+        const normalY = dy / distance;
+        const push = (separationDistance - distance) * 0.17;
+        first.sprite.x -= normalX * push;
+        first.sprite.y -= normalY * push;
+        second.sprite.x += normalX * push;
+        second.sprite.y += normalY * push;
+
+        const firstNormalSpeed = firstMotion.velocityX * normalX + firstMotion.velocityY * normalY;
+        const secondNormalSpeed = secondMotion.velocityX * normalX + secondMotion.velocityY * normalY;
+        const impulse = (secondNormalSpeed - firstNormalSpeed) * 0.42;
+        firstMotion.velocityX += normalX * impulse - normalX * 1.4;
+        firstMotion.velocityY += normalY * impulse - normalY * 1.4;
+        secondMotion.velocityX -= normalX * impulse - normalX * 1.4;
+        secondMotion.velocityY -= normalY * impulse - normalY * 1.4;
+      }
+    }
+
+    // Separation can nudge a crowded pickup toward geometry, so finish by projecting it
+    // back to the nearest safe edge instead of letting a floating cluster enter a wall.
+    const bounds = this.layout.generation.bounds;
+    const padding = 24;
+    for (const pickup of this.pickups) {
+      const motion = this.pickupMotion.get(pickup.sprite);
+      if (!motion) continue;
+      pickup.sprite.x = Phaser.Math.Clamp(pickup.sprite.x, bounds.x + padding, bounds.x + bounds.w - padding);
+      pickup.sprite.y = Phaser.Math.Clamp(pickup.sprite.y, bounds.y + padding, bounds.y + bounds.h - padding);
+      for (const wall of this.wallRects) {
+        const left = wall.x - padding;
+        const right = wall.x + wall.w + padding;
+        const top = wall.y - padding;
+        const bottom = wall.y + wall.h + padding;
+        if (pickup.sprite.x <= left || pickup.sprite.x >= right || pickup.sprite.y <= top || pickup.sprite.y >= bottom) continue;
+        const distanceLeft = pickup.sprite.x - left;
+        const distanceRight = right - pickup.sprite.x;
+        const distanceTop = pickup.sprite.y - top;
+        const distanceBottom = bottom - pickup.sprite.y;
+        const nearestEdge = Math.min(distanceLeft, distanceRight, distanceTop, distanceBottom);
+        if (nearestEdge === distanceLeft) {
+          pickup.sprite.x = left;
+          motion.velocityX = -Math.abs(motion.velocityX);
+        } else if (nearestEdge === distanceRight) {
+          pickup.sprite.x = right;
+          motion.velocityX = Math.abs(motion.velocityX);
+        } else if (nearestEdge === distanceTop) {
+          pickup.sprite.y = top;
+          motion.velocityY = -Math.abs(motion.velocityY);
+        } else {
+          pickup.sprite.y = bottom;
+          motion.velocityY = Math.abs(motion.velocityY);
+        }
+        break;
+      }
+    }
   }
 
   private infusionSpectrumColor(offset = 0): number {
@@ -3137,7 +3270,6 @@ export class ArenaScene extends Phaser.Scene {
       if (!this.isClearForArenaPickup(x, y)) continue;
 
       const pickup = this.createPickupSprite('health', x, y, COLORS.green);
-      this.tweens.add({ targets: pickup, alpha: { from: 0.45, to: 1 }, yoyo: true, duration: 360, repeat: -1 });
       this.pickups.push({
         type: 'health',
         sprite: pickup,
@@ -3424,7 +3556,6 @@ export class ArenaScene extends Phaser.Scene {
     };
 
     const p = this.createPickupSprite(type, x, y, colorMap[type]);
-    this.tweens.add({ targets: p, alpha: { from: 0.45, to: 1 }, yoyo: true, duration: 280, repeat: -1 });
     this.pickups.push({ type, sprite: p, expiresAt: this.time.now + PICKUP_BALANCE.lifetimeMs, source: 'enemy' });
     GameplayTelemetryRecorder.recordPickupDropped(type, 'enemy');
     return type;
@@ -3432,150 +3563,157 @@ export class ArenaScene extends Phaser.Scene {
 
   private createPickupSprite(type: PickupType, x: number, y: number, color: number): Phaser.GameObjects.Container {
     const container = this.add.container(x, y).setDepth(6);
+    const visualColor = type === 'credits' ? 0xf5ff58 : color;
+    const visual = this.createPickupVisualShell(container, visualColor, x, y, type);
+    this.addPickupIcon(visual.iconRig, type, visualColor);
+    this.pickupVisuals.set(container, visual);
+
+    const motionSeed = Math.abs(x * 0.037 + y * 0.053 + type.length * 1.731);
+    const driftAngle = motionSeed % (Math.PI * 2);
+    const driftSpeed = 5.5 + motionSeed % 4.5;
+    this.pickupMotion.set(container, {
+      velocityX: Math.cos(driftAngle) * driftSpeed,
+      velocityY: Math.sin(driftAngle) * driftSpeed,
+      phase: motionSeed % (Math.PI * 2)
+    });
+    return container;
+  }
+
+  private createPickupVisualShell(
+    container: Phaser.GameObjects.Container,
+    color: number,
+    x: number,
+    y: number,
+    type: PickupType
+  ): PickupVisual {
+    const haloRadius = 18;
+    const phase = Math.abs(x * 0.019 + y * 0.027 + type.length * 0.83) % (Math.PI * 2);
+    const glow = this.add.circle(0, 0, haloRadius, color, 0.12)
+      .setStrokeStyle(1, color, 0.28)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const backing = this.add.polygon(0, 0, [0, -14, 12, -7, 12, 7, 0, 14, -12, 7, -12, -7], 0x071017, 0.94)
+      .setStrokeStyle(2, color, 0.92);
+    const scanRing = this.add.circle(0, 0, 15, 0x000000, 0)
+      .setStrokeStyle(1.35, color, 0.7)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const centerBloom = this.add.circle(0, 0, 10, color, 0.08).setBlendMode(Phaser.BlendModes.ADD);
+
+    const arcSegments = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    arcSegments.lineStyle(1.6, 0xffffff, 0.64);
+    for (let index = 0; index < 4; index += 1) {
+      const start = index * Math.PI / 2 + 0.14;
+      arcSegments.beginPath();
+      arcSegments.arc(0, 0, 17, start, start + 0.46, false);
+      arcSegments.strokePath();
+    }
+
+    const orbitRig = this.add.container(0, 0);
+    const orbitPath = this.add.circle(0, 0, 20, 0x000000, 0).setStrokeStyle(1, color, 0.26);
+    const satellites: Phaser.GameObjects.GameObject[] = [0, 1, 2].map((index) => {
+      const angle = index * Math.PI * 2 / 3;
+      return this.add.polygon(
+        Math.cos(angle) * 20,
+        Math.sin(angle) * 20,
+        [0, -2.8, 2.8, 0, 0, 2.8, -2.8, 0],
+        index === 0 ? 0xffffff : color,
+        0.94
+      ).setStrokeStyle(1, color, 0.9).setBlendMode(Phaser.BlendModes.ADD);
+    });
+    orbitRig.add([orbitPath, ...satellites]);
+
+    let infusionOrbit: Phaser.GameObjects.Container | null = null;
     if (this.modRuntime?.hasInfusion('pickup-orbit')) {
-      const orbit = this.add.circle(0, 0, 17, color, 0.06).setStrokeStyle(1, color, 0.72);
-      const satelliteA = this.add.circle(17, 0, 3, 0xffffff, 0.95).setStrokeStyle(1, color, 1);
-      const satelliteB = this.add.circle(-17, 0, 2, color, 0.95).setStrokeStyle(1, 0xffffff, 0.85);
-      container.add([orbit, satelliteA, satelliteB]);
+      infusionOrbit = this.add.container(0, 0);
+      const infusionPath = this.add.circle(0, 0, 23, color, 0.035).setStrokeStyle(1, 0xffffff, 0.42);
+      const satelliteA = this.add.circle(23, 0, 2.4, 0xffffff, 0.98).setStrokeStyle(1, color, 1);
+      const satelliteB = this.add.circle(-23, 0, 1.8, color, 0.98).setStrokeStyle(1, 0xffffff, 0.86);
+      infusionOrbit.add([infusionPath, satelliteA, satelliteB]);
     }
 
+    const iconRig = this.add.container(0, 0);
+    const leftBracket = this.add.polygon(-16.5, 0, [0, -6, 2.5, -6, 2.5, -2.5, 6, 0, 2.5, 2.5, 2.5, 6, 0, 6], color, 0.86);
+    const rightBracket = this.add.polygon(16.5, 0, [0, -6, -2.5, -6, -2.5, -2.5, -6, 0, -2.5, 2.5, -2.5, 6, 0, 6], color, 0.86);
+    container.add([glow, orbitRig]);
+    if (infusionOrbit) container.add(infusionOrbit);
+    container.add([backing, centerBloom, scanRing, arcSegments, iconRig, leftBracket, rightBracket]);
+    return { glow, scanRing, orbitRig, infusionOrbit, iconRig, leftBracket, rightBracket, phase };
+  }
+
+  private addPickupIcon(iconRig: Phaser.GameObjects.Container, type: PickupType, color: number): void {
     if (type === 'health') {
-      const v = this.add.rectangle(0, 0, 5, 16, COLORS.green, 0.95).setStrokeStyle(1, 0xbaffc6, 1);
-      const h = this.add.rectangle(0, 0, 16, 5, COLORS.green, 0.95).setStrokeStyle(1, 0xbaffc6, 1);
-      const glow = this.add.circle(0, 0, 13, COLORS.green, 0.15).setStrokeStyle(1, COLORS.green, 0.55);
-      container.add([glow, v, h]);
-      return container;
+      const vertical = this.add.rectangle(0, 0, 4.5, 15, color, 1).setStrokeStyle(1, 0xe7ffed, 1);
+      const horizontal = this.add.rectangle(0, 0, 15, 4.5, color, 1).setStrokeStyle(1, 0xe7ffed, 1);
+      iconRig.add([vertical, horizontal]);
+      return;
     }
-
     if (type === 'energy') {
-      const boltPoints = [
-        -4, -12,
-        2, -12,
-        -1, -3,
-        6, -3,
-        -2, 12,
-        1, 3,
-        -6, 3
-      ];
-      const glow = this.add.circle(0, 0, 13, COLORS.cyan, 0.14).setStrokeStyle(1, COLORS.cyan, 0.5);
-      const bolt = this.add.polygon(0, 0, boltPoints, COLORS.cyan, 0.95).setStrokeStyle(1, 0xddfbff, 0.95);
-      container.add([glow, bolt]);
-      return container;
+      const bolt = this.add.polygon(0, 0, [-3.5, -11, 2, -11, -1, -3, 5.5, -3, -2, 11, 0.5, 3, -5.5, 3], color, 1)
+        .setStrokeStyle(1, 0xe8fdff, 1);
+      iconRig.add(bolt);
+      return;
     }
-
     if (type === 'damageBoost') {
-      const glow = this.add.circle(0, 0, 15, color, 0.13).setStrokeStyle(1, color, 0.45);
-      const body = this.add.rectangle(-1, -2, 18, 7, color, 0.95).setStrokeStyle(1, 0xffffff, 0.9);
-      const barrel = this.add.rectangle(10, -2, 10, 3, 0xffffff, 0.92);
-      const grip = this.add.polygon(-4, 5, [0, 0, 6, 0, 3, 10, -2, 10], color, 0.95);
-      container.add([glow, body, barrel, grip]);
-      return container;
+      const body = this.add.rectangle(-1, -2, 16, 6, color, 1).setStrokeStyle(1, 0xffffff, 0.92);
+      const barrel = this.add.rectangle(8.5, -2, 7, 2.5, 0xffffff, 0.94);
+      const grip = this.add.polygon(-4, 4, [0, 0, 5, 0, 2.5, 8, -1.5, 8], color, 1).setStrokeStyle(1, 0xffffff, 0.72);
+      iconRig.add([body, barrel, grip]);
+      return;
     }
-
     if (type === 'speedBoost') {
-      const glow = this.add.circle(0, 0, 15, color, 0.13).setStrokeStyle(1, color, 0.45);
-      const rocket = this.add.polygon(0, -1, [0, -14, 7, -4, 6, 8, 0, 12, -6, 8, -7, -4], color, 0.96)
-        .setStrokeStyle(1, 0xffffff, 0.9);
-      const flame = this.add.triangle(0, 14, -5, 0, 5, 0, 0, 9, COLORS.orange, 0.92);
-      container.add([glow, flame, rocket]);
-      return container;
+      const flame = this.add.triangle(0, 11, -4, 0, 4, 0, 0, 7, COLORS.orange, 0.96);
+      const rocket = this.add.polygon(0, -1, [0, -11, 6, -3, 5, 7, 0, 10, -5, 7, -6, -3], color, 1)
+        .setStrokeStyle(1, 0xffffff, 0.92);
+      iconRig.add([flame, rocket]);
+      return;
     }
-
     if (type === 'rapidFire') {
-      const glow = this.add.circle(0, 0, 15, color, 0.13).setStrokeStyle(1, color, 0.45);
-      const bolts = [-7, 0, 7].map((offset) => this.add.rectangle(offset, 0, 4, 20, color, 0.95)
-        .setRotation(0.35).setStrokeStyle(1, 0xffffff, 0.7));
-      container.add([glow, ...bolts]);
-      return container;
+      const bolts = [-6, 0, 6].map((offset) => this.add.rectangle(offset, 0, 3.5, 17, color, 1)
+        .setRotation(0.31).setStrokeStyle(1, 0xffffff, 0.78));
+      iconRig.add(bolts);
+      return;
     }
-
     if (type === 'credits') {
-      const neonYellow = 0xf5ff58;
-      const warmYellow = 0xffcf3f;
-      const glow = this.add.circle(0, 0, 22, neonYellow, 0.13)
-        .setStrokeStyle(1, neonYellow, 0.32)
-        .setBlendMode(Phaser.BlendModes.ADD);
-      const backing = this.add.polygon(0, 0, [0, -16, 13, -8, 13, 8, 0, 16, -13, 8, -13, -8], 0x171506, 0.96)
-        .setStrokeStyle(2.5, neonYellow, 0.95);
-      const scanRing = this.add.circle(0, 0, 18, 0x000000, 0)
-        .setStrokeStyle(1.5, warmYellow, 0.72)
-        .setBlendMode(Phaser.BlendModes.ADD);
-
-      const arcSegments = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-      arcSegments.lineStyle(2, 0xffffff, 0.72);
-      for (let index = 0; index < 4; index += 1) {
-        const start = index * Math.PI / 2 + 0.12;
-        arcSegments.beginPath();
-        arcSegments.arc(0, 0, 20, start, start + 0.52, false);
-        arcSegments.strokePath();
-      }
-
-      const orbitRig = this.add.container(0, 0);
-      const orbitPath = this.add.circle(0, 0, 24, 0x000000, 0).setStrokeStyle(1, neonYellow, 0.3);
-      const satellites: Phaser.GameObjects.GameObject[] = [0, 1, 2].map((index) => {
-        const angle = index * Math.PI * 2 / 3;
-        return this.add.polygon(
-          Math.cos(angle) * 24,
-          Math.sin(angle) * 24,
-          [0, -3.8, 3.8, 0, 0, 3.8, -3.8, 0],
-          index === 0 ? 0xffffff : neonYellow,
-          0.95
-        ).setStrokeStyle(1, warmYellow, 0.92).setBlendMode(Phaser.BlendModes.ADD);
-      });
-      orbitRig.add([orbitPath, ...satellites]);
-
-      const glyphGlow = this.add.text(0, 0, '¢', {
+      const glyphGlow = this.add.text(0, 0, '\u00a2', {
         fontFamily: 'Orbitron, Rajdhani, sans-serif',
-        fontSize: '27px',
+        fontSize: '24px',
         fontStyle: 'bold',
         color: '#fff36a',
         stroke: '#f5ff58',
-        strokeThickness: 5
-      }).setOrigin(0.5).setAlpha(0.34).setBlendMode(Phaser.BlendModes.ADD);
-      const glyph = this.add.text(0, -1, '¢', {
+        strokeThickness: 4
+      }).setOrigin(0.5).setAlpha(0.32).setBlendMode(Phaser.BlendModes.ADD);
+      const glyph = this.add.text(0, -1, '\u00a2', {
         fontFamily: 'Orbitron, Rajdhani, sans-serif',
-        fontSize: '25px',
+        fontSize: '22px',
         fontStyle: 'bold',
         color: '#ffffa8',
         stroke: '#8e7300',
         strokeThickness: 2
-      }).setOrigin(0.5).setShadow(0, 0, '#f5ff58', 7, true, true);
-
-      const leftBracket = this.add.polygon(-19, 0, [0, -7, 3, -7, 3, -3, 7, 0, 3, 3, 3, 7, 0, 7], warmYellow, 0.88);
-      const rightBracket = this.add.polygon(19, 0, [0, -7, -3, -7, -3, -3, -7, 0, -3, 3, -3, 7, 0, 7], warmYellow, 0.88);
-      container.add([glow, orbitRig, backing, scanRing, arcSegments, glyphGlow, glyph, leftBracket, rightBracket]);
-      this.creditPickupVisuals.set(container, { glow, scanRing, orbitRig, glyphGlow, glyph, leftBracket, rightBracket });
-      return container;
+      }).setOrigin(0.5).setShadow(0, 0, '#f5ff58', 6, true, true);
+      iconRig.add([glyphGlow, glyph]);
+      return;
     }
-
     if (type === 'coreToken') {
-      const token = this.add.polygon(0, 0, [0, -12, 10, -6, 10, 6, 0, 12, -10, 6, -10, -6], color, 0.88)
-        .setStrokeStyle(2, 0xffffff, 0.9);
-      const core = this.add.circle(0, 0, 4, 0xffffff, 0.9);
-      container.add([token, core]);
-      return container;
+      const token = this.add.polygon(0, 0, [0, -10, 8.5, -5, 8.5, 5, 0, 10, -8.5, 5, -8.5, -5], color, 0.96)
+        .setStrokeStyle(1.5, 0xffffff, 0.94);
+      const core = this.add.circle(0, 0, 3.5, 0xffffff, 0.96).setStrokeStyle(1, color, 1);
+      iconRig.add([token, core]);
     }
-
-    const circle = this.add.circle(0, 0, 8, color, 0.85).setStrokeStyle(2, color, 1);
-    container.add(circle);
-    return container;
   }
 
-  private updateCreditPickupVisual(
+  private updatePickupVisual(
     container: Phaser.GameObjects.Container,
-    visual: CreditPickupVisual,
+    visual: PickupVisual,
     now: number
   ): void {
-    const pulse = 0.5 + Math.sin(now * 0.008) * 0.5;
-    container.setRotation(Math.sin(now * 0.0022) * 0.055);
-    visual.orbitRig.setRotation(now * 0.0034);
-    visual.scanRing.setScale(0.86 + pulse * 0.24).setAlpha(0.38 + pulse * 0.52);
-    visual.glow.setScale(0.9 + pulse * 0.3).setAlpha(0.08 + pulse * 0.17);
-    visual.glyphGlow.setScale(1.02 + pulse * 0.18).setAlpha(0.18 + pulse * 0.28);
-    // Counter-rotate the currency mark so it stays immediately recognizable.
-    visual.glyph.setRotation(-container.rotation).setScale(0.96 + pulse * 0.08);
-    visual.glyphGlow.setRotation(-container.rotation);
-    const bracketOffset = 18 + pulse * 3;
+    const pulse = 0.5 + Math.sin(now * 0.008 + visual.phase) * 0.5;
+    container.setRotation(Math.sin(now * 0.0022 + visual.phase) * 0.055).setAlpha(0.8 + pulse * 0.2);
+    visual.orbitRig.setRotation(now * 0.0034 + visual.phase);
+    visual.infusionOrbit?.setRotation(-now * 0.0045 + visual.phase * 0.7);
+    visual.scanRing.setScale(0.88 + pulse * 0.2).setAlpha(0.36 + pulse * 0.48);
+    visual.glow.setScale(0.9 + pulse * 0.22).setAlpha(0.08 + pulse * 0.15);
+    // Counter-rotate the reward icon so every pickup remains recognizable while its shell floats.
+    visual.iconRig.setRotation(-container.rotation).setScale(0.96 + pulse * 0.07).setY(Math.sin(now * 0.003 + visual.phase) * 1.2);
+    const bracketOffset = 16 + pulse * 2;
     visual.leftBracket.setX(-bracketOffset);
     visual.rightBracket.setX(bracketOffset);
   }
@@ -3685,7 +3823,6 @@ export class ArenaScene extends Phaser.Scene {
       const px = s.x + Phaser.Math.Between(-20, 20);
       const py = s.y + Phaser.Math.Between(-20, 20);
       const p = this.createPickupSprite(pickupType, px, py, pickupType === 'health' ? COLORS.green : COLORS.cyan);
-      this.tweens.add({ targets: p, alpha: { from: 0.45, to: 1 }, yoyo: true, duration: 280, repeat: -1 });
       this.pickups.push({ type: pickupType, sprite: p, expiresAt: this.time.now + 11_000, source: 'site-recovery' });
       GameplayTelemetryRecorder.recordPickupDropped(pickupType, 'site-recovery');
     }
@@ -3928,7 +4065,6 @@ export class ArenaScene extends Phaser.Scene {
     const px = Phaser.Math.Clamp(x + Math.cos(angle) * distance, 50, WORLD_WIDTH - 50);
     const py = Phaser.Math.Clamp(y + Math.sin(angle) * distance, 50, WORLD_HEIGHT - 50);
     const sprite = this.createPickupSprite('credits', px, py, 0xffd65a);
-    this.tweens.add({ targets: sprite, alpha: { from: 0.5, to: 1 }, yoyo: true, duration: 320, repeat: -1 });
     this.pickups.push({ type: 'credits', sprite, expiresAt: this.time.now + BOSS_BALANCE.supportPickupLifetimeMs, source: 'boss-damage' });
     GameplayTelemetryRecorder.recordPickupDropped('credits', 'boss-damage');
     GameplayTelemetryRecorder.recordBossCreditDrop();
@@ -3962,7 +4098,6 @@ export class ArenaScene extends Phaser.Scene {
     const type: PickupType = this.bossSupportSequence++ % 2 === 0 ? 'health' : 'energy';
     const color = type === 'health' ? COLORS.green : COLORS.cyan;
     const sprite = this.createPickupSprite(type, point.x, point.y, color);
-    this.tweens.add({ targets: sprite, alpha: { from: 0.45, to: 1 }, yoyo: true, duration: 300, repeat: -1 });
     this.pickups.push({ type, sprite, expiresAt: now + BOSS_BALANCE.supportPickupLifetimeMs, source: 'boss-support' });
     GameplayTelemetryRecorder.recordPickupDropped(type, 'boss-support');
     this.showBanner(`${type.toUpperCase()} SUPPORT DROP`);
