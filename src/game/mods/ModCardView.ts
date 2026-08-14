@@ -98,8 +98,10 @@ export const createModCardView = (
   }
 
   const illuminatedDots = rank;
+  const rankDotRadius = compact ? 4 : Phaser.Math.Clamp(width * 0.028, 4, 6);
+  const rankDotGap = compact ? 12 : rankDotRadius * 3;
   for (let dot = 0; dot < 3; dot += 1) {
-    container.add(scene.add.circle(-width / 2 + 15 + dot * 12, -height / 2 + 15, 4, dot < illuminatedDots ? rarityColor : 0x172331, dot < illuminatedDots ? 1 : 0.7)
+    container.add(scene.add.circle(-width / 2 + 15 + dot * rankDotGap, -height / 2 + 15, rankDotRadius, dot < illuminatedDots ? rarityColor : 0x172331, dot < illuminatedDots ? 1 : 0.7)
       .setStrokeStyle(1, rarityColor, 0.9));
   }
   const rarity = scene.add.text(width / 2 - 8, -height / 2 + 9, corrupted ? 'CORRUPTED' : definition.rarity.toUpperCase(), {
@@ -114,7 +116,7 @@ export const createModCardView = (
     fontFamily: 'Orbitron, sans-serif', fontSize: `${nameFontSize}px`, color: '#f4fdff', align: 'center', lineSpacing: compact ? -1 : 1
   }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(2);
   const stat = scene.add.text(0, height * 0.25, definition.rankDescriptions[rank], {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${statFontSize}px`, color: '#c9e9f4', align: 'center', lineSpacing: compact ? 0 : 2
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${statFontSize}px`, color: '#d8f2f8', align: 'center', lineSpacing: compact ? 0 : 2
   }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(compact && card.infusionId ? 2 : 3);
   const infusion = scene.add.text(0, height / 2 - 10, card.infusionId ? `◆ ${MOD_INFUSION_BY_ID.get(card.infusionId)?.name.toUpperCase() ?? 'INFUSED'}` : '', {
     fontFamily: 'Rajdhani, sans-serif', fontSize: `${infusionFontSize}px`, fontStyle: 'bold', color: '#a5fff0', align: 'center'

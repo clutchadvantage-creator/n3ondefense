@@ -182,7 +182,7 @@ test('owned cosmetics, equipped cosmetics, and wallet values remain profile-owne
 });
 
 test('Garage responsive layout keeps critical docks, terminals, and stations on screen', () => {
-  for (const [width, height] of [[640, 480], [1024, 640], [1920, 1080], [720, 900]]) {
+  for (const [width, height] of [[640, 480], [1024, 640], [1366, 768], [1920, 1080], [2560, 1440], [720, 900]]) {
     const layout = calculateGarageLayout(width, height);
     assert.equal(layout.dockCenters.length, 5);
     assert.equal(layout.stationCenters.length, 5);
@@ -193,10 +193,11 @@ test('Garage responsive layout keeps critical docks, terminals, and stations on 
       assert.ok(point.y - layout.cardHeight / 2 > 65);
       assert.ok(point.y + layout.cardHeight / 2 < height - 45);
     }
-    const dockActionBottom = layout.dockCenters[0].y + layout.cardHeight / 2 + 31 + 20;
-    const stationHousingTop = layout.stationCenters[0].y - 26;
+    const dockActionBottom = layout.dockCenters[0].y + layout.cardHeight / 2 + layout.dockActionGap + layout.dockActionHeight;
+    const stationHousingTop = layout.stationCenters[0].y - (layout.stationHeight + 14) / 2;
     assert.ok(dockActionBottom <= stationHousingTop, 'dock actions must not overlap station consoles');
-    const dockLabelTop = layout.dockCenters[0].y - layout.cardHeight / 2 - (layout.compact ? 14 : 18);
+    const readableScale = layout.compact ? 1 : Math.max(1, Math.min(1.55, layout.cardWidth / 132));
+    const dockLabelTop = layout.dockCenters[0].y - layout.cardHeight / 2 - (layout.compact ? 14 : 22 * readableScale);
     assert.ok(dockLabelTop > layout.configTerminal.y + layout.configTerminal.height);
     for (const rect of [layout.configTerminal, layout.walletTerminal, layout.operatorPreview]) {
       assert.ok(rect.x >= 0 && rect.y >= 0);
@@ -209,16 +210,32 @@ test('Garage responsive layout keeps critical docks, terminals, and stations on 
 
 test('desktop Garage gives the deployment, wallet, and operative displays readable space', () => {
   const layout = calculateGarageLayout(1920, 1080);
-  assert.ok(layout.configTerminal.width >= 390);
-  assert.ok(layout.configTerminal.height >= 230);
+  assert.ok(layout.cardWidth >= 195);
+  assert.ok(layout.cardHeight >= 270);
+  assert.ok(layout.configTerminal.width >= 500);
+  assert.ok(layout.configTerminal.height >= 290);
   assert.equal(layout.walletTerminal.width, layout.configTerminal.width);
   assert.equal(layout.walletTerminal.height, layout.configTerminal.height);
   assert.ok(layout.configTerminal.x > layout.safe + 30);
   assert.equal(1920 - layout.walletTerminal.x - layout.walletTerminal.width, layout.configTerminal.x);
   assert.ok(layout.configTerminal.y >= 106);
-  assert.ok(layout.operatorPreview.width >= 330);
-  assert.ok(layout.operatorPreview.height >= 174);
+  assert.ok(layout.operatorPreview.width >= 490);
+  assert.ok(layout.operatorPreview.height >= 270);
   assert.ok(layout.operatorPreview.y >= 88);
+  assert.ok(layout.stationWidth >= 240);
+  assert.ok(layout.stationHeight >= 52);
+  assert.ok(layout.dockActionHeight >= 46);
+});
+
+test('large desktop Garage scaling grows usefully but remains clamped', () => {
+  const standard = calculateGarageLayout(1920, 1080);
+  const large = calculateGarageLayout(2560, 1440);
+  assert.ok(large.cardWidth > standard.cardWidth);
+  assert.ok(large.stationWidth > standard.stationWidth);
+  assert.ok(large.stationHeight > standard.stationHeight);
+  assert.ok(large.cardWidth <= 240);
+  assert.ok(large.configTerminal.width <= 550);
+  assert.ok(large.operatorPreview.width <= 510);
 });
 
 test('equipping an operative frame or color refreshes the Garage showcase', () => {

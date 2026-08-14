@@ -179,16 +179,18 @@ export const createModWorkbench = (
   cardWidth: number,
   cardHeight: number,
   centers: Array<{ x: number; y: number }>,
-  compact: boolean
+  compact: boolean,
+  actionButtonHeight = 40,
+  actionButtonGap = 11
 ): void => {
   if (!centers.length) return;
   const first = centers[0];
   const last = centers[centers.length - 1];
   const left = first.x - cardWidth / 2 - (compact ? 13 : 23);
   const right = last.x + cardWidth / 2 + (compact ? 13 : 23);
-  const top = first.y - cardHeight / 2 - (compact ? 31 : 43);
-  const actionY = first.y + cardHeight / 2 + 31;
-  const bottom = actionY + (compact ? 25 : 29);
+  const top = first.y - cardHeight / 2 - (compact ? 31 : Math.max(43, cardWidth * 0.22));
+  const actionY = first.y + cardHeight / 2 + actionButtonGap + actionButtonHeight / 2;
+  const bottom = actionY + actionButtonHeight / 2 + (compact ? 5 : 9);
   const width = right - left;
   const height = bottom - top;
 
@@ -223,7 +225,7 @@ export const createModWorkbench = (
   const labelY = top + 11;
   if (!compact) {
     scene.add.text(left + width / 2, labelY, 'MODULAR LOADOUT ARRAY // 05 CHANNEL BUS', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '10px', color: '#7edeea', letterSpacing: 1
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(cardWidth * 0.065, 11, 15)}px`, color: '#9af3fb', letterSpacing: 1
     }).setOrigin(0.5).setDepth(19);
   }
 
@@ -243,20 +245,25 @@ export const createStationHousing = (
   scene: Phaser.Scene,
   center: { x: number; y: number },
   width: number,
-  index: number
+  index: number,
+  buttonHeight = 40
 ): Phaser.GameObjects.Container => {
   const root = scene.add.container(center.x, center.y).setDepth(76);
   const accent = index % 2 ? MAGENTA : CYAN;
+  const housingHeight = buttonHeight + 14;
+  const housingTop = -housingHeight / 2;
   const housing = scene.add.graphics();
-  housing.fillStyle(0x03080e, 0.86).fillRoundedRect(-width / 2 - 7, -26, width + 14, 52, 4);
-  housing.fillStyle(0x14232e, 0.98).fillRect(-width / 2 - 4, -24, width + 8, 5);
-  housing.lineStyle(1, 0x355b69, 0.72).strokeRoundedRect(-width / 2 - 7, -26, width + 14, 52, 4);
-  housing.lineStyle(2, accent, 0.36).lineBetween(-width / 2 + 8, -25, width / 2 - 8, -25);
-  housing.fillStyle(0x263b46, 0.84).fillCircle(-width / 2 + 4, 18, 2).fillCircle(width / 2 - 4, 18, 2);
+  housing.fillStyle(0x03080e, 0.86).fillRoundedRect(-width / 2 - 7, housingTop, width + 14, housingHeight, 4);
+  housing.fillStyle(0x14232e, 0.98).fillRect(-width / 2 - 4, housingTop + 2, width + 8, 5);
+  housing.lineStyle(1, 0x355b69, 0.72).strokeRoundedRect(-width / 2 - 7, housingTop, width + 14, housingHeight, 4);
+  housing.lineStyle(2, accent, 0.36).lineBetween(-width / 2 + 8, housingTop + 1, width / 2 - 8, housingTop + 1);
+  housing.fillStyle(0x263b46, 0.84)
+    .fillCircle(-width / 2 + 4, housingHeight / 2 - 8, 2)
+    .fillCircle(width / 2 - 4, housingHeight / 2 - 8, 2);
   root.add(housing);
   if (scene.scale.height >= 560) {
-    root.add(scene.add.text(-width / 2 + 8, -28, `STATION 0${index + 1}`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '8px', fontStyle: 'bold', color: index % 2 ? '#c872af' : '#69aeb8'
+    root.add(scene.add.text(-width / 2 + 8, housingTop - 2, `STATION 0${index + 1}`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${Phaser.Math.Clamp(buttonHeight * 0.19, 8, 12)}px`, fontStyle: 'bold', color: index % 2 ? '#e28dcc' : '#83d7e2'
     }).setOrigin(0, 1));
   }
   return root;

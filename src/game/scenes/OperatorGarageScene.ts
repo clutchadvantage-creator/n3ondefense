@@ -79,25 +79,50 @@ export class OperatorGarageScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const layout = calculateGarageLayout(width, height);
     createGarageEnvironment(this, layout);
-    createModWorkbench(this, layout.cardWidth, layout.cardHeight, layout.dockCenters, layout.compact);
+    createModWorkbench(
+      this,
+      layout.cardWidth,
+      layout.cardHeight,
+      layout.dockCenters,
+      layout.compact,
+      layout.dockActionHeight,
+      layout.dockActionGap
+    );
 
-    createButton(this, layout.safe + 72, 34, 'BACK', () => this.returnToPrevious(), 132).setDepth(80);
+    const headerScale = layout.compact ? 1 : Phaser.Math.Clamp(layout.uiScale, 0.86, 1.2);
+    createButton(
+      this,
+      layout.safe + 79 * headerScale,
+      34 * headerScale,
+      'BACK',
+      () => this.returnToPrevious(),
+      148 * headerScale,
+      'menu',
+      { height: 46 * headerScale, fontSize: 18 * headerScale }
+    ).setDepth(80);
     this.add.text(width / 2, 18, 'OPERATOR GARAGE', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 24 : 31}px`, color: '#67f7ff', fontStyle: 'bold'
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 24 : Math.round(38 * headerScale)}px`, color: '#67f7ff', fontStyle: 'bold'
     }).setOrigin(0.5, 0).setDepth(70);
-    this.add.text(width / 2, 50, 'LOADOUT WORKSTATION // NEXT DEPLOYMENT', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 13 : 16}px`, color: '#ff9bd9', letterSpacing: 1
+    this.add.text(width / 2, layout.compact ? 50 : 57 * headerScale, 'LOADOUT WORKSTATION // NEXT DEPLOYMENT', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 13 : Math.round(19 * headerScale)}px`, color: '#ff9bd9', letterSpacing: 1
     }).setOrigin(0.5, 0).setDepth(70);
 
     this.createConfigurationTerminal(layout.configTerminal, layout.compact);
     this.createWalletTerminal(layout.walletTerminal, layout.compact);
     this.createOperatorPreview(layout.operatorPreview, layout.compact);
-    this.createModDocks(layout.cardWidth, layout.cardHeight, layout.dockCenters, layout.compact);
-    this.createStations(layout.stationCenters, layout.stationWidth);
+    this.createModDocks(
+      layout.cardWidth,
+      layout.cardHeight,
+      layout.dockCenters,
+      layout.compact,
+      layout.dockActionHeight,
+      layout.dockActionGap
+    );
+    this.createStations(layout.stationCenters, layout.stationWidth, layout.stationHeight);
 
     if (this.status) {
-      this.add.text(width / 2, height - layout.safe - 52, this.status, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', fontStyle: 'bold', color: this.status.startsWith('BLOCKED') ? '#ff94aa' : '#8effc3', align: 'center'
+      this.add.text(width / 2, layout.stationCenters[0].y - layout.stationHeight / 2 - 32, this.status, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 14 : Math.round(17 * layout.uiScale)}px`, fontStyle: 'bold', color: this.status.startsWith('BLOCKED') ? '#ff94aa' : '#8effc3', align: 'center'
       }).setOrigin(0.5).setDepth(90).setWordWrapWidth(width - 60, true).setMaxLines(2);
     }
 
@@ -116,7 +141,8 @@ export class OperatorGarageScene extends Phaser.Scene {
   private terminalFrame(rect: GarageRect, title: string, color = 0x55efff): Phaser.GameObjects.Container {
     const root = this.add.container(rect.x, rect.y).setDepth(40);
     const roomy = rect.height >= 180;
-    const headerHeight = roomy ? 35 : 29;
+    const contentScale = roomy ? Phaser.Math.Clamp(rect.width / 400, 1, 1.36) : 1;
+    const headerHeight = Math.round(roomy ? 35 * contentScale : 29);
     const panel = this.add.rectangle(0, 0, rect.width, rect.height, 0x06111a, 0.94).setOrigin(0).setStrokeStyle(2, color, 0.62);
     const glass = this.add.rectangle(6, headerHeight + 5, rect.width - 12, rect.height - headerHeight - 11, color, 0.018)
       .setOrigin(0)
@@ -127,17 +153,17 @@ export class OperatorGarageScene extends Phaser.Scene {
       rect.width - 14,
       rect.height - headerHeight - 13,
       rect.width,
-      roomy ? 8 : 6,
+      roomy ? Math.round(8 * contentScale) : 6,
       0x000000,
       0,
       color,
       0.025
     ).setOrigin(0);
     const header = this.add.rectangle(0, 0, rect.width, headerHeight, color, 0.1).setOrigin(0).setStrokeStyle(1, color, 0.35);
-    const label = this.add.text(13, roomy ? 8 : 7, title, {
-      fontFamily: 'Orbitron, sans-serif', fontSize: roomy ? '15px' : '12px', color: Phaser.Display.Color.IntegerToColor(color).rgba
+    const label = this.add.text(13 * contentScale, roomy ? 8 * contentScale : 7, title, {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${roomy ? Math.round(15 * contentScale) : 12}px`, color: Phaser.Display.Color.IntegerToColor(color).rgba
     }).setOrigin(0);
-    const led = this.add.circle(rect.width - 14, headerHeight / 2, roomy ? 4 : 3, 0x68ffac, 0.9);
+    const led = this.add.circle(rect.width - 14 * contentScale, headerHeight / 2, roomy ? 4 * contentScale : 3, 0x68ffac, 0.9);
     const footerRail = this.add.rectangle(9, rect.height - 7, rect.width - 18, 2, color, 0.13).setOrigin(0);
     root.add([panel, glass, scanlines, header, label, led, footerRail]);
     addTerminalMount(this, root, rect, color);
@@ -148,6 +174,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private createConfigurationTerminal(rect: GarageRect, compact: boolean): void {
     const root = this.terminalFrame(rect, 'DEPLOYMENT CONFIGURATION');
     const roomy = !compact && rect.height >= 180;
+    const contentScale = roomy ? Phaser.Math.Clamp(rect.width / 400, 1, 1.36) : 1;
     const highestRound = SaveSystem.getHighestRound();
     const requested = SaveSystem.getPreferredProtocol();
     const protocol = highestRound >= RUN_PROTOCOLS[requested].unlockHighestRound ? requested : 'normal';
@@ -157,16 +184,16 @@ export class OperatorGarageScene extends Phaser.Scene {
       { label: 'CONTRACT', value: setup.contract ? RUN_CONTRACTS[setup.contract].label : 'NO CONTRACT ACTIVE', action: () => this.cycleContract() },
       { label: 'SIGNAL', value: setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus] : 'NO SIGNAL ACTIVE', action: () => this.cycleSignal() }
     ];
-    const startY = roomy ? 43 : 33;
-    const rowGap = roomy ? 43 : 27;
+    const startY = roomy ? Math.round(43 * contentScale) : 33;
+    const rowGap = roomy ? Math.round(43 * contentScale) : 27;
     rows.forEach((row, index) => {
       const y = startY + index * rowGap;
       const hit = this.add.rectangle(7, y - 1, rect.width - 14, rowGap - 4, 0x102331, 0.5).setOrigin(0).setInteractive({ useHandCursor: true });
-      const label = this.add.text(15, y + (roomy ? 7 : 1), row.label, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '14px' : '9px', color: '#78adbf'
+      const label = this.add.text(15 * contentScale, y + (roomy ? 7 * contentScale : 1), row.label, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomy ? Math.round(14 * contentScale) : 9}px`, color: '#8fc6d5'
       }).setOrigin(0);
-      const value = this.add.text(roomy ? rect.width - 15 : 15, y + (roomy ? 4 : 10), row.value, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '17px' : '10px', fontStyle: 'bold', color: '#d6fbff'
+      const value = this.add.text(roomy ? rect.width - 15 * contentScale : 15, y + (roomy ? 4 * contentScale : 10), row.value, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomy ? Math.round(17 * contentScale) : 10}px`, fontStyle: 'bold', color: '#e4fcff'
       }).setOrigin(roomy ? 1 : 0, 0).setMaxLines(1);
       hit.on('pointerover', () => {
         hit.setFillStyle(0x17374a, 0.75);
@@ -182,7 +209,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     if (roomy) {
       const cost = getRunSetupCost(setup);
       root.add(this.add.text(rect.width / 2, rect.height - 19, cost > 0 ? `NEXT RUN FEE // ${cost.toLocaleString()} CREDITS` : 'NEXT RUN FEE // FREE', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', fontStyle: 'bold', color: cost > 0 ? '#ffd077' : '#7fffc2'
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${Math.round(15 * contentScale)}px`, fontStyle: 'bold', color: cost > 0 ? '#ffd077' : '#7fffc2'
       }).setOrigin(0.5));
     }
   }
@@ -190,6 +217,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private createWalletTerminal(rect: GarageRect, compact: boolean): void {
     const root = this.terminalFrame(rect, 'DIGITAL WALLET', 0xff5bcf);
     const roomy = !compact && rect.height >= 180;
+    const contentScale = roomy ? Phaser.Math.Clamp(rect.width / 400, 1, 1.36) : 1;
     const save = SaveSystem.get();
     const plasma = SaveSystem.getModCollection().plasmaChips;
     const values = [
@@ -199,16 +227,16 @@ export class OperatorGarageScene extends Phaser.Scene {
       ['FLUX CORES', save.fluxCores.toLocaleString(), '#76ff9e']
     ] as const;
     values.forEach(([label, value, color], index) => {
-      const y = (roomy ? 42 : 31) + index * (roomy ? 36 : 23);
-      root.add(this.add.text(15, y, label, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '15px' : '11px', color: '#7c9dad'
+      const y = (roomy ? 42 * contentScale : 31) + index * (roomy ? 36 * contentScale : 23);
+      root.add(this.add.text(15 * contentScale, y, label, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomy ? Math.round(15 * contentScale) : 11}px`, color: '#93b8c7'
       }).setOrigin(0));
-      root.add(this.add.text(rect.width - 15, y - 4, value, {
-        fontFamily: 'Orbitron, sans-serif', fontSize: roomy ? '21px' : '14px', color
+      root.add(this.add.text(rect.width - 15 * contentScale, y - 4 * contentScale, value, {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${roomy ? Math.round(21 * contentScale) : 14}px`, color
       }).setOrigin(1, 0));
     });
     if (roomy && rect.height >= 210) root.add(this.add.text(rect.width / 2, rect.height - 18, `HIGHEST ROUND // ${SaveSystem.getHighestRound()}`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', fontStyle: 'bold', color: '#9bc4d3'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${Math.round(15 * contentScale)}px`, fontStyle: 'bold', color: '#b7dce8'
     }).setOrigin(0.5));
   }
 
@@ -225,6 +253,10 @@ export class OperatorGarageScene extends Phaser.Scene {
     const centerX = rect.x + rect.width / 2;
     const centerY = rect.y + rect.height * (large ? 0.48 : 0.52);
     const root = this.add.container(centerX, centerY).setDepth(35);
+    const previewScale = large
+      ? Phaser.Math.Clamp(Math.min(rect.width / 340, rect.height / 200), 1, 1.35)
+      : 1;
+    root.setScale(previewScale);
     const liftY = large ? 58 : compact ? 35 : 45;
     const bayWidth = large ? 258 : compact ? 142 : 192;
     const bayTop = large ? -82 : compact ? -44 : -61;
@@ -298,9 +330,18 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.operatorPreviewRoot = null;
   }
 
-  private createModDocks(cardWidth: number, cardHeight: number, centers: Array<{ x: number; y: number }>, compact: boolean): void {
+  private createModDocks(
+    cardWidth: number,
+    cardHeight: number,
+    centers: Array<{ x: number; y: number }>,
+    compact: boolean,
+    actionButtonHeight: number,
+    actionButtonGap: number
+  ): void {
     const mods = SaveSystem.getModCollection();
     const docks = getGarageDockModels(mods);
+    const compactCard = compact || cardWidth < 160;
+    const readableScale = compact ? 1 : Phaser.Math.Clamp(cardWidth / 132, 1, 1.55);
     docks.forEach((dock, index) => {
       const center = centers[index];
       const definition = dock.card ? MOD_BY_ID.get(dock.card.modId) : undefined;
@@ -315,20 +356,20 @@ export class OperatorGarageScene extends Phaser.Scene {
       rails.fillStyle(color, dock.empty ? 0.16 : 0.3).fillRect(railLeft + 1, railTop + 5, 1, cardHeight + 4).fillRect(railRight - 2, railTop + 5, 1, cardHeight + 4);
       rails.fillStyle(0x273e48, 0.92).fillRect(railLeft - 2, railTop, 9, 5).fillRect(railRight - 7, railTop, 9, 5);
       rails.fillStyle(0x273e48, 0.92).fillRect(railLeft - 2, railBottom - 5, 9, 5).fillRect(railRight - 7, railBottom - 5, 9, 5);
-      const lock = this.add.circle(railRight - 2, railBottom + 5, compact ? 2 : 3, dock.empty ? 0x416572 : 0x69ffae, dock.empty ? 0.42 : 0.9).setDepth(27);
-      this.add.text(center.x, center.y - cardHeight / 2 - (compact ? 14 : 18), dock.label, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, fontStyle: 'bold', color: definition ? Phaser.Display.Color.IntegerToColor(color).rgba : '#79a9b6', align: 'center'
-      }).setOrigin(0.5).setDepth(27).setWordWrapWidth(cardWidth + 18, true).setMaxLines(2);
+      const lock = this.add.circle(railRight - 2, railBottom + 5, compact ? 2 : Phaser.Math.Clamp(cardWidth * 0.025, 3, 5), dock.empty ? 0x416572 : 0x69ffae, dock.empty ? 0.42 : 0.9).setDepth(27);
+      this.add.text(center.x, center.y - cardHeight / 2 - (compact ? 14 : 22 * readableScale), dock.label, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : Math.round(11 * readableScale)}px`, fontStyle: 'bold', color: definition ? Phaser.Display.Color.IntegerToColor(color).rgba : '#94c2cd', align: 'center'
+      }).setOrigin(0.5).setDepth(27).setWordWrapWidth(cardWidth + 24, true).setMaxLines(2);
       if (dock.card) {
-        const view = createModCardView(this, center.x, center.y, dock.card, dock.card.upgradeLevel, { width: cardWidth, height: cardHeight, compact: true, equipped: true });
+        const view = createModCardView(this, center.x, center.y, dock.card, dock.card.upgradeLevel, { width: cardWidth, height: cardHeight, compact: compactCard, equipped: true });
         view.setDepth(26).on('pointerdown', () => {
           this.audio.playSfx('menu');
           this.openCollection(dock.card?.instanceId);
         });
       } else {
         const emptyHit = this.add.rectangle(center.x, center.y, cardWidth, cardHeight, 0x0a1923, 0.78).setStrokeStyle(1, 0x4bd7e9, 0.25).setInteractive({ useHandCursor: true }).setDepth(26);
-        this.add.text(center.x, center.y - 13, '+', { fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 25 : 34}px`, color: '#376979' }).setOrigin(0.5).setDepth(27);
-        this.add.text(center.x, center.y + 22, 'AWAITING\nMODULE', { fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, color: '#638795', align: 'center' }).setOrigin(0.5).setDepth(27);
+        this.add.text(center.x, center.y - 13 * readableScale, '+', { fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 25 : Math.round(34 * readableScale)}px`, color: '#4d8796' }).setOrigin(0.5).setDepth(27);
+        this.add.text(center.x, center.y + 22 * readableScale, 'AWAITING\nMODULE', { fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : Math.round(13 * readableScale)}px`, fontStyle: 'bold', color: '#83aab5', align: 'center' }).setOrigin(0.5).setDepth(27);
         emptyHit.on('pointerover', () => {
           emptyHit.setStrokeStyle(2, 0x62efff, 0.72);
           this.audio.playSfx('menuHover');
@@ -339,20 +380,23 @@ export class OperatorGarageScene extends Phaser.Scene {
           this.openCollection();
         });
       }
-      const actionY = center.y + cardHeight / 2 + 31;
+      const actionY = center.y + cardHeight / 2 + actionButtonGap + actionButtonHeight / 2;
       createButton(this, center.x, actionY, dock.card ? 'UNEQUIP' : 'BROWSE', () => {
         if (dock.card) {
           SaveSystem.unequipMod(dock.slot);
           this.status = `SUCCESS // ${dock.label.replace('SLOT ', '').replace(' // ', ' ')} CLEARED`;
           this.scene.restart({ returnScene: this.returnScene });
         } else this.openCollection();
-      }, cardWidth).setDepth(28);
+      }, cardWidth, 'menu', {
+        height: actionButtonHeight,
+        fontSize: compact ? 16 : Phaser.Math.Clamp(17 * readableScale, 17, 21)
+      }).setDepth(28);
       this.tweens.add({ targets: backing, alpha: { from: 0.7, to: 1 }, duration: 1800 + index * 170, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       this.tweens.add({ targets: lock, alpha: { from: dock.empty ? 0.18 : 0.4, to: dock.empty ? 0.48 : 1 }, duration: 950 + index * 130, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     });
   }
 
-  private createStations(centers: Array<{ x: number; y: number }>, width: number): void {
+  private createStations(centers: Array<{ x: number; y: number }>, width: number, height: number): void {
     const stations: Array<{ label: string; action: () => void }> = [
       { label: 'GEAR LOCKER', action: () => this.showCosmetics() },
       { label: 'OVERDRIVE', action: () => this.showOverdrive() },
@@ -361,11 +405,15 @@ export class OperatorGarageScene extends Phaser.Scene {
       { label: 'CONFIG PRESETS', action: () => this.showPresets() }
     ];
     stations.forEach((station, index) => {
-      createStationHousing(this, centers[index], width, index);
+      createStationHousing(this, centers[index], width, index, height);
       const button = createButton(this, centers[index].x, centers[index].y, station.label, () => {
         station.action();
-      }, width).setDepth(80);
-      const led = this.add.circle(centers[index].x - width / 2 + 9, centers[index].y, 2, index % 2 ? 0xff5bcf : 0x62f4ff, 0.9).setDepth(82);
+      }, width, 'menu', {
+        height,
+        fontSize: Phaser.Math.Clamp(height * 0.34, 16, 21),
+        horizontalPadding: 28
+      }).setDepth(80);
+      const led = this.add.circle(centers[index].x - width / 2 + 11, centers[index].y, Phaser.Math.Clamp(height * 0.045, 2, 3), index % 2 ? 0xff5bcf : 0x62f4ff, 0.9).setDepth(82);
       this.tweens.add({ targets: led, alpha: { from: 0.25, to: 1 }, duration: 850 + index * 180, yoyo: true, repeat: -1 });
       button.setDepth(80);
     });

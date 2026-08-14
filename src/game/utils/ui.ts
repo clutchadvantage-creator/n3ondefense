@@ -6,6 +6,12 @@ import type { AudioSfxName } from '../config/audio';
 interface ButtonAudioState { enabled: boolean }
 const buttonAudioStates = new WeakMap<Phaser.GameObjects.Container, ButtonAudioState>();
 
+export interface ButtonPresentationOptions {
+  height?: number;
+  fontSize?: number;
+  horizontalPadding?: number;
+}
+
 export const createButton = (
   scene: Phaser.Scene,
   x: number,
@@ -13,20 +19,23 @@ export const createButton = (
   text: string,
   onClick: () => unknown,
   width = 220,
-  buttonSound: Extract<AudioSfxName, 'menu' | 'runStart'> = 'menu'
+  buttonSound: Extract<AudioSfxName, 'menu' | 'runStart'> = 'menu',
+  presentation: ButtonPresentationOptions = {}
 ): Phaser.GameObjects.Container => {
-  const bg = scene.add.rectangle(0, 0, width, 40, 0x121a2b, 0.95).setStrokeStyle(2, COLORS.cyan, 0.9);
-  const labelFontSize = text.length > 28 || (width < 190 && text.length > 20) ? 14 : 16;
+  const height = presentation.height ?? 40;
+  const horizontalPadding = presentation.horizontalPadding ?? 20;
+  const labelFontSize = presentation.fontSize ?? (text.length > 28 || (width < 190 && text.length > 20) ? 14 : 16);
+  const bg = scene.add.rectangle(0, 0, width, height, 0x121a2b, 0.95).setStrokeStyle(2, COLORS.cyan, 0.9);
   const label = scene.add.text(0, 0, text, {
     color: '#d6f7ff',
     fontSize: `${labelFontSize}px`,
     fontFamily: 'Rajdhani, sans-serif',
     align: 'center',
     lineSpacing: -2,
-    wordWrap: { width: Math.max(40, width - 20), useAdvancedWrap: true }
+    wordWrap: { width: Math.max(40, width - horizontalPadding), useAdvancedWrap: true }
   }).setOrigin(0.5).setMaxLines(2);
 
-  const hit = scene.add.rectangle(0, 0, width, 40, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+  const hit = scene.add.rectangle(0, 0, width, height, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
   hit.setName('button-hit');
   const state: ButtonAudioState = { enabled: true };
   hit.on('pointerover', () => {
