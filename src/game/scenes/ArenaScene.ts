@@ -41,6 +41,7 @@ import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { GameplayPointerLock } from '../input/GameplayPointerLock';
 import { DEFAULT_AIM_SETTINGS, normalizeAimSettings, type AimSettings } from '../config/interfaceSettings';
 import { drawReticle } from '../ui/ReticleRenderer';
+import { createPauseMenuView, type PauseMenuView } from '../ui/PauseMenuUi.ts';
 import { ABILITY_ACTIONS, compactBindingLabel, type AbilityAction, type AbilityBindings } from '../config/controls';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_BALANCE, normalizeRunProtocolId } from '../mods/modBalance.ts';
@@ -187,14 +188,6 @@ interface OperativeShieldVisual {
   crackleB: Phaser.GameObjects.Graphics;
 }
 
-interface PauseMenuElements {
-  backdrop: Phaser.GameObjects.Rectangle;
-  panel: Phaser.GameObjects.Rectangle;
-  title: Phaser.GameObjects.Text;
-  subtitle: Phaser.GameObjects.Text;
-  buttons: Phaser.GameObjects.Container[];
-}
-
 const ROUND_PHASE_LABELS: Record<RoundState, string> = {
   [RoundState.PrePlant]: 'PRE-PLANT',
   [RoundState.Planting]: 'PLANTING',
@@ -311,7 +304,7 @@ export class ArenaScene extends Phaser.Scene {
   private lastDefuserSpawnAt = -99_999;
   private turretTelemetrySequence = 0;
 
-  private pauseMenu: PauseMenuElements | null = null;
+  private pauseMenu: PauseMenuView | null = null;
   private equippedModsViewer: Phaser.GameObjects.Container | null = null;
   private modAcquisitionPresenter: ModAcquisitionPresenter | null = null;
   private legendaryRevealPhysicsWasPaused = false;
@@ -5017,83 +5010,38 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private layoutPauseMenu(width: number, height: number): void {
-    if (!this.pauseMenu) return;
-    const panelWidth = Math.min(600, width - 40);
-    const panelHeight = Math.min(620, height - 32);
-    const panelTop = (height - panelHeight) / 2;
-    const buttonGap = Math.min(50, Math.max(40, (panelHeight - 220) / Math.max(1, this.pauseMenu.buttons.length - 1)));
-    const buttonStartY = panelTop + 174;
-    this.pauseMenu.backdrop.setPosition(width * 0.5, height * 0.5).setDisplaySize(width, height);
-    this.pauseMenu.panel.setPosition(width * 0.5, height * 0.5).setDisplaySize(panelWidth, panelHeight);
-    this.pauseMenu.title.setPosition(width * 0.5, panelTop + 36).setWordWrapWidth(panelWidth - 64, true);
-    this.pauseMenu.subtitle.setPosition(width * 0.5, panelTop + 98).setWordWrapWidth(panelWidth - 64, true);
-    this.pauseMenu.buttons.forEach((button, index) => button.setPosition(width * 0.5, buttonStartY + index * buttonGap));
+    this.pauseMenu?.resize(width, height);
   }
 
   private showPauseMenu(): void {
     this.hidePauseMenu();
     this.setMenuCursorMode();
 
-    const { width, height } = this.scale;
-    const backdrop = this.add.rectangle(width * 0.5, height * 0.5, width, height, 0x03060c, 0.72)
-      .setScrollFactor(0)
-      .setDepth(1185);
-    const panel = this.add.rectangle(width * 0.5, height * 0.5, 560, 590, 0x0c1320, 0.96)
-      .setStrokeStyle(2, 0x53dfff, 0.9)
-      .setScrollFactor(0)
-      .setDepth(1190);
-
-    const title = this.add.text(width * 0.5, 0, 'PAUSED', {
-      fontFamily: 'Orbitron, sans-serif',
-      fontSize: '44px',
-      color: '#70f7ff'
-    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1192);
-
-    const subtitle = this.add.text(
-      width * 0.5,
-      0,
-      `${this.bossEncounter ? `Boss Gate ${this.bossRound}` : `Round ${this.roundManager.round}`} | Seed ${this.layout.seed} | Layout ${this.layout.template}`,
-      {
-        fontFamily: 'Rajdhani, sans-serif',
-        fontSize: '23px',
-        color: '#e1f8ff',
-        align: 'center',
-        lineSpacing: 3
-      }
-    ).setOrigin(0.5, 0).setScrollFactor(0).setDepth(1192);
-
-    const buttons = [
-      createButton(this, width * 0.5, height * 0.5 - 68, 'Resume', () => this.resumeGameplay(), 280),
-      createButton(this, width * 0.5, height * 0.5 - 16, 'Equipped Mod Cards', () => this.showEquippedModsViewer(), 280),
-      createButton(this, width * 0.5, height * 0.5 + 36, 'Mod Collection (Next Run)', () => {
+    this.pauseMenu = createPauseMenuView(this, {
+      encounter: this.bossEncounter ? `Boss Gate ${this.bossRound}` : `Round ${this.roundManager.round}`,
+      seed: this.layout.seed,
+      layout: this.layout.template
+    }, [
+      { label: 'Resume', onClick: () => this.resumeGameplay(), tone: 'primary' },
+      { label: 'Equipped Mod Cards', onClick: () => this.showEquippedModsViewer() },
+      { label: 'Mod Collection (Next Run)', onClick: () => {
         this.hidePauseMenu();
         this.scene.pause();
         this.scene.launch(SceneKeys.Mods, { returnScene: SceneKeys.Arena, resumePausedScene: true });
-      }, 280),
-      createButton(this, width * 0.5, height * 0.5 + 88, 'Restart From Round 1', () => this.restartFromRoundOne(), 280),
-      createButton(this, width * 0.5, height * 0.5 + 140, 'Options', () => {
+      } },
+      { label: 'Restart From Round 1', onClick: () => this.restartFromRoundOne(), tone: 'warning' },
+      { label: 'Options', onClick: () => {
         this.hidePauseMenu();
         this.scene.launch(SceneKeys.Options, { returnScene: SceneKeys.Arena, resumeGameplay: true });
         this.scene.pause();
-      }, 280),
-      createButton(this, width * 0.5, height * 0.5 + 192, 'Store', () => {
+      } },
+      { label: 'Store', onClick: () => {
         this.hidePauseMenu();
         this.scene.pause();
         this.scene.launch(SceneKeys.Upgrades, { returnScene: SceneKeys.Arena, resumePausedScene: true });
-      }, 280),
-      createButton(this, width * 0.5, height * 0.5 + 244, 'Quit To Main Menu', () => this.quitToMenu(), 280)
-    ];
-    buttons.forEach((btn) => {
-      btn.setScrollFactor(0).setDepth(1195);
-      for (const child of btn.list) {
-        if ('setScrollFactor' in child && typeof child.setScrollFactor === 'function') {
-          child.setScrollFactor(0);
-        }
-      }
-    });
-
-    this.pauseMenu = { backdrop, panel, title, subtitle, buttons };
-    this.layoutPauseMenu(width, height);
+      }, tone: 'utility' },
+      { label: 'Quit To Main Menu', onClick: () => this.quitToMenu(), tone: 'warning' }
+    ]);
   }
 
   private showEquippedModsViewer(): void {
@@ -5139,11 +5087,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private hidePauseMenu(): void {
     if (!this.pauseMenu) return;
-    this.pauseMenu.backdrop.destroy();
-    this.pauseMenu.panel.destroy();
-    this.pauseMenu.title.destroy();
-    this.pauseMenu.subtitle.destroy();
-    this.pauseMenu.buttons.forEach((btn) => btn.destroy());
+    this.pauseMenu.destroy();
     this.pauseMenu = null;
   }
 
