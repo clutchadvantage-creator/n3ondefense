@@ -59,6 +59,7 @@ import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorde
 import { ReusableObjectPool } from '../performance/ReusableObjectPool.ts';
 import { FramePerformanceMonitor } from '../performance/FramePerformanceMonitor.ts';
 import { shouldReplaceTurretTarget } from '../performance/Targeting.ts';
+import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -221,6 +222,7 @@ export class ArenaScene extends Phaser.Scene {
   private readonly pendingSplitProjectiles: Projectile[] = [];
   private projectilePool!: ReusableObjectPool<Projectile, ProjectileSpawn>;
   private fxCirclePool!: ReusableObjectPool<Phaser.GameObjects.Arc, FxCircleSpawn>;
+  private boostVisual!: BoostVisualSystem;
   private readonly hazardDamageTargets: HazardDamageTarget[] = [];
   private homingMissiles: HomingMissile[] = [];
   private pickups: Pickup[] = [];
@@ -515,6 +517,15 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.modRuntime = new ModRuntime(SaveSystem.getModCollection(), session?.equippedMods);
     this.createCombatPools();
+    this.boostVisual = new BoostVisualSystem(
+      this,
+      this.particlesEnabled,
+      {
+        obtain: (state) => this.obtainFxCircle(state),
+        release: (circle) => { this.retireFxCircle(circle); }
+      },
+      (sampleTime) => SaveSystem.getCosmeticColor('dashTrail', sampleTime)
+    );
     if (session) {
       this.roundManager = new RoundManager(session.baseSeed, session.objectiveMode, session.round);
       this.registry.set('arena-session', session);
@@ -1331,21 +1342,11 @@ export class ArenaScene extends Phaser.Scene {
         } else {
           this.audio.playSfx('boost');
         }
-        for (let i = 0; i < 9; i += 1) {
-          const c = SaveSystem.getCosmeticColor('dashTrail', now + i * 95);
-          const p = this.add.circle(this.player.x, this.player.y, Phaser.Math.Between(3, 7), c, 0.8).setDepth(3);
-          this.tweens.add({
-            targets: p,
-            x: this.player.x - Math.cos(angle) * (18 + i * 7),
-            y: this.player.y - Math.sin(angle) * (18 + i * 7),
-            alpha: 0,
-            scale: 0.35,
-            duration: 210 + i * 16,
-            onComplete: () => p.destroy()
-          });
-        }
+        this.boostVisual.start(this.player, angle, now, this.player.dashUntil);
       }
     }
+
+    this.boostVisual.update(this.player, now);
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.one)) this.selectedAbility = 'fence';
     if (Phaser.Input.Keyboard.JustDown(this.keys.two)) this.selectedAbility = 'turret';
@@ -4008,6 +4009,7 @@ export class ArenaScene extends Phaser.Scene {
       this.detonatingSiteIds.delete(site.id);
       this.bombSites.refreshVisuals(this.layout.theme);
       if (this.bombSites.sites.every((candidate) => candidate.state === BombSiteState.Destroyed)) {
+        this.boostVisual.reset();
         this.state.set(RoundState.Victory);
       } else {
         this.state.set(this.bombSites.activeBombCount() > 0 ? RoundState.Defense : RoundState.PrePlant);
@@ -4331,6 +4333,7 @@ export class ArenaScene extends Phaser.Scene {
   private completeBossFight(): void {
     if (this.bossVictoryHandled || !this.bossEncounter || !this.pendingRoundPayload) return;
     this.bossVictoryHandled = true;
+    this.boostVisual.reset();
     this.state.set(RoundState.Victory);
     this.pointerDown = false;
     this.laserSecurity?.silence();
@@ -4387,6 +4390,7 @@ export class ArenaScene extends Phaser.Scene {
       this.createDeathExplosion(this.player.x, this.player.y, SaveSystem.getCosmeticColor('playerColor', this.time.now), true);
       this.player.setVisible(false);
     }
+    this.boostVisual.reset();
     this.state.set(RoundState.Defeat);
     this.audio.stopDisarmLoop();
     this.laserSecurity?.silence();
@@ -5260,6 +5264,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private cleanupRoundObjects(): void {
+    this.boostVisual?.reset();
     this.mineSalvoInput.cancel();
     this.pendingMineSalvo = false;
     this.pressedAbilityActions.clear();
@@ -5345,6 +5350,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bossEncounter?.destroy();
     this.bossEncounter = null;
     this.destroyShieldOrb();
+    this.boostVisual?.destroy();
     this.projectilePool?.destroy((projectile) => projectile.sprite.destroy());
     this.fxCirclePool?.destroy((circle) => circle.destroy());
     this.pendingSplitProjectiles.length = 0;
