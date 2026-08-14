@@ -53,6 +53,18 @@ test('operative mines render as reusable spiked devices with animated arming sta
   assert.doesNotMatch(source, /repeat:\s*-1/);
 });
 
+test('star death mines reuse the operative mine model with a hostile pink-cyan theme', () => {
+  const mineSource = readFileSync(new URL('../src/game/abilities/Mine.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(mineSource, /STAR_DEATH_MINE_VISUAL_THEME:[\s\S]*?secondaryColor: 0x39eeff/);
+  assert.match(mineSource, /armedShellStrokeColor: 0xff4ed3/);
+  assert.match(mineSource, /armedInnerStrokeColor: 0x39eeff/);
+  assert.match(arena, /const hostileMine = new Mine\([\s\S]*?COLORS\.pink,[\s\S]*?62,[\s\S]*?170,[\s\S]*?STAR_DEATH_MINE_VISUAL_THEME/);
+  assert.match(arena, /hostileMine\.beginDetonation\(this\.time\.now, 1000\)/);
+  assert.match(arena, /this\.deathMines\.push\(\{ mine: hostileMine \}\)/);
+  assert.match(arena, /const mine = deathMine\.mine;[\s\S]*?mine\.update\(now\)/);
+});
+
 test('mine salvo placement is all-or-nothing, geometry safe, and preserves capacity and per-mine energy', () => {
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   assert.match(arena, /availableMines = Math\.max\(0, cfg\.maxActive - this\.mines\.length\)/);

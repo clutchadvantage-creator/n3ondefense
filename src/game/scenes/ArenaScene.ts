@@ -7,7 +7,7 @@ import { OBJECTIVE_CONFIG } from '../config/gameplay';
 import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, TANK_HOMING_MISSILE_BALANCE, WEAPON_BALANCE, getConcurrentSpawnPressure, getDefuseAssigneeCount, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
-import { Mine } from '../abilities/Mine';
+import { Mine, STAR_DEATH_MINE_VISUAL_THEME } from '../abilities/Mine';
 import { getMineRackEnergyCost, getMineRackPatternOffsets } from '../abilities/MineRackSalvo';
 import { Turret } from '../abilities/Turret';
 import { Fence } from '../abilities/Fence';
@@ -129,10 +129,7 @@ interface PickupMotion {
 }
 
 interface DeathMine {
-  sprite: Phaser.GameObjects.Arc;
-  detonateAt: number;
-  damage: number;
-  radius: number;
+  mine: Mine;
 }
 
 interface NavState {
@@ -2898,9 +2895,11 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateDeathMines(now: number): void {
     let writeIndex = 0;
-    for (const mine of this.deathMines) {
-      if (now < mine.detonateAt) {
-        this.deathMines[writeIndex] = mine;
+    for (const deathMine of this.deathMines) {
+      const mine = deathMine.mine;
+      mine.update(now);
+      if (!mine.readyToDetonate(now)) {
+        this.deathMines[writeIndex] = deathMine;
         writeIndex += 1;
         continue;
       }
@@ -2908,8 +2907,8 @@ export class ArenaScene extends Phaser.Scene {
       this.gasHazard?.igniteFromMine(mine.sprite.x, mine.sprite.y, mine.radius);
       this.audio.playSfx('mine');
       this.fluxCores?.damageArea(mine.sprite.x, mine.sprite.y, mine.radius, mine.damage, 'mine');
-      const blast = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 16, color: COLORS.cyan, alpha: 0.28, depth: 8 });
-      const ring = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 14, color: 0xffffff, alpha: 0.2, depth: 8 });
+      const blast = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 16, color: COLORS.pink, alpha: 0.28, depth: 8 });
+      const ring = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 14, color: COLORS.cyan, alpha: 0.24, depth: 8 });
       this.tweens.add({ targets: blast, radius: mine.radius, alpha: 0, duration: 360, onComplete: () => this.retireFxCircle(blast) });
       this.tweens.add({ targets: ring, radius: mine.radius * 0.82, alpha: 0, duration: 320, onComplete: () => this.retireFxCircle(ring) });
 
@@ -2944,7 +2943,7 @@ export class ArenaScene extends Phaser.Scene {
         }
       }
 
-      mine.sprite.destroy();
+      mine.destroy();
     }
     this.deathMines.length = writeIndex;
   }
@@ -3007,10 +3006,10 @@ export class ArenaScene extends Phaser.Scene {
       const motion = this.pickupMotion.get(pickup.sprite);
       if (!motion) continue;
 
-      const breezeX = Math.sin(now * 0.00072 + motion.phase) * 1.8;
-      const breezeY = Math.cos(now * 0.00061 + motion.phase * 1.37) * 1.55;
-      motion.velocityX = Phaser.Math.Clamp((motion.velocityX + breezeX * dt) * Math.pow(0.992, dt * 60), -13, 13);
-      motion.velocityY = Phaser.Math.Clamp((motion.velocityY + breezeY * dt) * Math.pow(0.992, dt * 60), -13, 13);
+      const breezeX = Math.sin(now * 0.00072 + motion.phase) * 2.4;
+      const breezeY = Math.cos(now * 0.00061 + motion.phase * 1.37) * 2.1;
+      motion.velocityX = Phaser.Math.Clamp((motion.velocityX + breezeX * dt) * Math.pow(0.994, dt * 60), -16, 16);
+      motion.velocityY = Phaser.Math.Clamp((motion.velocityY + breezeY * dt) * Math.pow(0.994, dt * 60), -16, 16);
 
       const previousX = pickup.sprite.x;
       const previousY = pickup.sprite.y;
@@ -3392,24 +3391,20 @@ export class ArenaScene extends Phaser.Scene {
     this.createDeathExplosion(enemy.x, enemy.y, enemy.stats.color);
 
     if (enemy.stats.type === 'star') {
-      const mineSprite = this.add.circle(enemy.x, enemy.y, 14, COLORS.cyan, 0.78).setDepth(8);
-      mineSprite.setStrokeStyle(3, 0xffffff, 0.95);
-      const prePulse = this.add.circle(enemy.x, enemy.y, 20, COLORS.cyan, 0.16).setDepth(7);
-      this.tweens.add({
-        targets: mineSprite,
-        alpha: { from: 0.3, to: 1 },
-        duration: 160,
-        yoyo: true,
-        repeat: 5
-      });
-      this.tweens.add({ targets: prePulse, radius: 30, alpha: 0, duration: 950, onComplete: () => prePulse.destroy() });
-
-      this.deathMines.push({
-        sprite: mineSprite,
-        detonateAt: this.time.now + 1000,
-        damage: 62,
-        radius: 170
-      });
+      const hostileMine = new Mine(
+        this,
+        enemy.x,
+        enemy.y,
+        COLORS.pink,
+        0,
+        62,
+        170,
+        undefined,
+        STAR_DEATH_MINE_VISUAL_THEME
+      );
+      hostileMine.sprite.setDepth(8);
+      hostileMine.beginDetonation(this.time.now, 1000);
+      this.deathMines.push({ mine: hostileMine });
     }
 
     enemy.destroy();
@@ -3570,7 +3565,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const motionSeed = Math.abs(x * 0.037 + y * 0.053 + type.length * 1.731);
     const driftAngle = motionSeed % (Math.PI * 2);
-    const driftSpeed = 5.5 + motionSeed % 4.5;
+    const driftSpeed = 8.5 + motionSeed % 4.5;
     this.pickupMotion.set(container, {
       velocityX: Math.cos(driftAngle) * driftSpeed,
       velocityY: Math.sin(driftAngle) * driftSpeed,
@@ -3712,7 +3707,7 @@ export class ArenaScene extends Phaser.Scene {
     visual.scanRing.setScale(0.88 + pulse * 0.2).setAlpha(0.36 + pulse * 0.48);
     visual.glow.setScale(0.9 + pulse * 0.22).setAlpha(0.08 + pulse * 0.15);
     // Counter-rotate the reward icon so every pickup remains recognizable while its shell floats.
-    visual.iconRig.setRotation(-container.rotation).setScale(0.96 + pulse * 0.07).setY(Math.sin(now * 0.003 + visual.phase) * 1.2);
+    visual.iconRig.setRotation(-container.rotation).setScale(0.96 + pulse * 0.07).setY(Math.sin(now * 0.003 + visual.phase) * 1.8);
     const bracketOffset = 16 + pulse * 2;
     visual.leftBracket.setX(-bracketOffset);
     visual.rightBracket.setX(bracketOffset);
@@ -5039,7 +5034,7 @@ export class ArenaScene extends Phaser.Scene {
     for (const f of this.fences) f.destroy();
     for (const t of this.turrets) t.destroy();
     for (const m of this.mines) m.destroy();
-    for (const m of this.deathMines) m.sprite.destroy();
+    for (const m of this.deathMines) m.mine.destroy();
     this.bombSites?.destroy();
     this.destroyShieldOrb();
 

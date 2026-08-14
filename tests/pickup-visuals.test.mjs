@@ -32,6 +32,9 @@ test('Pickups drift, respect arena geometry, and softly separate without physics
   assert.match(arena, /private readonly pickupMotion = new WeakMap/);
   assert.match(arena, /this\.updateFloatingPickupMotion\(now, dt\)/);
   assert.match(arena, /this\.separateFloatingPickups\(\)/);
+  assert.match(arena, /const driftSpeed = 8\.5 \+ motionSeed % 4\.5/);
+  assert.match(arena, /Math\.pow\(0\.994, dt \* 60\), -16, 16/);
+  assert.match(arena, /setY\(Math\.sin\(now \* 0\.003 \+ visual\.phase\) \* 1\.8\)/);
   assert.match(arena, /motion\.velocityX = Phaser\.Math\.Clamp/);
   assert.match(arena, /for \(const wall of this\.wallRects\)/);
   assert.match(arena, /const separationDistance = 35/);
