@@ -1,0 +1,54 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const scene = readFileSync(new URL('../src/game/scenes/LocalProfileScene.ts', import.meta.url), 'utf8');
+const ui = readFileSync(new URL('../src/ui/local-profiles/LocalProfilesUi.ts', import.meta.url), 'utf8');
+const card = readFileSync(new URL('../src/ui/local-profiles/ProfileCard.ts', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../src/ui/local-profiles/local-profiles.css', import.meta.url), 'utf8');
+
+test('Local Profiles uses the shared neon command-console visual language', () => {
+  assert.match(ui, /local-profiles-shell-chrome/);
+  assert.match(ui, /N3ON IDENTITY \/\/ LOCAL VAULT/);
+  assert.match(ui, /PROFILE LINK \/\/ SYNCED/);
+  assert.match(ui, /OPERATIVE ARCHIVE \/\/ LOCAL IDENTITY CONTROL/);
+  assert.match(ui, /PROFILE ARCHIVE \/\/ YOUR PROFILES/);
+  assert.match(ui, /SELECTED OPERATIVE \/\/ PROFILE LINK/);
+  assert.match(css, /repeating-linear-gradient/);
+  assert.match(css, /clip-path: polygon/);
+  assert.match(css, /--profile-cyan/);
+  assert.match(css, /--profile-pink/);
+  assert.match(css, /profile-link-pulse/);
+  assert.match(card, /dataset\.profileStatus/);
+});
+
+test('Local Profiles visual refactor preserves all profile management routes', () => {
+  for (const callback of [
+    'onSelect',
+    'onContinue',
+    'onCreate',
+    'onRename',
+    'onExport',
+    'onImport',
+    'onDelete',
+    'onLocalSaveInfo',
+    'onRestoreBackup'
+  ]) {
+    assert.match(ui, new RegExp(`this\\.callbacks\\.${callback}`));
+  }
+  assert.match(scene, /SaveSystem\.selectProfile/);
+  assert.match(scene, /SaveSystem\.createProfile/);
+  assert.match(scene, /SaveSystem\.renameProfile/);
+  assert.match(scene, /SaveSystem\.exportProfile/);
+  assert.match(scene, /SaveSystem\.importProfile/);
+  assert.match(scene, /SaveSystem\.deleteProfile/);
+  assert.match(scene, /SaveSystem\.restoreBackup/);
+});
+
+test('Local Profiles keeps responsive and reduced-motion safeguards', () => {
+  assert.match(css, /@media \(max-width: 900px\)/);
+  assert.match(css, /@media \(max-width: 640px\)/);
+  assert.match(css, /@media \(max-height: 760px\) and \(min-width: 901px\)/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(css, /overflow: auto/);
+});

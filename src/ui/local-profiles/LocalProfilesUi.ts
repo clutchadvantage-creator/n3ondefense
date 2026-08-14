@@ -89,16 +89,41 @@ export class LocalProfilesUi implements LocalProfilesUiHandle {
     const shell = document.createElement('main');
     shell.className = 'local-profiles-shell';
 
+    const shellChrome = document.createElement('div');
+    shellChrome.className = 'local-profiles-shell-chrome';
+    shellChrome.setAttribute('aria-hidden', 'true');
+    shellChrome.append(
+      this.createChromeRail('chrome-rail top'),
+      this.createChromeRail('chrome-rail left'),
+      this.createChromeRail('chrome-rail right')
+    );
+
     const header = document.createElement('header');
     header.className = 'local-profiles-header';
 
+    const statusLine = document.createElement('div');
+    statusLine.className = 'local-profiles-status-line';
+    const vaultStatus = document.createElement('span');
+    vaultStatus.textContent = 'N3ON IDENTITY // LOCAL VAULT';
+    const linkStatus = document.createElement('span');
+    linkStatus.className = 'linked';
+    linkStatus.textContent = 'PROFILE LINK // SYNCED';
+    statusLine.append(vaultStatus, linkStatus);
+
     const title = document.createElement('h1');
     title.textContent = 'LOCAL PROFILES';
+    title.dataset.title = title.textContent;
+
+    const kicker = document.createElement('p');
+    kicker.className = 'local-profiles-kicker';
+    kicker.textContent = 'OPERATIVE ARCHIVE // LOCAL IDENTITY CONTROL';
 
     const description = document.createElement('p');
+    description.className = 'local-profiles-description';
     description.textContent = 'Progress is saved only in this browser. Export a backup before clearing browser data or changing devices.';
 
-    header.append(title, description);
+    header.append(statusLine, title, kicker, description);
+    shell.append(shellChrome);
 
     if (this.state.profiles.length === 0) {
       shell.append(header, this.renderEmptyState());
@@ -113,7 +138,7 @@ export class LocalProfilesUi implements LocalProfilesUiHandle {
     footer.className = 'local-save-footer';
 
     const badge = document.createElement('span');
-    badge.textContent = 'LOCAL BROWSER SAVE';
+    badge.textContent = 'N3ON IDENTITY // LOCAL BROWSER SAVE';
 
     const status = this.state.storageMessage
       ? document.createElement('span')
@@ -176,7 +201,7 @@ export class LocalProfilesUi implements LocalProfilesUiHandle {
     heading.className = 'panel-heading';
 
     const title = document.createElement('h2');
-    title.textContent = 'YOUR PROFILES';
+    title.textContent = 'PROFILE ARCHIVE // YOUR PROFILES';
 
     const count = document.createElement('span');
     count.textContent = `${this.state.profiles.length} LOCAL PROFILE${this.state.profiles.length === 1 ? '' : 'S'}`;
@@ -229,7 +254,7 @@ export class LocalProfilesUi implements LocalProfilesUiHandle {
     }
 
     const heading = document.createElement('h2');
-    heading.textContent = 'SELECTED PROFILE';
+    heading.textContent = 'SELECTED OPERATIVE // PROFILE LINK';
 
     const top = document.createElement('div');
     top.className = 'selected-profile-top';
@@ -310,5 +335,11 @@ export class LocalProfilesUi implements LocalProfilesUiHandle {
     description.textContent = value;
     wrapper.append(term, description);
     return wrapper;
+  }
+
+  private createChromeRail(className: string): HTMLSpanElement {
+    const rail = document.createElement('span');
+    rail.className = className;
+    return rail;
   }
 }

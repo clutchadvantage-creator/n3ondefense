@@ -28,6 +28,7 @@ export const createProfileCard = ({ profile, selected, active, onSelect }: Profi
   card.type = 'button';
   card.className = selected ? 'profile-card selected' : 'profile-card';
   card.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  card.dataset.profileStatus = active ? 'ACTIVE' : selected ? 'SELECTED' : 'STANDBY';
   card.addEventListener('click', () => onSelect(profile.id));
 
   const top = document.createElement('div');
