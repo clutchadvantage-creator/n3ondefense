@@ -103,6 +103,20 @@ test('Main Menu uses one deployment stack and removes profile, save, and control
   assert.match(menu, /OPERATIVE INTEL/);
 });
 
+test('Main Menu second-pass presentation uses responsive command modules and a layered weekly cyber deck', () => {
+  const menu = readFileSync(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8');
+  assert.match(menu, /createCommandButton\(/);
+  assert.match(menu, /createProtocolChassis\(/);
+  assert.match(menu, /Phaser\.Math\.Clamp\(width \* \(narrow \? 0\.42 : 0\.23\)/);
+  assert.match(menu, /WEEKLY OPERATIONS \/\/ MISSION DECK/);
+  assert.match(menu, /const framePoints = \[/);
+  assert.match(menu, /const hexPoints: number\[\] = \[\]/);
+  assert.match(menu, /for \(let segment = 1; segment < 8; segment \+= 1\)/);
+  assert.match(menu, /OPERATIVE INTEL \/\/ LIVE FEED/);
+  assert.match(menu, /this\.scale\.on\('resize', this\.handleResize, this\)/);
+  assert.match(menu, /this\.scale\.off\('resize', this\.handleResize, this\)/);
+});
+
 test('Options Gameplay owns the readable core and active-profile control reference', () => {
   const options = readFileSync(new URL('../src/game/scenes/OptionsScene.ts', import.meta.url), 'utf8');
   assert.match(options, /CONTROLS \/ GAMEPLAY REFERENCE/);

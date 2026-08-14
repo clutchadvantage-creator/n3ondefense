@@ -43,6 +43,7 @@ const MAIN_MENU_TIPS = [
 
 export class MainMenuScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
+  private readonly handleResize = (): void => { this.scene.restart(); };
 
   constructor() {
     super(SceneKeys.MainMenu);
@@ -68,12 +69,12 @@ export class MainMenuScene extends Phaser.Scene {
     const protocolDefinition = RUN_PROTOCOLS[protocol];
     const equippedMods = profile ? new ModRuntime(SaveSystem.getModCollection()).snapshot() : [];
     const narrow = width < 1120;
-    const short = height < 760;
-    const tiny = height < 650;
+    const short = height < 900;
+    const tiny = height < 680;
     const centerX = narrow ? width * 0.34 : width * 0.5;
 
-    const onlineStatus = this.add.text(centerX, tiny ? 82 : short ? 96 : 122, profile ? 'CHECKING ONLINE IDENTITY...' : 'CREATE A LOCAL PROFILE TO START', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${tiny ? 12 : short ? 14 : 17}px`, color: '#9fc8d8', fontStyle: 'bold', align: 'center'
+    const onlineStatus = this.add.text(centerX, tiny ? 75 : short ? 108 : 148, profile ? 'CHECKING ONLINE IDENTITY...' : 'CREATE A LOCAL PROFILE TO START', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${tiny ? 13 : short ? 16 : 19}px`, color: '#9fc8d8', fontStyle: 'bold', align: 'center', letterSpacing: 1
     }).setOrigin(0.5).setWordWrapWidth(Math.max(240, width * (narrow ? 0.55 : 0.42)), true).setMaxLines(2);
     if (profile) {
       void OnlineRunManager.initializeIdentity(profile.id).then((status) => {
@@ -88,21 +89,21 @@ export class MainMenuScene extends Phaser.Scene {
       });
     }
 
-    const briefingWidth = Phaser.Math.Clamp(width * (narrow ? 0.34 : 0.215), narrow ? 230 : 330, 410);
+    const briefingWidth = Phaser.Math.Clamp(width * (narrow ? 0.36 : 0.24), narrow ? (width < 750 ? 240 : 280) : 390, narrow ? 410 : 470);
     const briefingX = width - Math.max(12, width * 0.018) - briefingWidth / 2;
-    const briefingTop = tiny ? 88 : short ? 114 : 142;
-    const briefingHeight = Math.max(270, Math.min(short ? height - briefingTop - 14 : 540, height - briefingTop - 22));
+    const briefingTop = tiny ? 84 : short ? 124 : 172;
+    const briefingHeight = Math.max(300, Math.min(short ? 590 : 660, height - briefingTop - 18));
     this.createOperativeBriefing(briefingX, briefingTop, briefingWidth, briefingHeight, profile?.name ?? null);
 
     const unlockedProtocols = profile ? getUnlockedProtocolIds(SaveSystem.getHighestRound()) : ['normal'] as const;
-    const protocolLabelY = tiny ? 106 : short ? 126 : 154;
-    const protocolY = tiny ? 132 : short ? 157 : 188;
-    const protocolArrowWidth = tiny ? 38 : 44;
-    const protocolGap = 8;
-    const protocolWidth = Phaser.Math.Clamp(width * (narrow ? 0.34 : 0.17), 190, 320);
+    const protocolLabelY = tiny ? 100 : short ? 142 : 194;
+    const protocolY = tiny ? 128 : short ? 177 : 235;
+    const protocolArrowWidth = tiny ? 42 : short ? 50 : 58;
+    const protocolGap = tiny ? 7 : 10;
+    const protocolWidth = Phaser.Math.Clamp(width * (narrow ? 0.35 : 0.21), narrow ? 220 : 340, narrow ? 390 : 410);
     const protocolArrowOffset = protocolWidth / 2 + protocolGap + protocolArrowWidth / 2;
     this.add.text(centerX, protocolLabelY, 'DEPLOYMENT PROTOCOL', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${tiny ? 10 : short ? 12 : 15}px`, color: '#78ddeb', letterSpacing: 1
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${tiny ? 11 : short ? 14 : 17}px`, color: '#78ddeb', letterSpacing: 2
     }).setOrigin(0.5);
 
     const selectProtocol = (direction: 1 | -1): boolean => {
@@ -123,12 +124,11 @@ export class MainMenuScene extends Phaser.Scene {
       return result.ok;
     };
 
-    const protocolHeight = tiny ? 40 : short ? 46 : 52;
-    const protocolButton = createButton(this, centerX, protocolY, `${protocolDefinition.label}\nSTART ROUND ${protocolDefinition.startingRound}`, () => selectProtocol(1), protocolWidth, 'menu', {
-      height: protocolHeight, fontSize: tiny ? 12 : short ? 14 : 16
-    });
-    const previousProtocolButton = createButton(this, centerX - protocolArrowOffset, protocolY, '<', () => selectProtocol(-1), protocolArrowWidth, 'menu', { height: protocolHeight });
-    const nextProtocolButton = createButton(this, centerX + protocolArrowOffset, protocolY, '>', () => selectProtocol(1), protocolArrowWidth, 'menu', { height: protocolHeight });
+    const protocolHeight = tiny ? 42 : short ? 54 : 68;
+    this.createProtocolChassis(centerX, protocolY, protocolWidth + protocolArrowWidth * 2 + protocolGap * 4, protocolHeight + (tiny ? 12 : 18));
+    const protocolButton = this.createCommandButton(centerX, protocolY, `${protocolDefinition.label}\nSTART ROUND ${protocolDefinition.startingRound}`, () => selectProtocol(1), protocolWidth, protocolHeight, 'protocol', 'menu', tiny ? 13 : short ? 16 : 19);
+    const previousProtocolButton = this.createCommandButton(centerX - protocolArrowOffset, protocolY, '<', () => selectProtocol(-1), protocolArrowWidth, protocolHeight, 'selector', 'menu', tiny ? 16 : 21);
+    const nextProtocolButton = this.createCommandButton(centerX + protocolArrowOffset, protocolY, '>', () => selectProtocol(1), protocolArrowWidth, protocolHeight, 'selector', 'menu', tiny ? 16 : 21);
     if (profile && unlockedProtocols.length === 1) {
       protocolButton.setAlpha(0.82);
       previousProtocolButton.setAlpha(0.82);
@@ -140,19 +140,21 @@ export class MainMenuScene extends Phaser.Scene {
     const setupSummary = setupSelection.modFocus || setupSelection.contract
       ? `RUN CONFIG // SIGNAL: ${setupSelection.modFocus ? MOD_FOCUS_LABELS[setupSelection.modFocus].replace(' Signal', '').toUpperCase() : 'NONE'} // CONTRACT: ${setupSelection.contract ? RUN_CONTRACTS[setupSelection.contract].label.toUpperCase() : 'NONE'} // ${setupCost.toLocaleString()}C`
       : 'LOADOUT READY // STANDARD RUN CONFIGURATION // FREE';
-    this.add.text(centerX, tiny ? 162 : short ? 188 : 225, setupSummary, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${tiny ? 9 : short ? 11 : 13}px`, color: setupCost > 0 ? '#ffd287' : '#78cbd7', align: 'center'
-    }).setOrigin(0.5).setWordWrapWidth(protocolWidth + 100, true).setMaxLines(2);
+    const readoutY = tiny ? 164 : short ? 218 : 290;
+    const readoutWidth = protocolWidth + (tiny ? 70 : 130);
+    this.add.rectangle(centerX, readoutY, readoutWidth, tiny ? 23 : 30, 0x06131f, 0.9)
+      .setStrokeStyle(1, setupCost > 0 ? 0xffbf63 : 0x3bb9c9, 0.48);
+    this.add.rectangle(centerX - readoutWidth / 2 + 6, readoutY, 3, tiny ? 13 : 18, setupCost > 0 ? 0xffc56d : 0x6fffc1, 0.9);
+    this.add.text(centerX, readoutY, setupSummary, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${tiny ? 10 : short ? 13 : 15}px`, color: setupCost > 0 ? '#ffd287' : '#9ae8f1', align: 'center', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0.5).setWordWrapWidth(readoutWidth - 24, true).setMaxLines(1);
 
-    const menuStartY = tiny ? 195 : short ? 222 : 274;
-    const menuRowGap = tiny ? 36 : short ? 43 : 51;
-    const singleButtonWidth = Phaser.Math.Clamp(width * (narrow ? 0.38 : 0.19), 250, 370);
-    const menuButtonHeight = tiny ? 31 : short ? 37 : 43;
-    const primaryFrame = this.add.rectangle(centerX, menuStartY, singleButtonWidth + 12, menuButtonHeight + 10, 0x1be8ff, 0.055)
-      .setStrokeStyle(1, 0x69f5ff, 0.45);
-    this.tweens.add({ targets: primaryFrame, alpha: { from: 0.42, to: 0.9 }, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const menuStartY = tiny ? 202 : short ? 268 : 356;
+    const menuRowGap = tiny ? 38 : short ? 49 : 62;
+    const singleButtonWidth = Phaser.Math.Clamp(width * (narrow ? 0.42 : 0.23), narrow && width < 750 ? 250 : 330, 450);
+    const menuButtonHeight = tiny ? 32 : short ? 41 : 52;
 
-    const startButton = createButton(this, centerX, menuStartY, 'DEPLOY ONLINE', () => {
+    const startButton = this.createCommandButton(centerX, menuStartY, 'DEPLOY ONLINE', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
@@ -196,9 +198,9 @@ export class MainMenuScene extends Phaser.Scene {
         });
       })();
       return true;
-    }, singleButtonWidth, 'runStart', { height: menuButtonHeight + 2, fontSize: tiny ? 14 : short ? 16 : 19 });
+    }, singleButtonWidth, menuButtonHeight + 2, 'primary', 'runStart', tiny ? 15 : short ? 18 : 21);
 
-    const localStartButton = createButton(this, centerX, menuStartY + menuRowGap, 'DEPLOY LOCAL', () => {
+    const localStartButton = this.createCommandButton(centerX, menuStartY + menuRowGap, 'DEPLOY LOCAL', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
@@ -229,27 +231,27 @@ export class MainMenuScene extends Phaser.Scene {
         message: 'Building explicitly local operation...'
       });
       return true;
-    }, singleButtonWidth, 'runStart', { height: menuButtonHeight, fontSize: tiny ? 13 : short ? 15 : 18 });
+    }, singleButtonWidth, menuButtonHeight, 'secondary', 'runStart', tiny ? 14 : short ? 17 : 20);
 
-    const navPresentation = { height: menuButtonHeight, fontSize: tiny ? 13 : short ? 15 : 17 };
-    createButton(this, centerX, menuStartY + menuRowGap * 2, 'OPERATOR GARAGE', () => this.scene.start(SceneKeys.Garage, { returnScene: SceneKeys.MainMenu }), singleButtonWidth, 'menu', navPresentation);
-    createButton(this, centerX, menuStartY + menuRowGap * 3, 'MOD COLLECTION', () => this.scene.start(SceneKeys.Mods, {
+    const navFontSize = tiny ? 14 : short ? 16 : 19;
+    this.createCommandButton(centerX, menuStartY + menuRowGap * 2, 'OPERATOR GARAGE', () => this.scene.start(SceneKeys.Garage, { returnScene: SceneKeys.MainMenu }), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
+    this.createCommandButton(centerX, menuStartY + menuRowGap * 3, 'MOD COLLECTION', () => this.scene.start(SceneKeys.Mods, {
       returnScene: SceneKeys.MainMenu,
       resumePausedScene: false
-    }), singleButtonWidth, 'menu', navPresentation);
-    createButton(this, centerX, menuStartY + menuRowGap * 4, 'STORE', () => this.scene.start(SceneKeys.Upgrades, {
+    }), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
+    this.createCommandButton(centerX, menuStartY + menuRowGap * 4, 'STORE', () => this.scene.start(SceneKeys.Upgrades, {
       returnScene: SceneKeys.MainMenu,
       resumePausedScene: false
-    }), singleButtonWidth, 'menu', navPresentation);
-    createButton(this, centerX, menuStartY + menuRowGap * 5, 'LEADERBOARDS', () => this.scene.start(SceneKeys.OnlineLeaderboards), singleButtonWidth, 'menu', navPresentation);
-    createButton(this, centerX, menuStartY + menuRowGap * 6, 'OPTIONS', () => this.scene.start(SceneKeys.Options, {
+    }), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
+    this.createCommandButton(centerX, menuStartY + menuRowGap * 5, 'LEADERBOARDS', () => this.scene.start(SceneKeys.OnlineLeaderboards), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
+    this.createCommandButton(centerX, menuStartY + menuRowGap * 6, 'OPTIONS', () => this.scene.start(SceneKeys.Options, {
       returnScene: SceneKeys.MainMenu,
       resumeGameplay: false
-    }), singleButtonWidth, 'menu', navPresentation);
+    }), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
 
     const lastMenuY = menuStartY + menuRowGap * 6;
-    const tipBottom = Math.min(height - 22, lastMenuY + (tiny ? 62 : short ? 92 : 122));
-    this.createTipRotator(centerX, Math.min(singleButtonWidth + 150, narrow ? width * 0.66 : 720), lastMenuY + (tiny ? 20 : 30), tipBottom);
+    const tipBottom = Math.min(height - 22, lastMenuY + (tiny ? 82 : short ? 124 : 154));
+    this.createTipRotator(centerX, Math.min(singleButtonWidth + (tiny ? 70 : 150), narrow ? width * 0.68 : 760), lastMenuY + (tiny ? 24 : short ? 38 : 50), tipBottom);
     const storageMessage = SaveSystem.getStorageMessage();
     if (storageMessage && tipBottom < height - 28) {
       this.add.text(centerX, Math.min(height - 12, tipBottom + 16), storageMessage, {
@@ -257,13 +259,93 @@ export class MainMenuScene extends Phaser.Scene {
         wordWrap: { width: singleButtonWidth + 100, useAdvancedWrap: true }
       }).setOrigin(0.5).setMaxLines(1);
     }
+    this.scale.off('resize', this.handleResize, this);
+    this.scale.on('resize', this.handleResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', this.handleResize, this));
+  }
+
+  private createCommandButton(
+    x: number,
+    y: number,
+    label: string,
+    onClick: () => unknown,
+    width: number,
+    height: number,
+    style: 'primary' | 'secondary' | 'navigation' | 'protocol' | 'selector',
+    sound: 'menu' | 'runStart' = 'menu',
+    fontSize = 18
+  ): Phaser.GameObjects.Container {
+    const accent = style === 'primary' || style === 'protocol' ? 0x62f4ff : style === 'secondary' ? 0xff68cf : 0x46c6dc;
+    const outerWidth = width + (style === 'primary' ? 16 : 10);
+    const outerHeight = height + (style === 'primary' ? 14 : 10);
+    const cut = Math.min(12, outerHeight * 0.24);
+    const points = [
+      -outerWidth / 2 + cut, -outerHeight / 2,
+      outerWidth / 2 - cut, -outerHeight / 2,
+      outerWidth / 2, -outerHeight / 2 + cut,
+      outerWidth / 2, outerHeight / 2 - cut,
+      outerWidth / 2 - cut, outerHeight / 2,
+      -outerWidth / 2 + cut, outerHeight / 2,
+      -outerWidth / 2, outerHeight / 2 - cut,
+      -outerWidth / 2, -outerHeight / 2 + cut
+    ];
+    const housing = this.add.container(x, y).setDepth(22);
+    const shadow = this.add.polygon(4, 5, points, 0x000000, 0.5);
+    const chassis = this.add.polygon(0, 0, points, style === 'primary' ? 0x0c2638 : 0x091521, 0.96)
+      .setStrokeStyle(style === 'primary' ? 2 : 1, accent, style === 'primary' ? 0.72 : 0.48);
+    const underlight = this.add.rectangle(0, outerHeight / 2 - 2, outerWidth - cut * 2, 3, accent, style === 'primary' ? 0.62 : 0.28);
+    housing.add([shadow, chassis, underlight]);
+    if (style === 'primary' || style === 'protocol') {
+      this.tweens.add({ targets: chassis, alpha: { from: 0.78, to: 1 }, duration: style === 'primary' ? 1100 : 1700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+
+    const button = createButton(this, x, y, label, onClick, width, sound, { height, fontSize, horizontalPadding: 34 }).setDepth(24);
+    const overlay = this.add.container(x, y).setDepth(25);
+    const topEdge = this.add.rectangle(0, -height / 2 + 2, width - 22, 2, 0xb7fbff, style === 'primary' ? 0.6 : 0.28);
+    const leftRail = this.add.rectangle(-width / 2 + 5, 0, 3, Math.max(10, height - 19), accent, 0.42);
+    const rightRail = this.add.rectangle(width / 2 - 5, 0, 2, Math.max(10, height - 23), accent, 0.24);
+    const led = this.add.circle(-width / 2 + 13, 0, style === 'selector' ? 2 : 2.5, accent, 0.9);
+    const sweep = this.add.rectangle(-width / 2 + 20, 0, 2, Math.max(8, height - 16), 0xffffff, style === 'primary' ? 0.2 : 0.08);
+    overlay.add([topEdge, leftRail, rightRail, led, sweep]);
+    this.tweens.add({ targets: led, alpha: { from: 0.25, to: 1 }, duration: 780, yoyo: true, repeat: -1 });
+    this.tweens.add({
+      targets: sweep,
+      x: width / 2 - 20,
+      alpha: { from: 0.03, to: style === 'primary' ? 0.28 : 0.12 },
+      duration: style === 'primary' ? 1450 : 2600,
+      delay: Phaser.Math.Between(0, 900),
+      repeat: -1,
+      repeatDelay: style === 'primary' ? 800 : 1900,
+      ease: 'Sine.easeInOut'
+    });
+    return button;
+  }
+
+  private createProtocolChassis(x: number, y: number, width: number, height: number): void {
+    const cut = Math.min(18, height * 0.28);
+    const points = [
+      -width / 2 + cut, -height / 2,
+      width / 2 - cut, -height / 2,
+      width / 2, -height / 2 + cut,
+      width / 2, height / 2 - cut,
+      width / 2 - cut, height / 2,
+      -width / 2 + cut, height / 2,
+      -width / 2, height / 2 - cut,
+      -width / 2, -height / 2 + cut
+    ];
+    this.add.polygon(x + 5, y + 7, points, 0x000000, 0.52).setDepth(17);
+    const plate = this.add.polygon(x, y, points, 0x07131f, 0.92).setStrokeStyle(2, 0x26768d, 0.6).setDepth(18);
+    this.add.rectangle(x, y - height / 2 + 4, width - cut * 2, 3, 0x55efff, 0.35).setDepth(19);
+    this.add.rectangle(x - width / 2 + 7, y, 3, height - cut * 1.7, 0xff5bcf, 0.36).setDepth(19);
+    this.add.rectangle(x + width / 2 - 7, y, 3, height - cut * 1.7, 0x55efff, 0.36).setDepth(19);
+    this.tweens.add({ targets: plate, alpha: { from: 0.78, to: 1 }, duration: 2100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 
   private createBranding(width: number, height: number): void {
-    const tiny = height < 650;
-    const short = height < 760;
-    const y = tiny ? 12 : short ? 22 : 28;
-    const size = tiny ? 25 : short ? 31 : Phaser.Math.Clamp(width * 0.027, 38, 48);
+    const tiny = height < 680;
+    const short = height < 900;
+    const y = tiny ? 8 : short ? 17 : 28;
+    const size = tiny ? 28 : short ? 40 : Phaser.Math.Clamp(width * 0.031, 48, 58);
     const pinkGhost = this.add.text(width / 2 + 2, y + 1, GAME_TITLE, {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${size}px`, color: '#ff5bcf', fontStyle: 'bold'
     }).setOrigin(0.5, 0).setAlpha(0.18).setBlendMode(Phaser.BlendModes.ADD);
@@ -274,35 +356,65 @@ export class MainMenuScene extends Phaser.Scene {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${size}px`, color: '#bafaff', fontStyle: 'bold',
       shadow: { color: '#29dfff', blur: 10, fill: true }
     }).setOrigin(0.5, 0);
-    this.add.text(width / 2, y + size + (tiny ? 0 : 3), GAME_TAGLINE, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${tiny ? 13 : short ? 17 : 21}px`, color: '#f8c7f9', letterSpacing: 1
+    this.add.text(width / 2, y + size + (tiny ? -1 : 3), GAME_TAGLINE, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${tiny ? 14 : short ? 19 : 23}px`, color: '#f8c7f9', letterSpacing: 1
     }).setOrigin(0.5, 0);
-    const rail = this.add.rectangle(width / 2, y + size + (tiny ? 22 : short ? 28 : 36), Math.min(470, width * 0.4), 2, 0x55efff, 0.34);
+    const rail = this.add.rectangle(width / 2, y + size + (tiny ? 23 : short ? 32 : 43), Math.min(560, width * 0.46), 2, 0x55efff, 0.34);
     this.tweens.add({ targets: title, alpha: { from: 0.82, to: 1 }, duration: 2300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.tweens.add({ targets: [cyanGhost, pinkGhost], x: '+=1', alpha: { from: 0.1, to: 0.3 }, duration: 1650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.tweens.add({ targets: rail, scaleX: { from: 0.76, to: 1 }, alpha: { from: 0.2, to: 0.55 }, duration: 1800, yoyo: true, repeat: -1 });
   }
 
   private createOperativeBriefing(x: number, top: number, panelWidth: number, panelHeight: number, profileName: string | null): void {
-    const root = this.add.container(x + 18, top).setDepth(20).setAlpha(0);
-    const compact = panelWidth < 300 || panelHeight < 430;
-    const panel = this.add.rectangle(0, 0, panelWidth, panelHeight, 0x07131f, 0.95)
-      .setOrigin(0.5, 0).setStrokeStyle(2, 0x55e9ff, 0.76);
-    const header = this.add.rectangle(0, 0, panelWidth, compact ? 44 : 54, 0x55e9ff, 0.075).setOrigin(0.5, 0);
-    const welcome = this.add.text(0, compact ? 8 : 10, profileName ? `WELCOME, OPERATIVE ${profileName.toUpperCase()}` : 'OPERATIVE BRIEFING', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 11 : 15}px`, color: '#71f4ff', fontStyle: 'bold', align: 'center'
-    }).setOrigin(0.5, 0).setWordWrapWidth(panelWidth - 30, true).setMaxLines(2);
-    const sync = this.add.text(panelWidth / 2 - 12, compact ? 31 : 38, 'DATA SYNC', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 8 : 10}px`, color: '#ff78d2'
+    const root = this.add.container(x + 24, top).setDepth(30).setAlpha(0);
+    const dense = panelWidth < 330 || panelHeight < 500;
+    const spacious = panelWidth >= 390 && panelHeight >= 580;
+    const cut = dense ? 10 : 17;
+    const halfW = panelWidth / 2;
+    const halfH = panelHeight / 2;
+    const framePoints = [
+      -halfW + cut, -halfH, halfW - cut, -halfH,
+      halfW, -halfH + cut, halfW, halfH - cut,
+      halfW - cut, halfH, -halfW + cut, halfH,
+      -halfW, halfH - cut, -halfW, -halfH + cut
+    ];
+    const shadow = this.add.polygon(6, halfH + 8, framePoints, 0x000000, 0.62);
+    const chassis = this.add.polygon(0, halfH, framePoints, 0x08111b, 0.99).setStrokeStyle(2, 0x3caec4, 0.78);
+    const innerGlass = this.add.rectangle(0, 10, panelWidth - 24, panelHeight - 20, 0x081a27, 0.88)
+      .setOrigin(0.5, 0).setStrokeStyle(1, 0x7af5ff, 0.25);
+    const scanlines = this.add.grid(0, 12, panelWidth - 28, panelHeight - 24, panelWidth, dense ? 7 : 9, 0x000000, 0, 0x63efff, 0.026)
+      .setOrigin(0.5, 0);
+    const leftMount = this.add.rectangle(-halfW - 5, halfH, 10, panelHeight * 0.52, 0x101e2b, 0.95).setStrokeStyle(1, 0xff5bcf, 0.36);
+    const rightMount = this.add.rectangle(halfW + 5, halfH, 10, panelHeight * 0.52, 0x101e2b, 0.95).setStrokeStyle(1, 0x55efff, 0.36);
+    const topRail = this.add.rectangle(0, 5, panelWidth - cut * 2, 4, 0x65f4ff, 0.48);
+    const magentaRail = this.add.rectangle(-halfW + 8, halfH, 3, panelHeight - cut * 3, 0xff5bcf, 0.42);
+    const headerHeight = dense ? 70 : 88;
+    const header = this.add.rectangle(0, 14, panelWidth - 30, headerHeight, 0x0b2130, 0.96)
+      .setOrigin(0.5, 0).setStrokeStyle(1, 0x59eaff, 0.5);
+    const headerInset = this.add.rectangle(0, 18, panelWidth - 40, 3, 0xff5bcf, 0.42).setOrigin(0.5, 0);
+    const welcome = this.add.text(-halfW + (dense ? 22 : 28), dense ? 28 : 30, profileName ? `WELCOME, OPERATIVE ${profileName.toUpperCase()}` : 'OPERATIVE BRIEFING', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${dense ? 11 : spacious ? 17 : 15}px`, color: '#86f8ff', fontStyle: 'bold'
+    }).setOrigin(0, 0).setWordWrapWidth(panelWidth - (dense ? 44 : 56), true).setMaxLines(1);
+    const operationsHeading = this.add.text(-halfW + (dense ? 22 : 28), dense ? 49 : 57, 'WEEKLY OPERATIONS // MISSION DECK', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 10 : spacious ? 16 : 14}px`, color: '#ff9ddd', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0, 0);
+    const sync = this.add.text(halfW - (dense ? 18 : 24), dense ? 50 : 61, 'DATA SYNC', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 8 : 11}px`, color: '#70dbe8', letterSpacing: 1
     }).setOrigin(1, 0);
-    root.add([panel, header, welcome, sync]);
+    root.add([shadow, chassis, leftMount, rightMount, innerGlass, scanlines, topRail, magentaRail, header, headerInset, welcome, operationsHeading, sync]);
+    for (const side of [-1, 1]) {
+      for (const screwY of [13, panelHeight - 13]) {
+        root.add(this.add.circle(side * (halfW - 12), screwY, dense ? 2 : 3, side < 0 ? 0xff5bcf : 0x55efff, 0.75));
+      }
+    }
 
     if (!profileName) {
-      root.add(this.add.text(0, panelHeight * 0.46, 'WEEKLY OPERATIONS\nSELECT AN OPERATIVE PROFILE TO ESTABLISH DATA LINK', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 13 : 18}px`, color: '#9abac7', align: 'center', lineSpacing: 8,
-        wordWrap: { width: panelWidth - 38, useAdvancedWrap: true }
+      root.add(this.add.rectangle(0, panelHeight * 0.48, panelWidth - 54, dense ? 94 : 128, 0x07131f, 0.92).setStrokeStyle(1, 0x6adfee, 0.35));
+      root.add(this.add.text(0, panelHeight * 0.48, 'PROFILE LINK REQUIRED\nSELECT AN OPERATIVE TO RECEIVE WEEKLY OPERATIONS', {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 13 : 18}px`, color: '#9fcbd8', align: 'center', lineSpacing: 8,
+        wordWrap: { width: panelWidth - 70, useAdvancedWrap: true }
       }).setOrigin(0.5));
-      this.tweens.add({ targets: root, x, alpha: 1, duration: 360, ease: 'Sine.easeOut' });
+      this.tweens.add({ targets: root, x, alpha: 1, duration: 420, ease: 'Sine.easeOut' });
       return;
     }
 
@@ -310,45 +422,88 @@ export class MainMenuScene extends Phaser.Scene {
     try {
       snapshot = SaveSystem.getWeeklyOperations();
     } catch {
-      root.add(this.add.text(0, panelHeight * 0.46, 'WEEKLY OPERATIONS\nDATA LINK UNAVAILABLE', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 14 : 19}px`, color: '#ffaeaf', align: 'center', lineSpacing: 9
+      root.add(this.add.rectangle(0, panelHeight * 0.48, panelWidth - 54, dense ? 94 : 128, 0x21101a, 0.82).setStrokeStyle(1, 0xff6e9d, 0.55));
+      root.add(this.add.text(0, panelHeight * 0.48, 'WEEKLY OPERATIONS\nDATA LINK UNAVAILABLE', {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 14 : 20}px`, color: '#ffaeaf', align: 'center', lineSpacing: 9, fontStyle: 'bold'
       }).setOrigin(0.5));
-      this.tweens.add({ targets: root, x, alpha: 1, duration: 360, ease: 'Sine.easeOut' });
+      this.tweens.add({ targets: root, x, alpha: 1, duration: 420, ease: 'Sine.easeOut' });
       return;
     }
 
-    const operationsTitleY = compact ? 53 : 66;
-    root.add(this.add.text(0, operationsTitleY, snapshot.complete ? 'WEEKLY OPERATIONS COMPLETE' : 'WEEKLY OPERATIONS', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 11 : 15}px`, color: snapshot.complete ? '#79ffae' : '#f0d6ff', fontStyle: 'bold'
-    }).setOrigin(0.5, 0));
-
-    const objectiveTop = compact ? 82 : 102;
-    const footerSpace = compact ? 86 : 116;
-    const objectiveGap = (panelHeight - objectiveTop - footerSpace) / Math.max(1, snapshot.objectives.length);
-    const barWidth = panelWidth - (compact ? 28 : 42);
+    if (snapshot.complete) operationsHeading.setText('WEEKLY OPERATIONS // COMPLETE').setColor('#77ffad');
+    const rewardHeight = dense ? 76 : 104;
+    const footerHeight = dense ? 25 : 34;
+    const objectiveTop = headerHeight + (dense ? 24 : 34);
+    const objectiveBottom = panelHeight - rewardHeight - footerHeight - (dense ? 12 : 18);
+    const rowGap = dense ? 7 : 11;
+    const rowHeight = (objectiveBottom - objectiveTop - rowGap * 2) / Math.max(1, snapshot.objectives.length);
+    const cardWidth = panelWidth - (dense ? 30 : 42);
     snapshot.objectives.forEach((objective, index) => {
-      const y = objectiveTop + index * objectiveGap;
-      root.add(this.add.text(-barWidth / 2, y, `${objective.complete ? '✓' : '○'}  ${objective.title.toUpperCase()}`, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 15}px`, color: objective.complete ? '#78ffae' : '#d8f6ff', fontStyle: 'bold'
-      }).setOrigin(0, 0).setWordWrapWidth(barWidth, true).setMaxLines(1));
-      root.add(this.add.text(barWidth / 2, y + (compact ? 15 : 20), objective.complete ? 'COMPLETE' : `${objective.current.toLocaleString()} / ${objective.target.toLocaleString()}`, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, color: objective.complete ? '#78ffae' : '#8fbac7'
+      const cardTop = objectiveTop + index * (rowHeight + rowGap);
+      const cardCenterY = cardTop + rowHeight * 0.5;
+      const accent = objective.complete ? 0x72ffac : 0x52eaff;
+      const card = this.add.rectangle(0, cardTop, cardWidth, rowHeight, objective.complete ? 0x0b291f : 0x091824, objective.complete ? 0.78 : 0.88)
+        .setOrigin(0.5, 0).setStrokeStyle(1, accent, objective.complete ? 0.68 : 0.34);
+      const leftEdge = this.add.rectangle(-cardWidth / 2 + 3, cardCenterY, 4, Math.max(8, rowHeight - 12), accent, objective.complete ? 0.78 : 0.42);
+      root.add([card, leftEdge]);
+
+      const iconRadius = Math.max(10, Math.min(spacious ? 21 : 17, rowHeight * 0.25));
+      const iconX = -cardWidth / 2 + (dense ? 25 : 34);
+      const hexPoints: number[] = [];
+      for (let point = 0; point < 6; point += 1) {
+        const angle = Math.PI / 3 * point - Math.PI / 2;
+        hexPoints.push(Math.cos(angle) * iconRadius, Math.sin(angle) * iconRadius);
+      }
+      const iconHalo = this.add.circle(iconX, cardCenterY, iconRadius + (dense ? 4 : 7), accent, objective.complete ? 0.12 : 0.045);
+      const icon = this.add.polygon(iconX, cardCenterY, hexPoints, objective.complete ? 0x163c2b : 0x102838, 0.98)
+        .setStrokeStyle(2, accent, objective.complete ? 0.95 : 0.62);
+      const iconText = this.add.text(iconX, cardCenterY, objective.complete ? '\u2713' : String(index + 1).padStart(2, '0'), {
+        fontFamily: objective.complete ? 'Rajdhani, sans-serif' : 'Orbitron, sans-serif',
+        fontSize: `${dense ? 10 : objective.complete ? 20 : 11}px`, color: objective.complete ? '#c8ffdb' : '#8cebf7', fontStyle: 'bold'
+      }).setOrigin(0.5);
+      root.add([iconHalo, icon, iconText]);
+      if (objective.complete) {
+        this.tweens.add({ targets: [iconHalo, icon], alpha: { from: 0.5, to: 1 }, scale: { from: 0.94, to: 1.06 }, duration: 1200 + index * 110, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+
+      const contentLeft = -cardWidth / 2 + (dense ? 47 : 66);
+      const contentRight = cardWidth / 2 - (dense ? 10 : 16);
+      root.add(this.add.text(contentLeft, cardTop + (dense ? 6 : 11), objective.title.toUpperCase(), {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 10 : spacious ? 17 : 14}px`, color: objective.complete ? '#b6ffd1' : '#e0faff', fontStyle: 'bold', letterSpacing: dense ? 0 : 1
+      }).setOrigin(0, 0).setWordWrapWidth(contentRight - contentLeft, true).setMaxLines(1));
+      root.add(this.add.text(contentRight, cardTop + (dense ? 22 : 34), objective.complete ? 'COMPLETE' : `${objective.current.toLocaleString()} / ${objective.target.toLocaleString()}`, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 9 : spacious ? 15 : 12}px`, color: objective.complete ? '#75ffad' : '#a9d3df', fontStyle: 'bold'
       }).setOrigin(1, 0));
+
       const ratio = Math.min(1, objective.current / objective.target);
-      root.add(this.add.rectangle(-barWidth / 2, y + (compact ? 31 : 39), barWidth, compact ? 3 : 5, 0x153243, 0.9).setOrigin(0, 0.5));
-      root.add(this.add.rectangle(-barWidth / 2, y + (compact ? 31 : 39), Math.max(1, barWidth * ratio), compact ? 3 : 5, objective.complete ? 0x78ffae : 0x52eaff, 0.9).setOrigin(0, 0.5));
+      const barY = cardTop + rowHeight - (dense ? 10 : 16);
+      const barWidth = contentRight - contentLeft;
+      const trackOuter = this.add.rectangle(contentLeft, barY, barWidth, dense ? 7 : 11, 0x02070b, 0.94).setOrigin(0, 0.5).setStrokeStyle(1, 0x315a69, 0.65);
+      const trackInner = this.add.rectangle(contentLeft + 2, barY, Math.max(2, barWidth - 4), dense ? 3 : 5, 0x102a36, 1).setOrigin(0, 0.5);
+      const fillGlow = this.add.rectangle(contentLeft + 2, barY, Math.max(2, (barWidth - 4) * ratio), dense ? 7 : 10, accent, 0.16).setOrigin(0, 0.5);
+      const fill = this.add.rectangle(contentLeft + 2, barY, Math.max(2, (barWidth - 4) * ratio), dense ? 3 : 5, accent, 0.96).setOrigin(0, 0.5);
+      fill.setScale(0, 1);
+      fillGlow.setScale(0, 1);
+      root.add([trackOuter, trackInner, fillGlow, fill]);
+      for (let segment = 1; segment < 8; segment += 1) {
+        root.add(this.add.rectangle(contentLeft + barWidth * segment / 8, barY, 1, dense ? 5 : 9, 0x061018, 0.72));
+      }
+      this.tweens.add({ targets: [fill, fillGlow], scaleX: 1, duration: 520 + index * 120, delay: 160 + index * 90, ease: 'Sine.easeOut' });
     });
 
-    const rewardY = panelHeight - (compact ? 73 : 98);
-    root.add(this.add.rectangle(0, rewardY - 8, panelWidth - 20, 1, 0xff5bcf, 0.35));
-    root.add(this.add.text(0, rewardY, snapshot.complete && snapshot.rewardClaimed ? 'WEEKLY REWARD ACQUIRED' : 'WEEKLY COMPLETION REWARD', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 9 : 12}px`, color: snapshot.complete ? '#78ffae' : '#ff9bda'
+    const rewardTop = panelHeight - rewardHeight - footerHeight;
+    const rewardPlate = this.add.rectangle(0, rewardTop, panelWidth - (dense ? 30 : 42), rewardHeight - (dense ? 6 : 10), snapshot.complete ? 0x0d291f : 0x1b1524, 0.94)
+      .setOrigin(0.5, 0).setStrokeStyle(1, snapshot.complete ? 0x72ffac : 0xff65cf, 0.58);
+    const rewardRail = this.add.rectangle(0, rewardTop + 3, panelWidth - (dense ? 48 : 64), 3, snapshot.complete ? 0x72ffac : 0xff65cf, 0.62).setOrigin(0.5, 0);
+    root.add([rewardPlate, rewardRail]);
+    root.add(this.add.text(0, rewardTop + (dense ? 11 : 17), snapshot.complete && snapshot.rewardClaimed ? 'WEEKLY REWARD // ACQUIRED' : 'WEEKLY COMPLETION REWARD', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${dense ? 9 : spacious ? 14 : 12}px`, color: snapshot.complete ? '#78ffae' : '#ff9bda', fontStyle: 'bold'
     }).setOrigin(0.5, 0));
-    root.add(this.add.text(0, rewardY + (compact ? 17 : 22), `${snapshot.reward.credits.toLocaleString()} CREDITS  +  ${snapshot.reward.coreTokens} CORE TOKEN${snapshot.reward.coreTokens === 1 ? '' : 'S'}`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 15}px`, color: '#ffd287', fontStyle: 'bold'
+    root.add(this.add.text(0, rewardTop + (dense ? 31 : 46), `${snapshot.reward.credits.toLocaleString()} CREDITS  +  ${snapshot.reward.coreTokens} CORE TOKEN${snapshot.reward.coreTokens === 1 ? '' : 'S'}`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 12 : spacious ? 19 : 16}px`, color: '#ffd287', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5, 0));
-    const countdown = this.add.text(0, panelHeight - (compact ? 22 : 27), formatWeeklyCountdown(snapshot.endsAt), {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, color: '#8ac7d5', fontStyle: 'bold'
+    const countdown = this.add.text(0, panelHeight - footerHeight / 2 - 2, formatWeeklyCountdown(snapshot.endsAt), {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 10 : spacious ? 15 : 13}px`, color: '#9cd5df', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5);
     root.add(countdown);
     this.time.addEvent({
@@ -358,29 +513,52 @@ export class MainMenuScene extends Phaser.Scene {
         if (countdown.active) countdown.setText(formatWeeklyCountdown(snapshot.endsAt));
       }
     });
-    this.tweens.add({ targets: sync, alpha: { from: 0.28, to: 1 }, duration: 900, yoyo: true, repeat: 2 });
-    this.tweens.add({ targets: root, x, alpha: 1, duration: 360, ease: 'Sine.easeOut' });
+    const dataSweep = this.add.rectangle(-halfW + 20, 12, 2, panelHeight - 24, 0x8cf7ff, 0.08).setOrigin(0.5, 0);
+    root.add(dataSweep);
+    this.tweens.add({ targets: dataSweep, x: halfW - 20, alpha: { from: 0.02, to: 0.14 }, duration: 3400, repeat: -1, repeatDelay: 2400, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: sync, alpha: { from: 0.24, to: 1 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: topRail, alpha: { from: 0.28, to: 0.7 }, duration: 1900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: root, x, alpha: 1, duration: 420, ease: 'Sine.easeOut' });
   }
 
   private createTipRotator(centerX: number, panelWidth: number, availableTop: number, availableBottom: number): void {
     const availableHeight = availableBottom - availableTop;
     if (availableHeight < 38) return;
-    const panelHeight = Math.min(66, availableHeight);
+    const compact = panelWidth < 400 || availableHeight < 72;
+    const panelHeight = Math.min(compact ? 58 : 82, availableHeight);
     const y = (availableTop + availableBottom) / 2;
-    const panel = this.add.rectangle(centerX, y, panelWidth, panelHeight, 0x07131f, 0.76)
-      .setStrokeStyle(1, 0x58f4ff, 0.38).setDepth(14);
+    const cut = Math.min(12, panelHeight * 0.22);
+    const framePoints = [
+      -panelWidth / 2 + cut, -panelHeight / 2,
+      panelWidth / 2 - cut, -panelHeight / 2,
+      panelWidth / 2, -panelHeight / 2 + cut,
+      panelWidth / 2, panelHeight / 2 - cut,
+      panelWidth / 2 - cut, panelHeight / 2,
+      -panelWidth / 2 + cut, panelHeight / 2,
+      -panelWidth / 2, panelHeight / 2 - cut,
+      -panelWidth / 2, -panelHeight / 2 + cut
+    ];
+    this.add.polygon(centerX + 4, y + 5, framePoints, 0x000000, 0.48).setDepth(13);
+    const panel = this.add.polygon(centerX, y, framePoints, 0x07131f, 0.92)
+      .setStrokeStyle(1, 0x58f4ff, 0.5).setDepth(14);
+    this.add.rectangle(centerX, y, panelWidth - 18, panelHeight - 14, 0x0a1a27, 0.7)
+      .setStrokeStyle(1, 0xff5bcf, 0.14).setDepth(14);
+    this.add.rectangle(centerX, y - panelHeight / 2 + 3, panelWidth - cut * 2, 3, 0x58f4ff, 0.45).setDepth(15);
+    this.add.rectangle(centerX - panelWidth / 2 + 5, y, 3, panelHeight - cut * 1.6, 0xff5bcf, 0.5).setDepth(15);
+    const intelLed = this.add.circle(centerX - panelWidth / 2 + (compact ? 18 : 24), y - panelHeight / 2 + (compact ? 13 : 17), compact ? 2 : 3, 0x78ffbd, 0.9).setDepth(16);
     let currentTip = Phaser.Math.Between(0, MAIN_MENU_TIPS.length - 1);
-    const tipText = this.add.text(centerX, y + 7, MAIN_MENU_TIPS[currentTip], {
+    const tipText = this.add.text(centerX, y + (compact ? 7 : 10), MAIN_MENU_TIPS[currentTip], {
       fontFamily: 'Rajdhani, sans-serif',
-      fontSize: panelWidth < 400 ? '13px' : '16px',
+      fontSize: compact ? '14px' : '18px',
       fontStyle: 'bold',
       color: '#f4d5ff',
       align: 'center',
-      lineSpacing: 2
-    }).setOrigin(0.5).setWordWrapWidth(panelWidth - 36, true).setMaxLines(2).setDepth(15);
-    this.add.text(centerX, y - panelHeight / 2 + 5, 'OPERATIVE INTEL', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: panelWidth < 400 ? '8px' : '10px', color: '#62efff'
-    }).setOrigin(0.5, 0).setDepth(15);
+      lineSpacing: compact ? 1 : 3
+    }).setOrigin(0.5).setWordWrapWidth(panelWidth - (compact ? 36 : 54), true).setMaxLines(2).setDepth(16);
+    this.add.text(centerX - panelWidth / 2 + (compact ? 27 : 36), y - panelHeight / 2 + (compact ? 7 : 9), 'OPERATIVE INTEL // LIVE FEED', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: compact ? '8px' : '11px', color: '#62efff', letterSpacing: 1
+    }).setOrigin(0, 0).setDepth(16);
+    const scan = this.add.rectangle(centerX - panelWidth / 2 + 18, y, 2, panelHeight - 20, 0xa8fbff, 0.08).setDepth(15);
 
     this.time.addEvent({
       delay: 6200,
@@ -403,6 +581,8 @@ export class MainMenuScene extends Phaser.Scene {
       }
     });
     this.tweens.add({ targets: panel, alpha: { from: 0.68, to: 0.92 }, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: intelLed, alpha: { from: 0.28, to: 1 }, duration: 760, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: scan, x: centerX + panelWidth / 2 - 18, alpha: { from: 0.02, to: 0.13 }, duration: 3200, repeat: -1, repeatDelay: 2200, ease: 'Sine.easeInOut' });
   }
 
   private getRunSetupSelection(): RunSetupSelection {

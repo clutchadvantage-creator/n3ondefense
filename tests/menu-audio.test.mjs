@@ -89,9 +89,9 @@ test('deployment start recording is restricted to Deploy Online and Deploy Local
   assert.match(audio, /soundeffects\/startsound\.mp3/);
   assert.match(audio, /case 'runStart':[\s\S]*?this\.playRunStartSfx\(\)/);
   assert.match(ui, /buttonSound: Extract<AudioSfxName, 'menu' \| 'runStart'> = 'menu'/);
-  assert.equal((menu.match(/singleButtonWidth, 'runStart'/g) ?? []).length, 2);
-  assert.match(menu, /'DEPLOY ONLINE'[\s\S]*?singleButtonWidth, 'runStart'/);
-  assert.match(menu, /'DEPLOY LOCAL'[\s\S]*?singleButtonWidth, 'runStart'/);
+  assert.equal((menu.match(/singleButtonWidth, menuButtonHeight(?: \+ 2)?, '(?:primary|secondary)', 'runStart'/g) ?? []).length, 2);
+  assert.match(menu, /'DEPLOY ONLINE'[\s\S]*?singleButtonWidth, menuButtonHeight \+ 2, 'primary', 'runStart'/);
+  assert.match(menu, /'DEPLOY LOCAL'[\s\S]*?singleButtonWidth, menuButtonHeight, 'secondary', 'runStart'/);
 });
 
 test('HTML menus are centrally covered while unaffordable Store actions defer to locked feedback', () => {
