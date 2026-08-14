@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { SFX_DEFINITIONS, type AudioSfxName } from '../config/audio';
-import { SPLASH_SESSION_KEY } from '../config/gameplay';
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
 import { SaveSystem } from '../systems/SaveSystem';
@@ -119,8 +118,11 @@ export class OptionsScene extends Phaser.Scene {
 
     const navigationY = soundStartY + soundRowGap * soundRows + 22;
     createButton(this, centerX, navigationY, 'Replay Splash Screen', () => {
-      sessionStorage.removeItem(SPLASH_SESSION_KEY);
-      this.scene.start(SceneKeys.Splash);
+      this.scene.start(SceneKeys.Splash, {
+        replay: true,
+        returnScene: this.returnScene,
+        resumeGameplay: this.resumeGameplayOnEsc
+      });
     }, 280);
     createButton(this, centerX, navigationY + 50, 'Back to Main Menu', () => this.scene.start(SceneKeys.MainMenu), 280);
 

@@ -80,8 +80,17 @@ test('player mine explosions use the shared explosion audio and dedicated red-or
   assert.match(arena, /this\.audio\.playSfx\('mine'\)/);
   assert.match(arena, /this\.playMineExplosion\(mine\.sprite\.x, mine\.sprite\.y, mine\.radius\)/);
   assert.match(arena, /private playMineExplosion/);
-  assert.match(arena, /const layers = \[[\s\S]*?0xffa340[\s\S]*?0xff4e27[\s\S]*?0xff174f/);
+  assert.match(arena, /PLAYER_MINE_EXPLOSION_PALETTE:[\s\S]*?0xffffff, 0xffa340, 0xff4e27, 0xff174f/);
+  assert.match(arena, /const layers = \[[\s\S]*?palette\[0\][\s\S]*?palette\[1\][\s\S]*?palette\[2\][\s\S]*?palette\[3\]/);
   assert.match(arena, /const arcStorm = this\.add\.graphics/);
   assert.match(arena, /const rayCount = this\.particlesEnabled \? 24 : 12/);
   assert.match(arena, /this\.cameras\.main\.shake\(380, 0\.013, false\)/);
+});
+
+test('star death mine explosion reuses every player-mine FX layer with pink-cyan colors', () => {
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(arena, /STAR_MINE_EXPLOSION_PALETTE:[\s\S]*?0xf4ffff, COLORS\.pink, COLORS\.cyan, 0xff24d4/);
+  assert.match(arena, /this\.playMineExplosion\(mine\.sprite\.x, mine\.sprite\.y, mine\.radius, STAR_MINE_EXPLOSION_PALETTE\)/);
+  assert.match(arena, /const color = index % 3 === 0 \? palette\[0\] : index % 2 === 0 \? palette\[1\] : palette\[2\]/);
+  assert.match(arena, /arcStorm\.lineStyle\([\s\S]*?palette\[2\][\s\S]*?palette\[1\]/);
 });

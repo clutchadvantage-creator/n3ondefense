@@ -193,6 +193,10 @@ const ROUND_PHASE_LABELS: Record<RoundState, string> = {
   [RoundState.Paused]: 'PAUSED'
 };
 
+type MineExplosionPalette = readonly [core: number, primary: number, secondary: number, outer: number];
+const PLAYER_MINE_EXPLOSION_PALETTE: MineExplosionPalette = [0xffffff, 0xffa340, 0xff4e27, 0xff174f];
+const STAR_MINE_EXPLOSION_PALETTE: MineExplosionPalette = [0xf4ffff, COLORS.pink, COLORS.cyan, 0xff24d4];
+
 export class ArenaScene extends Phaser.Scene {
   private readonly state = new GameStateMachine(RoundState.PrePlant);
   private readonly audio = AudioManager.get();
@@ -2495,20 +2499,25 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private playMineExplosion(x: number, y: number, radius: number): void {
+  private playMineExplosion(
+    x: number,
+    y: number,
+    radius: number,
+    palette: MineExplosionPalette = PLAYER_MINE_EXPLOSION_PALETTE
+  ): void {
     // Mines are deliberately the loudest deployable detonation: layered plasma
     // fronts provide the bomb-site scale without changing the damage footprint.
     this.cameras.main.shake(380, 0.013, false);
     const layers = [
-      { radius: 9, target: radius * 0.42, color: 0xffffff, alpha: 0.88, duration: 230 },
-      { radius: 13, target: radius * 0.72, color: 0xffa340, alpha: 0.68, duration: 350 },
-      { radius: 18, target: radius, color: 0xff4e27, alpha: 0.52, duration: 470 },
-      { radius: 22, target: radius * 1.28, color: 0xff174f, alpha: 0.28, duration: 620 }
+      { radius: 9, target: radius * 0.42, color: palette[0], alpha: 0.88, duration: 230 },
+      { radius: 13, target: radius * 0.72, color: palette[1], alpha: 0.68, duration: 350 },
+      { radius: 18, target: radius, color: palette[2], alpha: 0.52, duration: 470 },
+      { radius: 22, target: radius * 1.28, color: palette[3], alpha: 0.28, duration: 620 }
     ] as const;
     for (const layer of layers) {
       const wave = this.obtainFxCircle({
         x, y, radius: layer.radius, color: layer.color, alpha: layer.alpha, depth: 14,
-        strokeWidth: layer.color === 0xffffff ? 0 : 3,
+        strokeWidth: layer.color === palette[0] ? 0 : 3,
         strokeColor: layer.color,
         strokeAlpha: 0.95
       });
@@ -2532,7 +2541,7 @@ export class ArenaScene extends Phaser.Scene {
       const angle = index * Math.PI * 2 / rayCount + (index % 3) * 0.035;
       const inner = radius * (0.08 + (index % 4) * 0.012);
       const outer = radius * (0.68 + (index % 5) * 0.075);
-      const color = index % 3 === 0 ? 0xffffff : index % 2 === 0 ? COLORS.orange : COLORS.red;
+      const color = index % 3 === 0 ? palette[0] : index % 2 === 0 ? palette[1] : palette[2];
       rays.lineStyle(index % 3 === 0 ? 2 : 4, color, index % 3 === 0 ? 0.92 : 0.72);
       rays.lineBetween(Math.cos(angle) * inner, Math.sin(angle) * inner, Math.cos(angle) * outer, Math.sin(angle) * outer);
     }
@@ -2551,7 +2560,7 @@ export class ArenaScene extends Phaser.Scene {
     for (let index = 0; index < 7; index += 1) {
       const arcRadius = radius * (0.2 + index * 0.075);
       const start = index * 1.73;
-      arcStorm.lineStyle(2 + index % 2, index % 2 === 0 ? 0xff3b32 : 0xffb33c, 0.86);
+      arcStorm.lineStyle(2 + index % 2, index % 2 === 0 ? palette[2] : palette[1], 0.86);
       arcStorm.beginPath();
       arcStorm.arc(0, 0, arcRadius, start, start + 0.72 + (index % 3) * 0.28, false);
       arcStorm.strokePath();
@@ -2574,7 +2583,7 @@ export class ArenaScene extends Phaser.Scene {
       const ember = this.obtainFxCircle({
         x, y,
         radius: Phaser.Math.FloatBetween(1.8, 4.2),
-        color: index % 3 === 0 ? 0xfff0b0 : index % 2 === 0 ? COLORS.orange : COLORS.red,
+        color: index % 3 === 0 ? palette[0] : index % 2 === 0 ? palette[1] : palette[2],
         alpha: 0.95,
         depth: 16
       });
@@ -2907,10 +2916,7 @@ export class ArenaScene extends Phaser.Scene {
       this.gasHazard?.igniteFromMine(mine.sprite.x, mine.sprite.y, mine.radius);
       this.audio.playSfx('mine');
       this.fluxCores?.damageArea(mine.sprite.x, mine.sprite.y, mine.radius, mine.damage, 'mine');
-      const blast = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 16, color: COLORS.pink, alpha: 0.28, depth: 8 });
-      const ring = this.obtainFxCircle({ x: mine.sprite.x, y: mine.sprite.y, radius: 14, color: COLORS.cyan, alpha: 0.24, depth: 8 });
-      this.tweens.add({ targets: blast, radius: mine.radius, alpha: 0, duration: 360, onComplete: () => this.retireFxCircle(blast) });
-      this.tweens.add({ targets: ring, radius: mine.radius * 0.82, alpha: 0, duration: 320, onComplete: () => this.retireFxCircle(ring) });
+      this.playMineExplosion(mine.sprite.x, mine.sprite.y, mine.radius, STAR_MINE_EXPLOSION_PALETTE);
 
       const playerDx = this.player.x - mine.sprite.x;
       const playerDy = this.player.y - mine.sprite.y;
@@ -3006,10 +3012,10 @@ export class ArenaScene extends Phaser.Scene {
       const motion = this.pickupMotion.get(pickup.sprite);
       if (!motion) continue;
 
-      const breezeX = Math.sin(now * 0.00072 + motion.phase) * 2.4;
-      const breezeY = Math.cos(now * 0.00061 + motion.phase * 1.37) * 2.1;
-      motion.velocityX = Phaser.Math.Clamp((motion.velocityX + breezeX * dt) * Math.pow(0.994, dt * 60), -16, 16);
-      motion.velocityY = Phaser.Math.Clamp((motion.velocityY + breezeY * dt) * Math.pow(0.994, dt * 60), -16, 16);
+      const breezeX = Math.sin(now * 0.00072 + motion.phase) * 2.8;
+      const breezeY = Math.cos(now * 0.00061 + motion.phase * 1.37) * 2.5;
+      motion.velocityX = Phaser.Math.Clamp((motion.velocityX + breezeX * dt) * Math.pow(0.994, dt * 60), -18, 18);
+      motion.velocityY = Phaser.Math.Clamp((motion.velocityY + breezeY * dt) * Math.pow(0.994, dt * 60), -18, 18);
 
       const previousX = pickup.sprite.x;
       const previousY = pickup.sprite.y;
@@ -3565,7 +3571,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const motionSeed = Math.abs(x * 0.037 + y * 0.053 + type.length * 1.731);
     const driftAngle = motionSeed % (Math.PI * 2);
-    const driftSpeed = 8.5 + motionSeed % 4.5;
+    const driftSpeed = 10.5 + motionSeed % 4.5;
     this.pickupMotion.set(container, {
       velocityX: Math.cos(driftAngle) * driftSpeed,
       velocityY: Math.sin(driftAngle) * driftSpeed,
@@ -3707,7 +3713,7 @@ export class ArenaScene extends Phaser.Scene {
     visual.scanRing.setScale(0.88 + pulse * 0.2).setAlpha(0.36 + pulse * 0.48);
     visual.glow.setScale(0.9 + pulse * 0.22).setAlpha(0.08 + pulse * 0.15);
     // Counter-rotate the reward icon so every pickup remains recognizable while its shell floats.
-    visual.iconRig.setRotation(-container.rotation).setScale(0.96 + pulse * 0.07).setY(Math.sin(now * 0.003 + visual.phase) * 1.8);
+    visual.iconRig.setRotation(-container.rotation).setScale(0.96 + pulse * 0.07).setY(Math.sin(now * 0.003 + visual.phase) * 2.2);
     const bracketOffset = 16 + pulse * 2;
     visual.leftBracket.setX(-bracketOffset);
     visual.rightBracket.setX(bracketOffset);

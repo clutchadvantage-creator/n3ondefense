@@ -2,8 +2,14 @@ import Phaser from 'phaser';
 import splashImageUrl from '../../assets/splashimage.png';
 import { SPLASH_SESSION_KEY } from '../config/gameplay';
 import { GAME_VERSION } from '../config/version';
-import { SceneKeys } from '../flow/SceneKeys';
+import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
+
+interface SplashSceneData {
+  replay?: boolean;
+  returnScene?: SceneKeyValue;
+  resumeGameplay?: boolean;
+}
 
 export class SplashScene extends Phaser.Scene {
   private static readonly SLOGAN = 'Arcade never died....it went N3ON!......';
@@ -30,10 +36,16 @@ export class SplashScene extends Phaser.Scene {
     }
   }
 
-  create(): void {
+  create(data?: SplashSceneData): void {
+    // Scene instances are reused by Phaser. A completed first-run splash leaves this
+    // flag true, so every replay must explicitly reset its input gate and camera FX.
+    this.skipped = false;
+    this.cameras.main.resetFX();
     this.audio.startMusicLoop();
 
-    if (sessionStorage.getItem(SPLASH_SESSION_KEY) === '1') {
+    const replay = data?.replay === true;
+    const returnScene = data?.returnScene ?? SceneKeys.MainMenu;
+    if (!replay && sessionStorage.getItem(SPLASH_SESSION_KEY) === '1') {
       this.scene.start(SceneKeys.LocalProfiles);
       return;
     }
@@ -133,7 +145,19 @@ export class SplashScene extends Phaser.Scene {
       this.skipped = true;
       sessionStorage.setItem(SPLASH_SESSION_KEY, '1');
       this.cameras.main.fadeOut(260, 0, 0, 0);
-      this.time.delayedCall(280, () => this.scene.start(SceneKeys.LocalProfiles));
+      this.time.delayedCall(280, () => {
+        if (!replay) {
+          this.scene.start(SceneKeys.LocalProfiles);
+          return;
+        }
+        if (returnScene === SceneKeys.Arena && this.scene.isPaused(SceneKeys.Arena)) {
+          this.scene.resume(SceneKeys.Arena);
+          if (data?.resumeGameplay === true) this.scene.get(SceneKeys.Arena).events.emit('resume-from-options');
+          this.scene.stop();
+          return;
+        }
+        this.scene.start(returnScene);
+      });
     };
 
     this.input.keyboard?.once('keydown', skip);
