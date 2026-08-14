@@ -23,7 +23,9 @@ export class SaveSystem {
         soundVolumes: { ...save.settings.soundVolumes },
         screenShake: save.settings.screenShake,
         particles: save.settings.particles,
-        abilityBindings: { ...save.settings.abilityBindings }
+        abilityBindings: { ...save.settings.abilityBindings },
+        hud: { ...save.settings.hud },
+        aim: { ...save.settings.aim, reticle: { ...save.settings.aim.reticle } }
       }
     };
   }

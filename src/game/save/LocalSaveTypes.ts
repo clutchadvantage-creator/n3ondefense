@@ -6,11 +6,12 @@ import type { LocalModCollection, ProtocolPreference } from '../mods/types.ts';
 import type { CreditSpendBreakdown } from '../economy/types.ts';
 import type { PlayerGarageState } from '../garage/types.ts';
 import type { WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
+import type { AimSettings, HudSettings } from '../config/interfaceSettings.ts';
 
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 9;
+export const CURRENT_SAVE_VERSION = 10;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -50,6 +51,8 @@ export interface LocalPlayerSettings {
   screenShake: boolean;
   particles: boolean;
   abilityBindings: AbilityBindings;
+  hud: HudSettings;
+  aim: AimSettings;
 }
 
 export interface LocalPlayerCosmetics {
@@ -84,7 +87,7 @@ export interface LocalPlayerSaveV1 {
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
   progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'weeklyOperations'>;
-  settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings'>;
+  settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }
 

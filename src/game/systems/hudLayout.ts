@@ -15,6 +15,11 @@ export interface HudScreenLayout {
   abilities: HudRect;
 }
 
+export interface HudLayoutOptions {
+  scale?: number;
+  edgeMargin?: number;
+}
+
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
 
@@ -23,18 +28,24 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
  * This helper deliberately has no Phaser dependency so its responsive
  * guarantees can be exercised in the normal Node test suite.
  */
-export function calculateHudLayout(width: number, height: number): HudScreenLayout {
-  const safeArea = Math.round(clamp(Math.min(width, height) * 0.022, 12, 24));
-  const scale = clamp(Math.min(width / 1366, height / 768), 0.76, 1.18);
+export function calculateHudLayout(width: number, height: number, options: HudLayoutOptions = {}): HudScreenLayout {
+  const preferenceScale = clamp(options.scale ?? 1, 0.75, 1.4);
+  const extraMargin = clamp(options.edgeMargin ?? 0, 0, 36);
+  const safeArea = Math.round(clamp(Math.min(width, height) * 0.022, 12, 24) + extraMargin);
+  const scale = clamp(Math.min(width / 1366, height / 768), 0.76, 1.18) * preferenceScale;
   const topGap = Math.round(clamp(width * 0.008, 8, 14));
-  const objectiveWidth = Math.round(clamp(width * 0.29, 250, 430));
-  const topModuleHeight = Math.round(clamp(96 * scale, 82, 112));
+  const objectiveWidth = Math.round(clamp(width * 0.29 * preferenceScale, 210, 560));
+  const topModuleHeight = Math.round(clamp(96 * scale, 68, 154));
   const sideSpace = Math.max(120, (width - objectiveWidth) / 2 - safeArea - topGap);
   const vitalsWidth = Math.round(Math.min(326 * scale, sideSpace));
   const statsWidth = Math.round(Math.min(390 * scale, sideSpace));
-  const radarDiameter = Math.round(clamp(Math.min(width, height) * 0.17, 120, 150));
-  const abilityWidth = Math.round(clamp(width * 0.36, 340, 520));
-  const abilityHeight = Math.round(clamp(112 * scale, 96, 128));
+  const radarDiameter = Math.round(clamp(
+    Math.min(width, height) * 0.17 * preferenceScale,
+    120 * preferenceScale,
+    150 * preferenceScale
+  ));
+  const abilityWidth = Math.round(clamp(width * 0.36 * preferenceScale, 290, Math.min(700, width - safeArea * 2)));
+  const abilityHeight = Math.round(clamp(112 * scale, 76, 172));
 
   return {
     safeArea,

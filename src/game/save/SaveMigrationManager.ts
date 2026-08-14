@@ -1,6 +1,7 @@
 import { createDefaultLocalSave, normalizeImportedSave, normalizeLocalSave } from './SaveValidator';
 import { DEFAULT_AUDIO_VOLUME, createDefaultSoundVolumes } from '../config/audio';
 import { DEFAULT_ABILITY_BINDINGS } from '../config/controls';
+import { DEFAULT_AIM_SETTINGS, DEFAULT_HUD_SETTINGS } from '../config/interfaceSettings';
 import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type ExportedSaveFile, type ImportedSavePreview, type LocalPlayerSave, type LocalPlayerSaveV1 } from './LocalSaveTypes';
 
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -69,7 +70,9 @@ export const migrateUnknownSave = (input: unknown, existingNames: string[] = [])
         soundVolumes: createDefaultSoundVolumes(),
         screenShake: true,
         particles: true,
-        abilityBindings: { ...DEFAULT_ABILITY_BINDINGS }
+        abilityBindings: { ...DEFAULT_ABILITY_BINDINGS },
+        hud: { ...DEFAULT_HUD_SETTINGS },
+        aim: { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } }
       } : {
         masterVolume: DEFAULT_AUDIO_VOLUME,
         musicVolume: DEFAULT_AUDIO_VOLUME,
@@ -77,7 +80,9 @@ export const migrateUnknownSave = (input: unknown, existingNames: string[] = [])
         soundVolumes: createDefaultSoundVolumes(),
         screenShake: true,
         particles: true,
-        abilityBindings: { ...DEFAULT_ABILITY_BINDINGS }
+        abilityBindings: { ...DEFAULT_ABILITY_BINDINGS },
+        hud: { ...DEFAULT_HUD_SETTINGS },
+        aim: { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } }
       }
     });
   }

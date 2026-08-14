@@ -9,6 +9,7 @@ import { createEmptyCreditSpendBreakdown } from '../economy/EconomyService.ts';
 import type { CreditSpendCategory } from '../economy/types.ts';
 import { createDefaultGarageState, normalizeGarageState } from '../garage/GarageState.ts';
 import { createDefaultWeeklyOperationsState, normalizeWeeklyOperationsState } from '../progression/WeeklyOperations.ts';
+import { DEFAULT_AIM_SETTINGS, DEFAULT_HUD_SETTINGS, normalizeAimSettings, normalizeHudSettings } from '../config/interfaceSettings.ts';
 
 const defaultSettings: LocalPlayerSettings = {
   masterVolume: DEFAULT_AUDIO_VOLUME,
@@ -17,7 +18,9 @@ const defaultSettings: LocalPlayerSettings = {
   soundVolumes: createDefaultSoundVolumes(),
   screenShake: true,
   particles: true,
-  abilityBindings: { ...DEFAULT_ABILITY_BINDINGS }
+  abilityBindings: { ...DEFAULT_ABILITY_BINDINGS },
+  hud: { ...DEFAULT_HUD_SETTINGS },
+  aim: { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } }
 };
 
 const defaultEquipped: Partial<Record<CosmeticOption['category'], string>> = {
@@ -124,7 +127,9 @@ const normalizeSettings = (settings: unknown): LocalPlayerSettings => {
     soundVolumes,
     screenShake: toBoolean(candidate.screenShake, defaultSettings.screenShake),
     particles: toBoolean(candidate.particles, defaultSettings.particles),
-    abilityBindings: normalizeAbilityBindings(candidate.abilityBindings)
+    abilityBindings: normalizeAbilityBindings(candidate.abilityBindings),
+    hud: normalizeHudSettings(candidate.hud),
+    aim: normalizeAimSettings(candidate.aim)
   };
 };
 
@@ -242,7 +247,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;
@@ -312,7 +317,9 @@ export const createEmptyProfileIndex = (): { version: 1; activeProfileId: string
 export const getDefaultSettings = (): LocalPlayerSettings => ({
   ...defaultSettings,
   soundVolumes: { ...defaultSettings.soundVolumes },
-  abilityBindings: { ...defaultSettings.abilityBindings }
+  abilityBindings: { ...defaultSettings.abilityBindings },
+  hud: { ...defaultSettings.hud },
+  aim: { ...defaultSettings.aim, reticle: { ...defaultSettings.aim.reticle } }
 });
 
 export const getDefaultOwnedCosmetics = (): string[] => [...defaultOwned];

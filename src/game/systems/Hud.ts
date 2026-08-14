@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { calculateHudLayout, formatHudCountdown, type HudRect, type HudScreenLayout } from './hudLayout.ts';
+import { DEFAULT_HUD_SETTINGS, glowMultiplier, normalizeHudSettings, type HudSettings } from '../config/interfaceSettings.ts';
 
 export interface HudAbilitySlot {
   id: 'fence' | 'turret' | 'mine' | 'shield';
@@ -51,7 +52,7 @@ export interface HudPayload {
   radarContacts: HudRadarContact[];
 }
 
-type HudResourceKind = 'credits' | 'coreTokens' | 'plasmaChips' | 'fluxCores';
+export type HudResourceKind = 'credits' | 'coreTokens' | 'plasmaChips' | 'fluxCores';
 
 interface CyberPanelVisual {
   frame: Phaser.GameObjects.Graphics;
@@ -131,6 +132,51 @@ const PHASE_COLOR_MAP: Record<string, { fill: number; border: number; text: stri
   PAUSED: { fill: 0x2a2f39, border: 0xa8c7db, text: '#e9f7ff' }
 };
 
+export function drawHudResourceIcon(graphics: Phaser.GameObjects.Graphics, kind: HudResourceKind, color: number): void {
+  graphics.clear().fillStyle(color, 0.07).fillCircle(0, 0, 11).lineStyle(1, color, 0.72).strokeCircle(0, 0, 9);
+  if (kind === 'credits') return;
+  if (kind === 'coreTokens') {
+    graphics.fillStyle(color, 0.84);
+    graphics.beginPath().moveTo(0, -6).lineTo(6, -3).lineTo(6, 3).lineTo(0, 6).lineTo(-6, 3).lineTo(-6, -3).closePath().fillPath();
+    graphics.fillStyle(0xf8ffff, 0.95).fillCircle(0, 0, 2);
+    return;
+  }
+  if (kind === 'plasmaChips') {
+    graphics.fillStyle(color, 0.9).beginPath().moveTo(0, -6).lineTo(6, 0).lineTo(0, 6).lineTo(-6, 0).closePath().fillPath();
+    graphics.fillStyle(0xffffff, 0.9).fillCircle(0, 0, 1.7);
+    return;
+  }
+  graphics.fillStyle(color, 0.3).fillCircle(0, 0, 6).lineStyle(1.5, 0xd8ffe4, 0.82).strokeCircle(0, 0, 6);
+  graphics.fillStyle(0xd9ffe5, 0.96).fillCircle(0, 0, 2.5);
+  graphics.lineStyle(1, color, 0.9).lineBetween(-7, 0, 7, 0).lineBetween(0, -7, 0, 7);
+}
+
+export function drawHudAbilityIcon(graphics: Phaser.GameObjects.Graphics, id: HudAbilitySlot['id']): void {
+  graphics.clear().lineStyle(2, 0x8af7ff, 0.92).fillStyle(0x62eaff, 0.18);
+  if (id === 'fence') {
+    graphics.fillStyle(0x64edff, 0.78).fillRect(-13, -10, 3, 21).fillRect(10, -10, 3, 21);
+    graphics.lineStyle(1.5, 0x88faff, 0.95).lineBetween(-9, -6, 9, -6).lineBetween(-9, 0, 9, 0).lineBetween(-9, 6, 9, 6);
+    graphics.lineStyle(1, MAGENTA, 0.58).lineBetween(-8, -8, 8, 8).lineBetween(-8, 8, 8, -8);
+  } else if (id === 'turret') {
+    graphics.fillStyle(0x64edff, 0.28).fillRect(-10, -4, 18, 13).fillRect(-13, 9, 26, 4);
+    graphics.lineStyle(2, 0x8af7ff, 0.95).strokeRect(-10, -4, 18, 13).lineBetween(-2, -5, 11, -12).lineBetween(10, -12, 15, -12);
+    graphics.fillStyle(MAGENTA, 0.9).fillCircle(-3, 2, 2.5);
+  } else if (id === 'mine') {
+    graphics.fillStyle(0xff8859, 0.24).fillCircle(0, 0, 9).lineStyle(2, 0xffaa72, 0.95).strokeCircle(0, 0, 9);
+    for (let index = 0; index < 8; index += 1) {
+      const angle = index * Math.PI / 4;
+      graphics.lineBetween(Math.cos(angle) * 10, Math.sin(angle) * 10, Math.cos(angle) * 15, Math.sin(angle) * 15);
+    }
+    graphics.fillStyle(0xff596d, 1).fillCircle(0, 0, 3);
+  } else {
+    graphics.fillStyle(0x62eaff, 0.12);
+    graphics.beginPath().moveTo(0, -14).lineTo(12, -7).lineTo(12, 6).lineTo(0, 14).lineTo(-12, 6).lineTo(-12, -7).closePath().fillPath();
+    graphics.lineStyle(2, 0x8af7ff, 0.95);
+    graphics.beginPath().moveTo(0, -14).lineTo(12, -7).lineTo(12, 6).lineTo(0, 14).lineTo(-12, 6).lineTo(-12, -7).closePath().strokePath();
+    graphics.lineStyle(1, MAGENTA, 0.7).strokeCircle(0, 0, 6);
+  }
+}
+
 /**
  * Single live gameplay HUD. All game state continues to arrive through the
  * existing HudPayload; this class owns presentation, responsive layout and
@@ -190,9 +236,11 @@ export class Hud {
   private radarDiameter = 132;
   private scaleFactor = 1;
   private objectiveAccent = CYAN;
+  private settings: HudSettings = { ...DEFAULT_HUD_SETTINGS };
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, settings: HudSettings = DEFAULT_HUD_SETTINGS) {
     this.scene = scene;
+    this.settings = normalizeHudSettings(settings);
     this.root = scene.add.container(0, 0).setScrollFactor(0).setDepth(HUD_DEPTH);
 
     this.vitalsPanel = this.createCyberPanel('OPERATIVE // VITALS', CYAN);
@@ -261,7 +309,7 @@ export class Hud {
       ...this.buffVisuals.map((buff) => buff.root)
     ]);
 
-    this.layout(scene.scale.width, scene.scale.height);
+    this.applySettings(this.settings);
     this.scene.scale.on('resize', this.onResize, this);
   }
 
@@ -287,11 +335,12 @@ export class Hud {
     const width = rect.width;
     const height = rect.height;
     const frame = panel.frame;
+    const glow = glowMultiplier(this.settings.glow);
     frame.clear().setPosition(rect.x, rect.y);
     frame.fillStyle(0x000000, 0.26);
     frame.beginPath().moveTo(cut + 4, 5).lineTo(width, 5).lineTo(width, height - cut + 4)
       .lineTo(width - cut, height + 4).lineTo(4, height + 4).lineTo(4, cut + 4).closePath().fillPath();
-    frame.fillStyle(PANEL_FILL, fillAlpha);
+    frame.fillStyle(PANEL_FILL, fillAlpha * this.settings.panelOpacity);
     frame.beginPath().moveTo(cut, 0).lineTo(width - cut, 0).lineTo(width, cut)
       .lineTo(width, height - cut).lineTo(width - cut, height).lineTo(cut, height).lineTo(0, height - cut).lineTo(0, cut)
       .closePath().fillPath();
@@ -299,9 +348,9 @@ export class Hud {
     frame.beginPath().moveTo(cut, 0).lineTo(width - cut, 0).lineTo(width, cut)
       .lineTo(width, height - cut).lineTo(width - cut, height).lineTo(cut, height).lineTo(0, height - cut).lineTo(0, cut)
       .closePath().strokePath();
-    frame.fillStyle(PANEL_GLASS, 0.48).fillRect(7, 17, Math.max(1, width - 14), Math.max(1, height - 24));
-    frame.fillStyle(accent, 0.68).fillRect(cut + 4, 4, Math.max(8, width - cut * 2 - 8), 2);
-    frame.fillStyle(MAGENTA, 0.5).fillRect(3, cut + 5, 2, Math.max(5, height - cut * 2 - 10));
+    frame.fillStyle(PANEL_GLASS, 0.48 * this.settings.backgroundOpacity).fillRect(7, 17, Math.max(1, width - 14), Math.max(1, height - 24));
+    frame.fillStyle(accent, 0.24 + glow * 0.44).fillRect(cut + 4, 4, Math.max(8, width - cut * 2 - 8), 2);
+    frame.fillStyle(MAGENTA, 0.2 + glow * 0.3).fillRect(3, cut + 5, 2, Math.max(5, height - cut * 2 - 10));
     frame.lineStyle(1, accent, 0.22).lineBetween(9, 17, width - 9, 17);
     panel.title.setPosition(rect.x + 11, rect.y + 5)
       .setFontSize(Math.max(8, Math.round(10 * this.scaleFactor)))
@@ -327,7 +376,7 @@ export class Hud {
     const color = RESOURCE_COLORS[kind];
     const root = this.scene.add.container(0, 0);
     const icon = this.scene.add.graphics();
-    this.drawResourceIcon(icon, kind, color);
+    drawHudResourceIcon(icon, kind, color);
     const creditGlyph = kind === 'credits'
       ? this.createText('\u00a2', 16, '#fff5a4').setOrigin(0.5).setFontStyle('bold').setPosition(0, -1)
       : null;
@@ -337,32 +386,13 @@ export class Hud {
     return { root, icon, creditGlyph, value, color };
   }
 
-  private drawResourceIcon(graphics: Phaser.GameObjects.Graphics, kind: HudResourceKind, color: number): void {
-    graphics.clear().fillStyle(color, 0.07).fillCircle(0, 0, 11).lineStyle(1, color, 0.72).strokeCircle(0, 0, 9);
-    if (kind === 'credits') return;
-    if (kind === 'coreTokens') {
-      graphics.fillStyle(color, 0.84);
-      graphics.beginPath().moveTo(0, -6).lineTo(6, -3).lineTo(6, 3).lineTo(0, 6).lineTo(-6, 3).lineTo(-6, -3).closePath().fillPath();
-      graphics.fillStyle(0xf8ffff, 0.95).fillCircle(0, 0, 2);
-      return;
-    }
-    if (kind === 'plasmaChips') {
-      graphics.fillStyle(color, 0.9).beginPath().moveTo(0, -6).lineTo(6, 0).lineTo(0, 6).lineTo(-6, 0).closePath().fillPath();
-      graphics.fillStyle(0xffffff, 0.9).fillCircle(0, 0, 1.7);
-      return;
-    }
-    graphics.fillStyle(color, 0.3).fillCircle(0, 0, 6).lineStyle(1.5, 0xd8ffe4, 0.82).strokeCircle(0, 0, 6);
-    graphics.fillStyle(0xd9ffe5, 0.96).fillCircle(0, 0, 2.5);
-    graphics.lineStyle(1, color, 0.9).lineBetween(-7, 0, 7, 0).lineBetween(0, -7, 0, 7);
-  }
-
   private createAbilitySlot(id: HudAbilitySlot['id']): void {
     const root = this.scene.add.container(0, 0);
     const frame = this.scene.add.graphics();
     const overlay = this.scene.add.rectangle(0, 0, BASE_ABILITY_WIDTH, BASE_ABILITY_HEIGHT, 0x02050a, 0)
       .setOrigin(0, 0);
     const icon = this.scene.add.graphics().setPosition(BASE_ABILITY_WIDTH / 2, 35);
-    this.drawAbilityIcon(icon, id);
+    drawHudAbilityIcon(icon, id);
     const keyChip = this.scene.add.rectangle(8, 8, 25, 16, 0x0b2735, 0.94).setOrigin(0, 0).setStrokeStyle(1, CYAN, 0.52);
     const keyText = this.createText('', 9, '#d8faff').setOrigin(0.5).setPosition(20.5, 16).setFontStyle('bold');
     const countText = this.createText('', 10, '#a7e7f2', 'Rajdhani, sans-serif').setOrigin(1, 0.5).setPosition(92, 16).setFontStyle('bold');
@@ -387,36 +417,11 @@ export class Hud {
     graphics.beginPath().moveTo(cut, 0).lineTo(BASE_ABILITY_WIDTH - cut, 0).lineTo(BASE_ABILITY_WIDTH, cut)
       .lineTo(BASE_ABILITY_WIDTH, BASE_ABILITY_HEIGHT - cut).lineTo(BASE_ABILITY_WIDTH - cut, BASE_ABILITY_HEIGHT)
       .lineTo(cut, BASE_ABILITY_HEIGHT).lineTo(0, BASE_ABILITY_HEIGHT - cut).lineTo(0, cut).closePath().strokePath();
-    graphics.fillStyle(selected ? MAGENTA : border, selected ? 0.95 : 0.52).fillRect(12, 3, 76, selected ? 3 : 2);
+    const decorativeAlpha = 0.2 + glowMultiplier(this.settings.glow) * 0.32;
+    graphics.fillStyle(selected ? MAGENTA : border, selected ? 0.95 : decorativeAlpha).fillRect(12, 3, 76, selected ? 3 : 2);
     if (selected) {
       graphics.lineStyle(2, MAGENTA, 0.8).lineBetween(3, 18, 3, BASE_ABILITY_HEIGHT - 18);
       graphics.fillStyle(MAGENTA, 0.9).fillTriangle(3, 34, 8, 39, 3, 44);
-    }
-  }
-
-  private drawAbilityIcon(graphics: Phaser.GameObjects.Graphics, id: HudAbilitySlot['id']): void {
-    graphics.clear().lineStyle(2, 0x8af7ff, 0.92).fillStyle(0x62eaff, 0.18);
-    if (id === 'fence') {
-      graphics.fillStyle(0x64edff, 0.78).fillRect(-13, -10, 3, 21).fillRect(10, -10, 3, 21);
-      graphics.lineStyle(1.5, 0x88faff, 0.95).lineBetween(-9, -6, 9, -6).lineBetween(-9, 0, 9, 0).lineBetween(-9, 6, 9, 6);
-      graphics.lineStyle(1, MAGENTA, 0.58).lineBetween(-8, -8, 8, 8).lineBetween(-8, 8, 8, -8);
-    } else if (id === 'turret') {
-      graphics.fillStyle(0x64edff, 0.28).fillRect(-10, -4, 18, 13).fillRect(-13, 9, 26, 4);
-      graphics.lineStyle(2, 0x8af7ff, 0.95).strokeRect(-10, -4, 18, 13).lineBetween(-2, -5, 11, -12).lineBetween(10, -12, 15, -12);
-      graphics.fillStyle(MAGENTA, 0.9).fillCircle(-3, 2, 2.5);
-    } else if (id === 'mine') {
-      graphics.fillStyle(0xff8859, 0.24).fillCircle(0, 0, 9).lineStyle(2, 0xffaa72, 0.95).strokeCircle(0, 0, 9);
-      for (let index = 0; index < 8; index += 1) {
-        const angle = index * Math.PI / 4;
-        graphics.lineBetween(Math.cos(angle) * 10, Math.sin(angle) * 10, Math.cos(angle) * 15, Math.sin(angle) * 15);
-      }
-      graphics.fillStyle(0xff596d, 1).fillCircle(0, 0, 3);
-    } else {
-      graphics.fillStyle(0x62eaff, 0.12);
-      graphics.beginPath().moveTo(0, -14).lineTo(12, -7).lineTo(12, 6).lineTo(0, 14).lineTo(-12, 6).lineTo(-12, -7).closePath().fillPath();
-      graphics.lineStyle(2, 0x8af7ff, 0.95);
-      graphics.beginPath().moveTo(0, -14).lineTo(12, -7).lineTo(12, 6).lineTo(0, 14).lineTo(-12, 6).lineTo(-12, -7).closePath().strokePath();
-      graphics.lineStyle(1, MAGENTA, 0.7).strokeCircle(0, 0, 6);
     }
   }
 
@@ -433,24 +438,44 @@ export class Hud {
     this.layout(size.width, size.height);
   }
 
+  applySettings(settings: HudSettings): void {
+    this.settings = normalizeHudSettings(settings);
+    const glow = glowMultiplier(this.settings.glow);
+    this.hpGlow.setAlpha(0.12 * glow);
+    this.energyGlow.setAlpha(0.1 * glow);
+    if (this.settings.animation === 'off') {
+      for (const visual of this.abilitySlots.values()) {
+        this.scene.tweens.killTweensOf([visual.root, visual.cooldownRing]);
+        visual.root.setAlpha(1);
+        visual.cooldownRing.setAlpha(1);
+      }
+      for (const visual of this.resourceVisuals.values()) {
+        this.scene.tweens.killTweensOf([visual.icon, visual.value]);
+        visual.icon.setAlpha(1);
+        visual.value.setAlpha(1);
+      }
+    }
+    this.layout(this.scene.scale.width, this.scene.scale.height);
+  }
+
   private layout(width: number, height: number): void {
-    const layout = calculateHudLayout(width, height);
+    const layout = calculateHudLayout(width, height, this.settings);
     this.currentLayout = layout;
-    this.scaleFactor = layout.scale;
+    this.scaleFactor = layout.scale * this.settings.textScale;
     this.root.setPosition(0, 0);
     this.drawCyberPanel(this.vitalsPanel, layout.vitals, CYAN, 0.76);
     this.drawCyberPanel(this.objectivePanel, layout.objective, this.objectiveAccent, 0.8);
     this.drawCyberPanel(this.statsPanel, layout.stats, MAGENTA, 0.76);
     this.drawCyberPanel(this.abilitiesPanel, layout.abilities, CYAN, 0.78);
 
-    this.layoutVitals(layout.vitals, layout.scale);
-    this.layoutStats(layout.stats, layout.scale);
-    this.layoutObjective(layout.objective, layout.scale);
+    this.layoutVitals(layout.vitals, layout.scale, this.scaleFactor);
+    this.layoutStats(layout.stats, layout.scale, this.scaleFactor);
+    this.layoutObjective(layout.objective, layout.scale, this.scaleFactor);
     this.layoutRadar(layout);
     this.layoutAbilities(layout);
   }
 
-  private layoutVitals(rect: HudRect, scale: number): void {
+  private layoutVitals(rect: HudRect, scale: number, fontScale: number): void {
     const compact = rect.width < 230;
     const iconScale = Math.max(0.72, Math.min(1.08, scale));
     const iconX = rect.x + Math.round((compact ? 14 : 18) * scale);
@@ -465,29 +490,29 @@ export class Hud {
 
     this.hpGlow.setPosition(iconX, healthY).setScale(iconScale);
     this.hpIcon.setPosition(iconX, healthY).setScale(iconScale);
-    this.healthLabel.setPosition(barX, healthY - valueY).setFontSize(Math.max(8, Math.round(10 * scale)));
+    this.healthLabel.setPosition(barX, healthY - valueY).setFontSize(Math.max(8, Math.round(10 * fontScale)));
     this.healthTrack.setPosition(barX, healthY).setDisplaySize(barWidth, barHeight);
     this.healthFill.setPosition(barX, healthY).setDisplaySize(barWidth, fillHeight);
     this.healthReadyShine.setPosition(barX, healthY).setDisplaySize(Math.round(30 * scale), fillHeight);
-    this.healthValue.setPosition(barRight, healthY - valueY).setFontSize(Math.max(11, Math.round(14 * scale)));
+    this.healthValue.setPosition(barRight, healthY - valueY).setFontSize(Math.max(11, Math.round(14 * fontScale)));
 
     this.energyGlow.setPosition(iconX, energyY).setScale(iconScale);
     this.energyIcon.setPosition(iconX, energyY).setScale(iconScale);
-    this.energyLabel.setPosition(barX, energyY - valueY).setFontSize(Math.max(8, Math.round(10 * scale)));
+    this.energyLabel.setPosition(barX, energyY - valueY).setFontSize(Math.max(8, Math.round(10 * fontScale)));
     this.energyTrack.setPosition(barX, energyY).setDisplaySize(barWidth, barHeight);
     this.energyFill.setPosition(barX, energyY).setDisplaySize(barWidth, fillHeight);
-    this.energyValue.setPosition(barRight, energyY - valueY).setFontSize(Math.max(11, Math.round(14 * scale)));
+    this.energyValue.setPosition(barRight, energyY - valueY).setFontSize(Math.max(11, Math.round(14 * fontScale)));
   }
 
-  private layoutStats(rect: HudRect, scale: number): void {
+  private layoutStats(rect: HudRect, scale: number, fontScale: number): void {
     const compact = rect.width < 275;
     const topY = rect.y + rect.height * 0.34;
     const left = rect.x + Math.round(12 * scale);
     const center = rect.x + rect.width * 0.54;
-    this.roundLabel.setPosition(left, topY).setFontSize(Math.max(8, Math.round(10 * scale)));
-    this.roundValue.setPosition(left + Math.round(45 * scale), topY).setFontSize(Math.max(13, Math.round(17 * scale)));
-    this.enemyLabel.setPosition(center, topY).setFontSize(Math.max(8, Math.round(10 * scale)));
-    this.enemyValue.setPosition(center + Math.round(54 * scale), topY).setFontSize(Math.max(13, Math.round(17 * scale)));
+    this.roundLabel.setPosition(left, topY).setFontSize(Math.max(8, Math.round(10 * fontScale)));
+    this.roundValue.setPosition(left + Math.round(45 * scale), topY).setFontSize(Math.max(13, Math.round(17 * fontScale)));
+    this.enemyLabel.setPosition(center, topY).setFontSize(Math.max(8, Math.round(10 * fontScale)));
+    this.enemyValue.setPosition(center + Math.round(54 * scale), topY).setFontSize(Math.max(13, Math.round(17 * fontScale)));
 
     const resources = ['credits', 'coreTokens', 'plasmaChips', 'fluxCores'] as const;
     const cellWidth = rect.width / resources.length;
@@ -500,7 +525,7 @@ export class Hud {
       visual.root.setPosition(cellX - (compact ? 0 : Math.round(16 * scale)), resourceY).setScale(1);
       visual.icon.setScale(iconScale);
       visual.creditGlyph?.setScale(iconScale);
-      visual.value.setFontSize(Math.max(8, Math.round((compact ? 10 : 13) * scale)));
+      visual.value.setFontSize(Math.max(8, Math.round((compact ? 10 : 13) * fontScale)));
       if (compact) {
         visual.value.setOrigin(0.5, 0).setPosition(0, 10);
       } else {
@@ -509,14 +534,14 @@ export class Hud {
     });
   }
 
-  private layoutObjective(rect: HudRect, scale: number): void {
+  private layoutObjective(rect: HudRect, scale: number, fontScale: number): void {
     const centerX = rect.x + rect.width / 2;
     this.objectiveText.setPosition(centerX, rect.y + rect.height * 0.35)
-      .setFontSize(Math.max(12, Math.round(15 * scale))).setWordWrapWidth(rect.width - 22, true);
+      .setFontSize(Math.max(12, Math.round(15 * fontScale))).setWordWrapWidth(rect.width - 22, true);
     this.phaseBadge.setPosition(centerX, rect.y + rect.height * 0.63)
       .setDisplaySize(Math.min(rect.width - 34, Math.round(150 * scale)), Math.max(19, Math.round(22 * scale)));
-    this.phaseText.setPosition(centerX, this.phaseBadge.y).setFontSize(Math.max(9, Math.round(11 * scale)));
-    this.objectiveTimerText.setPosition(centerX, rect.y + rect.height * 0.76).setFontSize(Math.max(18, Math.round(23 * scale)));
+    this.phaseText.setPosition(centerX, this.phaseBadge.y).setFontSize(Math.max(9, Math.round(11 * fontScale)));
+    this.objectiveTimerText.setPosition(centerX, rect.y + rect.height * 0.76).setFontSize(Math.max(18, Math.round(23 * fontScale)));
     const barWidth = rect.width - Math.round(24 * scale);
     const barX = rect.x + Math.round(12 * scale);
     const barY = rect.y + rect.height - Math.round(7 * scale);
@@ -529,7 +554,7 @@ export class Hud {
     this.radarFrame.setPosition(layout.radar.centerX, layout.radar.centerY);
     this.radarContacts.setPosition(layout.radar.centerX, layout.radar.centerY);
     this.radarLabel.setPosition(layout.radar.centerX, layout.radar.centerY - layout.radar.diameter / 2 - 5)
-      .setFontSize(Math.max(9, Math.round(10 * layout.scale)));
+      .setFontSize(Math.max(9, Math.round(10 * layout.scale * this.settings.textScale)));
     this.drawRadarFrame();
   }
 
@@ -547,6 +572,12 @@ export class Hud {
       if (!visual) continue;
       const cellX = rect.x + inset + index * (cellWidth + gap);
       visual.root.setPosition(cellX + (cellWidth - BASE_ABILITY_WIDTH * slotScale) / 2, contentTop).setScale(slotScale);
+      const textScale = this.settings.textScale;
+      visual.labelText.setFontSize(Math.round(9 * textScale));
+      visual.countText.setFontSize(Math.round(10 * textScale));
+      visual.statusText.setFontSize(Math.round(13 * textScale));
+      const keyLength = visual.lastKeybind?.length ?? 1;
+      visual.keyText.setFontSize(Math.max(7, Math.round((keyLength > 5 ? 7 : keyLength > 3 ? 8 : 9) * textScale)));
       index += 1;
     }
 
@@ -555,6 +586,7 @@ export class Hud {
       const x = rect.x + rect.width - visibleWidth * (buffIndex + 1) - gap * buffIndex;
       const y = rect.y - Math.round(14 * layout.scale);
       buff.root.setPosition(x, y).setScale(visibleWidth / 116, Math.max(0.82, layout.scale));
+      buff.text.setFontSize(Math.round(10 * this.settings.textScale));
     });
   }
 
@@ -562,13 +594,14 @@ export class Hud {
     const radius = this.radarDiameter / 2;
     const inner = radius - 7;
     const bracket = 14;
+    const glow = glowMultiplier(this.settings.glow);
     this.radarFrame.clear();
     this.radarFrame.fillStyle(0x030812, 0.18).fillCircle(0, 0, radius);
-    this.radarFrame.lineStyle(2, CYAN, 0.48).strokeCircle(0, 0, radius);
+    this.radarFrame.lineStyle(2, CYAN, 0.28 + glow * 0.2).strokeCircle(0, 0, radius);
     this.radarFrame.lineStyle(1, 0x2e8294, 0.18).strokeCircle(0, 0, inner * 0.68);
     this.radarFrame.lineStyle(1, 0x2e8294, 0.13).strokeCircle(0, 0, inner * 0.34);
     this.radarFrame.lineStyle(1, 0x2e8294, 0.13).lineBetween(-inner, 0, inner, 0).lineBetween(0, -inner, 0, inner);
-    this.radarFrame.lineStyle(2, MAGENTA, 0.54)
+    this.radarFrame.lineStyle(2, MAGENTA, 0.24 + glow * 0.3)
       .lineBetween(-radius, -radius + bracket, -radius, -radius).lineBetween(-radius, -radius, -radius + bracket, -radius)
       .lineBetween(radius - bracket, radius, radius, radius).lineBetween(radius, radius, radius, radius - bracket);
     this.radarFrame.fillStyle(0x8af9ff, 1).fillTriangle(0, -6, -5, 6, 5, 6);
@@ -664,7 +697,7 @@ export class Hud {
       this.lowHealthPulse?.remove();
       this.lowHealthPulse = null;
       this.healthFill.setAlpha(1);
-      this.hpGlow.setAlpha(0.12);
+      this.hpGlow.setAlpha(0.12 * glowMultiplier(this.settings.glow));
     }
 
     this.setTextIfChanged(this.roundValue, `${payload.level}`);
@@ -724,9 +757,14 @@ export class Hud {
     if (!visual) return;
     const value = Math.max(0, rawValue);
     this.setTextIfChanged(visual.value, this.formatCompactNumber(value));
-    if (visual.lastValue !== undefined && value > visual.lastValue) {
+    if (this.settings.animation !== 'off' && visual.lastValue !== undefined && value > visual.lastValue) {
       this.scene.tweens.killTweensOf([visual.icon, visual.value]);
-      this.scene.tweens.add({ targets: [visual.icon, visual.value], alpha: { from: 0.38, to: 1 }, duration: 210, ease: 'Sine.easeOut' });
+      this.scene.tweens.add({
+        targets: [visual.icon, visual.value],
+        alpha: { from: this.settings.animation === 'reduced' ? 0.68 : 0.38, to: 1 },
+        duration: this.settings.animation === 'reduced' ? 130 : 210,
+        ease: 'Sine.easeOut'
+      });
     }
     visual.lastValue = value;
   }
@@ -750,7 +788,7 @@ export class Hud {
     this.lastAbilityReady.set(slot.id, ready);
     if (visual.lastKeybind !== slot.keybind) {
       visual.lastKeybind = slot.keybind;
-      visual.keyText.setText(slot.keybind).setFontSize(slot.keybind.length > 5 ? 7 : slot.keybind.length > 3 ? 8 : 9);
+      visual.keyText.setText(slot.keybind).setFontSize(Math.max(7, Math.round((slot.keybind.length > 5 ? 7 : slot.keybind.length > 3 ? 8 : 9) * this.settings.textScale)));
       visual.keyChip.setDisplaySize(slot.keybind.length > 3 ? 34 : 25, 16);
       visual.keyText.setX(8 + visual.keyChip.displayWidth / 2);
     }
@@ -805,9 +843,15 @@ export class Hud {
     visual.lastUnderLimit = slot.underLimit;
     visual.lastCount = slot.count;
     visual.lastCapacity = slot.capacity;
-    if (!previousReady && ready) {
+    if (this.settings.animation !== 'off' && !previousReady && ready) {
       this.scene.tweens.killTweensOf([visual.root, visual.cooldownRing]);
-      this.scene.tweens.add({ targets: [visual.root, visual.cooldownRing], alpha: { from: 0.62, to: 1 }, duration: 160, yoyo: true, repeat: 1 });
+      this.scene.tweens.add({
+        targets: [visual.root, visual.cooldownRing],
+        alpha: { from: this.settings.animation === 'reduced' ? 0.8 : 0.62, to: 1 },
+        duration: this.settings.animation === 'reduced' ? 110 : 160,
+        yoyo: true,
+        repeat: this.settings.animation === 'reduced' ? 0 : 1
+      });
     }
   }
 

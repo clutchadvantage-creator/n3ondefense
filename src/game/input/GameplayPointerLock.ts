@@ -12,6 +12,7 @@ export class GameplayPointerLock {
   private aimY: number;
   private disposed = false;
   private wasLocked = false;
+  private sensitivity = 1;
 
   constructor(private readonly game: Phaser.Game, private readonly callbacks: PointerLockCallbacks) {
     this.canvas = game.canvas;
@@ -35,6 +36,10 @@ export class GameplayPointerLock {
 
   get locked(): boolean { return document.pointerLockElement === this.canvas; }
   get supported(): boolean { return typeof this.canvas.requestPointerLock === 'function'; }
+
+  setSensitivity(value: number): void {
+    this.sensitivity = Number.isFinite(value) ? Math.max(0.35, Math.min(2, value)) : 1;
+  }
 
   showInitial(): void {
     this.show(this.supported ? 'CLICK TO PLAY' : 'POINTER LOCK UNAVAILABLE', this.supported
@@ -106,8 +111,8 @@ export class GameplayPointerLock {
   private readonly handleMove = (event: MouseEvent): void => {
     if (!this.locked) return;
     const rect = this.canvas.getBoundingClientRect();
-    this.aimX = Math.max(0, Math.min(rect.width, this.aimX + event.movementX));
-    this.aimY = Math.max(0, Math.min(rect.height, this.aimY + event.movementY));
+    this.aimX = Math.max(0, Math.min(rect.width, this.aimX + event.movementX * this.sensitivity));
+    this.aimY = Math.max(0, Math.min(rect.height, this.aimY + event.movementY * this.sensitivity));
   };
 
   private readonly handleError = (): void => {

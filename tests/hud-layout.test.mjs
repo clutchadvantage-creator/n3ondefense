@@ -56,3 +56,18 @@ test('objective countdown is compact and rounds up partial seconds', () => {
   assert.equal(formatHudCountdown(42_000), '00:42');
   assert.equal(formatHudCountdown(75_000), '01:15');
 });
+
+test('HUD customization scales and insets the same five clusters without leaving the viewport', () => {
+  const compact = calculateHudLayout(1280, 720, { scale: 0.75, edgeMargin: 0 });
+  const expanded = calculateHudLayout(1280, 720, { scale: 1.4, edgeMargin: 36 });
+  assert.ok(expanded.safeArea > compact.safeArea);
+  assert.ok(expanded.radar.diameter > compact.radar.diameter);
+  assert.ok(expanded.abilities.height > compact.abilities.height);
+  for (const rect of [expanded.vitals, expanded.objective, expanded.stats, expanded.abilities]) {
+    assert.ok(rect.x >= expanded.safeArea);
+    assert.ok(rect.x + rect.width <= 1280 - expanded.safeArea);
+    assert.ok(rect.y + rect.height <= 720 - expanded.safeArea);
+  }
+  assert.equal(overlaps(expanded.vitals, expanded.objective), false);
+  assert.equal(overlaps(expanded.objective, expanded.stats), false);
+});

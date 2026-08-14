@@ -34,7 +34,7 @@ test('tab contents are created once and hidden tabs have all nested pointer inpu
   assert.match(options, /object instanceof Phaser\.GameObjects\.Container[\s\S]*?for \(const child of object\.list\) visit\(child\)/);
 });
 
-test('Audio tab keeps the existing mixer keys and scrolls only inside its masked viewport', () => {
+test('Audio tab keeps the existing mixer keys and tab content scrolls only inside its masked viewport', () => {
   const audioTab = methodSource('createAudioTab', 'createGameplayTab');
   assert.match(audioTab, /MASTER VOLUME/);
   assert.match(audioTab, /MUSIC VOLUME/);
@@ -43,8 +43,8 @@ test('Audio tab keeps the existing mixer keys and scrolls only inside its masked
   assert.match(audioTab, /save\.settings\.soundVolumes\[definition\.key\]/);
   assert.match(options, /setSettings\(\{ soundVolumes: \{ \.\.\.current, \[key\]: value \} \}\)/);
   assert.match(options, /container\.setMask\(this\.contentMask\)/);
-  assert.match(options, /if \(this\.activeTab !== 'audio' \|\| pointer\.y < this\.viewport\.top \|\| pointer\.y > this\.viewport\.bottom\) return/);
-  assert.match(options, /entry\.target\.input\.enabled = this\.activeTab === 'audio'[\s\S]*?this\.viewport\.bottom/);
+  assert.match(options, /if \(pointer\.y < this\.viewport\.top \|\| pointer\.y > this\.viewport\.bottom\) return/);
+  assert.match(options, /const enabled = this\.activeTab === tab[\s\S]*?this\.viewport\.bottom/);
   assert.ok(SFX_DEFINITIONS.length > 20);
 });
 
@@ -54,7 +54,13 @@ test('existing Options controls are retained and routed to their logical tabs', 
   const profileTab = methodSource('createProfileTab', 'createSystemTab');
   const systemTab = methodSource('createSystemTab', 'addSectionHeader');
   assert.match(gameplayTab, /createKeybindPanel/);
-  assert.match(interfaceTab, /ADDITIONAL INTERFACE SETTINGS COMING ONLINE/);
+  for (const label of ['HUD SCALE', 'PANEL OPACITY', 'BACKGROUND OPACITY', 'HUD TEXT SCALE', 'EDGE MARGIN', 'HUD GLOW', 'HUD ANIMATION']) {
+    assert.ok(interfaceTab.includes(`'${label}'`), `missing Interface control: ${label}`);
+  }
+  for (const label of ['MOUSE SENSITIVITY', 'RETICLE SIZE', 'RETICLE OPACITY', 'RETICLE STYLE', 'RETICLE GLOW']) {
+    assert.ok(gameplayTab.includes(`'${label}'`), `missing Gameplay control: ${label}`);
+  }
+  assert.match(options, /'RETICLE COLOR'/);
   for (const label of ['Local Save Info', 'Switch Profile', 'Export Save', 'Import Save', 'Restore Backup', 'Reset Progress']) {
     assert.ok(profileTab.includes(`'${label}'`), `missing Profile action: ${label}`);
   }

@@ -39,6 +39,8 @@ import { startArenaLoad } from '../utils/runFlow';
 import { createButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { GameplayPointerLock } from '../input/GameplayPointerLock';
+import { DEFAULT_AIM_SETTINGS, normalizeAimSettings, type AimSettings } from '../config/interfaceSettings';
+import { drawReticle } from '../ui/ReticleRenderer';
 import { ABILITY_ACTIONS, compactBindingLabel, type AbilityAction, type AbilityBindings } from '../config/controls';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_BALANCE, normalizeRunProtocolId } from '../mods/modBalance.ts';
@@ -299,6 +301,7 @@ export class ArenaScene extends Phaser.Scene {
   private pointerDown = false;
   private pointerLock: GameplayPointerLock | null = null;
   private readonly aimWorldPoint = new Phaser.Math.Vector2();
+  private aimSettings: AimSettings = { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } };
   private abilityBindings!: AbilityBindings;
   private readonly pressedAbilityActions = new Set<AbilityAction>();
 
@@ -314,6 +317,7 @@ export class ArenaScene extends Phaser.Scene {
   private legendaryRevealPhysicsWasPaused = false;
   private siteActionText!: Phaser.GameObjects.Text;
   private crosshair!: Phaser.GameObjects.Graphics;
+  private crosshairValid: boolean | null = null;
   private balanceTelemetry: Phaser.GameObjects.Text | null = null;
   private performanceTelemetry: Phaser.GameObjects.Text | null = null;
   private readonly performanceMonitor = new FramePerformanceMonitor(600);
@@ -411,7 +415,12 @@ export class ArenaScene extends Phaser.Scene {
   };
   private readonly onResumeFromOptions = (): void => {
     this.refreshAbilityBindings();
-    this.particlesEnabled = SaveSystem.get().settings.particles;
+    const settings = SaveSystem.get().settings;
+    this.particlesEnabled = settings.particles;
+    this.aimSettings = normalizeAimSettings(settings.aim);
+    this.crosshairValid = null;
+    this.pointerLock?.setSensitivity(this.aimSettings.mouseSensitivity);
+    this.hud?.applySettings(settings.hud);
     this.resumeGameplay();
   };
   private readonly onReturnFromModCollection = (): void => {
@@ -531,6 +540,8 @@ export class ArenaScene extends Phaser.Scene {
       onLocked: () => this.resumeFromPointerLock(),
       onLost: (reason) => this.pauseForPointerLock(reason)
     });
+    this.aimSettings = normalizeAimSettings(SaveSystem.get().settings.aim);
+    this.pointerLock.setSensitivity(this.aimSettings.mouseSensitivity);
     this.pauseForPointerLock('initial');
     this.pointerLock.showInitial();
     if(import.meta.env.DEV){
@@ -837,7 +848,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.bannerText) this.bannerText.destroy();
     if (this.siteActionText) this.siteActionText.destroy();
 
-    this.hud = new Hud(this);
+    this.hud = new Hud(this, SaveSystem.get().settings.hud);
 
     this.bannerText = this.add.text(this.scale.width * 0.5, 148, '', {
       fontFamily: 'Orbitron, sans-serif',
@@ -1089,6 +1100,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private createCrosshair(): void {
     this.crosshair = this.add.graphics().setDepth(2100);
+    this.crosshairValid = null;
   }
 
   private setGameplayCursorMode(): void {
@@ -4721,17 +4733,10 @@ export class ArenaScene extends Phaser.Scene {
   private updateCrosshair(): void {
     const { x, y } = this.getAimWorldPoint();
     const valid = this.isValidPlacement(x, y);
-    const color = valid ? 0x6ff6ff : COLORS.red;
-
-    this.crosshair.clear();
-    this.crosshair.lineStyle(2, color, 0.95);
-    this.crosshair.strokeCircle(x, y, 10);
-    this.crosshair.lineBetween(x - 16, y, x - 5, y);
-    this.crosshair.lineBetween(x + 5, y, x + 16, y);
-    this.crosshair.lineBetween(x, y - 16, x, y - 5);
-    this.crosshair.lineBetween(x, y + 5, x, y + 16);
-    this.crosshair.fillStyle(color, 0.95);
-    this.crosshair.fillCircle(x, y, 1.8);
+    this.crosshair.setPosition(x, y);
+    if (this.crosshairValid === valid) return;
+    this.crosshairValid = valid;
+    drawReticle(this.crosshair, 0, 0, this.aimSettings.reticle, valid ? undefined : COLORS.red);
   }
 
   private getAbilityConfig(type: AbilityType): AbilityRuntimeConfig {

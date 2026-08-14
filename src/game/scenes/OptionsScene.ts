@@ -8,6 +8,23 @@ import { pickJsonFile, showConfirmDialog, showInfoModal } from '../utils/localSa
 import { createButton } from '../utils/ui';
 import { getGameUiRoot } from '../../ui/getGameUiRoot';
 import { mountFeedbackReportUi, type FeedbackReportHandle } from '../../ui/feedback/FeedbackReportUi';
+import {
+  DEFAULT_AIM_SETTINGS,
+  DEFAULT_HUD_SETTINGS,
+  HUD_ANIMATION_LEVELS,
+  HUD_GLOW_LEVELS,
+  RETICLE_COLOR_IDS,
+  RETICLE_COLORS,
+  RETICLE_STYLES,
+  glowMultiplier,
+  normalizeAimSettings,
+  normalizeHudSettings,
+  type AimSettings,
+  type HudSettings,
+  type ReticleColor
+} from '../config/interfaceSettings';
+import { drawReticle } from '../ui/ReticleRenderer';
+import { drawHudAbilityIcon, drawHudResourceIcon } from '../systems/Hud';
 
 type OptionsTabId = 'audio' | 'gameplay' | 'interface' | 'profile' | 'system';
 
@@ -35,6 +52,7 @@ interface SliderParts {
   knob: Phaser.GameObjects.Arc;
   valueText: Phaser.GameObjects.Text;
   hit: Phaser.GameObjects.Rectangle;
+  setValue?: (value: number) => void;
 }
 
 interface TabVisual {
@@ -46,6 +64,14 @@ interface ScrollInteractiveTarget {
   target: Phaser.GameObjects.GameObject;
   centerY: number;
   halfHeight: number;
+}
+
+interface TabScrollState {
+  container: Phaser.GameObjects.Container;
+  targets: ScrollInteractiveTarget[];
+  offset: number;
+  max: number;
+  contentHeight: number;
 }
 
 const OPTIONS_TABS: readonly OptionsTabDefinition[] = [
@@ -68,10 +94,7 @@ export class OptionsScene extends Phaser.Scene {
   private viewport: OptionsViewport = { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 };
   private contentMask: Phaser.Display.Masks.GeometryMask | null = null;
   private contentMaskShape: Phaser.GameObjects.Graphics | null = null;
-  private audioContainer: Phaser.GameObjects.Container | null = null;
-  private readonly audioInteractiveTargets: ScrollInteractiveTarget[] = [];
-  private audioScrollOffset = 0;
-  private audioScrollMax = 0;
+  private readonly scrollStates = new Map<OptionsTabId, TabScrollState>();
   private scrollThumb: Phaser.GameObjects.Rectangle | null = null;
   private scrollTrack: Phaser.GameObjects.Rectangle | null = null;
   private scrollLabel: Phaser.GameObjects.Text | null = null;
@@ -84,13 +107,13 @@ export class OptionsScene extends Phaser.Scene {
     _deltaX: number,
     deltaY: number
   ): void => {
-    if (this.activeTab !== 'audio' || pointer.y < this.viewport.top || pointer.y > this.viewport.bottom) return;
-    this.scrollAudio(deltaY * 0.75);
+    if (pointer.y < this.viewport.top || pointer.y > this.viewport.bottom) return;
+    this.scrollActiveTab(deltaY * 0.75);
   };
-  private readonly handleScrollUp = (): void => this.scrollAudio(-110);
-  private readonly handleScrollDown = (): void => this.scrollAudio(110);
-  private readonly handlePageUp = (): void => this.scrollAudio(-this.viewport.height * 0.72);
-  private readonly handlePageDown = (): void => this.scrollAudio(this.viewport.height * 0.72);
+  private readonly handleScrollUp = (): void => this.scrollActiveTab(-110);
+  private readonly handleScrollDown = (): void => this.scrollActiveTab(110);
+  private readonly handlePageUp = (): void => this.scrollActiveTab(-this.viewport.height * 0.72);
+  private readonly handlePageDown = (): void => this.scrollActiveTab(this.viewport.height * 0.72);
 
   constructor() {
     super(SceneKeys.Options);
@@ -129,10 +152,9 @@ export class OptionsScene extends Phaser.Scene {
 
     const save = SaveSystem.get();
     const audio = this.requireTab('audio');
-    this.audioContainer = audio;
     this.createAudioTab(audio, save);
-    this.createGameplayTab(this.requireTab('gameplay'));
-    this.createInterfaceTab(this.requireTab('interface'));
+    this.createGameplayTab(this.requireTab('gameplay'), save);
+    this.createInterfaceTab(this.requireTab('interface'), save);
     this.createProfileTab(this.requireTab('profile'));
     this.createSystemTab(this.requireTab('system'));
     this.selectTab('audio');
@@ -150,9 +172,7 @@ export class OptionsScene extends Phaser.Scene {
     this.activeTab = 'audio';
     this.tabContainers.clear();
     this.tabVisuals.clear();
-    this.audioInteractiveTargets.length = 0;
-    this.audioScrollOffset = 0;
-    this.audioScrollMax = 0;
+    this.scrollStates.clear();
     this.scrollThumb = null;
     this.scrollTrack = null;
     this.scrollLabel = null;
@@ -275,20 +295,79 @@ export class OptionsScene extends Phaser.Scene {
     });
 
     const contentBottom = soundsTop + soundsPanelHeight + 18;
-    this.configureAudioScrolling(contentBottom);
+    this.configureTabScrolling('audio', container, contentBottom);
   }
 
-  private createGameplayTab(container: Phaser.GameObjects.Container): void {
-    const centerX = this.viewport.left + this.viewport.width * 0.5;
-    const top = this.viewport.top + 26;
-    this.addSectionHeader(container, centerX, top, 'CONTROLS / GAMEPLAY REFERENCE', 'CURRENT PROFILE BINDINGS');
-    const referenceBottom = this.createGameplayReferencePanel(container, centerX, top + 34, this.viewport.width - 48);
-    const keybindBottom = this.createKeybindPanel(container, centerX, referenceBottom + 12, this.viewport.width - 48);
-    if (keybindBottom + 42 < this.viewport.bottom) {
-      container.add(this.add.text(centerX, keybindBottom + 27, 'ADDITIONAL GAMEPLAY SETTINGS COMING ONLINE', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#628796'
-      }).setOrigin(0.5));
-    }
+  private createGameplayTab(container: Phaser.GameObjects.Container, save: ReturnType<typeof SaveSystem.get>): void {
+    const { left, top, width } = this.viewport;
+    const centerX = left + width * 0.5;
+    const innerWidth = width - 48;
+    let y = top + 26;
+    this.addSectionHeader(container, centerX, y, 'AIMING & CONTROLS', 'RETICLE / INPUT CALIBRATION');
+
+    let aim = normalizeAimSettings(save.settings.aim);
+    const panelTop = y + 25;
+    const stacked = innerWidth < 760;
+    const panelHeight = stacked ? 580 : 330;
+    container.add(this.add.rectangle(centerX, panelTop + panelHeight * 0.5, innerWidth, panelHeight, 0x091522, 0.9)
+      .setStrokeStyle(1, 0x3a9db2, 0.58));
+    const controlWidth = Math.min(500, stacked ? innerWidth - 42 : innerWidth * 0.55);
+    const controlLeft = stacked ? centerX - controlWidth * 0.5 : centerX - innerWidth * 0.5 + 24;
+    const trackWidth = Phaser.Math.Clamp(controlWidth * 0.46, 145, 225);
+    const trackX = controlLeft + controlWidth - trackWidth * 0.5 - 42;
+    const labelWidth = Math.max(115, trackX - trackWidth * 0.5 - controlLeft - 12);
+    const previewX = stacked ? centerX : centerX + innerWidth * 0.29;
+    const previewY = stacked ? panelTop + 400 : panelTop + 154;
+    const preview = this.createReticlePreview(container, previewX, previewY, aim);
+    const commitAim = (): void => {
+      SaveSystem.setSettings({ aim: { ...aim, reticle: { ...aim.reticle } } });
+      preview.redraw(aim);
+      this.scheduleSettingsPersist();
+    };
+
+    const sensitivity = this.createRangeSlider(container, 'gameplay', controlLeft, trackX, panelTop + 43, 'MOUSE SENSITIVITY', aim.mouseSensitivity, 0.35, 2, trackWidth, (value) => {
+      aim = { ...aim, mouseSensitivity: value };
+      commitAim();
+    }, (value) => value.toFixed(2), labelWidth);
+    const reticleSize = this.createRangeSlider(container, 'gameplay', controlLeft, trackX, panelTop + 91, 'RETICLE SIZE', aim.reticle.size, 0.6, 1.8, trackWidth, (value) => {
+      aim = { ...aim, reticle: { ...aim.reticle, size: value } };
+      commitAim();
+    }, (value) => `${Math.round(value * 100)}%`, labelWidth);
+    const reticleOpacity = this.createRangeSlider(container, 'gameplay', controlLeft, trackX, panelTop + 139, 'RETICLE OPACITY', aim.reticle.opacity, 0.3, 1, trackWidth, (value) => {
+      aim = { ...aim, reticle: { ...aim.reticle, opacity: value } };
+      commitAim();
+    }, (value) => `${Math.round(value * 100)}%`, labelWidth);
+    const style = this.createCycleSelector(container, 'gameplay', controlLeft, panelTop + 185, controlWidth, 'RETICLE STYLE', RETICLE_STYLES, aim.reticle.style, (value) => {
+      aim = { ...aim, reticle: { ...aim.reticle, style: value } };
+      commitAim();
+    });
+    const glow = this.createCycleSelector(container, 'gameplay', controlLeft, panelTop + 229, controlWidth, 'RETICLE GLOW', HUD_GLOW_LEVELS, aim.reticle.glow, (value) => {
+      aim = { ...aim, reticle: { ...aim.reticle, glow: value } };
+      commitAim();
+    });
+    const colorSelector = this.createColorSelector(container, 'gameplay', controlLeft, panelTop + 276, controlWidth, aim.reticle.color, (value) => {
+      aim = { ...aim, reticle: { ...aim.reticle, color: value } };
+      commitAim();
+    });
+    const resetY = stacked ? panelTop + 548 : panelTop + 282;
+    const reset = this.addTabButton(container, previewX, resetY, 'Reset Aim Settings', () => {
+      aim = normalizeAimSettings(DEFAULT_AIM_SETTINGS);
+      sensitivity.setValue?.(aim.mouseSensitivity);
+      reticleSize.setValue?.(aim.reticle.size);
+      reticleOpacity.setValue?.(aim.reticle.opacity);
+      style.setValue(aim.reticle.style);
+      glow.setValue(aim.reticle.glow);
+      colorSelector.setValue(aim.reticle.color);
+      commitAim();
+      SaveSystem.persist();
+    }, Phaser.Math.Clamp(innerWidth * 0.34, 190, 260));
+    this.registerScrollTarget('gameplay', reset, resetY, 22);
+
+    y = panelTop + panelHeight + 22;
+    this.addSectionHeader(container, centerX, y, 'CONTROLS / GAMEPLAY REFERENCE', 'CURRENT PROFILE BINDINGS');
+    const referenceBottom = this.createGameplayReferencePanel(container, centerX, y + 34, innerWidth);
+    const keybindBottom = this.createKeybindPanel(container, centerX, referenceBottom + 12, innerWidth);
+    this.configureTabScrolling('gameplay', container, keybindBottom + 22);
   }
 
   private createGameplayReferencePanel(container: Phaser.GameObjects.Container, centerX: number, topY: number, contentWidth: number): number {
@@ -313,21 +392,71 @@ export class OptionsScene extends Phaser.Scene {
     return topY + panelHeight;
   }
 
-  private createInterfaceTab(container: Phaser.GameObjects.Container): void {
-    const centerX = this.viewport.left + this.viewport.width * 0.5;
-    const centerY = this.viewport.top + this.viewport.height * 0.5;
-    container.add(this.add.rectangle(centerX, centerY, Math.min(720, this.viewport.width - 64), Math.min(250, this.viewport.height - 64), 0x0b1725, 0.84)
-      .setStrokeStyle(1, 0x3a9db2, 0.5));
-    container.add(this.add.text(centerX, centerY - 42, 'INTERFACE SYSTEMS', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '24px', color: '#69f4ff'
+  private createInterfaceTab(container: Phaser.GameObjects.Container, save: ReturnType<typeof SaveSystem.get>): void {
+    const { left, top, width } = this.viewport;
+    const centerX = left + width * 0.5;
+    const innerWidth = width - 48;
+    let hud = normalizeHudSettings(save.settings.hud);
+    const headerY = top + 26;
+    this.addSectionHeader(container, centerX, headerY, 'HUD CUSTOMIZATION', 'PERIMETER DISPLAY CALIBRATION');
+    const panelTop = headerY + 25;
+    const stacked = innerWidth < 760;
+    const panelHeight = stacked ? 740 : 418;
+    container.add(this.add.rectangle(centerX, panelTop + panelHeight * 0.5, innerWidth, panelHeight, 0x091522, 0.9)
+      .setStrokeStyle(1, 0x3a9db2, 0.58));
+    const controlWidth = Math.min(510, stacked ? innerWidth - 42 : innerWidth * 0.56);
+    const controlLeft = stacked ? centerX - controlWidth * 0.5 : centerX - innerWidth * 0.5 + 24;
+    const trackWidth = Phaser.Math.Clamp(controlWidth * 0.45, 145, 220);
+    const trackX = controlLeft + controlWidth - trackWidth * 0.5 - 42;
+    const labelWidth = Math.max(115, trackX - trackWidth * 0.5 - controlLeft - 12);
+    const previewX = stacked ? centerX : centerX + innerWidth * 0.29;
+    const previewY = stacked ? panelTop + 480 : panelTop + 176;
+    const preview = this.createHudPreview(container, previewX, previewY, hud);
+    const commitHud = (): void => {
+      SaveSystem.setSettings({ hud: { ...hud } });
+      preview.redraw(hud);
+      this.scheduleSettingsPersist();
+    };
+
+    const hudScale = this.createRangeSlider(container, 'interface', controlLeft, trackX, panelTop + 38, 'HUD SCALE', hud.scale, 0.75, 1.4, trackWidth, (value) => {
+      hud = { ...hud, scale: value }; commitHud();
+    }, (value) => `${Math.round(value * 100)}%`, labelWidth);
+    const panelOpacity = this.createRangeSlider(container, 'interface', controlLeft, trackX, panelTop + 82, 'PANEL OPACITY', hud.panelOpacity, 0.2, 1, trackWidth, (value) => {
+      hud = { ...hud, panelOpacity: value }; commitHud();
+    }, (value) => `${Math.round(value * 100)}%`, labelWidth);
+    const backgroundOpacity = this.createRangeSlider(container, 'interface', controlLeft, trackX, panelTop + 126, 'BACKGROUND OPACITY', hud.backgroundOpacity, 0.2, 1, trackWidth, (value) => {
+      hud = { ...hud, backgroundOpacity: value }; commitHud();
+    }, (value) => `${Math.round(value * 100)}%`, labelWidth);
+    const textScale = this.createRangeSlider(container, 'interface', controlLeft, trackX, panelTop + 170, 'HUD TEXT SCALE', hud.textScale, 0.85, 1.25, trackWidth, (value) => {
+      hud = { ...hud, textScale: value }; commitHud();
+    }, (value) => `${Math.round(value * 100)}%`, labelWidth);
+    const edgeMargin = this.createRangeSlider(container, 'interface', controlLeft, trackX, panelTop + 214, 'EDGE MARGIN', hud.edgeMargin, 0, 36, trackWidth, (value) => {
+      hud = { ...hud, edgeMargin: value }; commitHud();
+    }, (value) => `${Math.round(value)} PX`, labelWidth);
+    const glow = this.createCycleSelector(container, 'interface', controlLeft, panelTop + 260, controlWidth, 'HUD GLOW', HUD_GLOW_LEVELS, hud.glow, (value) => {
+      hud = { ...hud, glow: value }; commitHud();
+    });
+    const animation = this.createCycleSelector(container, 'interface', controlLeft, panelTop + 305, controlWidth, 'HUD ANIMATION', HUD_ANIMATION_LEVELS, hud.animation, (value) => {
+      hud = { ...hud, animation: value }; commitHud();
+    });
+    const resetY = stacked ? panelTop + 660 : panelTop + 350;
+    const reset = this.addTabButton(container, previewX, resetY, 'Reset HUD Settings', () => {
+      hud = normalizeHudSettings(DEFAULT_HUD_SETTINGS);
+      hudScale.setValue?.(hud.scale);
+      panelOpacity.setValue?.(hud.panelOpacity);
+      backgroundOpacity.setValue?.(hud.backgroundOpacity);
+      textScale.setValue?.(hud.textScale);
+      edgeMargin.setValue?.(hud.edgeMargin);
+      glow.setValue(hud.glow);
+      animation.setValue(hud.animation);
+      commitHud();
+      SaveSystem.persist();
+    }, Phaser.Math.Clamp(innerWidth * 0.36, 195, 270));
+    this.registerScrollTarget('interface', reset, resetY, 22);
+    container.add(this.add.text(centerX, panelTop + panelHeight - 21, 'Critical health, objective, and cooldown warnings remain readable at every presentation level.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#789baa', align: 'center'
     }).setOrigin(0.5));
-    container.add(this.add.text(centerX, centerY + 12, 'ADDITIONAL INTERFACE SETTINGS COMING ONLINE', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', color: '#9dbcc7', align: 'center'
-    }).setOrigin(0.5));
-    container.add(this.add.text(centerX, centerY + 48, 'UI scale, HUD scale, and reticle controls will report here when available.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#617f8d', align: 'center',
-      wordWrap: { width: Math.min(620, this.viewport.width - 100), useAdvancedWrap: true }
-    }).setOrigin(0.5));
+    this.configureTabScrolling('interface', container, panelTop + panelHeight + 18);
   }
 
   private createProfileTab(container: Phaser.GameObjects.Container): void {
@@ -434,7 +563,7 @@ export class OptionsScene extends Phaser.Scene {
     }
     this.refreshTabVisuals();
     this.updateScrollVisibility();
-    if (tab === 'audio') this.applyAudioScroll();
+    this.applyTabScroll(tab);
   }
 
   private refreshTabVisuals(): void {
@@ -458,51 +587,81 @@ export class OptionsScene extends Phaser.Scene {
     visit(container);
   }
 
-  private configureAudioScrolling(contentBottom: number): void {
+  private configureTabScrolling(tab: OptionsTabId, container: Phaser.GameObjects.Container, contentBottom: number): void {
     const contentHeight = contentBottom - this.viewport.top;
-    this.audioScrollMax = Math.max(0, contentHeight - this.viewport.height + 8);
-    if (this.audioScrollMax <= 0) return;
+    const previous = this.scrollStates.get(tab);
+    this.scrollStates.set(tab, {
+      container,
+      targets: previous?.targets ?? [],
+      offset: previous?.offset ?? 0,
+      max: Math.max(0, contentHeight - this.viewport.height + 8),
+      contentHeight
+    });
+    this.ensureScrollIndicator();
+  }
+
+  private registerScrollTarget(tab: OptionsTabId, target: Phaser.GameObjects.GameObject, centerY: number, halfHeight: number): void {
+    const state = this.scrollStates.get(tab) ?? {
+      container: this.requireTab(tab), targets: [], offset: 0, max: 0, contentHeight: this.viewport.height
+    };
+    state.targets.push({ target, centerY, halfHeight });
+    this.scrollStates.set(tab, state);
+  }
+
+  private ensureScrollIndicator(): void {
+    if (this.scrollTrack) return;
     const trackHeight = Math.max(120, this.viewport.height - 28);
-    const thumbHeight = Math.max(46, trackHeight * (this.viewport.height / contentHeight));
     this.scrollTrackTop = this.viewport.top + 14;
-    this.scrollTrackRange = trackHeight - thumbHeight;
     const x = this.viewport.right - 12;
     this.scrollTrack = this.add.rectangle(x, this.scrollTrackTop + trackHeight * 0.5, 5, trackHeight, 0x18324b, 0.84)
       .setStrokeStyle(1, 0x4baccb, 0.65).setDepth(130);
-    this.scrollThumb = this.add.rectangle(x, this.scrollTrackTop + thumbHeight * 0.5, 8, thumbHeight, 0x62efff, 0.94)
+    this.scrollThumb = this.add.rectangle(x, this.scrollTrackTop + 28, 8, 46, 0x62efff, 0.94)
       .setStrokeStyle(1, 0xffffff, 0.75).setDepth(131);
     this.scrollLabel = this.add.text(x - 10, this.viewport.bottom - 10, 'SCROLL', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', color: '#78cfe7'
     }).setOrigin(1, 0.5).setDepth(131);
   }
 
-  private scrollAudio(delta: number): void {
-    if (this.activeTab !== 'audio' || this.audioScrollMax <= 0 || this.cancelBindingCapture) return;
-    this.audioScrollOffset = Phaser.Math.Clamp(this.audioScrollOffset + delta, 0, this.audioScrollMax);
-    this.applyAudioScroll();
+  private scrollActiveTab(delta: number): void {
+    const state = this.scrollStates.get(this.activeTab);
+    if (!state || state.max <= 0 || this.cancelBindingCapture) return;
+    state.offset = Phaser.Math.Clamp(state.offset + delta, 0, state.max);
+    this.applyTabScroll(this.activeTab);
   }
 
-  private applyAudioScroll(): void {
-    if (!this.audioContainer) return;
-    this.audioContainer.y = -this.audioScrollOffset;
-    if (this.scrollThumb) {
-      const ratio = this.audioScrollMax > 0 ? this.audioScrollOffset / this.audioScrollMax : 0;
-      this.scrollThumb.y = this.scrollTrackTop + this.scrollThumb.height * 0.5 + this.scrollTrackRange * ratio;
+  private applyTabScroll(tab: OptionsTabId): void {
+    const state = this.scrollStates.get(tab);
+    if (!state) return;
+    state.container.y = -state.offset;
+    if (tab === this.activeTab && this.scrollThumb) {
+      const trackHeight = Math.max(120, this.viewport.height - 28);
+      const thumbHeight = Math.max(46, trackHeight * (this.viewport.height / Math.max(this.viewport.height, state.contentHeight)));
+      this.scrollThumb.setDisplaySize(8, thumbHeight);
+      this.scrollTrackRange = trackHeight - thumbHeight;
+      const ratio = state.max > 0 ? state.offset / state.max : 0;
+      this.scrollThumb.y = this.scrollTrackTop + thumbHeight * 0.5 + this.scrollTrackRange * ratio;
     }
-    for (const entry of this.audioInteractiveTargets) {
-      if (!entry.target.input) continue;
-      const visibleY = entry.centerY - this.audioScrollOffset;
-      entry.target.input.enabled = this.activeTab === 'audio'
+    for (const entry of state.targets) {
+      const visibleY = entry.centerY - state.offset;
+      const enabled = this.activeTab === tab
         && visibleY - entry.halfHeight >= this.viewport.top + 3
         && visibleY + entry.halfHeight <= this.viewport.bottom - 3;
+      this.setGameObjectInputEnabled(entry.target, enabled);
     }
   }
 
   private updateScrollVisibility(): void {
-    const visible = this.activeTab === 'audio' && this.audioScrollMax > 0;
+    const visible = (this.scrollStates.get(this.activeTab)?.max ?? 0) > 0;
     this.scrollTrack?.setVisible(visible);
     this.scrollThumb?.setVisible(visible);
     this.scrollLabel?.setVisible(visible);
+  }
+
+  private setGameObjectInputEnabled(object: Phaser.GameObjects.GameObject, enabled: boolean): void {
+    if (object.input) object.input.enabled = enabled;
+    if (object instanceof Phaser.GameObjects.Container) {
+      for (const child of object.list) this.setGameObjectInputEnabled(child, enabled);
+    }
   }
 
   private createKeybindPanel(container: Phaser.GameObjects.Container, centerX: number, topY: number, contentWidth: number): number {
@@ -547,6 +706,7 @@ export class OptionsScene extends Phaser.Scene {
         this.beginBindingCapture(action, bindings, valueLabels, status);
       });
       container.add([actionLabel, background, value, hit]);
+      this.registerScrollTarget('gameplay', hit, y, 16);
     });
 
     const reset = this.add.text(centerX + panelWidth * 0.25 + 62, topY + panelHeight - 34, 'RESET DEFAULTS', {
@@ -563,6 +723,7 @@ export class OptionsScene extends Phaser.Scene {
       status.setText('Default ability bindings restored.').setColor('#8fffc4');
     });
     container.add(reset);
+    this.registerScrollTarget('gameplay', reset, topY + panelHeight - 34, 18);
     return topY + panelHeight;
   }
 
@@ -702,6 +863,225 @@ export class OptionsScene extends Phaser.Scene {
     this.scene.start(this.returnScene);
   }
 
+  private createRangeSlider(
+    container: Phaser.GameObjects.Container,
+    tab: OptionsTabId,
+    labelX: number,
+    trackX: number,
+    y: number,
+    label: string,
+    initial: number,
+    minimum: number,
+    maximum: number,
+    trackWidth: number,
+    onChange: (value: number) => void,
+    format: (value: number) => string,
+    labelWidth: number
+  ): SliderParts {
+    const minX = trackX - trackWidth * 0.5;
+    const maxX = trackX + trackWidth * 0.5;
+    const labelText = this.add.text(labelX, y, label, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#dbf5ff',
+      wordWrap: { width: labelWidth, useAdvancedWrap: true }
+    }).setOrigin(0, 0.5).setMaxLines(2);
+    const track = this.add.rectangle(trackX, y, trackWidth, 10, 0x1e2b45, 1).setStrokeStyle(1, 0x53dfff, 0.9);
+    const fill = this.add.rectangle(minX, y, 0, 8, 0x5be7ff, 1).setOrigin(0, 0.5);
+    const knob = this.add.circle(minX, y, 10, 0xff7adf, 1).setStrokeStyle(1, 0xffffff, 0.9);
+    const valueText = this.add.text(maxX + 39, y, '', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#ffeeb8'
+    }).setOrigin(0.5);
+    const hit = this.add.rectangle(trackX, y, trackWidth + 24, 34, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+    const setValue = (rawValue: number): void => {
+      const value = Phaser.Math.Clamp(rawValue, minimum, maximum);
+      const ratio = (value - minimum) / Math.max(0.0001, maximum - minimum);
+      fill.width = trackWidth * ratio;
+      knob.x = minX + trackWidth * ratio;
+      valueText.setText(format(value));
+    };
+    const updateFromPointer = (worldX: number): void => {
+      const ratio = Phaser.Math.Clamp((worldX - minX) / trackWidth, 0, 1);
+      const value = minimum + (maximum - minimum) * ratio;
+      setValue(value);
+      onChange(value);
+    };
+    hit.on('pointerover', () => AudioManager.get().playSfx('menuHover'));
+    hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => updateFromPointer(pointer.worldX));
+    hit.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.isDown) updateFromPointer(pointer.worldX);
+    });
+    setValue(initial);
+    container.add([labelText, track, fill, knob, valueText, hit]);
+    this.registerScrollTarget(tab, hit, y, 17);
+    return { fill, knob, valueText, hit, setValue };
+  }
+
+  private createCycleSelector<T extends string>(
+    container: Phaser.GameObjects.Container,
+    tab: OptionsTabId,
+    leftX: number,
+    y: number,
+    width: number,
+    label: string,
+    values: readonly T[],
+    initial: T,
+    onChange: (value: T) => void
+  ): { setValue: (value: T) => void } {
+    const labelWidth = Math.min(175, width * 0.42);
+    const controlX = leftX + labelWidth + (width - labelWidth) * 0.5;
+    const controlWidth = Math.max(160, width - labelWidth - 8);
+    container.add(this.add.text(leftX, y, label, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#dbf5ff'
+    }).setOrigin(0, 0.5));
+    const back = this.add.rectangle(controlX, y, controlWidth, 31, 0x101d31, 0.96).setStrokeStyle(1, 0x4fcfe9, 0.68);
+    const valueText = this.add.text(controlX, y, '', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: '13px', color: '#fff0ba'
+    }).setOrigin(0.5);
+    const previous = this.add.rectangle(controlX - controlWidth * 0.5 + 18, y, 35, 31, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+    const next = this.add.rectangle(controlX + controlWidth * 0.5 - 18, y, 35, 31, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+    const previousText = this.add.text(previous.x, y, '<', { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: '#65efff' }).setOrigin(0.5);
+    const nextText = this.add.text(next.x, y, '>', { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: '#65efff' }).setOrigin(0.5);
+    let current = values.includes(initial) ? initial : values[0];
+    const setValue = (value: T): void => {
+      current = values.includes(value) ? value : values[0];
+      valueText.setText(current.replaceAll('-', ' ').toUpperCase());
+    };
+    const step = (direction: number): void => {
+      const index = values.indexOf(current);
+      setValue(values[(index + direction + values.length) % values.length]);
+      AudioManager.get().playSfx('menu');
+      onChange(current);
+    };
+    for (const hit of [previous, next]) hit.on('pointerover', () => AudioManager.get().playSfx('menuHover'));
+    previous.on('pointerdown', () => step(-1));
+    next.on('pointerdown', () => step(1));
+    setValue(initial);
+    container.add([back, valueText, previous, next, previousText, nextText]);
+    this.registerScrollTarget(tab, previous, y, 16);
+    this.registerScrollTarget(tab, next, y, 16);
+    return { setValue };
+  }
+
+  private createColorSelector(
+    container: Phaser.GameObjects.Container,
+    tab: OptionsTabId,
+    leftX: number,
+    y: number,
+    width: number,
+    initial: ReticleColor,
+    onChange: (value: ReticleColor) => void
+  ): { setValue: (value: ReticleColor) => void } {
+    container.add(this.add.text(leftX, y, 'RETICLE COLOR', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#dbf5ff'
+    }).setOrigin(0, 0.5));
+    const startX = leftX + Math.min(190, width * 0.46);
+    const spacing = Math.min(38, (width - (startX - leftX) - 12) / RETICLE_COLOR_IDS.length);
+    const rings = new Map<ReticleColor, Phaser.GameObjects.Arc>();
+    let current = initial;
+    const setValue = (value: ReticleColor): void => {
+      current = value;
+      for (const [id, ring] of rings) ring.setStrokeStyle(id === current ? 3 : 1, id === current ? 0xffffff : RETICLE_COLORS[id], id === current ? 1 : 0.6);
+    };
+    RETICLE_COLOR_IDS.forEach((id, index) => {
+      const x = startX + index * spacing;
+      const ring = this.add.circle(x, y, 10, RETICLE_COLORS[id], 0.88).setStrokeStyle(1, RETICLE_COLORS[id], 0.6).setInteractive({ useHandCursor: true });
+      ring.on('pointerover', () => AudioManager.get().playSfx('menuHover'));
+      ring.on('pointerdown', () => {
+        if (current === id) return;
+        AudioManager.get().playSfx('menu');
+        setValue(id);
+        onChange(id);
+      });
+      rings.set(id, ring);
+      container.add(ring);
+      this.registerScrollTarget(tab, ring, y, 13);
+    });
+    setValue(initial);
+    return { setValue };
+  }
+
+  private createReticlePreview(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    initial: AimSettings
+  ): { redraw: (settings: AimSettings) => void } {
+    const root = this.add.container(x, y);
+    const frame = this.add.rectangle(0, 0, 300, 226, 0x050c15, 0.88).setStrokeStyle(1, 0x3dd9ef, 0.62);
+    const grid = this.add.graphics();
+    grid.lineStyle(1, 0x2b7080, 0.16);
+    for (let n = -120; n <= 120; n += 30) grid.lineBetween(n, -78, n, 78);
+    for (let n = -60; n <= 60; n += 30) grid.lineBetween(-120, n, 120, n);
+    const title = this.add.text(0, -91, 'LIVE RETICLE PREVIEW', { fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#69f4ff' }).setOrigin(0.5);
+    const graphic = this.add.graphics();
+    const detail = this.add.text(0, 91, '', { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#89adba' }).setOrigin(0.5);
+    root.add([frame, grid, title, graphic, detail]);
+    container.add(root);
+    const redraw = (settings: AimSettings): void => {
+      drawReticle(graphic, 0, 0, settings.reticle);
+      detail.setText(`${settings.reticle.style.replaceAll('-', ' ').toUpperCase()} // ${Math.round(settings.reticle.size * 100)}% // ${settings.reticle.color.toUpperCase()}`);
+    };
+    redraw(initial);
+    return { redraw };
+  }
+
+  private createHudPreview(
+    container: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    initial: HudSettings
+  ): { redraw: (settings: HudSettings) => void } {
+    const root = this.add.container(x, y);
+    const back = this.add.rectangle(0, 0, 330, 270, 0x040a12, 0.9).setStrokeStyle(1, 0x3dd9ef, 0.58);
+    const frame = this.add.graphics();
+    const title = this.add.text(0, -118, 'LIVE HUD PREVIEW', { fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#69f4ff' }).setOrigin(0.5);
+    const hp = this.add.rectangle(-118, -70, 105, 8, 0xff5578, 1).setOrigin(0, 0.5);
+    const energy = this.add.rectangle(-118, -51, 82, 8, 0x42f2ff, 1).setOrigin(0, 0.5);
+    const objective = this.add.text(0, -65, 'SITE B // DEFEND\n00:42', { fontFamily: 'Orbitron, sans-serif', fontSize: '12px', color: '#dffcff', align: 'center' }).setOrigin(0.5);
+    const resourceIcon = this.add.graphics().setPosition(79, -61);
+    drawHudResourceIcon(resourceIcon, 'coreTokens', 0xffc86b);
+    const resource = this.add.text(96, -61, '248', { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#ffd48c' }).setOrigin(0, 0.5);
+    const radar = this.add.graphics();
+    radar.lineStyle(1, 0x56edff, 0.58).strokeCircle(-103, 54, 32).lineStyle(1, 0x56edff, 0.2).lineBetween(-135, 54, -71, 54).lineBetween(-103, 22, -103, 86);
+    const abilities: Phaser.GameObjects.Graphics[] = [];
+    (['fence', 'turret', 'mine', 'shield'] as const).forEach((id, index) => {
+      const icon = this.add.graphics().setPosition(-27 + index * 52, 52);
+      drawHudAbilityIcon(icon, id);
+      abilities.push(icon);
+    });
+    const detail = this.add.text(0, 111, '', { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#89adba' }).setOrigin(0.5);
+    root.add([back, frame, title, hp, energy, objective, resourceIcon, resource, radar, ...abilities, detail]);
+    container.add(root);
+    const redraw = (rawSettings: HudSettings): void => {
+      const settings = normalizeHudSettings(rawSettings);
+      this.tweens.killTweensOf(root);
+      root.setAlpha(1).setY(y);
+      const glow = glowMultiplier(settings.glow);
+      frame.clear();
+      frame.fillStyle(0x06111b, 0.76 * settings.panelOpacity).fillRoundedRect(-139, -91, 278, 64, 5);
+      frame.fillStyle(0x0a1d29, 0.48 * settings.backgroundOpacity).fillRect(-132, -82, 264, 46);
+      frame.lineStyle(1 + glow * 0.5, 0x56edff, 0.48 + glow * 0.16).strokeRoundedRect(-139, -91, 278, 64, 5);
+      frame.fillStyle(0x06111b, 0.76 * settings.panelOpacity).fillRoundedRect(-52, 15, 190, 76, 5);
+      frame.lineStyle(1 + glow * 0.45, 0xff61cf, 0.5 + glow * 0.14).strokeRoundedRect(-52, 15, 190, 76, 5);
+      const previewScale = Phaser.Math.Linear(0.86, 1.08, (settings.scale - 0.75) / 0.65);
+      const inset = settings.edgeMargin * 0.22;
+      hp.setPosition(-118 + inset, -70);
+      energy.setPosition(-118 + inset, -51);
+      resourceIcon.setPosition(79 - inset, -61);
+      resource.setPosition(96 - inset, -61);
+      radar.setPosition(inset, 0);
+      abilities.forEach((icon, index) => icon.setPosition(-27 + index * 52 - inset * 0.45, 52));
+      for (const object of [hp, energy, objective, resourceIcon, resource, radar, ...abilities]) object.setScale(previewScale);
+      objective.setFontSize(Math.round(12 * settings.textScale));
+      resource.setFontSize(Math.round(14 * settings.textScale));
+      detail.setText(`${Math.round(settings.scale * 100)}% SCALE // ${Math.round(settings.textScale * 100)}% TEXT // ${settings.glow.toUpperCase()} GLOW`);
+      if (settings.animation !== 'off') {
+        this.tweens.add({ targets: root, y: y - (settings.animation === 'reduced' ? 1 : 3), duration: settings.animation === 'reduced' ? 1600 : 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    };
+    redraw(initial);
+    return { redraw };
+  }
+
   private createSlider(
     container: Phaser.GameObjects.Container,
     labelX: number,
@@ -742,7 +1122,7 @@ export class OptionsScene extends Phaser.Scene {
       if (pointer.isDown) updateFromPointer(pointer.worldX);
     });
     container.add([labelText, track, fill, knob, valueText, hit]);
-    this.audioInteractiveTargets.push({ target: hit, centerY: y, halfHeight: 17 });
+    this.registerScrollTarget('audio', hit, y, 17);
     return { fill, knob, valueText, hit };
   }
 
@@ -764,7 +1144,7 @@ export class OptionsScene extends Phaser.Scene {
     this.contentMask = null;
     this.contentMaskShape?.destroy();
     this.contentMaskShape = null;
-    this.audioInteractiveTargets.length = 0;
+    this.scrollStates.clear();
     this.tabContainers.clear();
     this.tabVisuals.clear();
   }

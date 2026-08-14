@@ -3,6 +3,7 @@ import type { AudioSfxName } from './config/audio';
 import type { AbilityBindings } from './config/controls';
 import type { EquippedModSnapshot, ModRewardRecord, RunProtocolId } from './mods/types.ts';
 import type { AccountProgressionTier, CosmeticPriceTier, ModFocusSignalId, RunContractId } from './economy/types.ts';
+import type { AimSettings, HudSettings } from './config/interfaceSettings.ts';
 
 export type SceneKey = 'boot' | 'splash' | 'local-profiles' | 'menu' | 'arena' | 'legendary-mod-reveal' | 'upgrades' | 'cosmetics' | 'mods' | 'garage' | 'results' | 'options' | 'round-finished' | 'loading';
 
@@ -226,6 +227,8 @@ export interface GameSaveData {
     screenShake: boolean;
     particles: boolean;
     abilityBindings: AbilityBindings;
+    hud: HudSettings;
+    aim: AimSettings;
   };
 }
 
