@@ -60,6 +60,7 @@ import { ReusableObjectPool } from '../performance/ReusableObjectPool.ts';
 import { FramePerformanceMonitor } from '../performance/FramePerformanceMonitor.ts';
 import { shouldReplaceTurretTarget } from '../performance/Targeting.ts';
 import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
+import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -270,6 +271,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private roundManager!: RoundManager;
   private layout!: ArenaLayout;
+  private arenaVisuals: ArenaVisualRenderer | null = null;
   private pathfinder!: GridPathfinder;
   private bombSites!: BombSiteManager;
   private bombsiteMods!: BombsiteModSystem;
@@ -754,28 +756,21 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private drawProceduralArena(layout: ArenaLayout): void {
-    this.add.rectangle(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5, WORLD_WIDTH, WORLD_HEIGHT, 0x090d14, 1).setDepth(0);
-
-    const floor = this.add.graphics();
-    floor.lineStyle(1, 0x131d2f, 0.6);
-    for (let x = 0; x < WORLD_WIDTH; x += 100) floor.lineBetween(x, 0, x, WORLD_HEIGHT);
-    for (let y = 0; y < WORLD_HEIGHT; y += 100) floor.lineBetween(0, y, WORLD_WIDTH, y);
+    this.arenaVisuals?.destroy();
+    this.arenaVisuals = new ArenaVisualRenderer(this, layout);
 
     this.walls = this.physics.add.staticGroup();
     this.wallRects = [];
 
     for (const wall of layout.walls) {
-      this.add.rectangle(wall.x + wall.w * 0.5, wall.y + wall.h * 0.5, wall.w, wall.h, 0x0c1119, 1)
-        .setStrokeStyle(2, layout.theme.primary, 0.92)
-        .setDepth(2);
       const body = this.walls.create(wall.x + wall.w * 0.5, wall.y + wall.h * 0.5, 'pixel');
       body.setDisplaySize(wall.w, wall.h);
+      body.setVisible(false);
       body.refreshBody();
       this.wallRects.push({ ...wall });
     }
 
     for (const obstacle of layout.obstacles) {
-      this.drawObstacle(obstacle, layout.theme.primary, layout.theme.secondary);
       const rect = {
         x: obstacle.x - obstacle.w * 0.5,
         y: obstacle.y - obstacle.h * 0.5,
@@ -784,47 +779,10 @@ export class ArenaScene extends Phaser.Scene {
       };
       const body = this.walls.create(obstacle.x, obstacle.y, 'pixel');
       body.setDisplaySize(rect.w, rect.h);
+      body.setVisible(false);
       body.refreshBody();
       this.wallRects.push(rect);
     }
-
-    for (const deco of layout.decorativeNeon) {
-      const color = Math.random() < 0.5 ? layout.theme.primary : layout.theme.secondary;
-      const line = this.add.rectangle(deco.x, deco.y, deco.w, deco.h, color, 0.15).setDepth(1);
-      this.tweens.add({ targets: line, alpha: { from: 0.08, to: 0.3 }, duration: 900 + Math.random() * 1000, yoyo: true, repeat: -1 });
-    }
-  }
-
-  private drawObstacle(obstacle: ArenaLayout['obstacles'][number], primary: number, secondary: number): void {
-    const g = this.add.graphics();
-    g.fillStyle(0x0f141d, 0.96);
-    g.lineStyle(2, Math.random() < 0.5 ? primary : secondary, 0.95);
-
-    const x = obstacle.x;
-    const y = obstacle.y;
-    const rx = obstacle.w * 0.5;
-    const ry = obstacle.h * 0.5;
-
-    if (obstacle.kind === 'circle' || obstacle.kind === 'energy-column') {
-      g.fillCircle(x, y, Math.min(rx, ry));
-      g.strokeCircle(x, y, Math.min(rx, ry));
-    } else if (obstacle.kind === 'triangle') {
-      g.fillPoints([{ x, y: y - ry }, { x: x - rx, y: y + ry }, { x: x + rx, y: y + ry }], true);
-      g.strokePoints([{ x, y: y - ry }, { x: x - rx, y: y + ry }, { x: x + rx, y: y + ry }], true);
-    } else if (obstacle.kind === 'hexagon' || obstacle.kind === 'octagon') {
-      const points: Phaser.Types.Math.Vector2Like[] = [];
-      const sides = obstacle.kind === 'hexagon' ? 6 : 8;
-      for (let i = 0; i < sides; i += 1) {
-        const a = (Math.PI * 2 * i) / sides;
-        points.push({ x: x + Math.cos(a) * rx, y: y + Math.sin(a) * ry });
-      }
-      g.fillPoints(points, true);
-      g.strokePoints(points, true);
-    } else {
-      g.fillRect(x - rx, y - ry, obstacle.w, obstacle.h);
-      g.strokeRect(x - rx, y - ry, obstacle.w, obstacle.h);
-    }
-    g.setDepth(3);
   }
 
   private createOrMovePlayer(): void {
@@ -5264,6 +5222,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private cleanupRoundObjects(): void {
+    this.arenaVisuals?.destroy();
+    this.arenaVisuals = null;
+    this.walls?.clear(true, true);
     this.boostVisual?.reset();
     this.mineSalvoInput.cancel();
     this.pendingMineSalvo = false;
@@ -5317,6 +5278,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private cleanup(): void {
+    this.arenaVisuals?.destroy();
+    this.arenaVisuals = null;
+    this.walls?.clear(true, true);
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
     this.audio.stopFluxCoreLoop();
