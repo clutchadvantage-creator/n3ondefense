@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { calculateHudLayout, formatHudCountdown } from '../src/game/systems/hudLayout.ts';
 
 const overlaps = (a, b) => !(
@@ -19,11 +20,33 @@ test('HUD perimeter clusters stay in bounds and the top row does not overlap', (
     }
     assert.equal(overlaps(layout.vitals, layout.objective), false, `${width}x${height} vitals overlap objective`);
     assert.equal(overlaps(layout.objective, layout.stats), false, `${width}x${height} objective overlaps stats`);
+    assert.equal(layout.vitals.height, layout.objective.height);
+    assert.equal(layout.objective.height, layout.stats.height);
     assert.ok(layout.radar.diameter >= 120 && layout.radar.diameter <= 150);
     assert.ok(layout.radar.centerX - layout.radar.diameter / 2 >= 0);
     assert.ok(layout.radar.centerY + layout.radar.diameter / 2 <= height);
     assert.ok(layout.radar.centerX + layout.radar.diameter / 2 < layout.abilities.x);
   }
+});
+
+test('combat HUD uses one icon-led cyber deck with truthful resource and deployable state', () => {
+  const hud = readFileSync(new URL('../src/game/systems/Hud.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  for (const title of ['OPERATIVE // VITALS', 'TACTICAL OBJECTIVE', 'RUN CACHE // TELEMETRY', 'COMBAT COMMAND DECK']) {
+    assert.match(hud, new RegExp(title.replaceAll('/', '\\/')));
+  }
+  for (const resource of ['credits', 'coreTokens', 'plasmaChips', 'fluxCores']) {
+    assert.match(hud, new RegExp(`updateResource\\('${resource}'`));
+  }
+  assert.match(hud, /\['fence', 'turret', 'mine', 'shield'\] as const/);
+  for (const ability of ['fence', 'turret', 'mine']) assert.match(hud, new RegExp(`id === '${ability}'`));
+  assert.match(hud, /lineTo\(0, 14\).*lineTo\(-12, 6\)/s);
+  assert.match(hud, /drawAbilitySegments/);
+  assert.match(hud, /slot\.selected \? MAGENTA/);
+  assert.match(arena, /fenceSlot\.count = this\.fences\.length/);
+  assert.match(arena, /turretSlot\.capacity = turretCfg\.maxActive/);
+  assert.match(arena, /mineSlot\.count = this\.mines\.length/);
+  assert.match(arena, /shieldSlot\.active \? 1 : 0/);
 });
 
 test('objective countdown is compact and rounds up partial seconds', () => {

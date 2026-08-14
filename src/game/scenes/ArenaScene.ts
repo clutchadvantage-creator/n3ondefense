@@ -287,6 +287,10 @@ export class ArenaScene extends Phaser.Scene {
   private roundCoreTokens = 0;
   private roundFluxCores = 0;
   private totalCreditsCollected = 0;
+  private hudWalletCredits = 0;
+  private hudWalletCoreTokens = 0;
+  private hudWalletPlasmaChips = 0;
+  private hudWalletFluxCores = 0;
 
   private activePlantingSite: BombSiteRuntime | null = null;
   private plantingProgressMs = 0;
@@ -365,6 +369,9 @@ export class ArenaScene extends Phaser.Scene {
     level: 1,
     enemies: 0,
     credits: 0,
+    coreTokens: 0,
+    plasmaChips: 0,
+    fluxCores: 0,
     phase: 'PRE-PLANT',
     objective: 'SITE A AVAILABLE',
     objectiveTimerMs: null,
@@ -374,10 +381,10 @@ export class ArenaScene extends Phaser.Scene {
     bombProgress: 0,
     buffs: this.hudBuffs,
     abilities: [
-      { id: 'fence', keybind: 'Q', icon: '⛔', label: 'FENCE', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.fence.cooldownMs, selected: false, hasEnergy: true, underLimit: true },
-      { id: 'turret', keybind: 'F', icon: '⌖', label: 'TURRET', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.turret.cooldownMs, selected: false, hasEnergy: true, underLimit: true },
-      { id: 'mine', keybind: 'R', icon: '✹', label: 'MINE', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.mine.cooldownMs, selected: false, hasEnergy: true, underLimit: true },
-      { id: 'shield', keybind: 'MMB', icon: '◉', label: 'SHIELD', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.shield.cooldownMs, active: false, selected: false, hasEnergy: true, underLimit: true }
+      { id: 'fence', keybind: 'Q', icon: '⛔', label: 'FENCE', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.fence.cooldownMs, selected: false, hasEnergy: true, underLimit: true, count: 0, capacity: ABILITY_BALANCE.fence.maxActive },
+      { id: 'turret', keybind: 'F', icon: '⌖', label: 'TURRET', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.turret.cooldownMs, selected: false, hasEnergy: true, underLimit: true, count: 0, capacity: ABILITY_BALANCE.turret.maxActive },
+      { id: 'mine', keybind: 'R', icon: '✹', label: 'MINE', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.mine.cooldownMs, selected: false, hasEnergy: true, underLimit: true, count: 0, capacity: ABILITY_BALANCE.mine.maxActive },
+      { id: 'shield', keybind: 'MMB', icon: '◉', label: 'SHIELD', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.shield.cooldownMs, active: false, selected: false, hasEnergy: true, underLimit: true, count: 0, capacity: null }
     ],
     radarRange: 900,
     radarContacts: this.hudRadarContacts
@@ -408,9 +415,11 @@ export class ArenaScene extends Phaser.Scene {
     this.resumeGameplay();
   };
   private readonly onReturnFromModCollection = (): void => {
+    this.refreshHudWallet();
     if (this.state.state === RoundState.Paused) this.showPauseMenu();
   };
   private readonly onReturnFromStore = (): void => {
+    this.refreshHudWallet();
     if (this.state.state === RoundState.Paused) this.showPauseMenu();
   };
   private readonly onQuitFromStore = (): void => this.quitToMenu();
@@ -444,6 +453,7 @@ export class ArenaScene extends Phaser.Scene {
     this.modsEarned = [...(session?.modsEarned ?? [])];
     this.runStartedAt = session?.runStartedAt ?? Date.now();
     const initialSave = SaveSystem.get();
+    this.refreshHudWallet(initialSave);
     this.runUpgrades = { ...initialSave.upgrades };
     this.particlesEnabled = initialSave.settings.particles;
     this.prismPlayerColor = SaveSystem.isPrismCosmetic('playerColor');
@@ -3975,6 +3985,7 @@ export class ArenaScene extends Phaser.Scene {
     this.roundCredits = 0;
     this.roundCoreTokens = 0;
     this.roundFluxCores = 0;
+    this.refreshHudWallet();
     this.detonatingSiteIds.clear();
     this.turretTelemetrySequence = 0;
     this.lastShotEnergyDeniedAt = -99_999;
@@ -4304,6 +4315,13 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
+  private refreshHudWallet(wallet = SaveSystem.get()): void {
+    this.hudWalletCredits = wallet.credits;
+    this.hudWalletCoreTokens = wallet.coreTokens;
+    this.hudWalletPlasmaChips = SaveSystem.getModCollection().plasmaChips;
+    this.hudWalletFluxCores = wallet.fluxCores;
+  }
+
   private refreshHudBuffs(now: number): void {
     this.hudBuffs.length = 0;
     this.appendHudBuff('DAMAGE+', this.player.buffs.damageBoostUntil, now);
@@ -4372,7 +4390,10 @@ export class ArenaScene extends Phaser.Scene {
     this.hudPayload.maxEnergy = this.player.energyStats.max;
     this.hudPayload.level = this.roundManager.round;
     this.hudPayload.enemies = this.enemies.length;
-    this.hudPayload.credits = this.totalCreditsCollected;
+    this.hudPayload.credits = this.hudWalletCredits + this.roundCredits;
+    this.hudPayload.coreTokens = this.hudWalletCoreTokens + this.roundCoreTokens;
+    this.hudPayload.plasmaChips = this.hudWalletPlasmaChips;
+    this.hudPayload.fluxCores = this.hudWalletFluxCores + this.roundFluxCores;
     this.hudPayload.phase = ROUND_PHASE_LABELS[this.state.state];
     this.hudPayload.objective = objectiveText;
     this.hudPayload.objectiveTimerMs = hudFocus?.timerMs ?? null;
@@ -4390,18 +4411,24 @@ export class ArenaScene extends Phaser.Scene {
     fenceSlot.selected = this.selectedAbility === 'fence';
     fenceSlot.hasEnergy = this.player.energy >= fenceCfg.energyCost;
     fenceSlot.underLimit = this.fences.length < fenceCfg.maxActive;
+    fenceSlot.count = this.fences.length;
+    fenceSlot.capacity = fenceCfg.maxActive;
 
     turretSlot.cooldownMs = turretCdMs;
     turretSlot.cooldownDurationMs = turretCfg.cooldownMs;
     turretSlot.selected = this.selectedAbility === 'turret';
     turretSlot.hasEnergy = this.player.energy >= turretCfg.energyCost;
     turretSlot.underLimit = this.turrets.length < turretCfg.maxActive;
+    turretSlot.count = this.turrets.length;
+    turretSlot.capacity = turretCfg.maxActive;
 
     mineSlot.cooldownMs = mineCdMs;
     mineSlot.cooldownDurationMs = mineCfg.cooldownMs;
     mineSlot.selected = this.selectedAbility === 'mine';
     mineSlot.hasEnergy = this.player.energy >= mineCfg.energyCost;
     mineSlot.underLimit = this.mines.length < mineCfg.maxActive;
+    mineSlot.count = this.mines.length;
+    mineSlot.capacity = mineCfg.maxActive;
 
     shieldSlot.cooldownMs = now < this.shieldActiveUntil ? this.shieldActiveUntil - now : shieldCdMs;
     shieldSlot.cooldownDurationMs = now < this.shieldActiveUntil
@@ -4409,6 +4436,8 @@ export class ArenaScene extends Phaser.Scene {
       : this.getShieldCooldownMs();
     shieldSlot.active = now < this.shieldActiveUntil;
     shieldSlot.hasEnergy = this.player.energy >= this.getShieldEnergyCost();
+    shieldSlot.count = shieldSlot.active ? 1 : 0;
+    shieldSlot.capacity = null;
 
     this.hud.update(this.hudPayload);
   }
@@ -4427,7 +4456,10 @@ export class ArenaScene extends Phaser.Scene {
     this.hudPayload.maxEnergy = this.player.energyStats.max;
     this.hudPayload.level = this.bossRound;
     this.hudPayload.enemies = encounter.boss.isDefeated ? 0 : 1;
-    this.hudPayload.credits = this.totalCreditsCollected;
+    this.hudPayload.credits = this.hudWalletCredits + this.roundCredits;
+    this.hudPayload.coreTokens = this.hudWalletCoreTokens + this.roundCoreTokens;
+    this.hudPayload.plasmaChips = this.hudWalletPlasmaChips;
+    this.hudPayload.fluxCores = this.hudWalletFluxCores + this.roundFluxCores;
     this.hudPayload.phase = this.state.state === RoundState.Paused ? 'PAUSED' : 'BOSS FIGHT';
     this.hudPayload.objective = `ELIMINATE ${BOSS_ARCHETYPES[encounter.archetype].label}`;
     this.hudPayload.objectiveTimerMs = null;
@@ -4443,16 +4475,22 @@ export class ArenaScene extends Phaser.Scene {
     fenceSlot.selected = this.selectedAbility === 'fence';
     fenceSlot.hasEnergy = this.player.energy >= fenceCfg.energyCost;
     fenceSlot.underLimit = this.fences.length < fenceCfg.maxActive;
+    fenceSlot.count = this.fences.length;
+    fenceSlot.capacity = fenceCfg.maxActive;
     turretSlot.cooldownMs = Math.max(0, this.abilityCooldownUntil.turret - now);
     turretSlot.cooldownDurationMs = turretCfg.cooldownMs;
     turretSlot.selected = this.selectedAbility === 'turret';
     turretSlot.hasEnergy = this.player.energy >= turretCfg.energyCost;
     turretSlot.underLimit = this.turrets.length < turretCfg.maxActive;
+    turretSlot.count = this.turrets.length;
+    turretSlot.capacity = turretCfg.maxActive;
     mineSlot.cooldownMs = Math.max(0, this.abilityCooldownUntil.mine - now);
     mineSlot.cooldownDurationMs = mineCfg.cooldownMs;
     mineSlot.selected = this.selectedAbility === 'mine';
     mineSlot.hasEnergy = this.player.energy >= mineCfg.energyCost;
     mineSlot.underLimit = this.mines.length < mineCfg.maxActive;
+    mineSlot.count = this.mines.length;
+    mineSlot.capacity = mineCfg.maxActive;
     shieldSlot.cooldownMs = now < this.shieldActiveUntil
       ? this.shieldActiveUntil - now
       : Math.max(0, this.shieldCooldownUntil - now);
@@ -4461,6 +4499,8 @@ export class ArenaScene extends Phaser.Scene {
       : this.getShieldCooldownMs();
     shieldSlot.active = now < this.shieldActiveUntil;
     shieldSlot.hasEnergy = this.player.energy >= this.getShieldEnergyCost();
+    shieldSlot.count = shieldSlot.active ? 1 : 0;
+    shieldSlot.capacity = null;
     this.hud.update(this.hudPayload);
   }
 

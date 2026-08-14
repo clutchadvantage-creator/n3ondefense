@@ -25,18 +25,16 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
  */
 export function calculateHudLayout(width: number, height: number): HudScreenLayout {
   const safeArea = Math.round(clamp(Math.min(width, height) * 0.022, 12, 24));
-  const scale = clamp(Math.min(width / 1366, height / 768), 0.72, 1.18);
+  const scale = clamp(Math.min(width / 1366, height / 768), 0.76, 1.18);
   const topGap = Math.round(clamp(width * 0.008, 8, 14));
-  const objectiveWidth = Math.round(clamp(width * 0.25, 220, 340));
-  const objectiveHeight = Math.round(90 * scale);
+  const objectiveWidth = Math.round(clamp(width * 0.29, 250, 430));
+  const topModuleHeight = Math.round(clamp(96 * scale, 82, 112));
   const sideSpace = Math.max(120, (width - objectiveWidth) / 2 - safeArea - topGap);
-  const vitalsWidth = Math.round(Math.min(292 * scale, sideSpace));
-  const statsWidth = Math.round(Math.min(280 * scale, sideSpace));
-  const vitalsHeight = Math.round(82 * scale);
-  const statsHeight = Math.round(44 * scale);
+  const vitalsWidth = Math.round(Math.min(326 * scale, sideSpace));
+  const statsWidth = Math.round(Math.min(390 * scale, sideSpace));
   const radarDiameter = Math.round(clamp(Math.min(width, height) * 0.17, 120, 150));
-  const abilityWidth = Math.round(clamp(width * 0.275, 246, 300) * Math.min(1, scale / 0.9));
-  const abilityHeight = Math.round(80 * scale);
+  const abilityWidth = Math.round(clamp(width * 0.36, 340, 520));
+  const abilityHeight = Math.round(clamp(112 * scale, 96, 128));
 
   return {
     safeArea,
@@ -45,19 +43,19 @@ export function calculateHudLayout(width: number, height: number): HudScreenLayo
       x: safeArea,
       y: safeArea,
       width: vitalsWidth,
-      height: vitalsHeight
+      height: topModuleHeight
     },
     objective: {
       x: Math.round((width - objectiveWidth) / 2),
       y: safeArea,
       width: objectiveWidth,
-      height: objectiveHeight
+      height: topModuleHeight
     },
     stats: {
       x: width - safeArea - statsWidth,
       y: safeArea,
       width: statsWidth,
-      height: statsHeight
+      height: topModuleHeight
     },
     radar: {
       centerX: safeArea + radarDiameter / 2,
