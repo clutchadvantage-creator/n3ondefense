@@ -382,6 +382,16 @@ export class PlayerProfileStore {
     PlayerProfileStore.save();
   }
 
+  static addFluxCores(amount: number): void {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const save = PlayerProfileStore.getActiveSave();
+    const earned = Math.floor(amount);
+    save.wallet.fluxCores += earned;
+    save.progress.totalFluxCoresEarned += earned;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
   static addPlasmaChips(amount: number): void {
     if (!Number.isFinite(amount) || amount <= 0) return;
     const save = PlayerProfileStore.getActiveSave();

@@ -25,6 +25,8 @@ test('live telemetry aggregates enemy TTK, kill sources, drops, pickups, and pla
   GameplayTelemetryRecorder.recordEnergyDenied('dash', 20, 7);
   GameplayTelemetryRecorder.recordPickupDropped('energy', 'enemy');
   GameplayTelemetryRecorder.recordPickupCollected('energy', 'enemy', 55, 40);
+  GameplayTelemetryRecorder.recordPickupDropped('fluxCore', 'flux-core');
+  GameplayTelemetryRecorder.recordPickupCollected('fluxCore', 'flux-core');
   GameplayTelemetryRecorder.recordPlayerDamage('enemy-projectile', 9);
   GameplayTelemetryRecorder.recordTurretPlaced('turret-1', { maximumHealth: 145, damage: 13, fireRate: 2.5, range: 215 });
   GameplayTelemetryRecorder.recordTurretShot('turret-1');
@@ -46,7 +48,7 @@ test('live telemetry aggregates enemy TTK, kill sources, drops, pickups, and pla
   });
   GameplayTelemetryRecorder.recordDefuseStopped('site-A');
   GameplayTelemetryRecorder.recordEncounterEndState({ playerHealth: 111, playerEnergy: 0, activePickups: {} });
-  GameplayTelemetryRecorder.endEncounter('completed', { credits: 250, coreTokens: 1 });
+  GameplayTelemetryRecorder.endEncounter('completed', { credits: 250, coreTokens: 1, fluxCores: 1 });
 
   const encounter = GameplayTelemetryRecorder.snapshot().activeRun.encounters[0];
   assert.equal(encounter.enemySpawns, 1);
@@ -56,6 +58,10 @@ test('live telemetry aggregates enemy TTK, kill sources, drops, pickups, and pla
   assert.equal(encounter.enemyMetrics.grunt.damageBySource.hazard, 6);
   assert.equal(encounter.pickupDrops.energy, 1);
   assert.equal(encounter.pickupsCollected.energy, 1);
+  assert.equal(encounter.pickupDrops.fluxCore, 1);
+  assert.equal(encounter.pickupDropsBySource['flux-core'], 1);
+  assert.equal(encounter.pickupsCollected.fluxCore, 1);
+  assert.equal(encounter.fluxCoresEarned, 1);
   assert.equal(encounter.shotsFired, 1);
   assert.equal(encounter.projectiles.weapon.hits, 1);
   assert.equal(encounter.projectiles.weapon.criticalHits, 1);

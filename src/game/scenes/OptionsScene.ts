@@ -647,7 +647,7 @@ export class OptionsScene extends Phaser.Scene {
     showInfoModal(
       this,
       'IMPORT SAVE PREVIEW',
-      `Profile: ${preview.preview.save.profile.name}\nCredits: ${preview.preview.save.wallet.credits}\nCore Tokens: ${preview.preview.save.wallet.coreTokens}\nHighest Round: ${preview.preview.save.progress.highestRound}`,
+      `Profile: ${preview.preview.save.profile.name}\nCredits: ${preview.preview.save.wallet.credits}\nCore Tokens: ${preview.preview.save.wallet.coreTokens}\nFlux Cores: ${preview.preview.save.wallet.fluxCores}\nHighest Round: ${preview.preview.save.progress.highestRound}`,
       [
         { label: 'Import As New Profile', onClick: () => { void SaveSystem.importProfile(parsed, 'new'); }, width: 240 },
         { label: 'Replace Active Profile', onClick: () => { const active = SaveSystem.getActiveProfileSummary(); if (active) void SaveSystem.importProfile(parsed, 'replace', active.id); }, width: 250 },

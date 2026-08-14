@@ -6,6 +6,13 @@ import { SeededRandom } from './SeededRandom';
 
 export type FluxCoreDamageSource = 'weapon' | 'turret' | 'enemy-projectile' | 'mine' | 'fence' | 'bomblet' | 'bomb' | 'boss';
 
+export interface FluxCoreDestroyedEvent {
+  x: number;
+  y: number;
+  color: number;
+  droppedCore: boolean;
+}
+
 interface FluxCoreVisual {
   id: number;
   x: number;
@@ -40,6 +47,7 @@ export class FluxCoreSystem {
   private readonly warningText: Phaser.GameObjects.Text;
   private readonly cores: FluxCoreVisual[] = [];
   private readonly effects = new Set<Phaser.GameObjects.GameObject>();
+  private readonly effectTweens = new Set<Phaser.Tweens.Tween>();
   private readonly capacity: number;
   private readonly recentSpawnLocations: Array<{ x: number; y: number }> = [];
   private nextSpawnAt: number;
@@ -60,7 +68,9 @@ export class FluxCoreSystem {
     private readonly theme: ArenaTheme,
     private readonly bounds: RectSpec,
     private readonly isBlocked: (x: number, y: number, halfWidth: number, halfHeight: number) => boolean,
-    private readonly onDestroyed?: (x: number, y: number) => void,
+    private readonly isReserved: (x: number, y: number, halfWidth: number, halfHeight: number) => boolean,
+    private readonly particlesEnabled: boolean,
+    private readonly onDestroyed?: (event: FluxCoreDestroyedEvent) => void,
     private readonly onProximityChanged?: (strength: number) => void,
     private readonly onRecoveryAlarm?: () => void
   ) {
@@ -187,6 +197,8 @@ export class FluxCoreSystem {
 
   destroy(): void {
     this.onProximityChanged?.(0);
+    for (const tween of this.effectTweens) tween.stop();
+    this.effectTweens.clear();
     for (const core of this.cores) this.destroyCoreVisual(core);
     this.cores.length = 0;
     for (const effect of this.effects) {
@@ -274,6 +286,7 @@ export class FluxCoreSystem {
       const x = this.random.float(this.bounds.x + inset, this.bounds.x + this.bounds.w - inset);
       const y = this.random.float(this.bounds.y + inset, this.bounds.y + this.bounds.h - inset);
       if (this.isBlocked(x, y, FLUX_CORE_BALANCE.geometryHalfWidth, FLUX_CORE_BALANCE.geometryHalfHeight)) continue;
+      if (this.isReserved(x, y, FLUX_CORE_BALANCE.geometryHalfWidth, FLUX_CORE_BALANCE.geometryHalfHeight)) continue;
       const playerDx = x - playerX;
       const playerDy = y - playerY;
       if (playerDx * playerDx + playerDy * playerDy < 120 * 120) continue;
@@ -447,7 +460,12 @@ export class FluxCoreSystem {
     this.cores.splice(index, 1);
     this.destroyCoreVisual(core);
     this.playDestroyedEffect(core.x, core.y, core.color);
-    this.onDestroyed?.(core.x, core.y);
+    this.onDestroyed?.({
+      x: core.x,
+      y: core.y,
+      color: core.color,
+      droppedCore: this.random.float(0, 1) < FLUX_CORE_BALANCE.collectibleDropChance
+    });
     // A partial clear never affects the lasers. Shutdown begins only after the
     // complete, already-planned deployment has emerged and every core is gone.
     if (this.cyclePhase === 'engaged' && this.cores.length === 0) {
@@ -461,18 +479,99 @@ export class FluxCoreSystem {
   }
 
   private playDestroyedEffect(x: number, y: number, color: number): void {
-    const blast = this.scene.add.circle(x, y, 8, color, 0.45).setDepth(12).setBlendMode(Phaser.BlendModes.ADD);
-    const ring = this.scene.add.circle(x, y, 12, 0xffffff, 0.08).setStrokeStyle(3, color, 0.95).setDepth(12);
+    const blast = this.scene.add.circle(x, y, 12, 0xffffff, 0.92)
+      .setStrokeStyle(4, color, 1)
+      .setDepth(13)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const innerRing = this.scene.add.circle(x, y, 18, color, 0.2)
+      .setStrokeStyle(5, 0xffffff, 0.9)
+      .setDepth(12)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const outerRing = this.scene.add.circle(x, y, 24, color, 0.05)
+      .setStrokeStyle(3, color, 0.95)
+      .setDepth(12)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const rays = this.scene.add.graphics().setPosition(x, y).setDepth(12).setBlendMode(Phaser.BlendModes.ADD);
+    rays.lineStyle(2.5, color, 0.9);
+    for (let index = 0; index < 12; index += 1) {
+      const angle = index * Math.PI / 6 + this.random.float(-0.09, 0.09);
+      const start = this.random.float(14, 24);
+      const end = this.random.float(43, 72);
+      rays.beginPath();
+      rays.moveTo(Math.cos(angle) * start, Math.sin(angle) * start);
+      rays.lineTo(Math.cos(angle) * end, Math.sin(angle) * end);
+      rays.strokePath();
+    }
     this.effects.add(blast);
-    this.effects.add(ring);
-    this.scene.tweens.add({
-      targets: blast, radius: 66, alpha: 0, duration: 320,
-      onComplete: () => { this.effects.delete(blast); blast.destroy(); }
-    });
-    this.scene.tweens.add({
-      targets: ring, radius: 82, alpha: 0, duration: 380,
-      onComplete: () => { this.effects.delete(ring); ring.destroy(); }
-    });
+    this.effects.add(innerRing);
+    this.effects.add(outerRing);
+    this.effects.add(rays);
+    this.trackEffectTween(this.scene.tweens.add({
+      targets: blast, radius: 72, alpha: 0, duration: 360, ease: 'Cubic.easeOut',
+      onComplete: () => this.retireEffect(blast)
+    }));
+    this.trackEffectTween(this.scene.tweens.add({
+      targets: innerRing, radius: 94, alpha: 0, duration: 500, ease: 'Cubic.easeOut',
+      onComplete: () => this.retireEffect(innerRing)
+    }));
+    this.trackEffectTween(this.scene.tweens.add({
+      targets: outerRing, radius: 136, alpha: 0, duration: 720, ease: 'Quart.easeOut',
+      onComplete: () => this.retireEffect(outerRing)
+    }));
+    this.trackEffectTween(this.scene.tweens.add({
+      targets: rays, scaleX: 1.75, scaleY: 1.75, alpha: 0, duration: 480, ease: 'Quad.easeOut',
+      onComplete: () => this.retireEffect(rays)
+    }));
+
+    if (!this.particlesEnabled) return;
+    for (let index = 0; index < FLUX_CORE_BALANCE.destructionParticleCount; index += 1) {
+      const angle = index * Math.PI * 2 / FLUX_CORE_BALANCE.destructionParticleCount + this.random.float(-0.18, 0.18);
+      const distance = this.random.float(72, 142);
+      const arcHeight = this.random.float(24, 58);
+      const size = this.random.float(2.2, 4.8);
+      const particle = index % 3 === 0
+        ? this.scene.add.polygon(x, y, [0, -size, size, 0, 0, size, -size, 0], index % 2 === 0 ? 0xffffff : color, 0.96)
+        : this.scene.add.circle(x, y, size, index % 4 === 0 ? 0xffffff : color, 0.95);
+      particle.setStrokeStyle(1, color, 1).setDepth(13).setBlendMode(Phaser.BlendModes.ADD);
+      this.effects.add(particle);
+      const state = { progress: 0 };
+      let tween: Phaser.Tweens.Tween;
+      tween = this.scene.tweens.add({
+        targets: state,
+        progress: 1,
+        duration: this.random.int(720, 980),
+        ease: 'Quad.easeOut',
+        onUpdate: () => {
+          if (!particle.active) return;
+          const progress = state.progress;
+          const travel = 1 - (1 - progress) * (1 - progress);
+          const firstFlight = progress <= 0.68;
+          const bounceProgress = firstFlight ? progress / 0.68 : (progress - 0.68) / 0.32;
+          const lift = Math.sin(Math.PI * bounceProgress) * arcHeight * (firstFlight ? 1 : 0.28);
+          particle.setPosition(
+            x + Math.cos(angle) * distance * travel,
+            y + Math.sin(angle) * distance * travel - Math.max(0, lift)
+          );
+          particle.setRotation(angle + progress * (index % 2 === 0 ? 5 : -5));
+          particle.setAlpha(progress < 0.68 ? 0.95 : Math.max(0, 1 - (progress - 0.68) / 0.32));
+        },
+        onComplete: () => {
+          this.effectTweens.delete(tween);
+          this.retireEffect(particle);
+        }
+      });
+      this.trackEffectTween(tween);
+    }
+  }
+
+  private trackEffectTween(tween: Phaser.Tweens.Tween): void {
+    this.effectTweens.add(tween);
+    tween.once(Phaser.Tweens.Events.TWEEN_COMPLETE, () => this.effectTweens.delete(tween));
+  }
+
+  private retireEffect(effect: Phaser.GameObjects.GameObject): void {
+    this.effects.delete(effect);
+    effect.destroy();
   }
 
   private destroyCoreVisual(core: FluxCoreVisual): void {

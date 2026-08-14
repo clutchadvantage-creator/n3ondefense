@@ -110,10 +110,11 @@ export const getModLibraryProgress = (mods: LocalModCollection): { discovered: n
   return { discovered: entries.filter((entry) => entry.owned).length, total: entries.length };
 };
 
-export const getGarageWallet = (save: LocalPlayerSave): { credits: number; coreTokens: number; plasmaChips: number } => ({
+export const getGarageWallet = (save: LocalPlayerSave): { credits: number; coreTokens: number; plasmaChips: number; fluxCores: number } => ({
   credits: save.wallet.credits,
   coreTokens: save.wallet.coreTokens,
-  plasmaChips: save.mods.plasmaChips
+  plasmaChips: save.mods.plasmaChips,
+  fluxCores: save.wallet.fluxCores
 });
 
 export const getOwnedGarageCosmetics = (save: LocalPlayerSave): CosmeticOption[] => {

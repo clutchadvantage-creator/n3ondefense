@@ -15,7 +15,7 @@ import {
   getRoundCompletionCredits
 } from '../src/game/economy/economyBalance.ts';
 import { rollModDrop } from '../src/game/mods/ModDropService.ts';
-import { normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
+import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 
 const progress = () => ({
   highestRound: 0,
@@ -98,13 +98,31 @@ test('version-five profiles preserve balances and receive economy telemetry defa
     metadata: { updatedAt: '2026-02-01T00:00:00.000Z', saveRevision: 99, gameVersion: '0.0.1' }
   });
   assert.ok(migrated);
-  assert.equal(migrated.version, 8);
+  assert.equal(migrated.version, 9);
+  assert.equal(migrated.wallet.fluxCores, 0);
+  assert.equal(migrated.progress.totalFluxCoresEarned, 0);
   assert.equal(migrated.progress.initialDeploymentBriefingSeen, false);
   assert.equal(migrated.wallet.credits, 9_876_543);
   assert.equal(migrated.wallet.coreTokens, 44);
   assert.equal(migrated.progress.totalCreditsSpent, 0);
   assert.deepEqual(migrated.progress.creditSpendByCategory, createEmptyCreditSpendBreakdown());
   assert.equal(migrated.mods.purchasedLoadoutSlots, 1);
+});
+
+test('version-eight profiles migrate into the Flux Core wallet without losing balances', () => {
+  const legacy = createDefaultLocalSave('flux-v8', 'Flux Veteran');
+  legacy.version = 8;
+  legacy.wallet.credits = 1234;
+  legacy.wallet.coreTokens = 56;
+  delete legacy.wallet.fluxCores;
+  delete legacy.progress.totalFluxCoresEarned;
+  const migrated = normalizeLocalSave(legacy);
+  assert.ok(migrated);
+  assert.equal(migrated.version, 9);
+  assert.equal(migrated.wallet.credits, 1234);
+  assert.equal(migrated.wallet.coreTokens, 56);
+  assert.equal(migrated.wallet.fluxCores, 0);
+  assert.equal(migrated.progress.totalFluxCoresEarned, 0);
 });
 
 test('run telemetry derives progression state without storing hidden adaptive difficulty', () => {

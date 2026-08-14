@@ -6,7 +6,7 @@ import type { ModFocusSignalId, RunContractId } from '../economy/types.ts';
 
 export type CombatDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard' | 'bomb' | 'splitCurrent' | 'unknown';
 export type PlayerDamageSource = 'enemy-contact' | 'enemy-projectile' | 'enemy-missile' | 'enemy-death-mine' | 'laser' | 'bomblet' | 'gas' | 'boss';
-export type PickupDropSource = 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support';
+export type PickupDropSource = 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support' | 'flux-core';
 export type EncounterKind = 'round' | 'boss';
 export type EncounterOutcome = 'completed' | 'playerDead' | 'bombDefused' | 'bossDefeated' | 'quit' | 'replaced';
 export type TelemetryAbility = 'dash' | 'shield' | 'fence' | 'turret' | 'mine';
@@ -234,6 +234,7 @@ export interface GameplayEncounterMetrics {
   creditsEarned: number;
   coreTokensEarned: number;
   plasmaChipsEarned: number;
+  fluxCoresEarned: number;
   boss: BossMetrics | null;
   derived: {
     spawnsPerActiveMinute: number;
@@ -391,7 +392,7 @@ export class GameplayTelemetryRecorder {
       restoration: { health: emptyRestoration(), energy: emptyRestoration() }, buffUptimeMs: {}, modDrops: [],
       playerDamageBySource: {}, playerHitsBySource: {}, minimumPlayerHealth: input.maximumPlayerHealth, minimumPlayerEnergy: input.maximumPlayerEnergy,
       turrets: emptyTurretMetrics(), spawnPressure: emptySpawnPressure(), objectives: emptyObjectiveMetrics(),
-      creditsEarned: 0, coreTokensEarned: 0, plasmaChipsEarned: 0, boss: null,
+      creditsEarned: 0, coreTokensEarned: 0, plasmaChipsEarned: 0, fluxCoresEarned: 0, boss: null,
       derived: { spawnsPerActiveMinute: 0, killsPerActiveMinute: 0, averageEnemyTtkMs: null, averageCombatTtkMs: null, averageTimeToFirstDamageMs: null, averageActiveEnemies: 0, averageActiveWeight: 0, pickupCollectionRate: null, weaponAccuracy: null, turretAccuracy: null }
     });
     this.persistSoon();
@@ -783,7 +784,7 @@ export class GameplayTelemetryRecorder {
     encounter.pickupsActiveAtEnd = { ...input.activePickups };
   }
 
-  static endEncounter(outcome: EncounterOutcome, rewards?: { credits?: number; coreTokens?: number; plasmaChips?: number }): void {
+  static endEncounter(outcome: EncounterOutcome, rewards?: { credits?: number; coreTokens?: number; plasmaChips?: number; fluxCores?: number }): void {
     const encounter = this.activeEncounter();
     if (!encounter) return;
     for (const site of Object.values(encounter.objectives.sites)) {
@@ -806,6 +807,7 @@ export class GameplayTelemetryRecorder {
     encounter.creditsEarned = Math.max(0, Math.floor(rewards?.credits ?? encounter.creditsEarned));
     encounter.coreTokensEarned = Math.max(0, Math.floor(rewards?.coreTokens ?? encounter.coreTokensEarned));
     encounter.plasmaChipsEarned = Math.max(0, Math.floor(rewards?.plasmaChips ?? encounter.plasmaChipsEarned));
+    encounter.fluxCoresEarned = Math.max(0, Math.floor(rewards?.fluxCores ?? encounter.fluxCoresEarned ?? 0));
     deriveEncounter(encounter);
     this.persistNow();
   }

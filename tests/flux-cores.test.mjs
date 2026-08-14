@@ -48,9 +48,28 @@ test('Flux Core locations reserve full geometry and avoid recent deployment posi
   const source = readFileSync(new URL('../src/game/systems/FluxCoreSystem.ts', import.meta.url), 'utf8');
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   assert.match(source, /this\.isBlocked\(x, y, FLUX_CORE_BALANCE\.geometryHalfWidth, FLUX_CORE_BALANCE\.geometryHalfHeight\)/);
+  assert.match(source, /this\.isReserved\(x, y, FLUX_CORE_BALANCE\.geometryHalfWidth, FLUX_CORE_BALANCE\.geometryHalfHeight\)/);
   assert.match(source, /for \(const previous of this\.recentSpawnLocations\)/);
   assert.match(arena, /intersectsWallGeometry\(x, y, halfWidth, halfHeight\)/);
   assert.match(arena, /x \+ halfWidth >= wall\.x[\s\S]*?y - halfHeight <= wall\.y \+ wall\.h/);
+  assert.match(arena, /private intersectsBombSiteGeometry\(/);
+  assert.match(arena, /FLUX_CORE_BALANCE\.bombSiteExclusionRadius/);
+  assert.match(arena, /const closestX = Phaser\.Math\.Clamp\(site\.x, x - halfWidth, x \+ halfWidth\)/);
+});
+
+test('destroyed Flux Cores use bounded neon bounce debris and can drop their exact colored core orb', () => {
+  const source = readFileSync(new URL('../src/game/systems/FluxCoreSystem.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.ok(FLUX_CORE_BALANCE.collectibleDropChance > 0 && FLUX_CORE_BALANCE.collectibleDropChance < 1);
+  assert.ok(FLUX_CORE_BALANCE.destructionParticleCount > 0 && FLUX_CORE_BALANCE.destructionParticleCount <= 24);
+  assert.match(source, /droppedCore: this\.random\.float\(0, 1\) < FLUX_CORE_BALANCE\.collectibleDropChance/);
+  assert.match(source, /const bounceProgress = firstFlight/);
+  assert.match(source, /this\.effectTweens/);
+  assert.match(arena, /if \(event\.droppedCore\) this\.dropFluxCorePickup\(event\.x, event\.y, event\.color\)/);
+  assert.match(arena, /const glow = this\.add\.circle\(0, -1, 10, color, 0\.23\)/);
+  assert.match(arena, /const orb = this\.add\.circle\(0, -1, 5, color, 0\.95\)/);
+  assert.match(arena, /SaveSystem\.addFluxCores\(rewardFluxCores\)/);
+  assert.match(arena, /this\.audio\.playSfx\('bomblet'\)/);
 });
 
 test('Flux Cores use capped manual collision, proximity-only pulses, and deterministic cleanup', () => {

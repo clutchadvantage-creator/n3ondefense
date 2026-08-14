@@ -17,7 +17,7 @@ export enum RoundState {
 }
 
 export type EnemyType = 'grunt' | 'shooter' | 'defuser' | 'tank' | 'disruptor' | 'star';
-export type PickupType = 'health' | 'energy' | 'damageBoost' | 'speedBoost' | 'rapidFire' | 'credits' | 'coreToken';
+export type PickupType = 'health' | 'energy' | 'damageBoost' | 'speedBoost' | 'rapidFire' | 'credits' | 'coreToken' | 'fluxCore';
 export type AbilityType = 'fence' | 'turret' | 'mine';
 
 export enum BombSiteState {
@@ -214,6 +214,7 @@ export interface CosmeticOption {
 export interface GameSaveData {
   credits: number;
   coreTokens: number;
+  fluxCores: number;
   upgrades: Record<string, number>;
   unlockedCosmetics: string[];
   equippedCosmetics: Partial<Record<CosmeticOption['category'], string>>;
@@ -232,6 +233,7 @@ export interface ArenaReward {
   credits: number;
   runCreditsEarned: number;
   coreTokens: number;
+  fluxCores: number;
   reason: 'victory' | 'playerDead' | 'bombDefused';
   round?: number;
   seed?: number;
@@ -275,6 +277,7 @@ export interface RoundFinishedPayload {
   creditsGained: number;
   coreTokensGained: number;
   plasmaChipsGained: number;
+  fluxCoresGained: number;
   bossDefeated: string | null;
   protocol: RunProtocolId;
   equippedMods: EquippedModSnapshot[];

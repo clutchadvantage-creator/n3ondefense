@@ -29,6 +29,7 @@ import { LaserSecuritySystem } from '../systems/LaserSecuritySystem';
 import { BombletHazardSystem } from '../systems/BombletHazardSystem';
 import { GasHazardSystem } from '../systems/GasHazardSystem';
 import { FluxCoreSystem } from '../systems/FluxCoreSystem';
+import { FLUX_CORE_BALANCE } from '../config/fluxCores';
 import { GAS_HAZARD_BALANCE } from '../config/gasHazards';
 import type { HazardDamageTarget } from '../config/hazardScaling';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossRewards, isBossRound, selectBossArchetype, type BossArchetype } from '../config/bossBalance';
@@ -108,7 +109,7 @@ interface Pickup {
   type: PickupType;
   sprite: Phaser.GameObjects.Container;
   expiresAt: number;
-  source: 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support';
+  source: 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support' | 'flux-core';
 }
 
 interface PickupVisual {
@@ -126,6 +127,15 @@ interface PickupMotion {
   velocityX: number;
   velocityY: number;
   phase: number;
+}
+
+interface FluxCorePickupVisual {
+  glow: Phaser.GameObjects.Arc;
+  orb: Phaser.GameObjects.Arc;
+  electricity: Phaser.GameObjects.Graphics;
+  color: number;
+  phase: number;
+  nextArcAt: number;
 }
 
 interface DeathMine {
@@ -217,6 +227,7 @@ export class ArenaScene extends Phaser.Scene {
   private homingMissiles: HomingMissile[] = [];
   private pickups: Pickup[] = [];
   private readonly pickupVisuals = new WeakMap<Phaser.GameObjects.Container, PickupVisual>();
+  private readonly fluxCorePickupVisuals = new WeakMap<Phaser.GameObjects.Container, FluxCorePickupVisual>();
   private readonly pickupMotion = new WeakMap<Phaser.GameObjects.Container, PickupMotion>();
   private fences: Fence[] = [];
   private turrets: Turret[] = [];
@@ -274,6 +285,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private roundCredits = 0;
   private roundCoreTokens = 0;
+  private roundFluxCores = 0;
   private totalCreditsCollected = 0;
 
   private activePlantingSite: BombSiteRuntime | null = null;
@@ -637,7 +649,12 @@ export class ArenaScene extends Phaser.Scene {
       this.layout.theme,
       this.layout.generation.bounds,
       (x, y, halfWidth, halfHeight) => this.intersectsWallGeometry(x, y, halfWidth, halfHeight),
-      () => this.audio.playSfx('bomblet'),
+      (x, y, halfWidth, halfHeight) => this.intersectsBombSiteGeometry(x, y, halfWidth, halfHeight),
+      this.particlesEnabled,
+      (event) => {
+        this.audio.playSfx('bomblet');
+        if (event.droppedCore) this.dropFluxCorePickup(event.x, event.y, event.color);
+      },
       (strength) => this.audio.setFluxCoreProximity(strength),
       () => this.audio.playSfx('defuseAlarm')
     );
@@ -658,6 +675,7 @@ export class ArenaScene extends Phaser.Scene {
     this.plantingProgressMs = 0;
     this.roundCredits = 0;
     this.roundCoreTokens = 0;
+    this.roundFluxCores = 0;
 
     this.state.set(RoundState.PrePlant);
 
@@ -2965,7 +2983,9 @@ export class ArenaScene extends Phaser.Scene {
     let writeIndex = 0;
     for (const p of this.pickups) {
       const visual = this.pickupVisuals.get(p.sprite);
+      const fluxCoreVisual = this.fluxCorePickupVisuals.get(p.sprite);
       if (visual) this.updatePickupVisual(p.sprite, visual, now);
+      else if (fluxCoreVisual) this.updateFluxCorePickupVisual(p.sprite, fluxCoreVisual, now);
       else p.sprite.rotation += dt * 2;
       if (now > p.expiresAt) {
         GameplayTelemetryRecorder.recordPickupExpired(p.type);
@@ -3334,6 +3354,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private collectPickup(type: PickupType, source: Pickup['source']): void {
     if (source === 'enemy') this.audio.playSfx('pickup');
+    if (source === 'flux-core') this.audio.playSfx('pickup');
     let requestedRestoration = 0;
     let appliedRestoration = 0;
     if (type === 'health') {
@@ -3359,9 +3380,11 @@ export class ArenaScene extends Phaser.Scene {
       this.totalCreditsCollected += credits;
     }
     if (type === 'coreToken') this.roundCoreTokens += 1;
+    if (type === 'fluxCore') this.roundFluxCores += 1;
     GameplayTelemetryRecorder.recordPickupCollected(type, source, requestedRestoration, appliedRestoration);
 
-    const t = this.add.text(this.player.x, this.player.y - 24, `+${type}`, {
+    const pickupLabel = type === 'fluxCore' ? 'FLUX CORE' : type;
+    const t = this.add.text(this.player.x, this.player.y - 24, `+${pickupLabel}`, {
       fontFamily: 'Rajdhani, sans-serif',
       fontSize: '18px',
       color: '#96ffe4'
@@ -3554,7 +3577,8 @@ export class ArenaScene extends Phaser.Scene {
       speedBoost: COLORS.pink,
       rapidFire: COLORS.orange,
       credits: 0xf2ff72,
-      coreToken: COLORS.purple
+      coreToken: COLORS.purple,
+      fluxCore: COLORS.cyan
     };
 
     const p = this.createPickupSprite(type, x, y, colorMap[type]);
@@ -3564,6 +3588,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private createPickupSprite(type: PickupType, x: number, y: number, color: number): Phaser.GameObjects.Container {
+    if (type === 'fluxCore') return this.createFluxCorePickupSprite(x, y, color);
     const container = this.add.container(x, y).setDepth(6);
     const visualColor = type === 'credits' ? 0xf5ff58 : color;
     const visual = this.createPickupVisualShell(container, visualColor, x, y, type);
@@ -3579,6 +3604,59 @@ export class ArenaScene extends Phaser.Scene {
       phase: motionSeed % (Math.PI * 2)
     });
     return container;
+  }
+
+  private createFluxCorePickupSprite(x: number, y: number, color: number): Phaser.GameObjects.Container {
+    const container = this.add.container(x, y).setDepth(8);
+    // These are the same glow/orb dimensions and styling used inside the raised Flux Core.
+    const glow = this.add.circle(0, -1, 10, color, 0.23).setBlendMode(Phaser.BlendModes.ADD);
+    const orb = this.add.circle(0, -1, 5, color, 0.95)
+      .setStrokeStyle(1, 0xffffff, 0.9)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const electricity = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    container.add([glow, orb, electricity]);
+    const phase = Math.abs(x * 0.019 + y * 0.027) % (Math.PI * 2);
+    this.fluxCorePickupVisuals.set(container, { glow, orb, electricity, color, phase, nextArcAt: 0 });
+    const driftAngle = phase % (Math.PI * 2);
+    const driftSpeed = 10.5 + phase % 4.5;
+    this.pickupMotion.set(container, {
+      velocityX: Math.cos(driftAngle) * driftSpeed,
+      velocityY: Math.sin(driftAngle) * driftSpeed,
+      phase
+    });
+    return container;
+  }
+
+  private updateFluxCorePickupVisual(
+    container: Phaser.GameObjects.Container,
+    visual: FluxCorePickupVisual,
+    now: number
+  ): void {
+    const pulse = 0.5 + Math.sin(now * 0.008 + visual.phase) * 0.5;
+    container.setScale(0.95 + pulse * 0.22).setAlpha(0.84 + pulse * 0.16);
+    visual.glow.setAlpha(0.16 + pulse * 0.22).setScale(0.9 + pulse * 0.35);
+    visual.orb.setFillStyle(pulse > 0.78 ? 0xffffff : visual.color, 0.96);
+    if (now < visual.nextArcAt) return;
+    visual.nextArcAt = now + 95 + Math.floor(pulse * 80);
+    visual.electricity.clear();
+    visual.electricity.lineStyle(1, pulse > 0.6 ? 0xffffff : visual.color, 0.75);
+    const angle = now * 0.01 + visual.phase;
+    visual.electricity.beginPath();
+    visual.electricity.moveTo(Math.cos(angle) * 6, Math.sin(angle) * 6 - 1);
+    visual.electricity.lineTo(Math.cos(angle + 1.8) * 10, Math.sin(angle + 1.8) * 10 - 1);
+    visual.electricity.lineTo(Math.cos(angle + 3.5) * 7, Math.sin(angle + 3.5) * 7 - 1);
+    visual.electricity.strokePath();
+  }
+
+  private dropFluxCorePickup(x: number, y: number, color: number): void {
+    const sprite = this.createFluxCorePickupSprite(x, y, color);
+    this.pickups.push({
+      type: 'fluxCore',
+      sprite,
+      expiresAt: this.time.now + PICKUP_BALANCE.lifetimeMs,
+      source: 'flux-core'
+    });
+    GameplayTelemetryRecorder.recordPickupDropped('fluxCore', 'flux-core');
   }
 
   private createPickupVisualShell(
@@ -3842,12 +3920,14 @@ export class ArenaScene extends Phaser.Scene {
     const rawRewardCredits = this.roundCredits + this.scaleModCredits(getRoundCompletionCredits(completedRound));
     const rewardCredits = Math.round(rawRewardCredits * (getContract(this.contract)?.creditRewardMultiplier ?? 1));
     const rewardTokens = this.roundCoreTokens + Math.max(REWARD_BALANCE.completionBaseTokens, Math.floor(completedRound / REWARD_BALANCE.tokenRoundDivisor));
+    const rewardFluxCores = this.roundFluxCores;
     SaveSystem.addCredits(rewardCredits);
     SaveSystem.addCoreTokens(rewardTokens);
+    SaveSystem.addFluxCores(rewardFluxCores);
     SaveSystem.recordRoundCompletion(completedRound);
     OnlineRunManager.recordMilestone(completedRound);
     this.captureTelemetryEndState();
-    GameplayTelemetryRecorder.endEncounter('completed', { credits: rewardCredits, coreTokens: rewardTokens });
+    GameplayTelemetryRecorder.endEncounter('completed', { credits: rewardCredits, coreTokens: rewardTokens, fluxCores: rewardFluxCores });
 
     this.transitionAfterModReveals(1400, () => {
       const next = this.roundManager.nextRound();
@@ -3863,6 +3943,7 @@ export class ArenaScene extends Phaser.Scene {
         creditsGained: rewardCredits,
         coreTokensGained: rewardTokens,
         plasmaChipsGained: 0,
+        fluxCoresGained: rewardFluxCores,
         bossDefeated: null,
         protocol: this.protocol,
         equippedMods: this.modRuntime.snapshot(),
@@ -3893,6 +3974,7 @@ export class ArenaScene extends Phaser.Scene {
     this.runCreditsEarned = payload.runCreditsEarned;
     this.roundCredits = 0;
     this.roundCoreTokens = 0;
+    this.roundFluxCores = 0;
     this.detonatingSiteIds.clear();
     this.turretTelemetrySequence = 0;
     this.lastShotEnergyDeniedAt = -99_999;
@@ -3966,7 +4048,12 @@ export class ArenaScene extends Phaser.Scene {
       this.layout.theme,
       this.layout.generation.bounds,
       (x, y, halfWidth, halfHeight) => this.intersectsWallGeometry(x, y, halfWidth, halfHeight),
-      () => this.audio.playSfx('bomblet'),
+      (x, y, halfWidth, halfHeight) => this.intersectsBombSiteGeometry(x, y, halfWidth, halfHeight),
+      this.particlesEnabled,
+      (event) => {
+        this.audio.playSfx('bomblet');
+        if (event.droppedCore) this.dropFluxCorePickup(event.x, event.y, event.color);
+      },
       (strength) => this.audio.setFluxCoreProximity(strength),
       () => this.audio.playSfx('defuseAlarm')
     );
@@ -4122,8 +4209,10 @@ export class ArenaScene extends Phaser.Scene {
     const bossCredits = this.scaleModCredits(rewards.credits);
     const collectedCredits = this.roundCredits;
     const collectedTokens = this.roundCoreTokens;
+    const collectedFluxCores = this.roundFluxCores;
     SaveSystem.addCredits(collectedCredits + bossCredits);
     SaveSystem.addCoreTokens(collectedTokens + rewards.coreTokens);
+    SaveSystem.addFluxCores(collectedFluxCores);
     SaveSystem.addPlasmaChips(rewards.plasmaChips);
     this.totalCreditsCollected += bossCredits;
     this.runCreditsEarned += collectedCredits + bossCredits;
@@ -4133,7 +4222,8 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.endEncounter('bossDefeated', {
       credits: collectedCredits + bossCredits,
       coreTokens: collectedTokens + rewards.coreTokens,
-      plasmaChips: rewards.plasmaChips
+      plasmaChips: rewards.plasmaChips,
+      fluxCores: collectedFluxCores
     });
 
     const payload: RoundFinishedPayload = {
@@ -4141,6 +4231,7 @@ export class ArenaScene extends Phaser.Scene {
       creditsGained: this.pendingRoundPayload.creditsGained + collectedCredits + bossCredits,
       coreTokensGained: this.pendingRoundPayload.coreTokensGained + collectedTokens + rewards.coreTokens,
       plasmaChipsGained: rewards.plasmaChips,
+      fluxCoresGained: (this.pendingRoundPayload.fluxCoresGained ?? 0) + collectedFluxCores,
       bossDefeated: this.bossEncounter.archetype,
       modsEarned: [...this.modsEarned],
       runCreditsEarned: this.runCreditsEarned
@@ -4171,6 +4262,7 @@ export class ArenaScene extends Phaser.Scene {
       credits: this.roundCredits,
       runCreditsEarned: this.runCreditsEarned + this.roundCredits,
       coreTokens: this.roundCoreTokens,
+      fluxCores: this.roundFluxCores,
       reason,
       round: currentCombatRound,
       seed: this.layout.seed,
@@ -4188,8 +4280,9 @@ export class ArenaScene extends Phaser.Scene {
 
     SaveSystem.addCredits(result.credits);
     SaveSystem.addCoreTokens(result.coreTokens);
+    SaveSystem.addFluxCores(result.fluxCores);
     this.captureTelemetryEndState();
-    GameplayTelemetryRecorder.endEncounter(reason, { credits: result.credits, coreTokens: result.coreTokens });
+    GameplayTelemetryRecorder.endEncounter(reason, { credits: result.credits, coreTokens: result.coreTokens, fluxCores: result.fluxCores });
     GameplayTelemetryRecorder.finishRun(reason);
     OnlineRunManager.complete(reason === 'playerDead' ? 'player_dead' : 'bomb_defused', currentCombatRound);
     this.registry.remove('arena-session');
@@ -4693,6 +4786,21 @@ export class ArenaScene extends Phaser.Scene {
     return false;
   }
 
+  private intersectsBombSiteGeometry(x: number, y: number, halfWidth: number, halfHeight: number): boolean {
+    const exclusionRadiusSquared = FLUX_CORE_BALANCE.bombSiteExclusionRadius
+      * FLUX_CORE_BALANCE.bombSiteExclusionRadius;
+    for (const site of this.bombSites.sites) {
+      // Test the site circle against the Flux Core's full rectangular footprint,
+      // rather than only checking its center point near the objective ring.
+      const closestX = Phaser.Math.Clamp(site.x, x - halfWidth, x + halfWidth);
+      const closestY = Phaser.Math.Clamp(site.y, y - halfHeight, y + halfHeight);
+      const dx = site.x - closestX;
+      const dy = site.y - closestY;
+      if (dx * dx + dy * dy <= exclusionRadiusSquared) return true;
+    }
+    return false;
+  }
+
   private isValidPlacement(x: number, y: number): boolean {
     const bounds=this.layout.generation.bounds;
     if (x < bounds.x+40 || y < bounds.y+40 || x > bounds.x+bounds.w-40 || y > bounds.y+bounds.h-40) return false;
@@ -5004,7 +5112,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private restartFromRoundOne(): void {
     this.captureTelemetryEndState();
-    GameplayTelemetryRecorder.endEncounter('quit', { credits: this.roundCredits, coreTokens: this.roundCoreTokens });
+    GameplayTelemetryRecorder.endEncounter('quit', { credits: this.roundCredits, coreTokens: this.roundCoreTokens, fluxCores: this.roundFluxCores });
     GameplayTelemetryRecorder.finishRun('quit');
     startArenaLoad(this, { reason: 'new-run', message: 'Restarting from round 1...' });
   }
@@ -5012,7 +5120,7 @@ export class ArenaScene extends Phaser.Scene {
   private quitToMenu(): void {
     this.setMenuCursorMode();
     this.captureTelemetryEndState();
-    GameplayTelemetryRecorder.endEncounter('quit', { credits: this.roundCredits, coreTokens: this.roundCoreTokens });
+    GameplayTelemetryRecorder.endEncounter('quit', { credits: this.roundCredits, coreTokens: this.roundCoreTokens, fluxCores: this.roundFluxCores });
     GameplayTelemetryRecorder.finishRun('quit');
     OnlineRunManager.complete('quit', this.currentCombatRound());
     this.registry.remove('arena-session');

@@ -76,7 +76,7 @@ export class ModCollectionScene extends Phaser.Scene {
     this.add.grid(width / 2, height / 2, width, height, 48, 48, 0x050b14, 0.2, 0x153447, 0.12);
     this.add.text(width / 2, 34, 'MOD CARD COLLECTION', { fontFamily: 'Orbitron, sans-serif', fontSize: '30px', color: '#68f7ff' }).setOrigin(0.5);
     const wallet = SaveSystem.get();
-    this.add.text(width / 2, 64, `${mods.cards.length} CARDS  •  ${mods.plasmaChips.toLocaleString()} PLASMA CHIPS  •  ${wallet.coreTokens.toLocaleString()} CORE TOKENS  •  ${wallet.credits.toLocaleString()} CREDITS`, {
+    this.add.text(width / 2, 64, `${mods.cards.length} CARDS  •  ${mods.plasmaChips.toLocaleString()} PLASMA CHIPS  •  ${wallet.coreTokens.toLocaleString()} CORE TOKENS  •  ${wallet.fluxCores.toLocaleString()} FLUX CORES  •  ${wallet.credits.toLocaleString()} CREDITS`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: width < 900 ? '16px' : '20px', fontStyle: 'bold', color: '#c0fff0', align: 'center'
     }).setOrigin(0.5).setWordWrapWidth(Math.max(280, width - 48), true).setMaxLines(2);
 

@@ -47,6 +47,13 @@ export class ResultScene extends Phaser.Scene {
       wordWrap: { width: panelWidth - 72, useAdvancedWrap: true }
     }).setOrigin(0.5, 0);
 
+    if ((result?.fluxCores ?? 0) > 0) {
+      summary.setText(summary.text.replace(
+        `Core Tokens Earned This Round: ${result?.coreTokens ?? 0}`,
+        `Core Tokens Earned This Round: ${result?.coreTokens ?? 0}\nFlux Cores Recovered: ${result?.fluxCores ?? 0}`
+      ));
+    }
+
     const reasonText =
       result?.reason === 'bombDefused' ? 'Defeat: bomb was defused.' :
       result?.reason === 'playerDead' ? 'Defeat: operator was eliminated.' :

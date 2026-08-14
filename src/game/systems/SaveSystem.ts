@@ -12,6 +12,7 @@ export class SaveSystem {
     return {
       credits: save.wallet.credits,
       coreTokens: save.wallet.coreTokens,
+      fluxCores: save.wallet.fluxCores,
       upgrades: save.upgrades,
       unlockedCosmetics: [...save.cosmetics.owned],
       equippedCosmetics: { ...save.cosmetics.equipped },
@@ -37,6 +38,10 @@ export class SaveSystem {
 
   static addCoreTokens(amount: number): void {
     PlayerProfileStore.addCoreTokens(amount);
+  }
+
+  static addFluxCores(amount: number): void {
+    PlayerProfileStore.addFluxCores(amount);
   }
 
   static addPlasmaChips(amount: number): void {

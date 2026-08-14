@@ -195,10 +195,11 @@ export class OperatorGarageScene extends Phaser.Scene {
     const values = [
       ['CREDITS', save.credits.toLocaleString(), '#7fffe5'],
       ['CORE TOKENS', save.coreTokens.toLocaleString(), '#ffd37b'],
-      ['PLASMA CHIPS', plasma.toLocaleString(), '#db8fff']
+      ['PLASMA CHIPS', plasma.toLocaleString(), '#db8fff'],
+      ['FLUX CORES', save.fluxCores.toLocaleString(), '#76ff9e']
     ] as const;
     values.forEach(([label, value, color], index) => {
-      const y = (roomy ? 48 : 37) + index * (roomy ? 43 : 27);
+      const y = (roomy ? 42 : 31) + index * (roomy ? 36 : 23);
       root.add(this.add.text(15, y, label, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: roomy ? '15px' : '11px', color: '#7c9dad'
       }).setOrigin(0));
@@ -206,7 +207,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         fontFamily: 'Orbitron, sans-serif', fontSize: roomy ? '21px' : '14px', color
       }).setOrigin(1, 0));
     });
-    if (roomy) root.add(this.add.text(rect.width / 2, rect.height - 18, `HIGHEST ROUND // ${SaveSystem.getHighestRound()}`, {
+    if (roomy && rect.height >= 210) root.add(this.add.text(rect.width / 2, rect.height - 18, `HIGHEST ROUND // ${SaveSystem.getHighestRound()}`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', fontStyle: 'bold', color: '#9bc4d3'
     }).setOrigin(0.5));
   }

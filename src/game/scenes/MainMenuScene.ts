@@ -87,7 +87,7 @@ export class MainMenuScene extends Phaser.Scene {
       fontSize: '20px',
       color: '#61f4ff'
     }).setOrigin(0.5, 0).setAlign('center').setWordWrapWidth(276, true).setMaxLines(2);
-    const profileBody = this.add.text(0, -38, profile && save ? `${save.credits.toLocaleString()} Credits\n${save.coreTokens} Core Tokens\nHighest Round: ${profile.highestRound}\nLOCAL SAVE` : 'Select or create a local profile to continue.', {
+    const profileBody = this.add.text(0, -38, profile && save ? `${save.credits.toLocaleString()} Credits\n${save.coreTokens} Core Tokens  •  ${save.fluxCores} Flux Cores\nHighest Round: ${profile.highestRound}\nLOCAL SAVE` : 'Select or create a local profile to continue.', {
       fontFamily: 'Rajdhani, sans-serif',
       fontSize: '16px',
       color: '#a6fff2',

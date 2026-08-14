@@ -88,6 +88,7 @@ const readIndex = (): LocalProfileIndex => {
         lastPlayedAt: typeof item.lastPlayedAt === 'string' ? item.lastPlayedAt : new Date().toISOString(),
         credits: Math.max(0, Number(item.credits) || 0),
         coreTokens: Math.max(0, Number(item.coreTokens) || 0),
+        fluxCores: Math.max(0, Number(item.fluxCores) || 0),
         highestRound: Math.max(0, Number(item.highestRound) || 0),
         roundsCompleted: Math.max(0, Number(item.roundsCompleted) || 0),
         equippedPlayerColor: typeof item.equippedPlayerColor === 'string' ? item.equippedPlayerColor : null,

@@ -54,7 +54,8 @@ export const migrateUnknownSave = (input: unknown, existingNames: string[] = [])
     return createDefaultLocalSave(`legacy-${Date.now()}`, profileName, {
       wallet: {
         credits: input.credits,
-        coreTokens: input.coreTokens
+        coreTokens: input.coreTokens,
+        fluxCores: typeof input.fluxCores === 'number' ? input.fluxCores : 0
       },
       upgrades: isObject(input.upgrades) ? (input.upgrades as Record<string, number>) : {},
       cosmetics: {

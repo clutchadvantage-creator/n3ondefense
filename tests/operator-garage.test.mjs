@@ -146,7 +146,7 @@ test('version-seven profiles migrate to empty Garage presets without losing data
   delete legacy.garage;
   const migrated = normalizeLocalSave(legacy);
   assert.ok(migrated);
-  assert.equal(migrated.version, 8);
+  assert.equal(migrated.version, 9);
   assert.equal(migrated.wallet.credits, 4567);
   assert.equal(migrated.mods.plasmaChips, 33);
   assert.deepEqual(migrated.garage, createDefaultGarageState());
@@ -173,11 +173,12 @@ test('owned cosmetics, equipped cosmetics, and wallet values remain profile-owne
   save.cosmetics.equipped.playerShape = cosmetic.id;
   save.wallet.credits = 12_345;
   save.wallet.coreTokens = 678;
+  save.wallet.fluxCores = 12;
   save.mods.plasmaChips = 90;
   const normalized = normalizeLocalSave(save);
   assert.equal(getOwnedGarageCosmetics(normalized).some((entry) => entry.id === cosmetic.id), true);
   assert.equal(normalized.cosmetics.equipped.playerShape, cosmetic.id);
-  assert.deepEqual(getGarageWallet(normalized), { credits: 12_345, coreTokens: 678, plasmaChips: 90 });
+  assert.deepEqual(getGarageWallet(normalized), { credits: 12_345, coreTokens: 678, plasmaChips: 90, fluxCores: 12 });
 });
 
 test('Garage responsive layout keeps critical docks, terminals, and stations on screen', () => {

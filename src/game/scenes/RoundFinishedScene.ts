@@ -54,6 +54,13 @@ export class RoundFinishedScene extends Phaser.Scene {
       }
     ).setOrigin(0.5, 0);
 
+    if ((payload?.fluxCoresGained ?? 0) > 0) {
+      completedSummary.setText(completedSummary.text.replace(
+        `Plasma Chips Gained: ${payload?.plasmaChipsGained ?? 0}`,
+        `Plasma Chips Gained: ${payload?.plasmaChipsGained ?? 0}\nFlux Cores Recovered: ${payload?.fluxCoresGained ?? 0}`
+      ));
+    }
+
     const nextSummary = this.add.text(
       width / 2,
       completedSummary.y + completedSummary.height + 18,

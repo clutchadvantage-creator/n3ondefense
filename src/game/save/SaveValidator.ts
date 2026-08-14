@@ -102,6 +102,7 @@ const normalizeProgress = (progress: unknown): LocalPlayerProgress => {
     totalCreditsSpent: toInteger(candidate.totalCreditsSpent),
     creditSpendByCategory,
     totalCoreTokensEarned: toInteger(candidate.totalCoreTokensEarned),
+    totalFluxCoresEarned: toInteger(candidate.totalFluxCoresEarned),
     totalPlaytimeSeconds: toInteger(candidate.totalPlaytimeSeconds),
     initialDeploymentBriefingSeen: toBoolean(candidate.initialDeploymentBriefingSeen, false)
   };
@@ -164,7 +165,8 @@ export const createDefaultLocalSave = (profileId: string, profileName: string, s
     },
     wallet: {
       credits: Math.max(0, toInteger(source?.wallet?.credits ?? legacyCredits)),
-      coreTokens: Math.max(0, toInteger(source?.wallet?.coreTokens ?? legacyTokens))
+      coreTokens: Math.max(0, toInteger(source?.wallet?.coreTokens ?? legacyTokens)),
+      fluxCores: Math.max(0, toInteger(source?.wallet?.fluxCores))
     },
     upgrades: { ...upgradeDefaults(), ...(isObject(source?.upgrades) ? source?.upgrades : {}) },
     cosmetics: {
@@ -201,7 +203,8 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
     };
     current.wallet = {
       credits: Math.max(0, toInteger(v1.wallet?.credits)),
-      coreTokens: Math.max(0, toInteger(v1.wallet?.coreTokens))
+      coreTokens: Math.max(0, toInteger(v1.wallet?.coreTokens)),
+      fluxCores: Math.max(0, toInteger(v1.wallet?.fluxCores))
     };
     current.upgrades = { ...upgradeDefaults(), ...(isObject(v1.upgrades) ? v1.upgrades : {}) };
     const owned = normalizeOwnedCosmetics(v1.cosmetics?.owned);
@@ -218,6 +221,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       totalCreditsSpent: 0,
       creditSpendByCategory: createEmptyCreditSpendBreakdown(),
       totalCoreTokensEarned: toInteger(v1.progress?.totalCoreTokensEarned),
+      totalFluxCoresEarned: 0,
       totalPlaytimeSeconds: 0,
       initialDeploymentBriefingSeen: false
     };
@@ -235,7 +239,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;
@@ -247,7 +251,8 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
     };
     current.wallet = {
       credits: Math.max(0, toInteger(candidate.wallet?.credits ?? legacyCandidate.credits)),
-      coreTokens: Math.max(0, toInteger(candidate.wallet?.coreTokens ?? legacyCandidate.coreTokens))
+      coreTokens: Math.max(0, toInteger(candidate.wallet?.coreTokens ?? legacyCandidate.coreTokens)),
+      fluxCores: Math.max(0, toInteger(candidate.wallet?.fluxCores ?? legacyCandidate.fluxCores))
     };
     current.upgrades = { ...upgradeDefaults(), ...(isObject(candidate.upgrades) ? candidate.upgrades : {}) };
     const owned = normalizeOwnedCosmetics(candidate.cosmetics?.owned);
@@ -287,6 +292,7 @@ export const buildProfileSummary = (save: LocalPlayerSave): ProfileSummary => ({
   lastPlayedAt: save.profile.lastPlayedAt,
   credits: save.wallet.credits,
   coreTokens: save.wallet.coreTokens,
+  fluxCores: save.wallet.fluxCores,
   highestRound: save.progress.highestRound,
   roundsCompleted: save.progress.roundsCompleted,
   equippedPlayerColor: save.cosmetics.equipped.playerColor ?? null,
