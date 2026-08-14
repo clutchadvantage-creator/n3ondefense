@@ -40,6 +40,7 @@ import { startArenaLoad } from '../utils/runFlow';
 import { createButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { GameplayPointerLock } from '../input/GameplayPointerLock';
+import { MineSalvoInput, type MineSalvoInputResolution } from '../input/MineSalvoInput.ts';
 import { DEFAULT_AIM_SETTINGS, normalizeAimSettings, type AimSettings } from '../config/interfaceSettings';
 import { drawReticle } from '../ui/ReticleRenderer';
 import { createPauseMenuView, type PauseMenuView } from '../ui/PauseMenuUi.ts';
@@ -298,6 +299,8 @@ export class ArenaScene extends Phaser.Scene {
   private aimSettings: AimSettings = { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } };
   private abilityBindings!: AbilityBindings;
   private readonly pressedAbilityActions = new Set<AbilityAction>();
+  private readonly mineSalvoInput = new MineSalvoInput();
+  private pendingMineSalvo = false;
 
   private nextSpawnAt = 0;
   private nextArenaHealthDropAt = 0;
@@ -352,7 +355,6 @@ export class ArenaScene extends Phaser.Scene {
   private selectedAbility: AbilityType = 'fence';
   private abilityCooldownUntil: Record<'fence' | 'turret', number> = { fence: 0, turret: 0 };
   private readonly mineChargeRack = new MineChargeRack();
-  private mineSalvoCooldownUntil = 0;
   private shieldCooldownUntil = 0;
   private shieldActiveUntil = 0;
   private shieldVisual: OperativeShieldVisual | null = null;
@@ -401,13 +403,14 @@ export class ArenaScene extends Phaser.Scene {
     const action = this.actionForBinding(`Mouse:${pointer.button}`);
     if (action) {
       pointer.event?.preventDefault();
-      this.pressedAbilityActions.add(action);
+      this.handleAbilityInputDown(action, `Mouse:${pointer.button}`);
     }
   };
   private readonly onPointerUp = (pointer: Phaser.Input.Pointer): void => {
     if (pointer.button === 0) {
       this.pointerDown = false;
     }
+    this.handleMineInputRelease(`Mouse:${pointer.button}`);
   };
   private readonly onResumeFromOptions = (): void => {
     this.refreshAbilityBindings();
@@ -448,7 +451,10 @@ export class ArenaScene extends Phaser.Scene {
     }
     if (this.state.state === RoundState.Paused) return;
     const action = this.actionForBinding(`Keyboard:${event.code}`);
-    if (action) this.pressedAbilityActions.add(action);
+    if (action) this.handleAbilityInputDown(action, `Keyboard:${event.code}`);
+  };
+  private readonly onAbilityKeyUp = (event: KeyboardEvent): void => {
+    this.handleMineInputRelease(`Keyboard:${event.code}`);
   };
 
   constructor() {
@@ -1060,6 +1066,7 @@ export class ArenaScene extends Phaser.Scene {
     this.input.on('pointerup', this.onPointerUp);
     this.refreshAbilityBindings();
     window.addEventListener('keydown', this.onAbilityKeyDown);
+    window.addEventListener('keyup', this.onAbilityKeyUp);
     this.setGameplayCursorMode();
   }
 
@@ -1100,6 +1107,36 @@ export class ArenaScene extends Phaser.Scene {
 
   private actionForBinding(binding: string): AbilityAction | null {
     return ABILITY_ACTIONS.find(({ action }) => this.abilityBindings?.[action] === binding)?.action ?? null;
+  }
+
+  private handleAbilityInputDown(action: AbilityAction, binding: string): void {
+    if (action === 'mine' && this.modRuntime.has('full-rack-salvo')) {
+      this.mineSalvoInput.press(binding, this.time.now);
+      return;
+    }
+    this.pressedAbilityActions.add(action);
+  }
+
+  private handleMineInputRelease(binding: string): void {
+    const resolution = this.mineSalvoInput.release(binding, this.time.now);
+    if (this.state.state === RoundState.Paused
+      || this.state.state === RoundState.Victory
+      || this.state.state === RoundState.Defeat) return;
+    this.queueMineInputResolution(resolution);
+  }
+
+  private queueMineInputResolution(resolution: MineSalvoInputResolution | null): void {
+    if (resolution === 'tap') this.pressedAbilityActions.add('mine');
+    if (resolution === 'salvo') this.pendingMineSalvo = true;
+  }
+
+  private updateMineSalvoInput(now: number): void {
+    if (!this.modRuntime.has('full-rack-salvo')) {
+      this.mineSalvoInput.cancel();
+      this.pendingMineSalvo = false;
+      return;
+    }
+    this.queueMineInputResolution(this.mineSalvoInput.update(now));
   }
 
   private consumeAbilityAction(action: AbilityAction): boolean {
@@ -1290,9 +1327,15 @@ export class ArenaScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.two)) this.selectedAbility = 'turret';
     if (Phaser.Input.Keyboard.JustDown(this.keys.three)) this.selectedAbility = 'mine';
 
+    this.updateMineSalvoInput(now);
     if (this.consumeAbilityAction('fence')) this.placeAbility('fence', now);
     if (this.consumeAbilityAction('turret')) this.placeAbility('turret', now);
     if (this.consumeAbilityAction('mine')) this.placeAbility('mine', now);
+    if (this.pendingMineSalvo) {
+      this.pendingMineSalvo = false;
+      const { x, y } = this.getAimWorldPoint();
+      this.placeFullRackSalvo(now, this.getAbilityConfig('mine'), x, y);
+    }
     if (this.consumeAbilityAction('shield')) this.activateShield(now);
     this.updateHoloAfterimage(now);
   }
@@ -2658,25 +2701,16 @@ export class ArenaScene extends Phaser.Scene {
 
   private placeAbility(type: AbilityType, now: number): void {
     const cfg = this.getAbilityConfig(type);
-    const isMineSalvo = type === 'mine' && this.modRuntime.has('full-rack-salvo');
     if (type !== 'mine' && now < this.abilityCooldownUntil[type]) {
       GameplayTelemetryRecorder.recordAbilityDenied(type, 'cooldown');
       return;
     }
-    if (isMineSalvo && now < this.mineSalvoCooldownUntil) {
-      GameplayTelemetryRecorder.recordAbilityDenied('mine', 'cooldown');
-      return;
-    }
-    if (type === 'mine' && !isMineSalvo && this.mineChargeRack.availability(now, cfg.cooldownMs) !== 'ready') {
+    if (type === 'mine' && this.mineChargeRack.availability(now, cfg.cooldownMs) !== 'ready') {
       GameplayTelemetryRecorder.recordAbilityDenied('mine', 'cooldown');
       return;
     }
 
     const { x, y } = this.getAimWorldPoint();
-    if (isMineSalvo) {
-      this.placeFullRackSalvo(now, cfg, x, y);
-      return;
-    }
 
     if (!this.player.canSpendEnergy(cfg.energyCost)) {
       GameplayTelemetryRecorder.recordEnergyDenied(type, cfg.energyCost, this.player.energy);
@@ -2728,9 +2762,10 @@ export class ArenaScene extends Phaser.Scene {
   private placeFullRackSalvo(now: number, cfg: AbilityRuntimeConfig, aimX: number, aimY: number): void {
     const salvo = this.modRuntime.fullRackSalvo();
     if (!salvo) return;
-    const availableMines = Math.max(0, cfg.maxActive - this.mines.length);
+    const rack = this.mineChargeRack.snapshot(now, cfg.cooldownMs);
+    const availableMines = rack.currentCharges;
     if (availableMines === 0) {
-      GameplayTelemetryRecorder.recordAbilityDenied('mine', 'active-limit');
+      GameplayTelemetryRecorder.recordAbilityDenied('mine', 'cooldown');
       return;
     }
 
@@ -2743,6 +2778,10 @@ export class ArenaScene extends Phaser.Scene {
     const points = this.resolveMineRackPattern(aimX, aimY, availableMines, salvo.spacing);
     if (!points) {
       GameplayTelemetryRecorder.recordAbilityDenied('mine', 'invalid-placement');
+      return;
+    }
+    if (!this.mineChargeRack.spendMany(now, cfg.cooldownMs, availableMines)) {
+      GameplayTelemetryRecorder.recordAbilityDenied('mine', 'cooldown');
       return;
     }
 
@@ -2765,7 +2804,6 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.player.spendEnergy(totalEnergyCost);
     GameplayTelemetryRecorder.recordAbilityUse('mine', totalEnergyCost);
-    this.mineSalvoCooldownUntil = now + cfg.cooldownMs;
     this.audio.playSfx('place');
   }
 
@@ -3936,11 +3974,7 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.recordResourceGain('energy', 'site-recovery-direct', REWARD_BALANCE.siteRecoveryEnergy, this.player.energy - energyBefore);
     this.abilityCooldownUntil.fence = Math.min(this.abilityCooldownUntil.fence, this.time.now + 900);
     this.abilityCooldownUntil.turret = Math.min(this.abilityCooldownUntil.turret, this.time.now + 900);
-    if (this.modRuntime.has('full-rack-salvo')) {
-      this.mineSalvoCooldownUntil = Math.min(this.mineSalvoCooldownUntil, this.time.now + 900);
-    } else {
-      this.mineChargeRack.accelerateRecharge(this.time.now, 900);
-    }
+    this.mineChargeRack.accelerateRecharge(this.time.now, 900);
 
     const recoveryCredits = this.scaleModCredits(REWARD_BALANCE.siteRecoveryCredits);
     this.roundCredits += recoveryCredits;
@@ -4151,7 +4185,6 @@ export class ArenaScene extends Phaser.Scene {
     this.shieldActiveUntil = 0;
     this.shieldCooldownUntil = 0;
     this.abilityCooldownUntil = { fence: 0, turret: 0 };
-    this.mineSalvoCooldownUntil = 0;
     this.mineChargeRack.reset(this.getAbilityConfig('mine').maxActive);
     this.destroyShieldOrb();
     this.activePlantingSite = null;
@@ -4535,17 +4568,6 @@ export class ArenaScene extends Phaser.Scene {
     slot.cooldownDurationMs = cfg.cooldownMs;
     slot.selected = this.selectedAbility === 'mine';
     slot.hasEnergy = this.player.energy >= cfg.energyCost;
-
-    // Full Rack Salvo intentionally retains its existing active-mine capacity
-    // and one-cooldown behavior. The base ability alone uses sequential charges.
-    if (this.modRuntime.has('full-rack-salvo')) {
-      slot.cooldownMs = Math.max(0, this.mineSalvoCooldownUntil - now);
-      slot.recharging = false;
-      slot.underLimit = this.mines.length < cfg.maxActive;
-      slot.count = this.mines.length;
-      slot.capacity = cfg.maxActive;
-      return;
-    }
 
     const rack = this.mineChargeRack.snapshot(now, cfg.cooldownMs);
     slot.cooldownMs = rack.nextChargeRemainingMs;
@@ -4972,6 +4994,8 @@ export class ArenaScene extends Phaser.Scene {
   private clearGameplayInput(): void {
     this.pointerDown = false;
     this.pressedAbilityActions.clear();
+    this.mineSalvoInput.cancel();
+    this.pendingMineSalvo = false;
     this.player?.setVelocity(0, 0);
     this.input.keyboard?.resetKeys();
   }
@@ -5166,6 +5190,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private cleanupRoundObjects(): void {
+    this.mineSalvoInput.cancel();
+    this.pendingMineSalvo = false;
+    this.pressedAbilityActions.clear();
     this.audio.stopFluxCoreLoop();
     this.bossEncounter?.destroy();
     this.bossEncounter = null;
@@ -5251,6 +5278,7 @@ export class ArenaScene extends Phaser.Scene {
     this.input.off('pointerdown', this.onPointerDown);
     this.input.off('pointerup', this.onPointerUp);
     window.removeEventListener('keydown', this.onAbilityKeyDown);
+    window.removeEventListener('keyup', this.onAbilityKeyUp);
     this.pointerLock?.destroy();
     this.pointerLock = null;
     this.setMenuCursorMode();

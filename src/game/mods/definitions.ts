@@ -92,9 +92,9 @@ const CORE_MOD_DEFINITIONS: readonly ModDefinition[] = [
   },
   {
     id: 'full-rack-salvo', name: 'Full Rack Salvo', icon: '✣', iconColor: 0xff563d, category: 'defense', rarity: 'epic', maxRank: 3, dropWeight: 0.34,
-    description: 'A rotary ejector empties every available mine slot toward the cursor in one geometry-safe formation.',
+    description: 'Tap to deploy one mine, or hold the mine control to eject every available charge toward the cursor.',
     rankDescriptions: {
-      0: 'Throw the available rack at full energy cost.',
+      0: 'Hold to throw the available rack at full energy cost.',
       1: 'Rack energy cost -8%; faster launch.',
       2: 'Rack energy cost -16%; high-speed launch.',
       3: 'Rack energy cost -25%; near-instant launch.'

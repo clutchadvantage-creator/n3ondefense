@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { getMineRackEnergyCost, getMineRackPatternOffsets } from '../src/game/abilities/MineRackSalvo.ts';
 import { MINE_DEPLOYMENT_DELAY_MS, MineChargeRack } from '../src/game/abilities/MineChargeRack.ts';
+import { FULL_RACK_SALVO_HOLD_MS, MineSalvoInput } from '../src/game/input/MineSalvoInput.ts';
 import { addModDrop, createDefaultModCollection, equipMod } from '../src/game/mods/ModInventoryService.ts';
 import { MOD_BY_ID } from '../src/game/mods/definitions.ts';
 import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
@@ -63,6 +64,48 @@ test('single and upgraded mine capacities clamp correctly and honor recharge mod
   assert.equal(upgraded.spend(0, 2100), true);
   assert.equal(upgraded.snapshot(2099, 2100).currentCharges, 4);
   assert.equal(upgraded.snapshot(2100, 2100).currentCharges, 5);
+});
+
+test('Full Rack Salvo input resolves a tap or hold exactly once', () => {
+  const input = new MineSalvoInput();
+  assert.equal(input.press('Keyboard:KeyR', 1000), true);
+  assert.equal(input.update(1000 + FULL_RACK_SALVO_HOLD_MS - 1), null);
+  assert.equal(input.release('Keyboard:KeyR', 1000 + FULL_RACK_SALVO_HOLD_MS - 1), 'tap');
+
+  assert.equal(input.press('Keyboard:KeyR', 2000), true);
+  assert.equal(input.update(2000 + FULL_RACK_SALVO_HOLD_MS), 'salvo');
+  assert.equal(input.update(9999), null);
+  assert.equal(input.release('Keyboard:KeyR', 9999), null);
+
+  assert.equal(input.press('Mouse:2', 3000), true);
+  assert.equal(input.release('Mouse:1', 4000), null);
+  assert.equal(input.release('Mouse:2', 3000 + FULL_RACK_SALVO_HOLD_MS), 'salvo');
+});
+
+test('Full Rack Salvo consumes full and partial racks through the shared charge state', () => {
+  const rack = new MineChargeRack();
+  rack.reset(5);
+  assert.equal(rack.spendMany(0, 4200, 5), true);
+  assert.equal(rack.snapshot(0, 4200).currentCharges, 0);
+  assert.equal(rack.spendMany(150, 4200, 1), false);
+  assert.equal(rack.snapshot(4200, 4200).currentCharges, 1);
+  assert.equal(rack.spendMany(4200, 4200, 1), true);
+  assert.equal(rack.snapshot(4200, 4200).currentCharges, 0);
+
+  rack.reset(5);
+  assert.equal(rack.spend(0, 4200), true);
+  assert.equal(rack.snapshot(150, 4200).currentCharges, 4);
+  assert.equal(rack.spendMany(150, 4200, 4), true);
+  assert.equal(rack.snapshot(150, 4200).currentCharges, 0);
+  assert.equal(rack.snapshot(4200, 4200).currentCharges, 1);
+});
+
+test('cancelling held Salvo input prevents stuck or delayed actions', () => {
+  const input = new MineSalvoInput();
+  input.press('Keyboard:KeyR', 0);
+  input.cancel();
+  assert.equal(input.update(10_000), null);
+  assert.equal(input.release('Keyboard:KeyR', 10_000), null);
 });
 
 test('base mine placement validates energy and geometry before consuming a charge', () => {
@@ -129,14 +172,25 @@ test('star death mines reuse the operative mine model with a hostile pink-cyan t
   assert.match(arena, /const mine = deathMine\.mine;[\s\S]*?mine\.update\(now\)/);
 });
 
-test('mine salvo placement is all-or-nothing, geometry safe, and preserves capacity and per-mine energy', () => {
+test('mine salvo placement atomically consumes current charges and preserves geometry, energy, and flight FX', () => {
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
-  assert.match(arena, /availableMines = Math\.max\(0, cfg\.maxActive - this\.mines\.length\)/);
+  assert.match(arena, /const rack = this\.mineChargeRack\.snapshot\(now, cfg\.cooldownMs\)/);
+  assert.match(arena, /const availableMines = rack\.currentCharges/);
   assert.match(arena, /getMineRackEnergyCost\(cfg\.energyCost, availableMines, salvo\.energyCostMultiplier\)/);
   assert.match(arena, /if \(!points\) \{[\s\S]*?recordAbilityDenied\('mine', 'invalid-placement'\)/);
+  assert.match(arena, /mineChargeRack\.spendMany\(now, cfg\.cooldownMs, availableMines\)/);
   assert.match(arena, /points\.forEach\(\(point, index\) => \{/);
   assert.match(arena, /intersectsWallGeometry\(x, y, 18, 18\)/);
   assert.match(arena, /durationMs: salvo\.flightMs/);
+});
+
+test('Arena wires Salvo tap-hold input without delaying an unmodded mine press', () => {
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(arena, /action === 'mine' && this\.modRuntime\.has\('full-rack-salvo'\)/);
+  assert.match(arena, /this\.mineSalvoInput\.press\(binding, this\.time\.now\);[\s\S]*?return;[\s\S]*?this\.pressedAbilityActions\.add\(action\)/);
+  assert.match(arena, /window\.addEventListener\('keyup', this\.onAbilityKeyUp\)/);
+  assert.match(arena, /window\.removeEventListener\('keyup', this\.onAbilityKeyUp\)/);
+  assert.match(arena, /this\.mineSalvoInput\.cancel\(\);[\s\S]*?this\.pendingMineSalvo = false/);
 });
 
 test('player mine explosions use the shared explosion audio and dedicated red-orange plasma FX', () => {

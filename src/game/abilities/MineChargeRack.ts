@@ -10,7 +10,8 @@ export interface MineChargeRackSnapshot {
 }
 
 /**
- * Tracks the operative's base mine rack independently from deployed Mine entities.
+ * Authoritative rack shared by individual deployment and Full Rack Salvo,
+ * independently from Mine entities already deployed in the arena.
  *
  * Recharge is intentionally lazy (advanced by ArenaScene's clock when queried), so
  * the rack does not create timers or listeners that can survive a scene restart.
@@ -36,10 +37,16 @@ export class MineChargeRack {
   }
 
   spend(now: number, rechargeDurationMs: number): boolean {
-    if (this.availability(now, rechargeDurationMs) !== 'ready') return false;
+    return this.spendMany(now, rechargeDurationMs, 1);
+  }
+
+  spendMany(now: number, rechargeDurationMs: number, requestedCharges: number): boolean {
+    const chargeCount = normalizeChargeCount(requestedCharges);
+    if (chargeCount <= 0 || this.availability(now, rechargeDurationMs) !== 'ready') return false;
+    if (this.currentCharges < chargeCount) return false;
 
     const wasFull = this.currentCharges === this.maxCharges;
-    this.currentCharges -= 1;
+    this.currentCharges -= chargeCount;
     this.nextDeploymentAt = now + MINE_DEPLOYMENT_DELAY_MS;
 
     // Spending another charge while the rack is already recharging must not
