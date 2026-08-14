@@ -37,6 +37,8 @@ test('pause menu uses the shared cyber-console presentation and keeps every exis
   assert.match(ui, /killTweensOf\(animatedTargets\)/);
   assert.doesNotMatch(ui, /backdrop[^;\n]*\.setInteractive\(/);
   assert.match(ui, /root\.setSize\(width, height\)\.setInteractive\(/);
+  assert.match(ui, /new Phaser\.Geom\.Rectangle\(0, 0, width, height\)/);
+  assert.doesNotMatch(ui, /new Phaser\.Geom\.Rectangle\(-width \* 0\.5, -height \* 0\.5/);
   assert.match(ui, /root\.on\('pointerover'/);
   assert.match(ui, /root\.on\('pointerdown'/);
   assert.match(arena, /event\.code === 'Escape'/);

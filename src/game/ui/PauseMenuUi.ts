@@ -75,9 +75,11 @@ const createActionControl = (
 
   // Keep the command itself as the hit target. This avoids relying on a hit
   // rectangle buried inside multiple scaled Containers, which Phaser can sort
-  // behind a fullscreen overlay during pointer hit testing.
+  // behind a fullscreen overlay during pointer hit testing. Phaser normalizes
+  // Container input by adding displayOriginX/Y, so this custom hit area must
+  // use positive local geometry rather than centered negative coordinates.
   root.setSize(width, height).setInteractive(
-    new Phaser.Geom.Rectangle(-width * 0.5, -height * 0.5, width, height),
+    new Phaser.Geom.Rectangle(0, 0, width, height),
     Phaser.Geom.Rectangle.Contains
   );
   if (root.input) root.input.cursor = 'pointer';
