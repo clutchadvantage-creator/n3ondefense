@@ -86,7 +86,8 @@ export class OperatorGarageScene extends Phaser.Scene {
       layout.dockCenters,
       layout.compact,
       layout.dockActionHeight,
-      layout.dockActionGap
+      layout.dockActionGap,
+      layout.workbenchTopPadding
     );
 
     const headerScale = layout.compact ? 1 : Phaser.Math.Clamp(layout.uiScale, 0.86, 1.2);
@@ -342,6 +343,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const docks = getGarageDockModels(mods);
     const compactCard = compact || cardWidth < 160;
     const readableScale = compact ? 1 : Phaser.Math.Clamp(cardWidth / 132, 1, 1.55);
+    const slotLabelOffset = compact ? 14 : Phaser.Math.Clamp(cardWidth * 0.115, 17, 25);
     docks.forEach((dock, index) => {
       const center = centers[index];
       const definition = dock.card ? MOD_BY_ID.get(dock.card.modId) : undefined;
@@ -357,7 +359,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       rails.fillStyle(0x273e48, 0.92).fillRect(railLeft - 2, railTop, 9, 5).fillRect(railRight - 7, railTop, 9, 5);
       rails.fillStyle(0x273e48, 0.92).fillRect(railLeft - 2, railBottom - 5, 9, 5).fillRect(railRight - 7, railBottom - 5, 9, 5);
       const lock = this.add.circle(railRight - 2, railBottom + 5, compact ? 2 : Phaser.Math.Clamp(cardWidth * 0.025, 3, 5), dock.empty ? 0x416572 : 0x69ffae, dock.empty ? 0.42 : 0.9).setDepth(27);
-      this.add.text(center.x, center.y - cardHeight / 2 - (compact ? 14 : 22 * readableScale), dock.label, {
+      this.add.text(center.x, center.y - cardHeight / 2 - slotLabelOffset, dock.label, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : Math.round(11 * readableScale)}px`, fontStyle: 'bold', color: definition ? Phaser.Display.Color.IntegerToColor(color).rgba : '#94c2cd', align: 'center'
       }).setOrigin(0.5).setDepth(27).setWordWrapWidth(cardWidth + 24, true).setMaxLines(2);
       if (dock.card) {

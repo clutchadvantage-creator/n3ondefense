@@ -196,9 +196,11 @@ test('Garage responsive layout keeps critical docks, terminals, and stations on 
     const dockActionBottom = layout.dockCenters[0].y + layout.cardHeight / 2 + layout.dockActionGap + layout.dockActionHeight;
     const stationHousingTop = layout.stationCenters[0].y - (layout.stationHeight + 14) / 2;
     assert.ok(dockActionBottom <= stationHousingTop, 'dock actions must not overlap station consoles');
-    const readableScale = layout.compact ? 1 : Math.max(1, Math.min(1.55, layout.cardWidth / 132));
-    const dockLabelTop = layout.dockCenters[0].y - layout.cardHeight / 2 - (layout.compact ? 14 : 22 * readableScale);
+    const slotLabelOffset = layout.compact ? 14 : Math.max(17, Math.min(25, layout.cardWidth * 0.115));
+    const dockLabelTop = layout.dockCenters[0].y - layout.cardHeight / 2 - slotLabelOffset;
     assert.ok(dockLabelTop > layout.configTerminal.y + layout.configTerminal.height);
+    const workbenchTop = layout.dockCenters[0].y - layout.cardHeight / 2 - layout.workbenchTopPadding;
+    assert.ok(workbenchTop >= layout.configTerminal.y + layout.configTerminal.height + 8, 'workbench must clear terminal mount casing');
     for (const rect of [layout.configTerminal, layout.walletTerminal, layout.operatorPreview]) {
       assert.ok(rect.x >= 0 && rect.y >= 0);
       assert.ok(rect.x + rect.width <= width);

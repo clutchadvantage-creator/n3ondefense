@@ -181,14 +181,15 @@ export const createModWorkbench = (
   centers: Array<{ x: number; y: number }>,
   compact: boolean,
   actionButtonHeight = 40,
-  actionButtonGap = 11
+  actionButtonGap = 11,
+  workbenchTopPadding = compact ? 31 : 48
 ): void => {
   if (!centers.length) return;
   const first = centers[0];
   const last = centers[centers.length - 1];
   const left = first.x - cardWidth / 2 - (compact ? 13 : 23);
   const right = last.x + cardWidth / 2 + (compact ? 13 : 23);
-  const top = first.y - cardHeight / 2 - (compact ? 31 : Math.max(43, cardWidth * 0.22));
+  const top = first.y - cardHeight / 2 - workbenchTopPadding;
   const actionY = first.y + cardHeight / 2 + actionButtonGap + actionButtonHeight / 2;
   const bottom = actionY + actionButtonHeight / 2 + (compact ? 5 : 9);
   const width = right - left;

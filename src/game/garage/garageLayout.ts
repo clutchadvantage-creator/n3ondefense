@@ -6,6 +6,7 @@ export interface GarageLayout {
   uiScale: number;
   cardWidth: number;
   cardHeight: number;
+  workbenchTopPadding: number;
   dockActionHeight: number;
   dockActionGap: number;
   dockCenters: GaragePoint[];
@@ -33,6 +34,9 @@ export const calculateGarageLayout = (width: number, height: number): GarageLayo
     ? clamp(availableCardWidth, 84, compactCardMaximum)
     : Math.min(availableCardWidth, clamp(desiredDesktopCardWidth, 132, 240)));
   const cardHeight = Math.round(cardWidth * 1.4);
+  const workbenchTopPadding = compact
+    ? height < 540 ? 18 : 31
+    : clamp(cardWidth * 0.34, 48, 76);
   const dockActionHeight = compact ? 40 : Math.round(clamp(48 * uiScale, 42, 58));
   const dockActionGap = compact ? 11 : Math.round(clamp(14 * uiScale, 11, 17));
   const totalDockWidth = cardWidth * 5 + dockGap * 4;
@@ -59,8 +63,9 @@ export const calculateGarageLayout = (width: number, height: number): GarageLayo
   const terminalInset = safe + Math.round(compact ? 6 : clamp(width * 0.032, 28, 62));
   const stationY = height - safe - stationHeight / 2;
   const stationHousingTop = stationY - (stationHeight + 14) / 2;
-  const dockLabelClearance = compact ? 26 : Math.round(clamp(34 * uiScale, 28, 42));
-  const minimumDockY = terminalY + terminalHeight + cardHeight / 2 + dockLabelClearance + (compact ? 8 : 16);
+  const terminalMountOverflow = 8;
+  const workbenchTerminalGap = compact ? 4 : 12;
+  const minimumDockY = terminalY + terminalHeight + terminalMountOverflow + workbenchTerminalGap + cardHeight / 2 + workbenchTopPadding;
   const maximumDockY = stationHousingTop - (compact ? 6 : 16) - cardHeight / 2 - dockActionGap - dockActionHeight;
   const dockY = clamp(Math.max(
     preferredDockY,
@@ -74,6 +79,7 @@ export const calculateGarageLayout = (width: number, height: number): GarageLayo
     uiScale,
     cardWidth,
     cardHeight,
+    workbenchTopPadding,
     dockActionHeight,
     dockActionGap,
     dockCenters: Array.from({ length: 5 }, (_, index) => ({ x: dockStartX + index * (cardWidth + dockGap), y: dockY })),
