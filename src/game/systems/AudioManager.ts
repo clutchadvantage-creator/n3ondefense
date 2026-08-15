@@ -11,10 +11,24 @@ const HIT_DAMAGE_SFX_MIN_INTERVAL_MS = 55;
 const MENU_SFX_POOL_SIZE = 4;
 const MENU_HOVER_SFX_MIN_INTERVAL_MS = 45;
 const PICKUP_SFX_POOL_SIZE = 4;
+const PICKUP_SFX_MAX_CONCURRENT = 6;
 const LOW_HEALTH_LOOP_GAP_MS = 900;
 const ABILITY_FEEDBACK_SFX_POOL_SIZE = 6;
 const UNAVAILABLE_SFX_MIN_INTERVAL_MS = 90;
 type AbilityFeedbackSfxName = 'placeTurret' | 'electricFence' | 'placeMine' | 'unavailable';
+const PICKUP_SFX_SOURCES = {
+  pickup: 'soundeffects/pickupsound.mp3',
+  healthPickup: 'soundeffects/healthpickup.mp3',
+  energyPickup: 'soundeffects/energypickup.mp3',
+  damageBoostPickup: 'soundeffects/damageboostpickup.mp3',
+  speedPickup: 'soundeffects/speedpickup.mp3',
+  fireRatePickup: 'soundeffects/fireratepickup.mp3',
+  creditPickup: 'soundeffects/creditpickup.mp3',
+  coreTokenPickup: 'soundeffects/coretokenpickup.mp3',
+  fluxCorePickup: 'soundeffects/fluxcorepickup.mp3'
+} as const;
+type PickupSfxName = keyof typeof PICKUP_SFX_SOURCES;
+const PICKUP_SFX_NAMES = Object.keys(PICKUP_SFX_SOURCES) as PickupSfxName[];
 
 export class AudioManager {
   private static instance: AudioManager | null = null;
@@ -40,7 +54,14 @@ export class AudioManager {
   private readonly menuHoverSfxPool: HTMLAudioElement[] = [];
   private readonly menuClickSfxPool: HTMLAudioElement[] = [];
   private readonly itemLockedSfxPool: HTMLAudioElement[] = [];
-  private readonly pickupSfxPool: HTMLAudioElement[] = [];
+  private readonly pickupSfxPools: Record<PickupSfxName, HTMLAudioElement[]> = {
+    pickup: [], healthPickup: [], energyPickup: [], damageBoostPickup: [], speedPickup: [],
+    fireRatePickup: [], creditPickup: [], coreTokenPickup: [], fluxCorePickup: []
+  };
+  private readonly pickupSfxCursors: Record<PickupSfxName, number> = {
+    pickup: 0, healthPickup: 0, energyPickup: 0, damageBoostPickup: 0, speedPickup: 0,
+    fireRatePickup: 0, creditPickup: 0, coreTokenPickup: 0, fluxCorePickup: 0
+  };
   private readonly abilityFeedbackSfxPools: Record<AbilityFeedbackSfxName, HTMLAudioElement[]> = {
     placeTurret: [], electricFence: [], placeMine: [], unavailable: []
   };
@@ -49,6 +70,7 @@ export class AudioManager {
   };
   private runStartSfx: HTMLAudioElement | null = null;
   private securityLaserAudio: HTMLAudioElement | null = null;
+  private lasersOffSfx: HTMLAudioElement | null = null;
   private securityLaserLoopRequested = false;
   private gasSfx: HTMLAudioElement | null = null;
   private fluxCoreAudio: HTMLAudioElement | null = null;
@@ -74,7 +96,6 @@ export class AudioManager {
   private menuHoverSfxCursor = 0;
   private menuClickSfxCursor = 0;
   private itemLockedSfxCursor = 0;
-  private pickupSfxCursor = 0;
   private lastEnemyDeathSfxAt = -Infinity;
   private lastHitDamageSfxAt = -Infinity;
   private lastMenuHoverSfxAt = -Infinity;
@@ -96,7 +117,7 @@ export class AudioManager {
     this.initDeathSfxPools();
     this.initSecurityHazardSfx();
     this.initGasSfx();
-    this.initPickupSfxPool();
+    this.initPickupSfxPools();
     this.initFluxCoreAudio();
     this.initShieldSfx();
     this.initHitDamageSfxPool();
@@ -216,37 +237,48 @@ export class AudioManager {
     this.gasSfx.load();
   }
 
-  private initPickupSfxPool(): void {
-    const source = audioAssetUrl('soundeffects/pickupsound.mp3');
-    for (let index = 0; index < PICKUP_SFX_POOL_SIZE; index += 1) {
-      const audio = new Audio(source);
-      audio.preload = 'auto';
-      audio.volume = this.getSfxVolume('pickup');
-      audio.load();
-      this.pickupSfxPool.push(audio);
+  private initPickupSfxPools(): void {
+    for (const name of PICKUP_SFX_NAMES) {
+      const source = audioAssetUrl(PICKUP_SFX_SOURCES[name]);
+      for (let index = 0; index < PICKUP_SFX_POOL_SIZE; index += 1) {
+        const audio = new Audio(source);
+        audio.preload = 'auto';
+        audio.volume = this.getSfxVolume(name);
+        audio.load();
+        this.pickupSfxPools[name].push(audio);
+      }
     }
   }
 
-  private playPickupSfx(): void {
-    if (this.pickupSfxPool.length === 0) return;
+  private playPickupSfx(name: PickupSfxName): void {
+    const pool = this.pickupSfxPools[name];
+    if (pool.length === 0) return;
+    let activeVoices = 0;
+    for (const pickupName of PICKUP_SFX_NAMES) {
+      const candidatePool = this.pickupSfxPools[pickupName];
+      for (const candidate of candidatePool) {
+        if (!candidate.paused && !candidate.ended) activeVoices += 1;
+      }
+    }
+    if (activeVoices >= PICKUP_SFX_MAX_CONCURRENT) return;
     let availableIndex = -1;
-    for (let offset = 0; offset < this.pickupSfxPool.length; offset += 1) {
-      const candidateIndex = (this.pickupSfxCursor + offset) % this.pickupSfxPool.length;
-      const candidate = this.pickupSfxPool[candidateIndex];
+    for (let offset = 0; offset < pool.length; offset += 1) {
+      const candidateIndex = (this.pickupSfxCursors[name] + offset) % pool.length;
+      const candidate = pool[candidateIndex];
       if (candidate.paused || candidate.ended) {
         availableIndex = candidateIndex;
         break;
       }
     }
     if (availableIndex < 0) return;
-    this.pickupSfxCursor = (availableIndex + 1) % this.pickupSfxPool.length;
-    const audio = this.pickupSfxPool[availableIndex];
+    this.pickupSfxCursors[name] = (availableIndex + 1) % pool.length;
+    const audio = pool[availableIndex];
     try {
       audio.currentTime = 0;
     } catch {
       // Metadata may still be loading on the first pickup.
     }
-    audio.volume = this.getSfxVolume('pickup');
+    audio.volume = this.getSfxVolume(name);
     void audio.play().catch(() => undefined);
   }
 
@@ -520,6 +552,11 @@ export class AudioManager {
     this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
     this.securityLaserAudio.load();
 
+    this.lasersOffSfx = new Audio(audioAssetUrl('soundeffects/lasersoff.mp3'));
+    this.lasersOffSfx.preload = 'auto';
+    this.lasersOffSfx.volume = this.getSfxVolume('lasersOff');
+    this.lasersOffSfx.load();
+
     const bombletSource = audioAssetUrl('soundeffects/bomblets.mp3');
     for (let index = 0; index < BOMBLET_SFX_POOL_SIZE; index += 1) {
       const audio = new Audio(bombletSource);
@@ -528,6 +565,18 @@ export class AudioManager {
       audio.load();
       this.bombletSfxPool.push(audio);
     }
+  }
+
+  private playLasersOffSfx(): void {
+    if (!this.lasersOffSfx) return;
+    this.lasersOffSfx.pause();
+    try {
+      this.lasersOffSfx.currentTime = 0;
+    } catch {
+      // Metadata may still be loading when the last Flux Core is destroyed.
+    }
+    this.lasersOffSfx.volume = this.getSfxVolume('lasersOff');
+    void this.lasersOffSfx.play().catch(() => undefined);
   }
 
   startSecurityLaserLoop(): void {
@@ -794,12 +843,15 @@ export class AudioManager {
     for (const menuHover of this.menuHoverSfxPool) menuHover.volume = this.getSfxVolume('menuHover');
     for (const menuClick of this.menuClickSfxPool) menuClick.volume = this.getSfxVolume('menu');
     for (const itemLocked of this.itemLockedSfxPool) itemLocked.volume = this.getSfxVolume('itemLocked');
-    for (const pickup of this.pickupSfxPool) pickup.volume = this.getSfxVolume('pickup');
+    for (const name of PICKUP_SFX_NAMES) {
+      for (const pickup of this.pickupSfxPools[name]) pickup.volume = this.getSfxVolume(name);
+    }
     for (const name of Object.keys(this.abilityFeedbackSfxPools) as AbilityFeedbackSfxName[]) {
       for (const audio of this.abilityFeedbackSfxPools[name]) audio.volume = this.getSfxVolume(name);
     }
     if (this.runStartSfx) this.runStartSfx.volume = this.getSfxVolume('runStart');
     if (this.securityLaserAudio) this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
+    if (this.lasersOffSfx) this.lasersOffSfx.volume = this.getSfxVolume('lasersOff');
     if (this.gasSfx) this.gasSfx.volume = this.getSfxVolume('gas');
     if (this.fluxCoreAudio) this.fluxCoreAudio.volume = this.fluxCoreTargetVolume(this.fluxCoreProximity);
     if (this.shieldActivationSfx) this.shieldActivationSfx.volume = this.getSfxVolume('shieldOn');
@@ -969,7 +1021,18 @@ export class AudioManager {
         this.playGasSfx();
         break;
       case 'pickup':
-        this.playPickupSfx();
+      case 'healthPickup':
+      case 'energyPickup':
+      case 'damageBoostPickup':
+      case 'speedPickup':
+      case 'fireRatePickup':
+      case 'creditPickup':
+      case 'coreTokenPickup':
+      case 'fluxCorePickup':
+        this.playPickupSfx(name);
+        break;
+      case 'lasersOff':
+        this.playLasersOffSfx();
         break;
       case 'modCollection':
       case 'legendaryMod':

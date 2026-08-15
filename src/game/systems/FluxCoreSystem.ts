@@ -72,7 +72,8 @@ export class FluxCoreSystem {
     private readonly particlesEnabled: boolean,
     private readonly onDestroyed?: (event: FluxCoreDestroyedEvent) => void,
     private readonly onProximityChanged?: (strength: number) => void,
-    private readonly onRecoveryAlarm?: () => void
+    private readonly onRecoveryAlarm?: () => void,
+    private readonly onLasersShutdown?: () => void
   ) {
     this.random = new SeededRandom((seed ^ Math.imul(round + 31, 0x85ebca6b) ^ 0xf10cc0de) >>> 0);
     this.capacity = getFluxCoreCapacity(round);
@@ -471,6 +472,7 @@ export class FluxCoreSystem {
     if (this.cyclePhase === 'engaged' && this.cores.length === 0) {
       this.cyclePhase = 'shutdown';
       this.laserSuppressedUntil = now + FLUX_CORE_BALANCE.laserShutdownMs;
+      this.onLasersShutdown?.();
       this.recoveryAlarmPlayed = false;
       this.nextSpawnAt = Number.POSITIVE_INFINITY;
       this.plannedCoreCount = 0;

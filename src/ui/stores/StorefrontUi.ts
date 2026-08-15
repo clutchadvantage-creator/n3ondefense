@@ -47,6 +47,7 @@ export class StorefrontUi {
   private message = '';
   private actionLocked = false;
   private dialogOpen = false;
+  private walletFeedback: { credits: number; coreTokens: number } | null = null;
   private readonly keyHandler = (event: KeyboardEvent): void => this.handleKey(event);
 
   constructor(options: StorefrontUiOptions) {
@@ -154,6 +155,12 @@ export class StorefrontUi {
     wallet.className = 'store-wallet';
     wallet.dataset.tutorialTarget = 'store.wallet';
     wallet.innerHTML = `<span class="credits" data-tutorial-target="store.wallet.credits"><b>◆</b> ${snapshot.credits.toLocaleString()} <small>CREDITS</small></span><span class="tokens" data-tutorial-target="store.wallet.core-tokens"><b>⬡</b> ${snapshot.coreTokens.toLocaleString()} <small>CORE TOKENS</small></span>`;
+    const feedback = this.walletFeedback;
+    this.walletFeedback = null;
+    const creditDelta = this.createCurrencyDelta(feedback?.credits);
+    const tokenDelta = this.createCurrencyDelta(feedback?.coreTokens);
+    if (creditDelta) wallet.querySelector('.credits')?.insertBefore(creditDelta, wallet.querySelector('.credits small'));
+    if (tokenDelta) wallet.querySelector('.tokens')?.insertBefore(tokenDelta, wallet.querySelector('.tokens small'));
     const actions = document.createElement('div');
     actions.className = 'store-header-actions';
     if (this.options.onReturn) {
@@ -402,10 +409,24 @@ export class StorefrontUi {
   private perform(action: () => StoreActionResult | undefined): void {
     if (this.actionLocked) return;
     this.actionLocked = true;
+    const before = this.options.getSnapshot();
     const result = action() ?? { ok: false, message: 'ACTION FAILED' };
+    const after = this.options.getSnapshot();
+    this.walletFeedback = result.ok ? {
+      credits: after.credits - before.credits,
+      coreTokens: after.coreTokens - before.coreTokens
+    } : null;
     this.message = result.message ?? (result.ok ? 'SYSTEM UPDATED' : 'ACTION FAILED');
     this.actionLocked = false;
     this.render();
+  }
+
+  private createCurrencyDelta(delta?: number): HTMLElement | null {
+    if (!delta) return null;
+    const feedback = document.createElement('em');
+    feedback.className = `currency-delta ${delta > 0 ? 'gain' : 'loss'}`;
+    feedback.textContent = `${delta > 0 ? '+' : '−'}${Math.abs(delta).toLocaleString()}`;
+    return feedback;
   }
 
   private confirm(titleText: string, bodyText: string, confirmText: string, onConfirm: () => void): void {

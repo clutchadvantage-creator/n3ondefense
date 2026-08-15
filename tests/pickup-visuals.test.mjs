@@ -48,8 +48,8 @@ test('Pickups drift, respect arena geometry, and softly separate without physics
   assert.doesNotMatch(motionUpdater, /physics\.add|add\.overlap|add\.collider/);
 });
 
-test('Pickup rewards, telemetry, and the existing enemy-drop sound remain unchanged', () => {
-  assert.match(arena, /if \(source === 'enemy'\) this\.audio\.playSfx\('pickup'\)/);
+test('Pickup rewards and telemetry remain unchanged while pickup audio is type-specific', () => {
+  assert.match(arena, /this\.audio\.playSfx\(PICKUP_SFX_BY_TYPE\[type\]\)/);
   assert.match(arena, /if \(type === 'credits'\) \{[\s\S]*?this\.roundCredits \+= credits;[\s\S]*?this\.totalCreditsCollected \+= credits;/);
   assert.match(arena, /GameplayTelemetryRecorder\.recordPickupCollected\(type, source, requestedRestoration, appliedRestoration\)/);
   assert.match(arena, /this\.pickups\.push\(\{ type, sprite: p, expiresAt:[\s\S]*?source: 'enemy' \}\)/);

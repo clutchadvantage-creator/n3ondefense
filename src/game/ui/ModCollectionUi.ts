@@ -12,6 +12,7 @@ export interface CollectionReadout {
   label: string;
   value: string;
   color: number;
+  delta?: number;
 }
 
 export type CollectionButtonTone = 'standard' | 'utility' | 'warning' | 'return';
@@ -191,6 +192,22 @@ export const createModCollectionShell = (
       fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 11 : 14}px`, color: Phaser.Display.Color.IntegerToColor(readout.color).rgba, fontStyle: 'bold'
     }).setOrigin(1, 0.5).setMaxLines(1);
     shell.add([cell, edge, label, value]);
+    if (readout.delta) {
+      const gained = readout.delta > 0;
+      const delta = scene.add.text(
+        value.x - value.displayWidth - (compact ? 4 : 7),
+        railY,
+        `${gained ? '+' : '−'}${Math.abs(readout.delta).toLocaleString()}`,
+        {
+          fontFamily: 'Rajdhani, sans-serif',
+          fontSize: `${compact ? 9 : 12}px`,
+          color: gained ? '#69ff9c' : '#ff647d',
+          fontStyle: 'bold'
+        }
+      ).setOrigin(1, 0.5);
+      shell.add(delta);
+      scene.tweens.add({ targets: delta, y: railY - 4, alpha: 0, delay: 1150, duration: 420, ease: 'Sine.easeIn' });
+    }
   });
 
   const sweep = scene.add.rectangle(margin + 18, height / 2, 2, shellHeight - 38, 0x55efff, 0.05);

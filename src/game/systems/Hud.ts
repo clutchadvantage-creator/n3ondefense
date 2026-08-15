@@ -69,8 +69,12 @@ interface ResourceVisual {
   icon: Phaser.GameObjects.Graphics;
   creditGlyph: Phaser.GameObjects.Text | null;
   value: Phaser.GameObjects.Text;
+  delta: Phaser.GameObjects.Text;
   color: number;
   lastValue?: number;
+  displayedDelta: number;
+  deltaHideTimer?: Phaser.Time.TimerEvent;
+  compact: boolean;
 }
 
 interface AbilitySlotVisual {
@@ -409,8 +413,10 @@ export class Hud {
       : null;
     const value = this.createText('0', 12, Phaser.Display.Color.IntegerToColor(color).rgba, 'Rajdhani, sans-serif')
       .setOrigin(0, 0.5).setFontStyle('bold');
-    root.add([icon, ...(creditGlyph ? [creditGlyph] : []), value]);
-    return { root, icon, creditGlyph, value, color };
+    const delta = this.createText('', 10, '#69ff9c', 'Rajdhani, sans-serif')
+      .setOrigin(0, 0.5).setFontStyle('bold').setVisible(false);
+    root.add([icon, ...(creditGlyph ? [creditGlyph] : []), value, delta]);
+    return { root, icon, creditGlyph, value, delta, color, displayedDelta: 0, compact: false };
   }
 
   private createAbilitySlot(id: HudAbilitySlot['id']): void {
@@ -565,10 +571,14 @@ export class Hud {
       visual.icon.setScale(iconScale);
       visual.creditGlyph?.setScale(iconScale);
       visual.value.setFontSize(Math.max(8, Math.round((compact ? 10 : 13) * fontScale)));
+      visual.delta.setFontSize(Math.max(8, Math.round((compact ? 9 : 11) * fontScale)));
+      visual.compact = compact;
       if (compact) {
         visual.value.setOrigin(0.5, 0).setPosition(0, 10);
+        visual.delta.setOrigin(0.5, 0.5).setPosition(0, -12);
       } else {
         visual.value.setOrigin(0, 0.5).setPosition(15, 0);
+        visual.delta.setOrigin(0, 0.5).setPosition(15 + visual.value.displayWidth + 5, 0);
       }
     });
   }
@@ -796,6 +806,40 @@ export class Hud {
     if (!visual) return;
     const value = Math.max(0, rawValue);
     this.setTextIfChanged(visual.value, this.formatCompactNumber(value));
+    if (!visual.compact) visual.delta.setX(15 + visual.value.displayWidth + 5);
+    if (visual.lastValue !== undefined && value !== visual.lastValue) {
+      const change = value - visual.lastValue;
+      const sameDirection = visual.delta.visible && Math.sign(change) === Math.sign(visual.displayedDelta);
+      visual.displayedDelta = sameDirection ? visual.displayedDelta + change : change;
+      const gained = visual.displayedDelta > 0;
+      visual.deltaHideTimer?.remove(false);
+      this.scene.tweens.killTweensOf(visual.delta);
+      this.setTextIfChanged(visual.delta, `${gained ? '+' : '−'}${this.formatCompactNumber(Math.abs(visual.displayedDelta))}`);
+      visual.delta
+        .setColor(gained ? '#69ff9c' : '#ff647d')
+        .setVisible(true)
+        .setAlpha(1)
+        .setY(visual.compact ? -12 : 0);
+      visual.deltaHideTimer = this.scene.time.delayedCall(1150, () => {
+        visual.deltaHideTimer = undefined;
+        if (this.settings.animation === 'off') {
+          visual.delta.setVisible(false);
+          visual.displayedDelta = 0;
+          return;
+        }
+        this.scene.tweens.add({
+          targets: visual.delta,
+          alpha: 0,
+          y: visual.delta.y - 4,
+          duration: this.settings.animation === 'reduced' ? 180 : 360,
+          onComplete: () => {
+            visual.delta.setVisible(false);
+            visual.displayedDelta = 0;
+            visual.delta.setY(visual.compact ? -12 : 0);
+          }
+        });
+      });
+    }
     if (this.settings.animation !== 'off' && visual.lastValue !== undefined && value > visual.lastValue) {
       this.scene.tweens.killTweensOf([visual.icon, visual.value]);
       this.scene.tweens.add({
@@ -924,7 +968,10 @@ export class Hud {
     this.defusePulse?.remove();
     this.defusePulse = null;
     for (const visual of this.abilitySlots.values()) this.scene.tweens.killTweensOf([visual.root, visual.cooldownRing]);
-    for (const visual of this.resourceVisuals.values()) this.scene.tweens.killTweensOf([visual.icon, visual.value]);
+    for (const visual of this.resourceVisuals.values()) {
+      visual.deltaHideTimer?.remove(false);
+      this.scene.tweens.killTweensOf([visual.icon, visual.value, visual.delta]);
+    }
     this.root.destroy(true);
   }
 }

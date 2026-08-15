@@ -20,6 +20,9 @@
 .store-wallet span { padding:10px 14px; border:1px solid rgba(255,255,255,.1); background:rgba(2,8,16,.65); line-height:1.35; }
 .store-wallet small { display:block; font-size:.62rem; letter-spacing:.14em; color:#8caabd; }
 .store-wallet .credits { color:#ffd66e; }.store-wallet .tokens { color:#e18cff; }.store-wallet b { margin-right:5px; }
+.currency-delta { display:inline-block; margin-left:6px; font:800 .72rem Rajdhani,sans-serif; font-style:normal; animation:currency-math 1.6s ease-out both; }
+.currency-delta.gain { color:#69ff9c; }.currency-delta.loss { color:#ff647d; }
+@keyframes currency-math { 0%,65%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-5px)} }
 .store-back,.store-action,.store-dialog button { min-height:44px; padding:9px 18px; border:1px solid var(--accent); background:rgba(7,20,31,.92); color:#e9fbff; font:700 .88rem/1.25 'Rajdhani'; letter-spacing:.1em; cursor:pointer; transition:140ms ease; white-space:normal; overflow-wrap:anywhere; }
 .store-action[aria-disabled="true"] { cursor:not-allowed; opacity:.56; border-color:#596879; color:#8091a2; box-shadow:none; }
 .store-header-actions { display:flex; gap:9px; justify-content:flex-end; }

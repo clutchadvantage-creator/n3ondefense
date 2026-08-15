@@ -229,6 +229,16 @@ const PICKUP_FLOAT_MAX_SPEED = 20;
 const PICKUP_SEPARATION_PUSH = 0.2;
 const PICKUP_BOUNCE_TRANSFER = 0.5;
 const PICKUP_BOUNCE_KICK = 2;
+const PICKUP_SFX_BY_TYPE = {
+  health: 'healthPickup',
+  energy: 'energyPickup',
+  damageBoost: 'damageBoostPickup',
+  speedBoost: 'speedPickup',
+  rapidFire: 'fireRatePickup',
+  credits: 'creditPickup',
+  coreToken: 'coreTokenPickup',
+  fluxCore: 'fluxCorePickup'
+} as const satisfies Record<PickupType, Parameters<AudioManager['playSfx']>[0]>;
 
 export class ArenaScene extends Phaser.Scene {
   private readonly state = new GameStateMachine(RoundState.PrePlant);
@@ -828,7 +838,10 @@ export class ArenaScene extends Phaser.Scene {
         if (event.droppedCore) this.dropFluxCorePickup(event.x, event.y, event.color);
       },
       (strength) => this.audio.setFluxCoreProximity(strength),
-      () => this.audio.playSfx('defuseAlarm')
+      () => this.audio.playSfx('defuseAlarm'),
+      () => {
+        if (!(this.gasHazard?.isLaserSuppressed(this.time.now) ?? false)) this.audio.playSfx('lasersOff');
+      }
     );
 
     this.registerBombSiteEvents();
@@ -3658,8 +3671,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private collectPickup(type: PickupType, source: Pickup['source']): void {
-    if (source === 'enemy') this.audio.playSfx('pickup');
-    if (source === 'flux-core') this.audio.playSfx('pickup');
+    this.audio.playSfx(PICKUP_SFX_BY_TYPE[type]);
     let requestedRestoration = 0;
     let appliedRestoration = 0;
     if (type === 'health') {
@@ -4381,7 +4393,10 @@ export class ArenaScene extends Phaser.Scene {
         if (event.droppedCore) this.dropFluxCorePickup(event.x, event.y, event.color);
       },
       (strength) => this.audio.setFluxCoreProximity(strength),
-      () => this.audio.playSfx('defuseAlarm')
+      () => this.audio.playSfx('defuseAlarm'),
+      () => {
+        if (!(this.gasHazard?.isLaserSuppressed(this.time.now) ?? false)) this.audio.playSfx('lasersOff');
+      }
     );
 
     GameplayTelemetryRecorder.beginEncounter({

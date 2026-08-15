@@ -32,7 +32,17 @@ const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 } 
 interface ModCollectionSceneData extends ModCollectionReturnRequest {
   selectedCardId?: string;
   initialCategory?: 'all' | ModCategory;
+  currencyDeltas?: CurrencyDeltas;
 }
+
+interface CurrencySnapshot {
+  credits: number;
+  coreTokens: number;
+  plasmaChips: number;
+  fluxCores: number;
+}
+
+type CurrencyDeltas = Partial<Record<keyof CurrencySnapshot, number>>;
 
 export class ModCollectionScene extends Phaser.Scene {
   private selectedCardId = '';
@@ -91,10 +101,10 @@ export class ModCollectionScene extends Phaser.Scene {
     const wallet = SaveSystem.get();
     createModCollectionShell(this, width, height, [
       { label: 'OWNED CARDS', value: mods.cards.length.toLocaleString(), color: 0x62efff },
-      { label: 'PLASMA CHIPS', value: mods.plasmaChips.toLocaleString(), color: 0xc877ff },
-      { label: 'CORE TOKENS', value: wallet.coreTokens.toLocaleString(), color: 0xffc86b },
-      { label: 'FLUX CORES', value: wallet.fluxCores.toLocaleString(), color: 0x69ff9c },
-      { label: 'CREDITS', value: wallet.credits.toLocaleString(), color: 0xffed67 }
+      { label: 'PLASMA CHIPS', value: mods.plasmaChips.toLocaleString(), color: 0xc877ff, delta: data?.currencyDeltas?.plasmaChips },
+      { label: 'CORE TOKENS', value: wallet.coreTokens.toLocaleString(), color: 0xffc86b, delta: data?.currencyDeltas?.coreTokens },
+      { label: 'FLUX CORES', value: wallet.fluxCores.toLocaleString(), color: 0x69ff9c, delta: data?.currencyDeltas?.fluxCores },
+      { label: 'CREDITS', value: wallet.credits.toLocaleString(), color: 0xffed67, delta: data?.currencyDeltas?.credits }
     ]);
 
     const chromeLayout = getModCollectionChromeLayout(width, height);
@@ -376,23 +386,45 @@ export class ModCollectionScene extends Phaser.Scene {
   }
 
   private apply(operation: () => { ok: boolean; message?: string }): boolean {
-    return this.finishOperation(operation());
+    const before = this.captureCurrencySnapshot();
+    return this.finishOperation(operation(), this.calculateCurrencyDeltas(before));
   }
 
   private applyWithTutorialEvent(event: string, operation: () => { ok: boolean; message?: string }): boolean {
+    const before = this.captureCurrencySnapshot();
     const result = operation();
     if (result.ok) TutorialEventBus.emit(event);
-    return this.finishOperation(result);
+    return this.finishOperation(result, this.calculateCurrencyDeltas(before));
   }
 
-  private finishOperation(result: { ok: boolean; message?: string }): boolean {
+  private captureCurrencySnapshot(): CurrencySnapshot {
+    const wallet = SaveSystem.get();
+    return {
+      credits: wallet.credits,
+      coreTokens: wallet.coreTokens,
+      plasmaChips: SaveSystem.getModCollection().plasmaChips,
+      fluxCores: wallet.fluxCores
+    };
+  }
+
+  private calculateCurrencyDeltas(before: CurrencySnapshot): CurrencyDeltas {
+    const after = this.captureCurrencySnapshot();
+    const deltas: CurrencyDeltas = {};
+    for (const key of Object.keys(before) as Array<keyof CurrencySnapshot>) {
+      const delta = after[key] - before[key];
+      if (delta !== 0) deltas[key] = delta;
+    }
+    return deltas;
+  }
+
+  private finishOperation(result: { ok: boolean; message?: string }, currencyDeltas: CurrencyDeltas = {}): boolean {
     this.status = `${result.ok ? 'Success' : 'Blocked'}: ${result.message ?? ''}`;
-    this.restartCollection();
+    this.restartCollection(result.ok ? currencyDeltas : undefined);
     return result.ok;
   }
 
-  private restartCollection(): void {
-    this.scene.restart({ returnScene: this.returnScene, resumePausedScene: this.resumePausedScene });
+  private restartCollection(currencyDeltas?: CurrencyDeltas): void {
+    this.scene.restart({ returnScene: this.returnScene, resumePausedScene: this.resumePausedScene, currencyDeltas });
   }
 
   private returnToPreviousScene(): void {

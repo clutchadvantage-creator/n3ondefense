@@ -106,14 +106,45 @@ test('enemy death audio caps concurrent voices without interrupting active clips
   assert.match(enemyPlayback, /this\.enemyDeathSfxCursor = \(availableIndex \+ 1\)/);
 });
 
-test('enemy resource pickups use the dedicated recording and never share Mod reveal audio', () => {
-  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/pickupsound.mp3', import.meta.url)));
+test('every gameplay pickup uses its dedicated pooled recording and never shares Mod reveal audio', () => {
+  const pickupFiles = {
+    healthPickup: 'healthpickup.mp3',
+    energyPickup: 'energypickup.mp3',
+    damageBoostPickup: 'damageboostpickup.mp3',
+    speedPickup: 'speedpickup.mp3',
+    fireRatePickup: 'fireratepickup.mp3',
+    creditPickup: 'creditpickup.mp3',
+    coreTokenPickup: 'coretokenpickup.mp3',
+    fluxCorePickup: 'fluxcorepickup.mp3'
+  };
+  for (const filename of Object.values(pickupFiles)) {
+    assert.ok(existsSync(new URL(`../public/assets/audio/soundeffects/${filename}`, import.meta.url)), filename);
+  }
   const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const config = readFileSync(new URL('../src/game/config/audio.ts', import.meta.url), 'utf8');
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   assert.match(audio, /PICKUP_SFX_POOL_SIZE = 4/);
-  assert.match(audio, /audioAssetUrl\('soundeffects\/pickupsound\.mp3'\)/);
-  assert.match(audio, /case 'pickup':[\s\S]*?this\.playPickupSfx\(\)/);
-  assert.match(arena, /if \(source === 'enemy'\) this\.audio\.playSfx\('pickup'\)/);
+  assert.match(audio, /PICKUP_SFX_MAX_CONCURRENT = 6/);
+  for (const [key, filename] of Object.entries(pickupFiles)) {
+    assert.match(config, new RegExp(`key: '${key}'`));
+    assert.match(audio, new RegExp(`soundeffects/${filename.replace('.', '\\.')}`));
+    assert.match(audio, new RegExp(`case '${key}':`));
+  }
+  assert.match(arena, /const PICKUP_SFX_BY_TYPE = \{[\s\S]*?health: 'healthPickup'[\s\S]*?rapidFire: 'fireRatePickup'[\s\S]*?fluxCore: 'fluxCorePickup'/);
+  assert.match(arena, /this\.audio\.playSfx\(PICKUP_SFX_BY_TYPE\[type\]\)/);
   assert.doesNotMatch(arena, /tryAwardMod[\s\S]{0,500}playSfx\('pickup'\)/);
   assert.match(audio, /case 'modCollection':[\s\S]*?this\.playModRevealSfx\(name\)/);
+});
+
+test('Flux Core completion uses lasersoff only for an actual laser shutdown', () => {
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/lasersoff.mp3', import.meta.url)));
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const config = readFileSync(new URL('../src/game/config/audio.ts', import.meta.url), 'utf8');
+  const flux = readFileSync(new URL('../src/game/systems/FluxCoreSystem.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(config, /key: 'lasersOff'/);
+  assert.match(audio, /soundeffects\/lasersoff\.mp3/);
+  assert.match(audio, /case 'lasersOff':[\s\S]*?this\.playLasersOffSfx\(\)/);
+  assert.match(flux, /this\.cyclePhase === 'engaged' && this\.cores\.length === 0[\s\S]*?this\.onLasersShutdown\?\.\(\)/);
+  assert.match(arena, /if \(!\(this\.gasHazard\?\.isLaserSuppressed\(this\.time\.now\) \?\? false\)\) this\.audio\.playSfx\('lasersOff'\)/);
 });
