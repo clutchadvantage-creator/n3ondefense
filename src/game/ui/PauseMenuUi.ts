@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/constants.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
+import { playButtonJiggle } from '../utils/ui.ts';
 import { PAUSE_MENU_BASE_HEIGHT, PAUSE_MENU_BASE_WIDTH, calculatePauseMenuLayout } from './PauseMenuLayout.ts';
 
 export type PauseMenuActionTone = 'primary' | 'standard' | 'utility' | 'warning';
@@ -91,6 +92,7 @@ const createActionControl = (
     label.setColor('#ffffff');
     edge.setAlpha(1);
     AudioManager.get().playSfx('menuHover');
+    playButtonJiggle(scene, root);
   });
   root.on('pointerout', () => {
     chassis.setStrokeStyle(tone === 'primary' ? 2 : 1, accent, tone === 'primary' ? 0.82 : 0.54);

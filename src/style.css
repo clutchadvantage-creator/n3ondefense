@@ -48,6 +48,24 @@ body {
   pointer-events: none;
 }
 
+@keyframes ui-button-jello-jiggle {
+  0% { scale: 1 1; rotate: 0deg; }
+  20% { scale: 1.052 0.944; rotate: -0.7deg; }
+  43% { scale: 0.976 1.034; rotate: 0.5deg; }
+  67% { scale: 1.018 0.986; rotate: -0.25deg; }
+  84% { scale: 0.994 1.008; rotate: 0.1deg; }
+  100% { scale: 1 1; rotate: 0deg; }
+}
+
+#game-ui-root button.ui-button-jiggle {
+  transform-origin: center;
+  animation: ui-button-jello-jiggle 302ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #game-ui-root button.ui-button-jiggle { animation: none; }
+}
+
 #phaser-game canvas {
   display: block;
   width: 100% !important;

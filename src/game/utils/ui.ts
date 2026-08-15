@@ -3,8 +3,68 @@ import { COLORS } from '../config/constants';
 import { AudioManager } from '../systems/AudioManager';
 import type { AudioSfxName } from '../config/audio';
 
-interface ButtonAudioState { enabled: boolean }
+export type ButtonJiggleTarget = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform;
+
+interface ButtonAudioState {
+  enabled: boolean;
+  jiggleTargets: ButtonJiggleTarget[];
+}
+
 const buttonAudioStates = new WeakMap<Phaser.GameObjects.Container, ButtonAudioState>();
+const buttonJiggleTweens = new WeakMap<ButtonJiggleTarget, Phaser.Tweens.TweenChain>();
+
+const reducedMotionRequested = (): boolean => (
+  typeof window !== 'undefined'
+  && typeof window.matchMedia === 'function'
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+);
+
+/**
+ * Runs a short, decaying squash-and-stretch wobble without changing a
+ * control's final transform. This is deliberately opt-in for button visuals;
+ * cards and other hoverable UI keep their existing presentation.
+ */
+export const playButtonJiggle = (
+  scene: Phaser.Scene,
+  targets: ButtonJiggleTarget | readonly ButtonJiggleTarget[]
+): void => {
+  if (reducedMotionRequested()) return;
+  const targetList = Array.isArray(targets) ? targets : [targets];
+  for (const target of targetList) {
+    const prior = buttonJiggleTweens.get(target);
+    prior?.stop();
+
+    const baseScaleX = target.scaleX;
+    const baseScaleY = target.scaleY;
+    const baseAngle = target.angle;
+    target.setScale(baseScaleX, baseScaleY).setAngle(baseAngle);
+
+    let chain: Phaser.Tweens.TweenChain;
+    chain = scene.tweens.chain({
+      targets: target,
+      tweens: [
+        { scaleX: baseScaleX * 1.052, scaleY: baseScaleY * 0.944, angle: baseAngle - 0.7, duration: 66, ease: 'Sine.easeOut' },
+        { scaleX: baseScaleX * 0.976, scaleY: baseScaleY * 1.034, angle: baseAngle + 0.5, duration: 72, ease: 'Sine.easeInOut' },
+        { scaleX: baseScaleX * 1.018, scaleY: baseScaleY * 0.986, angle: baseAngle - 0.25, duration: 72, ease: 'Sine.easeInOut' },
+        { scaleX: baseScaleX, scaleY: baseScaleY, angle: baseAngle, duration: 92, ease: 'Back.easeOut' }
+      ],
+      onComplete: () => {
+        if (buttonJiggleTweens.get(target) === chain) buttonJiggleTweens.delete(target);
+      },
+      onStop: () => target.setScale(baseScaleX, baseScaleY).setAngle(baseAngle)
+    });
+    buttonJiggleTweens.set(target, chain);
+  }
+};
+
+/** Allows composite controls to move their housing and overlays together. */
+export const setButtonJiggleTargets = (
+  button: Phaser.GameObjects.Container,
+  targets: readonly ButtonJiggleTarget[]
+): void => {
+  const state = buttonAudioStates.get(button);
+  if (state) state.jiggleTargets = [...targets];
+};
 
 export interface ButtonPresentationOptions {
   height?: number;
@@ -37,10 +97,13 @@ export const createButton = (
 
   const hit = scene.add.rectangle(0, 0, width, height, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
   hit.setName('button-hit');
-  const state: ButtonAudioState = { enabled: true };
+  const button = scene.add.container(x, y, [bg, label, hit]);
+  const state: ButtonAudioState = { enabled: true, jiggleTargets: [button] };
+  buttonAudioStates.set(button, state);
   hit.on('pointerover', () => {
     bg.setStrokeStyle(2, state.enabled ? COLORS.pink : 0xff7f9f, 1);
     AudioManager.get().playSfx('menuHover');
+    playButtonJiggle(scene, state.jiggleTargets);
   });
   hit.on('pointerout', () => bg.setStrokeStyle(2, COLORS.cyan, 0.9));
   hit.on('pointerdown', () => {
@@ -52,8 +115,6 @@ export const createButton = (
     AudioManager.get().playSfx(accepted === false ? 'itemLocked' : buttonSound);
   });
 
-  const button = scene.add.container(x, y, [bg, label, hit]);
-  buttonAudioStates.set(button, state);
   return button;
 };
 

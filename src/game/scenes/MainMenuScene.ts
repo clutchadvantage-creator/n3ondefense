@@ -5,7 +5,7 @@ import { SceneKeys } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
 import { SaveSystem } from '../systems/SaveSystem';
 import { startArenaLoad } from '../utils/runFlow';
-import { createButton, disableButton, enableButton } from '../utils/ui';
+import { createButton, disableButton, enableButton, setButtonJiggleTargets } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, getUnlockedProtocolIds } from '../mods/modBalance.ts';
 import { ModRuntime } from '../mods/ModRuntime.ts';
@@ -319,6 +319,7 @@ export class MainMenuScene extends Phaser.Scene {
     const led = this.add.circle(-width / 2 + 13, 0, style === 'selector' ? 2 : 2.5, accent, 0.9);
     const sweep = this.add.rectangle(-width / 2 + 20, 0, 2, Math.max(8, height - 16), 0xffffff, style === 'primary' ? 0.2 : 0.08);
     overlay.add([topEdge, leftRail, rightRail, led, sweep]);
+    setButtonJiggleTargets(button, [housing, button, overlay]);
     this.tweens.add({ targets: led, alpha: { from: 0.25, to: 1 }, duration: 780, yoyo: true, repeat: -1 });
     this.tweens.add({
       targets: sweep,

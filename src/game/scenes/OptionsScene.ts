@@ -5,7 +5,7 @@ import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
 import { SaveSystem } from '../systems/SaveSystem';
 import { pickJsonFile, showConfirmDialog, showInfoModal } from '../utils/localSaveUi';
-import { createButton } from '../utils/ui';
+import { createButton, playButtonJiggle } from '../utils/ui';
 import { getGameUiRoot } from '../../ui/getGameUiRoot';
 import { mountFeedbackReportUi, type FeedbackReportHandle } from '../../ui/feedback/FeedbackReportUi';
 import {
@@ -219,6 +219,7 @@ export class OptionsScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(121);
       background.on('pointerover', () => {
         AudioManager.get().playSfx('menuHover');
+        playButtonJiggle(this, [background, label]);
         if (this.activeTab !== definition.id) background.setStrokeStyle(2, 0x5cecff, 0.9);
       });
       background.on('pointerout', () => this.refreshTabVisuals());
@@ -699,6 +700,7 @@ export class OptionsScene extends Phaser.Scene {
       hit.on('pointerover', () => {
         background.setStrokeStyle(2, 0x69f4ff, 1);
         AudioManager.get().playSfx('menuHover');
+        playButtonJiggle(this, [background, value]);
       });
       hit.on('pointerout', () => background.setStrokeStyle(1, 0xff7adf, 0.8));
       hit.on('pointerdown', () => {
@@ -712,7 +714,10 @@ export class OptionsScene extends Phaser.Scene {
     const reset = this.add.text(centerX + panelWidth * 0.25 + 62, topY + panelHeight - 34, 'RESET DEFAULTS', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#ffcf91', backgroundColor: '#172238', padding: { x: 18, y: 5 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    reset.on('pointerover', () => AudioManager.get().playSfx('menuHover'));
+    reset.on('pointerover', () => {
+      AudioManager.get().playSfx('menuHover');
+      playButtonJiggle(this, reset);
+    });
     reset.on('pointerdown', () => {
       AudioManager.get().playSfx('menu');
       this.cancelBindingCapture?.();
@@ -951,7 +956,14 @@ export class OptionsScene extends Phaser.Scene {
       AudioManager.get().playSfx('menu');
       onChange(current);
     };
-    for (const hit of [previous, next]) hit.on('pointerover', () => AudioManager.get().playSfx('menuHover'));
+    previous.on('pointerover', () => {
+      AudioManager.get().playSfx('menuHover');
+      playButtonJiggle(this, previousText);
+    });
+    next.on('pointerover', () => {
+      AudioManager.get().playSfx('menuHover');
+      playButtonJiggle(this, nextText);
+    });
     previous.on('pointerdown', () => step(-1));
     next.on('pointerdown', () => step(1));
     setValue(initial);
@@ -984,7 +996,10 @@ export class OptionsScene extends Phaser.Scene {
     RETICLE_COLOR_IDS.forEach((id, index) => {
       const x = startX + index * spacing;
       const ring = this.add.circle(x, y, 10, RETICLE_COLORS[id], 0.88).setStrokeStyle(1, RETICLE_COLORS[id], 0.6).setInteractive({ useHandCursor: true });
-      ring.on('pointerover', () => AudioManager.get().playSfx('menuHover'));
+      ring.on('pointerover', () => {
+        AudioManager.get().playSfx('menuHover');
+        playButtonJiggle(this, ring);
+      });
       ring.on('pointerdown', () => {
         if (current === id) return;
         AudioManager.get().playSfx('menu');

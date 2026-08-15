@@ -75,6 +75,26 @@ test('menu hover audio is centralized, throttled, and covers shared Phaser contr
   assert.match(cards, /container\.on\('pointerover'[\s\S]*?playSfx\('menuHover'\)/);
 });
 
+test('UI buttons jiggle beside the existing hover sound while Mod cards keep their own behavior', () => {
+  const htmlAudio = readFileSync(new URL('../src/ui/installMenuAudio.ts', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
+  const ui = readFileSync(new URL('../src/game/utils/ui.ts', import.meta.url), 'utf8');
+  const pause = readFileSync(new URL('../src/game/ui/PauseMenuUi.ts', import.meta.url), 'utf8');
+  const options = readFileSync(new URL('../src/game/scenes/OptionsScene.ts', import.meta.url), 'utf8');
+  const cards = readFileSync(new URL('../src/game/mods/ModCardView.ts', import.meta.url), 'utf8');
+
+  assert.match(ui, /playSfx\('menuHover'\);[\s\S]*?playButtonJiggle\(scene, state\.jiggleTargets\)/);
+  assert.match(ui, /scaleX: baseScaleX \* 1\.052[\s\S]*?scaleY: baseScaleY \* 0\.944/);
+  assert.match(ui, /prefers-reduced-motion: reduce/);
+  assert.match(htmlAudio, /playSfx\('menuHover'\);[\s\S]*?classList\.add\('ui-button-jiggle'\)/);
+  assert.match(styles, /@keyframes ui-button-jello-jiggle/);
+  assert.match(styles, /button\.ui-button-jiggle/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(pause, /playSfx\('menuHover'\);[\s\S]*?playButtonJiggle\(scene, root\)/);
+  assert.match(options, /playButtonJiggle\(this, \[background, label\]\)/);
+  assert.doesNotMatch(cards, /playButtonJiggle|ui-button-jiggle/);
+});
+
 test('shared Phaser buttons use normal audio for accepted actions and locked audio when disabled or rejected', () => {
   const ui = readFileSync(new URL('../src/game/utils/ui.ts', import.meta.url), 'utf8');
   assert.match(ui, /if \(!state\.enabled\) \{[\s\S]*?playSfx\('itemLocked'\)/);

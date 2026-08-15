@@ -13,6 +13,11 @@ export const installMenuAudio = (): void => {
     const relatedTarget = event.relatedTarget;
     if (relatedTarget instanceof Node && button.contains(relatedTarget)) return;
     AudioManager.get().playSfx('menuHover');
+    button.classList.remove('ui-button-jiggle');
+    // Restart the bounded hover animation when a pointer leaves and returns.
+    void button.offsetWidth;
+    button.classList.add('ui-button-jiggle');
+    button.addEventListener('animationend', () => button.classList.remove('ui-button-jiggle'), { once: true });
   }, true);
   document.addEventListener('pointerdown', (event) => {
     const target = event.target;
