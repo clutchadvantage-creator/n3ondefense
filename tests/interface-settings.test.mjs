@@ -24,10 +24,11 @@ test('version-nine profiles migrate to the current version without losing settin
   delete legacy.settings.aim;
   const migrated = normalizeLocalSave(legacy);
   assert.ok(migrated);
-  assert.equal(migrated.version, 11);
+  assert.equal(migrated.version, 12);
   assert.equal(migrated.settings.masterVolume, 0.42);
   assert.deepEqual(migrated.settings.hud, DEFAULT_HUD_SETTINGS);
   assert.deepEqual(migrated.settings.aim, DEFAULT_AIM_SETTINGS);
+  assert.equal(migrated.settings.buttonJiggle, 1);
 });
 
 test('HUD and reticle settings clamp malformed imported values and preserve valid selections', () => {

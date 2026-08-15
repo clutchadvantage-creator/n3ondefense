@@ -11,6 +11,7 @@ const HIT_DAMAGE_SFX_MIN_INTERVAL_MS = 55;
 const MENU_SFX_POOL_SIZE = 4;
 const MENU_HOVER_SFX_MIN_INTERVAL_MS = 45;
 const PICKUP_SFX_POOL_SIZE = 4;
+const LOW_HEALTH_LOOP_GAP_MS = 900;
 
 export class AudioManager {
   private static instance: AudioManager | null = null;
@@ -20,7 +21,9 @@ export class AudioManager {
     'music/Arc Grid SiegeV3.mp3',
     'music/Arc Grid Siege4.mp3',
     'music/Arc Grid Siege5.mp3',
-    'music/Arc Grid Siege6.mp3'
+    'music/Arc Grid Siege6.mp3',
+    'music/Neon Concrete Pulse.mp3',
+    'music/Neondub.mp3'
   ].map(audioAssetUrl);
   private musicAudio: HTMLAudioElement | null = null;
   private playlistIndex = 0;
@@ -46,6 +49,9 @@ export class AudioManager {
   private shieldDeactivationSfx: HTMLAudioElement | null = null;
   private modCollectionSfx: HTMLAudioElement | null = null;
   private legendaryModSfx: HTMLAudioElement | null = null;
+  private lowHealthSfx: HTMLAudioElement | null = null;
+  private lowHealthLoopRequested = false;
+  private lowHealthRestartTimer: number | null = null;
   private plantingAudio: HTMLAudioElement | null = null;
   private plantingLoopRequested = false;
   private disarmAudio: HTMLAudioElement | null = null;
@@ -73,6 +79,7 @@ export class AudioManager {
 
   private constructor() {
     this.context = new AudioContext();
+    this.shufflePlaylist();
     this.refreshVolumeCache();
     this.initShotSfxPool();
     this.initBoostSfxPool();
@@ -83,6 +90,7 @@ export class AudioManager {
     this.initFluxCoreAudio();
     this.initShieldSfx();
     this.initHitDamageSfxPool();
+    this.initLowHealthSfx();
     this.initModRevealSfx();
     this.initMenuSfxPools();
     this.initRunStartSfx();
@@ -260,6 +268,61 @@ export class AudioManager {
       audio.load();
       this.hitDamageSfxPool.push(audio);
     }
+  }
+
+  private initLowHealthSfx(): void {
+    this.lowHealthSfx = new Audio(audioAssetUrl('soundeffects/lowhealth.mp3'));
+    this.lowHealthSfx.preload = 'auto';
+    this.lowHealthSfx.loop = false;
+    this.lowHealthSfx.volume = this.getSfxVolume('lowHealth');
+    this.lowHealthSfx.addEventListener('ended', () => this.scheduleLowHealthRepeat());
+    this.lowHealthSfx.load();
+  }
+
+  private scheduleLowHealthRepeat(): void {
+    if (!this.lowHealthLoopRequested || this.lowHealthRestartTimer !== null) return;
+    this.lowHealthRestartTimer = window.setTimeout(() => {
+      this.lowHealthRestartTimer = null;
+      if (this.lowHealthLoopRequested) this.playLowHealthWarning();
+    }, LOW_HEALTH_LOOP_GAP_MS);
+  }
+
+  private playLowHealthWarning(): void {
+    const audio = this.lowHealthSfx;
+    if (!audio || !this.lowHealthLoopRequested) return;
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Metadata may still be loading when the threshold is first crossed.
+    }
+    audio.volume = this.getSfxVolume('lowHealth');
+    void audio.play().catch(() => undefined);
+  }
+
+  /** Starts or stops one reusable warning voice with a calm gap between repeats. */
+  setLowHealthWarning(active: boolean): void {
+    if (active === this.lowHealthLoopRequested) return;
+    this.lowHealthLoopRequested = active;
+    if (active) {
+      this.playLowHealthWarning();
+      return;
+    }
+    if (this.lowHealthRestartTimer !== null) {
+      window.clearTimeout(this.lowHealthRestartTimer);
+      this.lowHealthRestartTimer = null;
+    }
+    this.lowHealthSfx?.pause();
+    if (this.lowHealthSfx) {
+      try {
+        this.lowHealthSfx.currentTime = 0;
+      } catch {
+        // Seeking is optional while metadata is unavailable.
+      }
+    }
+  }
+
+  stopLowHealthWarning(): void {
+    this.setLowHealthWarning(false);
   }
 
   private playHitDamageSfx(): void {
@@ -572,8 +635,26 @@ export class AudioManager {
     this.musicAudio = audio;
   }
 
+  private shufflePlaylist(avoidFirst?: string): void {
+    for (let index = this.playlist.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [this.playlist[index], this.playlist[swapIndex]] = [this.playlist[swapIndex], this.playlist[index]];
+    }
+    if (avoidFirst && this.playlist.length > 1 && this.playlist[0] === avoidFirst) {
+      const swapIndex = 1 + Math.floor(Math.random() * (this.playlist.length - 1));
+      [this.playlist[0], this.playlist[swapIndex]] = [this.playlist[swapIndex], this.playlist[0]];
+    }
+    this.playlistIndex = 0;
+  }
+
+  private advancePlaylist(): void {
+    const currentTrack = this.getCurrentTrackUrl();
+    if (this.playlistIndex + 1 >= this.playlist.length) this.shufflePlaylist(currentTrack);
+    else this.playlistIndex += 1;
+  }
+
   private nextTrack(): void {
-    this.playlistIndex = (this.playlistIndex + 1) % this.playlist.length;
+    this.advancePlaylist();
     this.mountTrack(this.getCurrentTrackUrl());
     void this.musicAudio?.play().catch(() => undefined);
   }
@@ -588,7 +669,7 @@ export class AudioManager {
   }
 
   nextMusicTrack(): void {
-    this.playlistIndex = (this.playlistIndex + 1) % this.playlist.length;
+    this.advancePlaylist();
     this.mountTrack(this.getCurrentTrackUrl());
     this.musicStarted = true;
     void this.musicAudio?.play().catch(() => {
@@ -647,6 +728,7 @@ export class AudioManager {
     for (const hitDamage of this.hitDamageSfxPool) {
       hitDamage.volume = this.getSfxVolume('playerDamage');
     }
+    if (this.lowHealthSfx) this.lowHealthSfx.volume = this.getSfxVolume('lowHealth');
     for (const menuHover of this.menuHoverSfxPool) menuHover.volume = this.getSfxVolume('menuHover');
     for (const menuClick of this.menuClickSfxPool) menuClick.volume = this.getSfxVolume('menu');
     for (const itemLocked of this.itemLockedSfxPool) itemLocked.volume = this.getSfxVolume('itemLocked');
@@ -774,7 +856,7 @@ export class AudioManager {
     this.disarmAudio.currentTime = 0;
   }
 
-  playSfx(name: Exclude<AudioSfxName, 'planting' | 'disarm' | 'securityLaser' | 'fluxCore'>): void {
+  playSfx(name: Exclude<AudioSfxName, 'planting' | 'disarm' | 'securityLaser' | 'fluxCore' | 'lowHealth'>): void {
     switch (name) {
       case 'shot':
         this.playShotSfx();

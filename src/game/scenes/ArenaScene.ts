@@ -349,6 +349,7 @@ export class ArenaScene extends Phaser.Scene {
   private equippedModsViewer: Phaser.GameObjects.Container | null = null;
   private modAcquisitionPresenter: ModAcquisitionPresenter | null = null;
   private legendaryRevealPhysicsWasPaused = false;
+  private legendaryRevealInProgress = false;
   private siteActionText!: Phaser.GameObjects.Text;
   private crosshair!: Phaser.GameObjects.Graphics;
   private crosshairValid: boolean | null = null;
@@ -1009,6 +1010,15 @@ export class ArenaScene extends Phaser.Scene {
       this.activateDevPerformanceStressScenario();
       return;
     }
+
+    const gameplayCanSoundLowHealth = !this.tutorialHardPaused
+      && !this.legendaryRevealInProgress
+      && this.state.state !== RoundState.Paused
+      && this.state.state !== RoundState.Victory
+      && this.state.state !== RoundState.Defeat;
+    this.audio.setLowHealthWarning(gameplayCanSoundLowHealth
+      && this.player.hp > 0
+      && this.player.hp <= this.player.stats.maxHealth * 0.25);
 
     if (this.tutorialHardPaused || this.state.state === RoundState.Paused || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
       return;
@@ -4112,6 +4122,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private completeRound(): void {
     if (this.state.state === RoundState.Victory && this.pendingRoundPayload) return;
+    this.audio.stopLowHealthWarning();
     this.showBanner('ALL TARGETS DESTROYED');
     this.flushPendingCombatProgress();
 
@@ -4463,6 +4474,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.boostVisual.reset();
     this.state.set(RoundState.Defeat);
+    this.audio.stopLowHealthWarning();
     this.audio.stopDisarmLoop();
     this.laserSecurity?.silence();
     this.audio.stopFluxCoreLoop();
@@ -5165,6 +5177,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private pauseForLegendaryModReveal(): void {
+    this.legendaryRevealInProgress = true;
+    this.audio.stopLowHealthWarning();
     this.legendaryRevealPhysicsWasPaused = this.physics.world.isPaused;
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
@@ -5186,6 +5200,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.state.state === RoundState.Planting) this.audio.startPlantingLoop();
     if (this.state.state === RoundState.Defusing) this.audio.startDisarmLoop();
     this.legendaryRevealPhysicsWasPaused = false;
+    this.legendaryRevealInProgress = false;
   }
 
   private pauseForPointerLock(reason: 'initial' | 'unlock' | 'blur' | 'hidden' | 'error'): void {
@@ -5194,6 +5209,7 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopDisarmLoop();
     this.laserSecurity?.silence();
     this.audio.stopFluxCoreLoop();
+    this.audio.stopLowHealthWarning();
     this.clearGameplayInput();
     this.state.set(RoundState.Paused);
     this.physics.pause();
@@ -5545,12 +5561,14 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
     this.audio.stopFluxCoreLoop();
+    this.audio.stopLowHealthWarning();
     this.modAcquisitionPresenter?.destroy();
     this.modAcquisitionPresenter = null;
     this.tutorialDirector?.destroy();
     this.tutorialDirector = null;
     this.tutorialHardPaused = false;
     this.tutorialClockWasPaused = false;
+    this.legendaryRevealInProgress = false;
     this.scale.off('resize', this.handleResize, this);
     this.events.off('resume-from-options', this.onResumeFromOptions);
     this.events.off('return-from-mod-collection', this.onReturnFromModCollection);

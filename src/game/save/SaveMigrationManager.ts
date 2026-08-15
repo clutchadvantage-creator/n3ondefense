@@ -73,7 +73,8 @@ export const migrateUnknownSave = (input: unknown, existingNames: string[] = [])
         abilityBindings: { ...DEFAULT_ABILITY_BINDINGS },
         hud: { ...DEFAULT_HUD_SETTINGS },
         aim: { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } },
-        contextualTutorials: true
+        contextualTutorials: true,
+        buttonJiggle: 1
       } : {
         masterVolume: DEFAULT_AUDIO_VOLUME,
         musicVolume: DEFAULT_AUDIO_VOLUME,
@@ -84,7 +85,8 @@ export const migrateUnknownSave = (input: unknown, existingNames: string[] = [])
         abilityBindings: { ...DEFAULT_ABILITY_BINDINGS },
         hud: { ...DEFAULT_HUD_SETTINGS },
         aim: { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } },
-        contextualTutorials: true
+        contextualTutorials: true,
+        buttonJiggle: 1
       }
     });
   }

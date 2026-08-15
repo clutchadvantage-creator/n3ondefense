@@ -50,10 +50,10 @@ body {
 
 @keyframes ui-button-jello-jiggle {
   0% { scale: 1 1; rotate: 0deg; }
-  20% { scale: 1.052 0.944; rotate: -0.7deg; }
-  43% { scale: 0.976 1.034; rotate: 0.5deg; }
-  67% { scale: 1.018 0.986; rotate: -0.25deg; }
-  84% { scale: 0.994 1.008; rotate: 0.1deg; }
+  20% { scale: var(--jiggle-x1, 1.052) var(--jiggle-y1, 0.944); rotate: var(--jiggle-r1, -0.7deg); }
+  43% { scale: var(--jiggle-x2, 0.976) var(--jiggle-y2, 1.034); rotate: var(--jiggle-r2, 0.5deg); }
+  67% { scale: var(--jiggle-x3, 1.018) var(--jiggle-y3, 0.986); rotate: var(--jiggle-r3, -0.25deg); }
+  84% { scale: var(--jiggle-x4, 0.994) var(--jiggle-y4, 1.008); rotate: var(--jiggle-r4, 0.1deg); }
   100% { scale: 1 1; rotate: 0deg; }
 }
 

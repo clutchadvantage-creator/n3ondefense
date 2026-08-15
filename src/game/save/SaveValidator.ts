@@ -21,7 +21,8 @@ const defaultSettings: LocalPlayerSettings = {
   abilityBindings: { ...DEFAULT_ABILITY_BINDINGS },
   hud: { ...DEFAULT_HUD_SETTINGS },
   aim: { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } },
-  contextualTutorials: true
+  contextualTutorials: true,
+  buttonJiggle: 1
 };
 
 const createDefaultTutorialProgress = (): TutorialProgressState => ({
@@ -161,7 +162,8 @@ const normalizeSettings = (settings: unknown): LocalPlayerSettings => {
     abilityBindings: normalizeAbilityBindings(candidate.abilityBindings),
     hud: normalizeHudSettings(candidate.hud),
     aim: normalizeAimSettings(candidate.aim),
-    contextualTutorials: toBoolean(candidate.contextualTutorials, true)
+    contextualTutorials: toBoolean(candidate.contextualTutorials, true),
+    buttonJiggle: clamp(toFiniteNumber(candidate.buttonJiggle, defaultSettings.buttonJiggle), 0, 1)
   };
 };
 
@@ -280,7 +282,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;

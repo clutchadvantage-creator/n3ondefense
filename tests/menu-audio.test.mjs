@@ -84,7 +84,8 @@ test('UI buttons jiggle beside the existing hover sound while Mod cards keep the
   const cards = readFileSync(new URL('../src/game/mods/ModCardView.ts', import.meta.url), 'utf8');
 
   assert.match(ui, /playSfx\('menuHover'\);[\s\S]*?playButtonJiggle\(scene, state\.jiggleTargets\)/);
-  assert.match(ui, /scaleX: baseScaleX \* 1\.052[\s\S]*?scaleY: baseScaleY \* 0\.944/);
+  assert.match(ui, /1 \+ 0\.052 \* jiggleIntensity[\s\S]*?1 - 0\.056 \* jiggleIntensity/);
+  assert.match(ui, /if \(jiggleIntensity <= 0\) return/);
   assert.match(ui, /prefers-reduced-motion: reduce/);
   assert.match(htmlAudio, /playSfx\('menuHover'\);[\s\S]*?classList\.add\('ui-button-jiggle'\)/);
   assert.match(styles, /@keyframes ui-button-jello-jiggle/);
@@ -93,6 +94,23 @@ test('UI buttons jiggle beside the existing hover sound while Mod cards keep the
   assert.match(pause, /playSfx\('menuHover'\);[\s\S]*?playButtonJiggle\(scene, root\)/);
   assert.match(options, /playButtonJiggle\(this, \[background, label\]\)/);
   assert.doesNotMatch(cards, /playButtonJiggle|ui-button-jiggle/);
+});
+
+test('new music uses a reshuffled non-repeating deck and low-health warning uses one spaced loop', () => {
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.ok(existsSync(new URL('../public/assets/audio/music/Neon Concrete Pulse.mp3', import.meta.url)));
+  assert.ok(existsSync(new URL('../public/assets/audio/music/Neondub.mp3', import.meta.url)));
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/lowhealth.mp3', import.meta.url)));
+  assert.match(audio, /music\/Neon Concrete Pulse\.mp3/);
+  assert.match(audio, /music\/Neondub\.mp3/);
+  assert.match(audio, /private shufflePlaylist[\s\S]*?Math\.random\(\)/);
+  assert.match(audio, /if \(this\.playlistIndex \+ 1 >= this\.playlist\.length\) this\.shufflePlaylist\(currentTrack\)/);
+  assert.match(audio, /soundeffects\/lowhealth\.mp3/);
+  assert.match(audio, /LOW_HEALTH_LOOP_GAP_MS = 900/);
+  assert.match(audio, /setLowHealthWarning\(active: boolean\)/);
+  assert.match(arena, /this\.player\.hp <= this\.player\.stats\.maxHealth \* 0\.25/);
+  assert.match(arena, /this\.audio\.stopLowHealthWarning\(\)/);
 });
 
 test('shared Phaser buttons use normal audio for accepted actions and locked audio when disabled or rejected', () => {

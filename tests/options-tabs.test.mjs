@@ -54,7 +54,7 @@ test('existing Options controls are retained and routed to their logical tabs', 
   const profileTab = methodSource('createProfileTab', 'createSystemTab');
   const systemTab = methodSource('createSystemTab', 'addSectionHeader');
   assert.match(gameplayTab, /createKeybindPanel/);
-  for (const label of ['HUD SCALE', 'PANEL OPACITY', 'BACKGROUND OPACITY', 'HUD TEXT SCALE', 'EDGE MARGIN', 'HUD GLOW', 'HUD ANIMATION']) {
+  for (const label of ['HUD SCALE', 'PANEL OPACITY', 'BACKGROUND OPACITY', 'HUD TEXT SCALE', 'EDGE MARGIN', 'HUD GLOW', 'HUD ANIMATION', 'BUTTON JIGGLE']) {
     assert.ok(interfaceTab.includes(`'${label}'`), `missing Interface control: ${label}`);
   }
   for (const label of ['MOUSE SENSITIVITY', 'RETICLE SIZE', 'RETICLE OPACITY', 'RETICLE STYLE', 'RETICLE GLOW']) {
@@ -69,6 +69,15 @@ test('existing Options controls are retained and routed to their logical tabs', 
   assert.match(systemTab, /Suggestions \/ Bug Reports/);
   assert.match(systemTab, /Back to Main Menu/);
   assert.match(systemTab, /this\.feedbackReportUi\?\.open\(\)/);
+});
+
+test('button jiggle is profile-backed and the keybind reset occupies the empty final grid cell', () => {
+  const keybindPanel = methodSource('createKeybindPanel', 'beginBindingCapture');
+  assert.match(options, /SaveSystem\.setSettings\(\{ buttonJiggle \}\)/);
+  assert.match(options, /'BUTTON JIGGLE'[\s\S]*?buttonJiggle, 0, 1/);
+  assert.match(keybindPanel, /const panelHeight = 260/);
+  assert.match(keybindPanel, /const resetY = topY \+ 206/);
+  assert.doesNotMatch(keybindPanel, /this\.viewport\.bottom - topY/);
 });
 
 test('feedback dialog can be launched from System without mounting its old floating button', () => {

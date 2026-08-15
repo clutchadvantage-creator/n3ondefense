@@ -95,9 +95,23 @@ export class StorefrontUi {
 
     const shell = document.createElement('main');
     shell.className = 'store-shell';
-    shell.append(this.renderHeader(snapshot), this.renderModeTabs(), this.renderBody(snapshot));
+    shell.append(this.renderConsoleDecor(), this.renderHeader(snapshot), this.renderModeTabs(), this.renderBody(snapshot));
     screen.append(ambient, shell);
     this.options.root.replaceChildren(screen);
+  }
+
+  private renderConsoleDecor(): HTMLElement {
+    const decor = document.createElement('div');
+    decor.className = 'store-console-decor';
+    decor.setAttribute('aria-hidden', 'true');
+    const node = document.createElement('span');
+    node.className = 'store-console-node';
+    node.textContent = this.options.mode === 'cosmetics' ? 'VISUAL FORGE // ONLINE' : 'ARMORY BUS // ONLINE';
+    const channel = document.createElement('span');
+    channel.className = 'store-console-channel';
+    channel.textContent = 'N3ON MARKET CHANNEL 03';
+    decor.append(node, channel);
+    return decor;
   }
 
   private renderModeTabs(): HTMLElement {

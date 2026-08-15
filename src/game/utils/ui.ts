@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { COLORS } from '../config/constants';
 import { AudioManager } from '../systems/AudioManager';
 import type { AudioSfxName } from '../config/audio';
+import { readButtonJiggleIntensity } from '../../ui/buttonJiggle';
 
 export type ButtonJiggleTarget = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform;
 
@@ -29,6 +30,8 @@ export const playButtonJiggle = (
   targets: ButtonJiggleTarget | readonly ButtonJiggleTarget[]
 ): void => {
   if (reducedMotionRequested()) return;
+  const jiggleIntensity = readButtonJiggleIntensity();
+  if (jiggleIntensity <= 0) return;
   const targetList = Array.isArray(targets) ? targets : [targets];
   for (const target of targetList) {
     const prior = buttonJiggleTweens.get(target);
@@ -43,9 +46,9 @@ export const playButtonJiggle = (
     chain = scene.tweens.chain({
       targets: target,
       tweens: [
-        { scaleX: baseScaleX * 1.052, scaleY: baseScaleY * 0.944, angle: baseAngle - 0.7, duration: 66, ease: 'Sine.easeOut' },
-        { scaleX: baseScaleX * 0.976, scaleY: baseScaleY * 1.034, angle: baseAngle + 0.5, duration: 72, ease: 'Sine.easeInOut' },
-        { scaleX: baseScaleX * 1.018, scaleY: baseScaleY * 0.986, angle: baseAngle - 0.25, duration: 72, ease: 'Sine.easeInOut' },
+        { scaleX: baseScaleX * (1 + 0.052 * jiggleIntensity), scaleY: baseScaleY * (1 - 0.056 * jiggleIntensity), angle: baseAngle - 0.7 * jiggleIntensity, duration: 66, ease: 'Sine.easeOut' },
+        { scaleX: baseScaleX * (1 - 0.024 * jiggleIntensity), scaleY: baseScaleY * (1 + 0.034 * jiggleIntensity), angle: baseAngle + 0.5 * jiggleIntensity, duration: 72, ease: 'Sine.easeInOut' },
+        { scaleX: baseScaleX * (1 + 0.018 * jiggleIntensity), scaleY: baseScaleY * (1 - 0.014 * jiggleIntensity), angle: baseAngle - 0.25 * jiggleIntensity, duration: 72, ease: 'Sine.easeInOut' },
         { scaleX: baseScaleX, scaleY: baseScaleY, angle: baseAngle, duration: 92, ease: 'Back.easeOut' }
       ],
       onComplete: () => {

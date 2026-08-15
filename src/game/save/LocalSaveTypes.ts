@@ -11,7 +11,7 @@ import type { AimSettings, HudSettings } from '../config/interfaceSettings.ts';
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 11;
+export const CURRENT_SAVE_VERSION = 12;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -54,6 +54,7 @@ export interface LocalPlayerSettings {
   hud: HudSettings;
   aim: AimSettings;
   contextualTutorials: boolean;
+  buttonJiggle: number;
 }
 
 export interface TutorialProgressState {
@@ -97,7 +98,7 @@ export interface LocalPlayerSaveV1 {
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
   progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'weeklyOperations'>;
-  settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'contextualTutorials'>;
+  settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'contextualTutorials' | 'buttonJiggle'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }
 

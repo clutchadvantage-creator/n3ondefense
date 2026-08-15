@@ -230,6 +230,7 @@ export interface GameSaveData {
     hud: HudSettings;
     aim: AimSettings;
     contextualTutorials: boolean;
+    buttonJiggle: number;
   };
 }
 

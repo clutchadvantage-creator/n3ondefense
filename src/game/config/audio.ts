@@ -6,6 +6,7 @@ export const SFX_DEFINITIONS = [
   { key: 'planting', label: 'Planting' },
   { key: 'hit', label: 'Enemy Hit' },
   { key: 'playerDamage', label: 'Player Damage' },
+  { key: 'lowHealth', label: 'Low Health Warning' },
   { key: 'enemyDeath', label: 'Enemy Death' },
   { key: 'playerDeath', label: 'Player Death' },
   { key: 'place', label: 'Ability Place' },

@@ -1,4 +1,5 @@
 import { AudioManager } from '../game/systems/AudioManager';
+import { applyButtonJiggleVariables, readButtonJiggleIntensity } from './buttonJiggle';
 
 let installed = false;
 
@@ -13,6 +14,9 @@ export const installMenuAudio = (): void => {
     const relatedTarget = event.relatedTarget;
     if (relatedTarget instanceof Node && button.contains(relatedTarget)) return;
     AudioManager.get().playSfx('menuHover');
+    const jiggleIntensity = readButtonJiggleIntensity();
+    if (jiggleIntensity <= 0) return;
+    applyButtonJiggleVariables(button, jiggleIntensity);
     button.classList.remove('ui-button-jiggle');
     // Restart the bounded hover animation when a pointer leaves and returns.
     void button.offsetWidth;

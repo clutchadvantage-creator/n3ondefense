@@ -57,3 +57,14 @@ test('both Store scenes validate return data before rendering a secondary return
     assert.match(source, /this\.scene\.isPaused\(SceneKeys\.Arena\) && this\.registry\.has\('arena-session'\)/);
   }
 });
+
+test('Upgrade and Cosmetic modes share the same layered cyber-console storefront shell', () => {
+  const ui = readFileSync(new URL('../src/ui/stores/StorefrontUi.ts', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../src/ui/stores/storefront.css', import.meta.url), 'utf8');
+  assert.match(ui, /shell\.append\(this\.renderConsoleDecor\(\), this\.renderHeader\(snapshot\), this\.renderModeTabs\(\), this\.renderBody\(snapshot\)\)/);
+  assert.match(ui, /ARMORY BUS \/\/ ONLINE/);
+  assert.match(ui, /VISUAL FORGE \/\/ ONLINE/);
+  assert.match(styles, /\.store-console-decor/);
+  assert.match(styles, /repeating-linear-gradient\(0deg/);
+  assert.match(styles, /\.store-categories::before,\.store-grid-panel::before,\.store-details::before/);
+});

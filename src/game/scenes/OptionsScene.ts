@@ -470,11 +470,12 @@ export class OptionsScene extends Phaser.Scene {
     const centerX = left + width * 0.5;
     const innerWidth = width - 48;
     let hud = normalizeHudSettings(save.settings.hud);
+    let buttonJiggle = Phaser.Math.Clamp(save.settings.buttonJiggle, 0, 1);
     const headerY = top + 26;
     this.addSectionHeader(container, centerX, headerY, 'HUD CUSTOMIZATION', 'PERIMETER DISPLAY CALIBRATION');
     const panelTop = headerY + 25;
     const stacked = innerWidth < 760;
-    const panelHeight = stacked ? 740 : 418;
+    const panelHeight = stacked ? 810 : 418;
     container.add(this.add.rectangle(centerX, panelTop + panelHeight * 0.5, innerWidth, panelHeight, 0x091522, 0.9)
       .setStrokeStyle(1, 0x3a9db2, 0.58));
     const controlWidth = Math.min(510, stacked ? innerWidth - 42 : innerWidth * 0.56);
@@ -483,7 +484,7 @@ export class OptionsScene extends Phaser.Scene {
     const trackX = controlLeft + controlWidth - trackWidth * 0.5 - 42;
     const labelWidth = Math.max(115, trackX - trackWidth * 0.5 - controlLeft - 12);
     const previewX = stacked ? centerX : centerX + innerWidth * 0.29;
-    const previewY = stacked ? panelTop + 480 : panelTop + 176;
+    const previewY = stacked ? panelTop + 535 : panelTop + 176;
     const preview = this.createHudPreview(container, previewX, previewY, hud);
     const commitHud = (): void => {
       SaveSystem.setSettings({ hud: { ...hud } });
@@ -512,7 +513,12 @@ export class OptionsScene extends Phaser.Scene {
     const animation = this.createCycleSelector(container, 'interface', controlLeft, panelTop + 305, controlWidth, 'HUD ANIMATION', HUD_ANIMATION_LEVELS, hud.animation, (value) => {
       hud = { ...hud, animation: value }; commitHud();
     });
-    const resetY = stacked ? panelTop + 660 : panelTop + 350;
+    this.createRangeSlider(container, 'interface', controlLeft, trackX, panelTop + 350, 'BUTTON JIGGLE', buttonJiggle, 0, 1, trackWidth, (value) => {
+      buttonJiggle = value;
+      SaveSystem.setSettings({ buttonJiggle });
+      this.scheduleSettingsPersist();
+    }, (value) => `${Math.round(value * 100)}%`, labelWidth);
+    const resetY = stacked ? panelTop + 735 : panelTop + 350;
     const reset = this.addTabButton(container, previewX, resetY, 'Reset HUD Settings', () => {
       hud = normalizeHudSettings(DEFAULT_HUD_SETTINGS);
       hudScale.setValue?.(hud.scale);
@@ -739,7 +745,9 @@ export class OptionsScene extends Phaser.Scene {
 
   private createKeybindPanel(container: Phaser.GameObjects.Container, centerX: number, topY: number, contentWidth: number): number {
     const panelWidth = Math.min(contentWidth, 900);
-    const panelHeight = Math.min(260, Math.max(210, this.viewport.bottom - topY - 14));
+    // This tab scrolls, so keep the control grid's geometry stable instead of
+    // squeezing the footer upward into the Dash row on short viewports.
+    const panelHeight = 260;
     const panelCenterY = topY + panelHeight * 0.5;
     container.add(this.add.rectangle(centerX, panelCenterY, panelWidth, panelHeight, 0x0b1422, 0.92)
       .setStrokeStyle(2, 0x53dfff, 0.72));
@@ -783,7 +791,8 @@ export class OptionsScene extends Phaser.Scene {
       this.registerScrollTarget('gameplay', hit, y, 16);
     });
 
-    const reset = this.add.text(centerX + panelWidth * 0.25 + 62, topY + panelHeight - 34, 'RESET DEFAULTS', {
+    const resetY = topY + 206;
+    const reset = this.add.text(centerX + panelWidth * 0.25 + 62, resetY, 'RESET DEFAULTS', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#ffcf91', backgroundColor: '#172238', padding: { x: 18, y: 5 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     reset.on('pointerover', () => {
@@ -800,7 +809,7 @@ export class OptionsScene extends Phaser.Scene {
       status.setText('Default ability bindings restored.').setColor('#8fffc4');
     });
     container.add(reset);
-    this.registerScrollTarget('gameplay', reset, topY + panelHeight - 34, 18);
+    this.registerScrollTarget('gameplay', reset, resetY, 18);
     return topY + panelHeight;
   }
 
