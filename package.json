@@ -14,6 +14,7 @@
     "arena:report": "node --experimental-strip-types scripts/analyze-arenas.ts",
     "telemetry:report": "node --experimental-strip-types scripts/analyze-gameplay-telemetry.ts",
     "performance:benchmark": "node --experimental-strip-types scripts/benchmark-combat-hotpaths.ts",
+    "performance:soak": "node --experimental-strip-types scripts/benchmark-long-session.ts",
     "preview": "vite preview"
   },
   "devDependencies": {

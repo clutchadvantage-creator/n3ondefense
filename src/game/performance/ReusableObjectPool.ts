@@ -61,6 +61,29 @@ export class ReusableObjectPool<T, TState> {
     }
   }
 
+  /**
+   * Gradually releases retained high-water capacity once a combat burst has
+   * passed. Active items are never touched, and a per-call budget prevents a
+   * large cleanup spike from replacing the memory spike it is fixing.
+   */
+  trimAvailable(
+    maxAvailable: number,
+    destroyItem: (item: T) => void,
+    maximumToTrim = Number.POSITIVE_INFINITY
+  ): number {
+    const target = Math.max(0, Math.floor(maxAvailable));
+    const budget = Math.max(0, Math.floor(maximumToTrim));
+    let trimmed = 0;
+    while (this.available.length > target && trimmed < budget) {
+      const item = this.available.pop();
+      if (item === undefined) break;
+      this.owned.delete(item);
+      destroyItem(item);
+      trimmed += 1;
+    }
+    return trimmed;
+  }
+
   owns(item: unknown): boolean {
     return this.owned.has(item as T);
   }

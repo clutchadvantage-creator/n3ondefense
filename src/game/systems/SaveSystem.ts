@@ -70,6 +70,10 @@ export class SaveSystem {
     PlayerProfileStore.recordBombSiteDestroyed(count);
   }
 
+  static recordCombatProgress(enemiesDestroyed: number, bombSitesDestroyed: number): void {
+    PlayerProfileStore.recordCombatProgress(enemiesDestroyed, bombSitesDestroyed);
+  }
+
   static setUpgradeLevel(id: string, level: number): void {
     const save = PlayerProfileStore.getActiveSave();
     save.upgrades[id] = Math.max(0, level);

@@ -200,15 +200,28 @@ export class PlayerProfileStore {
   }
 
   static recordEnemyDestroyed(count = 1): void {
-    const save = PlayerProfileStore.getActiveSave();
-    save.progress.enemiesDestroyed = Math.max(0, save.progress.enemiesDestroyed + Math.max(0, Math.floor(count)));
-    save.profile.lastPlayedAt = new Date().toISOString();
-    PlayerProfileStore.save();
+    PlayerProfileStore.recordCombatProgress(count, 0);
   }
 
   static recordBombSiteDestroyed(count = 1): void {
+    PlayerProfileStore.recordCombatProgress(0, count);
+  }
+
+  /**
+   * Commits encounter counters in one profile write. ArenaScene batches these
+   * values so a busy kill wave cannot synchronously serialize localStorage for
+   * every individual enemy while combat is running.
+   */
+  static recordCombatProgress(enemiesDestroyed = 0, bombSitesDestroyed = 0): void {
     const save = PlayerProfileStore.getActiveSave();
-    save.progress.bombSitesDestroyed = Math.max(0, save.progress.bombSitesDestroyed + Math.max(0, Math.floor(count)));
+    save.progress.enemiesDestroyed = Math.max(
+      0,
+      save.progress.enemiesDestroyed + Math.max(0, Math.floor(enemiesDestroyed))
+    );
+    save.progress.bombSitesDestroyed = Math.max(
+      0,
+      save.progress.bombSitesDestroyed + Math.max(0, Math.floor(bombSitesDestroyed))
+    );
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
   }

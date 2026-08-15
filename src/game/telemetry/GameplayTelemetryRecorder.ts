@@ -910,11 +910,11 @@ export class GameplayTelemetryRecorder {
         this.idleFlushId = window.requestIdleCallback(() => {
           this.idleFlushId = null;
           this.persistNow();
-        }, { timeout: 1500 });
+        }, { timeout: 5000 });
       } else {
         this.persistNow();
       }
-    }, 8000);
+    }, 30_000);
   }
 
   private static persistNow(): void {

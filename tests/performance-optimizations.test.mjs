@@ -5,6 +5,7 @@ import { ReusableObjectPool } from '../src/game/performance/ReusableObjectPool.t
 import { UniformSpatialGrid } from '../src/game/performance/UniformSpatialGrid.ts';
 import { FramePerformanceMonitor } from '../src/game/performance/FramePerformanceMonitor.ts';
 import { shouldReplaceTurretTarget } from '../src/game/performance/Targeting.ts';
+import { GridPathfinder } from '../src/game/systems/GridPathfinder.ts';
 
 test('reusable pool resets stale combat state and rejects duplicate release', () => {
   const retired = [];
@@ -27,6 +28,36 @@ test('reusable pool resets stale combat state and rejects duplicate release', ()
   assert.deepEqual(reused.listeners, []);
   assert.deepEqual(pool.stats(), { created: 1, reused: 1, active: 1, available: 0 });
   assert.equal(retired.length, 1);
+});
+
+test('reusable pool trims only inactive high-water capacity with a bounded budget', () => {
+  const destroyed = [];
+  const pool = new ReusableObjectPool(
+    (state) => ({ value: state.value }),
+    (item, state) => { item.value = state.value; },
+    () => {}
+  );
+  const items = Array.from({ length: 10 }, (_, value) => pool.obtain({ value }));
+  const stillActive = items[0];
+  for (let index = 1; index < items.length; index += 1) pool.release(items[index]);
+
+  assert.equal(pool.trimAvailable(3, (item) => destroyed.push(item), 2), 2);
+  assert.equal(pool.stats().active, 1);
+  assert.equal(pool.stats().available, 7);
+  assert.equal(pool.owns(stillActive), true);
+  assert.equal(destroyed.length, 2);
+});
+
+test('grid pathfinding reuses typed search storage and routes around padded walls', () => {
+  const pathfinder = new GridPathfinder(640, 480, 32, [{ x: 256, y: 0, w: 32, h: 320 }], 8);
+  const path = pathfinder.findPath(64, 64, 560, 64, { smooth: true, maxIterations: 5000 });
+  assert.ok(path.length > 0);
+  assert.equal(path.some((point) => point.x >= 248 && point.x <= 296 && point.y < 328), false);
+
+  const source = fs.readFileSync(new URL('../src/game/systems/GridPathfinder.ts', import.meta.url), 'utf8');
+  assert.match(source, /new Float64Array/);
+  assert.match(source, /private popMinimum/);
+  assert.doesNotMatch(source, /new Map|new Set|\.sort\(|\.shift\(/);
 });
 
 test('spatial grid removes stale contacts when rebuilt and bounds nearby work', () => {
@@ -80,8 +111,31 @@ test('pooled combat objects and Arena listeners are fully retired on restart and
   assert.match(source, /projectile\.telemetryOwner = undefined/);
   assert.match(source, /this\.projectilePool\?\.destroy/);
   assert.match(source, /this\.fxCirclePool\?\.destroy/);
+  assert.match(source, /this\.projectileTrails\?\.destroy/);
+  assert.match(source, /this\.destroyEnemyColliders\(enemy\)/);
+  assert.match(source, /for \(const collider of colliders\) collider\.destroy\(\)/);
   assert.match(source, /this\.scale\.off\('resize'/);
   assert.match(source, /window\.removeEventListener\('keydown'/);
+});
+
+test('projectile trails are batched without per-projectile display objects or tweens', () => {
+  const arena = fs.readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const batch = fs.readFileSync(new URL('../src/game/performance/ProjectileTrailBatch.ts', import.meta.url), 'utf8');
+  assert.match(arena, /this\.projectileTrails\?\.beginFrame\(now\)/);
+  assert.match(arena, /this\.projectileTrails\?\.render\(now\)/);
+  assert.match(arena, /p\.nextTrailAt = now \+ 30/);
+  assert.match(batch, /scene\.add\.graphics\(\)/);
+  assert.match(batch, /this\.available\.pop\(\)/);
+  assert.doesNotMatch(batch, /tweens|add\.circle/);
+});
+
+test('persistent combat progression is batched at safe transitions instead of every kill', () => {
+  const arena = fs.readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(arena, /this\.pendingProgressEnemyKills \+= 1/);
+  assert.match(arena, /private flushPendingCombatProgress/);
+  assert.match(arena, /SaveSystem\.recordCombatProgress\(enemiesDestroyed, bombSitesDestroyed\)/);
+  assert.doesNotMatch(arena, /SaveSystem\.recordEnemyDestroyed\(\)/);
+  assert.doesNotMatch(arena, /SaveSystem\.recordBombSiteDestroyed\(\)/);
 });
 
 test('security laser geometry reuses fixed storage and collision checks avoid square roots', () => {
@@ -96,7 +150,7 @@ test('security laser geometry reuses fixed storage and collision checks avoid sq
 test('combat telemetry batches persistence but encounter and run boundaries flush immediately', () => {
   const source = fs.readFileSync(new URL('../src/game/telemetry/GameplayTelemetryRecorder.ts', import.meta.url), 'utf8');
   assert.match(source, /requestIdleCallback/);
-  assert.match(source, /\}, 8000\);/);
+  assert.match(source, /\}, 30_000\);/);
   assert.match(source, /static endEncounter[\s\S]*?deriveEncounter\(encounter\);\s*this\.persistNow\(\);/);
   assert.match(source, /static finishRun[\s\S]*?this\.archiveActiveRun\(outcome\);\s*this\.persistNow\(\);/);
 });
