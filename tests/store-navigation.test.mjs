@@ -68,3 +68,17 @@ test('Upgrade and Cosmetic modes share the same layered cyber-console storefront
   assert.match(styles, /repeating-linear-gradient\(0deg/);
   assert.match(styles, /\.store-categories::before,\.store-grid-panel::before,\.store-details::before/);
 });
+
+test('store selection and transactions preserve inventory scroll with a persistent selected state', () => {
+  const ui = readFileSync(new URL('../src/ui/stores/StorefrontUi.ts', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../src/ui/stores/storefront.css', import.meta.url), 'utf8');
+  assert.match(ui, /private captureScrollState\(\): StoreScrollState \| null/);
+  assert.match(ui, /gridTop: grid\?\.scrollTop \?\? 0/);
+  assert.match(ui, /if \(grid\) grid\.scrollTop = state\.gridTop/);
+  assert.match(ui, /querySelectorAll<HTMLElement>\('\.store-card\.selected'\)[\s\S]*?card\.classList\.add\('selected'\)/);
+  assert.match(ui, /querySelector<HTMLElement>\('\.store-details'\)[\s\S]*?replaceWith\(this\.renderDetails/);
+  assert.doesNotMatch(ui, /querySelector<HTMLElement>\('\.store-action'\)\?\.focus\(\)/);
+  assert.match(ui, /private perform\([\s\S]*?this\.render\(\)/);
+  assert.match(styles, /\.store-card\.selected \{/);
+  assert.match(styles, /\.store-card\.selected::before/);
+});

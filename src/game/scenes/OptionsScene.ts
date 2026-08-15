@@ -504,9 +504,9 @@ export class OptionsScene extends Phaser.Scene {
     const textScale = this.createRangeSlider(container, 'interface', controlLeft, trackX, panelTop + 170, 'HUD TEXT SCALE', hud.textScale, 0.85, 1.25, trackWidth, (value) => {
       hud = { ...hud, textScale: value }; commitHud();
     }, (value) => `${Math.round(value * 100)}%`, labelWidth);
-    const edgeMargin = this.createRangeSlider(container, 'interface', controlLeft, trackX, panelTop + 214, 'EDGE MARGIN', hud.edgeMargin, 0, 36, trackWidth, (value) => {
-      hud = { ...hud, edgeMargin: value }; commitHud();
-    }, (value) => `${Math.round(value)} PX`, labelWidth);
+    const edgePosition = this.createRangeSlider(container, 'interface', controlLeft, trackX, panelTop + 214, 'HUD EDGE POSITION', hud.edgePosition, 0, 1, trackWidth, (value) => {
+      hud = { ...hud, edgePosition: value }; commitHud();
+    }, (value) => `${Math.round(value * 100)}%`, labelWidth);
     const glow = this.createCycleSelector(container, 'interface', controlLeft, panelTop + 260, controlWidth, 'HUD GLOW', HUD_GLOW_LEVELS, hud.glow, (value) => {
       hud = { ...hud, glow: value }; commitHud();
     });
@@ -525,7 +525,7 @@ export class OptionsScene extends Phaser.Scene {
       panelOpacity.setValue?.(hud.panelOpacity);
       backgroundOpacity.setValue?.(hud.backgroundOpacity);
       textScale.setValue?.(hud.textScale);
-      edgeMargin.setValue?.(hud.edgeMargin);
+      edgePosition.setValue?.(hud.edgePosition);
       glow.setValue(hud.glow);
       animation.setValue(hud.animation);
       commitHud();
@@ -1159,7 +1159,7 @@ export class OptionsScene extends Phaser.Scene {
       frame.fillStyle(0x06111b, 0.76 * settings.panelOpacity).fillRoundedRect(-52, 15, 190, 76, 5);
       frame.lineStyle(1 + glow * 0.45, 0xff61cf, 0.5 + glow * 0.14).strokeRoundedRect(-52, 15, 190, 76, 5);
       const previewScale = Phaser.Math.Linear(0.86, 1.08, (settings.scale - 0.75) / 0.65);
-      const inset = settings.edgeMargin * 0.22;
+      const inset = (1 - settings.edgePosition) * 8;
       hp.setPosition(-118 + inset, -70);
       energy.setPosition(-118 + inset, -51);
       resourceIcon.setPosition(79 - inset, -61);
@@ -1169,7 +1169,7 @@ export class OptionsScene extends Phaser.Scene {
       for (const object of [hp, energy, objective, resourceIcon, resource, radar, ...abilities]) object.setScale(previewScale);
       objective.setFontSize(Math.round(12 * settings.textScale));
       resource.setFontSize(Math.round(14 * settings.textScale));
-      detail.setText(`${Math.round(settings.scale * 100)}% SCALE // ${Math.round(settings.textScale * 100)}% TEXT // ${settings.glow.toUpperCase()} GLOW`);
+      detail.setText(`${Math.round(settings.scale * 100)}% SCALE // ${Math.round(settings.textScale * 100)}% TEXT // ${Math.round(settings.edgePosition * 100)}% EDGE // ${settings.glow.toUpperCase()} GLOW`);
       if (settings.animation !== 'off') {
         this.tweens.add({ targets: root, y: y - (settings.animation === 'reduced' ? 1 : 3), duration: settings.animation === 'reduced' ? 1600 : 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       }

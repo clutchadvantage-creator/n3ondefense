@@ -3034,9 +3034,9 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.player.spendEnergy(totalEnergyCost);
     GameplayTelemetryRecorder.recordAbilityUse('mine', totalEnergyCost);
-    points.forEach((_, index) => {
-      this.time.delayedCall(salvo.flightMs + index * salvo.staggerMs, () => this.audio.playSfx('placeMine'));
-    });
+    // A rack salvo is one placement action. Use one cue when the first mine
+    // lands instead of stacking a sound for every mine in the pattern.
+    this.time.delayedCall(salvo.flightMs, () => this.audio.playSfx('placeMine'));
     if (this.tutorialDirector?.awaits('combat.ability.mine')) TutorialEventBus.emit('combat.ability.mine', { type: 'mine', count: points.length, salvo: true });
   }
 

@@ -473,7 +473,7 @@ export class AudioManager {
     const sources: Record<AbilityFeedbackSfxName, string> = {
       placeTurret: 'soundeffects/placeturret.mp3',
       electricFence: 'soundeffects/electricfence.mp3',
-      placeMine: 'soundeffects/placemine.mp3',
+      placeMine: 'soundeffects/placemine2.mp3',
       unavailable: 'soundeffects/unavailable.mp3'
     };
     for (const name of Object.keys(sources) as AbilityFeedbackSfxName[]) {

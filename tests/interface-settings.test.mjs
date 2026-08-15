@@ -33,9 +33,9 @@ test('version-nine profiles migrate to the current version without losing settin
 
 test('HUD and reticle settings clamp malformed imported values and preserve valid selections', () => {
   assert.deepEqual(normalizeHudSettings({
-    scale: 99, panelOpacity: -2, backgroundOpacity: 0.63, glow: 'high', animation: 'reduced', edgeMargin: 400, textScale: 0.1
+    scale: 99, panelOpacity: -2, backgroundOpacity: 0.63, glow: 'high', animation: 'reduced', edgePosition: -4, textScale: 0.1
   }), {
-    scale: 1.4, panelOpacity: 0.2, backgroundOpacity: 0.63, glow: 'high', animation: 'reduced', edgeMargin: 36, textScale: 0.85
+    scale: 1.4, panelOpacity: 0.2, backgroundOpacity: 0.63, glow: 'high', animation: 'reduced', edgePosition: 0, textScale: 0.85
   });
   assert.deepEqual(normalizeAimSettings({
     mouseSensitivity: 1.37,
@@ -44,6 +44,13 @@ test('HUD and reticle settings clamp malformed imported values and preserve vali
     mouseSensitivity: 1.37,
     reticle: { style: 'triad', size: 1.8, color: 'magenta', opacity: 0.3, glow: 'low' }
   });
+});
+
+test('legacy pixel edge margins migrate to the normalized HUD edge position', () => {
+  assert.equal(normalizeHudSettings({ edgeMargin: 0 }).edgePosition, 1);
+  assert.equal(normalizeHudSettings({ edgeMargin: 18 }).edgePosition, 0.5);
+  assert.equal(normalizeHudSettings({ edgeMargin: 36 }).edgePosition, 0);
+  assert.equal(normalizeHudSettings({ edgeMargin: 36, edgePosition: 0.8 }).edgePosition, 0.8);
 });
 
 test('Options preview and Arena use the same reticle renderer while sensitivity remains pointer-lock only', () => {

@@ -60,9 +60,9 @@ test('objective countdown is compact and rounds up partial seconds', () => {
   assert.equal(formatHudCountdown(75_000), '01:15');
 });
 
-test('HUD customization scales and insets the same five clusters without leaving the viewport', () => {
-  const compact = calculateHudLayout(1280, 720, { scale: 0.75, edgeMargin: 0 });
-  const expanded = calculateHudLayout(1280, 720, { scale: 1.4, edgeMargin: 36 });
+test('HUD customization scales and positions the same five clusters without leaving the viewport', () => {
+  const compact = calculateHudLayout(1280, 720, { scale: 0.75, edgePosition: 1 });
+  const expanded = calculateHudLayout(1280, 720, { scale: 1.4, edgePosition: 0 });
   assert.ok(expanded.safeArea > compact.safeArea);
   assert.ok(expanded.radar.diameter > compact.radar.diameter);
   assert.ok(expanded.abilities.height > compact.abilities.height);
@@ -77,7 +77,7 @@ test('HUD customization scales and insets the same five clusters without leaving
 
 test('default HUD clusters hug the perimeter while retaining a responsive safe edge', () => {
   const desktop = calculateHudLayout(1920, 1080);
-  assert.ok(desktop.safeArea >= 14 && desktop.safeArea <= 18);
+  assert.ok(desktop.safeArea >= 4 && desktop.safeArea <= 10);
   assert.equal(desktop.vitals.x, desktop.safeArea);
   assert.equal(desktop.vitals.y, desktop.safeArea);
   assert.equal(desktop.objective.y, desktop.safeArea);
@@ -86,4 +86,20 @@ test('default HUD clusters hug the perimeter while retaining a responsive safe e
   assert.equal(desktop.radar.centerY + desktop.radar.diameter / 2, 1080 - desktop.safeArea);
   assert.equal(desktop.abilities.x + desktop.abilities.width, 1920 - desktop.safeArea);
   assert.equal(desktop.abilities.y + desktop.abilities.height, 1080 - desktop.safeArea);
+});
+
+test('HUD edge position is normalized, monotonic, and keeps the objective centered', () => {
+  for (const [width, height] of [[640, 480], [1366, 768], [1920, 1080], [2560, 1440]]) {
+    const inward = calculateHudLayout(width, height, { edgePosition: 0 });
+    const middle = calculateHudLayout(width, height, { edgePosition: 0.5 });
+    const outward = calculateHudLayout(width, height, { edgePosition: 1 });
+    assert.ok(inward.safeArea > middle.safeArea);
+    assert.ok(middle.safeArea > outward.safeArea);
+    for (const layout of [inward, middle, outward]) {
+      assert.equal(layout.objective.x + layout.objective.width / 2, Math.round((width - layout.objective.width) / 2) + layout.objective.width / 2);
+      assert.ok(layout.vitals.x >= 0 && layout.stats.x + layout.stats.width <= width);
+      assert.ok(layout.radar.centerY + layout.radar.diameter / 2 <= height);
+      assert.ok(layout.abilities.x + layout.abilities.width <= width);
+    }
+  }
 });

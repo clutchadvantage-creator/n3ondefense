@@ -17,6 +17,12 @@ export interface StoreSnapshot {
 
 interface StoreActionResult { ok: boolean; message?: string }
 
+interface StoreScrollState {
+  screenTop: number;
+  gridTop: number;
+  detailsTop: number;
+}
+
 export interface StorefrontUiOptions {
   root: HTMLElement;
   mode: StoreMode;
@@ -78,7 +84,8 @@ export class StorefrontUi {
       : (this.options.upgrades ?? []).filter((item) => item.category === this.selectedCategory);
   }
 
-  private render(): void {
+  private render(preserveScroll = true): void {
+    const scrollState = preserveScroll ? this.captureScrollState() : null;
     const snapshot = this.options.getSnapshot();
     const screen = document.createElement('div');
     screen.className = `storefront-screen ${this.options.mode} ${this.options.particlesEnabled ? '' : 'reduced-effects'}`;
@@ -99,6 +106,28 @@ export class StorefrontUi {
     shell.append(this.renderConsoleDecor(), this.renderHeader(snapshot), this.renderModeTabs(), this.renderBody(snapshot));
     screen.append(ambient, shell);
     this.options.root.replaceChildren(screen);
+    if (scrollState) this.restoreScrollState(scrollState);
+  }
+
+  private captureScrollState(): StoreScrollState | null {
+    const screen = this.options.root.querySelector<HTMLElement>('.storefront-screen');
+    const grid = this.options.root.querySelector<HTMLElement>('.store-card-grid');
+    const details = this.options.root.querySelector<HTMLElement>('.store-details');
+    if (!screen && !grid && !details) return null;
+    return {
+      screenTop: screen?.scrollTop ?? 0,
+      gridTop: grid?.scrollTop ?? 0,
+      detailsTop: details?.scrollTop ?? 0
+    };
+  }
+
+  private restoreScrollState(state: StoreScrollState): void {
+    const screen = this.options.root.querySelector<HTMLElement>('.storefront-screen');
+    const grid = this.options.root.querySelector<HTMLElement>('.store-card-grid');
+    const details = this.options.root.querySelector<HTMLElement>('.store-details');
+    if (screen) screen.scrollTop = state.screenTop;
+    if (grid) grid.scrollTop = state.gridTop;
+    if (details) details.scrollTop = state.detailsTop;
   }
 
   private renderConsoleDecor(): HTMLElement {
@@ -129,7 +158,7 @@ export class StorefrontUi {
         this.selectedCategory = this.getCategories()[0] ?? '';
         this.selectedId = this.getVisibleItems()[0]?.id ?? null;
         this.message = '';
-        this.render();
+        this.render(false);
       });
       nav.append(button);
     }
@@ -218,7 +247,7 @@ export class StorefrontUi {
         this.selectedId = null;
         this.selectedId = this.getVisibleItems()[0]?.id ?? null;
         this.message = '';
-        this.render();
+        this.render(false);
       });
       nav.append(button);
     }
@@ -304,8 +333,13 @@ export class StorefrontUi {
     card.addEventListener('click', () => {
       this.selectedId = id;
       this.message = '';
-      this.render();
-      this.options.root.querySelector<HTMLElement>('.store-action')?.focus();
+      this.options.root.querySelectorAll<HTMLElement>('.store-card.selected').forEach((node) => node.classList.remove('selected'));
+      card.classList.add('selected');
+      // Selection only changes the detail viewer. Keeping the inventory grid
+      // mounted preserves its exact scroll position and leaves focus on the
+      // selected card instead of pulling the viewport toward the action area.
+      this.options.root.querySelector<HTMLElement>('.store-details')
+        ?.replaceWith(this.renderDetails(this.options.getSnapshot()));
     });
     return card;
   }

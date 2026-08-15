@@ -35,7 +35,7 @@ test('boost activation preload and pooled fallback use the dedicated boost recor
 });
 
 test('ability placement and unavailable actions use dedicated non-interrupting recordings', () => {
-  for (const filename of ['placeturret.mp3', 'electricfence.mp3', 'placemine.mp3', 'unavailable.mp3']) {
+  for (const filename of ['placeturret.mp3', 'electricfence.mp3', 'placemine2.mp3', 'unavailable.mp3']) {
     assert.ok(existsSync(new URL(`../public/assets/audio/soundeffects/${filename}`, import.meta.url)), filename);
   }
   const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
@@ -47,14 +47,15 @@ test('ability placement and unavailable actions use dedicated non-interrupting r
   }
   assert.match(audio, /soundeffects\/placeturret\.mp3/);
   assert.match(audio, /soundeffects\/electricfence\.mp3/);
-  assert.match(audio, /soundeffects\/placemine\.mp3/);
+  assert.match(audio, /soundeffects\/placemine2\.mp3/);
   assert.match(audio, /soundeffects\/unavailable\.mp3/);
   const feedbackPlayback = audio.match(/private playAbilityFeedbackSfx[\s\S]*?\n  \}\n\n  private playRunStartSfx/)?.[0] ?? '';
   assert.match(feedbackPlayback, /candidate\.paused \|\| candidate\.ended/);
   assert.match(feedbackPlayback, /if \(availableIndex < 0\) return/);
   assert.doesNotMatch(feedbackPlayback, /audio\.pause\(\)/);
   assert.match(arena, /type === 'turret' \? 'placeTurret' : type === 'fence' \? 'electricFence' : 'placeMine'/);
-  assert.match(arena, /delayedCall\(salvo\.flightMs \+ index \* salvo\.staggerMs, \(\) => this\.audio\.playSfx\('placeMine'\)\)/);
+  assert.match(arena, /delayedCall\(salvo\.flightMs, \(\) => this\.audio\.playSfx\('placeMine'\)\)/);
+  assert.doesNotMatch(arena, /points\.forEach\(\(_?, index\)[\s\S]{0,180}playSfx\('placeMine'\)/);
   assert.match(arena, /recordAbilityDenied\('dash', 'cooldown'\);\s*this\.audio\.playSfx\('unavailable'\)/);
   assert.match(arena, /recordAbilityDenied\('shield', 'cooldown'\);\s*this\.audio\.playSfx\('unavailable'\)/);
   assert.match(arena, /recordAbilityDenied\('turret', 'active-limit'\);\s*this\.audio\.playSfx\('unavailable'\)/);

@@ -9,7 +9,8 @@ export interface HudSettings {
   backgroundOpacity: number;
   glow: HudGlowLevel;
   animation: HudAnimationLevel;
-  edgeMargin: number;
+  /** 0 = relaxed inward inset, 1 = closest safe position to the viewport edge. */
+  edgePosition: number;
   textScale: number;
 }
 
@@ -32,7 +33,7 @@ export const DEFAULT_HUD_SETTINGS: Readonly<HudSettings> = {
   backgroundOpacity: 1,
   glow: 'normal',
   animation: 'full',
-  edgeMargin: 0,
+  edgePosition: 1,
   textScale: 1
 };
 
@@ -77,13 +78,21 @@ const enumValue = <T extends string>(value: unknown, values: readonly T[], fallb
 
 export function normalizeHudSettings(value: unknown): HudSettings {
   const source = isRecord(value) ? value : {};
+  // Older profiles stored the same preference as an inverse 0..36 pixel
+  // margin. Translate it once while normalizing so existing saves retain an
+  // equivalent HUD position without keeping two competing settings.
+  const edgePosition = typeof source.edgePosition === 'number' && Number.isFinite(source.edgePosition)
+    ? source.edgePosition
+    : typeof source.edgeMargin === 'number' && Number.isFinite(source.edgeMargin)
+      ? 1 - source.edgeMargin / 36
+      : DEFAULT_HUD_SETTINGS.edgePosition;
   return {
     scale: clamp(finite(source.scale, DEFAULT_HUD_SETTINGS.scale), 0.75, 1.4),
     panelOpacity: clamp(finite(source.panelOpacity, DEFAULT_HUD_SETTINGS.panelOpacity), 0.2, 1),
     backgroundOpacity: clamp(finite(source.backgroundOpacity, DEFAULT_HUD_SETTINGS.backgroundOpacity), 0.2, 1),
     glow: enumValue(source.glow, HUD_GLOW_LEVELS, DEFAULT_HUD_SETTINGS.glow),
     animation: enumValue(source.animation, HUD_ANIMATION_LEVELS, DEFAULT_HUD_SETTINGS.animation),
-    edgeMargin: clamp(finite(source.edgeMargin, DEFAULT_HUD_SETTINGS.edgeMargin), 0, 36),
+    edgePosition: clamp(edgePosition, 0, 1),
     textScale: clamp(finite(source.textScale, DEFAULT_HUD_SETTINGS.textScale), 0.85, 1.25)
   };
 }

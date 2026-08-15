@@ -54,9 +54,10 @@ test('existing Options controls are retained and routed to their logical tabs', 
   const profileTab = methodSource('createProfileTab', 'createSystemTab');
   const systemTab = methodSource('createSystemTab', 'addSectionHeader');
   assert.match(gameplayTab, /createKeybindPanel/);
-  for (const label of ['HUD SCALE', 'PANEL OPACITY', 'BACKGROUND OPACITY', 'HUD TEXT SCALE', 'EDGE MARGIN', 'HUD GLOW', 'HUD ANIMATION', 'BUTTON JIGGLE']) {
+  for (const label of ['HUD SCALE', 'PANEL OPACITY', 'BACKGROUND OPACITY', 'HUD TEXT SCALE', 'HUD EDGE POSITION', 'HUD GLOW', 'HUD ANIMATION', 'BUTTON JIGGLE']) {
     assert.ok(interfaceTab.includes(`'${label}'`), `missing Interface control: ${label}`);
   }
+  assert.match(interfaceTab, /'HUD EDGE POSITION'[\s\S]*?hud\.edgePosition, 0, 1/);
   for (const label of ['MOUSE SENSITIVITY', 'RETICLE SIZE', 'RETICLE OPACITY', 'RETICLE STYLE', 'RETICLE GLOW']) {
     assert.ok(gameplayTab.includes(`'${label}'`), `missing Gameplay control: ${label}`);
   }

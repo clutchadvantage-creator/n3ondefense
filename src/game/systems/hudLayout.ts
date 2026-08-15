@@ -17,7 +17,8 @@ export interface HudScreenLayout {
 
 export interface HudLayoutOptions {
   scale?: number;
-  edgeMargin?: number;
+  /** 0 = relaxed inward inset, 1 = closest safe position to the viewport edge. */
+  edgePosition?: number;
 }
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
@@ -30,10 +31,14 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
  */
 export function calculateHudLayout(width: number, height: number, options: HudLayoutOptions = {}): HudScreenLayout {
   const preferenceScale = clamp(options.scale ?? 1, 0.75, 1.4);
-  const extraMargin = clamp(options.edgeMargin ?? 0, 0, 36);
-  // Keep the HUD edge-mounted. The prior 2.2% inset left the five clusters
-  // floating inward on desktop displays and obscured more arena than needed.
-  const safeArea = Math.round(clamp(Math.min(width, height) * 0.015, 10, 18) + extraMargin);
+  const edgePosition = clamp(options.edgePosition ?? 1, 0, 1);
+  const viewportMinimum = Math.min(width, height);
+  // Keep a small responsive safe area at 100%, then let the player relax all
+  // five clusters inward with one normalized preference. Anchoring still uses
+  // each cluster's natural viewport edge; only the inset changes.
+  const outerSafeArea = clamp(viewportMinimum * 0.006, 4, 10);
+  const inwardTravel = clamp(viewportMinimum * 0.04, 28, 44);
+  const safeArea = Math.round(outerSafeArea + (1 - edgePosition) * inwardTravel);
   const scale = clamp(Math.min(width / 1366, height / 768), 0.76, 1.18) * preferenceScale;
   const topGap = Math.round(clamp(width * 0.008, 8, 14));
   const objectiveWidth = Math.round(clamp(width * 0.29 * preferenceScale, 210, 560));
