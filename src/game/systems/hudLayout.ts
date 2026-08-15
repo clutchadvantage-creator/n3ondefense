@@ -31,7 +31,9 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
 export function calculateHudLayout(width: number, height: number, options: HudLayoutOptions = {}): HudScreenLayout {
   const preferenceScale = clamp(options.scale ?? 1, 0.75, 1.4);
   const extraMargin = clamp(options.edgeMargin ?? 0, 0, 36);
-  const safeArea = Math.round(clamp(Math.min(width, height) * 0.022, 12, 24) + extraMargin);
+  // Keep the HUD edge-mounted. The prior 2.2% inset left the five clusters
+  // floating inward on desktop displays and obscured more arena than needed.
+  const safeArea = Math.round(clamp(Math.min(width, height) * 0.015, 10, 18) + extraMargin);
   const scale = clamp(Math.min(width / 1366, height / 768), 0.76, 1.18) * preferenceScale;
   const topGap = Math.round(clamp(width * 0.008, 8, 14));
   const objectiveWidth = Math.round(clamp(width * 0.29 * preferenceScale, 210, 560));

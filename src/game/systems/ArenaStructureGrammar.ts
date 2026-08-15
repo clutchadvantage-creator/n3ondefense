@@ -12,8 +12,10 @@ export const ArenaStructureGrammar = {
   partialBox:(x:number,y:number,w:number,h:number,t:number,gap:number):RectSpec[]=>[
     {x,y,w:(w-gap)/2,h:t},{x:x+(w+gap)/2,y,w:(w-gap)/2,h:t},{x,y:y+h-t,w,h:t},{x,y,w:t,h},{x:x+w-t,y,w:t,h}
   ],
-  ring:(x:number,y:number,w:number,h:number,t:number,gapRatio=.24):RectSpec[]=>{
-    const hw=w*(1-gapRatio)/2,vh=h*(1-gapRatio)/2;
+  ring:(x:number,y:number,w:number,h:number,t:number,gapRatio=.24,minimumGap=0):RectSpec[]=>{
+    const horizontalGap=Math.min(Math.max(w*gapRatio,minimumGap),Math.max(0,w-t*2));
+    const verticalGap=Math.min(Math.max(h*gapRatio,minimumGap),Math.max(0,h-t*2));
+    const hw=(w-horizontalGap)/2,vh=(h-verticalGap)/2;
     return [{x,y,w:hw,h:t},{x:x+w-hw,y,w:hw,h:t},{x,y:y+h-t,w:hw,h:t},{x:x+w-hw,y:y+h-t,w:hw,h:t},{x,y,w:t,h:vh},{x,y:y+h-vh,w:t,h:vh},{x:x+w-t,y,w:t,h:vh},{x:x+w-t,y:y+h-vh,w:t,h:vh}];
   },
   pillarCluster:(x:number,y:number,size:number,gap:number):RectSpec[]=>[{x,y,w:size,h:size},{x:x+size+gap,y,w:size,h:size},{x,y:y+size+gap,w:size,h:size},{x:x+size+gap,y:y+size+gap,w:size,h:size}],

@@ -8,6 +8,7 @@ import { SeededRandom } from './SeededRandom.ts';
 import { ArenaValidator } from './ArenaValidator.ts';
 import { generateArenaTopology, type PointSpec } from './ArenaTopology.ts';
 import { ArenaHistory, createArenaFingerprint, type ArenaFingerprint } from './ArenaFingerprint.ts';
+import { createsNarrowPassage, repairNarrowPassages } from './ArenaTraversal.ts';
 
 const pointClear = (point:PointSpec, rects:RectSpec[], clearance:number):boolean => rects.every((r)=>point.x<r.x-clearance||point.x>r.x+r.w+clearance||point.y<r.y-clearance||point.y>r.y+r.h+clearance);
 const obstacleRect = (obstacle:GeneratedObstacle):RectSpec => ({x:obstacle.x-obstacle.w/2,y:obstacle.y-obstacle.h/2,w:obstacle.w,h:obstacle.h});
@@ -24,6 +25,8 @@ export class ArenaGenerator {
       const attemptSeed=(seed^Math.imul(round+31,0x85ebca6b)^Math.imul(attempt,0x9e3779b1))>>>0;
       const random=new SeededRandom(attemptSeed||1);
       const topology=generateArenaTopology(archetype,attemptSeed||1);
+      const traversalRepair=repairNarrowPassages(topology.walls,CONFIG.minimumCorridorWidth,CONFIG.boundaryThickness);
+      topology.walls=traversalRepair.walls;
       const theme=ArenaThemeManager.pick(random);
       const selectedSites=this.selectSites(random,topology.objectiveCandidates,siteCount);
       const player=topology.playerCandidates[random.int(0,topology.playerCandidates.length-1)];
@@ -42,7 +45,7 @@ export class ArenaGenerator {
       fingerprint.similarityScore=this.history.highestSimilarity(fingerprint);
       layout.generation=fingerprint;
       if(!best||fingerprint.similarityScore<best.fingerprint.similarityScore)best={layout,fingerprint};
-      if(fingerprint.similarityScore<=CONFIG.similarityThreshold){this.history.add(fingerprint);this.debug(layout,round);return layout;}
+      if(fingerprint.similarityScore<=CONFIG.similarityThreshold){this.history.add(fingerprint);this.debug(layout,round,traversalRepair.widenedPassages>0?`accepted; widened ${traversalRepair.widenedPassages} passage(s)`:'accepted');return layout;}
     }
     if(best){this.history.add(best.fingerprint);this.debug(best.layout,round,'similarity fallback');return best.layout;}
     const fallback=this.buildFallback(seed,archetype,siteCount);
@@ -68,7 +71,11 @@ export class ArenaGenerator {
       const candidate=factory.createAt(random.int(bounds.x+90,bounds.x+bounds.w-90),random.int(bounds.y+90,bounds.y+bounds.h-90),26,archetype==='open-field'?88:64);
       const rect=obstacleRect(candidate);
       const center={x:candidate.x,y:candidate.y};
-      if(!pointClear(center,walls,35)||protectedPoints.some((p)=>Math.hypot(p.x-center.x,p.y-center.y)<150)||obstacles.some((o)=>!pointClear(center,[obstacleRect(o)],45)))continue;
+      const existingObstacleRects=obstacles.map(obstacleRect);
+      if(!pointClear(center,walls,35)
+        || protectedPoints.some((p)=>Math.hypot(p.x-center.x,p.y-center.y)<150)
+        || obstacles.some((o)=>!pointClear(center,[obstacleRect(o)],45))
+        || createsNarrowPassage(rect,[...walls,...existingObstacleRects],CONFIG.minimumCorridorWidth))continue;
       if(rect.x<bounds.x+35||rect.y<bounds.y+35||rect.x+rect.w>bounds.x+bounds.w-35||rect.y+rect.h>bounds.y+bounds.h-35)continue;
       obstacles.push(candidate);
     }

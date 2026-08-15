@@ -46,3 +46,15 @@ test('enemy navigation retains tactical focus and never uses random wall-bounce 
   assert.doesNotMatch(navigation, /FloatBetween/);
   assert.doesNotMatch(navigation, /Math\.random\(\) < 0\.42 \? site\.x/);
 });
+
+test('crowd recovery is staggered, lateral-first, and spatially bounded', () => {
+  const source = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(source, /new UniformSpatialGrid<Enemy>\(48\)/);
+  assert.match(source, /nav\.recoveryUntil = now \+ 520/);
+  assert.match(source, /nav\.stuckTicks >= 14/);
+  assert.match(source, /private setEnemyNavigationVelocity/);
+  assert.match(source, /approachAngle/);
+  const separation = source.slice(source.indexOf('private applyEnemySeparation'), source.indexOf('private updateProjectiles'));
+  assert.match(separation, /enemySeparationGrid\.rebuild/);
+  assert.doesNotMatch(separation, /for \(let j = i \+ 1/);
+});

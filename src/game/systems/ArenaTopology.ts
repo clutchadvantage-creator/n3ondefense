@@ -30,7 +30,15 @@ const border = (b: RectSpec): RectSpec[] => {
     { x: b.x, y: b.y, w: t, h: b.h }, { x: b.x + b.w - t, y: b.y, w: t, h: b.h }
   ];
 };
-const ringWalls = (b: RectSpec, x: number, y: number, w: number, h: number): RectSpec[] => ArenaStructureGrammar.ring(b.x+b.w*x,b.y+b.h*y,b.w*w,b.h*h,Math.max(20,b.h*.018));
+const ringWalls = (b: RectSpec, x: number, y: number, w: number, h: number): RectSpec[] => ArenaStructureGrammar.ring(
+  b.x+b.w*x,
+  b.y+b.h*y,
+  b.w*w,
+  b.h*h,
+  Math.max(20,b.h*.018),
+  .24,
+  CONFIG.minimumCorridorWidth
+);
 const steppedDiagonal = (b: RectSpec, x: number, y: number, length: number, rising: boolean): RectSpec[] =>
   ArenaStructureGrammar.diagonalWall(b.x+b.w*x,b.y+b.h*y,b.w*length,b.h*.022,rising);
 const base = (archetype: ArenaTemplate, bounds: RectSpec, walls: RectSpec[], objectives: PointSpec[], players: PointSpec[], enemies: PointSpec[], major: number, chokes: number, regions: number, bias: ArenaTopologyDraft['orientationBias']): ArenaTopologyDraft => ({

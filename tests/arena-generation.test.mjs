@@ -5,6 +5,8 @@ import { compareArenaFingerprints, createArenaFingerprint } from '../src/game/sy
 import { generateArenaTopology } from '../src/game/systems/ArenaTopology.ts';
 import { validateTopologyDraft } from '../src/game/systems/ArenaTopologyValidator.ts';
 import { getConcurrentSpawnPressure, getSpawnProfile } from '../src/game/config/balance/index.ts';
+import { repairNarrowPassages, createsNarrowPassage } from '../src/game/systems/ArenaTraversal.ts';
+import { ArenaValidator } from '../src/game/systems/ArenaValidator.ts';
 
 test('every arena archetype is deterministic and exposes a distinct macro topology', () => {
   const silhouettes = new Set();
@@ -54,4 +56,54 @@ test('concurrent bomb pressure scales modestly and monotonically', () => {
   assert.ok(four.cadenceMultiplier >= 0.7);
   assert.ok(two.activeCountCap > one.activeCountCap);
   assert.ok(two.activeWeightCap > one.activeWeightCap);
+});
+
+test('important passage width derives from crowd collision requirements', () => {
+  const expectedFloor = ARENA_GENERATION_CONFIG.largestEnemyBodyDiameter
+    * ARENA_GENERATION_CONFIG.groupMovementLanes
+    + ARENA_GENERATION_CONFIG.enemyNavigationPadding * 2;
+  assert.ok(ARENA_GENERATION_CONFIG.minimumCorridorWidth > expectedFloor);
+  assert.ok(ARENA_GENERATION_CONFIG.minimumCorridorWidth >= 136);
+});
+
+test('narrow segmented doorways are widened without removing their structure', () => {
+  const walls = [
+    { x: 100, y: 200, w: 180, h: 30 },
+    { x: 350, y: 200, w: 180, h: 30 }
+  ];
+  const result = repairNarrowPassages(walls, 140, 30);
+  const gap = result.walls[1].x - (result.walls[0].x + result.walls[0].w);
+  assert.equal(result.widenedPassages, 1);
+  assert.ok(gap >= 140);
+  assert.equal(result.walls.length, walls.length);
+});
+
+test('secondary obstacles cannot create accidental single-file lanes', () => {
+  const candidate = { x: 250, y: 100, w: 40, h: 90 };
+  const blocker = { x: 100, y: 100, w: 40, h: 90 };
+  assert.equal(createsNarrowPassage(candidate, [blocker], 140), true);
+  assert.equal(createsNarrowPassage({ ...candidate, x: 300 }, [blocker], 140), false);
+});
+
+test('binary reachability no longer certifies a narrow critical route', () => {
+  const walls = [
+    { x: 380, y: 0, w: 30, h: 240 },
+    { x: 380, y: 360, w: 30, h: 240 }
+  ];
+  const layout = {
+    seed: 1,
+    template: 'split',
+    theme: {},
+    walls,
+    obstacles: [],
+    playerSpawn: { x: 180, y: 300 },
+    enemySpawns: [{ x: 140, y: 300 }],
+    bombSites: [{ x: 620, y: 300 }],
+    decorativeNeon: [],
+    generation: {}
+  };
+  const validation = ArenaValidator.validateDetailed(layout, 800, 600);
+  assert.ok(validation.checks.includes('player-reaches-all-objectives'));
+  assert.ok(validation.failures.includes('important-player-route-too-narrow'));
+  assert.ok(validation.failures.includes('important-enemy-route-too-narrow'));
 });

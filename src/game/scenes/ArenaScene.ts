@@ -43,6 +43,7 @@ import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { GameplayPointerLock } from '../input/GameplayPointerLock';
 import { MineSalvoInput, type MineSalvoInputResolution } from '../input/MineSalvoInput.ts';
 import { DEFAULT_AIM_SETTINGS, normalizeAimSettings, type AimSettings } from '../config/interfaceSettings';
+import { ARENA_GENERATION_CONFIG } from '../config/arenaGeneration.ts';
 import { drawReticle } from '../ui/ReticleRenderer';
 import { createPauseMenuView, type PauseMenuView } from '../ui/PauseMenuUi.ts';
 import { ABILITY_ACTIONS, INTERACT_BINDING, MOVEMENT_BINDINGS, PRIMARY_FIRE_BINDING, bindingLabel, compactBindingLabel, type AbilityAction, type AbilityBindings } from '../config/controls';
@@ -61,6 +62,7 @@ import { ReusableObjectPool } from '../performance/ReusableObjectPool.ts';
 import { FramePerformanceMonitor } from '../performance/FramePerformanceMonitor.ts';
 import { shouldReplaceTurretTarget } from '../performance/Targeting.ts';
 import { ProjectileTrailBatch } from '../performance/ProjectileTrailBatch.ts';
+import { UniformSpatialGrid } from '../performance/UniformSpatialGrid.ts';
 import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
@@ -168,6 +170,10 @@ interface NavState {
   stuckTicks: number;
   preferObjective: boolean;
   nextFocusDecisionAt: number;
+  approachAngle: number;
+  approachRadius: number;
+  recoveryUntil: number;
+  recoverySign: -1 | 1;
 }
 
 interface PatrolPoint {
@@ -215,7 +221,8 @@ const ROUND_PHASE_LABELS: Record<RoundState, string> = {
 type MineExplosionPalette = readonly [core: number, primary: number, secondary: number, outer: number];
 const PLAYER_MINE_EXPLOSION_PALETTE: MineExplosionPalette = [0xffffff, 0xffa340, 0xff4e27, 0xff174f];
 const STAR_MINE_EXPLOSION_PALETTE: MineExplosionPalette = [0xf4ffff, COLORS.pink, COLORS.cyan, 0xff24d4];
-const ENEMY_NAVIGATION_PADDING = 22;
+const ENEMY_NAVIGATION_PADDING = ARENA_GENERATION_CONFIG.enemyNavigationPadding;
+const ENEMY_SEPARATION_RADIUS = 31;
 const PICKUP_FLOAT_DRIFT_MIN = 12.5;
 const PICKUP_FLOAT_DRIFT_RANGE = 4.5;
 const PICKUP_FLOAT_MAX_SPEED = 20;
@@ -343,6 +350,7 @@ export class ArenaScene extends Phaser.Scene {
   private lastSpecialSpawnAt = -99_999;
   private lastDefuserSpawnAt = -99_999;
   private turretTelemetrySequence = 0;
+  private enemyNavigationSequence = 0;
 
   private pauseMenu: PauseMenuView | null = null;
   private pauseMenuOpenedAt = Number.NEGATIVE_INFINITY;
@@ -355,6 +363,8 @@ export class ArenaScene extends Phaser.Scene {
   private crosshairValid: boolean | null = null;
   private balanceTelemetry: Phaser.GameObjects.Text | null = null;
   private performanceTelemetry: Phaser.GameObjects.Text | null = null;
+  private traversalDebug: Phaser.GameObjects.Graphics | null = null;
+  private traversalDebugVisible = false;
   private tutorialDirector: TutorialDirector | null = null;
   private tutorialHardPaused = false;
   private tutorialClockWasPaused = false;
@@ -436,6 +446,22 @@ export class ArenaScene extends Phaser.Scene {
 
   private navState = new WeakMap<Enemy, NavState>();
   private patrolTargets = new WeakMap<Enemy, PatrolPoint>();
+  private readonly enemySeparationGrid = new UniformSpatialGrid<Enemy>(48);
+  private separationSubject: Enemy | null = null;
+  private readonly applySeparationNeighbor = (neighbor: Enemy): void => {
+    const enemy = this.separationSubject;
+    if (!enemy || neighbor === enemy || !neighbor.active || neighbor.isDead()) return;
+    const dx = enemy.x - neighbor.x;
+    const dy = enemy.y - neighbor.y;
+    const distanceSquared = dx * dx + dy * dy;
+    if (distanceSquared <= 0.01 || distanceSquared > ENEMY_SEPARATION_RADIUS * ENEMY_SEPARATION_RADIUS) return;
+    const distance = Math.sqrt(distanceSquared);
+    const push = (ENEMY_SEPARATION_RADIUS - distance) * 1.8;
+    const body = enemy.body as Phaser.Physics.Arcade.Body | null;
+    if (!body) return;
+    body.velocity.x += dx / distance * push;
+    body.velocity.y += dy / distance * push;
+  };
   private readonly navigationCellPenalty = (cellX: number, cellY: number): number => {
     const worldX = this.pathfinder.cellCenterX(cellX);
     const worldY = this.pathfinder.cellCenterY(cellY);
@@ -644,9 +670,17 @@ export class ArenaScene extends Phaser.Scene {
     this.pauseForPointerLock('initial');
     this.pointerLock.showInitial();
     if(import.meta.env.DEV){
-      const debugGlobal=globalThis as typeof globalThis&{forceArenaType?:(type:ArenaTemplate|null)=>void;regenerateArena?:()=>void};
+      const debugGlobal=globalThis as typeof globalThis&{
+        forceArenaType?:(type:ArenaTemplate|null)=>void;
+        regenerateArena?:()=>void;
+        toggleTraversalDebug?:()=>void;
+      };
       debugGlobal.forceArenaType=(type)=>{ArenaGenerator.forceArenaType(type);this.createRoundFromDefinition(this.roundManager.currentDefinition());};
       debugGlobal.regenerateArena=()=>this.createRoundFromDefinition(this.roundManager.currentDefinition());
+      debugGlobal.toggleTraversalDebug=()=>{
+        this.traversalDebugVisible=!this.traversalDebugVisible;
+        this.drawTraversalDebug();
+      };
     }
   }
 
@@ -695,6 +729,7 @@ export class ArenaScene extends Phaser.Scene {
     this.layout = ArenaGenerator.generate(def.seed, def.template, def.round, def.siteCount);
     this.drawProceduralArena(this.layout);
     this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 32, this.getBlockers(), ENEMY_NAVIGATION_PADDING);
+    this.drawTraversalDebug();
 
     this.createOrMovePlayer();
     this.modRuntime.beginRound(1);
@@ -1669,6 +1704,7 @@ export class ArenaScene extends Phaser.Scene {
     this.enemyColliders.set(enemy, [wallCollider, playerCollider]);
 
     this.enemies.push(enemy);
+    const navigationSequence = this.enemyNavigationSequence++;
     this.navState.set(enemy, {
       path: [],
       waypointIndex: 0,
@@ -1679,7 +1715,11 @@ export class ArenaScene extends Phaser.Scene {
       lastSampleAt: this.time.now,
       stuckTicks: 0,
       preferObjective: false,
-      nextFocusDecisionAt: 0
+      nextFocusDecisionAt: 0,
+      approachAngle: (navigationSequence * 2.399963229728653) % (Math.PI * 2),
+      approachRadius: 34 + (navigationSequence % 4) * 8,
+      recoveryUntil: 0,
+      recoverySign: navigationSequence % 2 === 0 ? 1 : -1
     });
     this.patrolTargets.set(enemy, { x: spawn.x, y: spawn.y });
   }
@@ -1937,7 +1977,7 @@ export class ArenaScene extends Phaser.Scene {
     const tx = focusBombSite ? site.x : this.player.x;
     const ty = focusBombSite ? site.y : this.player.y;
 
-    this.navigateEnemy(enemy, tx, ty, now, enemy.stats.speed);
+    this.navigateEnemy(enemy, tx, ty, now, enemy.stats.speed, focusBombSite);
 
     if (enemy.stats.type === 'tank' || enemy.stats.type === 'star') {
       const isStar = enemy.stats.type === 'star';
@@ -2233,7 +2273,7 @@ export class ArenaScene extends Phaser.Scene {
     const ideal = 230;
     const movementSpeed = enemy.effectiveSpeed(enemy.stats.speed, now);
     if (distanceSquared > (ideal + 24) * (ideal + 24)) {
-      this.navigateEnemy(enemy, focusX, focusY, now, movementSpeed);
+      this.navigateEnemy(enemy, focusX, focusY, now, movementSpeed, focusBombSite && !turretTarget);
     } else if (distanceSquared < (ideal - 22) * (ideal - 22)) {
       const inverseDistance = distanceSquared > 0 ? 1 / Math.sqrt(distanceSquared) : 0;
       const bounds = this.layout.generation.bounds;
@@ -2259,7 +2299,7 @@ export class ArenaScene extends Phaser.Scene {
   private updateDefuser(enemy: Enemy, site: BombSiteRuntime, now: number, dt: number): boolean {
     const toSite = Phaser.Math.Distance.Between(enemy.x, enemy.y, site.x, site.y);
     if (toSite > 46) {
-      this.navigateEnemy(enemy, site.x, site.y, now, enemy.stats.speed);
+      this.navigateEnemy(enemy, site.x, site.y, now, enemy.stats.speed, toSite > 104);
       enemy.defuseProgressMs = Math.max(0, enemy.defuseProgressMs - dt * 160);
       return false;
     }
@@ -2296,10 +2336,19 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private navigateEnemy(enemy: Enemy, targetX: number, targetY: number, now: number, speed: number): void {
+  private navigateEnemy(enemy: Enemy, targetX: number, targetY: number, now: number, speed: number, spreadApproach = false): void {
     speed = enemy.effectiveSpeed(speed, now);
     const nav = this.navState.get(enemy);
     if (!nav) return;
+
+    if (spreadApproach) {
+      const targetDeltaX = enemy.x - targetX;
+      const targetDeltaY = enemy.y - targetY;
+      if (targetDeltaX * targetDeltaX + targetDeltaY * targetDeltaY > 96 * 96) {
+        targetX += Math.cos(nav.approachAngle) * nav.approachRadius;
+        targetY += Math.sin(nav.approachAngle) * nav.approachRadius;
+      }
+    }
 
     const body = enemy.body as Phaser.Physics.Arcade.Body | null;
     if (body && (body.blocked.left || body.blocked.right || body.blocked.up || body.blocked.down)) {
@@ -2328,7 +2377,9 @@ export class ArenaScene extends Phaser.Scene {
         nav.path.length = 0;
         nav.waypointIndex = 0;
         nav.nextRepathAt = 0;
-        if (nav.stuckTicks >= 4) {
+        nav.recoveryUntil = now + 520;
+        nav.recoverySign = nav.recoverySign === 1 ? -1 : 1;
+        if (nav.stuckTicks >= 14) {
           const recovery = this.pathfinder.findNearestWalkableWorld(enemy.x, enemy.y, 0, 4);
           if (recovery) {
             const recoveryDx = recovery.x - enemy.x;
@@ -2340,7 +2391,7 @@ export class ArenaScene extends Phaser.Scene {
               nav.lastSampleY = recovery.y;
             }
           }
-          nav.stuckTicks = 1;
+          nav.stuckTicks = 4;
         }
       }
     }
@@ -2378,7 +2429,7 @@ export class ArenaScene extends Phaser.Scene {
       const distanceSquared = dx * dx + dy * dy;
       if (distanceSquared > 0.2) {
         const inverseDistance = 1 / Math.sqrt(distanceSquared);
-        enemy.setVelocity(dx * inverseDistance * speed, dy * inverseDistance * speed);
+        this.setEnemyNavigationVelocity(enemy, dx * inverseDistance, dy * inverseDistance, speed, nav, now);
         return;
       }
     }
@@ -2390,7 +2441,7 @@ export class ArenaScene extends Phaser.Scene {
       enemy.setVelocity(0, 0);
     } else if (this.pathfinder.hasLineOfSightWorld(enemy.x, enemy.y, targetX, targetY)) {
       const inverseDistance = 1 / Math.sqrt(directDistanceSquared);
-      enemy.setVelocity(directX * inverseDistance * speed, directY * inverseDistance * speed);
+      this.setEnemyNavigationVelocity(enemy, directX * inverseDistance, directY * inverseDistance, speed, nav, now);
     } else {
       // Never fall back to driving directly into geometry when a path query
       // temporarily fails. The next staggered repath will try again.
@@ -2399,29 +2450,71 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  private setEnemyNavigationVelocity(
+    enemy: Enemy,
+    directionX: number,
+    directionY: number,
+    speed: number,
+    nav: NavState,
+    now: number
+  ): void {
+    if (now >= nav.recoveryUntil) {
+      enemy.setVelocity(directionX * speed, directionY * speed);
+      return;
+    }
+    const lateralStrength = nav.stuckTicks >= 4 ? 0.52 : 0.34;
+    const forwardStrength = Math.sqrt(1 - lateralStrength * lateralStrength);
+    enemy.setVelocity(
+      (directionX * forwardStrength - directionY * lateralStrength * nav.recoverySign) * speed,
+      (directionY * forwardStrength + directionX * lateralStrength * nav.recoverySign) * speed
+    );
+  }
+
   private applyEnemySeparation(): void {
-    for (let i = 0; i < this.enemies.length; i += 1) {
-      for (let j = i + 1; j < this.enemies.length; j += 1) {
-        const a = this.enemies[i];
-        const b = this.enemies[j];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 <= 0 || d2 > 31 * 31) continue;
-        const d = Math.sqrt(d2);
-        const push = (31 - d) * 1.8;
-        const nx = dx / d;
-        const ny = dy / d;
-        const bodyA = a.body as Phaser.Physics.Arcade.Body | null;
-        const bodyB = b.body as Phaser.Physics.Arcade.Body | null;
-        if (bodyA) {
-          bodyA.velocity.x -= nx * push;
-          bodyA.velocity.y -= ny * push;
-        }
-        if (bodyB) {
-          bodyB.velocity.x += nx * push;
-          bodyB.velocity.y += ny * push;
-        }
+    this.enemySeparationGrid.rebuild(this.enemies);
+    for (const enemy of this.enemies) {
+      if (!enemy.active || enemy.isDead()) continue;
+      this.separationSubject = enemy;
+      this.enemySeparationGrid.forEachNearby(
+        enemy.x,
+        enemy.y,
+        ENEMY_SEPARATION_RADIUS,
+        this.applySeparationNeighbor
+      );
+    }
+    this.separationSubject = null;
+  }
+
+  private drawTraversalDebug(): void {
+    if (!import.meta.env.DEV) return;
+    if (!this.traversalDebugVisible || !this.layout || !this.pathfinder) {
+      this.traversalDebug?.setVisible(false);
+      return;
+    }
+    const graphics = this.traversalDebug ?? this.add.graphics().setDepth(999);
+    this.traversalDebug = graphics;
+    graphics.clear().setVisible(true);
+    graphics.fillStyle(0xff315f, 0.12);
+    for (const blocker of this.getBlockers()) {
+      graphics.fillRect(
+        blocker.x - ENEMY_NAVIGATION_PADDING,
+        blocker.y - ENEMY_NAVIGATION_PADDING,
+        blocker.w + ENEMY_NAVIGATION_PADDING * 2,
+        blocker.h + ENEMY_NAVIGATION_PADDING * 2
+      );
+    }
+    graphics.lineStyle(2, 0x54ffb0, 0.72);
+    for (const spawn of this.layout.enemySpawns) {
+      for (const site of this.layout.bombSites) {
+        const path = this.pathfinder.findPath(spawn.x, spawn.y, site.x, site.y, {
+          smooth: true,
+          maxIterations: 4800
+        });
+        if (path.length === 0) continue;
+        graphics.beginPath();
+        graphics.moveTo(spawn.x, spawn.y);
+        for (const waypoint of path) graphics.lineTo(waypoint.x, waypoint.y);
+        graphics.strokePath();
       }
     }
   }
@@ -5510,8 +5603,11 @@ export class ArenaScene extends Phaser.Scene {
     this.hudRadarContactCount = 0;
     this.nextHoloAfterimageAt = 0;
     this.arcadePopSequence = 0;
+    this.enemyNavigationSequence = 0;
     this.navState = new WeakMap<Enemy, NavState>();
     this.patrolTargets = new WeakMap<Enemy, PatrolPoint>();
+    this.enemySeparationGrid.clear();
+    this.separationSubject = null;
     this.defuseCandidateDistanceSquared = new WeakMap<Enemy, number>();
   }
 
@@ -5599,6 +5695,8 @@ export class ArenaScene extends Phaser.Scene {
     this.balanceTelemetry?.destroy();
     this.balanceTelemetry = null;
     this.performanceTelemetry?.destroy();
+    this.traversalDebug?.destroy();
+    this.traversalDebug = null;
     this.performanceTelemetry = null;
     this.hidePauseMenu();
     this.hideEquippedModsViewer();
@@ -5627,6 +5725,16 @@ export class ArenaScene extends Phaser.Scene {
     window.removeEventListener('keyup', this.onAbilityKeyUp);
     this.pointerLock?.destroy();
     this.pointerLock = null;
+    if (import.meta.env.DEV) {
+      const debugGlobal=globalThis as typeof globalThis&{
+        forceArenaType?:unknown;
+        regenerateArena?:unknown;
+        toggleTraversalDebug?:unknown;
+      };
+      delete debugGlobal.forceArenaType;
+      delete debugGlobal.regenerateArena;
+      delete debugGlobal.toggleTraversalDebug;
+    }
     this.setMenuCursorMode();
   }
 }

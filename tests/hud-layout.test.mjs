@@ -74,3 +74,16 @@ test('HUD customization scales and insets the same five clusters without leaving
   assert.equal(overlaps(expanded.vitals, expanded.objective), false);
   assert.equal(overlaps(expanded.objective, expanded.stats), false);
 });
+
+test('default HUD clusters hug the perimeter while retaining a responsive safe edge', () => {
+  const desktop = calculateHudLayout(1920, 1080);
+  assert.ok(desktop.safeArea >= 14 && desktop.safeArea <= 18);
+  assert.equal(desktop.vitals.x, desktop.safeArea);
+  assert.equal(desktop.vitals.y, desktop.safeArea);
+  assert.equal(desktop.objective.y, desktop.safeArea);
+  assert.equal(desktop.stats.x + desktop.stats.width, 1920 - desktop.safeArea);
+  assert.equal(desktop.radar.centerX - desktop.radar.diameter / 2, desktop.safeArea);
+  assert.equal(desktop.radar.centerY + desktop.radar.diameter / 2, 1080 - desktop.safeArea);
+  assert.equal(desktop.abilities.x + desktop.abilities.width, 1920 - desktop.safeArea);
+  assert.equal(desktop.abilities.y + desktop.abilities.height, 1080 - desktop.safeArea);
+});
