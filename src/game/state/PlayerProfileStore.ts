@@ -4,18 +4,30 @@ import type { CosmeticOption } from '../types';
 import { type LocalPlayerSave, type ProfileSummary } from '../save/LocalSaveTypes';
 import { LocalSaveManager } from '../save/LocalSaveManager';
 import { addModDrop, createDefaultModLoadout, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleAllUnupgradedDuplicates, recycleDuplicateMod, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
+import { MOD_DEFINITIONS } from '../mods/definitions.ts';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
 import { buildRunEconomySnapshot, getNextLoadoutSlotCost, getRunSetupCost, purchaseRunSetup, spendCreditsAtomic } from '../economy/EconomyService.ts';
 import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
 import { loadGaragePreset, normalizeRunSetupSelection, saveCurrentGaragePreset } from '../garage/GarageState.ts';
 import type { GaragePresetId, PlayerGarageState } from '../garage/types.ts';
-import { resolveWeeklyOperations, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
+import { resolveWeeklyOperationDecks, type WeeklyOperationDecksSnapshot } from '../progression/WeeklyOperations.ts';
 
 export interface PurchaseResult {
   ok: boolean;
   message?: string;
 }
+
+const isOverdriveProtocol = (protocol?: RunProtocolId): boolean => Boolean(protocol && protocol !== 'normal');
+
+const stableRewardIndex = (key: string, length: number): number => {
+  let hash = 2166136261;
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return length > 0 ? (hash >>> 0) % length : 0;
+};
 
 export class PlayerProfileStore {
   private static activeSave: LocalPlayerSave | null = null;
@@ -191,20 +203,24 @@ export class PlayerProfileStore {
     return { ok: true, file: result.file };
   }
 
-  static recordRoundCompletion(round: number): void {
+  static recordRoundCompletion(round: number, protocol?: RunProtocolId): void {
     const save = PlayerProfileStore.getActiveSave();
     save.progress.roundsCompleted += 1;
     save.progress.highestRound = Math.max(save.progress.highestRound, round);
+    if (isOverdriveProtocol(protocol)) {
+      save.progress.overdriveWeeklyProgress.roundsCompleted += 1;
+      save.progress.overdriveWeeklyProgress.highestRound = Math.max(save.progress.overdriveWeeklyProgress.highestRound, round);
+    }
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
   }
 
-  static recordEnemyDestroyed(count = 1): void {
-    PlayerProfileStore.recordCombatProgress(count, 0);
+  static recordEnemyDestroyed(count = 1, protocol?: RunProtocolId): void {
+    PlayerProfileStore.recordCombatProgress(count, 0, protocol);
   }
 
-  static recordBombSiteDestroyed(count = 1): void {
-    PlayerProfileStore.recordCombatProgress(0, count);
+  static recordBombSiteDestroyed(count = 1, protocol?: RunProtocolId): void {
+    PlayerProfileStore.recordCombatProgress(0, count, protocol);
   }
 
   /**
@@ -212,29 +228,48 @@ export class PlayerProfileStore {
    * values so a busy kill wave cannot synchronously serialize localStorage for
    * every individual enemy while combat is running.
    */
-  static recordCombatProgress(enemiesDestroyed = 0, bombSitesDestroyed = 0): void {
+  static recordCombatProgress(enemiesDestroyed = 0, bombSitesDestroyed = 0, protocol?: RunProtocolId): void {
     const save = PlayerProfileStore.getActiveSave();
+    const enemyCount = Math.max(0, Math.floor(enemiesDestroyed));
+    const siteCount = Math.max(0, Math.floor(bombSitesDestroyed));
     save.progress.enemiesDestroyed = Math.max(
       0,
-      save.progress.enemiesDestroyed + Math.max(0, Math.floor(enemiesDestroyed))
+      save.progress.enemiesDestroyed + enemyCount
     );
     save.progress.bombSitesDestroyed = Math.max(
       0,
-      save.progress.bombSitesDestroyed + Math.max(0, Math.floor(bombSitesDestroyed))
+      save.progress.bombSitesDestroyed + siteCount
     );
+    if (isOverdriveProtocol(protocol)) {
+      save.progress.overdriveWeeklyProgress.enemiesDestroyed += enemyCount;
+      save.progress.overdriveWeeklyProgress.bombSitesDestroyed += siteCount;
+    }
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
   }
 
-  static getWeeklyOperations(nowMs = Date.now()): WeeklyOperationsSnapshot {
+  static getWeeklyOperations(nowMs = Date.now()): WeeklyOperationDecksSnapshot {
     const save = PlayerProfileStore.getActiveSave();
-    const resolution = resolveWeeklyOperations(save.progress, save.progress.weeklyOperations, nowMs);
+    const resolution = resolveWeeklyOperationDecks(save.progress, save.progress.overdriveWeeklyProgress, save.progress.weeklyOperations, nowMs);
     save.progress.weeklyOperations = resolution.state;
-    if (resolution.rewardToGrant) {
-      save.wallet.credits += resolution.rewardToGrant.credits;
-      save.wallet.coreTokens += resolution.rewardToGrant.coreTokens;
-      save.progress.totalCreditsEarned += resolution.rewardToGrant.credits;
-      save.progress.totalCoreTokensEarned += resolution.rewardToGrant.coreTokens;
+    for (const grant of resolution.rewardsToGrant) {
+      const reward = grant.reward;
+      save.wallet.credits += reward.credits;
+      save.wallet.coreTokens += reward.coreTokens;
+      save.wallet.fluxCores += reward.fluxCores ?? 0;
+      save.mods.plasmaChips += reward.plasmaChips ?? 0;
+      save.progress.totalCreditsEarned += reward.credits;
+      save.progress.totalCoreTokensEarned += reward.coreTokens;
+      save.progress.totalFluxCoresEarned += reward.fluxCores ?? 0;
+      if (reward.randomMod && MOD_DEFINITIONS.length > 0) {
+        const modIndex = stableRewardIndex(`${save.profile.id}:${grant.deck}:${grant.rotationId}`, MOD_DEFINITIONS.length);
+        addModDrop(save.mods, MOD_DEFINITIONS[modIndex].id, new Date(nowMs).toISOString());
+      }
+      for (const cosmeticId of reward.cosmeticIds ?? []) {
+        if (COSMETICS.some((cosmetic) => cosmetic.id === cosmeticId) && !save.cosmetics.owned.includes(cosmeticId)) {
+          save.cosmetics.owned.push(cosmeticId);
+        }
+      }
       save.profile.lastPlayedAt = new Date(nowMs).toISOString();
     }
     if (resolution.stateChanged) PlayerProfileStore.save();

@@ -4,9 +4,11 @@ import { readFileSync } from 'node:fs';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import {
   WEEKLY_OPERATION_ROTATIONS,
+  OVERDRIVE_WEEKLY_OPERATION_ROTATIONS,
   createDefaultWeeklyOperationsState,
   formatWeeklyCountdown,
   getWeeklyRotationSlot,
+  resolveWeeklyOperationDecks,
   resolveWeeklyOperations
 } from '../src/game/progression/WeeklyOperations.ts';
 
@@ -69,6 +71,34 @@ test('weekly rotation resets claim state and snapshots new cumulative baselines'
   assert.ok(WEEKLY_OPERATION_ROTATIONS.length > 1);
 });
 
+test('Overdrive operations use an independent harder deck with prestige rewards', () => {
+  const now = Date.UTC(2026, 7, 10, 12);
+  const regularProgress = progressSource({ enemiesDestroyed: 50_000, roundsCompleted: 500, bombSitesDestroyed: 900, highestRound: 80 });
+  const overdriveProgress = progressSource({ enemiesDestroyed: 0, roundsCompleted: 0, bombSitesDestroyed: 0, highestRound: 0, totalCreditsEarned: 0 });
+  const initial = resolveWeeklyOperationDecks(regularProgress, overdriveProgress, createDefaultWeeklyOperationsState(), now);
+
+  assert.equal(initial.snapshot.regular.deck, 'regular');
+  assert.equal(initial.snapshot.overdrive.deck, 'overdrive');
+  assert.ok(initial.snapshot.overdrive.objectives.every((objective) => objective.current === 0));
+  assert.ok(initial.snapshot.overdrive.reward.credits >= 30_000);
+  assert.ok(initial.snapshot.overdrive.reward.coreTokens >= 8 && initial.snapshot.overdrive.reward.coreTokens <= 12);
+  assert.equal(initial.snapshot.overdrive.reward.fluxCores, 2);
+  assert.ok((initial.snapshot.overdrive.reward.plasmaChips ?? 0) > 0);
+  assert.ok(OVERDRIVE_WEEKLY_OPERATION_ROTATIONS.some((rotation) => rotation.reward.randomMod));
+
+  const completedOverdrive = { ...overdriveProgress };
+  for (const objective of initial.snapshot.overdrive.objectives) {
+    completedOverdrive[objective.statKey] = objective.progressMode === 'absolute'
+      ? objective.target
+      : initial.state.overdrive.baselines[objective.statKey] + objective.target;
+  }
+  const complete = resolveWeeklyOperationDecks(regularProgress, completedOverdrive, initial.state, now + 60_000);
+  assert.equal(complete.snapshot.overdrive.complete, true);
+  assert.equal(complete.rewardsToGrant.filter((grant) => grant.deck === 'overdrive').length, 1);
+  const reopened = resolveWeeklyOperationDecks(regularProgress, completedOverdrive, complete.state, now + 120_000);
+  assert.equal(reopened.rewardsToGrant.filter((grant) => grant.deck === 'overdrive').length, 0);
+});
+
 test('countdown formatting is stable and exposes the available state at expiry', () => {
   const now = Date.UTC(2026, 7, 10, 12);
   assert.equal(formatWeeklyCountdown(now + 2 * 86_400_000 + 14 * 3_600_000 + 32 * 60_000, now), 'NEW OPERATIONS IN 2D 14H 32M');
@@ -115,6 +145,12 @@ test('Main Menu second-pass presentation uses responsive command modules and a l
   assert.match(menu, /OPERATIVE INTEL \/\/ LIVE FEED/);
   assert.match(menu, /this\.scale\.on\('resize', this\.handleResize, this\)/);
   assert.match(menu, /this\.scale\.off\('resize', this\.handleResize, this\)/);
+  assert.match(menu, /mainMenuBackgroundUrl/);
+  assert.match(menu, /createStaticBackground\(width, height\)/);
+  assert.doesNotMatch(menu, /createAnimatedBackground\(width, height\)/);
+  assert.doesNotMatch(menu, /createArenaOverlay\(width, height\)/);
+  assert.match(menu, /REGULAR CHALLENGES/);
+  assert.match(menu, /OVERDRIVE CHALLENGES/);
 });
 
 test('Main Menu polygon frames use positive local geometry so their visual centers stay aligned', () => {

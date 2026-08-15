@@ -60,20 +60,20 @@ export class SaveSystem {
     return PlayerProfileStore.spendCoreTokens(amount);
   }
 
-  static recordRoundCompletion(round: number): void {
-    PlayerProfileStore.recordRoundCompletion(round);
+  static recordRoundCompletion(round: number, protocol?: RunProtocolId): void {
+    PlayerProfileStore.recordRoundCompletion(round, protocol);
   }
 
-  static recordEnemyDestroyed(count = 1): void {
-    PlayerProfileStore.recordEnemyDestroyed(count);
+  static recordEnemyDestroyed(count = 1, protocol?: RunProtocolId): void {
+    PlayerProfileStore.recordEnemyDestroyed(count, protocol);
   }
 
-  static recordBombSiteDestroyed(count = 1): void {
-    PlayerProfileStore.recordBombSiteDestroyed(count);
+  static recordBombSiteDestroyed(count = 1, protocol?: RunProtocolId): void {
+    PlayerProfileStore.recordBombSiteDestroyed(count, protocol);
   }
 
-  static recordCombatProgress(enemiesDestroyed: number, bombSitesDestroyed: number): void {
-    PlayerProfileStore.recordCombatProgress(enemiesDestroyed, bombSitesDestroyed);
+  static recordCombatProgress(enemiesDestroyed: number, bombSitesDestroyed: number, protocol?: RunProtocolId): void {
+    PlayerProfileStore.recordCombatProgress(enemiesDestroyed, bombSitesDestroyed, protocol);
   }
 
   static setUpgradeLevel(id: string, level: number): void {

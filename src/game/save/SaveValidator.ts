@@ -8,7 +8,7 @@ import { normalizeModCollection, normalizeProtocolPreference } from '../mods/Mod
 import { createEmptyCreditSpendBreakdown } from '../economy/EconomyService.ts';
 import type { CreditSpendCategory } from '../economy/types.ts';
 import { createDefaultGarageState, normalizeGarageState } from '../garage/GarageState.ts';
-import { createDefaultWeeklyOperationsState, normalizeWeeklyOperationsState } from '../progression/WeeklyOperations.ts';
+import { createDefaultWeeklyOperationsState, createWeeklyBaselines, normalizeWeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import { DEFAULT_AIM_SETTINGS, DEFAULT_HUD_SETTINGS, normalizeAimSettings, normalizeHudSettings } from '../config/interfaceSettings.ts';
 
 const defaultSettings: LocalPlayerSettings = {
@@ -141,6 +141,7 @@ const normalizeProgress = (progress: unknown): LocalPlayerProgress => {
     totalFluxCoresEarned: toInteger(candidate.totalFluxCoresEarned),
     totalPlaytimeSeconds: toInteger(candidate.totalPlaytimeSeconds),
     initialDeploymentBriefingSeen: toBoolean(candidate.initialDeploymentBriefingSeen, false),
+    overdriveWeeklyProgress: createWeeklyBaselines(isObject(candidate.overdriveWeeklyProgress) ? candidate.overdriveWeeklyProgress : undefined),
     weeklyOperations: normalizeWeeklyOperationsState(candidate.weeklyOperations)
   };
 };
@@ -266,6 +267,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       totalFluxCoresEarned: 0,
       totalPlaytimeSeconds: 0,
       initialDeploymentBriefingSeen: false,
+      overdriveWeeklyProgress: createWeeklyBaselines(),
       weeklyOperations: createDefaultWeeklyOperationsState()
     };
     current.garage = createDefaultGarageState();
@@ -282,7 +284,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === 12 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;

@@ -133,7 +133,7 @@ test('persistent combat progression is batched at safe transitions instead of ev
   const arena = fs.readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   assert.match(arena, /this\.pendingProgressEnemyKills \+= 1/);
   assert.match(arena, /private flushPendingCombatProgress/);
-  assert.match(arena, /SaveSystem\.recordCombatProgress\(enemiesDestroyed, bombSitesDestroyed\)/);
+  assert.match(arena, /SaveSystem\.recordCombatProgress\(enemiesDestroyed, bombSitesDestroyed, this\.protocol\)/);
   assert.doesNotMatch(arena, /SaveSystem\.recordEnemyDestroyed\(\)/);
   assert.doesNotMatch(arena, /SaveSystem\.recordBombSiteDestroyed\(\)/);
 });

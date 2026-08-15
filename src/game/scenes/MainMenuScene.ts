@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import mainMenuBackgroundUrl from '../../assets/mainmenu.png';
 import { GAME_TAGLINE, GAME_TITLE, OBJECTIVE_CONFIG } from '../config/gameplay';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
@@ -12,7 +13,7 @@ import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_FOCUS_LABELS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
 import type { RunSetupSelection } from '../economy/types.ts';
-import { formatWeeklyCountdown, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
+import { formatWeeklyCountdown, type WeeklyOperationDeck, type WeeklyOperationDecksSnapshot, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 
@@ -68,10 +69,17 @@ const createCenteredHexagonPoints = (radius: number): number[] => {
 export class MainMenuScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
   private tutorialDirector: TutorialDirector | null = null;
+  private operationDeck: WeeklyOperationDeck = 'regular';
   private readonly handleResize = (): void => { this.scene.restart(); };
 
   constructor() {
     super(SceneKeys.MainMenu);
+  }
+
+  preload(): void {
+    if (!this.textures.exists('main-menu-background')) {
+      this.load.image('main-menu-background', mainMenuBackgroundUrl);
+    }
   }
 
   create(): void {
@@ -81,9 +89,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.registry.remove('arena-session');
     RunTransitionManager.clearForMenu(this);
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x070b11, 1);
-    this.createAnimatedBackground(width, height);
-    this.createArenaOverlay(width, height);
+    this.createStaticBackground(width, height);
     this.createBranding(width, height);
 
     const profile = SaveSystem.getActiveProfileSummary();
@@ -114,10 +120,10 @@ export class MainMenuScene extends Phaser.Scene {
       });
     }
 
-    const briefingWidth = Phaser.Math.Clamp(width * (narrow ? 0.36 : 0.24), narrow ? (width < 750 ? 240 : 280) : 390, narrow ? 410 : 470);
+    const briefingWidth = Phaser.Math.Clamp(width * (narrow ? 0.34 : 0.2), narrow ? (width < 750 ? 240 : 280) : 330, narrow ? 390 : 400);
     const briefingX = width - Math.max(12, width * 0.018) - briefingWidth / 2;
-    const briefingTop = tiny ? 84 : short ? 124 : 172;
-    const briefingHeight = Math.max(300, Math.min(short ? 590 : 660, height - briefingTop - 18));
+    const briefingTop = tiny ? 58 : short ? 78 : 96;
+    const briefingHeight = Math.max(300, Math.min(short ? 600 : 680, height - briefingTop - 18));
     this.createOperativeBriefing(briefingX, briefingTop, briefingWidth, briefingHeight, profile?.name ?? null);
 
     const unlockedProtocols = profile ? getUnlockedProtocolIds(SaveSystem.getHighestRound()) : ['normal'] as const;
@@ -427,7 +433,7 @@ export class MainMenuScene extends Phaser.Scene {
     const rightMount = this.add.rectangle(halfW + 5, halfH, 10, panelHeight * 0.52, 0x101e2b, 0.95).setStrokeStyle(1, 0x55efff, 0.36);
     const topRail = this.add.rectangle(0, 5, panelWidth - cut * 2, 4, 0x65f4ff, 0.48);
     const magentaRail = this.add.rectangle(-halfW + 8, halfH, 3, panelHeight - cut * 3, 0xff5bcf, 0.42);
-    const headerHeight = dense ? 70 : 88;
+    const headerHeight = dense ? 98 : 122;
     const header = this.add.rectangle(0, 14, panelWidth - 30, headerHeight, 0x0b2130, 0.96)
       .setOrigin(0.5, 0).setStrokeStyle(1, 0x59eaff, 0.5);
     const headerInset = this.add.rectangle(0, 18, panelWidth - 40, 3, 0xff5bcf, 0.42).setOrigin(0.5, 0);
@@ -457,9 +463,9 @@ export class MainMenuScene extends Phaser.Scene {
       return;
     }
 
-    let snapshot: WeeklyOperationsSnapshot;
+    let snapshots: WeeklyOperationDecksSnapshot;
     try {
-      snapshot = SaveSystem.getWeeklyOperations();
+      snapshots = SaveSystem.getWeeklyOperations();
     } catch {
       root.add(this.add.rectangle(0, panelHeight * 0.48, panelWidth - 54, dense ? 94 : 128, 0x21101a, 0.82).setStrokeStyle(1, 0xff6e9d, 0.55));
       root.add(this.add.text(0, panelHeight * 0.48, 'WEEKLY OPERATIONS\nDATA LINK UNAVAILABLE', {
@@ -469,7 +475,26 @@ export class MainMenuScene extends Phaser.Scene {
       return;
     }
 
+    const snapshot: WeeklyOperationsSnapshot = snapshots[this.operationDeck];
     if (snapshot.complete) operationsHeading.setText('WEEKLY OPERATIONS // COMPLETE').setColor('#77ffad');
+    const selectorY = dense ? 83 : 101;
+    const arrowWidth = dense ? 30 : 38;
+    const arrowHeight = dense ? 21 : 27;
+    const arrowOffset = dense ? 70 : 92;
+    const switchDeck = (direction: -1 | 1): boolean => {
+      this.operationDeck = direction < 0
+        ? (this.operationDeck === 'regular' ? 'overdrive' : 'regular')
+        : (this.operationDeck === 'overdrive' ? 'regular' : 'overdrive');
+      this.scene.restart();
+      return true;
+    };
+    const previousDeck = createButton(this, -arrowOffset, selectorY, '<', () => switchDeck(-1), arrowWidth, 'menu', { height: arrowHeight, fontSize: dense ? 12 : 16, horizontalPadding: 4 });
+    const nextDeck = createButton(this, arrowOffset, selectorY, '>', () => switchDeck(1), arrowWidth, 'menu', { height: arrowHeight, fontSize: dense ? 12 : 16, horizontalPadding: 4 });
+    const deckLabel = this.add.text(0, selectorY, this.operationDeck === 'regular' ? 'REGULAR CHALLENGES' : 'OVERDRIVE CHALLENGES', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${dense ? 8 : spacious ? 12 : 10}px`,
+      color: this.operationDeck === 'regular' ? '#8cebf7' : '#ffb15c', fontStyle: 'bold', letterSpacing: dense ? 0 : 1
+    }).setOrigin(0.5);
+    root.add([previousDeck, nextDeck, deckLabel]);
     const rewardHeight = dense ? 76 : 104;
     const footerHeight = dense ? 25 : 34;
     const objectiveTop = headerHeight + (dense ? 24 : 34);
@@ -531,12 +556,23 @@ export class MainMenuScene extends Phaser.Scene {
       .setOrigin(0.5, 0).setStrokeStyle(1, snapshot.complete ? 0x72ffac : 0xff65cf, 0.58);
     const rewardRail = this.add.rectangle(0, rewardTop + 3, panelWidth - (dense ? 48 : 64), 3, snapshot.complete ? 0x72ffac : 0xff65cf, 0.62).setOrigin(0.5, 0);
     root.add([rewardPlate, rewardRail]);
-    root.add(this.add.text(0, rewardTop + (dense ? 11 : 17), snapshot.complete && snapshot.rewardClaimed ? 'WEEKLY REWARD // ACQUIRED' : 'WEEKLY COMPLETION REWARD', {
+    root.add(this.add.text(0, rewardTop + (dense ? 9 : 14), snapshot.complete && snapshot.rewardClaimed
+      ? `${this.operationDeck.toUpperCase()} REWARD // ACQUIRED`
+      : `${this.operationDeck.toUpperCase()} COMPLETION REWARD`, {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${dense ? 9 : spacious ? 14 : 12}px`, color: snapshot.complete ? '#78ffae' : '#ff9bda', fontStyle: 'bold'
     }).setOrigin(0.5, 0));
-    root.add(this.add.text(0, rewardTop + (dense ? 31 : 46), `${snapshot.reward.credits.toLocaleString()} CREDITS  +  ${snapshot.reward.coreTokens} CORE TOKEN${snapshot.reward.coreTokens === 1 ? '' : 'S'}`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 12 : spacious ? 19 : 16}px`, color: '#ffd287', fontStyle: 'bold', letterSpacing: 1
-    }).setOrigin(0.5, 0));
+    const primaryReward = `${snapshot.reward.credits.toLocaleString()} CREDITS  +  ${snapshot.reward.coreTokens} CORE TOKEN${snapshot.reward.coreTokens === 1 ? '' : 'S'}`;
+    const bonusRewardParts = [
+      snapshot.reward.plasmaChips ? `${snapshot.reward.plasmaChips} PLASMA` : '',
+      snapshot.reward.fluxCores ? `${snapshot.reward.fluxCores} FLUX CORES` : '',
+      snapshot.reward.randomMod ? 'RANDOM MOD' : ''
+    ].filter(Boolean);
+    const rewardText = [primaryReward, bonusRewardParts.join('  +  ')].filter(Boolean).join('\n');
+    root.add(this.add.text(0, rewardTop + (dense ? 28 : 40), rewardText, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 10 : spacious ? 16 : 14}px`, color: '#ffd287',
+      fontStyle: 'bold', letterSpacing: dense ? 0 : 1, align: 'center', lineSpacing: dense ? 0 : 2,
+      wordWrap: { width: panelWidth - (dense ? 42 : 58), useAdvancedWrap: true }
+    }).setOrigin(0.5, 0).setMaxLines(2));
     const countdown = this.add.text(0, panelHeight - footerHeight / 2 - 2, formatWeeklyCountdown(snapshot.endsAt), {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 10 : spacious ? 15 : 13}px`, color: '#9cd5df', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5);
@@ -619,133 +655,13 @@ export class MainMenuScene extends Phaser.Scene {
     SaveSystem.setNextRunSetupSelection({ modFocus: null, contract: null });
   }
 
-  private createAnimatedBackground(width: number, height: number): void {
-    const stripes = [
-      { y: height * 0.18, h: 120, color: 0x14233d, alpha: 0.28, duration: 4600 },
-      { y: height * 0.45, h: 160, color: 0x0f2d39, alpha: 0.22, duration: 5200 },
-      { y: height * 0.74, h: 130, color: 0x31163b, alpha: 0.2, duration: 6100 }
-    ];
-    for (const stripe of stripes) {
-      const band = this.add.rectangle(width * 0.5, stripe.y, width * 1.2, stripe.h, stripe.color, stripe.alpha);
-      this.tweens.add({
-        targets: band,
-        x: { from: width * 0.47, to: width * 0.53 },
-        alpha: { from: stripe.alpha * 0.7, to: stripe.alpha * 1.25 },
-        duration: stripe.duration,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
-    }
-    for (let i = 0; i < 22; i += 1) {
-      const x = Phaser.Math.Between(30, Math.max(30, width - 30));
-      const y = Phaser.Math.Between(30, Math.max(30, height - 30));
-      const dot = this.add.circle(x, y, Phaser.Math.Between(1, 3), Phaser.Math.RND.pick([0x58f4ff, 0xff8bcf, 0xa8ff78]), 0.55);
-      this.tweens.add({
-        targets: dot,
-        y: y + Phaser.Math.Between(-28, 28),
-        x: x + Phaser.Math.Between(-24, 24),
-        alpha: { from: 0.2, to: 0.75 },
-        scale: { from: 0.7, to: 1.3 },
-        duration: Phaser.Math.Between(1800, 3600),
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-        delay: Phaser.Math.Between(0, 900)
-      });
-    }
-    const ringLeft = this.add.circle(width * 0.15, height * 0.24, 110, 0x58f4ff, 0.06).setStrokeStyle(2, 0x58f4ff, 0.45);
-    const ringRight = this.add.circle(width * 0.86, height * 0.78, 140, 0xff8bcf, 0.05).setStrokeStyle(2, 0xff8bcf, 0.4);
-    this.tweens.add({ targets: ringLeft, scale: { from: 0.92, to: 1.08 }, alpha: { from: 0.08, to: 0.2 }, duration: 3400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.tweens.add({ targets: ringRight, scale: { from: 0.9, to: 1.06 }, alpha: { from: 0.07, to: 0.18 }, duration: 4100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-  }
-
-  private createArenaOverlay(width: number, height: number): void {
-    const obstacleSpecs = [
-      { x: 0.08, y: 0.18, w: 0.13, h: 0.055, angle: -8 },
-      { x: 0.18, y: 0.56, w: 0.19, h: 0.045, angle: 12 },
-      { x: 0.08, y: 0.84, w: 0.12, h: 0.07, angle: -4 },
-      { x: 0.9, y: 0.34, w: 0.12, h: 0.055, angle: 8 },
-      { x: 0.82, y: 0.68, w: 0.18, h: 0.045, angle: -11 },
-      { x: 0.93, y: 0.88, w: 0.1, h: 0.065, angle: 5 }
-    ];
-    for (const spec of obstacleSpecs) {
-      const obstacleWidth = Phaser.Math.Clamp(width * spec.w, 90, 250);
-      const obstacleHeight = Phaser.Math.Clamp(height * spec.h, 30, 66);
-      this.add.rectangle(width * spec.x + 7, height * spec.y + 8, obstacleWidth, obstacleHeight, 0x000000, 0.28)
-        .setRotation(Phaser.Math.DegToRad(spec.angle));
-      this.add.rectangle(width * spec.x, height * spec.y, obstacleWidth, obstacleHeight, 0x101b28, 0.48)
-        .setStrokeStyle(2, 0x326c7d, 0.52).setRotation(Phaser.Math.DegToRad(spec.angle));
-      this.add.rectangle(width * spec.x, height * spec.y, obstacleWidth * 0.62, 2, 0x61eaff, 0.2)
-        .setRotation(Phaser.Math.DegToRad(spec.angle));
-    }
-    const sites = [
-      { x: width * 0.18, y: height * 0.34, radius: Phaser.Math.Clamp(width * 0.044, 42, 76), color: 0x58f4ff, label: 'A', delay: 0 },
-      { x: width * 0.83, y: height * 0.52, radius: Phaser.Math.Clamp(width * 0.04, 40, 70), color: 0xff8bcf, label: 'B', delay: 1500 },
-      { x: width * 0.28, y: height * 0.82, radius: Phaser.Math.Clamp(width * 0.038, 38, 66), color: 0xa8ff78, label: 'C', delay: 3000 }
-    ];
-    for (const site of sites) this.createSimulatedBombSite(site.x, site.y, site.radius, site.color, site.label, site.delay);
-  }
-
-  private createSimulatedBombSite(x: number, y: number, radius: number, color: number, label: string, delay: number): void {
-    const floor = this.add.circle(x, y, radius, color, 0.025).setStrokeStyle(2, color, 0.26);
-    const inner = this.add.circle(x, y, radius * 0.68, 0x061019, 0.28).setStrokeStyle(1, color, 0.34);
-    const chargeArc = this.add.graphics();
-    const charge = { value: 0 };
-    const redraw = (): void => {
-      chargeArc.clear();
-      chargeArc.lineStyle(4, color, 0.28 + charge.value * 0.66);
-      chargeArc.beginPath();
-      chargeArc.arc(x, y, radius * 0.86, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * charge.value, false);
-      chargeArc.strokePath();
-    };
-    redraw();
-    const siteLabel = this.add.text(x, y - 2, label, {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.round(radius * 0.42)}px`, color: '#e7fdff', stroke: '#061019', strokeThickness: 4
-    }).setOrigin(0.5).setAlpha(0.42);
-    const status = this.add.text(x, y + radius + 13, 'CHARGING', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: Phaser.Display.Color.IntegerToColor(color).rgba
-    }).setOrigin(0.5).setAlpha(0.32);
-    this.tweens.add({
-      targets: charge,
-      value: 1,
-      duration: 5200,
-      delay,
-      repeat: -1,
-      repeatDelay: 900,
-      ease: 'Sine.easeIn',
-      onUpdate: redraw,
-      onRepeat: () => { charge.value = 0; redraw(); }
-    });
-    this.tweens.add({
-      targets: [floor, inner, siteLabel, status],
-      alpha: { from: 0.2, to: 0.58 },
-      scale: { from: 0.97, to: 1.035 },
-      duration: 1050,
-      delay,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    });
-    if (!SaveSystem.get().settings.particles) return;
-    this.time.addEvent({
-      delay: 360,
-      loop: true,
-      callback: () => {
-        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-        const tangent = angle + Phaser.Math.FloatBetween(-0.75, 0.75);
-        const sparkX = x + Math.cos(angle) * radius * 0.9;
-        const sparkY = y + Math.sin(angle) * radius * 0.9;
-        const spark = this.add.rectangle(sparkX, sparkY, Phaser.Math.Between(7, 15), 2, color, 0.72).setRotation(tangent);
-        this.tweens.add({
-          targets: spark,
-          x: sparkX + Math.cos(tangent) * Phaser.Math.Between(8, 18),
-          y: sparkY + Math.sin(tangent) * Phaser.Math.Between(8, 18),
-          alpha: 0,
-          duration: 240,
-          onComplete: () => spark.destroy()
-        });
-      }
-    });
+  private createStaticBackground(width: number, height: number): void {
+    this.add.rectangle(width / 2, height / 2, width, height, 0x03070c, 1).setDepth(-100);
+    const background = this.add.image(width / 2, height / 2, 'main-menu-background').setDepth(-99);
+    const coverScale = Math.max(width / background.width, height / background.height);
+    background.setScale(coverScale);
+    // A static veil keeps the action image recognizable without competing
+    // with menu labels. No background tweens or simulated arena objects run.
+    this.add.rectangle(width / 2, height / 2, width, height, 0x02070d, 0.56).setDepth(-98);
   }
 }

@@ -4138,7 +4138,7 @@ export class ArenaScene extends Phaser.Scene {
     SaveSystem.addCredits(rewardCredits);
     SaveSystem.addCoreTokens(rewardTokens);
     SaveSystem.addFluxCores(rewardFluxCores);
-    SaveSystem.recordRoundCompletion(completedRound);
+    SaveSystem.recordRoundCompletion(completedRound, this.protocol);
     OnlineRunManager.recordMilestone(completedRound);
     this.captureTelemetryEndState();
     GameplayTelemetryRecorder.endEncounter('completed', { credits: rewardCredits, coreTokens: rewardTokens, fluxCores: rewardFluxCores });
@@ -5449,7 +5449,7 @@ export class ArenaScene extends Phaser.Scene {
     if (enemiesDestroyed <= 0 && bombSitesDestroyed <= 0) return;
     this.pendingProgressEnemyKills = 0;
     this.pendingProgressBombSites = 0;
-    SaveSystem.recordCombatProgress(enemiesDestroyed, bombSitesDestroyed);
+    SaveSystem.recordCombatProgress(enemiesDestroyed, bombSitesDestroyed, this.protocol);
   }
 
   private prepareForRoundCreation(): void {

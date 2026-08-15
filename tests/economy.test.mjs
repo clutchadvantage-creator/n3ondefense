@@ -98,7 +98,7 @@ test('version-five profiles preserve balances and receive economy telemetry defa
     metadata: { updatedAt: '2026-02-01T00:00:00.000Z', saveRevision: 99, gameVersion: '0.0.1' }
   });
   assert.ok(migrated);
-  assert.equal(migrated.version, 12);
+  assert.equal(migrated.version, 13);
   assert.equal(migrated.wallet.fluxCores, 0);
   assert.equal(migrated.progress.totalFluxCoresEarned, 0);
   assert.equal(migrated.progress.initialDeploymentBriefingSeen, false);
@@ -118,7 +118,7 @@ test('version-eight profiles migrate into the Flux Core wallet without losing ba
   delete legacy.progress.totalFluxCoresEarned;
   const migrated = normalizeLocalSave(legacy);
   assert.ok(migrated);
-  assert.equal(migrated.version, 12);
+  assert.equal(migrated.version, 13);
   assert.equal(migrated.wallet.credits, 1234);
   assert.equal(migrated.wallet.coreTokens, 56);
   assert.equal(migrated.wallet.fluxCores, 0);

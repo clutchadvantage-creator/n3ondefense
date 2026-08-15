@@ -5,6 +5,8 @@ export type WeeklyOperationStat =
   | 'highestRound'
   | 'totalCreditsEarned';
 
+export type WeeklyOperationDeck = 'regular' | 'overdrive';
+
 export interface WeeklyOperationDefinition {
   id: string;
   title: string;
@@ -17,6 +19,11 @@ export interface WeeklyOperationDefinition {
 export interface WeeklyOperationReward {
   credits: number;
   coreTokens: number;
+  plasmaChips?: number;
+  fluxCores?: number;
+  randomMod?: boolean;
+  /** Future rewards stay undisclosed in the operation UI and enter the Gear Locker when claimed. */
+  cosmeticIds?: readonly string[];
 }
 
 export interface WeeklyOperationRotationDefinition {
@@ -33,11 +40,19 @@ export interface WeeklyOperationProgressSource {
   totalCreditsEarned: number;
 }
 
-export interface WeeklyOperationsState {
+export interface WeeklyOperationTrackState {
   rotationId: string;
   startedAt: string;
   baselines: Record<WeeklyOperationStat, number>;
   rewardClaimed: boolean;
+}
+
+/**
+ * The original regular-deck fields remain at the root for exported-save
+ * compatibility. Overdrive is an additive, independently rotating track.
+ */
+export interface WeeklyOperationsState extends WeeklyOperationTrackState {
+  overdrive: WeeklyOperationTrackState;
 }
 
 export interface WeeklyOperationObjectiveView extends WeeklyOperationDefinition {
@@ -46,6 +61,7 @@ export interface WeeklyOperationObjectiveView extends WeeklyOperationDefinition 
 }
 
 export interface WeeklyOperationsSnapshot {
+  deck: WeeklyOperationDeck;
   rotationId: string;
   endsAt: number;
   objectives: WeeklyOperationObjectiveView[];
@@ -58,6 +74,24 @@ export interface WeeklyOperationsResolution {
   state: WeeklyOperationsState;
   snapshot: WeeklyOperationsSnapshot;
   rewardToGrant: WeeklyOperationReward | null;
+  stateChanged: boolean;
+}
+
+export interface WeeklyOperationDecksSnapshot {
+  regular: WeeklyOperationsSnapshot;
+  overdrive: WeeklyOperationsSnapshot;
+}
+
+export interface WeeklyOperationRewardGrant {
+  deck: WeeklyOperationDeck;
+  rotationId: string;
+  reward: WeeklyOperationReward;
+}
+
+export interface WeeklyOperationDecksResolution {
+  state: WeeklyOperationsState;
+  snapshot: WeeklyOperationDecksSnapshot;
+  rewardsToGrant: WeeklyOperationRewardGrant[];
   stateChanged: boolean;
 }
 
@@ -104,6 +138,36 @@ export const WEEKLY_OPERATION_ROTATIONS: readonly WeeklyOperationRotationDefinit
   }
 ] as const;
 
+export const OVERDRIVE_WEEKLY_OPERATION_ROTATIONS: readonly WeeklyOperationRotationDefinition[] = [
+  {
+    id: 'overdrive-siege-line',
+    objectives: [
+      { id: 'overdrive-eliminate-3000', title: 'Eliminate 3,000 enemies', description: 'Destroy hostiles during Overdrive deployments.', statKey: 'enemiesDestroyed', target: 3_000, progressMode: 'rotation' },
+      { id: 'overdrive-complete-40', title: 'Complete 40 rounds', description: 'Complete rounds in any Overdrive tier.', statKey: 'roundsCompleted', target: 40, progressMode: 'rotation' },
+      { id: 'overdrive-sites-70', title: 'Detonate 70 bomb sites', description: 'Defend charges to detonation in Overdrive.', statKey: 'bombSitesDestroyed', target: 70, progressMode: 'rotation' }
+    ],
+    reward: { credits: 35_000, coreTokens: 8, plasmaChips: 12, fluxCores: 2 }
+  },
+  {
+    id: 'overdrive-deep-burn',
+    objectives: [
+      { id: 'overdrive-eliminate-4000', title: 'Eliminate 4,000 enemies', description: 'Destroy hostiles during Overdrive deployments.', statKey: 'enemiesDestroyed', target: 4_000, progressMode: 'rotation' },
+      { id: 'overdrive-complete-55', title: 'Complete 55 rounds', description: 'Complete rounds in any Overdrive tier.', statKey: 'roundsCompleted', target: 55, progressMode: 'rotation' },
+      { id: 'overdrive-reach-40', title: 'Reach Overdrive Round 40', description: 'Push an Overdrive deployment to Round 40.', statKey: 'highestRound', target: 40, progressMode: 'absolute' }
+    ],
+    reward: { credits: 45_000, coreTokens: 10, plasmaChips: 16, fluxCores: 2, randomMod: true }
+  },
+  {
+    id: 'overdrive-system-breaker',
+    objectives: [
+      { id: 'overdrive-sites-85', title: 'Detonate 85 bomb sites', description: 'Defend charges to detonation in Overdrive.', statKey: 'bombSitesDestroyed', target: 85, progressMode: 'rotation' },
+      { id: 'overdrive-complete-75', title: 'Complete 75 rounds', description: 'Complete rounds in any Overdrive tier.', statKey: 'roundsCompleted', target: 75, progressMode: 'rotation' },
+      { id: 'overdrive-eliminate-5000', title: 'Eliminate 5,000 enemies', description: 'Destroy hostiles during Overdrive deployments.', statKey: 'enemiesDestroyed', target: 5_000, progressMode: 'rotation' }
+    ],
+    reward: { credits: 60_000, coreTokens: 12, plasmaChips: 20, fluxCores: 2, randomMod: true }
+  }
+] as const;
+
 const finiteCounter = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 
@@ -115,14 +179,19 @@ export const createWeeklyBaselines = (progress?: Partial<WeeklyOperationProgress
   totalCreditsEarned: finiteCounter(progress?.totalCreditsEarned)
 });
 
-export const createDefaultWeeklyOperationsState = (): WeeklyOperationsState => ({
+export const createDefaultWeeklyOperationTrackState = (): WeeklyOperationTrackState => ({
   rotationId: '',
   startedAt: '',
   baselines: createWeeklyBaselines(),
   rewardClaimed: false
 });
 
-export const normalizeWeeklyOperationsState = (value: unknown): WeeklyOperationsState => {
+export const createDefaultWeeklyOperationsState = (): WeeklyOperationsState => ({
+  ...createDefaultWeeklyOperationTrackState(),
+  overdrive: createDefaultWeeklyOperationTrackState()
+});
+
+const normalizeTrackState = (value: unknown): WeeklyOperationTrackState => {
   const candidate = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const rawBaselines = candidate.baselines && typeof candidate.baselines === 'object'
     ? candidate.baselines as Record<string, unknown>
@@ -137,6 +206,11 @@ export const normalizeWeeklyOperationsState = (value: unknown): WeeklyOperations
   };
 };
 
+export const normalizeWeeklyOperationsState = (value: unknown): WeeklyOperationsState => {
+  const candidate = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return { ...normalizeTrackState(candidate), overdrive: normalizeTrackState(candidate.overdrive) };
+};
+
 export const getWeeklyRotationSlot = (nowMs = Date.now()): { index: number; startsAt: number; endsAt: number } => {
   const safeNow = Number.isFinite(nowMs) ? nowMs : Date.now();
   const index = Math.floor((safeNow - WEEKLY_EPOCH_MS) / WEEK_MS);
@@ -144,25 +218,28 @@ export const getWeeklyRotationSlot = (nowMs = Date.now()): { index: number; star
   return { index, startsAt, endsAt: startsAt + WEEK_MS };
 };
 
-export const resolveWeeklyOperations = (
-  progress: WeeklyOperationProgressSource,
-  storedState: WeeklyOperationsState,
-  nowMs = Date.now()
-): WeeklyOperationsResolution => {
-  const slot = getWeeklyRotationSlot(nowMs);
-  const rotation = WEEKLY_OPERATION_ROTATIONS[((slot.index % WEEKLY_OPERATION_ROTATIONS.length) + WEEKLY_OPERATION_ROTATIONS.length) % WEEKLY_OPERATION_ROTATIONS.length];
-  const rotationId = `${slot.index}:${rotation.id}`;
-  const normalized = normalizeWeeklyOperationsState(storedState);
-  const rotated = normalized.rotationId !== rotationId;
-  const state: WeeklyOperationsState = rotated
-    ? {
-      rotationId,
-      startedAt: new Date(slot.startsAt).toISOString(),
-      baselines: createWeeklyBaselines(progress),
-      rewardClaimed: false
-    }
-    : normalized;
+interface TrackResolution {
+  state: WeeklyOperationTrackState;
+  snapshot: WeeklyOperationsSnapshot;
+  rewardToGrant: WeeklyOperationReward | null;
+  stateChanged: boolean;
+}
 
+const resolveTrack = (
+  deck: WeeklyOperationDeck,
+  rotations: readonly WeeklyOperationRotationDefinition[],
+  progress: WeeklyOperationProgressSource,
+  storedState: WeeklyOperationTrackState,
+  nowMs: number
+): TrackResolution => {
+  const slot = getWeeklyRotationSlot(nowMs);
+  const rotation = rotations[((slot.index % rotations.length) + rotations.length) % rotations.length];
+  const rotationId = `${slot.index}:${rotation.id}`;
+  const normalized = normalizeTrackState(storedState);
+  const rotated = normalized.rotationId !== rotationId;
+  const state: WeeklyOperationTrackState = rotated
+    ? { rotationId, startedAt: new Date(slot.startsAt).toISOString(), baselines: createWeeklyBaselines(progress), rewardClaimed: false }
+    : normalized;
   const objectives = rotation.objectives.map((definition): WeeklyOperationObjectiveView => {
     const rawCurrent = finiteCounter(progress[definition.statKey]);
     const baseline = finiteCounter(state.baselines[definition.statKey]);
@@ -172,19 +249,47 @@ export const resolveWeeklyOperations = (
   const complete = objectives.every((objective) => objective.complete);
   const shouldGrant = complete && !state.rewardClaimed;
   if (shouldGrant) state.rewardClaimed = true;
-
   return {
     state,
-    snapshot: {
-      rotationId,
-      endsAt: slot.endsAt,
-      objectives,
-      reward: { ...rotation.reward },
-      complete,
-      rewardClaimed: state.rewardClaimed
-    },
+    snapshot: { deck, rotationId, endsAt: slot.endsAt, objectives, reward: { ...rotation.reward }, complete, rewardClaimed: state.rewardClaimed },
     rewardToGrant: shouldGrant ? { ...rotation.reward } : null,
     stateChanged: rotated || shouldGrant
+  };
+};
+
+/** Retains the original single-deck resolver for callers and save tests. */
+export const resolveWeeklyOperations = (
+  progress: WeeklyOperationProgressSource,
+  storedState: WeeklyOperationsState,
+  nowMs = Date.now()
+): WeeklyOperationsResolution => {
+  const normalized = normalizeWeeklyOperationsState(storedState);
+  const regular = resolveTrack('regular', WEEKLY_OPERATION_ROTATIONS, progress, normalized, nowMs);
+  return {
+    state: { ...regular.state, overdrive: normalized.overdrive },
+    snapshot: regular.snapshot,
+    rewardToGrant: regular.rewardToGrant,
+    stateChanged: regular.stateChanged
+  };
+};
+
+export const resolveWeeklyOperationDecks = (
+  progress: WeeklyOperationProgressSource,
+  overdriveProgress: WeeklyOperationProgressSource,
+  storedState: WeeklyOperationsState,
+  nowMs = Date.now()
+): WeeklyOperationDecksResolution => {
+  const normalized = normalizeWeeklyOperationsState(storedState);
+  const regular = resolveTrack('regular', WEEKLY_OPERATION_ROTATIONS, progress, normalized, nowMs);
+  const overdrive = resolveTrack('overdrive', OVERDRIVE_WEEKLY_OPERATION_ROTATIONS, overdriveProgress, normalized.overdrive, nowMs);
+  const rewardsToGrant: WeeklyOperationRewardGrant[] = [];
+  if (regular.rewardToGrant) rewardsToGrant.push({ deck: 'regular', rotationId: regular.snapshot.rotationId, reward: regular.rewardToGrant });
+  if (overdrive.rewardToGrant) rewardsToGrant.push({ deck: 'overdrive', rotationId: overdrive.snapshot.rotationId, reward: overdrive.rewardToGrant });
+  return {
+    state: { ...regular.state, overdrive: overdrive.state },
+    snapshot: { regular: regular.snapshot, overdrive: overdrive.snapshot },
+    rewardsToGrant,
+    stateChanged: regular.stateChanged || overdrive.stateChanged
   };
 };
 

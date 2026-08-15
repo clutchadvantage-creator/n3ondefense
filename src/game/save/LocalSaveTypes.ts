@@ -5,13 +5,13 @@ import type { AbilityBindings } from '../config/controls.ts';
 import type { LocalModCollection, ProtocolPreference } from '../mods/types.ts';
 import type { CreditSpendBreakdown } from '../economy/types.ts';
 import type { PlayerGarageState } from '../garage/types.ts';
-import type { WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
+import type { WeeklyOperationProgressSource, WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import type { AimSettings, HudSettings } from '../config/interfaceSettings.ts';
 
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 12;
+export const CURRENT_SAVE_VERSION = 13;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -40,6 +40,7 @@ export interface LocalPlayerProgress {
   totalFluxCoresEarned: number;
   totalPlaytimeSeconds: number;
   initialDeploymentBriefingSeen: boolean;
+  overdriveWeeklyProgress: WeeklyOperationProgressSource;
   weeklyOperations: WeeklyOperationsState;
 }
 
@@ -97,7 +98,7 @@ export interface LocalPlayerSaveV1 {
   wallet: Omit<LocalPlayerWallet, 'fluxCores'> & { fluxCores?: number };
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
-  progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'weeklyOperations'>;
+  progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
   settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'contextualTutorials' | 'buttonJiggle'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }
