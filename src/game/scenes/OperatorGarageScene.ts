@@ -22,6 +22,8 @@ import { SaveSystem } from '../systems/SaveSystem.ts';
 import type { CosmeticOption } from '../types.ts';
 import { createModCollectionFrame } from '../ui/ModCollectionUi.ts';
 import { createButton, disableButton } from '../utils/ui.ts';
+import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
+import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 
 interface OperatorGarageSceneData { returnScene?: SceneKeyValue }
 type LibraryOwnershipFilter = 'all' | 'owned' | 'unowned' | 'corrupted';
@@ -58,6 +60,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private operatorPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
   private operatorPreviewLayout: { rect: GarageRect; compact: boolean } | null = null;
   private cosmeticPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
+  private tutorialDirector: TutorialDirector | null = null;
   private cosmeticPreviewColorTargets: Array<{ item: CosmeticOption; setColor: (color: number) => void }> = [];
   private status = '';
   private libraryCategoryIndex = 0;
@@ -131,6 +134,43 @@ export class OperatorGarageScene extends Phaser.Scene {
     );
     this.createStations(layout.stationCenters, layout.stationWidth, layout.stationHeight);
 
+    this.tutorialDirector = new TutorialDirector({
+      scene: 'garage',
+      resolveTarget: (target) => {
+        const rect = target === 'garage.configuration'
+          ? layout.configTerminal
+          : target === 'garage.loadout'
+            ? {
+                x: layout.dockCenters[0].x - layout.cardWidth / 2 - 12,
+                y: layout.dockCenters[0].y - layout.cardHeight / 2 - 34,
+                width: layout.dockCenters.at(-1)!.x - layout.dockCenters[0].x + layout.cardWidth + 24,
+                height: layout.cardHeight + layout.dockActionGap + layout.dockActionHeight + 48
+              }
+            : target === 'garage.overdrive'
+              ? {
+                  x: layout.stationCenters[1].x - layout.stationWidth / 2,
+                  y: layout.stationCenters[1].y - layout.stationHeight / 2,
+                  width: layout.stationWidth,
+                  height: layout.stationHeight
+                }
+              : null;
+        if (!rect) return null;
+        const canvas = this.game.canvas.getBoundingClientRect();
+        return {
+          x: canvas.left + rect.x * canvas.width / this.scale.width,
+          y: canvas.top + rect.y * canvas.height / this.scale.height,
+          width: rect.width * canvas.width / this.scale.width,
+          height: rect.height * canvas.height / this.scale.height
+        };
+      },
+      setMode: () => undefined
+    });
+    window.setTimeout(() => {
+      if (!this.scene.isActive()) return;
+      TutorialEventBus.emit('ui.garageSceneOpened');
+      if (SaveSystem.getHighestRound() >= RUN_PROTOCOLS.overdrive.unlockHighestRound) TutorialEventBus.emit('progression.overdriveUnlocked');
+    }, 180);
+
     if (this.status) {
       this.add.text(width / 2, layout.stationCenters[0].y - layout.stationHeight / 2 - 32, this.status, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 14 : Math.round(17 * layout.uiScale)}px`, fontStyle: 'bold', color: this.status.startsWith('BLOCKED') ? '#ff94aa' : '#8effc3', align: 'center'
@@ -146,6 +186,8 @@ export class OperatorGarageScene extends Phaser.Scene {
       this.scale.off('resize', this.handleResize, this);
       this.closeOverlay();
       this.destroyOperatorPreview();
+      this.tutorialDirector?.destroy();
+      this.tutorialDirector = null;
     });
   }
 

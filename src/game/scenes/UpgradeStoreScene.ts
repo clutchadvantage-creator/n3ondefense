@@ -11,11 +11,14 @@ import type { UpgradeDefinition } from '../types';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { COSMETICS } from '../../data/cosmetics';
 import type { CosmeticOption } from '../types';
+import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
+import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 
 interface StoreSceneData extends StoreReturnRequest {}
 
 export class UpgradeStoreScene extends Phaser.Scene {
   private storefront: StorefrontUi | null = null;
+  private tutorialDirector: TutorialDirector | null = null;
 
   constructor() {
     super(SceneKeys.Upgrades);
@@ -56,10 +59,26 @@ export class UpgradeStoreScene extends Phaser.Scene {
       onUnlock: (item) => this.unlockCosmetic(item),
       onEquip: (item) => this.equipCosmetic(item)
     });
+    this.tutorialDirector = new TutorialDirector({
+      scene: 'upgrades',
+      resolveTarget: (target) => {
+        const element = document.querySelector<HTMLElement>(`[data-tutorial-target="${target}"]`);
+        if (!element) return null;
+        const bounds = element.getBoundingClientRect();
+        return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+      },
+      setMode: () => undefined,
+      isEventActionAvailable: (event) => event !== 'economy.upgradePurchaseAttempted' || this.hasAffordableUpgrade()
+    });
+    window.setTimeout(() => {
+      if (this.scene.isActive()) TutorialEventBus.emit('ui.upgradeStoreOpened');
+    }, 180);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.storefront?.destroy();
       this.storefront = null;
+      this.tutorialDirector?.destroy();
+      this.tutorialDirector = null;
     });
   }
 
@@ -98,14 +117,28 @@ export class UpgradeStoreScene extends Phaser.Scene {
   private purchaseUpgrade(definition: UpgradeDefinition, displayedLevel: number): { ok: boolean; message: string } {
     const save = SaveSystem.get();
     const currentLevel = getUpgradeLevel(save.upgrades, definition.id);
-    if (currentLevel !== displayedLevel) return { ok: false, message: 'LEVEL CHANGED • SELECT AGAIN' };
-    if (currentLevel >= definition.maxLevel) return { ok: false, message: 'MAX LEVEL' };
+    if (currentLevel !== displayedLevel) return this.reportUpgradeAttempt(definition.id, { ok: false, message: 'LEVEL CHANGED • SELECT AGAIN' });
+    if (currentLevel >= definition.maxLevel) return this.reportUpgradeAttempt(definition.id, { ok: false, message: 'MAX LEVEL' });
     const cost = getUpgradeCost(definition.baseCost, definition.growth, currentLevel);
     if (!SaveSystem.spendCredits(cost, 'upgrade')) {
-      return { ok: false, message: `NEED ${(cost - save.credits).toLocaleString()} MORE CREDITS` };
+      return this.reportUpgradeAttempt(definition.id, { ok: false, message: `NEED ${(cost - save.credits).toLocaleString()} MORE CREDITS` });
     }
     SaveSystem.setUpgradeLevel(definition.id, currentLevel + 1);
-    return { ok: true, message: 'UPGRADE INSTALLED' };
+    TutorialEventBus.emit('economy.upgradePurchased', { id: definition.id, level: currentLevel + 1 });
+    return this.reportUpgradeAttempt(definition.id, { ok: true, message: 'UPGRADE INSTALLED' });
+  }
+
+  private reportUpgradeAttempt(id: string, result: { ok: boolean; message: string }): { ok: boolean; message: string } {
+    TutorialEventBus.emit('economy.upgradePurchaseAttempted', { id, ok: result.ok });
+    return result;
+  }
+
+  private hasAffordableUpgrade(): boolean {
+    const save = SaveSystem.get();
+    return UPGRADE_DEFINITIONS.some((definition) => {
+      const level = getUpgradeLevel(save.upgrades, definition.id);
+      return level < definition.maxLevel && save.credits >= getUpgradeCost(definition.baseCost, definition.growth, level);
+    });
   }
 
   private unlockCosmetic(item: CosmeticOption): { ok: boolean; message: string } {

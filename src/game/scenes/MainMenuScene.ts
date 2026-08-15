@@ -13,6 +13,8 @@ import { MOD_FOCUS_LABELS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
 import type { RunSetupSelection } from '../economy/types.ts';
 import { formatWeeklyCountdown, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
+import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
+import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 
 const MAIN_MENU_TIPS = [
   'Shoot through a placed fence to split and multiply your projectiles.',
@@ -65,6 +67,7 @@ const createCenteredHexagonPoints = (radius: number): number[] => {
 
 export class MainMenuScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
+  private tutorialDirector: TutorialDirector | null = null;
   private readonly handleResize = (): void => { this.scene.restart(); };
 
   constructor() {
@@ -255,15 +258,21 @@ export class MainMenuScene extends Phaser.Scene {
     }, singleButtonWidth, menuButtonHeight, 'secondary', 'runStart', tiny ? 14 : short ? 17 : 20);
 
     const navFontSize = tiny ? 14 : short ? 16 : 19;
-    this.createCommandButton(centerX, menuStartY + menuRowGap * 2, 'OPERATOR GARAGE', () => this.scene.start(SceneKeys.Garage, { returnScene: SceneKeys.MainMenu }), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
+    const garageButton = this.createCommandButton(centerX, menuStartY + menuRowGap * 2, 'OPERATOR GARAGE', () => {
+      TutorialEventBus.emit('ui.garageOpened');
+      this.scene.start(SceneKeys.Garage, { returnScene: SceneKeys.MainMenu });
+    }, singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
     this.createCommandButton(centerX, menuStartY + menuRowGap * 3, 'MOD COLLECTION', () => this.scene.start(SceneKeys.Mods, {
       returnScene: SceneKeys.MainMenu,
       resumePausedScene: false
     }), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
-    this.createCommandButton(centerX, menuStartY + menuRowGap * 4, 'STORE', () => this.scene.start(SceneKeys.Upgrades, {
-      returnScene: SceneKeys.MainMenu,
-      resumePausedScene: false
-    }), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
+    const storeButton = this.createCommandButton(centerX, menuStartY + menuRowGap * 4, 'STORE', () => {
+      TutorialEventBus.emit('ui.storeOpened');
+      this.scene.start(SceneKeys.Upgrades, {
+        returnScene: SceneKeys.MainMenu,
+        resumePausedScene: false
+      });
+    }, singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
     this.createCommandButton(centerX, menuStartY + menuRowGap * 5, 'LEADERBOARDS', () => this.scene.start(SceneKeys.OnlineLeaderboards), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
     this.createCommandButton(centerX, menuStartY + menuRowGap * 6, 'OPTIONS', () => this.scene.start(SceneKeys.Options, {
       returnScene: SceneKeys.MainMenu,
@@ -282,7 +291,38 @@ export class MainMenuScene extends Phaser.Scene {
     }
     this.scale.off('resize', this.handleResize, this);
     this.scale.on('resize', this.handleResize, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', this.handleResize, this));
+    const tutorialTargets = new Map<string, Phaser.GameObjects.Container>([
+      ['menu.store', storeButton],
+      ['menu.garage', garageButton]
+    ]);
+    this.tutorialDirector = new TutorialDirector({
+      scene: 'menu',
+      resolveTarget: (target) => {
+        const bounds = tutorialTargets.get(target)?.getBounds();
+        if (!bounds) return null;
+        const canvas = this.game.canvas.getBoundingClientRect();
+        return {
+          x: canvas.left + bounds.x * canvas.width / this.scale.width,
+          y: canvas.top + bounds.y * canvas.height / this.scale.height,
+          width: bounds.width * canvas.width / this.scale.width,
+          height: bounds.height * canvas.height / this.scale.height
+        };
+      },
+      setMode: () => undefined
+    });
+    this.tutorialDirector.startEligible();
+    window.setTimeout(() => {
+      if (!this.scene.isActive()) return;
+      const briefing = SaveSystem.getInitialDeploymentBriefingState();
+      if (briefing.seen && SaveSystem.get().settings.contextualTutorials) TutorialEventBus.emit('progression.firstFailure');
+      const collection = SaveSystem.getModCollection();
+      if (Object.values(collection.inventory).some((entry) => entry.discovered)) TutorialEventBus.emit('progression.firstModOwned');
+    }, 250);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off('resize', this.handleResize, this);
+      this.tutorialDirector?.destroy();
+      this.tutorialDirector = null;
+    });
   }
 
   private createCommandButton(

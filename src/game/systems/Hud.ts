@@ -485,6 +485,18 @@ export class Hud {
     this.layout(this.scene.scale.width, this.scene.scale.height);
   }
 
+  /** Screen-space bounds used by the shared tutorial spotlight. */
+  getTutorialTargetBounds(target: 'vitals' | 'objective' | 'stats' | 'abilities' | HudAbilitySlot['id']): HudRect | null {
+    if (!this.currentLayout) return null;
+    if (target === 'vitals' || target === 'objective' || target === 'stats' || target === 'abilities') {
+      return { ...this.currentLayout[target] };
+    }
+    const slot = this.abilitySlots.get(target);
+    if (!slot) return null;
+    const bounds = slot.root.getBounds();
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+  }
+
   private layout(width: number, height: number): void {
     const layout = calculateHudLayout(width, height, this.settings);
     this.currentLayout = layout;

@@ -229,6 +229,7 @@ export interface GameSaveData {
     abilityBindings: AbilityBindings;
     hud: HudSettings;
     aim: AimSettings;
+    contextualTutorials: boolean;
   };
 }
 

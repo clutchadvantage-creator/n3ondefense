@@ -2,7 +2,7 @@ import { COSMETICS } from '../../data/cosmetics.ts';
 import { UPGRADE_DEFINITIONS } from '../../data/upgrades.ts';
 import type { CosmeticOption } from '../types.ts';
 import { DEFAULT_AUDIO_VOLUME, SFX_DEFINITIONS, createDefaultSoundVolumes } from '../config/audio.ts';
-import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type LocalPlayerMetadata, type LocalPlayerProgress, type LocalPlayerSave, type LocalPlayerSaveV1, type LocalPlayerSettings, type ProfileSummary } from './LocalSaveTypes.ts';
+import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type LocalPlayerMetadata, type LocalPlayerProgress, type LocalPlayerSave, type LocalPlayerSaveV1, type LocalPlayerSettings, type ProfileSummary, type TutorialProgressState } from './LocalSaveTypes.ts';
 import { DEFAULT_ABILITY_BINDINGS, normalizeAbilityBindings } from '../config/controls.ts';
 import { normalizeModCollection, normalizeProtocolPreference } from '../mods/ModSaveNormalizer.ts';
 import { createEmptyCreditSpendBreakdown } from '../economy/EconomyService.ts';
@@ -20,7 +20,38 @@ const defaultSettings: LocalPlayerSettings = {
   particles: true,
   abilityBindings: { ...DEFAULT_ABILITY_BINDINGS },
   hud: { ...DEFAULT_HUD_SETTINGS },
-  aim: { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } }
+  aim: { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } },
+  contextualTutorials: true
+};
+
+const createDefaultTutorialProgress = (): TutorialProgressState => ({
+  version: 1,
+  completedSequences: [],
+  skippedSequences: [],
+  completedSteps: {},
+  replaySequenceId: null
+});
+
+const normalizeTutorialProgress = (value: unknown): TutorialProgressState => {
+  const candidate = isObject(value) ? value : {};
+  const uniqueStrings = (input: unknown): string[] => Array.isArray(input)
+    ? Array.from(new Set(input.filter((item): item is string => typeof item === 'string' && item.length > 0)))
+    : [];
+  const completedSteps: Record<string, string[]> = {};
+  if (isObject(candidate.completedSteps)) {
+    for (const [sequenceId, steps] of Object.entries(candidate.completedSteps)) {
+      if (sequenceId) completedSteps[sequenceId] = uniqueStrings(steps);
+    }
+  }
+  return {
+    version: 1,
+    completedSequences: uniqueStrings(candidate.completedSequences),
+    skippedSequences: uniqueStrings(candidate.skippedSequences),
+    completedSteps,
+    replaySequenceId: typeof candidate.replaySequenceId === 'string' && candidate.replaySequenceId.length > 0
+      ? candidate.replaySequenceId
+      : null
+  };
 };
 
 const defaultEquipped: Partial<Record<CosmeticOption['category'], string>> = {
@@ -129,7 +160,8 @@ const normalizeSettings = (settings: unknown): LocalPlayerSettings => {
     particles: toBoolean(candidate.particles, defaultSettings.particles),
     abilityBindings: normalizeAbilityBindings(candidate.abilityBindings),
     hud: normalizeHudSettings(candidate.hud),
-    aim: normalizeAimSettings(candidate.aim)
+    aim: normalizeAimSettings(candidate.aim),
+    contextualTutorials: toBoolean(candidate.contextualTutorials, true)
   };
 };
 
@@ -185,6 +217,7 @@ export const createDefaultLocalSave = (profileId: string, profileName: string, s
     protocol: normalizeProtocolPreference(source?.protocol),
     progress: normalizeProgress(source?.progress),
     settings: normalizeSettings(source?.settings),
+    tutorials: source?.tutorials ? normalizeTutorialProgress(source.tutorials) : createDefaultTutorialProgress(),
     metadata: {
       updatedAt: now,
       saveRevision: 1,
@@ -247,7 +280,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;
@@ -273,6 +306,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
     current.protocol = normalizeProtocolPreference(candidate.protocol);
     current.progress = normalizeProgress(candidate.progress);
     current.settings = normalizeSettings(candidate.settings);
+    current.tutorials = normalizeTutorialProgress(candidate.tutorials);
     current.metadata = normalizeMetadata(candidate.metadata, CURRENT_SAVE_VERSION);
   } else {
     return null;
@@ -285,6 +319,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
   current.mods = normalizeModCollection(current.mods);
   current.garage = normalizeGarageState(current.garage);
   current.protocol = normalizeProtocolPreference(current.protocol);
+  current.tutorials = normalizeTutorialProgress(current.tutorials);
   return current as LocalPlayerSave;
 };
 

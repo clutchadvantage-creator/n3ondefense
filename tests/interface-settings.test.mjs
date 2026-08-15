@@ -15,7 +15,7 @@ test('new profiles receive presentation defaults that preserve the original HUD 
   assert.deepEqual(save.settings.aim, DEFAULT_AIM_SETTINGS);
 });
 
-test('version-nine profiles migrate to version ten without losing settings and receive nested defaults', () => {
+test('version-nine profiles migrate to the current version without losing settings and receive nested defaults', () => {
   const original = createDefaultLocalSave('interface-migrate', 'Interface Migrate');
   const legacy = structuredClone(original);
   legacy.version = 9;
@@ -24,7 +24,7 @@ test('version-nine profiles migrate to version ten without losing settings and r
   delete legacy.settings.aim;
   const migrated = normalizeLocalSave(legacy);
   assert.ok(migrated);
-  assert.equal(migrated.version, 10);
+  assert.equal(migrated.version, 11);
   assert.equal(migrated.settings.masterVolume, 0.42);
   assert.deepEqual(migrated.settings.hud, DEFAULT_HUD_SETTINGS);
   assert.deepEqual(migrated.settings.aim, DEFAULT_AIM_SETTINGS);

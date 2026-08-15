@@ -19,6 +19,8 @@ import {
   createModCollectionShell,
   getModCollectionChromeLayout
 } from '../ui/ModCollectionUi.ts';
+import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
+import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 
 type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
 type FilterMode = 'all' | 'duplicates';
@@ -43,6 +45,7 @@ export class ModCollectionScene extends Phaser.Scene {
   private infusionPage = 0;
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
   private resumePausedScene = false;
+  private tutorialDirector: TutorialDirector | null = null;
   private readonly handleEscape = (): void => {
     if (this.bulkRecycleModal) {
       this.bulkRecycleModal.destroy();
@@ -144,9 +147,35 @@ export class ModCollectionScene extends Phaser.Scene {
 
     const selected = mods.cards.find((card) => card.instanceId === this.selectedCardId);
     this.createDetails(width - detailWidth / 2 - 20, contentTop, detailWidth, height - contentTop - 16, selected, selected ? equippedCardIds.has(selected.instanceId) : false, selected ? Math.max(0, (copyCounts.get(selected.modId) ?? 1) - 1) : 0);
+    this.tutorialDirector = new TutorialDirector({
+      scene: 'mods',
+      resolveTarget: (target) => {
+        const rect = target === 'mods.archive'
+          ? { x: 20, y: contentTop, width: gridRight - 4, height: height - contentTop - 16 }
+          : target === 'mods.details'
+            ? { x: width - detailWidth - 40, y: contentTop, width: detailWidth, height: height - contentTop - 16 }
+            : null;
+        if (!rect) return null;
+        const canvas = this.game.canvas.getBoundingClientRect();
+        return {
+          x: canvas.left + rect.x * canvas.width / this.scale.width,
+          y: canvas.top + rect.y * canvas.height / this.scale.height,
+          width: rect.width * canvas.width / this.scale.width,
+          height: rect.height * canvas.height / this.scale.height
+        };
+      },
+      setMode: () => undefined
+    });
+    window.setTimeout(() => {
+      if (this.scene.isActive() && SaveSystem.getModCollection().cards.length > 0) TutorialEventBus.emit('ui.modCollectionOpened');
+    }, 160);
     this.input.keyboard?.off('keydown-ESC', this.handleEscape);
     this.input.keyboard?.on('keydown-ESC', this.handleEscape);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.keyboard?.off('keydown-ESC', this.handleEscape));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.keyboard?.off('keydown-ESC', this.handleEscape);
+      this.tutorialDirector?.destroy();
+      this.tutorialDirector = null;
+    });
     if (import.meta.env.DEV) this.installDevKeys();
   }
 
@@ -186,8 +215,8 @@ export class ModCollectionScene extends Phaser.Scene {
     if (detailCopy.height > availableDetailCopyHeight) {
       detailCopy.setMaxLines(Math.max(height < 650 ? 2 : 4, Math.floor(availableDetailCopyHeight / 17)));
     }
-    if (categorySlot) createModCollectionButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.apply(() => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40, 'standard', { height: buttonHeight, fontSize: compactDetails ? 12 : 16 });
-    createModCollectionButton(this, x, buttonY + buttonGap, 'Equip Wildcard', () => this.apply(() => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40, 'standard', { height: buttonHeight, fontSize: compactDetails ? 12 : 16 });
+    if (categorySlot) createModCollectionButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.applyWithTutorialEvent('mods.equipped', () => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40, 'standard', { height: buttonHeight, fontSize: compactDetails ? 12 : 16 });
+    createModCollectionButton(this, x, buttonY + buttonGap, 'Equip Wildcard', () => this.applyWithTutorialEvent('mods.equipped', () => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40, 'standard', { height: buttonHeight, fontSize: compactDetails ? 12 : 16 });
     const nextUpgrade = card.upgradeLevel < 3 ? (card.upgradeLevel + 1) as 1 | 2 | 3 : null;
     const coreTokenCost = nextUpgrade ? MOD_BALANCE.rankCoreTokenCostsByRarity[definition.rarity][nextUpgrade] : 0;
     const upgradeLabel = nextUpgrade
@@ -339,7 +368,21 @@ export class ModCollectionScene extends Phaser.Scene {
     });
   }
 
-  private apply(operation: () => { ok: boolean; message?: string }): boolean { const result = operation(); this.status = `${result.ok ? 'Success' : 'Blocked'}: ${result.message ?? ''}`; this.restartCollection(); return result.ok; }
+  private apply(operation: () => { ok: boolean; message?: string }): boolean {
+    return this.finishOperation(operation());
+  }
+
+  private applyWithTutorialEvent(event: string, operation: () => { ok: boolean; message?: string }): boolean {
+    const result = operation();
+    if (result.ok) TutorialEventBus.emit(event);
+    return this.finishOperation(result);
+  }
+
+  private finishOperation(result: { ok: boolean; message?: string }): boolean {
+    this.status = `${result.ok ? 'Success' : 'Blocked'}: ${result.message ?? ''}`;
+    this.restartCollection();
+    return result.ok;
+  }
 
   private restartCollection(): void {
     this.scene.restart({ returnScene: this.returnScene, resumePausedScene: this.resumePausedScene });

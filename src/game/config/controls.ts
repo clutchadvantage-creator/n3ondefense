@@ -2,6 +2,11 @@ export type AbilityAction = 'fence' | 'turret' | 'mine' | 'dash' | 'shield';
 export type InputBinding = `Keyboard:${string}` | `Mouse:${number}`;
 export type AbilityBindings = Record<AbilityAction, InputBinding>;
 
+/** Authoritative fixed combat bindings used by both gameplay and teaching UI. */
+export const MOVEMENT_BINDINGS = ['Keyboard:KeyW', 'Keyboard:KeyA', 'Keyboard:KeyS', 'Keyboard:KeyD'] as const;
+export const PRIMARY_FIRE_BINDING: InputBinding = 'Mouse:0';
+export const INTERACT_BINDING: InputBinding = 'Keyboard:KeyE';
+
 export const ABILITY_ACTIONS: ReadonlyArray<{ action: AbilityAction; label: string }> = [
   { action: 'fence', label: 'Fence' },
   { action: 'turret', label: 'Turret' },

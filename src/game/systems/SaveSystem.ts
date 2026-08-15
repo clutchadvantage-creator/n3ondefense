@@ -25,7 +25,8 @@ export class SaveSystem {
         particles: save.settings.particles,
         abilityBindings: { ...save.settings.abilityBindings },
         hud: { ...save.settings.hud },
-        aim: { ...save.settings.aim, reticle: { ...save.settings.aim.reticle } }
+        aim: { ...save.settings.aim, reticle: { ...save.settings.aim.reticle } },
+        contextualTutorials: save.settings.contextualTutorials
       }
     };
   }
@@ -219,5 +220,15 @@ export class SaveSystem {
 
   static getNotice() {
     return PlayerProfileStore.getNotice();
+  }
+
+  static getTutorialProgress() {
+    return PlayerProfileStore.getActiveSave().tutorials;
+  }
+
+  static updateTutorialProgress(mutator: (progress: import('../save/LocalSaveTypes.ts').TutorialProgressState) => void): void {
+    const progress = PlayerProfileStore.getActiveSave().tutorials;
+    mutator(progress);
+    PlayerProfileStore.save();
   }
 }

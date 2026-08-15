@@ -45,7 +45,7 @@ import { MineSalvoInput, type MineSalvoInputResolution } from '../input/MineSalv
 import { DEFAULT_AIM_SETTINGS, normalizeAimSettings, type AimSettings } from '../config/interfaceSettings';
 import { drawReticle } from '../ui/ReticleRenderer';
 import { createPauseMenuView, type PauseMenuView } from '../ui/PauseMenuUi.ts';
-import { ABILITY_ACTIONS, compactBindingLabel, type AbilityAction, type AbilityBindings } from '../config/controls';
+import { ABILITY_ACTIONS, INTERACT_BINDING, MOVEMENT_BINDINGS, PRIMARY_FIRE_BINDING, bindingLabel, compactBindingLabel, type AbilityAction, type AbilityBindings } from '../config/controls';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_BALANCE, normalizeRunProtocolId } from '../mods/modBalance.ts';
 import { isGuaranteedMilestone, rollModDrop } from '../mods/ModDropService.ts';
@@ -63,6 +63,9 @@ import { shouldReplaceTurretTarget } from '../performance/Targeting.ts';
 import { ProjectileTrailBatch } from '../performance/ProjectileTrailBatch.ts';
 import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
+import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
+import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
+import type { TutorialMode, TutorialTargetBounds } from '../tutorial/TutorialTypes.ts';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -351,6 +354,10 @@ export class ArenaScene extends Phaser.Scene {
   private crosshairValid: boolean | null = null;
   private balanceTelemetry: Phaser.GameObjects.Text | null = null;
   private performanceTelemetry: Phaser.GameObjects.Text | null = null;
+  private tutorialDirector: TutorialDirector | null = null;
+  private tutorialHardPaused = false;
+  private tutorialClockWasPaused = false;
+  private tutorialAimAngle: number | null = null;
   private readonly performanceMonitor = new FramePerformanceMonitor(600);
   private nextPerformanceTelemetryAt = 0;
   private nextPoolMaintenanceAt = 0;
@@ -447,8 +454,8 @@ export class ArenaScene extends Phaser.Scene {
     return penalty;
   };
   private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
-    if (this.state.state === RoundState.Paused) return;
-    if (pointer.button === 0) {
+    if (this.state.state === RoundState.Paused || this.tutorialHardPaused) return;
+    if (pointer.button === Number(PRIMARY_FIRE_BINDING.slice('Mouse:'.length))) {
       this.pointerDown = true;
       return;
     }
@@ -459,7 +466,7 @@ export class ArenaScene extends Phaser.Scene {
     }
   };
   private readonly onPointerUp = (pointer: Phaser.Input.Pointer): void => {
-    if (pointer.button === 0) {
+    if (pointer.button === Number(PRIMARY_FIRE_BINDING.slice('Mouse:'.length))) {
       this.pointerDown = false;
     }
     this.handleMineInputRelease(`Mouse:${pointer.button}`);
@@ -485,6 +492,12 @@ export class ArenaScene extends Phaser.Scene {
   private readonly onQuitFromStore = (): void => this.quitToMenu();
   private readonly onAbilityKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat || !this.scene.isActive()) return;
+    if (event.code === 'Escape' && this.tutorialHardPaused) {
+      // Training owns the gameplay pause while a hard-pause step is visible.
+      // Do not let Escape open a second pause surface underneath the tutorial.
+      event.preventDefault();
+      return;
+    }
     if (event.code === 'Escape') {
       // Pointer-lock loss may deliver the same Escape after its asynchronous
       // unlock callback has already opened the menu. Ignore only that duplicate
@@ -501,7 +514,7 @@ export class ArenaScene extends Phaser.Scene {
       }
       return;
     }
-    if (this.state.state === RoundState.Paused) return;
+    if (this.state.state === RoundState.Paused || this.tutorialHardPaused) return;
     const action = this.actionForBinding(`Keyboard:${event.code}`);
     if (action) this.handleAbilityInputDown(action, `Keyboard:${event.code}`);
   };
@@ -608,6 +621,11 @@ export class ArenaScene extends Phaser.Scene {
     this.modAcquisitionPresenter = new ModAcquisitionPresenter(this, {
       onLegendaryStart: () => this.pauseForLegendaryModReveal(),
       onLegendaryComplete: () => this.resumeAfterLegendaryModReveal()
+    });
+    this.tutorialDirector = new TutorialDirector({
+      scene: 'arena',
+      resolveTarget: (target) => this.resolveTutorialTarget(target),
+      setMode: (mode) => this.setTutorialMode(mode)
     });
 
     this.scale.on('resize', this.handleResize, this);
@@ -930,6 +948,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private registerBombSiteEvents(): void {
     this.bombSites.on('bomb-site-armed', (site: BombSiteRuntime) => {
+      if (this.tutorialDirector?.awaits('objective.bombArmed')) TutorialEventBus.emit('objective.bombArmed', { siteId: site.id });
       GameplayTelemetryRecorder.recordBombArmed(site.id);
       this.bombsiteMods.onBombArmed(site, this.getBombDefenseDurationMs(), this.time.now);
       this.state.set(RoundState.Defense);
@@ -991,7 +1010,7 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
-    if (this.state.state === RoundState.Paused || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
+    if (this.tutorialHardPaused || this.state.state === RoundState.Paused || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
       return;
     }
 
@@ -1088,11 +1107,11 @@ export class ArenaScene extends Phaser.Scene {
     if (!kb) throw new Error('Keyboard input unavailable.');
 
     this.keys = {
-      w: kb.addKey('W'),
-      a: kb.addKey('A'),
-      s: kb.addKey('S'),
-      d: kb.addKey('D'),
-      e: kb.addKey('E'),
+      w: kb.addKey(bindingLabel(MOVEMENT_BINDINGS[0])),
+      a: kb.addKey(bindingLabel(MOVEMENT_BINDINGS[1])),
+      s: kb.addKey(bindingLabel(MOVEMENT_BINDINGS[2])),
+      d: kb.addKey(bindingLabel(MOVEMENT_BINDINGS[3])),
+      e: kb.addKey(bindingLabel(INTERACT_BINDING)),
       one: kb.addKey('ONE'),
       two: kb.addKey('TWO'),
       three: kb.addKey('THREE')
@@ -1317,6 +1336,15 @@ export class ArenaScene extends Phaser.Scene {
   private updatePlayerMovement(now: number): void {
     const aim = this.getAimWorldPoint();
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
+    if (this.tutorialDirector?.awaits('combat.aimChanged')) {
+      if (this.tutorialAimAngle === null) this.tutorialAimAngle = angle;
+      else if (Math.abs(Phaser.Math.Angle.Wrap(angle - this.tutorialAimAngle)) > 0.08) {
+        this.tutorialAimAngle = angle;
+        TutorialEventBus.emit('combat.aimChanged');
+      }
+    } else {
+      this.tutorialAimAngle = null;
+    }
     const forwardFacingFrame = this.player.texture.key === 'player-spaceship' || this.player.texture.key === 'player-airplane';
     this.player.setRotation(angle + (forwardFacingFrame ? 0 : Math.PI / 2));
 
@@ -1330,6 +1358,7 @@ export class ArenaScene extends Phaser.Scene {
     if (now >= this.player.dashUntil) {
       const movementLengthSquared = movementX * movementX + movementY * movementY;
       if (movementLengthSquared > 0) {
+        if (this.tutorialDirector?.awaits('combat.playerMoved')) TutorialEventBus.emit('combat.playerMoved');
         const fieldSpeed = this.bombsiteMods?.playerMoveSpeedMultiplier(this.player.x, this.player.y) ?? 1;
         const speedScale = this.player.speed * fieldSpeed / Math.sqrt(movementLengthSquared);
         this.player.setVelocity(movementX * speedScale, movementY * speedScale);
@@ -1425,6 +1454,7 @@ export class ArenaScene extends Phaser.Scene {
     const criticalMultiplier = WEAPON_BALANCE.critMultiplier * this.modRuntime.multiplier('weaponCritDamage');
     const damage = this.player.weapon.damage * this.player.damageMultiplier * (crit ? criticalMultiplier : 1);
     GameplayTelemetryRecorder.recordShot(damage, shotEnergyCost, crit);
+    if (this.tutorialDirector?.awaits('combat.weaponFired')) TutorialEventBus.emit('combat.weaponFired');
 
     const spawnX = this.player.x + Math.cos(angle) * 14;
     const spawnY = this.player.y + Math.sin(angle) * 14;
@@ -2500,6 +2530,7 @@ export class ArenaScene extends Phaser.Scene {
           const finalDamage = p.damage * (1 + conditionalBonus);
           const wasAlive = !hitEnemy.isDead();
           const applied = hitEnemy.takeDamage(finalDamage, p.from === 'player' ? 'weapon' : 'turret');
+          if (p.from === 'player' && applied > 0 && this.tutorialDirector?.awaits('combat.enemyDamaged')) TutorialEventBus.emit('combat.enemyDamaged', { type: hitEnemy.stats.type, damage: applied });
           const overkill = Math.max(0, finalDamage - applied);
           if (p.from === 'turret') GameplayTelemetryRecorder.recordTurretHit(p.turretId ?? '', applied, overkill);
           else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
@@ -2823,6 +2854,7 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.recordAbilityUse(type, cfg.energyCost);
     if (type !== 'mine') this.abilityCooldownUntil[type] = now + cfg.cooldownMs;
     this.audio.playSfx('place');
+    if (this.tutorialDirector?.awaits(`combat.ability.${type}`)) TutorialEventBus.emit(`combat.ability.${type}`, { type });
   }
 
   private placeFullRackSalvo(now: number, cfg: AbilityRuntimeConfig, aimX: number, aimY: number): void {
@@ -2871,6 +2903,7 @@ export class ArenaScene extends Phaser.Scene {
     this.player.spendEnergy(totalEnergyCost);
     GameplayTelemetryRecorder.recordAbilityUse('mine', totalEnergyCost);
     this.audio.playSfx('place');
+    if (this.tutorialDirector?.awaits('combat.ability.mine')) TutorialEventBus.emit('combat.ability.mine', { type: 'mine', count: points.length, salvo: true });
   }
 
   private resolveMineRackPattern(
@@ -3544,6 +3577,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private killEnemy(enemy: Enemy): void {
+    if (this.tutorialDirector?.awaits('combat.enemyKilled')) TutorialEventBus.emit('combat.enemyKilled', { type: enemy.stats.type });
     this.audio.playSfx('enemyDeath');
     const standardCredits = this.scaleModCredits(enemy.stats.valueCredits);
     const bombsiteCreditMultiplier = this.bombsiteMods.onEnemyKilled(enemy.x, enemy.y);
@@ -3672,6 +3706,11 @@ export class ArenaScene extends Phaser.Scene {
         duplicate,
         sourceScreenX: sourcePosition.x,
         sourceScreenY: sourcePosition.y
+      });
+      this.modAcquisitionPresenter?.whenIdle(() => {
+        TutorialEventBus.emit('mod.revealed', { modId: definition.id, rarity: definition.rarity, duplicate });
+        if (definition.rarity === 'legendary') TutorialEventBus.emit('mod.legendaryRevealed', { modId: definition.id });
+        if (definition.variant === 'corrupted') TutorialEventBus.emit('mod.corruptedRevealed', { modId: definition.id });
       });
     }
   }
@@ -4259,6 +4298,7 @@ export class ArenaScene extends Phaser.Scene {
       }
     );
     GameplayTelemetryRecorder.startBoss(archetype, this.bossEncounter.boss.maxHp);
+    TutorialEventBus.emit('combat.bossStarted', { archetype, round: this.bossRound });
     this.bossWallCollider?.destroy();
     this.bossWallCollider = this.physics.add.collider(this.bossEncounter.boss, this.walls);
 
@@ -5170,6 +5210,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.bossEncounter) {
       this.state.set(RoundState.Defense);
       this.physics.resume();
+      this.tutorialDirector?.startEligible();
       return;
     }
     const activeSites = this.bombSites.getActiveBombSites();
@@ -5177,6 +5218,73 @@ export class ArenaScene extends Phaser.Scene {
     this.state.set(defusing ? RoundState.Defusing : activeSites.length > 0 ? RoundState.Defense : RoundState.PrePlant);
     if (defusing) this.audio.startDisarmLoop();
     this.physics.resume();
+    this.tutorialDirector?.startEligible();
+  }
+
+  private setTutorialMode(mode: TutorialMode): void {
+    const shouldPause = mode === 'hard-pause';
+    if (shouldPause === this.tutorialHardPaused) return;
+    this.tutorialHardPaused = shouldPause;
+    if (shouldPause) {
+      this.tutorialClockWasPaused = this.time.paused;
+      this.clearGameplayInput();
+      // Window-driven tutorial UI remains animated while the authoritative
+      // Arena clock, delayed calls, cooldown timestamps, and physics freeze.
+      this.time.paused = true;
+      this.physics.pause();
+    } else {
+      this.time.paused = this.tutorialClockWasPaused;
+      this.tutorialClockWasPaused = false;
+      if (this.state.state !== RoundState.Paused && this.state.state !== RoundState.Victory && this.state.state !== RoundState.Defeat) {
+        this.physics.resume();
+      }
+    }
+  }
+
+  private resolveTutorialTarget(target: string): TutorialTargetBounds | null {
+    if (target.startsWith('hud.')) {
+      const id = target.slice(4) as 'vitals' | 'objective' | 'stats' | 'abilities' | 'fence' | 'turret' | 'mine' | 'shield';
+      const bounds = this.hud?.getTutorialTargetBounds(id);
+      return bounds ? this.canvasBoundsToViewport(bounds) : null;
+    }
+    if (target === 'world.player' && this.player?.active) {
+      return this.worldCircleToViewport(this.player.x, this.player.y, Math.max(28, this.player.displayWidth * 0.8));
+    }
+    if (target === 'world.bombsite') {
+      const site = this.bombSites?.sites.find((candidate) => candidate.state === BombSiteState.Available) ?? this.bombSites?.sites[0];
+      return site ? this.worldCircleToViewport(site.x, site.y, 96) : null;
+    }
+    if (target === 'world.enemy') {
+      const enemy = this.enemies.find((candidate) => candidate.active);
+      return enemy ? this.worldCircleToViewport(enemy.x, enemy.y, Math.max(32, enemy.displayWidth)) : null;
+    }
+    if (target === 'world.boss' && this.bossEncounter?.boss.active) {
+      const boss = this.bossEncounter.boss;
+      return this.worldCircleToViewport(boss.x, boss.y, Math.max(70, boss.displayWidth));
+    }
+    return null;
+  }
+
+  private canvasBoundsToViewport(bounds: { x: number; y: number; width: number; height: number }): TutorialTargetBounds {
+    const canvas = this.game.canvas.getBoundingClientRect();
+    return {
+      x: canvas.left + bounds.x * canvas.width / this.scale.width,
+      y: canvas.top + bounds.y * canvas.height / this.scale.height,
+      width: bounds.width * canvas.width / this.scale.width,
+      height: bounds.height * canvas.height / this.scale.height
+    };
+  }
+
+  private worldCircleToViewport(worldX: number, worldY: number, diameter: number): TutorialTargetBounds {
+    const camera = this.cameras.main;
+    const centerX = camera.x + (worldX - camera.worldView.x) * camera.zoom;
+    const centerY = camera.y + (worldY - camera.worldView.y) * camera.zoom;
+    return this.canvasBoundsToViewport({
+      x: centerX - diameter / 2,
+      y: centerY - diameter / 2,
+      width: diameter,
+      height: diameter
+    });
   }
 
   private showBanner(text: string): void {
@@ -5439,6 +5547,10 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopFluxCoreLoop();
     this.modAcquisitionPresenter?.destroy();
     this.modAcquisitionPresenter = null;
+    this.tutorialDirector?.destroy();
+    this.tutorialDirector = null;
+    this.tutorialHardPaused = false;
+    this.tutorialClockWasPaused = false;
     this.scale.off('resize', this.handleResize, this);
     this.events.off('resume-from-options', this.onResumeFromOptions);
     this.events.off('return-from-mod-collection', this.onReturnFromModCollection);

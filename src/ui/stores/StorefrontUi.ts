@@ -138,7 +138,8 @@ export class StorefrontUi {
 
     const wallet = document.createElement('div');
     wallet.className = 'store-wallet';
-    wallet.innerHTML = `<span class="credits"><b>◆</b> ${snapshot.credits.toLocaleString()} <small>CREDITS</small></span><span class="tokens"><b>⬡</b> ${snapshot.coreTokens.toLocaleString()} <small>CORE TOKENS</small></span>`;
+    wallet.dataset.tutorialTarget = 'store.wallet';
+    wallet.innerHTML = `<span class="credits" data-tutorial-target="store.wallet.credits"><b>◆</b> ${snapshot.credits.toLocaleString()} <small>CREDITS</small></span><span class="tokens" data-tutorial-target="store.wallet.core-tokens"><b>⬡</b> ${snapshot.coreTokens.toLocaleString()} <small>CORE TOKENS</small></span>`;
     const actions = document.createElement('div');
     actions.className = 'store-header-actions';
     if (this.options.onReturn) {
@@ -254,6 +255,7 @@ export class StorefrontUi {
     const cost = maxed ? 0 : getUpgradeCost(item.baseCost, item.growth, level);
     const comparison = getUpgradeComparison(item, level);
     const card = this.cardButton(item.id, `upgrade-card ${maxed ? 'maxed' : ''}`);
+    card.dataset.tutorialTarget = 'store.upgrade-card';
     const icon = document.createElement('div');
     icon.className = 'upgrade-icon';
     icon.textContent = this.upgradeIcon(item.category);
@@ -361,6 +363,7 @@ export class StorefrontUi {
     const action = document.createElement('button');
     action.type = 'button';
     action.className = 'store-action';
+    action.dataset.tutorialTarget = 'store.upgrade-action';
     const unavailable = maxed || !affordable || this.actionLocked;
     action.dataset.menuAudio = 'deferred';
     action.setAttribute('aria-disabled', unavailable ? 'true' : 'false');

@@ -93,7 +93,7 @@ export const createButton = (
     align: 'center',
     lineSpacing: -2,
     wordWrap: { width: Math.max(40, width - horizontalPadding), useAdvancedWrap: true }
-  }).setOrigin(0.5).setMaxLines(2);
+  }).setOrigin(0.5).setMaxLines(2).setName('button-label');
 
   const hit = scene.add.rectangle(0, 0, width, height, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
   hit.setName('button-hit');

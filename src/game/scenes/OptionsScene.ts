@@ -25,6 +25,8 @@ import {
 } from '../config/interfaceSettings';
 import { drawReticle } from '../ui/ReticleRenderer';
 import { drawHudAbilityIcon, drawHudResourceIcon } from '../systems/Hud';
+import { TUTORIAL_REPLAY_GROUPS } from '../tutorial/TutorialRegistry.ts';
+import { requestTutorialReplay, resetTutorialSequence, skipTutorialSequence } from '../tutorial/TutorialProgress.ts';
 
 type OptionsTabId = 'audio' | 'gameplay' | 'interface' | 'profile' | 'system';
 
@@ -368,7 +370,77 @@ export class OptionsScene extends Phaser.Scene {
     this.addSectionHeader(container, centerX, y, 'CONTROLS / GAMEPLAY REFERENCE', 'CURRENT PROFILE BINDINGS');
     const referenceBottom = this.createGameplayReferencePanel(container, centerX, y + 34, innerWidth);
     const keybindBottom = this.createKeybindPanel(container, centerX, referenceBottom + 12, innerWidth);
-    this.configureTabScrolling('gameplay', container, keybindBottom + 22);
+    const tutorialBottom = this.createTutorialSettingsPanel(container, centerX, keybindBottom + 18, innerWidth, save.settings.contextualTutorials);
+    this.configureTabScrolling('gameplay', container, tutorialBottom + 22);
+  }
+
+  private createTutorialSettingsPanel(
+    container: Phaser.GameObjects.Container,
+    centerX: number,
+    topY: number,
+    contentWidth: number,
+    initialContextual: boolean
+  ): number {
+    const panelWidth = Math.min(contentWidth, 900);
+    const compact = panelWidth < 680;
+    const rowGap = 48;
+    const columns = compact ? 1 : 2;
+    const replayRows = Math.ceil(TUTORIAL_REPLAY_GROUPS.length / columns);
+    const panelHeight = 118 + replayRows * rowGap + 58;
+    container.add(this.add.rectangle(centerX, topY + panelHeight * 0.5, panelWidth, panelHeight, 0x091522, 0.9)
+      .setStrokeStyle(1, 0x3a9db2, 0.58));
+    container.add(this.add.text(centerX, topY + 15, 'TRAINING & CONTEXTUAL GUIDANCE', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: '17px', color: '#69f4ff'
+    }).setOrigin(0.5, 0));
+    container.add(this.add.text(centerX, topY + 42, 'Replay a module on its next relevant screen. Live training uses your current key bindings.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#9fc7d5', align: 'center'
+    }).setOrigin(0.5, 0));
+
+    let contextual = initialContextual;
+    const toggle = this.addTabButton(container, centerX, topY + 82, `CONTEXTUAL TIPS: ${contextual ? 'ON' : 'OFF'}`, () => {
+      contextual = !contextual;
+      SaveSystem.setSettings({ contextualTutorials: contextual });
+      const label = toggle.getByName('button-label') as Phaser.GameObjects.Text | null;
+      label?.setText(`CONTEXTUAL TIPS: ${contextual ? 'ON' : 'OFF'}`);
+    }, Math.min(330, panelWidth - 44));
+    this.registerScrollTarget('gameplay', toggle, topY + 82, 22);
+
+    const buttonWidth = compact ? panelWidth - 42 : (panelWidth - 58) / 2;
+    const startY = topY + 128;
+    TUTORIAL_REPLAY_GROUPS.forEach((group, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x = columns === 1 ? centerX : centerX + (column === 0 ? -(buttonWidth + 12) / 2 : (buttonWidth + 12) / 2);
+      const y = startY + row * rowGap;
+      const button = this.addTabButton(container, x, y, `REPLAY // ${group.label}`, () => {
+        if (group.sequenceId === 'progression.mod-collection' && SaveSystem.getModCollection().cards.length === 0) {
+          showInfoModal(this, 'TRAINING UNAVAILABLE', 'Recover at least one Mod before replaying the Mod Collection training module.', [{ label: 'ACKNOWLEDGED', onClick: () => undefined }]);
+          return;
+        }
+        SaveSystem.updateTutorialProgress((state) => {
+          requestTutorialReplay(state, group.sequenceId);
+          if ('followups' in group) {
+            for (const sequenceId of group.followups) resetTutorialSequence(state, sequenceId);
+          }
+        });
+        showInfoModal(this, 'TRAINING QUEUED', group.sequenceId.startsWith('onboarding.')
+          ? 'This training module will begin during your next deployment.'
+          : 'This training module will begin on its relevant menu screen.', [{ label: 'ACKNOWLEDGED', onClick: () => undefined }]);
+      }, buttonWidth);
+      this.registerScrollTarget('gameplay', button, y, 22);
+    });
+
+    const skipY = startY + replayRows * rowGap + 4;
+    const skip = this.addTabButton(container, centerX, skipY, 'SKIP INITIAL DEPLOYMENT TRAINING', () => {
+      SaveSystem.updateTutorialProgress((state) => {
+        for (const sequenceId of ['onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']) {
+          skipTutorialSequence(state, sequenceId);
+        }
+      });
+      showInfoModal(this, 'TRAINING UPDATED', 'Initial deployment training is marked complete. Individual modules can still be replayed here.', [{ label: 'ACKNOWLEDGED', onClick: () => undefined }]);
+    }, Math.min(390, panelWidth - 44));
+    this.registerScrollTarget('gameplay', skip, skipY, 22);
+    return topY + panelHeight;
   }
 
   private createGameplayReferencePanel(container: Phaser.GameObjects.Container, centerX: number, topY: number, contentWidth: number): number {
