@@ -170,7 +170,7 @@ export const RUN_PROTOCOL_IDS = [
 
 export const RUN_PROTOCOLS: Record<RunProtocolId, RunProtocolDefinition> = {
   normal: { id: 'normal', family: 'normal', tier: 0, label: 'NORMAL PROTOCOL', description: 'Classic operation beginning at Round 1.', unlockHighestRound: 0, startingRound: 1, scoreMultiplier: 1, modDropMultiplier: 1 },
-  overdrive: { id: 'overdrive', family: 'overdrive', tier: 1, label: 'OVERDRIVE', description: 'Begin at Round 5. Skipped rounds grant no rewards.', unlockHighestRound: 8, startingRound: 5, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
+  overdrive: { id: 'overdrive', family: 'overdrive', tier: 1, label: 'OVERDRIVE CYGNUS', description: 'Begin at Round 5. Skipped rounds grant no rewards.', unlockHighestRound: 8, startingRound: 5, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
   'overdrive-orion': { id: 'overdrive-orion', family: 'overdrive', tier: 2, label: 'OVERDRIVE ORION', description: 'Begin at Round 10. Skipped rounds grant no rewards.', unlockHighestRound: 13, startingRound: 10, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
   'overdrive-ares': { id: 'overdrive-ares', family: 'overdrive', tier: 3, label: 'OVERDRIVE ARES', description: 'Begin at Round 15. Skipped rounds grant no rewards.', unlockHighestRound: 18, startingRound: 15, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },
   'overdrive-lyra': { id: 'overdrive-lyra', family: 'overdrive', tier: 4, label: 'OVERDRIVE LYRA', description: 'Begin at Round 20. Skipped rounds grant no rewards.', unlockHighestRound: 23, startingRound: 20, scoreMultiplier: 1.25, modDropMultiplier: 1.35 },

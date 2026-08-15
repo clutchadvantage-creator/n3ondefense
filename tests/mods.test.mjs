@@ -580,7 +580,9 @@ test('the named Overdrive ladder starts every five rounds without skipped reward
   assert.equal(tiers.length, 10);
   assert.deepEqual(tiers.map((definition) => definition.startingRound), [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]);
   assert.deepEqual(tiers.map((definition) => definition.tier), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-  assert.deepEqual(tiers.slice(0, 3).map((definition) => definition.label), ['OVERDRIVE', 'OVERDRIVE ORION', 'OVERDRIVE ARES']);
+  assert.deepEqual(tiers.slice(0, 3).map((definition) => definition.label), ['OVERDRIVE CYGNUS', 'OVERDRIVE ORION', 'OVERDRIVE ARES']);
+  assert.ok(tiers.every((definition) => /^OVERDRIVE [A-Z]+$/.test(definition.label)));
+  assert.equal(new Set(tiers.map((definition) => definition.label)).size, tiers.length);
   assert.ok(tiers.every((definition) => definition.family === 'overdrive'));
   assert.ok(tiers.every((definition) => definition.scoreMultiplier === RUN_PROTOCOLS.overdrive.scoreMultiplier));
   assert.ok(tiers.every((definition) => definition.modDropMultiplier === RUN_PROTOCOLS.overdrive.modDropMultiplier));

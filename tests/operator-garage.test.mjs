@@ -73,6 +73,20 @@ test('Garage uses existing Mod category validation instead of inventing equip ru
   assert.equal(equipMod(save.mods, 'weapon', definition.id, card.instanceId).ok, true);
 });
 
+test('Overdrive progression terminal keeps full constellation protocol names in the shared cyber-console treatment', () => {
+  const source = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
+  const terminalStart = source.indexOf('private showOverdrive(): void');
+  const terminalEnd = source.indexOf('private showPresets(): void', terminalStart);
+  assert.ok(terminalStart >= 0 && terminalEnd > terminalStart);
+
+  const terminalSource = source.slice(terminalStart, terminalEnd);
+  assert.match(terminalSource, /PROTOCOL LADDER \/\/ CONSTELLATION CLEARANCE MATRIX/);
+  assert.match(terminalSource, /createModCollectionFrame\(this/);
+  assert.match(terminalSource, /createConsoleChamferPoints/);
+  assert.match(terminalSource, /definition\.label/);
+  assert.doesNotMatch(terminalSource, /definition\.label\.replace/);
+});
+
 test('Garage presets save and immediately restore five Mod and deployment references', () => {
   const save = createDefaultLocalSave('garage-preset', 'Garage Preset');
   const cards = addCategoryLoadout(save);

@@ -42,6 +42,13 @@ const syntheticLibraryCard = (definition: ModDefinition): ModCardInstance => ({
   upgradeLevel: 0
 });
 
+const createConsoleChamferPoints = (width: number, height: number, cut: number): number[] => [
+  cut, 0, width - cut, 0,
+  width, cut, width, height - cut,
+  width - cut, height, cut, height,
+  0, height - cut, 0, cut
+];
+
 export class OperatorGarageScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
@@ -712,29 +719,120 @@ export class OperatorGarageScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const highest = SaveSystem.getHighestRound();
     const current = SaveSystem.getPreferredProtocol();
-    root.add(this.add.text(width < 760 ? (width - 118) / 2 : width / 2, 58, `HIGHEST ROUND ${highest} // SELECT ANY UNLOCKED PROTOCOL`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: width < 760 ? '13px' : '16px', color: '#a8d6e3'
-    }).setOrigin(0.5));
+    const narrow = width < 760;
+    const outerMargin = narrow ? 14 : 28;
+    const frameTop = narrow ? 94 : 104;
+    const frameWidth = width - outerMargin * 2;
+    const frameHeight = height - frameTop - (narrow ? 12 : 20);
+    const activeLabel = RUN_PROTOCOLS[current].family === 'overdrive'
+      ? RUN_PROTOCOLS[current].label
+      : 'NORMAL PROTOCOL';
+
+    const statusWidth = Math.min(width - (narrow ? 160 : 300), 1040);
+    const statusY = narrow ? 70 : 78;
+    const statusRail = this.add.rectangle(width / 2, statusY, statusWidth, narrow ? 28 : 34, 0x071722, 0.95)
+      .setStrokeStyle(1, 0x55efff, 0.32);
+    const statusEdge = this.add.rectangle(width / 2 - statusWidth / 2 + 5, statusY, 3, narrow ? 20 : 25, 0xff5bcf, 0.78);
+    const statusLed = this.add.circle(width / 2 + statusWidth / 2 - 14, statusY, 3, 0x67ffad, 0.96);
+    const statusText = this.add.text(width / 2, statusY, `CLEARANCE // HIGHEST ROUND ${highest}     ACTIVE // ${activeLabel}`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 11 : 16}px`, color: '#bfeaf3', fontStyle: 'bold', letterSpacing: narrow ? 0 : 1
+    }).setOrigin(0.5).setMaxLines(1);
+    root.add([statusRail, statusEdge, statusLed, statusText]);
+    this.overlayAnimatedTargets.push(statusLed);
+    this.tweens.add({ targets: statusLed, alpha: { from: 0.24, to: 1 }, duration: 820, yoyo: true, repeat: -1 });
+
+    const progressionFrame = createModCollectionFrame(this, {
+      x: outerMargin,
+      y: frameTop,
+      width: frameWidth,
+      height: frameHeight
+    }, 'PROTOCOL LADDER // CONSTELLATION CLEARANCE MATRIX', 0x55efff);
+    root.add(progressionFrame);
+    this.overlayAnimatedTargets.push(...progressionFrame.list);
+
+    const uplink = this.add.text(outerMargin + 22, frameTop + 48, 'N3ON OVERDRIVE NETWORK // TIERED DEPLOYMENT ACCESS', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 12}px`, color: '#72bdca', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0, 0.5);
+    const instruction = this.add.text(width - outerMargin - 22, frameTop + 48, 'SELECT ANY UNLOCKED PROTOCOL', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 12}px`, color: '#75ffb3', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(1, 0.5);
+    root.add([uplink, instruction]);
+
     const protocols = RUN_PROTOCOL_IDS.slice(1);
     const columns = 2;
     const rows = Math.ceil(protocols.length / columns);
-    const gap = 10;
-    const cardWidth = Math.min(430, (width - 44 - gap * (columns - 1)) / columns);
-    const availableHeight = height - 122;
-    const cardHeight = Math.max(47, Math.min(72, (availableHeight - gap * (rows - 1)) / rows));
+    const columnGap = narrow ? 7 : 18;
+    const rowGap = narrow ? 6 : 11;
+    const cardWidth = Math.min(720, (frameWidth - (narrow ? 24 : 54) - columnGap) / columns);
+    const cardsTop = frameTop + (narrow ? 62 : 70);
+    const cardsBottom = frameTop + frameHeight - (narrow ? 10 : 16);
+    const availableHeight = cardsBottom - cardsTop;
+    const cardHeight = Phaser.Math.Clamp((availableHeight - rowGap * (rows - 1)) / rows, narrow ? 48 : 58, 118);
+    const usedHeight = cardHeight * rows + rowGap * (rows - 1);
+    const firstCenterY = cardsTop + Math.max(0, (availableHeight - usedHeight) / 2) + cardHeight / 2;
     protocols.forEach((id, index) => {
       const definition = RUN_PROTOCOLS[id];
       const unlocked = highest >= definition.unlockHighestRound;
       const selected = current === id;
       const column = index % columns;
       const row = Math.floor(index / columns);
-      const x = width / 2 + (column === 0 ? -(cardWidth + gap) / 2 : (cardWidth + gap) / 2);
-      const y = 96 + cardHeight / 2 + row * (cardHeight + gap);
-      const panel = this.add.rectangle(x, y, cardWidth, cardHeight, unlocked ? 0x0b2425 : 0x10141d, 0.95)
-        .setStrokeStyle(selected ? 3 : 1, selected ? 0xffb14d : unlocked ? 0x61ffab : 0x445765, selected ? 1 : 0.58);
-      panel.setInteractive({ useHandCursor: true });
-      panel.on('pointerover', () => this.audio.playSfx('menuHover'));
-      panel.on('pointerdown', () => {
+      const x = width / 2 + (column === 0 ? -(cardWidth + columnGap) / 2 : (cardWidth + columnGap) / 2);
+      const y = firstCenterY + row * (cardHeight + rowGap);
+      const accent = selected ? 0xffb45f : unlocked ? (column === 0 ? 0x55efff : 0x68ffad) : 0x75506f;
+      const framePoints = createConsoleChamferPoints(cardWidth, cardHeight, Math.min(13, cardHeight * 0.18));
+      const shadow = this.add.polygon(x + 4, y + 5, framePoints, 0x000000, 0.5);
+      const chassis = this.add.polygon(x, y, framePoints, unlocked ? 0x081a24 : 0x0a1018, 0.98)
+        .setStrokeStyle(selected ? 2 : 1, accent, selected ? 0.95 : 0.55);
+      const innerWidth = cardWidth - (narrow ? 12 : 18);
+      const innerHeight = cardHeight - (narrow ? 10 : 14);
+      const inner = this.add.rectangle(x, y, innerWidth, innerHeight, unlocked ? 0x0a2028 : 0x11131c, unlocked ? 0.83 : 0.9)
+        .setStrokeStyle(1, accent, selected ? 0.4 : 0.18);
+      const topRail = this.add.rectangle(x, y - cardHeight / 2 + 5, cardWidth - 28, 3, accent, selected ? 0.9 : 0.52);
+      const sideEdge = this.add.rectangle(x - cardWidth / 2 + 7, y, 3, cardHeight - 22, column === 0 ? 0xff5bcf : 0x55efff, unlocked ? 0.48 : 0.18);
+      const tierRadius = Phaser.Math.Clamp(cardHeight * 0.22, narrow ? 10 : 13, 24);
+      const tierX = x - cardWidth / 2 + (narrow ? 22 : 34);
+      const tierBadge = this.add.circle(tierX, y, tierRadius, selected ? 0x2b2114 : unlocked ? 0x09222a : 0x15131d, 1)
+        .setStrokeStyle(2, accent, unlocked ? 0.76 : 0.35);
+      const tierText = this.add.text(tierX, y, `${String(definition.tier).padStart(2, '0')}`, {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(cardHeight * 0.16, 8, 15)}px`, color: unlocked ? '#e8ffff' : '#786c7a', fontStyle: 'bold'
+      }).setOrigin(0.5);
+      const textLeft = tierX + tierRadius + (narrow ? 7 : 14);
+      const nameY = y - cardHeight * 0.18;
+      const tierName = this.add.text(textLeft, nameY, definition.label, {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(cardHeight * 0.16, narrow ? 8 : 10, 18)}px`,
+        color: unlocked ? '#dffcff' : '#756d7b', fontStyle: 'bold'
+      }).setOrigin(0, 0.5).setMaxLines(1);
+      const stateText = this.add.text(x + cardWidth / 2 - (narrow ? 10 : 17), nameY, selected ? 'ACTIVE' : unlocked ? 'UNLOCKED' : 'LOCKED', {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${Phaser.Math.Clamp(cardHeight * 0.14, 8, 14)}px`, fontStyle: 'bold',
+        color: selected ? '#ffc070' : unlocked ? '#75ffb1' : '#a46f82'
+      }).setOrigin(1, 0.5);
+      const detail = this.add.text(textLeft, y + cardHeight * 0.13, unlocked
+        ? `DEPLOYMENT START // ROUND ${definition.startingRound}`
+        : `CLEAR ROUND ${definition.unlockHighestRound} TO UNLOCK`, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${Phaser.Math.Clamp(cardHeight * 0.13, 8, 13)}px`, color: unlocked ? '#8fc4d1' : '#b27b8c', fontStyle: 'bold'
+      }).setOrigin(0, 0.5).setMaxLines(1);
+
+      const progressLeft = textLeft;
+      const progressRight = x + cardWidth / 2 - (narrow ? 10 : 17);
+      const progressWidth = Math.max(24, progressRight - progressLeft);
+      const progressY = y + cardHeight / 2 - (narrow ? 7 : 11);
+      const progressRatio = unlocked ? 1 : Phaser.Math.Clamp(highest / definition.unlockHighestRound, 0, 1);
+      const progressTrack = this.add.rectangle(progressLeft, progressY, progressWidth, narrow ? 2 : 4, 0x02070c, 1)
+        .setOrigin(0, 0.5).setStrokeStyle(1, accent, 0.22);
+      const progressFill = this.add.rectangle(progressLeft, progressY, Math.max(1, progressWidth * progressRatio), narrow ? 2 : 4, accent, unlocked ? 0.72 : 0.42)
+        .setOrigin(0, 0.5);
+      const led = this.add.circle(x + cardWidth / 2 - 9, y - cardHeight / 2 + 8, narrow ? 2 : 3, accent, selected ? 1 : 0.72);
+      const hitZone = this.add.rectangle(x, y, cardWidth, cardHeight, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+      hitZone.on('pointerover', () => {
+        this.audio.playSfx('menuHover');
+        inner.setFillStyle(unlocked ? 0x0d2a33 : 0x171622, 0.96);
+        topRail.setAlpha(1);
+      });
+      hitZone.on('pointerout', () => {
+        inner.setFillStyle(unlocked ? 0x0a2028 : 0x11131c, unlocked ? 0.83 : 0.9);
+        topRail.setAlpha(selected ? 0.9 : 0.52);
+      });
+      hitZone.on('pointerdown', () => {
         if (!unlocked) {
           this.audio.playSfx('itemLocked');
           return;
@@ -744,10 +842,9 @@ export class OperatorGarageScene extends Phaser.Scene {
         this.audio.playSfx(result.ok ? 'menu' : 'itemLocked');
         this.showOverdrive();
       });
-      root.add(panel);
-      root.add(this.add.text(x - cardWidth / 2 + 14, y - 13, definition.label.replace('OVERDRIVE ', ''), { fontFamily: 'Orbitron, sans-serif', fontSize: cardHeight < 56 ? '12px' : '15px', color: unlocked ? '#d9fff0' : '#778791' }).setOrigin(0, 0.5));
-      root.add(this.add.text(x + cardWidth / 2 - 14, y - 13, selected ? 'ACTIVE' : unlocked ? 'UNLOCKED' : 'LOCKED', { fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', fontStyle: 'bold', color: selected ? '#ffb45f' : unlocked ? '#69ffac' : '#7b6b76' }).setOrigin(1, 0.5));
-      root.add(this.add.text(x, y + 14, unlocked ? `START ROUND ${definition.startingRound}` : `CLEAR ROUND ${definition.unlockHighestRound} TO UNLOCK // ${Math.min(highest, definition.unlockHighestRound)} / ${definition.unlockHighestRound}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: cardHeight < 56 ? '10px' : '12px', color: unlocked ? '#8fbac4' : '#a87582', align: 'center' }).setOrigin(0.5));
+      root.add([shadow, chassis, inner, topRail, sideEdge, tierBadge, tierText, tierName, stateText, detail, progressTrack, progressFill, led, hitZone]);
+      this.overlayAnimatedTargets.push(led);
+      this.tweens.add({ targets: led, alpha: { from: selected ? 0.35 : 0.2, to: 1 }, duration: 720 + index * 45, yoyo: true, repeat: -1 });
     });
   }
 
