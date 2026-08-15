@@ -31,6 +31,7 @@ const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 } 
 
 interface ModCollectionSceneData extends ModCollectionReturnRequest {
   selectedCardId?: string;
+  initialCategory?: 'all' | ModCategory;
 }
 
 export class ModCollectionScene extends Phaser.Scene {
@@ -62,17 +63,23 @@ export class ModCollectionScene extends Phaser.Scene {
     this.returnScene = returnRoute.returnScene;
     this.resumePausedScene = returnRoute.resumePausedScene;
     if (data?.selectedCardId) this.selectedCardId = data.selectedCardId;
+    if (data?.initialCategory && CATEGORIES.includes(data.initialCategory)) {
+      this.categoryIndex = CATEGORIES.indexOf(data.initialCategory);
+      this.filterIndex = 0;
+      this.page = 0;
+    }
     const { width, height } = this.scale;
     const mods = SaveSystem.getModCollection();
     const category = CATEGORIES[this.categoryIndex];
     const sort = SORTS[this.sortIndex];
     const filter = FILTERS[this.filterIndex];
     const copyCounts = getModCopyCounts(mods.cards);
+    const recyclableDuplicates = getRecyclableUnupgradedDuplicates(mods);
+    const recyclableDuplicateIds = new Set(recyclableDuplicates.map((card) => card.instanceId));
     const cards = this.sortedCards(mods.cards.filter((card) =>
       (category === 'all' || MOD_BY_ID.get(card.modId)?.category === category)
-      && (filter === 'all' || (copyCounts.get(card.modId) ?? 0) > 1)
+      && (filter === 'all' || recyclableDuplicateIds.has(card.instanceId))
     ), sort);
-    const recyclableDuplicates = getRecyclableUnupgradedDuplicates(mods);
     const bulkPlasmaValue = recyclableDuplicates.reduce((total, card) => {
       const definition = MOD_BY_ID.get(card.modId);
       return total + (definition ? MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity] : 0);

@@ -12,6 +12,9 @@ const MENU_SFX_POOL_SIZE = 4;
 const MENU_HOVER_SFX_MIN_INTERVAL_MS = 45;
 const PICKUP_SFX_POOL_SIZE = 4;
 const LOW_HEALTH_LOOP_GAP_MS = 900;
+const ABILITY_FEEDBACK_SFX_POOL_SIZE = 6;
+const UNAVAILABLE_SFX_MIN_INTERVAL_MS = 90;
+type AbilityFeedbackSfxName = 'placeTurret' | 'electricFence' | 'placeMine' | 'unavailable';
 
 export class AudioManager {
   private static instance: AudioManager | null = null;
@@ -38,6 +41,12 @@ export class AudioManager {
   private readonly menuClickSfxPool: HTMLAudioElement[] = [];
   private readonly itemLockedSfxPool: HTMLAudioElement[] = [];
   private readonly pickupSfxPool: HTMLAudioElement[] = [];
+  private readonly abilityFeedbackSfxPools: Record<AbilityFeedbackSfxName, HTMLAudioElement[]> = {
+    placeTurret: [], electricFence: [], placeMine: [], unavailable: []
+  };
+  private readonly abilityFeedbackSfxCursors: Record<AbilityFeedbackSfxName, number> = {
+    placeTurret: 0, electricFence: 0, placeMine: 0, unavailable: 0
+  };
   private runStartSfx: HTMLAudioElement | null = null;
   private securityLaserAudio: HTMLAudioElement | null = null;
   private securityLaserLoopRequested = false;
@@ -69,6 +78,7 @@ export class AudioManager {
   private lastEnemyDeathSfxAt = -Infinity;
   private lastHitDamageSfxAt = -Infinity;
   private lastMenuHoverSfxAt = -Infinity;
+  private lastUnavailableSfxAt = -Infinity;
   private cachedMusicVolume = DEFAULT_AUDIO_VOLUME * DEFAULT_AUDIO_VOLUME;
   private cachedSfxVolume = DEFAULT_AUDIO_VOLUME * DEFAULT_AUDIO_VOLUME;
   private readonly cachedSoundVolumes = {} as Record<AudioSfxName, number>;
@@ -94,6 +104,7 @@ export class AudioManager {
     this.initModRevealSfx();
     this.initMenuSfxPools();
     this.initRunStartSfx();
+    this.initAbilityFeedbackSfxPools();
   }
 
   static get(): AudioManager {
@@ -426,6 +437,57 @@ export class AudioManager {
     this.runStartSfx.load();
   }
 
+  private initAbilityFeedbackSfxPools(): void {
+    const sources: Record<AbilityFeedbackSfxName, string> = {
+      placeTurret: 'soundeffects/placeturret.mp3',
+      electricFence: 'soundeffects/electricfence.mp3',
+      placeMine: 'soundeffects/placemine.mp3',
+      unavailable: 'soundeffects/unavailable.mp3'
+    };
+    for (const name of Object.keys(sources) as AbilityFeedbackSfxName[]) {
+      const source = audioAssetUrl(sources[name]);
+      for (let index = 0; index < ABILITY_FEEDBACK_SFX_POOL_SIZE; index += 1) {
+        const audio = new Audio(source);
+        audio.preload = 'auto';
+        audio.volume = this.getSfxVolume(name);
+        audio.load();
+        this.abilityFeedbackSfxPools[name].push(audio);
+      }
+    }
+  }
+
+  private playAbilityFeedbackSfx(name: AbilityFeedbackSfxName): void {
+    const now = performance.now();
+    if (name === 'unavailable') {
+      if (now - this.lastUnavailableSfxAt < UNAVAILABLE_SFX_MIN_INTERVAL_MS) return;
+      this.lastUnavailableSfxAt = now;
+    }
+    const pool = this.abilityFeedbackSfxPools[name];
+    if (pool.length === 0) return;
+    const cursor = this.abilityFeedbackSfxCursors[name];
+    let availableIndex = -1;
+    for (let offset = 0; offset < pool.length; offset += 1) {
+      const candidateIndex = (cursor + offset) % pool.length;
+      const candidate = pool[candidateIndex];
+      if (candidate.paused || candidate.ended) {
+        availableIndex = candidateIndex;
+        break;
+      }
+    }
+    // Never cut off an active placement clip; a saturated pool folds the
+    // additional cue into the voices that are already playing.
+    if (availableIndex < 0) return;
+    this.abilityFeedbackSfxCursors[name] = (availableIndex + 1) % pool.length;
+    const audio = pool[availableIndex];
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Metadata may still be loading for the first placement.
+    }
+    audio.volume = this.getSfxVolume(name);
+    void audio.play().catch(() => undefined);
+  }
+
   private playRunStartSfx(): void {
     if (!this.runStartSfx) return;
     this.runStartSfx.pause();
@@ -733,6 +795,9 @@ export class AudioManager {
     for (const menuClick of this.menuClickSfxPool) menuClick.volume = this.getSfxVolume('menu');
     for (const itemLocked of this.itemLockedSfxPool) itemLocked.volume = this.getSfxVolume('itemLocked');
     for (const pickup of this.pickupSfxPool) pickup.volume = this.getSfxVolume('pickup');
+    for (const name of Object.keys(this.abilityFeedbackSfxPools) as AbilityFeedbackSfxName[]) {
+      for (const audio of this.abilityFeedbackSfxPools[name]) audio.volume = this.getSfxVolume(name);
+    }
     if (this.runStartSfx) this.runStartSfx.volume = this.getSfxVolume('runStart');
     if (this.securityLaserAudio) this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
     if (this.gasSfx) this.gasSfx.volume = this.getSfxVolume('gas');
@@ -882,6 +947,12 @@ export class AudioManager {
         break;
       case 'place':
         this.beep('sfx', 350, 90, 0.05, name);
+        break;
+      case 'placeTurret':
+      case 'electricFence':
+      case 'placeMine':
+      case 'unavailable':
+        this.playAbilityFeedbackSfx(name);
         break;
       case 'bomblet':
       case 'mine':

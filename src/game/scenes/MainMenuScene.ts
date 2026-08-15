@@ -480,7 +480,7 @@ export class MainMenuScene extends Phaser.Scene {
     const selectorY = dense ? 83 : 101;
     const arrowWidth = dense ? 30 : 38;
     const arrowHeight = dense ? 21 : 27;
-    const arrowOffset = dense ? 70 : 92;
+    const arrowOffset = dense ? 82 : 112;
     const switchDeck = (direction: -1 | 1): boolean => {
       this.operationDeck = direction < 0
         ? (this.operationDeck === 'regular' ? 'overdrive' : 'regular')

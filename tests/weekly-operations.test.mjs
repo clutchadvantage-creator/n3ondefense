@@ -153,6 +153,13 @@ test('Main Menu second-pass presentation uses responsive command modules and a l
   assert.match(menu, /OVERDRIVE CHALLENGES/);
 });
 
+test('regular and Overdrive challenge deck arrows are spaced symmetrically away from the title', () => {
+  const menu = readFileSync(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8');
+  assert.match(menu, /const arrowOffset = dense \? 82 : 112/);
+  assert.match(menu, /createButton\(this, -arrowOffset, selectorY/);
+  assert.match(menu, /createButton\(this, arrowOffset, selectorY/);
+});
+
 test('Main Menu polygon frames use positive local geometry so their visual centers stay aligned', () => {
   const menu = readFileSync(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8');
   assert.match(menu, /const createChamferedFramePoints[\s\S]*?cut, 0,[\s\S]*?width - cut, 0/);

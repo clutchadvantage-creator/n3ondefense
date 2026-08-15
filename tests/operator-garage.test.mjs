@@ -73,6 +73,13 @@ test('Garage uses existing Mod category validation instead of inventing equip ru
   assert.equal(equipMod(save.mods, 'weapon', definition.id, card.instanceId).ok, true);
 });
 
+test('Garage Browse opens the Collection on the matching slot category', () => {
+  const source = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
+  assert.match(source, /dock\.slot === 'wildcard' \? 'all' : dock\.slot/);
+  assert.match(source, /definition\?\.category \?\? 'all'/);
+  assert.match(source, /this\.scene\.start\(SceneKeys\.Mods, \{ returnScene: SceneKeys\.Garage, selectedCardId, initialCategory \}\)/);
+});
+
 test('Overdrive progression terminal keeps full constellation protocol names in the shared cyber-console treatment', () => {
   const source = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
   const terminalStart = source.indexOf('private showOverdrive(): void');

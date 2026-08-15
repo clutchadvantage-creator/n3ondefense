@@ -418,7 +418,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         const view = createModCardView(this, center.x, center.y, dock.card, dock.card.upgradeLevel, { width: cardWidth, height: cardHeight, compact: compactCard, equipped: true });
         view.setDepth(26).on('pointerdown', () => {
           this.audio.playSfx('menu');
-          this.openCollection(dock.card?.instanceId);
+          this.openCollection(dock.card?.instanceId, definition?.category ?? 'all');
         });
       } else {
         const emptyHit = this.add.rectangle(center.x, center.y, cardWidth, cardHeight, 0x0a1923, 0.78).setStrokeStyle(1, 0x4bd7e9, 0.25).setInteractive({ useHandCursor: true }).setDepth(26);
@@ -431,7 +431,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         emptyHit.on('pointerout', () => emptyHit.setStrokeStyle(1, 0x4bd7e9, 0.25));
         emptyHit.on('pointerdown', () => {
           this.audio.playSfx('menu');
-          this.openCollection();
+          this.openCollection(undefined, dock.slot === 'wildcard' ? 'all' : dock.slot);
         });
       }
       const actionY = center.y + cardHeight / 2 + actionButtonGap + actionButtonHeight / 2;
@@ -440,7 +440,7 @@ export class OperatorGarageScene extends Phaser.Scene {
           SaveSystem.unequipMod(dock.slot);
           this.status = `SUCCESS // ${dock.label.replace('SLOT ', '').replace(' // ', ' ')} CLEARED`;
           this.scene.restart({ returnScene: this.returnScene });
-        } else this.openCollection();
+        } else this.openCollection(undefined, dock.slot === 'wildcard' ? 'all' : dock.slot);
       }, cardWidth, 'menu', {
         height: actionButtonHeight,
         fontSize: compact ? 16 : Phaser.Math.Clamp(17 * readableScale, 17, 21)
@@ -940,8 +940,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     return result.ok;
   }
 
-  private openCollection(selectedCardId?: string): void {
-    this.scene.start(SceneKeys.Mods, { returnScene: SceneKeys.Garage, selectedCardId });
+  private openCollection(selectedCardId?: string, initialCategory?: 'all' | ModCategory): void {
+    this.scene.start(SceneKeys.Mods, { returnScene: SceneKeys.Garage, selectedCardId, initialCategory });
   }
 
   private closeOverlay(): void {

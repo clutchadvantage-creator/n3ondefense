@@ -44,6 +44,16 @@ test('filters, pagination, inventory actions, infusions, and return routing rema
   assert.match(scene, /return-from-mod-collection/);
 });
 
+test('duplicate filtering exposes only rank-zero excess copies and Garage category routing can initialize the group', () => {
+  assert.match(scene, /const recyclableDuplicates = getRecyclableUnupgradedDuplicates\(mods\)/);
+  assert.match(scene, /const recyclableDuplicateIds = new Set\(recyclableDuplicates\.map\(\(card\) => card\.instanceId\)\)/);
+  assert.match(scene, /filter === 'all' \|\| recyclableDuplicateIds\.has\(card\.instanceId\)/);
+  assert.doesNotMatch(scene, /filter === 'all' \|\| \(copyCounts\.get\(card\.modId\) \?\? 0\) > 1/);
+  assert.match(scene, /initialCategory\?: 'all' \| ModCategory/);
+  assert.match(scene, /this\.categoryIndex = CATEGORIES\.indexOf\(data\.initialCategory\)/);
+  assert.match(scene, /this\.filterIndex = 0/);
+});
+
 test('infusion overlay remains input-blocking and uses the same framed command treatment', () => {
   assert.match(scene, /const blocker = .*\.setInteractive\(\)/);
   assert.match(scene, /INFUSION TERMINAL \/\/ COSMETIC CHANNEL/);

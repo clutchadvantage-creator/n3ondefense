@@ -1380,8 +1380,10 @@ export class ArenaScene extends Phaser.Scene {
     if (this.consumeAbilityAction('dash')) {
       if (!this.player.canDash(now)) {
         GameplayTelemetryRecorder.recordAbilityDenied('dash', 'cooldown');
+        this.audio.playSfx('unavailable');
       } else if (!this.player.canSpendEnergy(PLAYER_BALANCE.dashEnergyCost)) {
         GameplayTelemetryRecorder.recordEnergyDenied('dash', PLAYER_BALANCE.dashEnergyCost, this.player.energy);
+        this.audio.playSfx('unavailable');
       } else {
         this.player.spendEnergy(PLAYER_BALANCE.dashEnergyCost);
         GameplayTelemetryRecorder.recordAbilityUse('dash', PLAYER_BALANCE.dashEnergyCost);
@@ -1952,14 +1954,17 @@ export class ArenaScene extends Phaser.Scene {
     const energyCost = this.getShieldEnergyCost();
     if (now < this.shieldActiveUntil) {
       GameplayTelemetryRecorder.recordAbilityDenied('shield', 'already-active');
+      this.audio.playSfx('unavailable');
       return;
     }
     if (now < this.shieldCooldownUntil) {
       GameplayTelemetryRecorder.recordAbilityDenied('shield', 'cooldown');
+      this.audio.playSfx('unavailable');
       return;
     }
     if (!this.player.canSpendEnergy(energyCost)) {
       GameplayTelemetryRecorder.recordEnergyDenied('shield', energyCost, this.player.energy);
+      this.audio.playSfx('unavailable');
       return;
     }
 
@@ -2810,10 +2815,12 @@ export class ArenaScene extends Phaser.Scene {
     const cfg = this.getAbilityConfig(type);
     if (type !== 'mine' && now < this.abilityCooldownUntil[type]) {
       GameplayTelemetryRecorder.recordAbilityDenied(type, 'cooldown');
+      this.audio.playSfx('unavailable');
       return;
     }
     if (type === 'mine' && this.mineChargeRack.availability(now, cfg.cooldownMs) !== 'ready') {
       GameplayTelemetryRecorder.recordAbilityDenied('mine', 'cooldown');
+      this.audio.playSfx('unavailable');
       return;
     }
 
@@ -2821,17 +2828,20 @@ export class ArenaScene extends Phaser.Scene {
 
     if (!this.player.canSpendEnergy(cfg.energyCost)) {
       GameplayTelemetryRecorder.recordEnergyDenied(type, cfg.energyCost, this.player.energy);
+      this.audio.playSfx('unavailable');
       return;
     }
 
     if (!this.isValidPlacement(x, y)) {
       GameplayTelemetryRecorder.recordAbilityDenied(type, 'invalid-placement');
+      this.audio.playSfx('unavailable');
       return;
     }
 
     if (type === 'fence') {
       if (this.fences.length >= cfg.maxActive) {
         GameplayTelemetryRecorder.recordAbilityDenied('fence', 'active-limit');
+        this.audio.playSfx('unavailable');
         return;
       }
       const fence = new Fence(this, x, y, this.player.rotation, SaveSystem.getCosmeticColor('fenceStyle', now), ABILITY_BALANCE.fence.width, cfg.durationMs, cfg.hp, cfg.damage, ABILITY_BALANCE.fence.slowFactor);
@@ -2841,6 +2851,7 @@ export class ArenaScene extends Phaser.Scene {
     if (type === 'turret') {
       if (this.turrets.length >= cfg.maxActive) {
         GameplayTelemetryRecorder.recordAbilityDenied('turret', 'active-limit');
+        this.audio.playSfx('unavailable');
         return;
       }
       const turret = new Turret(this, x, y, SaveSystem.getCosmeticColor('turretSkin', now), cfg.hp, cfg.damage, cfg.fireRate, cfg.range);
@@ -2854,6 +2865,7 @@ export class ArenaScene extends Phaser.Scene {
       // consumed, so a failed placement never loses a charge.
       if (!this.mineChargeRack.spend(now, cfg.cooldownMs)) {
         GameplayTelemetryRecorder.recordAbilityDenied('mine', 'cooldown');
+        this.audio.playSfx('unavailable');
         return;
       }
       const mine = new Mine(this, x, y, COLORS.orange, cfg.armMs, cfg.damage, cfg.radius);
@@ -2863,7 +2875,7 @@ export class ArenaScene extends Phaser.Scene {
     this.player.spendEnergy(cfg.energyCost);
     GameplayTelemetryRecorder.recordAbilityUse(type, cfg.energyCost);
     if (type !== 'mine') this.abilityCooldownUntil[type] = now + cfg.cooldownMs;
-    this.audio.playSfx('place');
+    this.audio.playSfx(type === 'turret' ? 'placeTurret' : type === 'fence' ? 'electricFence' : 'placeMine');
     if (this.tutorialDirector?.awaits(`combat.ability.${type}`)) TutorialEventBus.emit(`combat.ability.${type}`, { type });
   }
 
@@ -2874,22 +2886,26 @@ export class ArenaScene extends Phaser.Scene {
     const availableMines = rack.currentCharges;
     if (availableMines === 0) {
       GameplayTelemetryRecorder.recordAbilityDenied('mine', 'cooldown');
+      this.audio.playSfx('unavailable');
       return;
     }
 
     const totalEnergyCost = getMineRackEnergyCost(cfg.energyCost, availableMines, salvo.energyCostMultiplier);
     if (!this.player.canSpendEnergy(totalEnergyCost)) {
       GameplayTelemetryRecorder.recordEnergyDenied('mine', totalEnergyCost, this.player.energy);
+      this.audio.playSfx('unavailable');
       return;
     }
 
     const points = this.resolveMineRackPattern(aimX, aimY, availableMines, salvo.spacing);
     if (!points) {
       GameplayTelemetryRecorder.recordAbilityDenied('mine', 'invalid-placement');
+      this.audio.playSfx('unavailable');
       return;
     }
     if (!this.mineChargeRack.spendMany(now, cfg.cooldownMs, availableMines)) {
       GameplayTelemetryRecorder.recordAbilityDenied('mine', 'cooldown');
+      this.audio.playSfx('unavailable');
       return;
     }
 
@@ -2912,7 +2928,9 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.player.spendEnergy(totalEnergyCost);
     GameplayTelemetryRecorder.recordAbilityUse('mine', totalEnergyCost);
-    this.audio.playSfx('place');
+    points.forEach((_, index) => {
+      this.time.delayedCall(salvo.flightMs + index * salvo.staggerMs, () => this.audio.playSfx('placeMine'));
+    });
     if (this.tutorialDirector?.awaits('combat.ability.mine')) TutorialEventBus.emit('combat.ability.mine', { type: 'mine', count: points.length, salvo: true });
   }
 
