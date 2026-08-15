@@ -3,6 +3,8 @@ import type { EnemyType } from '../types';
 import { ENEMY_BALANCE } from '../config/balance';
 import { GameplayTelemetryRecorder, type CombatDamageSource } from '../telemetry/GameplayTelemetryRecorder.ts';
 
+export const ENEMY_VISUAL_SIZE_BONUS = 2;
+
 export interface EnemyStats {
   type: EnemyType;
   hp: number;
@@ -45,7 +47,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const bodyScale = stats.type === 'tank' || stats.type === 'star' ? 0.86 : 0.72;
     this.body?.setSize(stats.size * bodyScale, stats.size * bodyScale, true);
 
-    this.setDisplaySize(stats.size, stats.size);
+    // Give every robot chassis slightly more visual presence without changing
+    // its authoritative collision body, hazard radius, stats, or balance.
+    this.setDisplaySize(stats.size + ENEMY_VISUAL_SIZE_BONUS, stats.size + ENEMY_VISUAL_SIZE_BONUS);
     this.setTint(stats.color);
     this.setDepth(7);
   }

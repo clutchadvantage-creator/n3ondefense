@@ -5,7 +5,7 @@ import { DEFAULT_HUD_SETTINGS, glowMultiplier, normalizeHudSettings, type HudSet
 export interface HudAbilitySlot {
   id: 'fence' | 'turret' | 'mine' | 'shield';
   keybind: string;
-  /** Retained for payload compatibility; the HUD renders a procedural equipment icon. */
+  /** Retained for payload compatibility; the HUD renders the matching in-game equipment art. */
   icon: string;
   label: string;
   cooldownMs: number;
@@ -155,28 +155,52 @@ export function drawHudResourceIcon(graphics: Phaser.GameObjects.Graphics, kind:
 }
 
 export function drawHudAbilityIcon(graphics: Phaser.GameObjects.Graphics, id: HudAbilitySlot['id']): void {
-  graphics.clear().lineStyle(2, 0x8af7ff, 0.92).fillStyle(0x62eaff, 0.18);
+  graphics.clear();
   if (id === 'fence') {
-    graphics.fillStyle(0x64edff, 0.78).fillRect(-13, -10, 3, 21).fillRect(10, -10, 3, 21);
-    graphics.lineStyle(1.5, 0x88faff, 0.95).lineBetween(-9, -6, 9, -6).lineBetween(-9, 0, 9, 0).lineBetween(-9, 6, 9, 6);
-    graphics.lineStyle(1, MAGENTA, 0.58).lineBetween(-8, -8, 8, 8).lineBetween(-8, 8, 8, -8);
+    // Miniature of the deployed two-node telescoping fence.
+    graphics.fillStyle(CYAN, 0.12).fillCircle(-13, 10, 7).fillCircle(13, 10, 7);
+    graphics.fillStyle(0x07131d, 1).lineStyle(1.5, CYAN, 0.94)
+      .fillCircle(-13, 10, 4.5).strokeCircle(-13, 10, 4.5)
+      .fillCircle(13, 10, 4.5).strokeCircle(13, 10, 4.5);
+    graphics.fillStyle(CYAN, 0.92).fillCircle(-13, 10, 1.8).fillCircle(13, 10, 1.8);
+    graphics.fillStyle(0x16313b, 1).lineStyle(1, CYAN, 0.9)
+      .fillRect(-15, -10, 4, 20).strokeRect(-15, -10, 4, 20)
+      .fillRect(11, -10, 4, 20).strokeRect(11, -10, 4, 20);
+    graphics.fillStyle(MAGENTA, 1).fillCircle(-13, -12, 2).fillCircle(13, -12, 2);
+    graphics.lineStyle(1.35, CYAN, 0.96);
+    for (const wireY of [-8, -3, 2, 7]) graphics.lineBetween(-11, wireY, 11, wireY);
+    graphics.fillStyle(0xffffff, 0.96).fillCircle(-5, -8, 1.4).fillCircle(5, 2, 1.2);
   } else if (id === 'turret') {
-    graphics.fillStyle(0x64edff, 0.28).fillRect(-10, -4, 18, 13).fillRect(-13, 9, 26, 4);
-    graphics.lineStyle(2, 0x8af7ff, 0.95).strokeRect(-10, -4, 18, 13).lineBetween(-2, -5, 11, -12).lineBetween(10, -12, 15, -12);
-    graphics.fillStyle(MAGENTA, 0.9).fillCircle(-3, 2, 2.5);
+    // Same base, rotating housing, barrel, and muzzle silhouette as Turret.
+    graphics.fillStyle(CYAN, 0.12).fillCircle(0, 7, 14);
+    graphics.fillStyle(0x07131d, 1).lineStyle(2, CYAN, 0.94).fillCircle(0, 8, 9).strokeCircle(0, 8, 9);
+    graphics.fillStyle(0x102838, 1).lineStyle(1.5, CYAN, 1).fillRect(-8, -1, 16, 11).strokeRect(-8, -1, 16, 11);
+    graphics.fillStyle(CYAN, 0.9).fillRect(-2.5, -14, 5, 14);
+    graphics.fillStyle(0x07131d, 1).lineStyle(1.5, CYAN, 1).fillRect(-5, -18, 10, 4).strokeRect(-5, -18, 10, 4);
+    graphics.fillStyle(0xffffff, 0.96).fillCircle(0, 4, 2.5);
+    graphics.fillStyle(MAGENTA, 0.86).fillRect(-11, 15, 22, 2);
   } else if (id === 'mine') {
-    graphics.fillStyle(0xff8859, 0.24).fillCircle(0, 0, 9).lineStyle(2, 0xffaa72, 0.95).strokeCircle(0, 0, 9);
-    for (let index = 0; index < 8; index += 1) {
-      const angle = index * Math.PI / 4;
+    // Twelve-spike shell, inner ring, and armed core from the operative mine.
+    graphics.lineStyle(2.2, 0xff9b4f, 0.98);
+    for (let index = 0; index < 12; index += 1) {
+      const angle = index * Math.PI * 2 / 12;
       graphics.lineBetween(Math.cos(angle) * 10, Math.sin(angle) * 10, Math.cos(angle) * 15, Math.sin(angle) * 15);
     }
-    graphics.fillStyle(0xff596d, 1).fillCircle(0, 0, 3);
+    graphics.fillStyle(0x21080b, 1).lineStyle(2, 0xff8a32, 1).fillCircle(0, 0, 10).strokeCircle(0, 0, 10);
+    graphics.fillStyle(0x09070b, 1).lineStyle(1.5, 0xff4e3d, 0.94).fillCircle(0, 0, 6).strokeCircle(0, 0, 6);
+    graphics.fillStyle(0xffd36a, 1).fillCircle(0, 0, 3).lineStyle(1, 0xffffff, 0.9).strokeCircle(0, 0, 3);
   } else {
-    graphics.fillStyle(0x62eaff, 0.12);
-    graphics.beginPath().moveTo(0, -14).lineTo(12, -7).lineTo(12, 6).lineTo(0, 14).lineTo(-12, 6).lineTo(-12, -7).closePath().fillPath();
-    graphics.lineStyle(2, 0x8af7ff, 0.95);
-    graphics.beginPath().moveTo(0, -14).lineTo(12, -7).lineTo(12, 6).lineTo(0, 14).lineTo(-12, 6).lineTo(-12, -7).closePath().strokePath();
-    graphics.lineStyle(1, MAGENTA, 0.7).strokeCircle(0, 0, 6);
+    // Layered energy bubble with orbit segments and crackling core.
+    graphics.fillStyle(CYAN, 0.07).fillCircle(0, 0, 15);
+    graphics.lineStyle(2, CYAN, 0.96).strokeCircle(0, 0, 14);
+    graphics.lineStyle(1.4, MAGENTA, 0.72).strokeCircle(0, 0, 10);
+    graphics.lineStyle(1.2, 0xffffff, 0.76)
+      .lineBetween(-12, -6, -8, -10).lineBetween(8, -10, 12, -5)
+      .lineBetween(-11, 7, -6, 12).lineBetween(7, 11, 12, 6);
+    graphics.fillStyle(CYAN, 0.2);
+    graphics.beginPath().moveTo(0, -7).lineTo(6, -3).lineTo(6, 4).lineTo(0, 8).lineTo(-6, 4).lineTo(-6, -3).closePath().fillPath();
+    graphics.lineStyle(1.5, 0xeaffff, 0.94);
+    graphics.beginPath().moveTo(0, -7).lineTo(6, -3).lineTo(6, 4).lineTo(0, 8).lineTo(-6, 4).lineTo(-6, -3).closePath().strokePath();
   }
 }
 

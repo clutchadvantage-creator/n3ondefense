@@ -20,6 +20,7 @@ import type { ModCardInstance, ModCategory, ModDefinition, ModRarity, RunProtoco
 import { AudioManager } from '../systems/AudioManager.ts';
 import { SaveSystem } from '../systems/SaveSystem.ts';
 import type { CosmeticOption } from '../types.ts';
+import { createModCollectionFrame } from '../ui/ModCollectionUi.ts';
 import { createButton, disableButton } from '../utils/ui.ts';
 
 interface OperatorGarageSceneData { returnScene?: SceneKeyValue }
@@ -45,6 +46,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
   private overlay: Phaser.GameObjects.Container | null = null;
+  private readonly overlayAnimatedTargets: Phaser.GameObjects.GameObject[] = [];
   private operatorPreviewRoot: Phaser.GameObjects.Container | null = null;
   private operatorPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
   private operatorPreviewLayout: { rect: GarageRect; compact: boolean } | null = null;
@@ -453,23 +455,40 @@ export class OperatorGarageScene extends Phaser.Scene {
     const columnWidth = Math.min(narrow ? (width - 40 - columnGap) * 0.5 : 620, (width - 64 - columnGap) * 0.5);
     const leftX = width / 2 - (columnWidth + columnGap) / 2;
     const rightX = width / 2 + (columnWidth + columnGap) / 2;
-    const panelTop = narrow ? 98 : 112;
+    const panelTop = narrow ? 108 : 120;
     const panelHeight = height - panelTop - 24;
 
     const summary = totalCost > 0
-      ? `CURRENT RUN FEE // ${totalCost.toLocaleString()} CREDITS  ·  CHARGED ONCE WHEN DEPLOYMENT STARTS`
-      : 'CURRENT RUN FEE // FREE  ·  STANDARD DROP AND CHALLENGE RULES';
-    root.add(this.add.text(width / 2, narrow ? 70 : 76, summary, {
+      ? `CURRENT RUN FEE // ${totalCost.toLocaleString()} CREDITS  //  CHARGED ONCE WHEN DEPLOYMENT STARTS`
+      : 'CURRENT RUN FEE // FREE  //  STANDARD DROP AND CHALLENGE RULES';
+    const summaryY = narrow ? 82 : 80;
+    const summaryWidth = Math.max(260, Math.min(width - 340, 1040));
+    const summaryRail = this.add.rectangle(width / 2, summaryY, summaryWidth, narrow ? 28 : 32, 0x071722, 0.94)
+      .setStrokeStyle(1, totalCost > 0 ? 0xffbd68 : 0x6effae, 0.34);
+    const summaryEdge = this.add.rectangle(width / 2 - summaryWidth / 2 + 5, summaryY, 3, narrow ? 20 : 24, totalCost > 0 ? 0xff5bcf : 0x55efff, 0.72);
+    const summaryLed = this.add.circle(width / 2 + summaryWidth / 2 - 15, summaryY, 3, totalCost > 0 ? 0xffbd68 : 0x6effae, 0.95);
+    root.add([summaryRail, summaryEdge, summaryLed]);
+    root.add(this.add.text(width / 2, summaryY, summary, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 13 : 17}px`, fontStyle: 'bold',
       color: totalCost > 0 ? '#ffd17f' : '#82ffc1', align: 'center'
-    }).setOrigin(0.5).setWordWrapWidth(width - 180, true).setMaxLines(2));
+    }).setOrigin(0.5).setWordWrapWidth(summaryWidth - 42, true).setMaxLines(2));
+    root.add(this.add.text(30, panelTop - 19, 'LOADOUT PROCUREMENT // TEMPORARY PARAMETERS', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 11}px`, color: '#69bdca', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0, 0.5));
+    root.add(this.add.text(width - 30, panelTop - 19, 'NEXT DEPLOYMENT LINK // STANDBY', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 11}px`, color: '#72ffad', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(1, 0.5));
 
     const createColumn = (centerX: number, title: string, accent: number): void => {
-      root.add(this.add.rectangle(centerX, panelTop, columnWidth, panelHeight, 0x091725, 0.92)
-        .setOrigin(0.5, 0).setStrokeStyle(2, accent, 0.58));
-      root.add(this.add.text(centerX, panelTop + 16, title, {
-        fontFamily: 'Orbitron, sans-serif', fontSize: `${narrow ? 14 : 19}px`, color: Phaser.Display.Color.IntegerToColor(accent).rgba, fontStyle: 'bold'
-      }).setOrigin(0.5, 0));
+      const frame = createModCollectionFrame(this, {
+        x: centerX - columnWidth / 2,
+        y: panelTop,
+        width: columnWidth,
+        height: panelHeight
+      }, title, accent);
+      const lowerRail = this.add.rectangle(centerX, panelTop + panelHeight - 8, columnWidth - 34, 2, accent, 0.24);
+      root.add([frame, lowerRail]);
+      this.overlayAnimatedTargets.push(...frame.list);
     };
     createColumn(leftX, 'SIGNAL // FOCUSED MOD HUNT', 0x55efff);
     createColumn(rightX, 'CONTRACT // ENGAGEMENT RULES', 0xff5bcf);
@@ -524,6 +543,8 @@ export class OperatorGarageScene extends Phaser.Scene {
         wordWrap: { width: columnWidth - 40, useAdvancedWrap: true }
       }).setOrigin(0.5, 0).setMaxLines(narrow ? 2 : 3));
     });
+    this.overlayAnimatedTargets.push(summaryLed);
+    this.tweens.add({ targets: summaryLed, alpha: { from: 0.25, to: 1 }, duration: 760, yoyo: true, repeat: -1 });
   }
 
   private showLibrary(): void {
@@ -788,6 +809,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.cosmeticPreviewColorTimer?.remove(false);
     this.cosmeticPreviewColorTimer = null;
     this.cosmeticPreviewColorTargets = [];
+    this.tweens.killTweensOf(this.overlayAnimatedTargets);
+    this.overlayAnimatedTargets.length = 0;
     this.overlay?.destroy(true);
     this.overlay = null;
   }

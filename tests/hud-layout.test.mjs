@@ -40,7 +40,8 @@ test('combat HUD uses one icon-led cyber deck with truthful resource and deploya
   }
   assert.match(hud, /\['fence', 'turret', 'mine', 'shield'\] as const/);
   for (const ability of ['fence', 'turret', 'mine']) assert.match(hud, new RegExp(`id === '${ability}'`));
-  assert.match(hud, /lineTo\(0, 14\).*lineTo\(-12, 6\)/s);
+  assert.match(hud, /Layered energy bubble with orbit segments and crackling core/);
+  assert.match(hud, /strokeCircle\(0, 0, 14\)/);
   assert.match(hud, /drawAbilitySegments/);
   assert.match(hud, /slot\.selected \? MAGENTA/);
   assert.match(arena, /fenceSlot\.count = this\.fences\.length/);

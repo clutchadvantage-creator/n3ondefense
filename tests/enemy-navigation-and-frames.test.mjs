@@ -19,6 +19,8 @@ test('robot frames are generated once in Boot and runtime combat colors remain a
   }
   assert.match(enemySource, /this\.setTint\(stats\.color\)/);
   assert.match(enemySource, /this\.body\?\.setSize\(stats\.size \* bodyScale/);
+  assert.match(enemySource, /ENEMY_VISUAL_SIZE_BONUS = 2/);
+  assert.match(enemySource, /setDisplaySize\(stats\.size \+ ENEMY_VISUAL_SIZE_BONUS/);
 });
 
 test('pathfinding resolves padded start and goal cells instead of falling back through walls', () => {

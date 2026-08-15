@@ -210,6 +210,12 @@ type MineExplosionPalette = readonly [core: number, primary: number, secondary: 
 const PLAYER_MINE_EXPLOSION_PALETTE: MineExplosionPalette = [0xffffff, 0xffa340, 0xff4e27, 0xff174f];
 const STAR_MINE_EXPLOSION_PALETTE: MineExplosionPalette = [0xf4ffff, COLORS.pink, COLORS.cyan, 0xff24d4];
 const ENEMY_NAVIGATION_PADDING = 22;
+const PICKUP_FLOAT_DRIFT_MIN = 12.5;
+const PICKUP_FLOAT_DRIFT_RANGE = 4.5;
+const PICKUP_FLOAT_MAX_SPEED = 20;
+const PICKUP_SEPARATION_PUSH = 0.2;
+const PICKUP_BOUNCE_TRANSFER = 0.5;
+const PICKUP_BOUNCE_KICK = 2;
 
 export class ArenaScene extends Phaser.Scene {
   private readonly state = new GameStateMachine(RoundState.PrePlant);
@@ -3154,8 +3160,8 @@ export class ArenaScene extends Phaser.Scene {
 
       const breezeX = Math.sin(now * 0.00072 + motion.phase) * 2.8;
       const breezeY = Math.cos(now * 0.00061 + motion.phase * 1.37) * 2.5;
-      motion.velocityX = Phaser.Math.Clamp((motion.velocityX + breezeX * dt) * Math.pow(0.994, dt * 60), -18, 18);
-      motion.velocityY = Phaser.Math.Clamp((motion.velocityY + breezeY * dt) * Math.pow(0.994, dt * 60), -18, 18);
+      motion.velocityX = Phaser.Math.Clamp((motion.velocityX + breezeX * dt) * Math.pow(0.994, dt * 60), -PICKUP_FLOAT_MAX_SPEED, PICKUP_FLOAT_MAX_SPEED);
+      motion.velocityY = Phaser.Math.Clamp((motion.velocityY + breezeY * dt) * Math.pow(0.994, dt * 60), -PICKUP_FLOAT_MAX_SPEED, PICKUP_FLOAT_MAX_SPEED);
 
       const previousX = pickup.sprite.x;
       const previousY = pickup.sprite.y;
@@ -3209,7 +3215,7 @@ export class ArenaScene extends Phaser.Scene {
         const distance = Math.sqrt(distanceSquared);
         const normalX = dx / distance;
         const normalY = dy / distance;
-        const push = (separationDistance - distance) * 0.17;
+        const push = (separationDistance - distance) * PICKUP_SEPARATION_PUSH;
         first.sprite.x -= normalX * push;
         first.sprite.y -= normalY * push;
         second.sprite.x += normalX * push;
@@ -3217,11 +3223,11 @@ export class ArenaScene extends Phaser.Scene {
 
         const firstNormalSpeed = firstMotion.velocityX * normalX + firstMotion.velocityY * normalY;
         const secondNormalSpeed = secondMotion.velocityX * normalX + secondMotion.velocityY * normalY;
-        const impulse = (secondNormalSpeed - firstNormalSpeed) * 0.42;
-        firstMotion.velocityX += normalX * impulse - normalX * 1.4;
-        firstMotion.velocityY += normalY * impulse - normalY * 1.4;
-        secondMotion.velocityX -= normalX * impulse - normalX * 1.4;
-        secondMotion.velocityY -= normalY * impulse - normalY * 1.4;
+        const impulse = (secondNormalSpeed - firstNormalSpeed) * PICKUP_BOUNCE_TRANSFER;
+        firstMotion.velocityX += normalX * impulse - normalX * PICKUP_BOUNCE_KICK;
+        firstMotion.velocityY += normalY * impulse - normalY * PICKUP_BOUNCE_KICK;
+        secondMotion.velocityX -= normalX * impulse - normalX * PICKUP_BOUNCE_KICK;
+        secondMotion.velocityY -= normalY * impulse - normalY * PICKUP_BOUNCE_KICK;
       }
     }
 
@@ -3719,7 +3725,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const motionSeed = Math.abs(x * 0.037 + y * 0.053 + type.length * 1.731);
     const driftAngle = motionSeed % (Math.PI * 2);
-    const driftSpeed = 10.5 + motionSeed % 4.5;
+    const driftSpeed = PICKUP_FLOAT_DRIFT_MIN + motionSeed % PICKUP_FLOAT_DRIFT_RANGE;
     this.pickupMotion.set(container, {
       velocityX: Math.cos(driftAngle) * driftSpeed,
       velocityY: Math.sin(driftAngle) * driftSpeed,
@@ -3740,7 +3746,7 @@ export class ArenaScene extends Phaser.Scene {
     const phase = Math.abs(x * 0.019 + y * 0.027) % (Math.PI * 2);
     this.fluxCorePickupVisuals.set(container, { glow, orb, electricity, color, phase, nextArcAt: 0 });
     const driftAngle = phase % (Math.PI * 2);
-    const driftSpeed = 10.5 + phase % 4.5;
+    const driftSpeed = PICKUP_FLOAT_DRIFT_MIN + phase % PICKUP_FLOAT_DRIFT_RANGE;
     this.pickupMotion.set(container, {
       velocityX: Math.cos(driftAngle) * driftSpeed,
       velocityY: Math.sin(driftAngle) * driftSpeed,
