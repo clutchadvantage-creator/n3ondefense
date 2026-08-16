@@ -1,4 +1,5 @@
 import { SeededRandom } from '../systems/SeededRandom.ts';
+import { MODE_BALANCE, type RunModeFamily } from './modeBalance.ts';
 
 export type BossArchetype = 'artillery' | 'storm-mage' | 'void-brawler';
 
@@ -83,11 +84,15 @@ export const isBossRound = (completedRound: number): boolean =>
 export const getBossTier = (completedRound: number): number =>
   Math.max(1, Math.floor(Math.max(1, completedRound) / BOSS_BALANCE.intervalRounds));
 
-export const getBossHealth = (completedRound: number): number =>
-  Math.min(BOSS_BALANCE.maximumHealth, BOSS_BALANCE.baseHealth + (getBossTier(completedRound) - 1) * BOSS_BALANCE.healthPerTier);
+export const getBossHealth = (completedRound: number, family: RunModeFamily): number =>
+  Math.round(
+    Math.min(BOSS_BALANCE.maximumHealth, BOSS_BALANCE.baseHealth + (getBossTier(completedRound) - 1) * BOSS_BALANCE.healthPerTier)
+      * MODE_BALANCE[family].bossHealthMultiplier
+  );
 
-export const getBossDamageMultiplier = (completedRound: number): number =>
-  Math.min(BOSS_BALANCE.maximumDamageMultiplier, 1 + (getBossTier(completedRound) - 1) * BOSS_BALANCE.damageMultiplierPerTier);
+export const getBossDamageMultiplier = (completedRound: number, family: RunModeFamily): number =>
+  Math.min(BOSS_BALANCE.maximumDamageMultiplier, 1 + (getBossTier(completedRound) - 1) * BOSS_BALANCE.damageMultiplierPerTier)
+    * MODE_BALANCE[family].bossDamageMultiplier;
 
 export const getBossRewards = (completedRound: number): { credits: number; coreTokens: number; plasmaChips: number } => {
   const tier = getBossTier(completedRound);

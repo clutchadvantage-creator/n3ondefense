@@ -44,6 +44,7 @@ import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { GameplayPointerLock } from '../input/GameplayPointerLock';
 import { MineSalvoInput, type MineSalvoInputResolution } from '../input/MineSalvoInput.ts';
 import { DEFAULT_AIM_SETTINGS, normalizeAimSettings, type AimSettings } from '../config/interfaceSettings';
+import { MODE_BALANCE, applyEnemyDamageMode, applyEnemyHealthMode, getEnemyDefuseDuration, getModeSpawnCadence, type RunModeFamily } from '../config/modeBalance.ts';
 import { ARENA_GENERATION_CONFIG } from '../config/arenaGeneration.ts';
 import { drawReticle } from '../ui/ReticleRenderer';
 import { createPauseMenuView, type PauseMenuView } from '../ui/PauseMenuUi.ts';
@@ -832,7 +833,8 @@ export class ArenaScene extends Phaser.Scene {
       (damage) => {
         GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
       },
-      (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop()
+      (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop(),
+      this.currentModeBalance().hazardDamageMultiplier
     );
     this.bombletHazard = new BombletHazardSystem(
       this,
@@ -853,7 +855,8 @@ export class ArenaScene extends Phaser.Scene {
           y,
           blastRadius * GAS_HAZARD_BALANCE.bombletTunnelRadiusMultiplier
         );
-      }
+      },
+      this.currentModeBalance().hazardDamageMultiplier
     );
     if (def.round >= GAS_HAZARD_BALANCE.unlockRound) {
       this.gasHazard = new GasHazardSystem(
@@ -1148,7 +1151,11 @@ export class ArenaScene extends Phaser.Scene {
       if (this.bossFlowPhase === 'combat') {
         const bossHazardTargets = this.getHazardDamageTargets();
         const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
-        this.gasHazard?.update(now, this.player, this.modRuntime.multiplier('gasDamageTaken'));
+        this.gasHazard?.update(
+          now,
+          this.player,
+          this.modRuntime.multiplier('gasDamageTaken') * this.currentModeBalance().hazardDamageMultiplier
+        );
         if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
         const gasSuppressesLasers = this.gasHazard?.isLaserSuppressed(now) ?? false;
         this.fluxCores?.update(now, this.player, gasSuppressesLasers);
@@ -1191,7 +1198,11 @@ export class ArenaScene extends Phaser.Scene {
 
     const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
     const hazardTargets = this.getHazardDamageTargets();
-    this.gasHazard?.update(now, this.player, this.modRuntime.multiplier('gasDamageTaken'));
+    this.gasHazard?.update(
+      now,
+      this.player,
+      this.modRuntime.multiplier('gasDamageTaken') * this.currentModeBalance().hazardDamageMultiplier
+    );
     const gasSuppressesLasers = this.gasHazard?.isLaserSuppressed(now) ?? false;
     this.fluxCores?.update(now, this.player, gasSuppressesLasers);
     const fluxSuppressesLasers = this.fluxCores?.isLaserSuppressed(now) ?? false;
@@ -1677,7 +1688,14 @@ export class ArenaScene extends Phaser.Scene {
     const concurrentPressure = getConcurrentSpawnPressure(profile, activeSites.length);
     const contractCadence = defensePhase ? getContract(this.contract)?.spawnCadenceMultiplier ?? 1 : 1;
     const bombsiteCadence = defensePhase ? this.bombsiteMods.spawnCadenceMultiplier() : 1;
-    const cadenceMs = Math.round((defensePhase ? profile.defenseCadenceMs : profile.prePlantCadenceMs) * phaseMultiplier * concurrentPressure.cadenceMultiplier * contractCadence * bombsiteCadence);
+    const cadenceMs = Math.round(getModeSpawnCadence(
+      (defensePhase ? profile.defenseCadenceMs : profile.prePlantCadenceMs)
+        * phaseMultiplier
+        * concurrentPressure.cadenceMultiplier
+        * contractCadence
+        * bombsiteCadence,
+      this.currentModeFamily()
+    ));
     const { activeCountCap, activeWeightCap } = concurrentPressure;
 
     if (now < this.nextSpawnAt) return;
@@ -1752,9 +1770,15 @@ export class ArenaScene extends Phaser.Scene {
 
     const stats = {
       ...base,
-      hp: Math.round(base.hp * (1 + (curve.healthMultiplier - 1) * phaseScale) * (getContract(this.contract)?.enemyHealthMultiplier ?? 1)),
-      speed: Math.round(base.speed * curve.speedMultiplier),
-      damage: Math.round(base.damage * (1 + (curve.damageMultiplier - 1) * phaseScale))
+      hp: Math.round(applyEnemyHealthMode(
+        base.hp * (1 + (curve.healthMultiplier - 1) * phaseScale) * (getContract(this.contract)?.enemyHealthMultiplier ?? 1),
+        this.currentModeFamily()
+      )),
+      speed: Math.round(base.speed * curve.speedMultiplier * this.currentModeBalance().enemySpeedMultiplier),
+      damage: Math.round(applyEnemyDamageMode(
+        base.damage * (1 + (curve.damageMultiplier - 1) * phaseScale),
+        this.currentModeFamily()
+      ))
     };
 
     const enemyTexture = ENEMY_ROBOT_FRAMES[type].textureKey;
@@ -1838,6 +1862,10 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     let anyDefusing = false;
+    const requiredDefuseMs = getEnemyDefuseDuration(
+      OBJECTIVE_CONFIG.defuseRequiredMs,
+      this.currentModeFamily()
+    );
     for (const site of activeSites) {
       const activeDefusers = activeDefusersBySite.get(site.id) ?? 0;
       if (activeDefusers > 0) {
@@ -1848,7 +1876,7 @@ export class ArenaScene extends Phaser.Scene {
           site,
           this.activeDefuserEnemiesBySite.get(site.id) ?? [],
           dt * 1000,
-          OBJECTIVE_CONFIG.defuseRequiredMs,
+          requiredDefuseMs,
           now,
           this.player.weapon.damage * this.player.damageMultiplier,
           this.enemies,
@@ -1869,7 +1897,7 @@ export class ArenaScene extends Phaser.Scene {
           resolution.activeDefusers
         );
         if (!shieldBlocked
-          && this.bombSites.applyDefuse(site, requestedProgressMs, OBJECTIVE_CONFIG.defuseRequiredMs)) {
+          && this.bombSites.applyDefuse(site, requestedProgressMs, requiredDefuseMs)) {
           GameplayTelemetryRecorder.recordDefuseCompleted(site.id);
           this.triggerDefeat('bombDefused');
           return;
@@ -2224,7 +2252,7 @@ export class ArenaScene extends Phaser.Scene {
       owner: enemy,
       hp: TANK_HOMING_MISSILE_BALANCE.health,
       lifeMs: TANK_HOMING_MISSILE_BALANCE.lifetimeMs,
-      damage: TANK_HOMING_MISSILE_BALANCE.damage,
+      damage: applyEnemyDamageMode(TANK_HOMING_MISSILE_BALANCE.damage, this.currentModeFamily()),
       detonated: false,
       nextTrailAt: now
     });
@@ -3948,7 +3976,7 @@ export class ArenaScene extends Phaser.Scene {
         enemy.y,
         COLORS.pink,
         0,
-        62,
+        applyEnemyDamageMode(62, this.currentModeFamily()),
         170,
         undefined,
         STAR_DEATH_MINE_VISUAL_THEME
@@ -3963,7 +3991,15 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private isOverdriveProtocol(): boolean {
-    return RUN_PROTOCOLS[this.protocol].family === 'overdrive';
+    return this.currentModeFamily() === 'overdrive';
+  }
+
+  private currentModeFamily(): RunModeFamily {
+    return RUN_PROTOCOLS[this.protocol].family;
+  }
+
+  private currentModeBalance() {
+    return MODE_BALANCE[this.currentModeFamily()];
   }
 
   private destroyEnemyColliders(enemy: Enemy): void {
@@ -4657,7 +4693,8 @@ export class ArenaScene extends Phaser.Scene {
       (damage) => {
         GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
       },
-      (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop()
+      (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop(),
+      this.currentModeBalance().hazardDamageMultiplier
     );
     this.bombletHazard = new BombletHazardSystem(
       this,
@@ -4678,7 +4715,8 @@ export class ArenaScene extends Phaser.Scene {
           y,
           blastRadius * GAS_HAZARD_BALANCE.bombletTunnelRadiusMultiplier
         );
-      }
+      },
+      this.currentModeBalance().hazardDamageMultiplier
     );
     if (this.bossRound >= GAS_HAZARD_BALANCE.unlockRound) {
       this.gasHazard = new GasHazardSystem(
@@ -4747,7 +4785,8 @@ export class ArenaScene extends Phaser.Scene {
         onDamaged: (damage, source) => GameplayTelemetryRecorder.recordBossDamage(source, damage),
         onAttackCast: (attack) => GameplayTelemetryRecorder.recordBossAttackCast(attack),
         onDefeated: () => this.completeBossFight()
-      }
+      },
+      this.currentModeFamily()
     );
     GameplayTelemetryRecorder.startBoss(archetype, this.bossEncounter.boss.maxHp);
     this.bossWallCollider?.destroy();

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossDamageMultiplier, type BossArchetype } from '../config/bossBalance';
+import type { RunModeFamily } from '../config/modeBalance.ts';
 import type { RectSpec } from '../types';
 import type { Player } from '../entities/Player';
 import { SeededRandom } from '../systems/SeededRandom';
@@ -89,11 +90,12 @@ export class BossEncounter {
     spawn: { x: number; y: number },
     private readonly bounds: RectSpec,
     private readonly isBlocked: (x: number, y: number) => boolean,
-    private readonly callbacks: BossEncounterCallbacks
+    private readonly callbacks: BossEncounterCallbacks,
+    modeFamily: RunModeFamily
   ) {
     this.archetype = archetype;
     this.random = new SeededRandom((seed ^ Math.imul(completedRound, 0x9e3779b1) ^ 0xb055cafe) >>> 0);
-    this.damageMultiplier = getBossDamageMultiplier(completedRound);
+    this.damageMultiplier = getBossDamageMultiplier(completedRound, modeFamily);
     this.boss = new Boss(
       scene,
       spawn.x,
@@ -101,7 +103,8 @@ export class BossEncounter {
       archetype,
       completedRound,
       (damage, source) => this.handleBossDamage(damage, source),
-      () => callbacks.onDefeated()
+      () => callbacks.onDefeated(),
+      modeFamily
     );
 
     const width = Math.min(900, scene.scale.width - 80);

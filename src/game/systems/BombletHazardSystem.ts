@@ -42,7 +42,8 @@ export class BombletHazardSystem {
       y: number,
       blastRadius: number,
       shouldPlaySound: boolean
-    ) => void
+    ) => void,
+    private readonly playerDamageMultiplier = 1
   ) {
     this.random = new SeededRandom((seed ^ Math.imul(round + 17, 0x9e3779b1) ^ 0xb04b1e7) >>> 0);
     this.nextStrikeAt = scene.time.now + BOMBLET_HAZARD_BALANCE.initialDelayMs + this.random.int(0, 1200);
@@ -206,7 +207,8 @@ export class BombletHazardSystem {
     const playerDy = player.y - target.y;
     const playerRadius = config.blastRadius + 10;
     if (playerDx * playerDx + playerDy * playerDy <= playerRadius * playerRadius) {
-      const damage = getScaledHazardDamage(config.playerDamageBase, this.round, config.maximumPlayerDamage);
+      const damage = getScaledHazardDamage(config.playerDamageBase, this.round, config.maximumPlayerDamage)
+        * this.playerDamageMultiplier;
       if (player.takeDamage(damage)) this.onPlayerDamaged?.(damage);
     }
     const enemyDamage = getScaledHazardDamage(config.enemyDamageBase, this.round, config.maximumEnemyDamage);

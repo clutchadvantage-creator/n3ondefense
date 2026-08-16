@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossHealth, type BossArchetype } from '../config/bossBalance';
+import type { RunModeFamily } from '../config/modeBalance.ts';
 
 export type BossDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard';
 
@@ -21,12 +22,13 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     archetype: BossArchetype,
     completedRound: number,
     private readonly onDamaged: (damage: number, source: BossDamageSource) => void,
-    private readonly onDefeated: () => void
+    private readonly onDefeated: () => void,
+    modeFamily: RunModeFamily
   ) {
     const definition = BOSS_ARCHETYPES[archetype];
     super(scene, x, y, definition.texture);
     this.archetype = archetype;
-    this.maxHp = getBossHealth(completedRound);
+    this.maxHp = getBossHealth(completedRound, modeFamily);
     this.hp = this.maxHp;
     scene.add.existing(this);
     scene.physics.add.existing(this);
