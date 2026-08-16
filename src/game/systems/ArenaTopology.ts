@@ -30,13 +30,13 @@ const border = (b: RectSpec): RectSpec[] => {
     { x: b.x, y: b.y, w: t, h: b.h }, { x: b.x + b.w - t, y: b.y, w: t, h: b.h }
   ];
 };
-const ringWalls = (b: RectSpec, x: number, y: number, w: number, h: number): RectSpec[] => ArenaStructureGrammar.ring(
+const ringWalls = (b: RectSpec, x: number, y: number, w: number, h: number, gapRatio = .24): RectSpec[] => ArenaStructureGrammar.ring(
   b.x+b.w*x,
   b.y+b.h*y,
   b.w*w,
   b.h*h,
   Math.max(20,b.h*.018),
-  .24,
+  gapRatio,
   CONFIG.minimumCorridorWidth
 );
 const steppedDiagonal = (b: RectSpec, x: number, y: number, length: number, rising: boolean): RectSpec[] =>
@@ -57,8 +57,8 @@ const openField: Generator = (r, b) => {
 };
 const islands: Generator = (r, b) => {
   const centers = [[.22,.25],[.68,.2],[.3,.68],[.76,.7]] as const;
-  const placements=centers.map(([x,y])=>({x:x+r.float(-.02,.02),y:y+r.float(-.02,.02),w:.18,h:.22}));
-  const walls = placements.flatMap((entry)=>ringWalls(b,entry.x,entry.y,entry.w,entry.h));
+  const placements=centers.map(([x,y])=>({x:x+r.float(-.035,.035),y:y+r.float(-.035,.035),w:r.float(.15,.2),h:r.float(.18,.24)}));
+  const walls = placements.flatMap((entry)=>ringWalls(b,entry.x,entry.y,entry.w,entry.h,r.float(.24,.34)));
   return base('islands', b, walls, [...placements.map((entry)=>point(b,entry.x+entry.w/2,entry.y+entry.h/2)),point(b,.5,.48)], [point(b,.5,.48)], [point(b,.5,.08),point(b,.94,.5),point(b,.5,.92),point(b,.06,.5)], 4, 4, 4, { horizontal:.45, vertical:.45, diagonal:.1 });
 };
 const fortress: Generator = (r, b) => {
@@ -67,15 +67,19 @@ const fortress: Generator = (r, b) => {
   walls.push(hWall(b,.36+ox,.39+oy,.28),vWall(b,.49+ox,.29+oy,.22));
   return base('fortress', b, walls, [point(b,.39+ox,.31+oy),point(b,.62+ox,.64+oy),point(b,.15,.72),point(b,.86,.27),point(b,.16,.25)], [point(b,.14,.5)], [point(b,.93,.12),point(b,.93,.5),point(b,.86,.9),point(b,.5,.92)], 1, 4, 2, { horizontal:.5, vertical:.45, diagonal:.05 });
 };
-const ring: Generator = (_r, b) => {
-  const walls = ringWalls(b,.2,.16,.6,.67);
-  return base('ring', b, walls, [point(b,.5,.5),point(b,.12,.5),point(b,.88,.5),point(b,.5,.1),point(b,.5,.9)], [point(b,.5,.5)], [point(b,.05,.2),point(b,.95,.2),point(b,.95,.8),point(b,.05,.8)], 1, 4, 2, { horizontal:.48, vertical:.48, diagonal:.04 });
+const ring: Generator = (r, b) => {
+  const width=r.float(.53,.67),height=r.float(.58,.72);
+  const x=.5-width/2+r.float(-.045,.045),y=.5-height/2+r.float(-.04,.04);
+  const walls = ringWalls(b,x,y,width,height,r.float(.22,.34));
+  return base('ring', b, walls, [point(b,x+width/2,y+height/2),point(b,.12,.5),point(b,.88,.5),point(b,.5,.1),point(b,.5,.9)], [point(b,x+width/2,y+height/2)], [point(b,.05,.2),point(b,.95,.2),point(b,.95,.8),point(b,.05,.8)], 1, 4, 2, { horizontal:.48, vertical:.48, diagonal:.04 });
 };
 const split: Generator = (r, b) => {
   const vertical = r.bool();
+  const axis=.49+r.float(-.055,.055);
+  const firstLength=r.float(.25,.32),middleStart=r.float(.4,.45),middleLength=r.float(.17,.23),lastStart=r.float(.74,.79);
   const walls: RectSpec[] = vertical
-    ? [vWall(b,.49,.02,.29,.026),vWall(b,.49,.42,.22,.026),vWall(b,.49,.76,.22,.026)]
-    : [hWall(b,.02,.49,.3,.026),hWall(b,.43,.49,.2,.026),hWall(b,.75,.49,.23,.026)];
+    ? [vWall(b,axis,.02,firstLength,.026),vWall(b,axis,middleStart,middleLength,.026),vWall(b,axis,lastStart,.98-lastStart,.026)]
+    : [hWall(b,.02,axis,firstLength,.026),hWall(b,middleStart,axis,middleLength,.026),hWall(b,lastStart,axis,.98-lastStart,.026)];
   const objectives = vertical ? [point(b,.23,.3),point(b,.76,.68),point(b,.23,.75),point(b,.76,.28),point(b,.72,.86)] : [point(b,.25,.23),point(b,.72,.76),point(b,.75,.24),point(b,.23,.73),point(b,.88,.86)];
   const players = vertical ? [point(b,.2,.5)] : [point(b,.5,.2)];
   return base('split', b, walls, objectives, players, [point(b,.07,.1),point(b,.93,.12),point(b,.91,.88),point(b,.08,.9)], 1, 2, 2, vertical ? {horizontal:.05,vertical:.9,diagonal:.05}:{horizontal:.9,vertical:.05,diagonal:.05});
@@ -87,7 +91,7 @@ const hubSpoke: Generator = (r, b) => {
 };
 const canyon: Generator = (r, b) => {
   const flip=r.bool();
-  const heights=(flip?[.27,.18,.24,.12,.18,.12]:[.12,.18,.12,.24,.18,.27]);
+  const heights=(flip?[.27,.18,.24,.12,.18,.12]:[.12,.18,.12,.24,.18,.27]).map((height)=>height+r.float(-.025,.025));
   const walls:RectSpec[]=[];
   const routes:PointSpec[]=[];
   heights.forEach((upperY,index)=>{const x=.04+index*.155;walls.push(hWall(b,x,upperY,.14,.022),hWall(b,x,upperY+.3,.14,.022));routes.push(point(b,x+.07,upperY+.16));});
@@ -104,8 +108,9 @@ const maze: Generator = (r, b) => {
 };
 const chambers: Generator = (r, b) => {
   const chambers = [[.06,.08,.3,.32],[.56,.08,.37,.26],[.1,.58,.35,.32],[.62,.52,.28,.39]] as const;
-  const walls = chambers.flatMap(([x,y,w,h])=>ringWalls(b,x+r.float(-.015,.015),y,w,h));
-  return base('chambers', b, walls, [...chambers.map(([x,y,w,h])=>point(b,x+w/2,y+h/2)),point(b,.52,.46)], [point(b,.5,.46)], [point(b,.5,.05),point(b,.95,.45),point(b,.5,.95),point(b,.05,.48)], 4, 6, 4, {horizontal:.48,vertical:.48,diagonal:.04});
+  const placements=chambers.map(([x,y,w,h])=>({x:x+r.float(-.025,.025),y:y+r.float(-.018,.018),w:w*r.float(.9,1.08),h:h*r.float(.9,1.08)}));
+  const walls = placements.flatMap((entry)=>ringWalls(b,entry.x,entry.y,entry.w,entry.h,r.float(.24,.32)));
+  return base('chambers', b, walls, [...placements.map((entry)=>point(b,entry.x+entry.w/2,entry.y+entry.h/2)),point(b,.52,.46)], [point(b,.5,.46)], [point(b,.5,.05),point(b,.95,.45),point(b,.5,.95),point(b,.05,.48)], 4, 6, 4, {horizontal:.48,vertical:.48,diagonal:.04});
 };
 const asymmetricClusters: Generator = (r,b) => {
   const walls: RectSpec[] = [];

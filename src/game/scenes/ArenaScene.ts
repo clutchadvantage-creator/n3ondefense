@@ -865,7 +865,7 @@ export class ArenaScene extends Phaser.Scene {
     this.state.set(RoundState.PrePlant);
     this.hasLiveRoundObjects = true;
 
-    this.showBanner(`ROUND ${def.round} - ${def.template.toUpperCase()}\nSeed ${def.seed}`);
+    this.showBanner(`ROUND ${def.round} - ${this.layout.template.toUpperCase()}\nSeed ${def.seed}`);
   }
 
   private drawProceduralArena(layout: ArenaLayout): void {

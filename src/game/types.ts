@@ -109,6 +109,11 @@ export interface ArenaGenerationMetadata {
   orientationBias: { horizontal: number; vertical: number; diagonal: number };
   occupancy: number[];
   similarityScore: number;
+  fingerprintHash?: string;
+  closestHistoryAge?: number;
+  similarityRejected?: number;
+  validationRejected?: number;
+  fallbackUsed?: boolean;
   validation: string[];
 }
 

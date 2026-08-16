@@ -1,12 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ARENA_ARCHETYPES, ARENA_GENERATION_CONFIG } from '../src/game/config/arenaGeneration.ts';
-import { compareArenaFingerprints, createArenaFingerprint } from '../src/game/systems/ArenaFingerprint.ts';
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../src/game/config/constants.ts';
+import { ArenaHistory, compareArenaFingerprints, createArenaFingerprint } from '../src/game/systems/ArenaFingerprint.ts';
+import { createSafeArenaFallbacks } from '../src/game/systems/ArenaFallbacks.ts';
 import { generateArenaTopology } from '../src/game/systems/ArenaTopology.ts';
 import { validateTopologyDraft } from '../src/game/systems/ArenaTopologyValidator.ts';
 import { getConcurrentSpawnPressure, getSpawnProfile } from '../src/game/config/balance/index.ts';
 import { repairNarrowPassages, createsNarrowPassage } from '../src/game/systems/ArenaTraversal.ts';
 import { ArenaValidator } from '../src/game/systems/ArenaValidator.ts';
+
+const makeFingerprint = (archetype, seed, wallOffset = 0) => {
+  const draft = generateArenaTopology(archetype, seed);
+  const blockers = draft.walls.map((wall, index) => index < 4 || wallOffset === 0
+    ? wall
+    : { ...wall, x: wall.x + wallOffset });
+  return createArenaFingerprint({
+    archetype,
+    bounds: draft.bounds,
+    blockers,
+    bombSites: draft.objectiveCandidates.slice(0, 5),
+    enemySpawns: draft.enemySpawns,
+    attempt: 1,
+    majorStructureCount: draft.majorStructureCount,
+    chokePointCount: draft.chokePointCount,
+    connectedRegionCount: draft.connectedRegionCount,
+    orientationBias: draft.orientationBias,
+    validation: []
+  });
+};
 
 test('every arena archetype is deterministic and exposes a distinct macro topology', () => {
   const silhouettes = new Set();
@@ -34,15 +56,121 @@ test('representative topology objectives and enemy entrances remain connected', 
 });
 
 test('fingerprints compare resulting occupancy rather than seeds', () => {
-  const make = (archetype, seed) => {
-    const draft = generateArenaTopology(archetype, seed);
-    return createArenaFingerprint({ archetype, bounds: draft.bounds, blockers: draft.walls, bombSites: draft.objectiveCandidates.slice(0, 4), enemySpawns: draft.enemySpawns, attempt: 1, majorStructureCount: draft.majorStructureCount, chokePointCount: draft.chokePointCount, connectedRegionCount: draft.connectedRegionCount, orientationBias: draft.orientationBias, validation: [] });
-  };
-  const maze = make('maze', 1234);
-  const sameMaze = make('maze', 1234);
-  const open = make('open-field', 1234);
+  const maze = makeFingerprint('maze', 1234);
+  const sameMaze = makeFingerprint('maze', 1234);
+  const open = makeFingerprint('open-field', 1234);
   assert.ok(compareArenaFingerprints(maze, sameMaze) > 0.999999);
   assert.ok(compareArenaFingerprints(maze, open) < ARENA_GENERATION_CONFIG.similarityThreshold);
+});
+
+test('recent arena history rejects exact and near-identical layouts', () => {
+  const history = new ArenaHistory();
+  const original = makeFingerprint('maze', 1234);
+  history.add(original);
+
+  const exact = history.assess(makeFingerprint('maze', 1234));
+  assert.equal(exact.reject, true);
+  assert.equal(exact.exactPrevious, true);
+
+  const shifted = makeFingerprint('maze', 1234, 40);
+  assert.notEqual(shifted.hash, original.hash);
+  assert.ok(compareArenaFingerprints(original, shifted) > 0.9);
+  assert.equal(history.assess(shifted).reject, true);
+});
+
+test('same archetype candidates remain eligible when their structures are genuinely different', () => {
+  const history = new ArenaHistory();
+  const first = makeFingerprint('split', 1);
+  const different = makeFingerprint('split', 261);
+  history.add(first);
+  assert.ok(compareArenaFingerprints(first, different) < 0.75);
+  assert.equal(history.assess(different).reject, false);
+});
+
+test('an extreme-open arena forces the next choice toward a structured archetype', () => {
+  const history = new ArenaHistory();
+  history.add(makeFingerprint('open-field', 1));
+  const repeat = history.assess(makeFingerprint('open-field', 2));
+  assert.equal(repeat.reject, true);
+  assert.equal(repeat.openRepeat, true);
+
+  const ordered = history.orderArchetypes('open-field', ['open-field', 'maze', 'chambers'], 9876);
+  assert.notEqual(ordered[0], 'open-field');
+});
+
+test('older layouts remain protected and history stays strictly bounded', () => {
+  const history = new ArenaHistory();
+  const original = makeFingerprint('maze', 1234);
+  history.add(original);
+  const fillers = ['open-field', 'ring', 'chambers', 'canyon', 'islands', 'crossroads'];
+  fillers.forEach((archetype, index) => history.add(makeFingerprint(archetype, 5000 + index * 97)));
+  assert.equal(history.recent().length, ARENA_GENERATION_CONFIG.recentFingerprintCount);
+
+  const recurrence = history.assess(makeFingerprint('maze', 1234));
+  assert.equal(recurrence.reject, true);
+  assert.equal(recurrence.exact, true);
+  assert.equal(recurrence.closestHistoryAge, ARENA_GENERATION_CONFIG.recentFingerprintCount - 1);
+
+  const evolvedRecurrence = history.assess(makeFingerprint('maze', 1234, 140));
+  assert.ok(evolvedRecurrence.score > 0.9);
+  assert.equal(evolvedRecurrence.closestHistoryAge, ARENA_GENERATION_CONFIG.recentFingerprintCount - 1);
+  assert.equal(evolvedRecurrence.reject, false);
+
+  history.add(makeFingerprint('perimeter', 9001));
+  assert.equal(history.recent().length, ARENA_GENERATION_CONFIG.recentFingerprintCount);
+  assert.equal(history.recent().includes(original), false);
+});
+
+test('emergency fallbacks are diverse, fully traversable, and preserve requested site count', () => {
+  const fallbacks = createSafeArenaFallbacks(4444, 30, 5);
+  const hashes = new Set();
+  const archetypes = new Set();
+  for (const fallback of fallbacks) {
+    const draft = {
+      archetype: fallback.archetype,
+      bounds: fallback.bounds,
+      walls: fallback.walls,
+      objectiveCandidates: fallback.bombSites,
+      playerCandidates: [fallback.playerSpawn],
+      enemySpawns: fallback.enemySpawns,
+      majorStructureCount: fallback.majorStructureCount,
+      chokePointCount: fallback.chokePointCount,
+      connectedRegionCount: fallback.connectedRegionCount,
+      orientationBias: fallback.orientationBias
+    };
+    assert.equal(validateTopologyDraft(draft, fallback.bombSites).valid, true, fallback.id);
+    assert.equal(fallback.bombSites.length, 5);
+    assert.equal(ArenaValidator.validateDetailed({
+      seed: 4444,
+      template: fallback.archetype,
+      theme: {},
+      walls: fallback.walls,
+      obstacles: [],
+      playerSpawn: fallback.playerSpawn,
+      enemySpawns: fallback.enemySpawns,
+      bombSites: fallback.bombSites,
+      decorativeNeon: [],
+      generation: {}
+    }, WORLD_WIDTH, WORLD_HEIGHT).valid, true, `${fallback.id} failed full traversal validation`);
+    const fingerprint = createArenaFingerprint({
+      archetype: fallback.archetype,
+      bounds: fallback.bounds,
+      blockers: fallback.walls,
+      bombSites: fallback.bombSites,
+      enemySpawns: fallback.enemySpawns,
+      attempt: 1,
+      majorStructureCount: fallback.majorStructureCount,
+      chokePointCount: fallback.chokePointCount,
+      connectedRegionCount: fallback.connectedRegionCount,
+      orientationBias: fallback.orientationBias,
+      validation: []
+    });
+    hashes.add(fingerprint.hash);
+    archetypes.add(fallback.archetype);
+  }
+  assert.equal(fallbacks.length, ARENA_GENERATION_CONFIG.fallbackVariantCount);
+  assert.ok(hashes.size >= 4);
+  assert.ok(archetypes.size >= 4);
 });
 
 test('concurrent bomb pressure scales modestly and monotonically', () => {
