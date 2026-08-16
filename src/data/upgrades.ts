@@ -2,13 +2,13 @@ import type { UpgradeDefinition } from '../game/types.ts';
 
 export const UPGRADE_DEFINITIONS: UpgradeDefinition[] = [
   { id: 'player.maxHealth', category: 'player', label: 'Max Health', description: '+10 max HP', maxLevel: 10, baseCost: 75, growth: 1.26, effectPerLevel: 10 },
-  { id: 'player.moveSpeed', category: 'player', label: 'Move Speed', description: '+7 speed', maxLevel: 10, baseCost: 90, growth: 1.27, effectPerLevel: 7 },
+  { id: 'player.moveSpeed', category: 'player', label: 'Move Speed', description: '+9 speed', maxLevel: 10, baseCost: 90, growth: 1.27, effectPerLevel: 9 },
   { id: 'player.dashCooldown', category: 'player', label: 'Dash Cooldown', description: '-120ms dash cooldown', maxLevel: 8, baseCost: 110, growth: 1.3, effectPerLevel: -120 },
-  { id: 'player.dashDistance', category: 'player', label: 'Dash Distance', description: '+6% dash distance', maxLevel: 8, baseCost: 120, growth: 1.29, effectPerLevel: 0.06 },
+  { id: 'player.dashDistance', category: 'player', label: 'Dash Distance', description: '+8% dash distance', maxLevel: 8, baseCost: 120, growth: 1.29, effectPerLevel: 0.08 },
   { id: 'player.pickupRadius', category: 'player', label: 'Pickup Radius', description: '+7 pickup radius', maxLevel: 8, baseCost: 80, growth: 1.25, effectPerLevel: 7 },
-  { id: 'player.shieldDuration', category: 'player', label: 'Shield Duration', description: '+0.275s shield duration', maxLevel: 8, baseCost: 145, growth: 1.31, effectPerLevel: 275 },
+  { id: 'player.shieldDuration', category: 'player', label: 'Shield Duration', description: '+0.35s shield duration', maxLevel: 8, baseCost: 145, growth: 1.31, effectPerLevel: 350 },
   { id: 'player.energyMax', category: 'player', label: 'Energy Capacity', description: '+5 max energy', maxLevel: 10, baseCost: 100, growth: 1.27, effectPerLevel: 5 },
-  { id: 'player.energyRegen', category: 'player', label: 'Energy Regen', description: '+0.1 energy/s', maxLevel: 10, baseCost: 125, growth: 1.29, effectPerLevel: 0.1 },
+  { id: 'player.energyRegen', category: 'player', label: 'Energy Regen', description: '+0.14 energy/s', maxLevel: 10, baseCost: 125, growth: 1.29, effectPerLevel: 0.14 },
 
   { id: 'weapon.damage', category: 'weapon', label: 'Weapon Damage', description: '+2 damage', maxLevel: 10, baseCost: 125, growth: 1.3, effectPerLevel: 2 },
   { id: 'weapon.fireRate', category: 'weapon', label: 'Weapon Fire Rate', description: '+0.4 shots/s', maxLevel: 10, baseCost: 160, growth: 1.31, effectPerLevel: 0.4 },

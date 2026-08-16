@@ -226,6 +226,7 @@ export class Hud {
   private readonly healthLabel: Phaser.GameObjects.Text;
   private readonly healthTrack: Phaser.GameObjects.Rectangle;
   private readonly healthFill: Phaser.GameObjects.Rectangle;
+  private readonly overhealthFill: Phaser.GameObjects.Rectangle;
   private readonly healthReadyShine: Phaser.GameObjects.Rectangle;
   private readonly healthValue: Phaser.GameObjects.Text;
   private readonly energyIcon: Phaser.GameObjects.Graphics;
@@ -233,6 +234,7 @@ export class Hud {
   private readonly energyLabel: Phaser.GameObjects.Text;
   private readonly energyTrack: Phaser.GameObjects.Rectangle;
   private readonly energyFill: Phaser.GameObjects.Rectangle;
+  private readonly overchargeFill: Phaser.GameObjects.Rectangle;
   private readonly energyValue: Phaser.GameObjects.Text;
 
   private readonly roundLabel: Phaser.GameObjects.Text;
@@ -261,6 +263,8 @@ export class Hud {
   private previousEnergy: number | null = null;
   private healthEmphasisUntil = 0;
   private energyEmphasisUntil = 0;
+  private overhealthActive = false;
+  private overchargeActive = false;
   private lowHealthPulse: Phaser.Tweens.Tween | null = null;
   private defusePulse: Phaser.Tweens.Tween | null = null;
   private readonly lastAbilityReady = new Map<HudAbilitySlot['id'], boolean>();
@@ -286,6 +290,8 @@ export class Hud {
     this.healthTrack = scene.add.rectangle(0, 0, 200, 13, 0x260914, 0.92)
       .setOrigin(0, 0.5).setStrokeStyle(1, 0x9e334a, 0.74);
     this.healthFill = scene.add.rectangle(0, 0, 200, 7, 0xff5578, 1).setOrigin(0, 0.5);
+    this.overhealthFill = scene.add.rectangle(0, 0, 200, 3, 0x55ff9c, 1)
+      .setOrigin(0, 0.5).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
     this.healthReadyShine = scene.add.rectangle(0, 0, 28, 7, 0xffffff, 0.12).setOrigin(0, 0.5);
     this.healthValue = this.createText('', 14, '#ffd9e2', 'Rajdhani, sans-serif').setOrigin(1, 0.5).setFontStyle('bold');
 
@@ -296,6 +302,8 @@ export class Hud {
     this.energyTrack = scene.add.rectangle(0, 0, 200, 13, 0x071e2f, 0.92)
       .setOrigin(0, 0.5).setStrokeStyle(1, 0x267da0, 0.74);
     this.energyFill = scene.add.rectangle(0, 0, 200, 7, 0x42f2ff, 1).setOrigin(0, 0.5);
+    this.overchargeFill = scene.add.rectangle(0, 0, 200, 3, 0xa86dff, 1)
+      .setOrigin(0, 0.5).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
     this.energyValue = this.createText('', 14, '#d5fbff', 'Rajdhani, sans-serif').setOrigin(1, 0.5).setFontStyle('bold');
 
     this.roundLabel = this.createText('ROUND', 10, '#7fc6d8', 'Rajdhani, sans-serif').setOrigin(0, 0.5).setFontStyle('bold');
@@ -329,8 +337,8 @@ export class Hud {
       this.vitalsPanel.frame, this.objectivePanel.frame, this.statsPanel.frame, this.abilitiesPanel.frame,
       this.vitalsPanel.title, this.vitalsPanel.led, this.objectivePanel.title, this.objectivePanel.led,
       this.statsPanel.title, this.statsPanel.led, this.abilitiesPanel.title, this.abilitiesPanel.led,
-      this.hpGlow, this.hpIcon, this.healthLabel, this.healthTrack, this.healthFill, this.healthReadyShine, this.healthValue,
-      this.energyGlow, this.energyIcon, this.energyLabel, this.energyTrack, this.energyFill, this.energyValue,
+      this.hpGlow, this.hpIcon, this.healthLabel, this.healthTrack, this.healthFill, this.overhealthFill, this.healthReadyShine, this.healthValue,
+      this.energyGlow, this.energyIcon, this.energyLabel, this.energyTrack, this.energyFill, this.overchargeFill, this.energyValue,
       this.roundLabel, this.roundValue, this.enemyLabel, this.enemyValue,
       ...Array.from(this.resourceVisuals.values()).map((resource) => resource.root),
       this.phaseBadge, this.phaseText, this.objectiveText, this.objectiveTimerText,
@@ -538,6 +546,8 @@ export class Hud {
     this.healthLabel.setPosition(barX, healthY - valueY).setFontSize(Math.max(8, Math.round(10 * fontScale)));
     this.healthTrack.setPosition(barX, healthY).setDisplaySize(barWidth, barHeight);
     this.healthFill.setPosition(barX, healthY).setDisplaySize(barWidth, fillHeight);
+    this.overhealthFill.setPosition(barX, healthY - Math.max(1, Math.round(fillHeight * 0.26)))
+      .setDisplaySize(barWidth, Math.max(2, Math.round(fillHeight * 0.42)));
     this.healthReadyShine.setPosition(barX, healthY).setDisplaySize(Math.round(30 * scale), fillHeight);
     this.healthValue.setPosition(barRight, healthY - valueY).setFontSize(Math.max(11, Math.round(14 * fontScale)));
 
@@ -546,6 +556,8 @@ export class Hud {
     this.energyLabel.setPosition(barX, energyY - valueY).setFontSize(Math.max(8, Math.round(10 * fontScale)));
     this.energyTrack.setPosition(barX, energyY).setDisplaySize(barWidth, barHeight);
     this.energyFill.setPosition(barX, energyY).setDisplaySize(barWidth, fillHeight);
+    this.overchargeFill.setPosition(barX, energyY - Math.max(1, Math.round(fillHeight * 0.26)))
+      .setDisplaySize(barWidth, Math.max(2, Math.round(fillHeight * 0.42)));
     this.energyValue.setPosition(barRight, energyY - valueY).setFontSize(Math.max(11, Math.round(14 * fontScale)));
   }
 
@@ -725,10 +737,28 @@ export class Hud {
   update(payload: HudPayload): void {
     const hpRatio = Phaser.Math.Clamp(payload.hp / Math.max(1, payload.maxHp), 0, 1);
     const energyRatio = Phaser.Math.Clamp(payload.energy / Math.max(1, payload.maxEnergy), 0, 1);
+    const overhealthRatio = Phaser.Math.Clamp((payload.hp - payload.maxHp) / Math.max(1, payload.maxHp), 0, 1);
+    const overchargeRatio = Phaser.Math.Clamp((payload.energy - payload.maxEnergy) / Math.max(1, payload.maxEnergy), 0, 1);
     this.displayedHealthRatio = Phaser.Math.Linear(this.displayedHealthRatio, hpRatio, 0.22);
     this.displayedEnergyRatio = Phaser.Math.Linear(this.displayedEnergyRatio, energyRatio, 0.2);
     this.healthFill.displayWidth = Math.max(0, this.healthTrack.displayWidth * this.displayedHealthRatio);
     this.energyFill.displayWidth = Math.max(0, this.energyTrack.displayWidth * this.displayedEnergyRatio);
+    this.overhealthFill.displayWidth = Math.max(0, this.healthTrack.displayWidth * overhealthRatio);
+    this.overchargeFill.displayWidth = Math.max(0, this.energyTrack.displayWidth * overchargeRatio);
+    this.overhealthFill.setVisible(overhealthRatio > 0.0001);
+    this.overchargeFill.setVisible(overchargeRatio > 0.0001);
+    if (overhealthRatio > 0 && !this.overhealthActive) {
+      this.scene.tweens.add({ targets: [this.overhealthFill, this.healthLabel], alpha: { from: 0.25, to: 1 }, duration: 300, ease: 'Cubic.Out' });
+    }
+    if (overchargeRatio > 0 && !this.overchargeActive) {
+      this.scene.tweens.add({ targets: [this.overchargeFill, this.energyLabel], alpha: { from: 0.25, to: 1 }, duration: 300, ease: 'Cubic.Out' });
+    }
+    this.overhealthActive = overhealthRatio > 0.0001;
+    this.overchargeActive = overchargeRatio > 0.0001;
+    this.setTextIfChanged(this.healthLabel, this.overhealthActive ? 'HP // OVERHEALTH' : 'HP');
+    this.healthLabel.setColor(this.overhealthActive ? '#65ffac' : '#ff93a8');
+    this.setTextIfChanged(this.energyLabel, this.overchargeActive ? 'EN // OVERCHARGE' : 'EN');
+    this.energyLabel.setColor(this.overchargeActive ? '#bd8bff' : '#75eaff');
     const shineMax = Math.max(0, this.healthFill.displayWidth - this.healthReadyShine.displayWidth);
     this.healthReadyShine.x = this.healthTrack.x + Phaser.Math.Clamp(shineMax * 0.7, 0, shineMax);
     this.setTextIfChanged(this.healthValue, `${Math.max(0, Math.round(payload.hp))} / ${Math.max(1, Math.round(payload.maxHp))}`);

@@ -267,36 +267,47 @@ export class BootScene extends Phaser.Scene {
     const createBossTexture = (key: string, draw: (graphics: Phaser.GameObjects.Graphics) => void): void => {
       g.clear();
       g.fillStyle(0xffffff, 1);
-      g.lineStyle(3, 0x151a28, 1);
+      g.lineStyle(4, 0x080b14, 1);
       draw(g);
-      g.generateTexture(key, 72, 72);
+      g.generateTexture(key, 112, 112);
     };
     createBossTexture('boss-artillery', (graphics) => {
-      const gear = Array.from({ length: 16 }, (_, index) => {
-        const radius = index % 2 === 0 ? 31 : 24;
-        const angle = -Math.PI / 2 + index * Math.PI / 8;
-        return { x: 36 + Math.cos(angle) * radius, y: 36 + Math.sin(angle) * radius };
+      const gear = Array.from({ length: 20 }, (_, index) => {
+        const radius = index % 2 === 0 ? 48 : 39;
+        const angle = -Math.PI / 2 + index * Math.PI / 10;
+        return { x: 56 + Math.cos(angle) * radius, y: 56 + Math.sin(angle) * radius };
       });
       graphics.fillPoints(gear, true);
       graphics.strokePoints(gear, true);
-      graphics.fillRect(31, 3, 10, 34);
-      graphics.strokeRect(31, 3, 10, 34);
-      graphics.fillCircle(36, 36, 12);
-      graphics.strokeCircle(36, 36, 12);
+      graphics.fillStyle(0xbfc8d8, 1).fillRoundedRect(24, 38, 64, 36, 9).strokeRoundedRect(24, 38, 64, 36, 9);
+      graphics.fillStyle(0x111827, 1).fillCircle(56, 56, 24);
+      graphics.fillStyle(0xffffff, 1).fillCircle(56, 56, 12).strokeCircle(56, 56, 12);
+      graphics.fillStyle(0xc8d0de, 1).fillRect(8, 47, 35, 9).strokeRect(8, 47, 35, 9);
+      graphics.fillRect(69, 47, 35, 9).strokeRect(69, 47, 35, 9);
+      graphics.fillStyle(0x101726, 1).fillRect(4, 50, 18, 3).fillRect(90, 50, 18, 3);
+      graphics.fillStyle(0xffffff, 1).fillTriangle(42, 33, 56, 9, 70, 33);
+      graphics.lineStyle(3, 0x080b14, 1).strokeTriangle(42, 33, 56, 9, 70, 33);
     });
     createBossTexture('boss-storm-mage', (graphics) => {
-      const crown = [{ x: 36, y: 2 }, { x: 49, y: 23 }, { x: 69, y: 36 }, { x: 49, y: 49 }, { x: 36, y: 70 }, { x: 23, y: 49 }, { x: 3, y: 36 }, { x: 23, y: 23 }];
+      const crown = [{ x: 56, y: 3 }, { x: 72, y: 29 }, { x: 105, y: 22 }, { x: 83, y: 56 }, { x: 105, y: 90 }, { x: 72, y: 83 }, { x: 56, y: 109 }, { x: 40, y: 83 }, { x: 7, y: 90 }, { x: 29, y: 56 }, { x: 7, y: 22 }, { x: 40, y: 29 }];
       graphics.fillPoints(crown, true);
       graphics.strokePoints(crown, true);
-      graphics.fillPoints([{ x: 36, y: 15 }, { x: 57, y: 36 }, { x: 36, y: 57 }, { x: 15, y: 36 }], true);
-      graphics.strokePoints([{ x: 36, y: 15 }, { x: 57, y: 36 }, { x: 36, y: 57 }, { x: 15, y: 36 }], true);
+      graphics.fillStyle(0x151325, 1).fillCircle(56, 56, 35).strokeCircle(56, 56, 35);
+      graphics.fillStyle(0xffffff, 1).fillPoints([{ x: 56, y: 20 }, { x: 91, y: 56 }, { x: 56, y: 92 }, { x: 21, y: 56 }], true);
+      graphics.strokePoints([{ x: 56, y: 20 }, { x: 91, y: 56 }, { x: 56, y: 92 }, { x: 21, y: 56 }], true);
+      graphics.fillStyle(0x171020, 1).fillCircle(56, 56, 18);
+      graphics.fillStyle(0xffffff, 1).fillCircle(56, 56, 8);
     });
     createBossTexture('boss-void-brawler', (graphics) => {
-      const frame = [{ x: 7, y: 7 }, { x: 29, y: 16 }, { x: 36, y: 3 }, { x: 43, y: 16 }, { x: 65, y: 7 }, { x: 57, y: 29 }, { x: 70, y: 36 }, { x: 55, y: 43 }, { x: 62, y: 66 }, { x: 41, y: 56 }, { x: 36, y: 70 }, { x: 31, y: 56 }, { x: 10, y: 66 }, { x: 17, y: 43 }, { x: 2, y: 36 }, { x: 15, y: 29 }];
+      const frame = [{ x: 5, y: 12 }, { x: 38, y: 26 }, { x: 56, y: 2 }, { x: 74, y: 26 }, { x: 107, y: 12 }, { x: 91, y: 45 }, { x: 110, y: 56 }, { x: 88, y: 69 }, { x: 101, y: 105 }, { x: 69, y: 88 }, { x: 56, y: 110 }, { x: 43, y: 88 }, { x: 11, y: 105 }, { x: 24, y: 69 }, { x: 2, y: 56 }, { x: 21, y: 45 }];
       graphics.fillPoints(frame, true);
       graphics.strokePoints(frame, true);
-      graphics.fillRect(23, 24, 26, 24);
-      graphics.strokeRect(23, 24, 26, 24);
+      graphics.fillStyle(0x17111d, 1).fillRoundedRect(30, 28, 52, 56, 13).strokeRoundedRect(30, 28, 52, 56, 13);
+      graphics.fillStyle(0xffffff, 1).fillPoints([{ x: 56, y: 21 }, { x: 81, y: 56 }, { x: 56, y: 91 }, { x: 31, y: 56 }], true);
+      graphics.strokePoints([{ x: 56, y: 21 }, { x: 81, y: 56 }, { x: 56, y: 91 }, { x: 31, y: 56 }], true);
+      graphics.fillStyle(0x17111d, 1).fillCircle(56, 56, 15);
+      graphics.fillStyle(0xffffff, 1).fillRect(11, 45, 24, 22).strokeRect(11, 45, 24, 22);
+      graphics.fillRect(77, 45, 24, 22).strokeRect(77, 45, 24, 22);
     });
 
     const createEnemyRobot = (type: EnemyType, draw: (graphics: Phaser.GameObjects.Graphics) => void): void => {

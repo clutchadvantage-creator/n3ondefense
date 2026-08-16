@@ -29,6 +29,7 @@ export const WEAPON_BALANCE = {
   cooldownRate: 40,
   minimumHeatPerShot: 4.5,
   maximumFireRate: 14,
+  maximumBuffedFireRate: 22,
   maximumCritChance: 0.35,
   damageBoostMultiplier: 1.4,
   rapidFireMultiplier: 1.35,
@@ -74,7 +75,7 @@ export const ABILITY_BALANCE = {
   },
   turret: { energyCost: 10, cooldownMs: 6800, maxActive: 2, damage: 13, hp: 145, durationMs: 0, range: 215, fireRate: 2.5 },
   mine: { energyCost: 10, cooldownMs: 4200, maxActive: 3, damage: 72, hp: 0, durationMs: 0, range: 0, fireRate: 0, armMs: 1000, radius: 82 },
-  shield: { energyCost: 15, durationMs: 2800, maximumDurationMs: 5000, cooldownMs: 10_000 }
+  shield: { energyCost: 15, durationMs: 2800, maximumDurationMs: 6000, cooldownMs: 10_000 }
 } as const;
 
 export const OBJECTIVE_BALANCE = {

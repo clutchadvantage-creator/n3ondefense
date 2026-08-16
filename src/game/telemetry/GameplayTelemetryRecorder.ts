@@ -6,7 +6,7 @@ import type { ModFocusSignalId, RunContractId } from '../economy/types.ts';
 
 export type CombatDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard' | 'bomb' | 'bombSite' | 'splitCurrent' | 'unknown';
 export type PlayerDamageSource = 'enemy-contact' | 'enemy-projectile' | 'enemy-missile' | 'enemy-death-mine' | 'laser' | 'bomblet' | 'gas' | 'bombsite-reactor' | 'boss';
-export type PickupDropSource = 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support' | 'flux-core';
+export type PickupDropSource = 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support' | 'boss-loot' | 'flux-core';
 export type EncounterKind = 'round' | 'boss';
 export type EncounterOutcome = 'completed' | 'playerDead' | 'bombDefused' | 'bossDefeated' | 'quit' | 'replaced';
 export type TelemetryAbility = 'dash' | 'shield' | 'fence' | 'turret' | 'mine';
@@ -20,6 +20,8 @@ export type ResourceGainSource = PickupDropSource | 'natural-regen' | 'site-reco
 export type BuffName = 'damageBoost' | 'speedBoost' | 'rapidFire';
 export type BossAttackKind =
   | 'artillery-basic'
+  | 'artillery-rocket'
+  | 'artillery-strike'
   | 'artillery-super'
   | 'storm-basic'
   | 'storm-super'

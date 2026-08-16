@@ -24,7 +24,7 @@ export const MOD_BALANCE = {
     'arcade-pop': 5
   } as const,
   detonationFireworks: { minDurationMs: 20_000, maxDurationMs: 30_000, burstIntervalMs: 520, sparksPerBurst: 12 },
-  dropChance: { normalEnemy: 0.0005, eliteEnemy: 0.04, milestone: 0.12, boss: 0.55 } satisfies Record<ModDropSource, number>,
+  dropChance: { normalEnemy: 0.0005, eliteEnemy: 0.04, milestone: 0.12, boss: 0.62 } satisfies Record<ModDropSource, number>,
   rarityWeights: { common: 56, uncommon: 27, rare: 12, epic: 4.5, legendary: 0.5 } satisfies Record<ModRarity, number>,
   raritySourceMultipliers: {
     normalEnemy: { common: 1, uncommon: 0.65, rare: 0.25, epic: 0, legendary: 0 },

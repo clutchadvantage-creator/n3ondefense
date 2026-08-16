@@ -3,11 +3,14 @@ import type { EnergyStats, PlayerStats, WeaponStats } from '../types';
 import { PLAYER_BALANCE, WEAPON_BALANCE } from '../config/balance';
 import { applyOperativeSpeedMultipliers } from '../mods/ModRules.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
+import { stackedPickupMultiplier } from '../player/OverdriveRules.ts';
 
 export interface BuffState {
   damageBoostUntil: number;
   speedBoostUntil: number;
   rapidFireUntil: number;
+  speedBoostStacks: number;
+  rapidFireStacks: number;
 }
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
@@ -28,7 +31,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   buffs: BuffState = {
     damageBoostUntil: 0,
     speedBoostUntil: 0,
-    rapidFireUntil: 0
+    rapidFireUntil: 0,
+    speedBoostStacks: 0,
+    rapidFireStacks: 0
   };
 
   constructor(scene: Phaser.Scene, x: number, y: number, texture: string, stats: PlayerStats, energyStats: EnergyStats, weapon: WeaponStats) {
@@ -54,18 +59,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   get speed(): number {
     const boosted = this.scene.time.now < this.buffs.speedBoostUntil;
+    const boostStacks = boosted ? Math.max(1, this.buffs.speedBoostStacks) : 0;
+    const pickupMultiplier = stackedPickupMultiplier(WEAPON_BALANCE.speedBoostMultiplier, boostStacks);
     const modBoost = this.scene.time.now < this.modSpeedBoostUntil ? this.modSpeedMultiplier : 1;
     return applyOperativeSpeedMultipliers(
       this.stats.moveSpeed,
       this.permanentModSpeedMultiplier,
-      boosted ? WEAPON_BALANCE.speedBoostMultiplier : 1,
+      boosted ? pickupMultiplier : 1,
       modBoost
     );
   }
 
   get fireRate(): number {
     const boosted = this.scene.time.now < this.buffs.rapidFireUntil;
-    return this.weapon.fireRate * (boosted ? WEAPON_BALANCE.rapidFireMultiplier : 1);
+    const boostStacks = boosted ? Math.max(1, this.buffs.rapidFireStacks) : 0;
+    const multiplier = stackedPickupMultiplier(WEAPON_BALANCE.rapidFireMultiplier, boostStacks);
+    return Math.min(WEAPON_BALANCE.maximumBuffedFireRate, this.weapon.fireRate * multiplier);
   }
 
   get damageMultiplier(): number {
@@ -73,7 +82,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   updateEnergy(dtSec: number): void {
-    this.energy = Phaser.Math.Clamp(this.energy + this.energyStats.regenPerSecond * dtSec, 0, this.energyStats.max);
+    // Regeneration restores the normal reservoir but never creates overcharge.
+    // Existing overcharge is preserved until the player spends it.
+    if (this.energy < this.energyStats.max) {
+      this.energy = Phaser.Math.Clamp(this.energy + this.energyStats.regenPerSecond * dtSec, 0, this.energyStats.max);
+    }
     this.heat = Phaser.Math.Clamp(this.heat - this.weapon.cooldownRate * dtSec, 0, this.weapon.maxHeat);
   }
 

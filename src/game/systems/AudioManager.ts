@@ -40,7 +40,12 @@ export class AudioManager {
     'music/Arc Grid Siege5.mp3',
     'music/Arc Grid Siege6.mp3',
     'music/Neon Concrete Pulse.mp3',
-    'music/Neondub.mp3'
+    'music/Neondub.mp3',
+    'music/NeonShamisen.mp3',
+    'music/NeonShamisenV2.mp3',
+    'music/NeonSwampRiot.mp3',
+    'music/NeonSwampRiotV2.mp3',
+    'music/NeonTokyoNights.mp3'
   ].map(audioAssetUrl);
   private musicAudio: HTMLAudioElement | null = null;
   private playlistIndex = 0;

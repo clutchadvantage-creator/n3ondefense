@@ -15,14 +15,14 @@ test('fully upgraded energy still depletes under sustained weapon use', () => {
   const fireRate = Math.min(WEAPON_BALANCE.maximumFireRate, WEAPON_BALANCE.fireRate + getUpgradeEffect(maximumLevels, 'weapon.fireRate'));
   const sustainedShotRate = Math.min(fireRate, WEAPON_BALANCE.cooldownRate / heatPerShot);
   assert.equal(capacity, 160);
-  assert.equal(regeneration, 2);
+  assert.ok(Math.abs(regeneration - 2.4) < 1e-9);
   assert.ok(sustainedShotRate * WEAPON_BALANCE.energyCostPerShot > regeneration);
   assert.equal(capacity * 0.5, 80);
   assert.equal(PICKUP_BALANCE.enemyDropChance * PICKUP_BALANCE.energyShare, 0.025);
   assert.equal(PICKUP_BALANCE.energyRestoreFraction, 0.5);
 });
 
-test('operative shield duration upgrades monotonically to five seconds', () => {
+test('operative shield duration upgrades monotonically to the moderately buffed cap', () => {
   const definition = UPGRADE_DEFINITIONS.find((upgrade) => upgrade.id === 'player.shieldDuration');
   assert.ok(definition);
   let previous = ABILITY_BALANCE.shield.durationMs;
@@ -31,7 +31,7 @@ test('operative shield duration upgrades monotonically to five seconds', () => {
     assert.ok(duration > previous);
     previous = duration;
   }
-  assert.equal(previous, 5000);
+  assert.equal(previous, 5600);
 });
 
 test('projectile shape cosmetics are unique, renderable, and migrate into existing profiles', () => {

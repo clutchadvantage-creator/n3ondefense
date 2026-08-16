@@ -18,6 +18,8 @@ export interface BossProjectileSpec {
 
 export type BossAttackKind =
   | 'artillery-basic'
+  | 'artillery-rocket'
+  | 'artillery-strike'
   | 'artillery-super'
   | 'storm-basic'
   | 'storm-super'
@@ -67,6 +69,11 @@ export class BossEncounter {
   private lastContactAt = -99_999;
   private lastPounceAt = -99_999;
   private lastTeleportAt = 0;
+  private lastRocketAt = -99_999;
+  private mageChargeStartsAt = 0;
+  private mageChargeEndsAt = 0;
+  private mageChargeAim = 0;
+  private mageSuperVolleyAt = 0;
   private pounceStartsAt = 0;
   private pounceEndsAt = 0;
   private pounceAngle = 0;
@@ -122,6 +129,11 @@ export class BossEncounter {
     else if (this.archetype === 'storm-mage') this.updateStormMage(player);
     else this.updateVoidBrawler(player);
     this.updatePendingStrikes(player);
+    const aim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
+    const charge = this.archetype === 'storm-mage' && this.mageChargeEndsAt > this.elapsedMs
+      ? Phaser.Math.Clamp((this.elapsedMs - this.mageChargeStartsAt) / Math.max(1, this.mageChargeEndsAt - this.mageChargeStartsAt), 0, 1)
+      : 0;
+    this.boss.updatePresentation(this.elapsedMs, aim, charge);
     this.refreshHealthBar();
   }
 
@@ -150,24 +162,82 @@ export class BossEncounter {
     this.effects.clear();
   }
 
+  cancelCombat(): void {
+    this.boss.setVelocity(0, 0);
+    for (const strike of this.pendingStrikes) strike.marker.destroy();
+    this.pendingStrikes.length = 0;
+    this.mageChargeEndsAt = 0;
+    this.mageSuperVolleyAt = 0;
+    this.callout.setAlpha(0);
+    this.healthTrack.setVisible(false);
+    this.healthFill.setVisible(false);
+    this.healthText.setVisible(false);
+    this.title.setVisible(false);
+  }
+
+  setPresentationVisible(visible: boolean): void {
+    this.boss.setVisible(visible).setActive(visible);
+    this.healthTrack.setVisible(visible);
+    this.healthFill.setVisible(visible);
+    this.healthText.setVisible(visible);
+    this.title.setVisible(visible);
+    if (!visible) this.callout.setVisible(false);
+    else this.callout.setVisible(true);
+  }
+
   private updateArtillery(player: Player): void {
     const config = BOSS_BALANCE.artillery;
-    this.boss.setVelocity(0, 0).setRotation(this.elapsedMs * 0.00035);
+    const aim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
+    const desiredX = player.x + Math.cos(this.elapsedMs * 0.00032) * 360;
+    const desiredY = player.y + Math.sin(this.elapsedMs * 0.00027) * 260;
+    let moveX = desiredX - this.boss.x;
+    let moveY = desiredY - this.boss.y;
+    const moveDistanceSquared = moveX * moveX + moveY * moveY;
+    if (moveDistanceSquared > 64) {
+      const scale = config.movementSpeed / Math.sqrt(moveDistanceSquared);
+      moveX *= scale;
+      moveY *= scale;
+      if (this.isBlocked(this.boss.x + moveX * 0.3, this.boss.y + moveY * 0.3)) {
+        const temporary = moveX;
+        moveX = -moveY * 0.72;
+        moveY = temporary * 0.72;
+      }
+    }
+    this.boss.setVelocity(moveX, moveY).setRotation(aim);
     if (this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
       this.lastBasicAt = this.elapsedMs;
       this.callbacks.onAttackCast('artillery-basic');
-      const aim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
-      for (const offset of [-config.spreadRadians, 0, config.spreadRadians]) {
-        this.fire(aim + offset, config.projectileSpeed, config.projectileDamage, BOSS_ARCHETYPES.artillery.color, 11, 'artillery-basic');
+      const center = (config.rapidBurstCount - 1) * 0.5;
+      for (let index = 0; index < config.rapidBurstCount; index += 1) {
+        this.fire(aim + (index - center) * config.spreadRadians, config.projectileSpeed, config.projectileDamage, BOSS_ARCHETYPES.artillery.color, 9, 'artillery-basic');
+      }
+      this.spawnMuzzleEffect(aim, BOSS_ARCHETYPES.artillery.color);
+    }
+    if (this.elapsedMs - this.lastRocketAt >= config.rocketCooldownMs) {
+      this.lastRocketAt = this.elapsedMs;
+      this.callbacks.onAttackCast('artillery-rocket');
+      this.showCallout('ROCKET LOCK // EVADE', 720);
+      const center = (config.rocketCount - 1) * 0.5;
+      for (let index = 0; index < config.rocketCount; index += 1) {
+        this.fire(aim + (index - center) * 0.17, config.rocketSpeed, config.rocketDamage, 0xffbc62, 17, 'artillery-rocket');
       }
     }
     if (this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
       this.lastSuperAt = this.elapsedMs;
       this.callbacks.onAttackCast('artillery-super');
-      this.showCallout('SUPER: SIEGE NOVA', 1500);
-      for (let i = 0; i < config.superProjectileCount; i += 1) {
-        const angle = i / config.superProjectileCount * Math.PI * 2 + this.elapsedMs * 0.0002;
-        this.fire(angle, config.superProjectileSpeed, config.superProjectileDamage, 0xffd36a, 9, 'artillery-super');
+      this.showCallout('SUPER: ORBITAL SIEGE', config.superTelegraphMs);
+      for (let index = 0; index < config.superStrikeCount; index += 1) {
+        const angle = index / config.superStrikeCount * Math.PI * 2 + this.elapsedMs * 0.0004;
+        const distance = index === 0 ? 0 : 105 + index * 18;
+        this.scheduleStrike(
+          player.x + Math.cos(angle) * distance,
+          player.y + Math.sin(angle) * distance,
+          config.superRadius,
+          config.superDamage * this.damageMultiplier,
+          config.superTelegraphMs + index * 110,
+          0xffc96a,
+          'artillery-strike'
+        );
       }
     }
   }
@@ -184,32 +254,30 @@ export class BossEncounter {
     }
     this.boss.setVelocity(directionX, directionY).setRotation(-this.elapsedMs * 0.0006);
 
-    if (this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
-      this.lastBasicAt = this.elapsedMs;
+    if (this.mageChargeEndsAt > 0 && this.elapsedMs >= this.mageChargeEndsAt) {
       this.callbacks.onAttackCast('storm-basic');
-      const aim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
-      const center = (config.basicProjectileCount - 1) * 0.5;
-      for (let i = 0; i < config.basicProjectileCount; i += 1) {
-        this.fire(aim + (i - center) * 0.09, config.projectileSpeed, config.projectileDamage, BOSS_ARCHETYPES['storm-mage'].color, 9, 'storm-basic');
-      }
+      this.fire(this.mageChargeAim, config.projectileSpeed, config.projectileDamage, BOSS_ARCHETYPES['storm-mage'].color, 12, 'storm-basic');
+      this.spawnMuzzleEffect(this.mageChargeAim, BOSS_ARCHETYPES['storm-mage'].color);
+      this.mageChargeEndsAt = 0;
+    } else if (this.mageChargeEndsAt <= 0 && this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
+      this.lastBasicAt = this.elapsedMs;
+      this.mageChargeStartsAt = this.elapsedMs;
+      this.mageChargeEndsAt = this.elapsedMs + config.chargeMs;
+      this.mageChargeAim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
+      this.showCallout('ARC CHARGE', config.chargeMs);
     }
-    if (this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
-      this.lastSuperAt = this.elapsedMs;
+    if (this.mageSuperVolleyAt > 0 && this.elapsedMs >= this.mageSuperVolleyAt) {
       this.callbacks.onAttackCast('storm-super');
-      this.showCallout('SUPER: CROWN OF STORMS', config.superTelegraphMs);
-      for (let i = 0; i < config.superStrikeCount; i += 1) {
-        const angle = i / config.superStrikeCount * Math.PI * 2;
-        const radius = i === 0 ? 0 : 105;
-        this.scheduleStrike(
-          player.x + Math.cos(angle) * radius,
-          player.y + Math.sin(angle) * radius,
-          config.superRadius,
-          config.superDamage * this.damageMultiplier,
-          config.superTelegraphMs + i * 90,
-          0xa978ff,
-          'storm-super'
-        );
+      const aim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
+      const center = (config.superProjectileCount - 1) * 0.5;
+      for (let index = 0; index < config.superProjectileCount; index += 1) {
+        this.fire(aim + (index - center) * 0.105, config.superProjectileSpeed, config.superProjectileDamage, 0xb980ff, 10, 'storm-super');
       }
+      this.mageSuperVolleyAt = 0;
+    } else if (this.mageSuperVolleyAt <= 0 && this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
+      this.lastSuperAt = this.elapsedMs;
+      this.showCallout('SUPER: PRISMATIC TEMPEST', config.superTelegraphMs);
+      this.mageSuperVolleyAt = this.elapsedMs + config.superTelegraphMs;
     }
   }
 
@@ -256,6 +324,7 @@ export class BossEncounter {
       this.pounceEndsAt = this.pounceStartsAt + config.pounceDurationMs;
       this.pounceAngle = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
       this.showCallout('POUNCE LOCKED', config.pounceTelegraphMs);
+      this.spawnPounceTelegraph(this.pounceAngle, config.pounceTelegraphMs);
       this.boss.setVelocity(0, 0);
     } else {
       let directionX = player.x - this.boss.x;
@@ -317,6 +386,36 @@ export class BossEncounter {
     this.effects.add(ring);
     this.scene.tweens.add({ targets: core, radius: radius * 0.55, alpha: 0, duration: 260, onComplete: () => { this.effects.delete(core); core.destroy(); } });
     this.scene.tweens.add({ targets: ring, radius, alpha: 0, duration: 420, onComplete: () => { this.effects.delete(ring); ring.destroy(); } });
+  }
+
+  private spawnMuzzleEffect(angle: number, color: number): void {
+    const x = this.boss.x + Math.cos(angle) * 55;
+    const y = this.boss.y + Math.sin(angle) * 55;
+    const flash = this.scene.add.polygon(x, y, [0, -7, 24, 0, 0, 7, 6, 0], color, 0.9)
+      .setRotation(angle).setDepth(12).setBlendMode(Phaser.BlendModes.ADD);
+    this.effects.add(flash);
+    this.scene.tweens.add({ targets: flash, scaleX: 1.65, alpha: 0, duration: 130, onComplete: () => { this.effects.delete(flash); flash.destroy(); } });
+  }
+
+  private spawnPounceTelegraph(angle: number, durationMs: number): void {
+    const length = 390;
+    const line = this.scene.add.rectangle(
+      this.boss.x + Math.cos(angle) * length * 0.5,
+      this.boss.y + Math.sin(angle) * length * 0.5,
+      length,
+      18,
+      0xff4e82,
+      0.12
+    ).setOrigin(0.5).setRotation(angle).setStrokeStyle(2, 0xff85a8, 0.76).setDepth(7);
+    this.effects.add(line);
+    this.scene.tweens.add({
+      targets: line,
+      alpha: { from: 0.1, to: 0.42 },
+      scaleY: { from: 0.5, to: 1.1 },
+      duration: Math.max(120, durationMs * 0.42),
+      yoyo: true,
+      onComplete: () => { this.effects.delete(line); line.destroy(); }
+    });
   }
 
   private flashAt(x: number, y: number, color: number): void {
