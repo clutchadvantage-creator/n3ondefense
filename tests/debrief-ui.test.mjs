@@ -56,3 +56,20 @@ test('debrief action routes preserve completion flow and expose safe post-failur
   assert.match(failed, /SceneKeys\.Mods, \{ returnScene: SceneKeys\.MainMenu, resumePausedScene: false \}/);
   assert.match(failed, /buildRunEconomySnapshot\(\{ modFocus: null, contract: null \}, 0\)/);
 });
+
+test('round-finished readability tier increases only secondary typography', () => {
+  const finished = readFileSync(new URL('../src/game/scenes/RoundFinishedScene.ts', import.meta.url), 'utf8');
+  const failed = readFileSync(new URL('../src/game/scenes/ResultScene.ts', import.meta.url), 'utf8');
+  const ui = readFileSync(new URL('../src/game/ui/DebriefUi.ts', import.meta.url), 'utf8');
+  assert.match(finished, /createDebriefShell\([^;]*true\)/);
+  assert.match(finished, /layout\.compact, false, true/);
+  assert.match(finished, /createOperationReadout\([^;]*layout\.compact, true\)/);
+  assert.match(finished, /ENDLESS FLOW \/\/ NEXT ARENA READY', true/);
+  assert.doesNotMatch(failed, /enhanceSecondaryTypography|layout\.compact, true, true/);
+  assert.doesNotMatch(failed, /createDebriefShell\([^;]*, true\)/);
+  for (const pair of [
+    '18 : 17', '24 : 22', '10 : 9', '13 : 11',
+    '11 : 10', '14 : 12', '12 : 11', '14 : 13',
+    '17 : 16', '12 : 11', '16 : 14'
+  ]) assert.match(ui, new RegExp(pair.replace(/ /g, '\\s*')));
+});

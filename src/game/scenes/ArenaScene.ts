@@ -230,6 +230,13 @@ interface OperativeShieldVisual {
 
 type BossFlowPhase = 'none' | 'intro' | 'combat' | 'destruction' | 'loot-collection' | 'transitioning';
 
+interface BossDeathSnapshot {
+  encounter: BossEncounter;
+  x: number;
+  y: number;
+  color: number;
+}
+
 const ROUND_PHASE_LABELS: Record<RoundState, string> = {
   [RoundState.PrePlant]: 'PRE-PLANT',
   [RoundState.Planting]: 'PLANTING',
@@ -1129,6 +1136,7 @@ export class ArenaScene extends Phaser.Scene {
     this.updatePlayerShooting(now);
 
     if (this.bossEncounter) {
+      const bossCombatAtFrameStart = this.bossFlowPhase === 'combat';
       if (this.bossFlowPhase === 'combat') this.bossEncounter.update(delta, this.player);
       if (this.gasHazard?.visualGasActive && this.bossEncounter.boss.active && !this.bossEncounter.boss.isDefeated) {
         this.gasHazard.carveVisualTunnel(
@@ -1141,16 +1149,21 @@ export class ArenaScene extends Phaser.Scene {
         const bossHazardTargets = this.getHazardDamageTargets();
         const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
         this.gasHazard?.update(now, this.player, this.modRuntime.multiplier('gasDamageTaken'));
+        if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
         const gasSuppressesLasers = this.gasHazard?.isLaserSuppressed(now) ?? false;
         this.fluxCores?.update(now, this.player, gasSuppressesLasers);
         const fluxSuppressesLasers = this.fluxCores?.isLaserSuppressed(now) ?? false;
         const securityLasersSuppressed = gasSuppressesLasers || fluxSuppressesLasers;
         const laserDangerWindow = this.laserSecurity?.isDangerWindow(now, securityLasersSuppressed) ?? false;
         this.laserSecurity?.update(now, dt, this.player, bossHazardTargets, playerLaserImmune, securityLasersSuppressed);
+        if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
         this.bombletHazard?.update(now, this.player, bossHazardTargets, laserDangerWindow);
+        if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
       }
       this.updateProjectiles(delta);
+      if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
       this.updateAbilities(now, dt);
+      if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
       this.updateDeathMines(now);
       this.updateShieldState(now);
       if (this.bossFlowPhase === 'combat') this.updateBossSupportPickups(now);
@@ -2697,6 +2710,14 @@ export class ArenaScene extends Phaser.Scene {
           else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
           this.spawnImpact(p.sprite.x, p.sprite.y, p.sprite.tintTopLeft);
           this.retireProjectile(p);
+          if (boss.isDefeated) {
+            // Preserve all unprocessed pooled projectiles for the deferred boss
+            // teardown. Nothing else should advance on the fatal-hit frame.
+            for (let remaining = readIndex + 1; remaining < this.projectiles.length; remaining += 1) {
+              this.projectiles[writeIndex++] = this.projectiles[remaining];
+            }
+            break;
+          }
           continue;
         }
         const hitEnemy = this.findProjectileHitEnemy(p.sprite.x, p.sprite.y);
@@ -4755,11 +4776,10 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private startBossCombat(): void {
-    if (this.bossFlowPhase !== 'intro' || !this.bossEncounter) return;
+    if (!this.bossEncounter || !this.transitionBossFlow('intro', 'combat')) return;
     this.bossIntroOverlay?.destroy();
     this.bossIntroOverlay = null;
     this.bossEncounter.setPresentationVisible(true);
-    this.bossFlowPhase = 'combat';
     this.clearGameplayInput();
     this.pointerDown = false;
     TutorialEventBus.emit('combat.bossStarted', { archetype: this.bossEncounter.archetype, round: this.bossRound });
@@ -4873,14 +4893,34 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private completeBossFight(): void {
-    if (this.bossVictoryHandled || !this.bossEncounter || !this.pendingRoundPayload) return;
+    if (this.bossVictoryHandled || !this.bossEncounter || !this.pendingRoundPayload
+      || !this.transitionBossFlow('combat', 'destruction')) return;
     this.bossVictoryHandled = true;
-    this.bossFlowPhase = 'destruction';
+    const encounter = this.bossEncounter;
+    const snapshot: BossDeathSnapshot = {
+      encounter,
+      x: encounter.boss.x,
+      y: encounter.boss.y,
+      color: BOSS_ARCHETYPES[encounter.archetype].color
+    };
     this.boostVisual.reset();
     this.state.set(RoundState.Paused);
     this.pointerDown = false;
     this.clearGameplayInput();
-    this.bossEncounter.cancelCombat();
+    encounter.cancelCombat();
+    this.physics.pause();
+    GameplayTelemetryRecorder.recordBossDefeated();
+
+    // Fatal damage can arrive from inside projectile, laser, or bomblet update
+    // callbacks. Destructively clearing those same systems in that call stack
+    // invalidates their active iterators (and used to leave the scene frozen or
+    // throw on already-destroyed Phaser objects). Move lifetime teardown to the
+    // next Scene Clock turn, after the fatal-hit callback has fully unwound.
+    this.bossSequenceTimers.push(this.time.delayedCall(0, () => this.beginBossDestruction(snapshot)));
+  }
+
+  private beginBossDestruction(snapshot: BossDeathSnapshot): void {
+    if (this.bossFlowPhase !== 'destruction' || this.bossEncounter !== snapshot.encounter) return;
     this.laserSecurity?.silence();
     this.laserSecurity?.destroy();
     this.laserSecurity = null;
@@ -4891,33 +4931,28 @@ export class ArenaScene extends Phaser.Scene {
     this.fluxCores?.destroy();
     this.fluxCores = null;
     this.audio.stopFluxCoreLoop();
-    this.physics.pause();
-    GameplayTelemetryRecorder.recordBossDefeated();
     this.retireActiveBossProjectiles();
 
-    const boss = this.bossEncounter.boss;
-    const origin = { x: boss.x, y: boss.y };
-    const color = BOSS_ARCHETYPES[this.bossEncounter.archetype].color;
     this.showBanner('BOSS CORE DESTABILIZING');
     for (let index = 0; index < 4; index += 1) {
       const timer = this.time.delayedCall(index * 260, () => {
-        if (this.bossFlowPhase !== 'destruction') return;
+        if (this.bossFlowPhase !== 'destruction' || this.bossEncounter !== snapshot.encounter) return;
         const angle = index * Math.PI * 0.62 + this.time.now * 0.001;
         const distance = 18 + index * 8;
         this.audio.playSfx('bomblet');
-        this.createDeathExplosion(origin.x + Math.cos(angle) * distance, origin.y + Math.sin(angle) * distance, index % 2 === 0 ? color : 0xffffff, index >= 2);
+        this.createDeathExplosion(snapshot.x + Math.cos(angle) * distance, snapshot.y + Math.sin(angle) * distance, index % 2 === 0 ? snapshot.color : 0xffffff, index >= 2);
         this.cameras.main.shake(120 + index * 18, 0.0022 + index * 0.0006);
       });
       this.bossSequenceTimers.push(timer);
     }
     this.bossSequenceTimers.push(this.time.delayedCall(1120, () => {
-      if (this.bossFlowPhase !== 'destruction' || !this.bossEncounter) return;
+      if (this.bossFlowPhase !== 'destruction' || this.bossEncounter !== snapshot.encounter) return;
       this.audio.playSfx('bomblet');
-      this.createDeathExplosion(origin.x, origin.y, color, true);
+      this.createDeathExplosion(snapshot.x, snapshot.y, snapshot.color, true);
       this.cameras.main.flash(360, 255, 230, 190);
       this.cameras.main.shake(480, 0.008);
-      this.bossEncounter.boss.setVisible(false).setActive(false);
-      this.beginBossLootCollection(origin.x, origin.y);
+      snapshot.encounter.boss.setVisible(false).setActive(false);
+      this.beginBossLootCollection(snapshot.x, snapshot.y);
     }));
   }
 
@@ -4934,8 +4969,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private beginBossLootCollection(originX: number, originY: number): void {
-    if (!this.bossEncounter) return;
-    this.bossFlowPhase = 'loot-collection';
+    if (!this.bossEncounter || !this.transitionBossFlow('destruction', 'loot-collection')) return;
     this.state.set(RoundState.Defense);
     this.physics.resume();
     this.player.setVisible(true).setActive(true);
@@ -5059,8 +5093,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private finishBossCollection(): void {
-    if (this.bossFlowPhase !== 'loot-collection' || !this.pendingRoundPayload || !this.bossEncounter) return;
-    this.bossFlowPhase = 'transitioning';
+    if (!this.pendingRoundPayload || !this.bossEncounter
+      || !this.transitionBossFlow('loot-collection', 'transitioning')) return;
     this.bossNextFightButton?.destroy();
     this.bossNextFightButton = null;
     this.state.set(RoundState.Victory);
@@ -5101,6 +5135,12 @@ export class ArenaScene extends Phaser.Scene {
       this.registry.set('round-finished', payload);
       this.scene.start(SceneKeys.RoundFinished);
     });
+  }
+
+  private transitionBossFlow(expected: BossFlowPhase, next: BossFlowPhase): boolean {
+    if (this.bossFlowPhase !== expected) return false;
+    this.bossFlowPhase = next;
+    return true;
   }
 
   private triggerDefeat(reason: 'playerDead' | 'bombDefused'): void {

@@ -79,6 +79,7 @@ export class BossEncounter {
   private pounceAngle = 0;
   private creditDamage = 0;
   private calloutUntil = 0;
+  private combatActive = true;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -121,7 +122,7 @@ export class BossEncounter {
   }
 
   update(deltaMs: number, player: Player): void {
-    if (this.boss.isDefeated) return;
+    if (!this.combatActive || this.boss.isDefeated) return;
     this.elapsedMs += Math.max(0, deltaMs);
     this.callout.setAlpha(this.elapsedMs < this.calloutUntil ? 0.75 + Math.sin(this.elapsedMs * 0.018) * 0.2 : 0);
 
@@ -163,11 +164,20 @@ export class BossEncounter {
   }
 
   cancelCombat(): void {
+    if (!this.combatActive) return;
+    this.combatActive = false;
     this.boss.setVelocity(0, 0);
     for (const strike of this.pendingStrikes) strike.marker.destroy();
     this.pendingStrikes.length = 0;
     this.mageChargeEndsAt = 0;
     this.mageSuperVolleyAt = 0;
+    this.pounceStartsAt = 0;
+    this.pounceEndsAt = 0;
+    for (const effect of this.effects) {
+      this.scene.tweens.killTweensOf(effect);
+      effect.destroy();
+    }
+    this.effects.clear();
     this.callout.setAlpha(0);
     this.healthTrack.setVisible(false);
     this.healthFill.setVisible(false);
@@ -348,6 +358,7 @@ export class BossEncounter {
   }
 
   private fire(angle: number, speed: number, damage: number, color: number, size: number, attack: BossAttackKind): void {
+    if (!this.combatActive || this.boss.isDefeated) return;
     this.callbacks.fireProjectile({
       x: this.boss.x + Math.cos(angle) * 42,
       y: this.boss.y + Math.sin(angle) * 42,
@@ -361,6 +372,7 @@ export class BossEncounter {
   }
 
   private scheduleStrike(x: number, y: number, radius: number, damage: number, delayMs: number, color: number, attack: BossAttackKind): void {
+    if (!this.combatActive || this.boss.isDefeated) return;
     const target = this.clampPoint(x, y);
     const marker = this.scene.add.circle(target.x, target.y, radius, color, 0.08).setStrokeStyle(3, color, 0.9).setDepth(7);
     this.pendingStrikes.push({ ...target, radius, damage, triggerAt: this.elapsedMs + delayMs, marker, color, attack });

@@ -35,13 +35,13 @@ export class RoundFinishedScene extends Phaser.Scene {
     const sections = splitDebriefPrimary(layout.primary, layout.compact);
     const completedRound = payload?.completedRound ?? '-';
 
-    createDebriefShell(this, layout, 'complete', 'ROUND FINISHED', `ROUND ${completedRound} // OPERATION COMPLETE`);
+    createDebriefShell(this, layout, 'complete', 'ROUND FINISHED', `ROUND ${completedRound} // OPERATION COMPLETE`, true);
     createRewardSummary(this, sections.rewards, [
       { kind: 'credits', value: payload?.creditsGained ?? 0 },
       { kind: 'coreTokens', value: payload?.coreTokensGained ?? 0 },
       { kind: 'plasmaChips', value: payload?.plasmaChipsGained ?? 0 },
       { kind: 'fluxCores', value: payload?.fluxCoresGained ?? 0 }
-    ], layout.compact);
+    ], layout.compact, false, true);
 
     const operationFields = [
       { label: 'PROTOCOL', value: protocolDefinition.label.toUpperCase() },
@@ -52,14 +52,14 @@ export class RoundFinishedScene extends Phaser.Scene {
       { label: 'COMPLETED SEED', value: String(payload?.completedSeed ?? '-') }
     ];
     if (payload?.bossDefeated) operationFields.push({ label: 'BOSS DEFEATED', value: displayId(payload.bossDefeated) });
-    createOperationReadout(this, sections.operation, operationFields, layout.compact);
+    createOperationReadout(this, sections.operation, operationFields, layout.compact, true);
 
     createDebriefHighlight(this, sections.highlight, {
       eyebrow: 'NEXT DEPLOYMENT // ARENA PREVIEW',
       primary: `ROUND ${payload?.nextRound ?? '-'}`,
       details: [`LAYOUT ${displayId(payload?.nextTemplate)}`, `SEED ${payload?.nextSeed ?? '-'}`],
       tone: 'complete'
-    }, layout.compact);
+    }, layout.compact, true);
 
     let continueButton!: Phaser.GameObjects.Container;
     const actions = createDebriefActions(this, layout.actions, [
@@ -113,7 +113,7 @@ export class RoundFinishedScene extends Phaser.Scene {
           this.scene.start(SceneKeys.MainMenu);
         }
       }
-    ], layout.compact, 'ENDLESS FLOW // NEXT ARENA READY');
+    ], layout.compact, 'ENDLESS FLOW // NEXT ARENA READY', true);
     continueButton = actions.get('CONTINUE TO NEXT ROUND')!;
 
     this.scale.off('resize', this.handleResize, this);

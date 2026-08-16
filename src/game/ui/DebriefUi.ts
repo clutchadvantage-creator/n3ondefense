@@ -51,7 +51,8 @@ export const createDebriefShell = (
   layout: DebriefLayout,
   tone: DebriefTone,
   title: string,
-  subtitle: string
+  subtitle: string,
+  enhanceSecondaryTypography = false
 ): void => {
   const { viewportWidth: width, viewportHeight: height, panel, compact } = layout;
   const accent = toneColor(tone);
@@ -94,10 +95,10 @@ export const createDebriefShell = (
     shadow: { color: toneCss(tone), blur: 9, fill: true }, align: 'center'
   }).setOrigin(0.5, 0).setWordWrapWidth(layout.header.width - 100, true).setMaxLines(1);
   const subheading = scene.add.text(centerX, heading.y + heading.height + (compact ? 1 : 4), subtitle, {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 17 : 22}px`, color: '#c7e8f2', fontStyle: 'bold', letterSpacing: 2, align: 'center'
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? (enhanceSecondaryTypography ? 18 : 17) : (enhanceSecondaryTypography ? 24 : 22)}px`, color: '#c7e8f2', fontStyle: 'bold', letterSpacing: 2, align: 'center'
   }).setOrigin(0.5, 0);
   const sync = scene.add.text(layout.header.x + layout.header.width - 14, layout.header.y + layout.header.height - 18, 'DEBRIEF LINK // SYNCED', {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, color: '#76cdd9', letterSpacing: 1
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? (enhanceSecondaryTypography ? 10 : 9) : (enhanceSecondaryTypography ? 13 : 11)}px`, color: '#76cdd9', letterSpacing: 1
   }).setOrigin(1, 0);
   root.add([ghost, heading, subheading, sync]);
 
@@ -156,7 +157,7 @@ const createResourceIcon = (scene: Phaser.Scene, x: number, y: number, size: num
   return root;
 };
 
-export const createRewardSummary = (scene: Phaser.Scene, rect: DebriefRect, rewards: DebriefRewardItem[], compact: boolean, retained = false): void => {
+export const createRewardSummary = (scene: Phaser.Scene, rect: DebriefRect, rewards: DebriefRewardItem[], compact: boolean, retained = false, enhanceSecondaryTypography = false): void => {
   const root = createSectionFrame(scene, rect, retained ? 'REWARDS RETAINED' : 'REWARDS SUMMARY', 0xff68cf);
   const contentTop = compact ? 34 : 42;
   const gap = compact ? 7 : 11;
@@ -181,7 +182,7 @@ export const createRewardSummary = (scene: Phaser.Scene, rect: DebriefRect, rewa
       fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 17 : 23}px`, color: style.css, fontStyle: 'bold'
     }).setOrigin(0, 0);
     const label = scene.add.text(textX, y + chipHeight * 0.62, style.label, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 12}px`, color: '#9ec5d1', fontStyle: 'bold', letterSpacing: 1
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? (enhanceSecondaryTypography ? 11 : 10) : (enhanceSecondaryTypography ? 14 : 12)}px`, color: '#9ec5d1', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0, 0);
     root.add([chip, edge, icon, value, label]);
     icon.setScale(0.72).setAlpha(0);
@@ -191,7 +192,7 @@ export const createRewardSummary = (scene: Phaser.Scene, rect: DebriefRect, rewa
   });
 };
 
-export const createOperationReadout = (scene: Phaser.Scene, rect: DebriefRect, fields: DebriefReadoutItem[], compact: boolean): void => {
+export const createOperationReadout = (scene: Phaser.Scene, rect: DebriefRect, fields: DebriefReadoutItem[], compact: boolean, enhanceSecondaryTypography = false): void => {
   const root = createSectionFrame(scene, rect, 'OPERATION DATA // TACTICAL READOUT', 0x55eaff);
   const contentTop = compact ? 35 : 43;
   const gap = compact ? 5 : 8;
@@ -206,16 +207,16 @@ export const createOperationReadout = (scene: Phaser.Scene, rect: DebriefRect, f
     const y = contentTop + gap + row * (cellHeight + gap);
     const cell = scene.add.rectangle(x, y, cellWidth, cellHeight, 0x06121c, 0.82).setOrigin(0, 0).setStrokeStyle(1, 0x387184, 0.28);
     const label = scene.add.text(x + 9, y + 5, field.label, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, color: '#72b8c7', fontStyle: 'bold', letterSpacing: 1
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? (enhanceSecondaryTypography ? 10 : 9) : (enhanceSecondaryTypography ? 12 : 11)}px`, color: '#72b8c7', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0, 0);
     const value = scene.add.text(x + 9, y + cellHeight - (compact ? 5 : 7), field.value, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 13 : 16}px`, color: '#d9f7ff', fontStyle: 'bold'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? (enhanceSecondaryTypography ? 14 : 13) : (enhanceSecondaryTypography ? 17 : 16)}px`, color: '#d9f7ff', fontStyle: 'bold'
     }).setOrigin(0, 1).setWordWrapWidth(cellWidth - 18, true).setMaxLines(1);
     root.add([cell, label, value]);
   });
 };
 
-export const createDebriefHighlight = (scene: Phaser.Scene, rect: DebriefRect, content: DebriefHighlightContent, compact: boolean): void => {
+export const createDebriefHighlight = (scene: Phaser.Scene, rect: DebriefRect, content: DebriefHighlightContent, compact: boolean, enhanceSecondaryTypography = false): void => {
   const tone = content.tone ?? 'complete';
   const accent = toneColor(tone);
   const root = createSectionFrame(scene, rect, content.eyebrow, accent);
@@ -225,7 +226,7 @@ export const createDebriefHighlight = (scene: Phaser.Scene, rect: DebriefRect, c
   root.add(primary);
   const detailY = compact ? rect.height - 13 : rect.height - 17;
   const detail = scene.add.text(rect.width - 16, detailY, content.details.join('   //   '), {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 14}px`, color: '#b5dbe5', fontStyle: 'bold', align: 'right', letterSpacing: compact ? 0 : 1
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? (enhanceSecondaryTypography ? 12 : 11) : (enhanceSecondaryTypography ? 16 : 14)}px`, color: '#b5dbe5', fontStyle: 'bold', align: 'right', letterSpacing: compact ? 0 : 1
   }).setOrigin(1, 1).setWordWrapWidth(rect.width - 32, true).setMaxLines(compact ? 2 : 1);
   root.add(detail);
   const pulse = scene.add.rectangle(8, rect.height - 5, rect.width - 16, 2, accent, 0.35).setOrigin(0, 0.5);
@@ -265,7 +266,8 @@ export const createDebriefActions = (
   rect: DebriefRect,
   actions: DebriefAction[],
   compact: boolean,
-  footer: string
+  footer: string,
+  enhanceSecondaryTypography = false
 ): Map<string, Phaser.GameObjects.Container> => {
   createSectionFrame(scene, rect, 'COMMAND ROUTES', 0x55eaff);
   const buttons = new Map<string, Phaser.GameObjects.Container>();
@@ -283,7 +285,7 @@ export const createDebriefActions = (
     buttons.set(action.label, createDebriefActionButton(scene, rect.x + rect.width / 2, y, width, height, action, compact));
   });
   scene.add.text(rect.x + rect.width / 2, rect.y + rect.height - (compact ? 10 : 14), footer, {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 12}px`, color: '#789eac', align: 'center', letterSpacing: 1,
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? (enhanceSecondaryTypography ? 11 : 10) : (enhanceSecondaryTypography ? 14 : 12)}px`, color: '#789eac', align: 'center', letterSpacing: 1,
     wordWrap: { width: rect.width - 24, useAdvancedWrap: true }
   }).setOrigin(0.5, 1).setDepth(34).setMaxLines(2);
   return buttons;
