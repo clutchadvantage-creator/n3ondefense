@@ -47,6 +47,7 @@ import { DEFAULT_AIM_SETTINGS, normalizeAimSettings, type AimSettings } from '..
 import { ARENA_GENERATION_CONFIG } from '../config/arenaGeneration.ts';
 import { drawReticle } from '../ui/ReticleRenderer';
 import { createPauseMenuView, type PauseMenuView } from '../ui/PauseMenuUi.ts';
+import { ArenaCommandButton } from '../ui/ArenaCommandButton.ts';
 import { ABILITY_ACTIONS, INTERACT_BINDING, MOVEMENT_BINDINGS, PRIMARY_FIRE_BINDING, bindingLabel, compactBindingLabel, type AbilityAction, type AbilityBindings } from '../config/controls';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_BALANCE, RUN_PROTOCOLS, normalizeRunProtocolId } from '../mods/modBalance.ts';
@@ -55,6 +56,7 @@ import type { ModDefinition, ModDropSource, ModRewardRecord, ModSlot, RunProtoco
 import { magneticResistanceForEnemy, splitCurrentSecondaryDamage } from '../mods/ModRules.ts';
 import { MOD_RARITY_COLORS, createModCardView } from '../mods/ModCardView.ts';
 import { ModAcquisitionPresenter } from '../mods/ModAcquisitionPresenter.ts';
+import { MOD_PICKUP_REVEAL_LEAD_IN_MS } from '../mods/ModAcquisition.ts';
 import { BombsiteModSystem } from '../mods/BombsiteModSystem.ts';
 import { MOD_FOCUS_CATEGORIES, RUN_CONTRACT_IDS, getContract, getRoundCompletionCredits } from '../economy/economyBalance.ts';
 import type { AccountProgressionTier, ModFocusSignalId, RunContractId } from '../economy/types.ts';
@@ -70,6 +72,7 @@ import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import type { TutorialMode, TutorialTargetBounds } from '../tutorial/TutorialTypes.ts';
 import { nextPickupBuffStack, resourcePickupCap } from '../player/OverdriveRules.ts';
+import { RICOCHET_MAX_WALL_BOUNCES, reflectRicochetVelocity } from '../player/RicochetRules.ts';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -85,6 +88,7 @@ interface Projectile {
   critical?: boolean;
   turretId?: string;
   bossAttack?: BossAttackKind;
+  ricochetsRemaining?: number;
   nextTrailAt: number;
 }
 
@@ -253,6 +257,7 @@ const PICKUP_SFX_BY_TYPE = {
   damageBoost: 'damageBoostPickup',
   speedBoost: 'speedPickup',
   rapidFire: 'fireRatePickup',
+  ricochet: 'ricochetPickup',
   credits: 'creditPickup',
   coreToken: 'coreTokenPickup',
   plasmaChip: 'pickup',
@@ -348,12 +353,13 @@ export class ArenaScene extends Phaser.Scene {
   private pendingRoundPayload: RoundFinishedPayload | null = null;
   private bossPickupRandom: SeededRandom | null = null;
   private nextBossSupportPickupAt = 0;
-  private bossSupportSequence = 0;
   private bossVictoryHandled = false;
   private bossFlowPhase: BossFlowPhase = 'none';
   private bossIntroOverlay: BossIntroOverlay | null = null;
-  private bossNextFightButton: Phaser.GameObjects.Container | null = null;
+  private bossNextFightButton: ArenaCommandButton | null = null;
   private readonly bossSequenceTimers: Phaser.Time.TimerEvent[] = [];
+  private readonly roundInfusionTimers = new Set<Phaser.Time.TimerEvent>();
+  private readonly roundInfusionEffects = new Set<Phaser.GameObjects.GameObject>();
   private bossLootLaunchesPending = 0;
 
   private roundCredits = 0;
@@ -382,7 +388,7 @@ export class ArenaScene extends Phaser.Scene {
   private pendingMineSalvo = false;
 
   private nextSpawnAt = 0;
-  private nextArenaHealthDropAt = 0;
+  private nextArenaSupportPickupAt = 0;
   private lastSpecialSpawnAt = -99_999;
   private lastDefuserSpawnAt = -99_999;
   private turretTelemetrySequence = 0;
@@ -879,7 +885,7 @@ export class ArenaScene extends Phaser.Scene {
     this.registerBombSiteEvents();
 
     this.nextSpawnAt = this.time.now + 2500;
-    this.nextArenaHealthDropAt = this.time.now + Phaser.Math.Between(PICKUP_BALANCE.arenaHealthFirstMinMs, PICKUP_BALANCE.arenaHealthFirstMaxMs);
+    this.nextArenaSupportPickupAt = this.time.now + 600;
     this.lastSpecialSpawnAt = -99_999;
     this.lastDefuserSpawnAt = -99_999;
     this.activeDefuserCountForTelemetry = 0;
@@ -991,6 +997,7 @@ export class ArenaScene extends Phaser.Scene {
       this.player.buffs.damageBoostUntil = 0;
       this.player.buffs.speedBoostUntil = 0;
       this.player.buffs.rapidFireUntil = 0;
+      this.player.buffs.ricochetUntil = 0;
       this.player.buffs.speedBoostStacks = 0;
       this.player.buffs.rapidFireStacks = 0;
       this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor', this.time.now));
@@ -1186,7 +1193,7 @@ export class ArenaScene extends Phaser.Scene {
     this.updateAbilities(now, dt);
     this.updateDeathMines(now);
     this.updateShieldState(now);
-    this.updateArenaHealthDrops(now);
+    this.updateArenaSupportPickups(now);
     this.updatePickups(now, dt);
     this.updateModPickups(now, dt);
     this.updateEmergencyCapacitor(now);
@@ -1357,6 +1364,7 @@ export class ArenaScene extends Phaser.Scene {
       projectile.critical = state.critical;
       projectile.turretId = state.turretId;
       projectile.bossAttack = state.bossAttack;
+      projectile.ricochetsRemaining = state.ricochetsRemaining ?? 0;
       projectile.nextTrailAt = this.time.now + Math.abs(Math.floor(state.x + state.y)) % 30;
     };
 
@@ -1389,6 +1397,7 @@ export class ArenaScene extends Phaser.Scene {
         projectile.critical = undefined;
         projectile.turretId = undefined;
         projectile.bossAttack = undefined;
+        projectile.ricochetsRemaining = 0;
       }
     );
 
@@ -1508,13 +1517,13 @@ export class ArenaScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body | null;
     if (!body || body.velocity.lengthSq() < 36) return;
     this.nextHoloAfterimageAt = now + (this.particlesEnabled ? 90 : 180);
-    const echo = this.add.image(this.player.x, this.player.y, this.player.texture.key, this.player.frame.name)
+    const echo = this.trackRoundInfusionEffect(this.add.image(this.player.x, this.player.y, this.player.texture.key, this.player.frame.name)
       .setDisplaySize(this.player.displayWidth, this.player.displayHeight)
       .setRotation(this.player.rotation)
       .setTint(this.infusionSpectrumColor(0.12))
       .setAlpha(0.32)
       .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(7);
+      .setDepth(7));
     this.tweens.add({
       targets: echo,
       alpha: 0,
@@ -1522,7 +1531,7 @@ export class ArenaScene extends Phaser.Scene {
       scaleY: 1.16,
       duration: 360,
       ease: 'Quad.Out',
-      onComplete: () => echo.destroy()
+      onComplete: () => this.releaseRoundInfusionEffect(echo)
     });
   }
 
@@ -1576,7 +1585,8 @@ export class ArenaScene extends Phaser.Scene {
       previousX: spawnX,
       previousY: spawnY,
       telemetryOwner: 'weapon',
-      critical: crit
+      critical: crit,
+      ricochetsRemaining: now < this.player.buffs.ricochetUntil ? RICOCHET_MAX_WALL_BOUNCES : 0
     }));
 
     this.player.heat += this.player.weapon.heatPerShot;
@@ -2593,6 +2603,10 @@ export class ArenaScene extends Phaser.Scene {
           this.explodeBossRocket(p);
           continue;
         }
+        if (p.from === 'player' && (p.ricochetsRemaining ?? 0) > 0 && this.ricochetProjectileFromWall(p)) {
+          this.projectiles[writeIndex++] = p;
+          continue;
+        }
         if (p.telemetryOwner) GameplayTelemetryRecorder.recordProjectileMiss(p.telemetryOwner, 'wall');
         this.spawnImpact(p.sprite.x, p.sprite.y, p.trailColor);
         this.retireProjectile(p);
@@ -2770,6 +2784,37 @@ export class ArenaScene extends Phaser.Scene {
     this.retireProjectile(projectile);
   }
 
+  private ricochetProjectileFromWall(projectile: Projectile): boolean {
+    const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
+    if (!body) return false;
+    const previousX = projectile.previousX ?? projectile.sprite.x;
+    const previousY = projectile.previousY ?? projectile.sprite.y;
+    const struckVerticalSurface = this.hitWall(projectile.sprite.x, previousY);
+    const struckHorizontalSurface = this.hitWall(previousX, projectile.sprite.y);
+    const reflected = reflectRicochetVelocity(
+      body.velocity.x,
+      body.velocity.y,
+      struckVerticalSurface,
+      struckHorizontalSurface
+    );
+    const velocityX = reflected.x;
+    const velocityY = reflected.y;
+    const speed = Math.hypot(velocityX, velocityY);
+    if (speed <= 0.01) return false;
+    const directionX = velocityX / speed;
+    const directionY = velocityY / speed;
+    const safeX = previousX + directionX * 4;
+    const safeY = previousY + directionY * 4;
+    body.reset(safeX, safeY);
+    body.setVelocity(velocityX, velocityY);
+    projectile.sprite.setRotation(Math.atan2(velocityY, velocityX));
+    projectile.previousX = safeX;
+    projectile.previousY = safeY;
+    projectile.ricochetsRemaining = Math.max(0, (projectile.ricochetsRemaining ?? 0) - 1);
+    this.spawnImpact(projectile.sprite.x, projectile.sprite.y, 0x6fffd2);
+    return true;
+  }
+
   private splitProjectileAtFence(projectile: Projectile, spawned: Projectile[]): number {
     const previousX = projectile.previousX ?? projectile.sprite.x;
     const previousY = projectile.previousY ?? projectile.sprite.y;
@@ -2826,7 +2871,8 @@ export class ArenaScene extends Phaser.Scene {
         previousY: y,
         telemetryOwner: projectile.telemetryOwner,
         critical: projectile.critical,
-        turretId: projectile.turretId
+        turretId: projectile.turretId,
+        ricochetsRemaining: projectile.ricochetsRemaining
       }));
     }
     const pulse = this.obtainFxCircle({
@@ -3640,8 +3686,18 @@ export class ArenaScene extends Phaser.Scene {
       for (let ray = 0; ray < rays; ray += 1) {
         const angle = ray / rays * Math.PI * 2 + Phaser.Math.FloatBetween(-0.08, 0.08);
         const distance = Phaser.Math.Between(52, 88);
-        const spark = this.add.circle(bx, by, Phaser.Math.Between(2, 4), colors[(burst + ray) % colors.length], 1).setDepth(42);
-        this.tweens.add({ targets: spark, x: bx + Math.cos(angle) * distance, y: by + Math.sin(angle) * distance, alpha: 0, duration: Phaser.Math.Between(480, 760), ease: 'Cubic.Out', onComplete: () => spark.destroy() });
+        const spark = this.trackRoundInfusionEffect(
+          this.add.circle(bx, by, Phaser.Math.Between(2, 4), colors[(burst + ray) % colors.length], 1).setDepth(42)
+        );
+        this.tweens.add({
+          targets: spark,
+          x: bx + Math.cos(angle) * distance,
+          y: by + Math.sin(angle) * distance,
+          alpha: 0,
+          duration: Phaser.Math.Between(480, 760),
+          ease: 'Cubic.Out',
+          onComplete: () => this.releaseRoundInfusionEffect(spark)
+        });
       }
       burst += 1;
     };
@@ -3658,41 +3714,78 @@ export class ArenaScene extends Phaser.Scene {
       callback: () => {
         if (!this.sys.isActive() || this.time.now - startsAt > duration) {
           timer?.remove();
+          if (timer) this.roundInfusionTimers.delete(timer);
           timer = null;
           return;
         }
         emitBurst();
       }
     });
+    this.roundInfusionTimers.add(timer);
   }
 
-  private updateArenaHealthDrops(now: number): void {
-    if (now < this.nextArenaHealthDropAt) return;
+  private trackRoundInfusionEffect<T extends Phaser.GameObjects.GameObject>(effect: T): T {
+    this.roundInfusionEffects.add(effect);
+    return effect;
+  }
 
-    this.nextArenaHealthDropAt = now + Phaser.Math.Between(
-      PICKUP_BALANCE.arenaHealthMinIntervalMs,
-      PICKUP_BALANCE.arenaHealthMaxIntervalMs
+  private releaseRoundInfusionEffect(effect: Phaser.GameObjects.GameObject): void {
+    this.roundInfusionEffects.delete(effect);
+    if (!effect.scene) return;
+    effect.destroy();
+  }
+
+  private clearRoundInfusionEffects(): void {
+    for (const timer of this.roundInfusionTimers) timer.remove(false);
+    this.roundInfusionTimers.clear();
+    for (const effect of this.roundInfusionEffects) {
+      this.tweens.killTweensOf(effect);
+      if (effect.scene) effect.destroy();
+    }
+    this.roundInfusionEffects.clear();
+  }
+
+  private updateArenaSupportPickups(now: number): void {
+    if (now < this.nextArenaSupportPickupAt) return;
+
+    this.nextArenaSupportPickupAt = now + Phaser.Math.Between(
+      PICKUP_BALANCE.arenaSupportRestockMinMs,
+      PICKUP_BALANCE.arenaSupportRestockMaxMs
     );
 
-    const activeHealthDrops = this.pickups.filter((pickup) => pickup.type === 'health').length;
-    if (activeHealthDrops >= PICKUP_BALANCE.maxArenaHealthDrops) return;
-
-    for (let attempt = 0; attempt < 24; attempt += 1) {
-      const bounds=this.layout.generation.bounds;
-      const x = Phaser.Math.Between(bounds.x+100, bounds.x+bounds.w-100);
-      const y = Phaser.Math.Between(bounds.y+100, bounds.y+bounds.h-100);
-      if (!this.isClearForArenaPickup(x, y)) continue;
-
-      const pickup = this.createPickupSprite('health', x, y, COLORS.green);
-      this.pickups.push({
-        type: 'health',
-        sprite: pickup,
-        expiresAt: now + PICKUP_BALANCE.arenaHealthLifetimeMs,
-        source: 'arena-support'
-      });
-      GameplayTelemetryRecorder.recordPickupDropped('health', 'arena-support');
-      return;
+    let healthCount = 0;
+    let energyCount = 0;
+    for (const pickup of this.pickups) {
+      if (pickup.source !== 'arena-support') continue;
+      if (pickup.type === 'health') healthCount += 1;
+      if (pickup.type === 'energy') energyCount += 1;
     }
+    for (const type of ['health', 'energy'] as const) {
+      const active = type === 'health' ? healthCount : energyCount;
+      const missing = Math.max(0, PICKUP_BALANCE.arenaSupportTargetPerType - active);
+      for (let index = 0; index < missing; index += 1) {
+        const point = this.findArenaSupportPickupPoint();
+        if (!point) break;
+        const sprite = this.createPickupSprite(type, point.x, point.y, type === 'health' ? COLORS.green : COLORS.cyan);
+        this.pickups.push({
+          type,
+          sprite,
+          expiresAt: now + PICKUP_BALANCE.arenaSupportLifetimeMs,
+          source: 'arena-support'
+        });
+        GameplayTelemetryRecorder.recordPickupDropped(type, 'arena-support');
+      }
+    }
+  }
+
+  private findArenaSupportPickupPoint(): { x: number; y: number } | null {
+    const bounds = this.layout.generation.bounds;
+    for (let attempt = 0; attempt < 32; attempt += 1) {
+      const x = Phaser.Math.Between(bounds.x + 100, bounds.x + bounds.w - 100);
+      const y = Phaser.Math.Between(bounds.y + 100, bounds.y + bounds.h - 100);
+      if (this.isClearForArenaPickup(x, y)) return { x, y };
+    }
+    return null;
   }
 
   private getSecondaryTurretTarget(enemy: Enemy, now: number): Turret | null {
@@ -3775,6 +3868,7 @@ export class ArenaScene extends Phaser.Scene {
       );
       this.player.buffs.rapidFireUntil = this.time.now + buffDurationMs;
     }
+    if (type === 'ricochet') this.player.buffs.ricochetUntil = this.time.now + buffDurationMs;
     if (type === 'credits') {
       const credits = explicitAmount ?? this.scaleModCredits(PICKUP_BALANCE.credits);
       this.roundCredits += credits;
@@ -3785,7 +3879,7 @@ export class ArenaScene extends Phaser.Scene {
     if (type === 'fluxCore') this.roundFluxCores += explicitAmount ?? 1;
     GameplayTelemetryRecorder.recordPickupCollected(type, source, requestedRestoration, appliedRestoration);
 
-    const pickupLabel = type === 'fluxCore' ? 'FLUX CORE' : type;
+    const pickupLabel = type === 'fluxCore' ? 'FLUX CORE' : type === 'ricochet' ? 'RICOCHET ROUNDS' : type;
     const t = this.add.text(this.player.x, this.player.y - 24, `+${pickupLabel}`, {
       fontFamily: 'Rajdhani, sans-serif',
       fontSize: '18px',
@@ -3859,13 +3953,13 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private playEnemyGhostEcho(enemy: Enemy): void {
-    const ghost = this.add.image(enemy.x, enemy.y, enemy.texture.key, enemy.frame.name)
+    const ghost = this.trackRoundInfusionEffect(this.add.image(enemy.x, enemy.y, enemy.texture.key, enemy.frame.name)
       .setDisplaySize(enemy.displayWidth, enemy.displayHeight)
       .setRotation(enemy.rotation)
       .setTint(0x74f7ff)
       .setAlpha(0.42)
       .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(7);
+      .setDepth(7));
     this.tweens.add({
       targets: ghost,
       y: ghost.y - 42,
@@ -3874,21 +3968,21 @@ export class ArenaScene extends Phaser.Scene {
       scaleY: 1.22,
       duration: 720,
       ease: 'Cubic.Out',
-      onComplete: () => ghost.destroy()
+      onComplete: () => this.releaseRoundInfusionEffect(ghost)
     });
   }
 
   private playArcadePop(x: number, y: number): void {
     const callouts = ['ZAP!', 'NICE!', 'RAD!', 'POP!', 'NEON!'];
     const index = this.arcadePopSequence++ % callouts.length;
-    const label = this.add.text(x, y - 18, callouts[index], {
+    const label = this.trackRoundInfusionEffect(this.add.text(x, y - 18, callouts[index], {
       fontFamily: 'Orbitron, sans-serif',
       fontSize: '16px',
       fontStyle: 'bold',
       color: Phaser.Display.Color.IntegerToColor(this.infusionSpectrumColor(index * 0.14)).rgba,
       stroke: '#020711',
       strokeThickness: 4
-    }).setOrigin(0.5).setDepth(13).setRotation(Phaser.Math.FloatBetween(-0.1, 0.1));
+    }).setOrigin(0.5).setDepth(13).setRotation(Phaser.Math.FloatBetween(-0.1, 0.1)));
     this.tweens.add({
       targets: label,
       y: label.y - 34,
@@ -3898,7 +3992,7 @@ export class ArenaScene extends Phaser.Scene {
       delay: 180,
       duration: 760,
       ease: 'Back.easeOut',
-      onComplete: () => label.destroy()
+      onComplete: () => this.releaseRoundInfusionEffect(label)
     });
   }
 
@@ -3984,7 +4078,8 @@ export class ArenaScene extends Phaser.Scene {
         const x = pickup.sprite.x;
         const y = pickup.sprite.y;
         pickup.sprite.destroy();
-        this.awardResolvedMod(pickup.definition, pickup.source, x, y);
+        this.audio.playSfx('modPickup');
+        this.awardResolvedMod(pickup.definition, pickup.source, x, y, MOD_PICKUP_REVEAL_LEAD_IN_MS);
         continue;
       }
       if (now >= pickup.collectibleAt && magneticField.pullSpeed > 0 && distanceSquared < attractionRadiusSquared) {
@@ -4000,7 +4095,7 @@ export class ArenaScene extends Phaser.Scene {
     this.modPickups.length = writeIndex;
   }
 
-  private awardResolvedMod(definition: ModDefinition, source: ModDropSource, x: number, y: number): void {
+  private awardResolvedMod(definition: ModDefinition, source: ModDropSource, x: number, y: number, leadInMs = 0): void {
     const duplicate = Boolean(SaveSystem.getModCollection().inventory[definition.id]?.discovered);
     const result = SaveSystem.addMod(definition.id);
     if (!result.ok) return;
@@ -4014,7 +4109,8 @@ export class ArenaScene extends Phaser.Scene {
         rarity: definition.rarity,
         duplicate,
         sourceScreenX: sourcePosition.x,
-        sourceScreenY: sourcePosition.y
+        sourceScreenY: sourcePosition.y,
+        leadInMs
       });
       this.modAcquisitionPresenter?.whenIdle(() => {
         TutorialEventBus.emit('mod.revealed', { modId: definition.id, rarity: definition.rarity, duplicate });
@@ -4076,7 +4172,9 @@ export class ArenaScene extends Phaser.Scene {
     else if (roll < PICKUP_BALANCE.healthShare + PICKUP_BALANCE.energyShare) type = 'energy';
     else if (roll < PICKUP_BALANCE.healthShare + PICKUP_BALANCE.energyShare + PICKUP_BALANCE.damageBoostShare) type = 'damageBoost';
     else if (roll < PICKUP_BALANCE.healthShare + PICKUP_BALANCE.energyShare + PICKUP_BALANCE.damageBoostShare + PICKUP_BALANCE.speedBoostShare) type = 'speedBoost';
-    else if (roll < 1 - PICKUP_BALANCE.creditsShare - PICKUP_BALANCE.coreTokenShare) type = 'rapidFire';
+    else if (roll < PICKUP_BALANCE.healthShare + PICKUP_BALANCE.energyShare + PICKUP_BALANCE.damageBoostShare
+      + PICKUP_BALANCE.speedBoostShare + PICKUP_BALANCE.rapidFireShare) type = 'rapidFire';
+    else if (roll < 1 - PICKUP_BALANCE.creditsShare - PICKUP_BALANCE.coreTokenShare) type = 'ricochet';
     else if (roll < 1 - PICKUP_BALANCE.coreTokenShare) type = 'credits';
     else type = 'coreToken';
 
@@ -4086,6 +4184,7 @@ export class ArenaScene extends Phaser.Scene {
       damageBoost: COLORS.red,
       speedBoost: COLORS.pink,
       rapidFire: COLORS.orange,
+      ricochet: 0x6fffd2,
       credits: 0xf2ff72,
       coreToken: COLORS.purple,
       plasmaChip: 0xd06dff,
@@ -4263,6 +4362,14 @@ export class ArenaScene extends Phaser.Scene {
       iconRig.add(bolts);
       return;
     }
+    if (type === 'ricochet') {
+      const wall = this.add.rectangle(0, 0, 2.5, 20, 0xffffff, 0.82).setRotation(0.42);
+      const incoming = this.add.line(0, 0, -10, 7, -1, 1, color, 1).setLineWidth(2.5, 2.5);
+      const outgoing = this.add.line(0, 0, 1, -1, 10, -8, color, 1).setLineWidth(2.5, 2.5);
+      const spark = this.add.polygon(0, 0, [0, -4, 1.5, -1.5, 4, 0, 1.5, 1.5, 0, 4, -1.5, 1.5, -4, 0, -1.5, -1.5], 0xffffff, 0.96);
+      iconRig.add([wall, incoming, outgoing, spark]);
+      return;
+    }
     if (type === 'credits') {
       const glyphGlow = this.add.text(0, 0, '\u00a2', {
         fontFamily: 'Orbitron, Rajdhani, sans-serif',
@@ -4429,6 +4536,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private completeRound(): void {
     if (this.state.state === RoundState.Victory && this.pendingRoundPayload) return;
+    this.clearRoundInfusionEffects();
     this.audio.stopLowHealthWarning();
     this.showBanner('ALL TARGETS DESTROYED');
     this.flushPendingCombatProgress();
@@ -4625,7 +4733,6 @@ export class ArenaScene extends Phaser.Scene {
     this.bossWallCollider = this.physics.add.collider(this.bossEncounter.boss, this.walls);
 
     this.bossPickupRandom = new SeededRandom((bossSeed ^ 0x51f15e11) >>> 0);
-    this.bossSupportSequence = 0;
     this.nextBossSupportPickupAt = this.time.now + BOSS_BALANCE.supportPickupFirstDelayMs;
     this.shieldActiveUntil = 0;
     this.shieldCooldownUntil = 0;
@@ -4721,14 +4828,37 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateBossSupportPickups(now: number): void {
     if (!this.bossEncounter || now < this.nextBossSupportPickupAt || !this.bossPickupRandom) return;
-    const supportCount = this.pickups.filter((pickup) => pickup.type === 'health' || pickup.type === 'energy').length;
-    if (supportCount >= BOSS_BALANCE.maximumSupportPickups) {
-      this.nextBossSupportPickupAt = now + 1800;
-      return;
+    const interval = this.bossPickupRandom.int(BOSS_BALANCE.supportPickupMinimumIntervalMs, BOSS_BALANCE.supportPickupMaximumIntervalMs);
+    this.nextBossSupportPickupAt = now + interval;
+
+    let healthCount = 0;
+    let energyCount = 0;
+    for (const pickup of this.pickups) {
+      if (pickup.source !== 'boss-support') continue;
+      if (pickup.type === 'health') healthCount += 1;
+      if (pickup.type === 'energy') energyCount += 1;
     }
 
+    let spawned = 0;
+    for (const type of ['health', 'energy'] as const) {
+      const active = type === 'health' ? healthCount : energyCount;
+      const missing = Math.max(0, BOSS_BALANCE.supportPickupTargetPerType - active);
+      for (let index = 0; index < missing && healthCount + energyCount + spawned < BOSS_BALANCE.maximumSupportPickups; index += 1) {
+        const point = this.findBossSupportPickupPoint();
+        if (!point) break;
+        const color = type === 'health' ? COLORS.green : COLORS.cyan;
+        const sprite = this.createPickupSprite(type, point.x, point.y, color);
+        this.pickups.push({ type, sprite, expiresAt: now + BOSS_BALANCE.supportPickupLifetimeMs, source: 'boss-support' });
+        GameplayTelemetryRecorder.recordPickupDropped(type, 'boss-support');
+        spawned += 1;
+      }
+    }
+    if (spawned > 0) this.showBanner('HEALTH + ENERGY SUPPORT ONLINE');
+  }
+
+  private findBossSupportPickupPoint(): { x: number; y: number } | null {
+    if (!this.bossEncounter || !this.bossPickupRandom) return null;
     const bounds = this.layout.generation.bounds;
-    let point: { x: number; y: number } | null = null;
     for (let attempt = 0; attempt < 40; attempt += 1) {
       const candidate = {
         x: this.bossPickupRandom.float(bounds.x + 80, bounds.x + bounds.w - 80),
@@ -4736,20 +4866,10 @@ export class ArenaScene extends Phaser.Scene {
       };
       if (this.isClearForArenaPickup(candidate.x, candidate.y)
         && Phaser.Math.Distance.Between(candidate.x, candidate.y, this.bossEncounter.boss.x, this.bossEncounter.boss.y) > 150) {
-        point = candidate;
-        break;
+        return candidate;
       }
     }
-    const interval = this.bossPickupRandom.int(BOSS_BALANCE.supportPickupMinimumIntervalMs, BOSS_BALANCE.supportPickupMaximumIntervalMs);
-    this.nextBossSupportPickupAt = now + interval;
-    if (!point) return;
-
-    const type: PickupType = this.bossSupportSequence++ % 2 === 0 ? 'health' : 'energy';
-    const color = type === 'health' ? COLORS.green : COLORS.cyan;
-    const sprite = this.createPickupSprite(type, point.x, point.y, color);
-    this.pickups.push({ type, sprite, expiresAt: now + BOSS_BALANCE.supportPickupLifetimeMs, source: 'boss-support' });
-    GameplayTelemetryRecorder.recordPickupDropped(type, 'boss-support');
-    this.showBanner(`${type.toUpperCase()} SUPPORT DROP`);
+    return null;
   }
 
   private completeBossFight(): void {
@@ -4932,15 +5052,16 @@ export class ArenaScene extends Phaser.Scene {
     this.setMenuCursorMode();
     this.pointerLock?.hidePrompt();
     this.pointerLock?.release();
-    this.bossNextFightButton = createButton(this, this.scale.width * 0.5, this.scale.height - 58, 'NEXT FIGHT', () => {
+    this.bossNextFightButton = new ArenaCommandButton(this, 'NEXT FIGHT', () => {
       this.finishBossCollection();
-    }, 270, 'menu', { height: 46, fontSize: 18 }).setScrollFactor(0).setDepth(3500);
+    });
+    this.bossNextFightButton.setGamePosition(this.scale.width * 0.5, this.scale.height - 58, 270, 46);
   }
 
   private finishBossCollection(): void {
     if (this.bossFlowPhase !== 'loot-collection' || !this.pendingRoundPayload || !this.bossEncounter) return;
     this.bossFlowPhase = 'transitioning';
-    this.bossNextFightButton?.destroy(true);
+    this.bossNextFightButton?.destroy();
     this.bossNextFightButton = null;
     this.state.set(RoundState.Victory);
     this.physics.pause();
@@ -4984,6 +5105,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private triggerDefeat(reason: 'playerDead' | 'bombDefused'): void {
     if (this.state.state === RoundState.Defeat) return;
+    this.clearRoundInfusionEffects();
     if (reason === 'playerDead') {
       this.audio.playSfx('playerDeath');
       this.createDeathExplosion(this.player.x, this.player.y, SaveSystem.getCosmeticColor('playerColor', this.time.now), true);
@@ -5059,6 +5181,7 @@ export class ArenaScene extends Phaser.Scene {
     const fireRateStacks = now < this.player.buffs.rapidFireUntil ? Math.max(1, this.player.buffs.rapidFireStacks) : 0;
     this.appendHudBuff(`SPEED x${speedStacks}`, this.player.buffs.speedBoostUntil, now);
     this.appendHudBuff(`RAPID FIRE x${fireRateStacks}`, this.player.buffs.rapidFireUntil, now);
+    this.appendHudBuff('RICOCHET', this.player.buffs.ricochetUntil, now);
   }
 
   private appendHudBuff(label: string, until: number, now: number): void {
@@ -5858,7 +5981,7 @@ export class ArenaScene extends Phaser.Scene {
     this.siteActionText.setPosition(width * 0.5, height - 46);
     this.bossEncounter?.resize(width);
     this.bossIntroOverlay?.resize(width, height);
-    this.bossNextFightButton?.setPosition(width * 0.5, height - 58);
+    this.bossNextFightButton?.setGamePosition(width * 0.5, height - 58, 270, 46);
     this.modAcquisitionPresenter?.resize(width, height);
     if (this.pauseMenu) {
       this.layoutPauseMenu(width, height);
@@ -6011,7 +6134,10 @@ export class ArenaScene extends Phaser.Scene {
 
   private clearRoundCollections(): void {
     this.bossSequenceTimers.length = 0;
+    this.bossNextFightButton?.destroy();
     this.bossNextFightButton = null;
+    this.roundInfusionTimers.clear();
+    this.roundInfusionEffects.clear();
     this.bossLootLaunchesPending = 0;
     this.wallRects.length = 0;
     this.enemies.length = 0;
@@ -6049,6 +6175,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private cleanupRoundObjects(): void {
+    this.clearRoundInfusionEffects();
     this.arenaVisuals?.destroy();
     this.arenaVisuals = null;
     this.walls?.clear(true, true);
@@ -6059,7 +6186,7 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopFluxCoreLoop();
     for (const timer of this.bossSequenceTimers) timer.remove(false);
     this.bossSequenceTimers.length = 0;
-    this.bossNextFightButton?.destroy(true);
+    this.bossNextFightButton?.destroy();
     this.bossNextFightButton = null;
     this.bossEncounter?.destroy();
     this.bossEncounter = null;

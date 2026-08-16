@@ -9,6 +9,7 @@ export interface BuffState {
   damageBoostUntil: number;
   speedBoostUntil: number;
   rapidFireUntil: number;
+  ricochetUntil: number;
   speedBoostStacks: number;
   rapidFireStacks: number;
 }
@@ -32,6 +33,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     damageBoostUntil: 0,
     speedBoostUntil: 0,
     rapidFireUntil: 0,
+    ricochetUntil: 0,
     speedBoostStacks: 0,
     rapidFireStacks: 0
   };

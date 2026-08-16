@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { PICKUP_BALANCE } from '../src/game/config/balance/index.ts';
+import { SFX_DEFINITIONS } from '../src/game/config/audio.ts';
+import { RICOCHET_MAX_WALL_BOUNCES, reflectRicochetVelocity } from '../src/game/player/RicochetRules.ts';
 
 const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
 
@@ -10,11 +13,29 @@ test('Every pickup type uses the same compact neon shell with a distinct center 
   assert.match(arena, /const haloRadius = 18/);
   assert.match(arena, /const scanRing = this\.add\.circle\(0, 0, 15/);
   assert.match(arena, /const orbitPath = this\.add\.circle\(0, 0, 20/);
-  for (const type of ['health', 'energy', 'damageBoost', 'speedBoost', 'rapidFire', 'credits', 'coreToken']) {
+  for (const type of ['health', 'energy', 'damageBoost', 'speedBoost', 'rapidFire', 'ricochet', 'credits', 'coreToken']) {
     assert.match(arena, new RegExp(`type === '${type}'`));
   }
   assert.match(arena, /this\.add\.text\(0, -1, '\\u00a2'/);
   assert.doesNotMatch(arena, /this\.add\.circle\(0, 0, 22/);
+});
+
+test('Ricochet Rounds use a distinct pickup, preserve projectile speed, and have bounded wall bounces', () => {
+  assert.equal(RICOCHET_MAX_WALL_BOUNCES, 2);
+  assert.deepEqual(reflectRicochetVelocity(300, 120, true, false), { x: -300, y: 120 });
+  assert.deepEqual(reflectRicochetVelocity(300, 120, false, true), { x: 300, y: -120 });
+  assert.deepEqual(reflectRicochetVelocity(300, 120, true, true), { x: -300, y: -120 });
+  assert.equal(Math.hypot(...Object.values(reflectRicochetVelocity(300, 120, true, false))), Math.hypot(300, 120));
+  assert.ok(SFX_DEFINITIONS.some((sound) => sound.key === 'ricochetPickup'));
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/ricochetpickup.mp3', import.meta.url)));
+  assert.equal(
+    PICKUP_BALANCE.healthShare + PICKUP_BALANCE.energyShare + PICKUP_BALANCE.damageBoostShare
+      + PICKUP_BALANCE.speedBoostShare + PICKUP_BALANCE.rapidFireShare + PICKUP_BALANCE.ricochetShare
+      + PICKUP_BALANCE.creditsShare + PICKUP_BALANCE.coreTokenShare,
+    1
+  );
+  assert.match(arena, /ricochetsRemaining: now < this\.player\.buffs\.ricochetUntil \? RICOCHET_MAX_WALL_BOUNCES : 0/);
+  assert.match(arena, /if \(p\.from === 'player' && \(p\.ricochetsRemaining \?\? 0\) > 0/);
 });
 
 test('Pickup accents use bounded shared-frame animation and preserve Loot Satellites', () => {

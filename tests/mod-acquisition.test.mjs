@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   LEGENDARY_MOD_REVEAL_HOLD_MS,
+  MOD_PICKUP_REVEAL_LEAD_IN_MS,
   NORMAL_MOD_REVEAL_HOLD_MS,
   calculateModRevealCardWidth,
   enqueueModAcquisition
@@ -67,4 +68,19 @@ test('standard and Legendary gameplay reveals use their dedicated recordings', (
   assert.doesNotMatch(audio, /playLegendaryModSfx|const notes = \[164\.81/);
   assert.match(presenter, /AudioManager\.get\(\)\.playSfx\('modCollection'\)/);
   assert.match(legendary, /AudioManager\.get\(\)\.playSfx\('legendaryMod'\)/);
+});
+
+test('physical Mod pickup audio plays before the inventory award queues its reveal', () => {
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/modpickup.mp3', import.meta.url)));
+  assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'modPickup'));
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const audioAt = arena.indexOf("this.audio.playSfx('modPickup')");
+  const awardAt = arena.indexOf('this.awardResolvedMod(', audioAt);
+  assert.ok(audioAt >= 0);
+  assert.ok(awardAt > audioAt);
+  assert.ok(MOD_PICKUP_REVEAL_LEAD_IN_MS >= 100);
+  assert.match(arena, /awardResolvedMod\(pickup\.definition, pickup\.source, x, y, MOD_PICKUP_REVEAL_LEAD_IN_MS\)/);
+  const presenter = readFileSync(new URL('../src/game/mods/ModAcquisitionPresenter.ts', import.meta.url), 'utf8');
+  assert.match(presenter, /this\.leadInTimer = this\.scene\.time\.delayedCall\(leadInMs, present\)/);
+  assert.match(presenter, /this\.leadInTimer\?\.remove\(false\)/);
 });

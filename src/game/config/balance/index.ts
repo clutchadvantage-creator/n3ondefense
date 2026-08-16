@@ -97,19 +97,18 @@ export const PICKUP_BALANCE = {
   damageBoostShare: 0.13,
   speedBoostShare: 0.13,
   rapidFireShare: 0.13,
-  creditsShare: 0.31,
+  ricochetShare: 0.06,
+  creditsShare: 0.25,
   coreTokenShare: 0.03,
   lifetimeMs: 14_000,
   healthRestore: 28,
   energyRestoreFraction: 0.5,
   energyAutoCollectMissingFraction: 0.2,
   credits: 24,
-  arenaHealthFirstMinMs: 6000,
-  arenaHealthFirstMaxMs: 10_000,
-  arenaHealthMinIntervalMs: 15_000,
-  arenaHealthMaxIntervalMs: 24_000,
-  arenaHealthLifetimeMs: 20_000,
-  maxArenaHealthDrops: 3
+  arenaSupportTargetPerType: 2,
+  arenaSupportRestockMinMs: 4500,
+  arenaSupportRestockMaxMs: 7000,
+  arenaSupportLifetimeMs: 60_000
 } as const;
 
 export const REWARD_BALANCE = {

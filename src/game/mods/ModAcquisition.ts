@@ -3,6 +3,7 @@ import type { ModCardInstance, ModRarity } from './types.ts';
 export const NORMAL_MOD_REVEAL_HOLD_MS = 2_000;
 export const LEGENDARY_MOD_REVEAL_HOLD_MS = 2_100;
 export const LEGENDARY_MOD_REVEAL_COMPLETE_EVENT = 'mod-reveal:legendary-complete';
+export const MOD_PICKUP_REVEAL_LEAD_IN_MS = 180;
 
 export interface ModAcquisitionPresentation {
   card: ModCardInstance;
@@ -10,6 +11,7 @@ export interface ModAcquisitionPresentation {
   duplicate: boolean;
   sourceScreenX: number;
   sourceScreenY: number;
+  leadInMs?: number;
 }
 
 /** Legendary requests move ahead of waiting standard reveals without disturbing FIFO order within either tier. */

@@ -12,6 +12,7 @@ import {
 
 const arenaSource = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
 const encounterSource = readFileSync(new URL('../src/game/bosses/BossEncounter.ts', import.meta.url), 'utf8');
+const introOverlaySource = readFileSync(new URL('../src/game/bosses/BossIntroOverlay.ts', import.meta.url), 'utf8');
 const audioSource = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
 
 test('Overdrive pickup stacks cap at two and refresh without changing normal mode', () => {
@@ -35,6 +36,29 @@ test('bosses use a gated state flow, distinct attacks, and collection-first rewa
   assert.match(encounterSource, /PRISMATIC TEMPEST/);
   assert.match(encounterSource, /spawnPounceTelegraph/);
   assert.ok(BOSS_BALANCE.artillery.movementSpeed > 0);
+});
+
+test('boss READY and NEXT FIGHT use camera-independent DOM commands', () => {
+  assert.match(introOverlaySource, /this\.ready = new ArenaCommandButton/);
+  assert.match(introOverlaySource, /this\.ready\.setGamePosition\(width \* 0\.5, height \* 0\.5 \+ 170 \* scale/);
+  assert.doesNotMatch(introOverlaySource, /this\.root\.add\([^;]*this\.ready/);
+  assert.match(arenaSource, /this\.bossNextFightButton = new ArenaCommandButton\(this, 'NEXT FIGHT'/);
+  assert.match(arenaSource, /this\.finishBossCollection\(\)/);
+});
+
+test('boss and standard arenas keep a bounded health and energy support reserve', () => {
+  assert.equal(BOSS_BALANCE.supportPickupTargetPerType, 2);
+  assert.equal(BOSS_BALANCE.maximumSupportPickups, 4);
+  assert.match(arenaSource, /pickup\.source !== 'arena-support'/);
+  assert.match(arenaSource, /PICKUP_BALANCE\.arenaSupportTargetPerType - active/);
+  assert.match(arenaSource, /pickup\.source !== 'boss-support'/);
+  assert.match(arenaSource, /BOSS_BALANCE\.supportPickupTargetPerType - active/);
+});
+
+test('round transitions explicitly retire standalone infusion timers and effects', () => {
+  assert.match(arenaSource, /private clearRoundInfusionEffects\(\)/);
+  assert.match(arenaSource, /for \(const timer of this\.roundInfusionTimers\) timer\.remove\(false\)/);
+  assert.match(arenaSource, /private completeRound\(\): void \{[\s\S]*?this\.clearRoundInfusionEffects\(\)/);
 });
 
 test('arena Mod drops are physical before inventory award and boss chance increases modestly', () => {

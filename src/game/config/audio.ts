@@ -31,6 +31,8 @@ export const SFX_DEFINITIONS = [
   { key: 'creditPickup', label: 'Credit Pickup' },
   { key: 'coreTokenPickup', label: 'Core Token Pickup' },
   { key: 'fluxCorePickup', label: 'Flux Core Pickup' },
+  { key: 'ricochetPickup', label: 'Ricochet Rounds Pickup' },
+  { key: 'modPickup', label: 'Mod Pickup' },
   { key: 'fluxCore', label: 'Flux Core Energy' },
   { key: 'lasersOff', label: 'Security Lasers Offline' },
   { key: 'modCollection', label: 'Mod Acquired' },

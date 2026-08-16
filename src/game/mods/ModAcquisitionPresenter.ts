@@ -21,6 +21,7 @@ export class ModAcquisitionPresenter {
   private active: ModAcquisitionPresentation | null = null;
   private activeRoot: Phaser.GameObjects.Container | null = null;
   private activeBackdrop: Phaser.GameObjects.Rectangle | null = null;
+  private leadInTimer: Phaser.Time.TimerEvent | null = null;
   private holdTimer: Phaser.Time.TimerEvent | null = null;
   private legendaryToken = '';
   private destroyed = false;
@@ -63,6 +64,8 @@ export class ModAcquisitionPresenter {
     this.destroyed = true;
     this.queue.length = 0;
     this.idleCallbacks.clear();
+    this.leadInTimer?.remove(false);
+    this.leadInTimer = null;
     this.holdTimer?.remove(false);
     this.holdTimer = null;
     this.scene.game.events.off(LEGENDARY_MOD_REVEAL_COMPLETE_EVENT, this.handleLegendaryComplete, this);
@@ -86,8 +89,15 @@ export class ModAcquisitionPresenter {
       return;
     }
     this.active = request;
-    if (request.rarity === 'legendary') this.presentLegendary(request);
-    else this.presentStandard(request);
+    const present = (): void => {
+      this.leadInTimer = null;
+      if (this.destroyed || this.active !== request) return;
+      if (request.rarity === 'legendary') this.presentLegendary(request);
+      else this.presentStandard(request);
+    };
+    const leadInMs = Math.max(0, request.leadInMs ?? 0);
+    if (leadInMs > 0) this.leadInTimer = this.scene.time.delayedCall(leadInMs, present);
+    else present();
   }
 
   private presentStandard(request: ModAcquisitionPresentation): void {
