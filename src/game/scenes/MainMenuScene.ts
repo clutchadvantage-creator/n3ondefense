@@ -16,6 +16,7 @@ import type { RunSetupSelection } from '../economy/types.ts';
 import { formatWeeklyCountdown, type WeeklyOperationDeck, type WeeklyOperationDecksSnapshot, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
+import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 
 const MAIN_MENU_TIPS = [
   'Shoot through a placed fence to split and multiply your projectiles.',
@@ -307,12 +308,7 @@ export class MainMenuScene extends Phaser.Scene {
         const bounds = tutorialTargets.get(target)?.getBounds();
         if (!bounds) return null;
         const canvas = this.game.canvas.getBoundingClientRect();
-        return {
-          x: canvas.left + bounds.x * canvas.width / this.scale.width,
-          y: canvas.top + bounds.y * canvas.height / this.scale.height,
-          width: bounds.width * canvas.width / this.scale.width,
-          height: bounds.height * canvas.height / this.scale.height
-        };
+        return projectTutorialBoundsToViewport(bounds, canvas, this.scale.width, this.scale.height);
       },
       setMode: () => undefined
     });

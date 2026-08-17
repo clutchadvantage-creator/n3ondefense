@@ -21,6 +21,7 @@ import {
 } from '../ui/ModCollectionUi.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
+import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 
 type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
 type FilterMode = 'all' | 'duplicates';
@@ -174,12 +175,7 @@ export class ModCollectionScene extends Phaser.Scene {
             : null;
         if (!rect) return null;
         const canvas = this.game.canvas.getBoundingClientRect();
-        return {
-          x: canvas.left + rect.x * canvas.width / this.scale.width,
-          y: canvas.top + rect.y * canvas.height / this.scale.height,
-          width: rect.width * canvas.width / this.scale.width,
-          height: rect.height * canvas.height / this.scale.height
-        };
+        return projectTutorialBoundsToViewport(rect, canvas, this.scale.width, this.scale.height);
       },
       setMode: () => undefined
     });

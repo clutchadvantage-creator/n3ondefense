@@ -7,7 +7,11 @@ interface ArmedSiteEffect {
   shield: Phaser.GameObjects.Graphics;
   shieldGlow: Phaser.GameObjects.Arc;
   guardLabel: Phaser.GameObjects.Text;
+  defuseBoundary: Phaser.GameObjects.Graphics;
+  defuseGlow: Phaser.GameObjects.Arc;
+  defuseLabel: Phaser.GameObjects.Text;
   pulse: Phaser.Tweens.Tween;
+  defusePulse: Phaser.Tweens.Tween;
   defenseMs: number;
   nextRedrawAt: number;
 }
@@ -438,6 +442,7 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     effect.coreLight.setFillStyle(color, 0.82).setStrokeStyle(1, 0xffffff, 0.6);
     effect.identifier.setColor(css).setAlpha(alpha);
     effect.stateReadout.setText(state).setColor(css).setAlpha(alpha);
+    this.setDefuseWarningVisible(site.id, site.state === BombSiteState.BeingDefused);
     if (site.state === BombSiteState.Destroyed) {
       effect.ringPulse.pause();
       site.ring.setAlpha(0.34);
@@ -480,6 +485,44 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
       strokeThickness: 3
     }).setOrigin(0.5).setDepth(6);
 
+    // One reusable, pre-drawn hazard perimeter per armed site. It is only
+    // animated while this exact site is actively being defused.
+    const defuseBoundary = this.scene.add.graphics()
+      .setPosition(site.x, site.y)
+      .setDepth(8)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
+    const stripeCount = 24;
+    for (let index = 0; index < stripeCount; index += 1) {
+      const start = index * Math.PI * 2 / stripeCount;
+      const end = start + Math.PI * 2 / stripeCount * 0.62;
+      const color = index % 2 === 0 ? 0xffbe32 : 0xff3158;
+      defuseBoundary.lineStyle(index % 2 === 0 ? 5 : 4, color, 0.96);
+      defuseBoundary.beginPath();
+      defuseBoundary.arc(0, 0, 98, start, end, false);
+      defuseBoundary.strokePath();
+      defuseBoundary.lineStyle(3, color, 0.76);
+      defuseBoundary.lineBetween(
+        Math.cos(start) * 105,
+        Math.sin(start) * 105,
+        Math.cos(start) * 115,
+        Math.sin(start) * 115
+      );
+    }
+    const defuseGlow = this.scene.add.circle(site.x, site.y, 108, 0xff4b32, 0.045)
+      .setStrokeStyle(2, 0xffc93b, 0.7)
+      .setDepth(7)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
+    const defuseLabel = this.scene.add.text(site.x, site.y - 129, '!  DEFUSE IN PROGRESS  !', {
+      fontFamily: 'Orbitron, sans-serif',
+      fontSize: '13px',
+      fontStyle: 'bold',
+      color: '#ffd65c',
+      stroke: '#4a0711',
+      strokeThickness: 5
+    }).setOrigin(0.5).setDepth(9).setVisible(false);
+
     const pulse = this.scene.tweens.add({
       targets: [shieldGlow, shield, guardLabel],
       alpha: { from: 0.58, to: 1 },
@@ -489,7 +532,20 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
       ease: 'Sine.easeInOut'
     });
 
-    this.armedEffects.set(site.id, { electricity, shield, shieldGlow, guardLabel, pulse, defenseMs, nextRedrawAt: 0 });
+    const defusePulse = this.scene.tweens.add({
+      targets: [defuseBoundary, defuseGlow, defuseLabel],
+      alpha: { from: 0.5, to: 1 },
+      duration: 330,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      paused: true
+    });
+
+    this.armedEffects.set(site.id, {
+      electricity, shield, shieldGlow, guardLabel, defuseBoundary, defuseGlow, defuseLabel,
+      pulse, defusePulse, defenseMs, nextRedrawAt: 0
+    });
     this.updateArmedEffect(site);
   }
 
@@ -499,6 +555,10 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     const now = this.scene?.time.now ?? 0;
     const charge = Phaser.Math.Clamp(1 - site.timerMs / effect.defenseMs, 0, 1);
     effect.shieldGlow.setRadius(29 + charge * 5);
+    if (site.state === BombSiteState.BeingDefused) {
+      effect.defuseBoundary.rotation = now * 0.00115;
+      effect.defuseGlow.setRadius(106 + Math.sin(now * 0.008) * 4);
+    }
     if (now < effect.nextRedrawAt) return;
     effect.nextRedrawAt = now + 50;
     const segments = Math.round(10 + charge * 34);
@@ -512,7 +572,9 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     const flicker = 0.72 + noise(0, site.x + site.y) * 0.28;
 
     effect.electricity.clear();
-    const siteColor = this.ambientEffects.get(site.id)?.color ?? this.theme.primary;
+    const siteColor = site.state === BombSiteState.BeingDefused
+      ? 0xff4f67
+      : this.ambientEffects.get(site.id)?.color ?? this.theme.primary;
     effect.electricity.lineStyle(1 + charge * 2.2, siteColor, (0.34 + charge * 0.52) * flicker);
     for (let i = 0; i < segments; i += 1) {
       const angle = (i / segments) * Math.PI * 2 + noise(i, 1) * 0.06;
@@ -534,14 +596,34 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     effect.electricity.strokeCircle(site.x, site.y, radius + 6 + Math.sin(now / 180) * 2);
   }
 
+  private setDefuseWarningVisible(siteId: string, visible: boolean): void {
+    const effect = this.armedEffects.get(siteId);
+    if (!effect) return;
+    effect.defuseBoundary.setVisible(visible);
+    effect.defuseGlow.setVisible(visible);
+    effect.defuseLabel.setVisible(visible);
+    if (visible) {
+      effect.defusePulse.resume();
+    } else {
+      effect.defusePulse.pause();
+      effect.defuseBoundary.setAlpha(1).setRotation(0);
+      effect.defuseGlow.setAlpha(1);
+      effect.defuseLabel.setAlpha(1);
+    }
+  }
+
   private destroyArmedEffect(siteId: string): void {
     const effect = this.armedEffects.get(siteId);
     if (!effect) return;
     effect.pulse.remove();
+    effect.defusePulse.remove();
     effect.electricity.destroy();
     effect.shield.destroy();
     effect.shieldGlow.destroy();
     effect.guardLabel.destroy();
+    effect.defuseBoundary.destroy();
+    effect.defuseGlow.destroy();
+    effect.defuseLabel.destroy();
     this.armedEffects.delete(siteId);
   }
 

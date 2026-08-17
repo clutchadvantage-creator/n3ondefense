@@ -5,6 +5,7 @@ import { TutorialEventBus } from './TutorialEventBus.ts';
 import { TutorialOverlay } from './TutorialOverlay.ts';
 import type { TutorialEvent, TutorialHost, TutorialSequenceDefinition } from './TutorialTypes.ts';
 import { compactBindingLabel } from '../config/controls.ts';
+import { resolveTutorialAdvancePolicy, type TutorialAdvancePolicy } from './TutorialStepRules.ts';
 
 /** One director per visible scene. Awarding/game state remains independent of this presentation queue. */
 export class TutorialDirector {
@@ -16,9 +17,11 @@ export class TutorialDirector {
   private timer: number | null = null;
   private transitionTimer: number | null = null;
   private acceptingCompletion = false;
+  private advancePolicy: TutorialAdvancePolicy | null = null;
   private destroyed = false;
   private readonly keyHandler = (event: KeyboardEvent): void => {
     if (event.code === 'KeyK' && this.active && this.active.skippable !== false) this.skip();
+    else if (event.code === 'Enter' && this.acceptingCompletion && this.advancePolicy?.type === 'manual') this.advance();
   };
 
   constructor(private readonly host: TutorialHost) {
@@ -53,9 +56,9 @@ export class TutorialDirector {
   }
 
   awaits(event: string): boolean {
-    if (!this.acceptingCompletion) return false;
-    const completion = this.active?.steps[this.stepIndex]?.completion;
-    return completion?.type === 'event' && completion.event === event;
+    return this.acceptingCompletion
+      && this.advancePolicy?.type === 'event'
+      && this.advancePolicy.event === event;
   }
 
   destroy(): void {
@@ -72,8 +75,7 @@ export class TutorialDirector {
   private onEvent(event: TutorialEvent): void {
     if (this.destroyed) return;
     if (this.active) {
-      const completion = this.active.steps[this.stepIndex]?.completion;
-      if (this.acceptingCompletion && completion?.type === 'event' && completion.event === event.type) {
+      if (this.acceptingCompletion && this.advancePolicy?.type === 'event' && this.advancePolicy.event === event.type) {
         this.advance();
         return;
       }
@@ -114,6 +116,9 @@ export class TutorialDirector {
     this.clearTimer();
     this.acceptingCompletion = true;
     const sourceStep = this.active.steps[this.stepIndex];
+    const eventActionAvailable = sourceStep.completion.type !== 'event'
+      || this.host.isEventActionAvailable?.(sourceStep.completion.event) !== false;
+    this.advancePolicy = resolveTutorialAdvancePolicy(sourceStep.completion, eventActionAvailable);
     const bindings = SaveSystem.get().settings.abilityBindings;
     const replacements: Record<string, string> = {
       '{FENCE}': compactBindingLabel(bindings.fence),
@@ -124,9 +129,13 @@ export class TutorialDirector {
     };
     const replaceBindings = (value: string): string => Object.entries(replacements)
       .reduce((copy, [token, label]) => copy.replaceAll(token, label), value);
+    const actionUnavailable = this.advancePolicy.type === 'manual'
+      && this.advancePolicy.reason === 'action-unavailable';
     const step = {
       ...sourceStep,
-      body: replaceBindings(sourceStep.body),
+      body: `${replaceBindings(sourceStep.body)}${actionUnavailable
+        ? ' This action is not currently available; continue when ready.'
+        : ''}`,
       inputDemo: sourceStep.inputDemo?.map(replaceBindings)
     };
     this.host.setMode(step.mode);
@@ -136,21 +145,19 @@ export class TutorialDirector {
       this.active.steps.length,
       () => step.target ? this.host.resolveTarget(step.target) : null,
       () => this.advance(),
-      this.active.skippable !== false
+      this.active.skippable !== false,
+      this.advancePolicy.type === 'manual' ? this.advancePolicy.label : null
     );
     TutorialEventBus.emit('tutorial.stepShown', { sequenceId: this.active.id, stepId: step.id });
-    if (step.completion.type === 'auto') {
-      this.timer = window.setTimeout(() => this.advance(), step.completion.delayMs ?? 2500);
-    } else if (step.completion.type === 'event' && this.host.isEventActionAvailable?.(step.completion.event) === false) {
-      // The explanation remains useful, but never trap the sequence behind an
-      // action the current save cannot legitimately perform.
-      this.timer = window.setTimeout(() => this.advance(), 3600);
+    if (this.advancePolicy.type === 'auto') {
+      this.timer = window.setTimeout(() => this.advance(), this.advancePolicy.delayMs);
     }
   }
 
   private advance(): void {
     if (!this.active || !this.acceptingCompletion) return;
     this.acceptingCompletion = false;
+    this.advancePolicy = null;
     this.clearTimer();
     const sequence = this.active;
     const step = sequence.steps[this.stepIndex];
@@ -165,6 +172,10 @@ export class TutorialDirector {
       this.scheduleTransition(() => this.startNext(), 180);
       return;
     }
+    // Apply the next gate synchronously with the acknowledgement/action. In
+    // particular, leaving a hard-pause from a button click must restore mouse
+    // capture inside that same trusted browser gesture.
+    this.host.setMode(sequence.steps[this.stepIndex].mode);
     this.scheduleTransition(() => { if (this.active === sequence) this.showStep(); }, 170);
   }
 
@@ -189,6 +200,7 @@ export class TutorialDirector {
     const sequenceId = this.active?.id;
     this.clearTimer();
     this.acceptingCompletion = false;
+    this.advancePolicy = null;
     this.active = null;
     this.overlay.hide();
     this.host.setMode('live');

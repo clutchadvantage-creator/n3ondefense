@@ -247,6 +247,7 @@ export class Hud {
   private readonly phaseText: Phaser.GameObjects.Text;
   private readonly objectiveText: Phaser.GameObjects.Text;
   private readonly objectiveTimerText: Phaser.GameObjects.Text;
+  private readonly defuseWarningIcon: Phaser.GameObjects.Container;
   private readonly bombProgressTrack: Phaser.GameObjects.Rectangle;
   private readonly bombProgressFill: Phaser.GameObjects.Rectangle;
 
@@ -320,6 +321,22 @@ export class Hud {
     this.phaseText = this.createText('PRE-PLANT', 11, '#8ef2ff').setOrigin(0.5).setFontStyle('bold');
     this.objectiveText = this.createText('SITE A AVAILABLE', 15, '#def6ff').setOrigin(0.5).setFontStyle('bold');
     this.objectiveTimerText = this.createText('', 23, '#9ffaff').setOrigin(0.5).setVisible(false).setFontStyle('bold');
+    const defuseWarningGlow = scene.add.circle(0, 0, 15, 0xffb62e, 0.16)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const defuseWarningTriangle = scene.add.graphics();
+    defuseWarningTriangle.fillStyle(0xffc83d, 1);
+    defuseWarningTriangle.lineStyle(2, 0xffed88, 1);
+    defuseWarningTriangle.beginPath();
+    defuseWarningTriangle.moveTo(0, -12);
+    defuseWarningTriangle.lineTo(12, 10);
+    defuseWarningTriangle.lineTo(-12, 10);
+    defuseWarningTriangle.closePath();
+    defuseWarningTriangle.fillPath();
+    defuseWarningTriangle.strokePath();
+    const defuseWarningMark = this.createText('!', 17, '#090b0e', 'Orbitron, sans-serif')
+      .setOrigin(0.5, 0.47).setFontStyle('bold');
+    this.defuseWarningIcon = scene.add.container(0, 0, [defuseWarningGlow, defuseWarningTriangle, defuseWarningMark])
+      .setVisible(false);
     this.bombProgressTrack = scene.add.rectangle(0, 0, 120, 6, 0x10201d, 0.88)
       .setOrigin(0, 0.5).setStrokeStyle(1, 0x5b9d87, 0.58).setVisible(false);
     this.bombProgressFill = scene.add.rectangle(0, 0, 120, 3, 0x53ff8a, 1)
@@ -341,7 +358,7 @@ export class Hud {
       this.energyGlow, this.energyIcon, this.energyLabel, this.energyTrack, this.energyFill, this.overchargeFill, this.energyValue,
       this.roundLabel, this.roundValue, this.enemyLabel, this.enemyValue,
       ...Array.from(this.resourceVisuals.values()).map((resource) => resource.root),
-      this.phaseBadge, this.phaseText, this.objectiveText, this.objectiveTimerText,
+      this.phaseBadge, this.phaseText, this.objectiveText, this.objectiveTimerText, this.defuseWarningIcon,
       this.bombProgressTrack, this.bombProgressFill,
       this.radarFrame, this.radarContacts, this.radarLabel,
       ...Array.from(this.abilitySlots.values()).map((slot) => slot.root),
@@ -481,6 +498,11 @@ export class Hud {
 
   applySettings(settings: HudSettings): void {
     this.settings = normalizeHudSettings(settings);
+    this.defusePulse?.remove();
+    this.defusePulse = null;
+    for (const target of [this.objectiveText, this.objectiveTimerText, this.defuseWarningIcon, this.objectivePanel.led, this.objectivePanel.frame]) {
+      target.setAlpha(1);
+    }
     const glow = glowMultiplier(this.settings.glow);
     this.hpGlow.setAlpha(0.12 * glow);
     this.energyGlow.setAlpha(0.1 * glow);
@@ -603,6 +625,7 @@ export class Hud {
       .setDisplaySize(Math.min(rect.width - 34, Math.round(150 * scale)), Math.max(19, Math.round(22 * scale)));
     this.phaseText.setPosition(centerX, this.phaseBadge.y).setFontSize(Math.max(9, Math.round(11 * fontScale)));
     this.objectiveTimerText.setPosition(centerX, rect.y + rect.height * 0.76).setFontSize(Math.max(18, Math.round(23 * fontScale)));
+    this.defuseWarningIcon.setScale(Math.max(0.78, Math.min(1.2, scale * this.settings.textScale)));
     const barWidth = rect.width - Math.round(24 * scale);
     const barX = rect.x + Math.round(12 * scale);
     const barY = rect.y + rect.height - Math.round(7 * scale);
@@ -800,11 +823,16 @@ export class Hud {
     this.setTextIfChanged(this.objectiveText, payload.objective);
     const objectiveRect = this.currentLayout.objective;
     this.objectiveText.setY(objectiveRect.y + objectiveRect.height * (phaseIsRedundant && payload.objectiveTimerMs === null ? 0.56 : 0.35))
-      .setColor(payload.bombUrgent ? '#ff9daf' : '#def6ff');
+      .setColor(payload.defuseAlert ? '#ff6b82' : payload.bombUrgent ? '#ff9daf' : '#def6ff');
+    const warningIconX = Math.min(
+      objectiveRect.x + objectiveRect.width - 20 * this.currentLayout.scale,
+      this.objectiveText.x + this.objectiveText.displayWidth / 2 + 19 * this.currentLayout.scale
+    );
+    this.defuseWarningIcon.setPosition(warningIconX, this.objectiveText.y).setVisible(payload.defuseAlert);
     this.setTextIfChanged(this.objectiveTimerText, formatHudCountdown(payload.objectiveTimerMs));
     this.objectiveTimerText.setVisible(payload.objectiveTimerMs !== null)
       .setY(objectiveRect.y + objectiveRect.height * (phaseIsRedundant ? 0.64 : 0.76))
-      .setColor(payload.bombUrgent ? '#ff718c' : '#9ffaff');
+      .setColor(payload.defuseAlert ? '#ff8396' : payload.bombUrgent ? '#ff718c' : '#9ffaff');
 
     const bombProgress = Phaser.Math.Clamp(payload.bombProgress, 0, 1);
     this.bombProgressTrack.setVisible(payload.bombActive);
@@ -816,14 +844,22 @@ export class Hud {
       this.bombProgressFill.setFillStyle(color, 1).setAlpha(pulse);
     }
     if (payload.defuseAlert) {
-      if (!this.defusePulse) {
-        this.defusePulse = this.scene.tweens.add({ targets: [this.phaseBadge, this.objectivePanel.led], alpha: { from: 1, to: 0.38 }, duration: 220, yoyo: true, repeat: -1 });
+      if (!this.defusePulse && this.settings.animation !== 'off') {
+        this.defusePulse = this.scene.tweens.add({
+          targets: [this.objectiveText, this.objectiveTimerText, this.defuseWarningIcon, this.objectivePanel.led, this.objectivePanel.frame],
+          alpha: { from: 1, to: this.settings.animation === 'reduced' ? 0.68 : 0.48 },
+          duration: this.settings.animation === 'reduced' ? 520 : 290,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut'
+        });
       }
     } else {
       this.defusePulse?.remove();
       this.defusePulse = null;
-      this.phaseBadge.setAlpha(1);
-      this.objectivePanel.led.setAlpha(1);
+      for (const target of [this.objectiveText, this.objectiveTimerText, this.defuseWarningIcon, this.objectivePanel.led, this.objectivePanel.frame]) {
+        target.setAlpha(1);
+      }
     }
 
     for (const slot of payload.abilities) this.updateAbility(slot);

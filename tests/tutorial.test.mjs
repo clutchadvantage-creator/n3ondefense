@@ -12,6 +12,11 @@ import {
   skipTutorialSequence
 } from '../src/game/tutorial/TutorialProgress.ts';
 import { TUTORIAL_SEQUENCES } from '../src/game/tutorial/TutorialRegistry.ts';
+import { resolveTutorialAdvancePolicy } from '../src/game/tutorial/TutorialStepRules.ts';
+import {
+  projectTutorialBoundsToViewport,
+  projectViewportBoundsToTutorialMount
+} from '../src/game/tutorial/TutorialTargeting.ts';
 
 test('tutorial progress uses stable ids and supports completion, skipping, and replay', () => {
   const progress = createTutorialProgress();
@@ -63,6 +68,50 @@ test('tutorial registry has unique sequence and step ids with event-driven actio
   const basic = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.basic-controls');
   assert.equal(basic.steps.find(({ id }) => id === 'move').completion.event, 'combat.playerMoved');
   assert.equal(basic.steps.find(({ id }) => id === 'fire').completion.event, 'combat.weaponFired');
+  assert.equal(TUTORIAL_SEQUENCES.flatMap(({ steps }) => steps).some(({ completion }) => completion.type === 'auto'), false);
+  assert.equal(basic.steps.find(({ id }) => id === 'welcome').completion.type, 'manual');
+});
+
+test('tutorial advance policies separate acknowledgement, action, fallback, and intentional timer behavior', () => {
+  assert.deepEqual(resolveTutorialAdvancePolicy({ type: 'manual' }), {
+    type: 'manual', label: 'GOT IT', reason: 'acknowledgement'
+  });
+  assert.deepEqual(resolveTutorialAdvancePolicy({ type: 'event', event: 'combat.weaponFired' }), {
+    type: 'event', event: 'combat.weaponFired'
+  });
+  assert.deepEqual(resolveTutorialAdvancePolicy({ type: 'event', event: 'mods.equipped' }, false), {
+    type: 'manual', label: 'CONTINUE', reason: 'action-unavailable'
+  });
+  assert.deepEqual(resolveTutorialAdvancePolicy({ type: 'auto', delayMs: 1200 }), {
+    type: 'auto', delayMs: 1200
+  });
+});
+
+test('tutorial target projection accounts for canvas and game mount offsets and scaling', () => {
+  const viewport = projectTutorialBoundsToViewport(
+    { x: 200, y: 100, width: 400, height: 200 },
+    { x: 100, y: 50, width: 800, height: 450 },
+    1600,
+    900
+  );
+  assert.deepEqual(viewport, { x: 200, y: 100, width: 200, height: 100 });
+  assert.deepEqual(
+    projectViewportBoundsToTutorialMount(
+      viewport,
+      { x: 80, y: 30, width: 1000, height: 500 },
+      2000,
+      1000
+    ),
+    { x: 240, y: 140, width: 400, height: 200 }
+  );
+});
+
+test('first defuse teaching names the danger and requires acknowledgement', () => {
+  const sequence = TUTORIAL_SEQUENCES.find(({ id }) => id === 'context.first-defuse');
+  assert.equal(sequence.triggerEvent, 'objective.defuseStarted');
+  assert.equal(sequence.steps[0].target, 'world.defusingBombsite');
+  assert.equal(sequence.steps[0].completion.type, 'manual');
+  assert.match(sequence.steps[0].body, /Eliminate or interrupt every defuser/);
 });
 
 test('Arena tutorial cleanup and success events are wired to authoritative gameplay paths', async () => {
@@ -72,4 +121,8 @@ test('Arena tutorial cleanup and success events are wired to authoritative gamep
   assert.match(arena, /TutorialEventBus\.emit\(`combat\.ability\.\$\{type\}`/);
   assert.match(arena, /this\.tutorialDirector\?\.destroy\(\)/);
   assert.match(arena, /this\.tutorialHardPaused \|\| this\.state\.state === RoundState\.Paused/);
+  assert.match(arena, /TutorialEventBus\.emit\('objective\.defuseStarted'/);
+  assert.match(arena, /this\.tutorialPointerLockWasActive = this\.pointerLock\?\.locked \?\? false/);
+  assert.match(arena, /this\.pointerLock\?\.release\(\)/);
+  assert.match(arena, /this\.pointerLock\.requestLock\(\)/);
 });

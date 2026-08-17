@@ -1,4 +1,5 @@
 import type { TutorialStepDefinition, TutorialTargetBounds } from './TutorialTypes.ts';
+import { projectViewportBoundsToTutorialMount } from './TutorialTargeting.ts';
 
 const make = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string): HTMLElementTagNameMap[K] => {
   const element = document.createElement(tag);
@@ -7,6 +8,7 @@ const make = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string):
 };
 
 export class TutorialOverlay {
+  private readonly mount: HTMLElement;
   private readonly root = make('section', 'tutorial-overlay');
   private readonly shadeTop = make('div', 'tutorial-shade tutorial-shade-top');
   private readonly shadeRight = make('div', 'tutorial-shade tutorial-shade-right');
@@ -31,6 +33,7 @@ export class TutorialOverlay {
   constructor(onSkip: () => void) {
     const mount = document.querySelector<HTMLElement>('#game-ui-root');
     if (!mount) throw new Error('Tutorial overlay requires #game-ui-root.');
+    this.mount = mount;
     this.root.hidden = true;
     this.root.setAttribute('aria-live', 'polite');
     this.skip.type = 'button';
@@ -44,7 +47,15 @@ export class TutorialOverlay {
     mount.append(this.root);
   }
 
-  show(step: TutorialStepDefinition, index: number, total: number, targetResolver: () => TutorialTargetBounds | null, onManual: () => void, skippable: boolean): void {
+  show(
+    step: TutorialStepDefinition,
+    index: number,
+    total: number,
+    targetResolver: () => TutorialTargetBounds | null,
+    onManual: () => void,
+    skippable: boolean,
+    manualAdvanceLabel: string | null
+  ): void {
     this.root.hidden = false;
     this.root.classList.remove('tutorial-confirm');
     this.targetResolver = targetResolver;
@@ -62,7 +73,8 @@ export class TutorialOverlay {
       return chip;
     }));
     this.keys.hidden = !step.inputDemo?.length;
-    this.continueButton.hidden = step.completion.type !== 'manual';
+    this.continueButton.hidden = manualAdvanceLabel === null;
+    this.continueButton.textContent = manualAdvanceLabel ?? 'CONTINUE';
     this.skip.hidden = !skippable;
     this.focus.classList.toggle('tutorial-focus-circle', step.spotlight === 'circle');
     cancelAnimationFrame(this.frame);
@@ -92,20 +104,24 @@ export class TutorialOverlay {
   }
 
   private layout(target: TutorialTargetBounds | null): void {
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    this.root.classList.toggle('tutorial-no-target', !target);
-    if (!target) {
+    const mountBounds = this.mount.getBoundingClientRect();
+    const viewportWidth = this.mount.clientWidth || mountBounds.width;
+    const viewportHeight = this.mount.clientHeight || mountBounds.height;
+    const localTarget = target
+      ? projectViewportBoundsToTutorialMount(target, mountBounds, viewportWidth, viewportHeight)
+      : null;
+    this.root.classList.toggle('tutorial-no-target', !localTarget);
+    if (!localTarget) {
       this.callout.style.left = `${viewportWidth / 2}px`;
       this.callout.style.top = `${viewportHeight / 2}px`;
       this.callout.dataset.position = 'center';
       return;
     }
     const pad = this.targetPadding;
-    const x = Math.max(8, target.x - pad);
-    const y = Math.max(8, target.y - pad);
-    const right = Math.min(viewportWidth - 8, target.x + target.width + pad);
-    const bottom = Math.min(viewportHeight - 8, target.y + target.height + pad);
+    const x = Math.max(8, localTarget.x - pad);
+    const y = Math.max(8, localTarget.y - pad);
+    const right = Math.min(viewportWidth - 8, localTarget.x + localTarget.width + pad);
+    const bottom = Math.min(viewportHeight - 8, localTarget.y + localTarget.height + pad);
     const width = Math.max(24, right - x);
     const height = Math.max(24, bottom - y);
     Object.assign(this.focus.style, { left: `${x}px`, top: `${y}px`, width: `${width}px`, height: `${height}px` });

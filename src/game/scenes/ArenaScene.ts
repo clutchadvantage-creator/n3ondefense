@@ -72,6 +72,7 @@ import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import type { TutorialMode, TutorialTargetBounds } from '../tutorial/TutorialTypes.ts';
+import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { nextPickupBuffStack, resourcePickupCap } from '../player/OverdriveRules.ts';
 import { RICOCHET_MAX_WALL_BOUNCES, reflectRicochetVelocity } from '../player/RicochetRules.ts';
 
@@ -418,6 +419,7 @@ export class ArenaScene extends Phaser.Scene {
   private tutorialDirector: TutorialDirector | null = null;
   private tutorialHardPaused = false;
   private tutorialClockWasPaused = false;
+  private tutorialPointerLockWasActive = false;
   private tutorialAimAngle: number | null = null;
   private readonly performanceMonitor = new FramePerformanceMonitor(600);
   private nextPerformanceTelemetryAt = 0;
@@ -1062,6 +1064,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.bombSites.on('bomb-site-defuse-started', (site: BombSiteRuntime) => {
       GameplayTelemetryRecorder.recordDefuseStarted(site.id);
+      TutorialEventBus.emit('objective.defuseStarted', { siteId: site.id });
       this.state.set(RoundState.Defusing);
       this.bombSites.refreshVisuals(this.layout.theme);
       this.audio.playSfx('defuseAlarm');
@@ -1081,7 +1084,10 @@ export class ArenaScene extends Phaser.Scene {
     this.bombSites.on('bomb-site-destroyed', (site: BombSiteRuntime) => {
       GameplayTelemetryRecorder.recordBombDestroyed(site.id);
       this.bombsiteMods.onBombDestroyed(site);
-      this.audio.stopDisarmLoop();
+      const anotherSiteIsBeingDefused = this.bombSites.getActiveBombSites()
+        .some((activeSite) => activeSite.state === BombSiteState.BeingDefused);
+      if (anotherSiteIsBeingDefused) this.audio.startDisarmLoop();
+      else this.audio.stopDisarmLoop();
       this.pendingProgressBombSites += 1;
       this.recoveryAfterSiteDestroy();
     });
@@ -5981,7 +5987,11 @@ export class ArenaScene extends Phaser.Scene {
     this.tutorialHardPaused = shouldPause;
     if (shouldPause) {
       this.tutorialClockWasPaused = this.time.paused;
+      this.tutorialPointerLockWasActive = this.pointerLock?.locked ?? false;
       this.clearGameplayInput();
+      this.setMenuCursorMode();
+      this.pointerLock?.hidePrompt();
+      this.pointerLock?.release();
       // Window-driven tutorial UI remains animated while the authoritative
       // Arena clock, delayed calls, cooldown timestamps, and physics freeze.
       this.time.paused = true;
@@ -5989,9 +5999,18 @@ export class ArenaScene extends Phaser.Scene {
     } else {
       this.time.paused = this.tutorialClockWasPaused;
       this.tutorialClockWasPaused = false;
-      if (this.state.state !== RoundState.Paused && this.state.state !== RoundState.Victory && this.state.state !== RoundState.Defeat) {
+      const canResumeGameplay = this.state.state !== RoundState.Paused
+        && this.state.state !== RoundState.Victory
+        && this.state.state !== RoundState.Defeat;
+      if (canResumeGameplay) {
         this.physics.resume();
+        if (this.tutorialPointerLockWasActive && this.scene.isActive() && this.pointerLock?.supported) {
+          this.pointerLock.requestLock();
+        } else {
+          this.setGameplayCursorMode();
+        }
       }
+      this.tutorialPointerLockWasActive = false;
     }
   }
 
@@ -6008,6 +6027,11 @@ export class ArenaScene extends Phaser.Scene {
       const site = this.bombSites?.sites.find((candidate) => candidate.state === BombSiteState.Available) ?? this.bombSites?.sites[0];
       return site ? this.worldCircleToViewport(site.x, site.y, 96) : null;
     }
+    if (target === 'world.defusingBombsite') {
+      const site = this.bombSites?.sites.find((candidate) => candidate.state === BombSiteState.BeingDefused)
+        ?? this.bombSites?.getActiveBombSite();
+      return site ? this.worldCircleToViewport(site.x, site.y, 226) : null;
+    }
     if (target === 'world.enemy') {
       const enemy = this.enemies.find((candidate) => candidate.active);
       return enemy ? this.worldCircleToViewport(enemy.x, enemy.y, Math.max(32, enemy.displayWidth)) : null;
@@ -6021,12 +6045,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private canvasBoundsToViewport(bounds: { x: number; y: number; width: number; height: number }): TutorialTargetBounds {
     const canvas = this.game.canvas.getBoundingClientRect();
-    return {
-      x: canvas.left + bounds.x * canvas.width / this.scale.width,
-      y: canvas.top + bounds.y * canvas.height / this.scale.height,
-      width: bounds.width * canvas.width / this.scale.width,
-      height: bounds.height * canvas.height / this.scale.height
-    };
+    return projectTutorialBoundsToViewport(bounds, canvas, this.scale.width, this.scale.height);
   }
 
   private worldCircleToViewport(worldX: number, worldY: number, diameter: number): TutorialTargetBounds {
@@ -6333,6 +6352,7 @@ export class ArenaScene extends Phaser.Scene {
     this.tutorialDirector = null;
     this.tutorialHardPaused = false;
     this.tutorialClockWasPaused = false;
+    this.tutorialPointerLockWasActive = false;
     this.legendaryRevealInProgress = false;
     this.scale.off('resize', this.handleResize, this);
     this.events.off('resume-from-options', this.onResumeFromOptions);

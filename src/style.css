@@ -112,15 +112,15 @@ body {
 .gameplay-pointer-lock span { font-size: clamp(17px, 2vw, 24px); }
 
 /* Event-driven teaching layer shared by Phaser scenes and DOM storefronts. */
-.tutorial-overlay { position: fixed; inset: 0; z-index: 9000; pointer-events: none; font-family: 'Rajdhani', sans-serif; color: #eaffff; }
+.tutorial-overlay { position: absolute; inset: 0; z-index: 9000; pointer-events: none; font-family: 'Rajdhani', sans-serif; color: #eaffff; }
 .tutorial-overlay[hidden] { display: none; }
-.tutorial-shade { position: fixed; background: rgba(1, 5, 11, 0.72); backdrop-filter: saturate(0.68); transition: all 150ms ease-out; }
-.tutorial-focus { position: fixed; border: 2px solid #69f5ff; border-radius: 8px; box-shadow: 0 0 0 1px rgba(255, 85, 205, 0.6), 0 0 24px rgba(78, 235, 255, 0.76), inset 0 0 18px rgba(78, 235, 255, 0.18); transition: all 110ms linear; animation: tutorial-focus-pulse 1.4s ease-in-out infinite; }
+.tutorial-shade { position: absolute; background: rgba(1, 5, 11, 0.72); backdrop-filter: saturate(0.68); transition: all 150ms ease-out; }
+.tutorial-focus { position: absolute; border: 2px solid #69f5ff; border-radius: 8px; box-shadow: 0 0 0 1px rgba(255, 85, 205, 0.6), 0 0 24px rgba(78, 235, 255, 0.76), inset 0 0 18px rgba(78, 235, 255, 0.18); transition: all 110ms linear; animation: tutorial-focus-pulse 1.4s ease-in-out infinite; }
 .tutorial-focus-circle { border-radius: 50%; }
-.tutorial-arrow { position: fixed; width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; filter: drop-shadow(0 0 7px #58ecff); transform: translateX(-50%); }
+.tutorial-arrow { position: absolute; width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; filter: drop-shadow(0 0 7px #58ecff); transform: translateX(-50%); }
 .tutorial-arrow[data-position='below'] { border-bottom: 14px solid #69f5ff; }
 .tutorial-arrow[data-position='above'] { border-top: 14px solid #69f5ff; transform: translate(-50%, -100%); }
-.tutorial-callout { position: fixed; width: min(440px, calc(100vw - 32px)); padding: 18px 22px 15px; margin: 0; background: linear-gradient(145deg, rgba(6, 20, 31, 0.98), rgba(12, 13, 29, 0.98)); border: 1px solid rgba(91, 239, 255, 0.8); border-left: 4px solid #ff5bcf; box-shadow: 0 14px 50px rgba(0, 0, 0, 0.64), 0 0 22px rgba(53, 224, 255, 0.16); transform: translateX(-50%); pointer-events: auto; }
+.tutorial-callout { position: absolute; width: min(440px, calc(100% - 32px)); padding: 18px 22px 15px; margin: 0; background: linear-gradient(145deg, rgba(6, 20, 31, 0.98), rgba(12, 13, 29, 0.98)); border: 1px solid rgba(91, 239, 255, 0.8); border-left: 4px solid #ff5bcf; box-shadow: 0 14px 50px rgba(0, 0, 0, 0.64), 0 0 22px rgba(53, 224, 255, 0.16); transform: translateX(-50%); pointer-events: auto; }
 .tutorial-callout[data-position='above'] { transform: translate(-50%, -100%); }
 .tutorial-callout[data-position='center'] { transform: translate(-50%, -50%); }
 .tutorial-callout::before { content: ''; position: absolute; inset: 5px; border: 1px solid rgba(255,255,255,0.07); pointer-events: none; }
@@ -133,7 +133,7 @@ body {
 .tutorial-mouse { border-radius: 16px; min-width: 70px; border-color: #69f5ff; animation-name: tutorial-mouse-demo; }
 .tutorial-progress { margin-top: 12px; color: #6c93a2; font: 600 12px 'Orbitron', sans-serif; letter-spacing: 2px; }
 .tutorial-skip,.tutorial-continue { border: 1px solid #4dcde1; background: rgba(8, 20, 33, 0.96); color: #b7d9e4; font: 700 13px 'Rajdhani', sans-serif; letter-spacing: 1px; cursor: pointer; pointer-events: auto; }
-.tutorial-skip { position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); padding: 9px 14px; }
+.tutorial-skip { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); padding: 9px 14px; }
 .tutorial-continue { float: right; margin-top: -22px; padding: 7px 14px; }
 .tutorial-skip:hover,.tutorial-continue:hover { color: white; border-color: #ff67d2; box-shadow: 0 0 12px rgba(255, 91, 207, .34); }
 .tutorial-no-target .tutorial-shade-top { inset: 0 !important; width: auto !important; height: auto !important; }
