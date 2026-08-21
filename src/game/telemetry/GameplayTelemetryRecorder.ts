@@ -17,7 +17,7 @@ export type ProjectileMissReason = 'expired' | 'wall' | 'fence-split';
 export type SpawnBlockReason = 'count-cap' | 'weight-cap' | 'composition';
 export type ModEffectMetric = 'triggers' | 'damage' | 'playerDamage' | 'countdownMs' | 'credits' | 'pulls';
 export type ResourceGainSource = PickupDropSource | 'natural-regen' | 'site-recovery-direct' | 'emergency-capacitor';
-export type BuffName = 'damageBoost' | 'speedBoost' | 'rapidFire';
+export type BuffName = 'damageBoost' | 'speedBoost' | 'rapidFire' | 'grenadeRounds' | 'scattershot';
 export type BossAttackKind =
   | 'artillery-basic'
   | 'artillery-rocket'
@@ -434,6 +434,8 @@ export class GameplayTelemetryRecorder {
     if (buffs?.damageBoost) increment(encounter.buffUptimeMs, 'damageBoost', appliedDelta);
     if (buffs?.speedBoost) increment(encounter.buffUptimeMs, 'speedBoost', appliedDelta);
     if (buffs?.rapidFire) increment(encounter.buffUptimeMs, 'rapidFire', appliedDelta);
+    if (buffs?.grenadeRounds) increment(encounter.buffUptimeMs, 'grenadeRounds', appliedDelta);
+    if (buffs?.scattershot) increment(encounter.buffUptimeMs, 'scattershot', appliedDelta);
   }
 
   static activeEncounterElapsedMs(): number { return this.activeEncounter()?.activeDurationMs ?? 0; }

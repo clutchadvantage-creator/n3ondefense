@@ -21,10 +21,12 @@ interface MineExplosionState {
   radius: number;
   startedAt: number;
   phase: number;
-  palette: ExplosionPalette;
+  coreColor: number;
+  primaryColor: number;
+  secondaryColor: number;
+  outerColor: number;
 }
 
-const EMPTY_PALETTE: ExplosionPalette = [0xffffff, 0xffffff, 0xffffff, 0xffffff];
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 const easeOutCubic = (value: number): number => 1 - (1 - value) ** 3;
 
@@ -56,7 +58,10 @@ export class MineExplosionVfx {
       radius: 0,
       startedAt: 0,
       phase: 0,
-      palette: EMPTY_PALETTE
+      coreColor: 0xffffff,
+      primaryColor: 0xffffff,
+      secondaryColor: 0xffffff,
+      outerColor: 0xffffff
     }));
     for (let index = 0; index < FULL_RAY_COUNT; index += 1) {
       const angle = index * Math.PI * 2 / FULL_RAY_COUNT;
@@ -83,6 +88,21 @@ export class MineExplosionVfx {
     now: number,
     cameraImpulse = true
   ): void {
+    this.emitColors(x, y, radius, palette[0], palette[1], palette[2], palette[3], now, cameraImpulse);
+  }
+
+  /** Scalar-color variant used by projectile impacts to avoid a palette-array allocation per hit. */
+  emitColors(
+    x: number,
+    y: number,
+    radius: number,
+    coreColor: number,
+    primaryColor: number,
+    secondaryColor: number,
+    outerColor: number,
+    now: number,
+    cameraImpulse = true
+  ): void {
     let state = this.states[0];
     let oldestStartedAt = Number.POSITIVE_INFINITY;
     for (const candidate of this.states) {
@@ -102,7 +122,10 @@ export class MineExplosionVfx {
     state.radius = radius;
     state.startedAt = now;
     state.phase = (this.sequence * 2.399963229728653) % (Math.PI * 2);
-    state.palette = palette;
+    state.coreColor = coreColor;
+    state.primaryColor = primaryColor;
+    state.secondaryColor = secondaryColor;
+    state.outerColor = outerColor;
     this.sequence += 1;
 
     // force=false prevents rapid mine chains from repeatedly restarting shake.
@@ -144,7 +167,7 @@ export class MineExplosionVfx {
   }
 
   private drawExplosion(state: MineExplosionState, elapsed: number): void {
-    const { x, y, radius, palette, phase } = state;
+    const { x, y, radius, coreColor, primaryColor, secondaryColor, outerColor, phase } = state;
     const lifetimeProgress = clamp01(elapsed / EXPLOSION_LIFETIME_MS);
     const lifetimeFade = (1 - lifetimeProgress) ** 1.5;
     const phaseCos = Math.cos(phase);
@@ -152,18 +175,18 @@ export class MineExplosionVfx {
 
     // A restrained floor response anchors the otherwise airborne neon energy.
     const floorProgress = easeOutCubic(clamp01(elapsed / 420));
-    this.graphics.fillStyle(palette[3], 0.075 * lifetimeFade);
+    this.graphics.fillStyle(outerColor, 0.075 * lifetimeFade);
     this.graphics.fillCircle(x, y, radius * (0.25 + floorProgress * 0.72));
-    this.graphics.lineStyle(Math.max(1, 3.5 * lifetimeFade), palette[2], 0.22 * lifetimeFade);
+    this.graphics.lineStyle(Math.max(1, 3.5 * lifetimeFade), secondaryColor, 0.22 * lifetimeFade);
     this.graphics.strokeCircle(x, y, radius * (0.18 + floorProgress * 0.78));
 
     // The first 120 ms contains the concentrated white-hot core and plasma bloom.
     const coreFade = 1 - clamp01(elapsed / 125);
     if (coreFade > 0) {
       const flashProgress = easeOutCubic(clamp01(elapsed / 80));
-      this.graphics.fillStyle(palette[1], 0.24 * coreFade);
+      this.graphics.fillStyle(primaryColor, 0.24 * coreFade);
       this.graphics.fillCircle(x, y, radius * (0.25 + flashProgress * 0.19));
-      this.graphics.fillStyle(palette[0], 0.88 * coreFade);
+      this.graphics.fillStyle(coreColor, 0.88 * coreFade);
       this.graphics.fillCircle(x, y, radius * (0.08 + flashProgress * 0.11));
       this.graphics.fillStyle(0xffffff, 0.82 * coreFade);
       this.graphics.fillCircle(x, y, radius * (0.035 + flashProgress * 0.04));
@@ -185,10 +208,10 @@ export class MineExplosionVfx {
         const directionY = baseX * rotationSin + baseY * rotationCos;
         const distance = radius * (0.06 + nebulaProgress * (0.12 + (index % 3) * 0.035));
         const lobeRadius = radius * (0.14 + (index % 4) * 0.018) * (0.72 + nebulaProgress * 0.48);
-        this.graphics.fillStyle(index % 2 === 0 ? palette[1] : palette[2], 0.075 * nebulaFade);
+        this.graphics.fillStyle(index % 2 === 0 ? primaryColor : secondaryColor, 0.075 * nebulaFade);
         this.graphics.fillCircle(x + directionX * distance, y + directionY * distance, lobeRadius);
       }
-      this.graphics.lineStyle(Math.max(1, 2.2 * nebulaFade), palette[2], 0.32 * nebulaFade);
+      this.graphics.lineStyle(Math.max(1, 2.2 * nebulaFade), secondaryColor, 0.32 * nebulaFade);
       this.graphics.beginPath();
       this.graphics.arc(
         x,
@@ -205,15 +228,15 @@ export class MineExplosionVfx {
     const primaryProgress = easeOutCubic(clamp01((elapsed - 24) / 330));
     if (elapsed >= 24 && primaryProgress < 1) {
       const waveFade = 1 - primaryProgress;
-      this.graphics.lineStyle(2 + waveFade * 5, palette[1], 0.94 * waveFade);
+      this.graphics.lineStyle(2 + waveFade * 5, primaryColor, 0.94 * waveFade);
       this.graphics.strokeCircle(x, y, radius * (0.1 + primaryProgress * 0.9));
-      this.graphics.lineStyle(1.5 + waveFade * 2.5, palette[0], 0.48 * waveFade);
+      this.graphics.lineStyle(1.5 + waveFade * 2.5, coreColor, 0.48 * waveFade);
       this.graphics.strokeCircle(x, y, radius * (0.07 + primaryProgress * 0.93));
     }
     const secondaryProgress = easeOutCubic(clamp01((elapsed - 78) / 390));
     if (elapsed >= 78 && secondaryProgress < 1) {
       const waveFade = 1 - secondaryProgress;
-      this.graphics.lineStyle(1.5 + waveFade * 3, palette[2], 0.72 * waveFade);
+      this.graphics.lineStyle(1.5 + waveFade * 3, secondaryColor, 0.72 * waveFade);
       this.graphics.strokeCircle(x, y, radius * (0.12 + secondaryProgress * 1.06));
     }
 
@@ -229,7 +252,7 @@ export class MineExplosionVfx {
         const directionY = baseX * phaseSin + baseY * phaseCos;
         const inner = radius * (0.05 + (index % 3) * 0.018);
         const outer = radius * (0.34 + rayProgress * (0.34 + (index % 4) * 0.075));
-        const color = index % 4 === 0 ? palette[0] : index % 2 === 0 ? palette[1] : palette[2];
+        const color = index % 4 === 0 ? coreColor : index % 2 === 0 ? primaryColor : secondaryColor;
         this.graphics.lineStyle(index % 4 === 0 ? 2 : 3.5, color, (index % 4 === 0 ? 0.9 : 0.68) * rayFade);
         this.graphics.lineBetween(
           x + directionX * inner,
@@ -246,7 +269,7 @@ export class MineExplosionVfx {
       for (let index = 0; index < 5; index += 1) {
         const arcRadius = radius * (0.22 + index * 0.105 + lifetimeProgress * 0.18);
         const start = phase + index * 1.37 - lifetimeProgress * (index % 2 === 0 ? 0.9 : -0.7);
-        this.graphics.lineStyle(index % 2 === 0 ? 2.5 : 1.5, index % 2 === 0 ? palette[2] : palette[1], 0.62 * arcFade);
+        this.graphics.lineStyle(index % 2 === 0 ? 2.5 : 1.5, index % 2 === 0 ? secondaryColor : primaryColor, 0.62 * arcFade);
         this.graphics.beginPath();
         this.graphics.arc(x, y, arcRadius, start, start + 0.48 + index * 0.06, false);
         this.graphics.strokePath();
@@ -270,7 +293,7 @@ export class MineExplosionVfx {
         const innerRadius = radius * 0.1;
         this.graphics.lineStyle(
           bolt % 2 === 0 ? 2.2 : 1.4,
-          bolt % 2 === 0 ? palette[0] : palette[2],
+          bolt % 2 === 0 ? coreColor : secondaryColor,
           0.84 * electricFade
         );
         this.graphics.beginPath();
@@ -305,7 +328,7 @@ export class MineExplosionVfx {
         const size = Math.max(1.2, radius * (0.018 + (index % 3) * 0.006) * fragmentFade);
         const tangentX = -directionY * size;
         const tangentY = directionX * size;
-        this.graphics.fillStyle(index % 3 === 0 ? palette[0] : index % 2 === 0 ? palette[1] : palette[2], 0.88 * fragmentFade);
+        this.graphics.fillStyle(index % 3 === 0 ? coreColor : index % 2 === 0 ? primaryColor : secondaryColor, 0.88 * fragmentFade);
         this.graphics.fillTriangle(
           fragmentX + directionX * size * 1.8,
           fragmentY + directionY * size * 1.8,
@@ -327,7 +350,7 @@ export class MineExplosionVfx {
         const directionY = baseX * phaseSin + baseY * phaseCos;
         const middle = radius * (0.18 + (index % 3) * 0.04);
         const end = radius * (0.36 + (index % 2) * 0.08);
-        this.graphics.lineStyle(1.5, index % 2 === 0 ? palette[1] : palette[2], 0.38 * crackFade);
+        this.graphics.lineStyle(1.5, index % 2 === 0 ? primaryColor : secondaryColor, 0.38 * crackFade);
         this.graphics.beginPath();
         this.graphics.moveTo(x + directionX * radius * 0.08, y + directionY * radius * 0.08);
         this.graphics.lineTo(
@@ -346,7 +369,7 @@ export class MineExplosionVfx {
         const baseX = this.fragmentCos[index * 2];
         const baseY = this.fragmentSin[index * 2];
         const offset = radius * (0.08 + index * 0.018);
-        this.graphics.fillStyle(index % 2 === 0 ? palette[1] : palette[2], 0.055 * cloudFade);
+        this.graphics.fillStyle(index % 2 === 0 ? primaryColor : secondaryColor, 0.055 * cloudFade);
         this.graphics.fillCircle(
           x + baseX * offset,
           y + baseY * offset,
@@ -358,7 +381,7 @@ export class MineExplosionVfx {
 
   private drawSmokeNebula(state: MineExplosionState, elapsed: number): void {
     if (elapsed < 45) return;
-    const { x, y, radius, palette, phase } = state;
+    const { x, y, radius, secondaryColor, outerColor, phase } = state;
     const progress = clamp01((elapsed - 45) / (EXPLOSION_LIFETIME_MS - 45));
     const fade = (1 - progress) ** 1.3;
     if (fade <= 0) return;
@@ -379,7 +402,7 @@ export class MineExplosionVfx {
       const smokeRadius = radius * (0.13 + (index % 3) * 0.025) * (0.78 + progress * 0.72);
       this.smokeGraphics.fillStyle(0x05070d, 0.12 * fade);
       this.smokeGraphics.fillCircle(smokeX, smokeY, smokeRadius * 1.12);
-      this.smokeGraphics.fillStyle(index % 2 === 0 ? palette[3] : palette[2], 0.095 * fade);
+      this.smokeGraphics.fillStyle(index % 2 === 0 ? outerColor : secondaryColor, 0.095 * fade);
       this.smokeGraphics.fillCircle(smokeX, smokeY, smokeRadius);
     }
   }

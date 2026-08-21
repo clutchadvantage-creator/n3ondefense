@@ -13,7 +13,7 @@ test('Every pickup type uses the same compact neon shell with a distinct center 
   assert.match(arena, /const haloRadius = 18/);
   assert.match(arena, /const scanRing = this\.add\.circle\(0, 0, 15/);
   assert.match(arena, /const orbitPath = this\.add\.circle\(0, 0, 20/);
-  for (const type of ['health', 'energy', 'damageBoost', 'speedBoost', 'rapidFire', 'ricochet', 'credits', 'coreToken']) {
+  for (const type of ['health', 'energy', 'damageBoost', 'speedBoost', 'rapidFire', 'ricochet', 'grenadeRounds', 'scattershot', 'credits', 'coreToken']) {
     assert.match(arena, new RegExp(`type === '${type}'`));
   }
   assert.match(arena, /this\.add\.text\(0, -1, '\\u00a2'/);
@@ -31,10 +31,11 @@ test('Ricochet Rounds use a distinct pickup, preserve projectile speed, and have
   assert.equal(
     PICKUP_BALANCE.healthShare + PICKUP_BALANCE.energyShare + PICKUP_BALANCE.damageBoostShare
       + PICKUP_BALANCE.speedBoostShare + PICKUP_BALANCE.rapidFireShare + PICKUP_BALANCE.ricochetShare
+      + PICKUP_BALANCE.grenadeRoundsShare + PICKUP_BALANCE.scattershotShare
       + PICKUP_BALANCE.creditsShare + PICKUP_BALANCE.coreTokenShare,
-    1
+    1.08
   );
-  assert.match(arena, /ricochetsRemaining: now < this\.player\.buffs\.ricochetUntil \? RICOCHET_MAX_WALL_BOUNCES : 0/);
+  assert.match(arena, /const ricochetsRemaining = now < this\.player\.buffs\.ricochetUntil \? RICOCHET_MAX_WALL_BOUNCES : 0/);
   assert.match(arena, /if \(p\.from === 'player' && \(p\.ricochetsRemaining \?\? 0\) > 0/);
 });
 

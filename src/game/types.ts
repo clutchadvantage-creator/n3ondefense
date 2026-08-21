@@ -18,7 +18,7 @@ export enum RoundState {
 }
 
 export type EnemyType = 'grunt' | 'shooter' | 'defuser' | 'tank' | 'disruptor' | 'star';
-export type PickupType = 'health' | 'energy' | 'damageBoost' | 'speedBoost' | 'rapidFire' | 'ricochet' | 'credits' | 'coreToken' | 'plasmaChip' | 'fluxCore';
+export type PickupType = 'health' | 'energy' | 'damageBoost' | 'speedBoost' | 'rapidFire' | 'ricochet' | 'grenadeRounds' | 'scattershot' | 'credits' | 'coreToken' | 'plasmaChip' | 'fluxCore';
 export type AbilityType = 'fence' | 'turret' | 'mine';
 
 export enum BombSiteState {

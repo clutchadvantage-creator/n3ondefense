@@ -17,6 +17,7 @@ import {
 import { MOD_BALANCE, RUN_PROTOCOLS } from '../src/game/mods/modBalance.ts';
 import { MOD_DEFINITIONS } from '../src/game/mods/definitions.ts';
 import { getRoundCompletionCredits } from '../src/game/economy/economyBalance.ts';
+import { ENEMY_PICKUP_TOTAL_WEIGHT, ENEMY_PICKUP_WEIGHTS } from '../src/game/player/PickupDropTable.ts';
 
 const assert = (condition: boolean, message: string): void => {
   if (!condition) throw new Error(`BALANCE ASSERTION FAILED: ${message}`);
@@ -213,7 +214,8 @@ assert(weaponAtLevel(10).fireRate <= WEAPON_BALANCE.maximumFireRate, 'maximum fi
 assert(maximumEnergyRegen < maximumSustainedFireEnergyPerSecond, 'fully upgraded sustained fire must consume energy faster than regeneration restores it');
 assert(maximumEnergy <= 160, 'fully upgraded energy capacity remains within pickup-useful target');
 assert(maximumShieldDuration === ABILITY_BALANCE.shield.maximumDurationMs, 'shield duration upgrade reaches its configured cap');
-assert(Math.abs(PICKUP_BALANCE.healthShare + PICKUP_BALANCE.energyShare + PICKUP_BALANCE.damageBoostShare + PICKUP_BALANCE.speedBoostShare + PICKUP_BALANCE.rapidFireShare + PICKUP_BALANCE.creditsShare + PICKUP_BALANCE.coreTokenShare - 1) < 0.0001, 'pickup weights sum to one');
+assert(ENEMY_PICKUP_TOTAL_WEIGHT > 0, 'pickup table has positive total weight');
+assert(ENEMY_PICKUP_WEIGHTS.every((entry) => entry.weight > 0), 'every enemy pickup has a positive drop weight');
 assert(OBJECTIVE_BALANCE.defuseRequiredMs >= 9000, 'defuser reaction time');
 assert(Math.abs(Object.values(getSpawnProfile(10).composition).reduce((sum, value) => sum + value, 0) - 1) < 0.0001, 'composition normalized');
 assert(MOD_BALANCE.conditionalDirectDamageBonusCap > 0 && MOD_BALANCE.conditionalDirectDamageBonusCap <= 0.3, 'conditional mod damage cap');

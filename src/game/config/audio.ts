@@ -32,6 +32,8 @@ export const SFX_DEFINITIONS = [
   { key: 'coreTokenPickup', label: 'Core Token Pickup' },
   { key: 'fluxCorePickup', label: 'Flux Core Pickup' },
   { key: 'ricochetPickup', label: 'Ricochet Rounds Pickup' },
+  { key: 'grenadeRoundsPickup', label: 'Grenade Rounds Pickup' },
+  { key: 'scattershotPickup', label: 'Scattershot Pickup' },
   { key: 'modPickup', label: 'Mod Pickup' },
   { key: 'fluxCore', label: 'Flux Core Energy' },
   { key: 'lasersOff', label: 'Security Lasers Offline' },

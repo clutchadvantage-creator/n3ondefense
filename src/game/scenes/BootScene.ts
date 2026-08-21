@@ -227,6 +227,19 @@ export class BootScene extends Phaser.Scene {
       graphics.fillStyle(0xffffff, 0.45);
       graphics.fillCircle(6, 6, 2);
     });
+    createProjectileTexture('ammo-grenade-round', 22, 14, (graphics) => {
+      graphics.fillCircle(9, 7, 5.5);
+      graphics.fillRect(13, 5, 5, 4);
+      graphics.fillTriangle(17, 3, 21, 5, 17, 6);
+      graphics.fillTriangle(17, 8, 21, 9, 17, 11);
+      graphics.fillStyle(0xffffff, 0.5);
+      graphics.fillCircle(7, 5, 1.5);
+    });
+    createProjectileTexture('ammo-scatter-pellet', 12, 6, (graphics) => {
+      graphics.fillRoundedRect(1, 1, 10, 4, 2);
+      graphics.fillStyle(0xffffff, 0.58);
+      graphics.fillRect(7, 1, 2, 4);
+    });
     createProjectileTexture('projectile-sword', 30, 14, (graphics) => {
       graphics.fillPoints([
         { x: 8, y: 4 }, { x: 24, y: 4 }, { x: 29, y: 7 }, { x: 24, y: 10 }, { x: 8, y: 10 }

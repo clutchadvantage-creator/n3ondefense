@@ -27,6 +27,8 @@ const PICKUP_SFX_SOURCES = {
   coreTokenPickup: 'soundeffects/coretokenpickup.mp3',
   fluxCorePickup: 'soundeffects/fluxcorepickup.mp3',
   ricochetPickup: 'soundeffects/ricochetpickup.mp3',
+  grenadeRoundsPickup: 'soundeffects/grenadeshotpickup.mp3',
+  scattershotPickup: 'soundeffects/scattershotpickup.mp3',
   modPickup: 'soundeffects/modpickup.mp3'
 } as const;
 type PickupSfxName = keyof typeof PICKUP_SFX_SOURCES;
@@ -65,11 +67,13 @@ export class AudioManager {
   private readonly itemLockedSfxPool: HTMLAudioElement[] = [];
   private readonly pickupSfxPools: Record<PickupSfxName, HTMLAudioElement[]> = {
     pickup: [], healthPickup: [], energyPickup: [], damageBoostPickup: [], speedPickup: [],
-    fireRatePickup: [], creditPickup: [], coreTokenPickup: [], fluxCorePickup: [], ricochetPickup: [], modPickup: []
+    fireRatePickup: [], creditPickup: [], coreTokenPickup: [], fluxCorePickup: [], ricochetPickup: [],
+    grenadeRoundsPickup: [], scattershotPickup: [], modPickup: []
   };
   private readonly pickupSfxCursors: Record<PickupSfxName, number> = {
     pickup: 0, healthPickup: 0, energyPickup: 0, damageBoostPickup: 0, speedPickup: 0,
-    fireRatePickup: 0, creditPickup: 0, coreTokenPickup: 0, fluxCorePickup: 0, ricochetPickup: 0, modPickup: 0
+    fireRatePickup: 0, creditPickup: 0, coreTokenPickup: 0, fluxCorePickup: 0, ricochetPickup: 0,
+    grenadeRoundsPickup: 0, scattershotPickup: 0, modPickup: 0
   };
   private readonly abilityFeedbackSfxPools: Record<AbilityFeedbackSfxName, HTMLAudioElement[]> = {
     placeTurret: [], electricFence: [], placeMine: [], unavailable: []
@@ -1039,6 +1043,8 @@ export class AudioManager {
       case 'coreTokenPickup':
       case 'fluxCorePickup':
       case 'ricochetPickup':
+      case 'grenadeRoundsPickup':
+      case 'scattershotPickup':
       case 'modPickup':
         this.playPickupSfx(name);
         break;

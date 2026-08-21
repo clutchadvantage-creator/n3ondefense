@@ -15,7 +15,7 @@ test('live telemetry aggregates enemy TTK, kill sources, drops, pickups, and pla
   });
   GameplayTelemetryRecorder.recordActiveFrame(200, 1, 120, 90, {
     activeWeight: 1, activeCountCap: 4, activeWeightCap: 5, activeBombs: 1,
-    activeDefusers: 0, buffs: { damageBoost: true }
+    activeDefusers: 0, buffs: { damageBoost: true, grenadeRounds: true }
   });
   const spawnedAt = GameplayTelemetryRecorder.recordEnemySpawn('grunt', 50);
   GameplayTelemetryRecorder.recordShot(24, 0.5, true);
@@ -40,7 +40,7 @@ test('live telemetry aggregates enemy TTK, kill sources, drops, pickups, and pla
   GameplayTelemetryRecorder.recordSpawnAttempt('count-cap', 900);
   GameplayTelemetryRecorder.recordActiveFrame(800, 4, 111, 0, {
     activeWeight: 5, activeCountCap: 4, activeWeightCap: 5, activeBombs: 1,
-    activeDefusers: 1, buffs: { damageBoost: true }
+    activeDefusers: 1, buffs: { damageBoost: true, scattershot: true }
   });
   GameplayTelemetryRecorder.recordEnemyDamage('grunt', 'weapon', 44);
   GameplayTelemetryRecorder.recordEnemyDamage('grunt', 'hazard', 6);
@@ -84,6 +84,8 @@ test('live telemetry aggregates enemy TTK, kill sources, drops, pickups, and pla
   assert.equal(encounter.modEffects['kill-switch'].countdownMs, 850);
   assert.equal(encounter.modEffects['arc-surge'].damage, 18);
   assert.equal(encounter.buffUptimeMs.damageBoost, 450);
+  assert.equal(encounter.buffUptimeMs.grenadeRounds, 200);
+  assert.equal(encounter.buffUptimeMs.scattershot, 250);
   assert.equal(encounter.playerDamageBySource['enemy-projectile'], 9);
   assert.equal(encounter.derived.pickupCollectionRate, 1);
   assert.ok(encounter.derived.killsPerActiveMinute > 0);
