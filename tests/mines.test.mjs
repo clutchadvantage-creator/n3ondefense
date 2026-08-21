@@ -216,6 +216,9 @@ test('player mine explosions use the shared explosion audio and dedicated red-or
   assert.match(vfx, /Two thin wave fronts/);
   assert.match(vfx, /Sharp radial energy spikes/);
   assert.match(vfx, /Jagged rotating plasma arcs/);
+  assert.match(vfx, /rolling energy nebula/);
+  assert.match(vfx, /multi-segment bolts crackle through the nebula/);
+  assert.match(vfx, /private drawSmokeNebula/);
   assert.match(vfx, /Short, narrow crack traces/);
   assert.match(vfx, /compact plasma afterglow/i);
   assert.match(vfx, /cameras\.main\.shake\(260, 0\.008, false\)/);
@@ -238,7 +241,9 @@ test('mine explosion chains share one bounded renderer without particle objects 
   assert.match(arena, /this\.mineExplosionVfx\.reset\(\)/);
   assert.match(vfx, /MAX_ACTIVE_EXPLOSIONS = 18/);
   assert.match(vfx, /this\.graphics = scene\.add\.graphics\(\)/);
+  assert.match(vfx, /this\.smokeGraphics = scene\.add\.graphics\(\)/);
   assert.match(vfx, /new Float32Array\(FULL_RAY_COUNT\)/);
   assert.match(vfx, /new Float32Array\(FULL_FRAGMENT_COUNT\)/);
+  assert.match(vfx, /new Float32Array\(FULL_NEBULA_LOBE_COUNT\)/);
   assert.doesNotMatch(vfx, /scene\.add\.circle|scene\.tweens\.add|physics\./);
 });

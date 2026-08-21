@@ -105,9 +105,9 @@ test('security laser and per-bomblet audio use active-state and pooled playback'
   assert.match(lasers, /this\.setAudioActive\(true\)/);
   assert.match(lasers, /this\.setAudioActive\(false\)/);
   assert.match(bomblets, /const shouldPlaySound = this\.strikeDetonationCount % 2 === 0/);
-  assert.match(bomblets, /this\.onBombletExploded\?\.\(target\.x, target\.y, config\.blastRadius, shouldPlaySound\)/);
+  assert.match(bomblets, /this\.onBombletExploded\?\.\([\s\S]*?target\.explosionPalette[\s\S]*?\)/);
   assert.match(arena, /startSecurityLaserLoop\(\).*stopSecurityLaserLoop\(\)/);
-  assert.match(arena, /\(x, y, blastRadius, shouldPlaySound\) => \{[\s\S]*?if \(shouldPlaySound\) this\.audio\.playSfx\('bomblet'\)/);
+  assert.match(arena, /\(x, y, blastRadius, shouldPlaySound, explosionPalette\) => \{[\s\S]*?if \(shouldPlaySound\) this\.audio\.playSfx\('bomblet'\)/);
   assert.match(arena, /laserSecurity\?\.silence\(\)/);
 });
 
@@ -151,4 +151,18 @@ test('bomblet detonations apply a restrained non-restarting camera shake', () =>
   assert.ok(BOMBLET_HAZARD_BALANCE.cameraShakeIntensity > 0);
   assert.ok(BOMBLET_HAZARD_BALANCE.cameraShakeIntensity < 0.01);
   assert.match(bomblets, /cameras\.main\.shake\(config\.cameraShakeDurationMs, config\.cameraShakeIntensity, false\)/);
+});
+
+test('bomblets share the bounded mine nebula renderer without temporary blast objects', () => {
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const bomblets = readFileSync(new URL('../src/game/systems/BombletHazardSystem.ts', import.meta.url), 'utf8');
+  const vfx = readFileSync(new URL('../src/game/vfx/MineExplosionVfx.ts', import.meta.url), 'utf8');
+  const detonateStart = bomblets.indexOf('private detonate');
+  const detonateEnd = bomblets.indexOf('private clearTargets', detonateStart);
+  const detonate = bomblets.slice(detonateStart, detonateEnd);
+  assert.match(bomblets, /const explosionPalette: ExplosionPalette = \[0xffffff, color, secondaryColor, this\.theme\.primary\]/);
+  assert.match(arena, /mineExplosionVfx\.emit\(x, y, blastRadius, explosionPalette, this\.time\.now, false\)/);
+  assert.match(vfx, /private drawSmokeNebula/);
+  assert.match(vfx, /multi-segment bolts crackle through the nebula/);
+  assert.doesNotMatch(detonate, /scene\.add\.circle|scene\.tweens\.add/);
 });

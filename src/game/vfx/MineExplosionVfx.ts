@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import type { MineExplosionPalette } from '../abilities/Mine.ts';
+
+export type ExplosionPalette = readonly [core: number, primary: number, secondary: number, outer: number];
 
 const EXPLOSION_LIFETIME_MS = 680;
 const MAX_ACTIVE_EXPLOSIONS = 18;
@@ -8,6 +9,10 @@ const FULL_RAY_COUNT = 18;
 const REDUCED_RAY_COUNT = 10;
 const FULL_FRAGMENT_COUNT = 12;
 const REDUCED_FRAGMENT_COUNT = 6;
+const FULL_NEBULA_LOBE_COUNT = 9;
+const REDUCED_NEBULA_LOBE_COUNT = 5;
+const FULL_ELECTRIC_BOLT_COUNT = 6;
+const REDUCED_ELECTRIC_BOLT_COUNT = 3;
 
 interface MineExplosionState {
   active: boolean;
@@ -16,29 +21,33 @@ interface MineExplosionState {
   radius: number;
   startedAt: number;
   phase: number;
-  palette: MineExplosionPalette;
+  palette: ExplosionPalette;
 }
 
-const EMPTY_PALETTE: MineExplosionPalette = [0xffffff, 0xffffff, 0xffffff, 0xffffff];
+const EMPTY_PALETTE: ExplosionPalette = [0xffffff, 0xffffff, 0xffffff, 0xffffff];
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 const easeOutCubic = (value: number): number => 1 - (1 - value) ** 3;
 
 /**
- * One batched, allocation-free renderer for every active mine detonation.
+ * One batched, allocation-free renderer for active mine and bomblet detonations.
  * Gameplay damage and radius remain owned by ArenaScene; this class only draws.
  */
 export class MineExplosionVfx {
   readonly maximumActiveExplosions: number;
+  private readonly smokeGraphics: Phaser.GameObjects.Graphics;
   private readonly graphics: Phaser.GameObjects.Graphics;
   private readonly states: MineExplosionState[];
   private readonly rayCos = new Float32Array(FULL_RAY_COUNT);
   private readonly raySin = new Float32Array(FULL_RAY_COUNT);
   private readonly fragmentCos = new Float32Array(FULL_FRAGMENT_COUNT);
   private readonly fragmentSin = new Float32Array(FULL_FRAGMENT_COUNT);
+  private readonly nebulaCos = new Float32Array(FULL_NEBULA_LOBE_COUNT);
+  private readonly nebulaSin = new Float32Array(FULL_NEBULA_LOBE_COUNT);
   private sequence = 0;
 
   constructor(private readonly scene: Phaser.Scene, private readonly particlesEnabled: boolean) {
     this.maximumActiveExplosions = particlesEnabled ? MAX_ACTIVE_EXPLOSIONS : REDUCED_ACTIVE_EXPLOSIONS;
+    this.smokeGraphics = scene.add.graphics().setDepth(14).setBlendMode(Phaser.BlendModes.NORMAL);
     this.graphics = scene.add.graphics().setDepth(15).setBlendMode(Phaser.BlendModes.ADD);
     this.states = Array.from({ length: this.maximumActiveExplosions }, (): MineExplosionState => ({
       active: false,
@@ -59,9 +68,21 @@ export class MineExplosionVfx {
       this.fragmentCos[index] = Math.cos(angle);
       this.fragmentSin[index] = Math.sin(angle);
     }
+    for (let index = 0; index < FULL_NEBULA_LOBE_COUNT; index += 1) {
+      const angle = index * Math.PI * 2 / FULL_NEBULA_LOBE_COUNT + (index % 2) * 0.17;
+      this.nebulaCos[index] = Math.cos(angle);
+      this.nebulaSin[index] = Math.sin(angle);
+    }
   }
 
-  emit(x: number, y: number, radius: number, palette: MineExplosionPalette, now: number): void {
+  emit(
+    x: number,
+    y: number,
+    radius: number,
+    palette: ExplosionPalette,
+    now: number,
+    cameraImpulse = true
+  ): void {
     let state = this.states[0];
     let oldestStartedAt = Number.POSITIVE_INFINITY;
     for (const candidate of this.states) {
@@ -85,10 +106,12 @@ export class MineExplosionVfx {
     this.sequence += 1;
 
     // force=false prevents rapid mine chains from repeatedly restarting shake.
-    this.scene.cameras.main.shake(260, 0.008, false);
+    // Bomblets retain their own lighter hazard shake and opt out here.
+    if (cameraImpulse) this.scene.cameras.main.shake(260, 0.008, false);
   }
 
   update(now: number): void {
+    this.smokeGraphics.clear();
     this.graphics.clear();
     for (const state of this.states) {
       if (!state.active) continue;
@@ -97,17 +120,20 @@ export class MineExplosionVfx {
         state.active = false;
         continue;
       }
+      this.drawSmokeNebula(state, elapsed);
       this.drawExplosion(state, elapsed);
     }
   }
 
   reset(): void {
     for (const state of this.states) state.active = false;
+    this.smokeGraphics.clear();
     this.graphics.clear();
   }
 
   destroy(): void {
     this.reset();
+    this.smokeGraphics.destroy();
     this.graphics.destroy();
   }
 
@@ -141,6 +167,38 @@ export class MineExplosionVfx {
       this.graphics.fillCircle(x, y, radius * (0.08 + flashProgress * 0.11));
       this.graphics.fillStyle(0xffffff, 0.82 * coreFade);
       this.graphics.fillCircle(x, y, radius * (0.035 + flashProgress * 0.04));
+    }
+
+    // A rolling energy nebula fills the gap between the core and shock fronts.
+    // Its fixed lobe table creates turbulent volume without particle objects.
+    const nebulaFade = 1 - clamp01((elapsed - 105) / 500);
+    if (nebulaFade > 0) {
+      const nebulaProgress = easeOutCubic(clamp01(elapsed / 470));
+      const lobeCount = this.particlesEnabled ? FULL_NEBULA_LOBE_COUNT : REDUCED_NEBULA_LOBE_COUNT;
+      const rotation = phase - lifetimeProgress * 0.82;
+      const rotationCos = Math.cos(rotation);
+      const rotationSin = Math.sin(rotation);
+      for (let index = 0; index < lobeCount; index += 1) {
+        const baseX = this.nebulaCos[index];
+        const baseY = this.nebulaSin[index];
+        const directionX = baseX * rotationCos - baseY * rotationSin;
+        const directionY = baseX * rotationSin + baseY * rotationCos;
+        const distance = radius * (0.06 + nebulaProgress * (0.12 + (index % 3) * 0.035));
+        const lobeRadius = radius * (0.14 + (index % 4) * 0.018) * (0.72 + nebulaProgress * 0.48);
+        this.graphics.fillStyle(index % 2 === 0 ? palette[1] : palette[2], 0.075 * nebulaFade);
+        this.graphics.fillCircle(x + directionX * distance, y + directionY * distance, lobeRadius);
+      }
+      this.graphics.lineStyle(Math.max(1, 2.2 * nebulaFade), palette[2], 0.32 * nebulaFade);
+      this.graphics.beginPath();
+      this.graphics.arc(
+        x,
+        y,
+        radius * (0.19 + nebulaProgress * 0.2),
+        phase + lifetimeProgress,
+        phase + lifetimeProgress + 4.45,
+        false
+      );
+      this.graphics.strokePath();
     }
 
     // Two thin wave fronts communicate the blast without creating opaque discs.
@@ -191,6 +249,41 @@ export class MineExplosionVfx {
         this.graphics.lineStyle(index % 2 === 0 ? 2.5 : 1.5, index % 2 === 0 ? palette[2] : palette[1], 0.62 * arcFade);
         this.graphics.beginPath();
         this.graphics.arc(x, y, arcRadius, start, start + 0.48 + index * 0.06, false);
+        this.graphics.strokePath();
+      }
+    }
+
+    // Animated multi-segment bolts crackle through the nebula. The changing
+    // phase makes the electricity crawl without spawning lines or tweens.
+    const electricFade = 1 - clamp01((elapsed - 70) / 430);
+    if (elapsed <= 500 && electricFade > 0) {
+      const boltCount = this.particlesEnabled ? FULL_ELECTRIC_BOLT_COUNT : REDUCED_ELECTRIC_BOLT_COUNT;
+      const boltReach = radius * (0.34 + easeOutCubic(clamp01(elapsed / 300)) * 0.5);
+      for (let bolt = 0; bolt < boltCount; bolt += 1) {
+        const directionIndex = bolt * 3;
+        const baseX = this.rayCos[directionIndex];
+        const baseY = this.raySin[directionIndex];
+        const directionX = baseX * phaseCos - baseY * phaseSin;
+        const directionY = baseX * phaseSin + baseY * phaseCos;
+        const tangentX = -directionY;
+        const tangentY = directionX;
+        const innerRadius = radius * 0.1;
+        this.graphics.lineStyle(
+          bolt % 2 === 0 ? 2.2 : 1.4,
+          bolt % 2 === 0 ? palette[0] : palette[2],
+          0.84 * electricFade
+        );
+        this.graphics.beginPath();
+        this.graphics.moveTo(x + directionX * innerRadius, y + directionY * innerRadius);
+        for (let segment = 1; segment <= 4; segment += 1) {
+          const segmentProgress = segment / 4;
+          const jitter = Math.sin(elapsed * 0.052 + bolt * 3.17 + segment * 2.41)
+            * radius * 0.045 * (1 - segmentProgress * 0.35);
+          this.graphics.lineTo(
+            x + directionX * boltReach * segmentProgress + tangentX * jitter,
+            y + directionY * boltReach * segmentProgress + tangentY * jitter
+          );
+        }
         this.graphics.strokePath();
       }
     }
@@ -260,6 +353,34 @@ export class MineExplosionVfx {
           radius * (0.18 + index * 0.018) * (0.7 + lifetimeProgress * 0.55)
         );
       }
+    }
+  }
+
+  private drawSmokeNebula(state: MineExplosionState, elapsed: number): void {
+    if (elapsed < 45) return;
+    const { x, y, radius, palette, phase } = state;
+    const progress = clamp01((elapsed - 45) / (EXPLOSION_LIFETIME_MS - 45));
+    const fade = (1 - progress) ** 1.3;
+    if (fade <= 0) return;
+    const lobeCount = this.particlesEnabled ? FULL_NEBULA_LOBE_COUNT : REDUCED_NEBULA_LOBE_COUNT;
+    const rotation = phase + progress * 0.62;
+    const rotationCos = Math.cos(rotation);
+    const rotationSin = Math.sin(rotation);
+    for (let index = 0; index < lobeCount; index += 1) {
+      const baseX = this.nebulaCos[index];
+      const baseY = this.nebulaSin[index];
+      const directionX = baseX * rotationCos - baseY * rotationSin;
+      const directionY = baseX * rotationSin + baseY * rotationCos;
+      const curl = Math.sin(progress * 5.2 + index * 1.71) * radius * 0.045;
+      const distance = radius * progress * (0.18 + (index % 4) * 0.065);
+      const smokeX = x + directionX * distance - directionY * curl;
+      const smokeY = y + directionY * distance + directionX * curl
+        - radius * progress * (0.025 + (index % 3) * 0.012);
+      const smokeRadius = radius * (0.13 + (index % 3) * 0.025) * (0.78 + progress * 0.72);
+      this.smokeGraphics.fillStyle(0x05070d, 0.12 * fade);
+      this.smokeGraphics.fillCircle(smokeX, smokeY, smokeRadius * 1.12);
+      this.smokeGraphics.fillStyle(index % 2 === 0 ? palette[3] : palette[2], 0.095 * fade);
+      this.smokeGraphics.fillCircle(smokeX, smokeY, smokeRadius);
     }
   }
 }

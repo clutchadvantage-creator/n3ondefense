@@ -5,13 +5,14 @@ import type { ArenaTheme, RectSpec } from '../types';
 import { getScaledHazardDamage, type HazardDamageTarget } from '../config/hazardScaling';
 import { SeededRandom } from './SeededRandom';
 import { AIR_DROP_PATTERN_NAMES, createAirDropPattern } from './AirDropPatterns';
+import type { ExplosionPalette } from '../vfx/MineExplosionVfx.ts';
 
 interface TargetPoint {
   x: number;
   y: number;
   marker: Phaser.GameObjects.Arc;
   bomb: Phaser.GameObjects.Container;
-  color: number;
+  explosionPalette: ExplosionPalette;
   delayMs: number;
   exploded: boolean;
 }
@@ -20,7 +21,6 @@ interface TargetPoint {
 export class BombletHazardSystem {
   private readonly random: SeededRandom;
   private readonly warningText: Phaser.GameObjects.Text;
-  private readonly effects = new Set<Phaser.GameObjects.GameObject>();
   private targets: TargetPoint[] = [];
   private nextStrikeAt: number;
   private strikeStartedAt = 0;
@@ -35,13 +35,14 @@ export class BombletHazardSystem {
     private readonly theme: ArenaTheme,
     private readonly bounds: RectSpec,
     private readonly isBlocked: (x: number, y: number) => boolean,
-    private readonly particlesEnabled: boolean,
+    _particlesEnabled: boolean,
     private readonly onPlayerDamaged?: (damage: number) => void,
     private readonly onBombletExploded?: (
       x: number,
       y: number,
       blastRadius: number,
-      shouldPlaySound: boolean
+      shouldPlaySound: boolean,
+      explosionPalette: ExplosionPalette
     ) => void,
     private readonly playerDamageMultiplier = 1
   ) {
@@ -116,11 +117,6 @@ export class BombletHazardSystem {
 
   destroy(): void {
     this.clearTargets();
-    for (const effect of this.effects) {
-      this.scene.tweens.killTweensOf(effect);
-      effect.destroy();
-    }
-    this.effects.clear();
     this.warningText.destroy();
   }
 
@@ -144,6 +140,8 @@ export class BombletHazardSystem {
     });
     this.targets = points.map((point, index) => {
       const color = [this.theme.accent, this.theme.secondary, 0xffa340, 0xff5e75][index % 4];
+      const secondaryColor = color === this.theme.secondary ? this.theme.primary : this.theme.secondary;
+      const explosionPalette: ExplosionPalette = [0xffffff, color, secondaryColor, this.theme.primary];
       const marker = this.scene.add.circle(point.x, point.y, config.blastRadius, color, 0.08)
         .setStrokeStyle(3, color, 0.82)
         .setDepth(5);
@@ -154,7 +152,7 @@ export class BombletHazardSystem {
       const bomb = this.scene.add.container(point.x, point.y - config.fallHeight, [horizontalFin, verticalFin, shell, core])
         .setDepth(8)
         .setAlpha(0);
-      return { ...point, marker, bomb, color, delayMs: index * config.staggerMs, exploded: false };
+      return { ...point, marker, bomb, explosionPalette, delayMs: index * config.staggerMs, exploded: false };
     });
   }
 
@@ -163,45 +161,17 @@ export class BombletHazardSystem {
     target.exploded = true;
     const shouldPlaySound = this.strikeDetonationCount % 2 === 0;
     this.strikeDetonationCount += 1;
-    this.onBombletExploded?.(target.x, target.y, config.blastRadius, shouldPlaySound);
+    this.onBombletExploded?.(
+      target.x,
+      target.y,
+      config.blastRadius,
+      shouldPlaySound,
+      target.explosionPalette
+    );
     // Do not force-restart an in-progress shake when staggered bomblets overlap.
     this.scene.cameras.main.shake(config.cameraShakeDurationMs, config.cameraShakeIntensity, false);
     target.marker.setAlpha(0);
     target.bomb.setAlpha(0);
-    const color = target.color;
-    const blast = this.scene.add.circle(target.x, target.y, 8, color, 0.42).setDepth(8).setBlendMode(Phaser.BlendModes.ADD);
-    const ring = this.scene.add.circle(target.x, target.y, 10, 0xffffff, 0.08).setStrokeStyle(3, color, 0.92).setDepth(8);
-    this.effects.add(blast);
-    this.effects.add(ring);
-    this.scene.tweens.add({
-      targets: blast,
-      radius: config.blastRadius,
-      alpha: 0,
-      duration: config.blastVisualMs,
-      onComplete: () => { this.effects.delete(blast); blast.destroy(); }
-    });
-    this.scene.tweens.add({
-      targets: ring,
-      radius: config.blastRadius * 1.15,
-      alpha: 0,
-      duration: config.blastVisualMs,
-      onComplete: () => { this.effects.delete(ring); ring.destroy(); }
-    });
-    if (this.particlesEnabled) {
-      for (let i = 0; i < 6; i += 1) {
-        const spark = this.scene.add.circle(target.x, target.y, 2, color, 0.9).setDepth(8);
-        this.effects.add(spark);
-        const angle = i / 6 * Math.PI * 2;
-        this.scene.tweens.add({
-          targets: spark,
-          x: target.x + Math.cos(angle) * config.blastRadius,
-          y: target.y + Math.sin(angle) * config.blastRadius,
-          alpha: 0,
-          duration: config.blastVisualMs,
-          onComplete: () => { this.effects.delete(spark); spark.destroy(); }
-        });
-      }
-    }
 
     const playerDx = player.x - target.x;
     const playerDy = player.y - target.y;

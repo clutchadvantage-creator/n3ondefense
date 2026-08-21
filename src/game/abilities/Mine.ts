@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { ExplosionPalette } from '../vfx/MineExplosionVfx.ts';
 
 export interface MineLaunchOptions {
   fromX: number;
@@ -19,7 +20,7 @@ export interface MineVisualTheme {
   explosionPalette: MineExplosionPalette;
 }
 
-export type MineExplosionPalette = readonly [core: number, primary: number, secondary: number, outer: number];
+export type MineExplosionPalette = ExplosionPalette;
 
 const PLAYER_MINE_VISUAL_THEME: MineVisualTheme = {
   secondaryColor: 0xff4e3d,

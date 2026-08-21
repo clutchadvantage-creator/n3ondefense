@@ -849,8 +849,9 @@ export class ArenaScene extends Phaser.Scene {
       (damage) => {
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
       },
-      (x, y, blastRadius, shouldPlaySound) => {
+      (x, y, blastRadius, shouldPlaySound, explosionPalette) => {
         if (shouldPlaySound) this.audio.playSfx('bomblet');
+        this.mineExplosionVfx.emit(x, y, blastRadius, explosionPalette, this.time.now, false);
         this.fluxCores?.damageArea(x, y, blastRadius, 9999, 'bomblet');
         this.gasHazard?.carveVisualBlast(
           x,
@@ -4635,8 +4636,9 @@ export class ArenaScene extends Phaser.Scene {
       (damage) => {
         GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
       },
-      (x, y, blastRadius, shouldPlaySound) => {
+      (x, y, blastRadius, shouldPlaySound, explosionPalette) => {
         if (shouldPlaySound) this.audio.playSfx('bomblet');
+        this.mineExplosionVfx.emit(x, y, blastRadius, explosionPalette, this.time.now, false);
         this.fluxCores?.damageArea(x, y, blastRadius, 9999, 'bomblet');
         this.gasHazard?.carveVisualBlast(
           x,
