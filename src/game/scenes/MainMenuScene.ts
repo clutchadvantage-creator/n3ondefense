@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import mainMenuBackgroundUrl from '../../assets/mainmenu.png';
+import mainMenuBackgroundUrl from '../../assets/mainmenubackground.png';
 import { GAME_TAGLINE, GAME_TITLE, OBJECTIVE_CONFIG } from '../config/gameplay';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
