@@ -2018,6 +2018,7 @@ export class ArenaScene extends Phaser.Scene {
         if (!shieldBlocked
           && this.bombSites.applyDefuse(site, requestedProgressMs, requiredDefuseMs)) {
           GameplayTelemetryRecorder.recordDefuseCompleted(site.id);
+          this.bombsiteMods.onBombDestroyed(site);
           this.triggerDefeat('bombDefused');
           return;
         }
@@ -4601,6 +4602,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.detonatingSiteIds.has(site.id)) return;
     this.detonatingSiteIds.add(site.id);
     this.state.set(this.bombSites.activeBombCount() > 1 ? RoundState.Defense : RoundState.Victory);
+    this.bombsiteMods.onBombDetonationStarted(site, this.time.now);
     if (this.state.state === RoundState.Victory) {
       this.laserSecurity?.silence();
       this.audio.stopFluxCoreLoop();
@@ -5325,6 +5327,7 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopDisarmLoop();
     this.laserSecurity?.silence();
     this.audio.stopFluxCoreLoop();
+    this.bombsiteMods?.destroy();
     this.physics.pause();
     this.flushPendingCombatProgress();
 

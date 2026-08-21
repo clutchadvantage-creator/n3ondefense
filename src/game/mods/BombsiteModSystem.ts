@@ -4,6 +4,7 @@ import type { Player } from '../entities/Player.ts';
 import type { BombSiteRuntime } from '../types.ts';
 import { BombSiteState } from '../types.ts';
 import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
+import { BombsiteTotemVfx, type BombsiteTotemEffectKind } from '../vfx/BombsiteTotemVfx.ts';
 import { MOD_BALANCE } from './modBalance.ts';
 import type { ModRuntime } from './ModRuntime.ts';
 import {
@@ -53,6 +54,7 @@ interface ActiveSiteState {
   defenseMs: number;
   previousTimerMs: number;
   nextArcAt: number;
+  arcChargingFor: number;
   nextUnstableWarningAt: number;
   unstablePulseAt: number;
   nextGravityWarningAt: number;
@@ -61,14 +63,15 @@ interface ActiveSiteState {
   groundZeroUsed: boolean;
   groundChargedUntil: number;
   nextGroundTickAt: number;
+  nextHotVisualAt: number;
   killSwitchKills: number;
   secondSunStages: Set<number>;
   activeDefusers: Set<Enemy>;
   visual: FieldVisual | null;
 }
 
-const FIELD_VISUAL_MODS = [
-  'arc-surge', 'pressure-field', 'combat-uplink', 'countermeasure-array', 'kill-switch', 'hot-zone',
+const TOTEM_VISUAL_MODS = [
+  'arc-surge', 'defuse-feedback', 'pressure-field', 'combat-uplink', 'countermeasure-array', 'kill-switch', 'hot-zone',
   'final-countdown', 'capacitor-field', 'sentry-uplink', 'munitions-relay', 'emergency-shielding',
   'danger-close', 'unstable-reactor', 'blood-beacon', 'ground-zero', 'event-horizon-array', 'second-sun'
 ] as const;
@@ -83,13 +86,16 @@ export class BombsiteModSystem {
   private readonly exposures = new Map<Enemy, ExposureState>();
   private readonly pulls = new Map<Enemy, PullState>();
   private readonly temporaryObjects = new Set<Phaser.GameObjects.GameObject>();
+  private readonly totems: BombsiteTotemVfx;
   private nextFieldScanAt = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly runtime: ModRuntime,
     private readonly callbacks: BombsiteModCallbacks
-  ) {}
+  ) {
+    this.totems = new BombsiteTotemVfx(scene);
+  }
 
   onBombArmed(site: BombSiteRuntime, defenseMs: number, now: number): void {
     this.onBombDestroyed(site);
@@ -99,6 +105,7 @@ export class BombsiteModSystem {
       defenseMs,
       previousTimerMs: defenseMs,
       nextArcAt: now + MOD_BALANCE.bombsite.arcSurge.intervalMs[this.runtime.rank('arc-surge')],
+      arcChargingFor: 0,
       nextUnstableWarningAt: now + MOD_BALANCE.bombsite.unstableReactor.intervalMs[this.runtime.rank('unstable-reactor')],
       unstablePulseAt: 0,
       nextGravityWarningAt: now + MOD_BALANCE.bombsite.eventHorizon.intervalMs[this.runtime.rank('event-horizon-array')],
@@ -109,24 +116,33 @@ export class BombsiteModSystem {
       groundZeroUsed: false,
       groundChargedUntil: 0,
       nextGroundTickAt: 0,
+      nextHotVisualAt: 0,
       killSwitchKills: 0,
       secondSunStages: new Set<number>(),
       activeDefusers: new Set<Enemy>(),
       visual: this.shouldShowField() ? this.createFieldVisual(site) : null
     };
     this.stateBySite.set(site.id, state);
+    if (state.visual) this.totems.deploy(site.id, site.x, site.y, now);
   }
 
   onBombDestroyed(site: BombSiteRuntime): void {
     const state = this.stateBySite.get(site.id);
     if (!state) return;
+    this.totems.remove(site.id);
     this.destroyFieldVisual(state.visual);
     state.activeDefusers.clear();
     this.stateBySite.delete(site.id);
     for (const [enemy, pull] of this.pulls) if (pull.site.id === site.id) this.pulls.delete(enemy);
   }
 
+  /** Starts the visual overload while ArenaScene's bomb detonation stays authoritative. */
+  onBombDetonationStarted(site: BombSiteRuntime, now: number): void {
+    if (this.stateBySite.has(site.id)) this.totems.beginResolve(site.id, now);
+  }
+
   update(now: number, deltaMs: number, activeSites: BombSiteRuntime[], enemies: Enemy[], player: Player): void {
+    this.totems.update(now);
     if (activeSites.length === 0) {
       this.exposures.clear();
       this.pulls.clear();
@@ -182,6 +198,7 @@ export class BombsiteModSystem {
         const applied = enemy.takeDamage(damage, 'bombSite');
         if (applied > 0) {
           GameplayTelemetryRecorder.recordModEffect('defuse-feedback', 'damage', applied);
+          this.totems.flash(site.id, 0x7dfff2, now, 'electric');
           this.drawElectricArc(site.x, site.y, enemy.x, enemy.y, 0x7dfff2);
           this.callbacks.playCue('electric');
         }
@@ -261,7 +278,7 @@ export class BombsiteModSystem {
         const removed = this.callbacks.reduceCountdown(state.site, requested);
         if (removed > 0) {
           GameplayTelemetryRecorder.recordModEffect('kill-switch', 'countdownMs', removed);
-          this.showPulse(state.site, 0xffcf58, 120, 280);
+          this.showPulse(state.site, 0xffcf58, 120, 280, 'support');
         }
       }
     }
@@ -343,6 +360,7 @@ export class BombsiteModSystem {
     this.stateBySite.clear();
     this.exposures.clear();
     this.pulls.clear();
+    this.totems.destroy();
     for (const object of this.temporaryObjects) {
       this.scene.tweens.killTweensOf(object);
       object.destroy();
@@ -351,12 +369,20 @@ export class BombsiteModSystem {
   }
 
   private updateArcSurge(state: ActiveSiteState, now: number, enemies: Enemy[], weaponDamage: number): void {
-    if (!this.runtime.has('arc-surge') || now < state.nextArcAt) return;
+    if (!this.runtime.has('arc-surge')) return;
+    if (now < state.nextArcAt) {
+      if (state.nextArcAt - now <= 240 && state.arcChargingFor !== state.nextArcAt) {
+        state.arcChargingFor = state.nextArcAt;
+        this.totems.charge(state.site.id, 0x63efff, now, state.nextArcAt - now, 'electric');
+      }
+      return;
+    }
     const rank = this.runtime.rank('arc-surge');
     state.nextArcAt = now + MOD_BALANCE.bombsite.arcSurge.intervalMs[rank];
+    state.arcChargingFor = 0;
     const damage = weaponDamage * MOD_BALANCE.bombsite.arcSurge.weaponDamageMultiplier[rank];
     const applied = this.damageEnemiesInRadius(state.site, enemies, MOD_BALANCE.bombsite.fieldRadius, damage, 'arc-surge');
-    this.showPulse(state.site, 0x63efff, MOD_BALANCE.bombsite.fieldRadius, 430);
+    this.showPulse(state.site, 0x63efff, MOD_BALANCE.bombsite.fieldRadius, 430, 'electric');
     if (applied > 0) this.callbacks.playCue('electric');
   }
 
@@ -374,7 +400,7 @@ export class BombsiteModSystem {
           GameplayTelemetryRecorder.recordModEffect('unstable-reactor', 'playerDamage', config.playerDamage[rank]);
         }
       }
-      this.showPulse(state.site, 0x91ff3f, config.outerRadius, 520);
+      this.showPulse(state.site, 0xff7a32, config.outerRadius, 520, 'damage');
       this.callbacks.playCue('heavy');
       return;
     }
@@ -404,7 +430,7 @@ export class BombsiteModSystem {
         pulled += 1;
       }
       if (pulled > 0) GameplayTelemetryRecorder.recordModEffect('event-horizon-array', 'pulls', pulled);
-      this.showPulse(state.site, 0xc36cff, config.outerRadius, 650);
+      this.showPulse(state.site, 0xc36cff, config.outerRadius, 650, 'control');
       this.callbacks.playCue('gravity');
       return;
     }
@@ -431,7 +457,7 @@ export class BombsiteModSystem {
           if (stage === 2) enemy.defuseInterruptedUntil = Math.max(enemy.defuseInterruptedUntil, now + 450);
         }
       }
-      this.showPulse(state.site, stage === 2 ? 0xff6b24 : 0xffc857, config.radius[stage], 440 + stage * 120);
+      this.showPulse(state.site, stage === 2 ? 0xff542f : 0xffa238, config.radius[stage], 440 + stage * 120, 'damage');
       this.callbacks.announce(`SECOND SUN // STAGE ${stage + 1}`);
       this.callbacks.playCue(stage === 2 ? 'heavy' : 'warning');
       GameplayTelemetryRecorder.recordModEffect('second-sun', 'triggers', 1);
@@ -443,7 +469,7 @@ export class BombsiteModSystem {
     state.nextGroundTickAt = now + MOD_BALANCE.bombsite.groundZero.chargedTickMs;
     const damage = weaponDamage * MOD_BALANCE.bombsite.groundZero.chargedDamageMultiplier;
     this.damageEnemiesInRadius(state.site, enemies, MOD_BALANCE.bombsite.fieldRadius, damage, 'ground-zero');
-    this.showPulse(state.site, 0x74f7ff, MOD_BALANCE.bombsite.fieldRadius, 260);
+    this.showPulse(state.site, 0xff8a38, MOD_BALANCE.bombsite.fieldRadius, 260, 'damage');
   }
 
   private updateFieldStatuses(now: number, activeSites: BombSiteRuntime[], enemies: Enemy[], weaponDamage: number): void {
@@ -469,7 +495,14 @@ export class BombsiteModSystem {
         exposure.nextTickAt = now + MOD_BALANCE.bombsite.hotZone.tickMs;
         const damage = weaponDamage * MOD_BALANCE.bombsite.hotZone.weaponDamageMultiplierPerStack[hotRank] * exposure.stacks;
         const applied = enemy.takeDamage(damage, 'bombSite');
-        if (applied > 0) GameplayTelemetryRecorder.recordModEffect('hot-zone', 'damage', applied);
+        if (applied > 0) {
+          GameplayTelemetryRecorder.recordModEffect('hot-zone', 'damage', applied);
+          const state = this.findFieldState(enemy.x, enemy.y);
+          if (state && now >= state.nextHotVisualAt) {
+            state.nextHotVisualAt = now + 520;
+            this.totems.flash(state.site.id, 0xff6748, now, 'damage');
+          }
+        }
       }
       this.exposures.set(enemy, exposure);
     }
@@ -529,7 +562,13 @@ export class BombsiteModSystem {
     }
     if (totalDamage > 0) GameplayTelemetryRecorder.recordModEffect(modId, 'damage', totalDamage);
     GameplayTelemetryRecorder.recordModEffect(modId, 'triggers', 1);
-    this.showPulse(site, modId === 'ground-zero' ? 0xffb03b : 0x69efff, radius, modId === 'ground-zero' ? 720 : 460);
+    this.showPulse(
+      site,
+      modId === 'ground-zero' ? 0xff8a32 : 0x69efff,
+      radius,
+      modId === 'ground-zero' ? 720 : 460,
+      modId === 'ground-zero' ? 'damage' : 'push'
+    );
   }
 
   private damageEnemiesInRadius(site: BombSiteRuntime, enemies: readonly Enemy[], radius: number, damage: number, modId: string): number {
@@ -569,7 +608,7 @@ export class BombsiteModSystem {
   }
 
   private shouldShowField(): boolean {
-    return FIELD_VISUAL_MODS.some((id) => this.runtime.has(id));
+    return TOTEM_VISUAL_MODS.some((id) => this.runtime.has(id));
   }
 
   private createFieldVisual(site: BombSiteRuntime): FieldVisual {
@@ -613,7 +652,14 @@ export class BombsiteModSystem {
     visual.markings.destroy();
   }
 
-  private showPulse(site: BombSiteRuntime, color: number, radius: number, duration: number): void {
+  private showPulse(
+    site: BombSiteRuntime,
+    color: number,
+    radius: number,
+    duration: number,
+    kind: BombsiteTotemEffectKind = 'support'
+  ): void {
+    if (this.totems.trigger(site.id, color, radius, this.scene.time.now, duration, kind)) return;
     const ring = this.track(this.scene.add.circle(site.x, site.y, 18, color, 0.08).setStrokeStyle(4, color, 0.95).setDepth(12));
     this.scene.tweens.add({
       targets: ring,
@@ -626,6 +672,8 @@ export class BombsiteModSystem {
   }
 
   private showWarning(site: BombSiteRuntime, radius: number, labelText: string, color: number, duration: number): void {
+    const kind: BombsiteTotemEffectKind = labelText === 'EVENT HORIZON' ? 'control' : 'damage';
+    this.totems.charge(site.id, color, this.scene.time.now, duration, kind);
     const ring = this.track(this.scene.add.circle(site.x, site.y, radius, color, 0.035).setStrokeStyle(3, color, 0.9).setDepth(12));
     const label = this.track(this.scene.add.text(site.x, site.y - radius - 18, labelText, {
       fontFamily: 'Orbitron, sans-serif', fontSize: '15px', color: '#f5ffff', stroke: '#050811', strokeThickness: 5
