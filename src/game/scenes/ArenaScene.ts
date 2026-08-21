@@ -68,6 +68,7 @@ import { shouldReplaceTurretTarget } from '../performance/Targeting.ts';
 import { ProjectileTrailBatch } from '../performance/ProjectileTrailBatch.ts';
 import { UniformSpatialGrid } from '../performance/UniformSpatialGrid.ts';
 import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
+import { MineExplosionVfx } from '../vfx/MineExplosionVfx.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
@@ -250,9 +251,6 @@ const ROUND_PHASE_LABELS: Record<RoundState, string> = {
   [RoundState.Paused]: 'PAUSED'
 };
 
-type MineExplosionPalette = readonly [core: number, primary: number, secondary: number, outer: number];
-const PLAYER_MINE_EXPLOSION_PALETTE: MineExplosionPalette = [0xffffff, 0xffa340, 0xff4e27, 0xff174f];
-const STAR_MINE_EXPLOSION_PALETTE: MineExplosionPalette = [0xf4ffff, COLORS.pink, COLORS.cyan, 0xff24d4];
 const ENEMY_NAVIGATION_PADDING = ARENA_GENERATION_CONFIG.enemyNavigationPadding;
 const ENEMY_SEPARATION_RADIUS = 31;
 const PICKUP_FLOAT_DRIFT_MIN = 12.5;
@@ -301,6 +299,7 @@ export class ArenaScene extends Phaser.Scene {
   private fxCirclePool!: ReusableObjectPool<Phaser.GameObjects.Arc, FxCircleSpawn>;
   private projectileTrails: ProjectileTrailBatch | null = null;
   private boostVisual!: BoostVisualSystem;
+  private mineExplosionVfx!: MineExplosionVfx;
   private readonly hazardDamageTargets: HazardDamageTarget[] = [];
   private homingMissiles: HomingMissile[] = [];
   private pickups: Pickup[] = [];
@@ -670,6 +669,7 @@ export class ArenaScene extends Phaser.Scene {
       },
       (sampleTime) => SaveSystem.getCosmeticColor('dashTrail', sampleTime)
     );
+    this.mineExplosionVfx = new MineExplosionVfx(this, this.particlesEnabled);
     if (session) {
       this.roundManager = new RoundManager(session.baseSeed, session.objectiveMode, session.round);
       this.registry.set('arena-session', session);
@@ -1133,6 +1133,7 @@ export class ArenaScene extends Phaser.Scene {
     this.performanceMonitor.record(delta);
     this.updatePerformanceTelemetry(now);
     this.maintainCombatPools(now);
+    this.mineExplosionVfx.update(now);
 
     this.recordTelemetryFrame(delta, now);
     const energyBeforeRegeneration = this.player.energy;
@@ -2980,110 +2981,8 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private playMineExplosion(
-    x: number,
-    y: number,
-    radius: number,
-    palette: MineExplosionPalette = PLAYER_MINE_EXPLOSION_PALETTE
-  ): void {
-    // Mines are deliberately the loudest deployable detonation: layered plasma
-    // fronts provide the bomb-site scale without changing the damage footprint.
-    this.cameras.main.shake(380, 0.013, false);
-    const layers = [
-      { radius: 9, target: radius * 0.42, color: palette[0], alpha: 0.88, duration: 230 },
-      { radius: 13, target: radius * 0.72, color: palette[1], alpha: 0.68, duration: 350 },
-      { radius: 18, target: radius, color: palette[2], alpha: 0.52, duration: 470 },
-      { radius: 22, target: radius * 1.28, color: palette[3], alpha: 0.28, duration: 620 }
-    ] as const;
-    for (const layer of layers) {
-      const wave = this.obtainFxCircle({
-        x, y, radius: layer.radius, color: layer.color, alpha: layer.alpha, depth: 14,
-        strokeWidth: layer.color === palette[0] ? 0 : 3,
-        strokeColor: layer.color,
-        strokeAlpha: 0.95
-      });
-      wave.setBlendMode(Phaser.BlendModes.ADD);
-      this.tweens.add({
-        targets: wave,
-        radius: layer.target,
-        alpha: 0,
-        duration: layer.duration,
-        ease: 'Cubic.Out',
-        onComplete: () => {
-          wave.setBlendMode(Phaser.BlendModes.NORMAL);
-          this.retireFxCircle(wave);
-        }
-      });
-    }
-
-    const rays = this.add.graphics({ x, y }).setDepth(15).setBlendMode(Phaser.BlendModes.ADD);
-    const rayCount = this.particlesEnabled ? 24 : 12;
-    for (let index = 0; index < rayCount; index += 1) {
-      const angle = index * Math.PI * 2 / rayCount + (index % 3) * 0.035;
-      const inner = radius * (0.08 + (index % 4) * 0.012);
-      const outer = radius * (0.68 + (index % 5) * 0.075);
-      const color = index % 3 === 0 ? palette[0] : index % 2 === 0 ? palette[1] : palette[2];
-      rays.lineStyle(index % 3 === 0 ? 2 : 4, color, index % 3 === 0 ? 0.92 : 0.72);
-      rays.lineBetween(Math.cos(angle) * inner, Math.sin(angle) * inner, Math.cos(angle) * outer, Math.sin(angle) * outer);
-    }
-    this.tweens.add({
-      targets: rays,
-      scaleX: 1.38,
-      scaleY: 1.38,
-      rotation: 0.3,
-      alpha: 0,
-      duration: 540,
-      ease: 'Quad.Out',
-      onComplete: () => rays.destroy()
-    });
-
-    const arcStorm = this.add.graphics({ x, y }).setDepth(15).setBlendMode(Phaser.BlendModes.ADD);
-    for (let index = 0; index < 7; index += 1) {
-      const arcRadius = radius * (0.2 + index * 0.075);
-      const start = index * 1.73;
-      arcStorm.lineStyle(2 + index % 2, index % 2 === 0 ? palette[2] : palette[1], 0.86);
-      arcStorm.beginPath();
-      arcStorm.arc(0, 0, arcRadius, start, start + 0.72 + (index % 3) * 0.28, false);
-      arcStorm.strokePath();
-    }
-    this.tweens.add({
-      targets: arcStorm,
-      rotation: -1.2,
-      scaleX: 1.5,
-      scaleY: 1.5,
-      alpha: 0,
-      duration: 680,
-      ease: 'Cubic.Out',
-      onComplete: () => arcStorm.destroy()
-    });
-
-    const emberCount = this.particlesEnabled ? 14 : 6;
-    for (let index = 0; index < emberCount; index += 1) {
-      const angle = index * Math.PI * 2 / emberCount + Phaser.Math.FloatBetween(-0.12, 0.12);
-      const distance = radius * Phaser.Math.FloatBetween(0.7, 1.35);
-      const ember = this.obtainFxCircle({
-        x, y,
-        radius: Phaser.Math.FloatBetween(1.8, 4.2),
-        color: index % 3 === 0 ? palette[0] : index % 2 === 0 ? palette[1] : palette[2],
-        alpha: 0.95,
-        depth: 16
-      });
-      ember.setBlendMode(Phaser.BlendModes.ADD);
-      this.tweens.add({
-        targets: ember,
-        x: x + Math.cos(angle) * distance,
-        y: y + Math.sin(angle) * distance,
-        scaleX: 0.2,
-        scaleY: 0.2,
-        alpha: 0,
-        duration: Phaser.Math.Between(430, 720),
-        ease: 'Quad.Out',
-        onComplete: () => {
-          ember.setBlendMode(Phaser.BlendModes.NORMAL);
-          this.retireFxCircle(ember);
-        }
-      });
-    }
+  private playMineExplosion(x: number, y: number, radius: number, mine: Mine): void {
+    this.mineExplosionVfx.emit(x, y, radius, mine.explosionPalette, this.time.now);
   }
 
   private placeAbility(type: AbilityType, now: number): void {
@@ -3307,10 +3206,16 @@ export class ArenaScene extends Phaser.Scene {
       this.applyMagneticPayload(mine, now);
       if (!mine.readyToDetonate(now)) continue;
 
-      this.gasHazard?.igniteFromMine(mine.sprite.x, mine.sprite.y, mine.radius);
+      this.gasHazard?.igniteFromMine(
+        mine.sprite.x,
+        mine.sprite.y,
+        mine.radius,
+        mine.explosionPalette[1],
+        mine.explosionPalette[2]
+      );
       this.audio.playSfx('mine');
       this.fluxCores?.damageArea(mine.sprite.x, mine.sprite.y, mine.radius, mine.damage, 'mine');
-      this.playMineExplosion(mine.sprite.x, mine.sprite.y, mine.radius);
+      this.playMineExplosion(mine.sprite.x, mine.sprite.y, mine.radius, mine);
       for (const e of this.enemies) {
         const dx = e.x - mine.sprite.x;
         const dy = e.y - mine.sprite.y;
@@ -3419,10 +3324,16 @@ export class ArenaScene extends Phaser.Scene {
         continue;
       }
 
-      this.gasHazard?.igniteFromMine(mine.sprite.x, mine.sprite.y, mine.radius);
+      this.gasHazard?.igniteFromMine(
+        mine.sprite.x,
+        mine.sprite.y,
+        mine.radius,
+        mine.explosionPalette[1],
+        mine.explosionPalette[2]
+      );
       this.audio.playSfx('mine');
       this.fluxCores?.damageArea(mine.sprite.x, mine.sprite.y, mine.radius, mine.damage, 'mine');
-      this.playMineExplosion(mine.sprite.x, mine.sprite.y, mine.radius, STAR_MINE_EXPLOSION_PALETTE);
+      this.playMineExplosion(mine.sprite.x, mine.sprite.y, mine.radius, mine);
 
       const playerDx = this.player.x - mine.sprite.x;
       const playerDy = this.player.y - mine.sprite.y;
@@ -6324,6 +6235,7 @@ export class ArenaScene extends Phaser.Scene {
     for (const p of this.projectiles) this.retireProjectile(p);
     this.projectilePool.releaseAll();
     this.fxCirclePool.releaseAll();
+    this.mineExplosionVfx.reset();
     this.projectileTrails?.reset();
     for (const missile of this.homingMissiles) missile.sprite.destroy();
     for (const p of this.pickups) p.sprite.destroy();
@@ -6400,6 +6312,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bossFlowPhase = 'none';
     this.destroyShieldOrb();
     this.boostVisual?.destroy();
+    this.mineExplosionVfx?.destroy();
     this.projectilePool?.destroy((projectile) => projectile.sprite.destroy());
     this.fxCirclePool?.destroy((circle) => circle.destroy());
     this.projectileTrails?.destroy();

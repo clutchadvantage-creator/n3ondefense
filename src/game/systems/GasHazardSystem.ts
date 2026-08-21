@@ -22,6 +22,19 @@ interface GasCanisterTarget {
   canister: Phaser.GameObjects.Container;
 }
 
+interface GasIgnitionState {
+  active: boolean;
+  x: number;
+  y: number;
+  radius: number;
+  startedAt: number;
+  lastEraseRadius: number;
+  primaryColor: number;
+  secondaryColor: number;
+}
+
+const MAX_CONCURRENT_GAS_IGNITIONS = 6;
+
 /**
  * Occasional non-blocking gas phase. One render texture holds every cloud and
  * is erased along the operative path; a coarse byte grid mirrors collision.
@@ -34,6 +47,8 @@ export class GasHazardSystem {
   private readonly skullBrush: Phaser.GameObjects.Image;
   private readonly tunnelBrush: Phaser.GameObjects.Image;
   private readonly wispGraphics: Phaser.GameObjects.Graphics;
+  private readonly ignitionGraphics: Phaser.GameObjects.Graphics;
+  private readonly ignitionStates: GasIgnitionState[];
   private readonly effects = new Set<Phaser.GameObjects.GameObject>();
   private readonly densityColumns = Math.ceil(WORLD_WIDTH / GAS_HAZARD_BALANCE.densityCellSize);
   private readonly densityRows = Math.ceil(WORLD_HEIGHT / GAS_HAZARD_BALANCE.densityCellSize);
@@ -74,6 +89,17 @@ export class GasHazardSystem {
     this.skullBrush = scene.make.image({ x: 0, y: 0, key: GAS_SKULL_TEXTURE, add: false }).setOrigin(0.5);
     this.tunnelBrush = scene.make.image({ x: 0, y: 0, key: GAS_TUNNEL_TEXTURE, add: false }).setOrigin(0.5);
     this.wispGraphics = scene.add.graphics().setDepth(8).setBlendMode(Phaser.BlendModes.ADD);
+    this.ignitionGraphics = scene.add.graphics().setDepth(10).setBlendMode(Phaser.BlendModes.ADD);
+    this.ignitionStates = Array.from({ length: MAX_CONCURRENT_GAS_IGNITIONS }, (): GasIgnitionState => ({
+      active: false,
+      x: 0,
+      y: 0,
+      radius: 0,
+      startedAt: 0,
+      lastEraseRadius: 0,
+      primaryColor: 0xff9d24,
+      secondaryColor: 0xe9ff38
+    }));
     this.warningText = scene.add.text(scene.scale.width * 0.5, 248, '', {
       fontFamily: 'Orbitron, sans-serif',
       fontSize: '17px',
@@ -113,17 +139,26 @@ export class GasHazardSystem {
   }
 
   /** Mines consume both the visual cloud and persistent damage footprint. */
-  igniteFromMine(x: number, y: number, mineRadius: number): boolean {
+  igniteFromMine(
+    x: number,
+    y: number,
+    mineRadius: number,
+    primaryColor = 0xff9d24,
+    secondaryColor = 0xe9ff38
+  ): boolean {
     if (!this.gasLayer.visible || !this.hasGasAt(x, y)) return false;
     const ignitionRadius = mineRadius * GAS_HAZARD_BALANCE.mineIgnitionRadiusMultiplier;
-    this.eraseGasAt(x, y, ignitionRadius, true);
-    this.playIgnitionEffect(x, y, ignitionRadius);
+    // Damage disappears immediately across the same authoritative footprint as
+    // before; only the RenderTexture erasure is staged behind the burn front.
+    this.clearGasHazardAt(x, y, ignitionRadius);
+    this.startIgnitionBurn(x, y, ignitionRadius, primaryColor, secondaryColor);
     return true;
   }
 
   update(now: number, player: Player, gasDamageMultiplier = 1): void {
     const config = GAS_HAZARD_BALANCE;
     if (this.round < config.unlockRound) return;
+    this.updateIgnitionBurns(now);
 
     if (!this.active) {
       this.gasLayer.setVisible(false);
@@ -199,6 +234,7 @@ export class GasHazardSystem {
 
   destroy(): void {
     this.clearCanisters();
+    this.resetIgnitionBurns();
     for (const effect of this.effects) {
       this.scene.tweens.killTweensOf(effect);
       effect.destroy();
@@ -207,6 +243,7 @@ export class GasHazardSystem {
     this.warningText.destroy();
     this.gasLayer.destroy();
     this.wispGraphics.destroy();
+    this.ignitionGraphics.destroy();
     this.cloudBrush.destroy();
     this.skullBrush.destroy();
     this.tunnelBrush.destroy();
@@ -295,6 +332,7 @@ export class GasHazardSystem {
     });
     this.density.fill(0);
     this.tunnelMask.fill(0);
+    this.resetIgnitionBurns();
     this.gasLayer.clear().setAlpha(0.9).setVisible(false);
     this.wispGraphics.clear().setAlpha(1);
     this.lastTunnelX = Number.NaN;
@@ -515,48 +553,118 @@ export class GasHazardSystem {
     return false;
   }
 
-  private playIgnitionEffect(x: number, y: number, radius: number): void {
-    const fire = this.scene.add.graphics({ x, y })
-      .setDepth(10)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setScale(0.16);
-    fire.fillStyle(0xff5b19, 0.24);
-    fire.fillCircle(0, 0, radius * 0.42);
-    fire.fillStyle(0xffd43b, 0.28);
-    fire.fillCircle(0, 0, radius * 0.24);
-    fire.lineStyle(8, 0xff781f, 0.9);
-    fire.strokeCircle(0, 0, radius * 0.72);
-    fire.lineStyle(4, 0xf3ff52, 0.86);
-    fire.strokeCircle(0, 0, radius * 0.53);
-    for (let index = 0; index < 10; index += 1) {
-      const angle = index / 10 * Math.PI * 2;
-      const innerRadius = radius * 0.36;
-      const outerRadius = radius * (0.64 + (index % 3) * 0.07);
-      const spread = 0.12;
-      fire.fillStyle(index % 2 === 0 ? 0xff9d24 : 0xe9ff38, 0.56);
-      fire.fillTriangle(
-        Math.cos(angle - spread) * innerRadius,
-        Math.sin(angle - spread) * innerRadius,
-        Math.cos(angle) * outerRadius,
-        Math.sin(angle) * outerRadius,
-        Math.cos(angle + spread) * innerRadius,
-        Math.sin(angle + spread) * innerRadius
-      );
-    }
-    this.effects.add(fire);
-    this.scene.tweens.add({
-      targets: fire,
-      scaleX: 1,
-      scaleY: 1,
-      angle: 18,
-      alpha: 0,
-      duration: GAS_HAZARD_BALANCE.mineIgnitionVisualMs,
-      ease: 'Cubic.Out',
-      onComplete: () => {
-        this.effects.delete(fire);
-        fire.destroy();
+  private startIgnitionBurn(
+    x: number,
+    y: number,
+    radius: number,
+    primaryColor: number,
+    secondaryColor: number
+  ): void {
+    let state = this.ignitionStates[0];
+    let oldestStartedAt = Number.POSITIVE_INFINITY;
+    for (const candidate of this.ignitionStates) {
+      if (!candidate.active) {
+        state = candidate;
+        oldestStartedAt = Number.NEGATIVE_INFINITY;
+        break;
       }
-    });
+      if (candidate.startedAt < oldestStartedAt) {
+        state = candidate;
+        oldestStartedAt = candidate.startedAt;
+      }
+    }
+    state.active = true;
+    state.x = x;
+    state.y = y;
+    state.radius = radius;
+    state.startedAt = this.scene.time.now;
+    state.lastEraseRadius = 0;
+    state.primaryColor = primaryColor;
+    state.secondaryColor = secondaryColor;
+  }
+
+  private updateIgnitionBurns(now: number): void {
+    this.ignitionGraphics.clear();
+    const duration = GAS_HAZARD_BALANCE.mineIgnitionVisualMs;
+    for (let stateIndex = 0; stateIndex < this.ignitionStates.length; stateIndex += 1) {
+      const state = this.ignitionStates[stateIndex];
+      if (!state.active) continue;
+      const progress = Phaser.Math.Clamp((now - state.startedAt) / duration, 0, 1);
+      const eased = 1 - (1 - progress) ** 3;
+      const burnRadius = Math.max(5, state.radius * eased);
+      // At most one cheap RenderTexture erasure stamp per active burn per frame.
+      if (burnRadius - state.lastEraseRadius >= 5 || progress >= 1) {
+        this.eraseVisualGasAt(state.x, state.y, burnRadius);
+        state.lastEraseRadius = burnRadius;
+      }
+      if (progress >= 1) {
+        state.active = false;
+        continue;
+      }
+
+      const fade = (1 - progress) ** 0.72;
+      const frontWidth = Math.max(2, 10 * fade);
+      this.ignitionGraphics.lineStyle(frontWidth + 5, state.primaryColor, 0.12 * fade);
+      this.ignitionGraphics.strokeCircle(state.x, state.y, burnRadius);
+      this.ignitionGraphics.lineStyle(frontWidth, 0xff8a21, 0.82 * fade);
+      this.ignitionGraphics.strokeCircle(state.x, state.y, burnRadius);
+      this.ignitionGraphics.lineStyle(Math.max(1.5, frontWidth * 0.42), 0xfff26b, 0.92 * fade);
+      this.ignitionGraphics.strokeCircle(state.x, state.y, Math.max(2, burnRadius - frontWidth * 0.45));
+
+      // Mine-faction color remains visible at the outer fringe of the hot fire.
+      this.ignitionGraphics.lineStyle(Math.max(1, frontWidth * 0.28), state.secondaryColor, 0.66 * fade);
+      this.ignitionGraphics.strokeCircle(state.x, state.y, burnRadius + frontWidth * 0.5);
+      for (let index = 0; index < 10; index += 1) {
+        const angle = index / 10 * Math.PI * 2 + stateIndex * 0.37;
+        const directionX = Math.cos(angle);
+        const directionY = Math.sin(angle);
+        const tangentX = -directionY;
+        const tangentY = directionX;
+        const baseRadius = Math.max(2, burnRadius - frontWidth * 0.4);
+        const tipRadius = burnRadius + frontWidth * (0.65 + (index % 3) * 0.22);
+        const halfBase = Math.max(2, frontWidth * 0.34);
+        this.ignitionGraphics.fillStyle(index % 2 === 0 ? 0xffc52f : state.primaryColor, 0.58 * fade);
+        this.ignitionGraphics.fillTriangle(
+          state.x + directionX * baseRadius + tangentX * halfBase,
+          state.y + directionY * baseRadius + tangentY * halfBase,
+          state.x + directionX * tipRadius,
+          state.y + directionY * tipRadius,
+          state.x + directionX * baseRadius - tangentX * halfBase,
+          state.y + directionY * baseRadius - tangentY * halfBase
+        );
+      }
+    }
+  }
+
+  private clearGasHazardAt(x: number, y: number, radius: number): void {
+    const cellSize = GAS_HAZARD_BALANCE.densityCellSize;
+    const minimumColumn = Math.max(0, Math.floor((x - radius) / cellSize));
+    const maximumColumn = Math.min(this.densityColumns - 1, Math.floor((x + radius) / cellSize));
+    const minimumRow = Math.max(0, Math.floor((y - radius) / cellSize));
+    const maximumRow = Math.min(this.densityRows - 1, Math.floor((y + radius) / cellSize));
+    const radiusSquared = radius * radius;
+    for (let row = minimumRow; row <= maximumRow; row += 1) {
+      const cellY = (row + 0.5) * cellSize;
+      for (let column = minimumColumn; column <= maximumColumn; column += 1) {
+        const cellX = (column + 0.5) * cellSize;
+        const dx = cellX - x;
+        const dy = cellY - y;
+        if (dx * dx + dy * dy <= radiusSquared) this.density[row * this.densityColumns + column] = 0;
+      }
+    }
+  }
+
+  private eraseVisualGasAt(x: number, y: number, radius: number): void {
+    const scale = Math.max(0.1, radius / GAS_HAZARD_BALANCE.tunnelRadius);
+    this.tunnelBrush
+      .setPosition(x - this.bounds.x, y - this.bounds.y)
+      .setScale(scale);
+    this.gasLayer.erase(this.tunnelBrush);
+  }
+
+  private resetIgnitionBurns(): void {
+    for (const state of this.ignitionStates) state.active = false;
+    this.ignitionGraphics.clear();
   }
 
   private hasGasAt(x: number, y: number): boolean {
@@ -583,6 +691,7 @@ export class GasHazardSystem {
     this.wispGraphics.clear();
     this.density.fill(0);
     this.tunnelMask.fill(0);
+    this.resetIgnitionBurns();
     this.warningText.setAlpha(0);
     this.recoveryUntil = now + config.laserRecoveryDelayMs;
     const cooldown = Math.max(

@@ -16,7 +16,10 @@ export interface MineVisualTheme {
   armedShellStrokeColor: number;
   armedInnerStrokeColor: number;
   armedCoreColor: number;
+  explosionPalette: MineExplosionPalette;
 }
+
+export type MineExplosionPalette = readonly [core: number, primary: number, secondary: number, outer: number];
 
 const PLAYER_MINE_VISUAL_THEME: MineVisualTheme = {
   secondaryColor: 0xff4e3d,
@@ -26,7 +29,8 @@ const PLAYER_MINE_VISUAL_THEME: MineVisualTheme = {
   armedShellFillColor: 0x32070a,
   armedShellStrokeColor: 0xff7a28,
   armedInnerStrokeColor: 0xff334e,
-  armedCoreColor: 0xffd36a
+  armedCoreColor: 0xffd36a,
+  explosionPalette: [0xffffff, 0xffa340, 0xff4e27, 0xff174f]
 };
 
 export const STAR_DEATH_MINE_VISUAL_THEME: MineVisualTheme = {
@@ -37,7 +41,8 @@ export const STAR_DEATH_MINE_VISUAL_THEME: MineVisualTheme = {
   armedShellFillColor: 0x310628,
   armedShellStrokeColor: 0xff4ed3,
   armedInnerStrokeColor: 0x39eeff,
-  armedCoreColor: 0x9af7ff
+  armedCoreColor: 0x9af7ff,
+  explosionPalette: [0xf4ffff, 0xff4ed3, 0x39eeff, 0xff24d4]
 };
 
 export class Mine {
@@ -127,6 +132,10 @@ export class Mine {
 
   readyToDetonate(now: number): boolean {
     return this.detonateAt > 0 && now >= this.detonateAt;
+  }
+
+  get explosionPalette(): MineExplosionPalette {
+    return this.visualTheme.explosionPalette;
   }
 
   destroy(): void {

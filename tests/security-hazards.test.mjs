@@ -133,11 +133,15 @@ test('moving entities tunnel gas visually while mine ignition consumes the damag
   assert.match(gas, /carveVisualTunnel\(x: number, y: number, radius: number\)/);
   assert.match(gas, /if \(!this\.gasLayer\.visible \|\| !this\.hasVisibleGasAt\(x, y\)\) return false/);
   assert.match(gas, /const ignitionRadius = mineRadius \* GAS_HAZARD_BALANCE\.mineIgnitionRadiusMultiplier/);
-  assert.match(gas, /this\.eraseGasAt\(x, y, ignitionRadius, true\)/);
-  assert.match(gas, /this\.playIgnitionEffect\(x, y, ignitionRadius\)/);
+  assert.match(gas, /this\.clearGasHazardAt\(x, y, ignitionRadius\)/);
+  assert.match(gas, /this\.startIgnitionBurn\(x, y, ignitionRadius, primaryColor, secondaryColor\)/);
+  assert.match(gas, /this\.eraseVisualGasAt\(state\.x, state\.y, burnRadius\)/);
+  assert.match(gas, /MAX_CONCURRENT_GAS_IGNITIONS = 6/);
+  assert.match(gas, /updateIgnitionBurns\(now\)/);
+  assert.doesNotMatch(gas, /playIgnitionEffect/);
   assert.match(arena, /gasHazard\?\.carveVisualTunnel\(/);
   assert.match(arena, /this\.gasHazard\?\.carveVisualBlast\(/);
-  assert.match(arena, /this\.gasHazard\?\.igniteFromMine\(mine\.sprite\.x, mine\.sprite\.y, mine\.radius\)/);
+  assert.match(arena, /this\.gasHazard\?\.igniteFromMine\([\s\S]*?mine\.explosionPalette\[1\][\s\S]*?mine\.explosionPalette\[2\]/);
   assert.doesNotMatch(lasers, /carveVisualTunnel|carveVisualBlast|igniteFromMine/);
 });
 

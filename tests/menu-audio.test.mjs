@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { DEFAULT_AUDIO_VOLUME, SFX_DEFINITIONS, createDefaultSoundVolumes } from '../src/game/config/audio.ts';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 
@@ -101,9 +101,13 @@ test('new music uses a reshuffled non-repeating deck and low-health warning uses
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   assert.ok(existsSync(new URL('../public/assets/audio/music/Neon Concrete Pulse.mp3', import.meta.url)));
   assert.ok(existsSync(new URL('../public/assets/audio/music/Neondub.mp3', import.meta.url)));
+  assert.ok(existsSync(new URL('../public/assets/audio/music/Busted Reef Groove.mp3', import.meta.url)));
+  assert.ok(existsSync(new URL('../public/assets/audio/music/Neon Nebula Surge.mp3', import.meta.url)));
   assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/lowhealth.mp3', import.meta.url)));
   assert.match(audio, /music\/Neon Concrete Pulse\.mp3/);
   assert.match(audio, /music\/Neondub\.mp3/);
+  assert.match(audio, /music\/Busted Reef Groove\.mp3/);
+  assert.match(audio, /music\/Neon Nebula Surge\.mp3/);
   assert.match(audio, /private shufflePlaylist[\s\S]*?Math\.random\(\)/);
   assert.match(audio, /if \(this\.playlistIndex \+ 1 >= this\.playlist\.length\) this\.shufflePlaylist\(currentTrack\)/);
   assert.match(audio, /soundeffects\/lowhealth\.mp3/);
@@ -111,6 +115,16 @@ test('new music uses a reshuffled non-repeating deck and low-health warning uses
   assert.match(audio, /setLowHealthWarning\(active: boolean\)/);
   assert.match(arena, /this\.player\.hp <= this\.player\.stats\.maxHealth \* 0\.25/);
   assert.match(arena, /this\.audio\.stopLowHealthWarning\(\)/);
+});
+
+test('every gameplay music file on disk is registered exactly once in the shuffled playlist', () => {
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  const files = readdirSync(new URL('../public/assets/audio/music/', import.meta.url))
+    .filter((file) => file.toLowerCase().endsWith('.mp3'))
+    .sort();
+  const registered = [...audio.matchAll(/'music\/([^']+\.mp3)'/g)].map((match) => match[1]).sort();
+  assert.deepEqual(registered, files);
+  assert.equal(new Set(registered).size, registered.length);
 });
 
 test('shared Phaser buttons use normal audio for accepted actions and locked audio when disabled or rejected', () => {

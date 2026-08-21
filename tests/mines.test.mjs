@@ -204,20 +204,41 @@ test('Arena wires Salvo tap-hold input without delaying an unmodded mine press',
 
 test('player mine explosions use the shared explosion audio and dedicated red-orange plasma FX', () => {
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const mine = readFileSync(new URL('../src/game/abilities/Mine.ts', import.meta.url), 'utf8');
+  const vfx = readFileSync(new URL('../src/game/vfx/MineExplosionVfx.ts', import.meta.url), 'utf8');
   assert.match(arena, /this\.audio\.playSfx\('mine'\)/);
-  assert.match(arena, /this\.playMineExplosion\(mine\.sprite\.x, mine\.sprite\.y, mine\.radius\)/);
+  assert.match(arena, /this\.playMineExplosion\(mine\.sprite\.x, mine\.sprite\.y, mine\.radius, mine\)/);
   assert.match(arena, /private playMineExplosion/);
-  assert.match(arena, /PLAYER_MINE_EXPLOSION_PALETTE:[\s\S]*?0xffffff, 0xffa340, 0xff4e27, 0xff174f/);
-  assert.match(arena, /const layers = \[[\s\S]*?palette\[0\][\s\S]*?palette\[1\][\s\S]*?palette\[2\][\s\S]*?palette\[3\]/);
-  assert.match(arena, /const arcStorm = this\.add\.graphics/);
-  assert.match(arena, /const rayCount = this\.particlesEnabled \? 24 : 12/);
-  assert.match(arena, /this\.cameras\.main\.shake\(380, 0\.013, false\)/);
+  assert.match(mine, /explosionPalette: \[0xffffff, 0xffa340, 0xff4e27, 0xff174f\]/);
+  assert.match(mine, /get explosionPalette\(\): MineExplosionPalette/);
+  assert.match(vfx, /private drawExplosion/);
+  assert.match(vfx, /white-hot core/);
+  assert.match(vfx, /Two thin wave fronts/);
+  assert.match(vfx, /Sharp radial energy spikes/);
+  assert.match(vfx, /Jagged rotating plasma arcs/);
+  assert.match(vfx, /Short, narrow crack traces/);
+  assert.match(vfx, /compact plasma afterglow/i);
+  assert.match(vfx, /cameras\.main\.shake\(260, 0\.008, false\)/);
 });
 
 test('star death mine explosion reuses every player-mine FX layer with pink-cyan colors', () => {
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
-  assert.match(arena, /STAR_MINE_EXPLOSION_PALETTE:[\s\S]*?0xf4ffff, COLORS\.pink, COLORS\.cyan, 0xff24d4/);
-  assert.match(arena, /this\.playMineExplosion\(mine\.sprite\.x, mine\.sprite\.y, mine\.radius, STAR_MINE_EXPLOSION_PALETTE\)/);
-  assert.match(arena, /const color = index % 3 === 0 \? palette\[0\] : index % 2 === 0 \? palette\[1\] : palette\[2\]/);
-  assert.match(arena, /arcStorm\.lineStyle\([\s\S]*?palette\[2\][\s\S]*?palette\[1\]/);
+  const mine = readFileSync(new URL('../src/game/abilities/Mine.ts', import.meta.url), 'utf8');
+  assert.match(mine, /STAR_DEATH_MINE_VISUAL_THEME:[\s\S]*?explosionPalette: \[0xf4ffff, 0xff4ed3, 0x39eeff, 0xff24d4\]/);
+  assert.match(arena, /STAR_DEATH_MINE_VISUAL_THEME/);
+  assert.match(arena, /this\.playMineExplosion\(mine\.sprite\.x, mine\.sprite\.y, mine\.radius, mine\)/);
+  assert.match(arena, /mine\.explosionPalette\[1\][\s\S]*?mine\.explosionPalette\[2\]/);
+});
+
+test('mine explosion chains share one bounded renderer without particle objects or per-fragment tweens', () => {
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const vfx = readFileSync(new URL('../src/game/vfx/MineExplosionVfx.ts', import.meta.url), 'utf8');
+  assert.match(arena, /this\.mineExplosionVfx = new MineExplosionVfx\(this, this\.particlesEnabled\)/);
+  assert.match(arena, /this\.mineExplosionVfx\.update\(now\)/);
+  assert.match(arena, /this\.mineExplosionVfx\.reset\(\)/);
+  assert.match(vfx, /MAX_ACTIVE_EXPLOSIONS = 18/);
+  assert.match(vfx, /this\.graphics = scene\.add\.graphics\(\)/);
+  assert.match(vfx, /new Float32Array\(FULL_RAY_COUNT\)/);
+  assert.match(vfx, /new Float32Array\(FULL_FRAGMENT_COUNT\)/);
+  assert.doesNotMatch(vfx, /scene\.add\.circle|scene\.tweens\.add|physics\./);
 });
