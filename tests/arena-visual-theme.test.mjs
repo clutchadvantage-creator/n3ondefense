@@ -41,7 +41,8 @@ test('animated neon city dressing remains strictly bounded for late-game renderi
     assert.equal(new Set(plan.signWallIndices).size, plan.signWallIndices.length);
     assert.equal(plan.animatedNodeIndices.some((index) => plan.signWallIndices.includes(index)), false);
     assert.ok(plan.palmTreeCount >= 8 && plan.palmTreeCount <= NEON_CITY_VISUAL_THEME.maximumPalmTrees);
-    assert.ok(plan.venueBannerCount >= 8 && plan.venueBannerCount <= NEON_CITY_VISUAL_THEME.maximumVenueBanners);
+    assert.ok(plan.venueBannerCount >= 10 && plan.venueBannerCount <= NEON_CITY_VISUAL_THEME.maximumVenueBanners);
+    assert.ok(plan.venueScreenCount >= 6 && plan.venueScreenCount <= NEON_CITY_VISUAL_THEME.maximumVenueScreens);
     assert.ok(plan.spectatorLightCount <= NEON_CITY_VISUAL_THEME.maximumSpectatorLights);
     assert.ok(plan.animatedVenueLightCount <= NEON_CITY_VISUAL_THEME.maximumAnimatedVenueLights);
   }
@@ -65,6 +66,23 @@ test('arena exterior uses recognizable four-sided stadium architecture instead o
   assert.doesNotMatch(source, /drawHorizontalStand/);
   assert.doesNotMatch(source, /drawVerticalStand/);
   assert.doesNotMatch(source, /physics\.(?:add|world)/);
+});
+
+test('stadium static detail and advertising are baked once instead of replaying live vector work', () => {
+  const source = readFileSync(new URL('../src/game/arena/ArenaVisualRenderer.ts', import.meta.url), 'utf8');
+
+  assert.match(source, /scene\.make\.graphics\(\{ x: 0, y: 0 \}, false\)/);
+  assert.match(source, /scene\.add\.renderTexture\(0, 0, WORLD_WIDTH, WORLD_HEIGHT\)/);
+  assert.match(source, /cachedLayer\.draw\(\[graphics, \.\.\.labels\]\)/);
+  assert.match(source, /graphics\.destroy\(\)/);
+  assert.match(source, /staticSourceObjectsAfterBake: 0/);
+  assert.match(source, /independentAnimationLoops: 1/);
+  assert.match(source, /createVenueTextObjects/);
+  assert.match(source, /NEON FIZZ/);
+  assert.match(source, /BYTE COLA/);
+  assert.match(source, /FLUX FUEL/);
+  assert.match(source, /PIXEL CHIPS/);
+  assert.doesNotMatch(source, /shadowBlur|BlurFilter|GlowFilter|setPostPipeline/);
 });
 
 test('different accepted seeds can select distinct city districts without changing topology inputs', () => {

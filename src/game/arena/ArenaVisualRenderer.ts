@@ -12,15 +12,56 @@ const colorCss = (color: number): string => `#${color.toString(16).padStart(6, '
 const centerX = (rect: RectSpec): number => rect.x + rect.w * 0.5;
 const centerY = (rect: RectSpec): number => rect.y + rect.h * 0.5;
 
+const VENUE_ADVERTISEMENTS = [
+  { brand: 'NEON FIZZ', slogan: 'CHARGE YOUR NIGHT', accent: 0xff4fcf, product: 'can' },
+  { brand: 'BYTE COLA', slogan: 'CRACK THE CODE', accent: 0x45efff, product: 'bottle' },
+  { brand: 'FLUX FUEL', slogan: 'STAY OVERDRIVEN', accent: 0xffc857, product: 'bolt' },
+  { brand: 'PLASMA PUNCH', slogan: 'TASTE THE FLUX', accent: 0xb76cff, product: 'cup' },
+  { brand: 'PIXEL CHIPS', slogan: 'CRUNCH THE GRID', accent: 0x8affbd, product: 'chips' },
+  { brand: 'CYBER SLUSH', slogan: 'COOL THE CORE', accent: 0x36bfff, product: 'cup' },
+  { brand: 'N3ON DOGS', slogan: 'FUEL THE RUN', accent: 0xff7b45, product: 'snack' },
+  { brand: 'ION ICE', slogan: 'FREEZE THE NIGHT', accent: 0xbafcff, product: 'ice' }
+] as const;
+
+interface VenueScreenSpec {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  brand: string;
+  slogan: string;
+  accent: number;
+}
+
+export interface ArenaVisualDiagnostics {
+  staticLayer: 'cached-render-texture';
+  staticSourceObjectsAfterBake: 0;
+  liveAnimatedObjects: number;
+  independentAnimationLoops: 1;
+  venueScreenCount: number;
+  venueBannerCount: number;
+  bakeTimeMs: number;
+}
+
 /** Static/setup-time renderer for the visual theme. It owns no physics bodies. */
 export class ArenaVisualRenderer {
   readonly plan: ArenaDressingPlan;
+  readonly diagnostics: ArenaVisualDiagnostics;
   private readonly roots: Phaser.GameObjects.GameObject[] = [];
   private readonly tweens: Phaser.Tweens.Tween[] = [];
 
   constructor(private readonly scene: Phaser.Scene, private readonly layout: ArenaLayout) {
     this.plan = createArenaDressingPlan(layout);
-    this.drawBackdropAndBeachStadium();
+    const bakeTimeMs = this.drawBackdropAndBeachStadium();
+    this.diagnostics = {
+      staticLayer: 'cached-render-texture',
+      staticSourceObjectsAfterBake: 0,
+      liveAnimatedObjects: this.plan.animatedVenueLightCount,
+      independentAnimationLoops: 1,
+      venueScreenCount: this.plan.venueScreenCount,
+      venueBannerCount: this.plan.venueBannerCount,
+      bakeTimeMs
+    };
     this.drawFloor();
     this.drawArchetypeMotif();
     this.drawContainmentPerimeter();
@@ -41,11 +82,12 @@ export class ArenaVisualRenderer {
     return object;
   }
 
-  private drawBackdropAndBeachStadium(): void {
+  private drawBackdropAndBeachStadium(): number {
+    const startedAt = performance.now();
     const { palette } = NEON_CITY_VISUAL_THEME;
     const bounds = this.layout.generation.bounds;
     const random = new SeededRandom(this.plan.venueSeed);
-    const graphics = this.keep(this.scene.add.graphics().setDepth(-4));
+    const graphics = this.scene.make.graphics({ x: 0, y: 0 }, false);
 
     graphics.fillStyle(palette.void, 1);
     graphics.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -53,8 +95,25 @@ export class ArenaVisualRenderer {
     this.drawStadiumStructure(graphics, bounds, random);
     this.drawPalmTrees(graphics, bounds, random);
     this.drawVenueBanners(graphics, bounds, random);
-    this.drawVenueLabels(bounds);
+    const screens = this.drawVenueScreens(graphics, bounds, random);
+    const labels = this.createVenueTextObjects(bounds, screens);
+
+    // The original live Graphics command buffer contained hundreds of filled
+    // paths and state changes. Bake it once into a single textured quad so none
+    // of that static vector work competes with combat rendering each frame.
+    const cachedLayer = this.keep(this.scene.add.renderTexture(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
+      .setOrigin(0)
+      .setDepth(-4));
+    cachedLayer.draw([graphics, ...labels]);
+    graphics.destroy();
+    for (const label of labels) label.destroy();
+
     this.createVenueBeacons(bounds);
+    const bakeTimeMs = performance.now() - startedAt;
+    if (import.meta.env.DEV) {
+      console.debug(`[ArenaVisuals] cached beach stadium in ${bakeTimeMs.toFixed(2)}ms; 1 static layer, ${this.plan.animatedVenueLightCount} live lights`);
+    }
+    return bakeTimeMs;
   }
 
   private drawCoastalApron(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, random: SeededRandom): void {
@@ -220,6 +279,11 @@ export class ArenaVisualRenderer {
           { x: x + outerInset, y: rowOuterY }, { x: x + w - outerInset, y: rowOuterY },
           { x: x + w - innerInset, y: rowInnerY }, { x: x + innerInset, y: rowInnerY }
         ], true);
+        const tierAccent = (bay + row) % 2 ? this.layout.theme.primary : this.layout.theme.secondary;
+        graphics.fillStyle(tierAccent, 0.16);
+        graphics.fillRoundedRect(x + innerInset + 3, rowInnerY - 2, Math.max(4, w - innerInset * 2 - 6), 4, 2);
+        graphics.fillStyle(tierAccent, 0.84);
+        graphics.fillRoundedRect(x + innerInset + 6, rowInnerY - 0.75, Math.max(3, w - innerInset * 2 - 12), 1.5, 1);
         const seatY = (rowOuterY + rowInnerY) * 0.5;
         for (let seatX = x + 15; seatX < x + w - 12 && seatBudget.remaining > 0; seatX += 16) {
           const color = random.pick([0x45efff, 0xff4fcf, 0xffc857, 0x8affbd]);
@@ -234,6 +298,12 @@ export class ArenaVisualRenderer {
       graphics.fillPoints([
         { x: x, y: innerY }, { x: x + 8, y: innerY },
         { x: x + 15, y: outerY }, { x: x + 9, y: outerY }
+      ], true);
+      const aisleAccent = bay % 2 ? this.layout.theme.secondary : this.layout.theme.primary;
+      graphics.fillStyle(aisleAccent, 0.72);
+      graphics.fillPoints([
+        { x: x + 4, y: innerY }, { x: x + 6, y: innerY },
+        { x: x + 13, y: outerY }, { x: x + 11, y: outerY }
       ], true);
       graphics.fillStyle(0x25374a, 1);
       graphics.fillRoundedRect(x + 7, outerY - (top ? 4 : 0), 9, 4, 1);
@@ -295,6 +365,11 @@ export class ArenaVisualRenderer {
           { x: rowOuterX, y: y + outerInset }, { x: rowInnerX, y: y + innerInset },
           { x: rowInnerX, y: y + h - innerInset }, { x: rowOuterX, y: y + h - outerInset }
         ], true);
+        const tierAccent = (bay + row) % 2 ? this.layout.theme.secondary : this.layout.theme.primary;
+        graphics.fillStyle(tierAccent, 0.16);
+        graphics.fillRoundedRect(rowInnerX - 2, y + innerInset + 3, 4, Math.max(4, h - innerInset * 2 - 6), 2);
+        graphics.fillStyle(tierAccent, 0.82);
+        graphics.fillRoundedRect(rowInnerX - 0.75, y + innerInset + 6, 1.5, Math.max(3, h - innerInset * 2 - 12), 1);
         const seatX = (rowOuterX + rowInnerX) * 0.5;
         for (let seatY = y + 15; seatY < y + h - 12 && seatBudget.remaining > 0; seatY += 16) {
           graphics.fillStyle(random.pick([0x45efff, 0xff4fcf, 0xffc857, 0x8affbd]), random.float(0.4, 0.78));
@@ -302,6 +377,17 @@ export class ArenaVisualRenderer {
           seatBudget.remaining -= 1;
         }
       }
+      graphics.fillStyle(0x03070d, 1);
+      graphics.fillPoints([
+        { x: innerX, y }, { x: innerX, y: y + 8 },
+        { x: outerX, y: y + 15 }, { x: outerX, y: y + 9 }
+      ], true);
+      const aisleAccent = bay % 2 ? this.layout.theme.primary : this.layout.theme.secondary;
+      graphics.fillStyle(aisleAccent, 0.7);
+      graphics.fillPoints([
+        { x: innerX, y: y + 4 }, { x: innerX, y: y + 6 },
+        { x: outerX, y: y + 13 }, { x: outerX, y: y + 11 }
+      ], true);
     }
   }
 
@@ -389,6 +475,11 @@ export class ArenaVisualRenderer {
       const canopyY = Phaser.Math.Clamp(anchor.y - Math.cos(rotation) * trunkLength, 8, WORLD_HEIGHT - 8);
       const baseX = Phaser.Math.Clamp(anchor.x, 8, WORLD_WIDTH - 8);
       const baseY = Phaser.Math.Clamp(anchor.y, 8, WORLD_HEIGHT - 8);
+      const uplight = index % 2 ? this.layout.theme.primary : this.layout.theme.secondary;
+      graphics.fillStyle(uplight, 0.1);
+      graphics.fillCircle(baseX, baseY, Math.max(8, 14 * scale));
+      graphics.lineStyle(2, uplight, 0.58);
+      graphics.strokeCircle(baseX, baseY, Math.max(6, 10 * scale));
       const trunkSegments = 6;
       for (let segment = 0; segment < trunkSegments; segment += 1) {
         const t = segment / (trunkSegments - 1);
@@ -479,8 +570,90 @@ export class ArenaVisualRenderer {
     }
   }
 
-  private drawVenueLabels(bounds: RectSpec): void {
-    const root = this.keep(this.scene.add.container(0, 0).setDepth(-3.5));
+  private drawVenueScreens(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, random: SeededRandom): VenueScreenSpec[] {
+    const screens: VenueScreenSpec[] = [];
+    const screenWidth = Math.max(116, Math.min(172, bounds.w * 0.105));
+    const screenHeight = Math.max(28, Math.min(44, bounds.y * 0.34));
+    const topCount = Math.ceil(this.plan.venueScreenCount / 2);
+    const bottomCount = Math.floor(this.plan.venueScreenCount / 2);
+    const fractionsFor = (count: number): readonly number[] => count >= 4 ? [0.12, 0.36, 0.64, 0.88] : [0.16, 0.5, 0.84];
+    for (let index = 0; index < this.plan.venueScreenCount; index += 1) {
+      const top = index % 2 === 0;
+      const sideIndex = Math.floor(index / 2);
+      const fractions = fractionsFor(top ? topCount : bottomCount);
+      const fraction = fractions[sideIndex % fractions.length];
+      const x = Phaser.Math.Clamp(bounds.x + bounds.w * fraction - screenWidth * 0.5, 4, WORLD_WIDTH - screenWidth - 4);
+      const offset = Math.max(4, Math.min(14, bounds.y * 0.1));
+      const y = top
+        ? Phaser.Math.Clamp(bounds.y - screenHeight - offset, 4, WORLD_HEIGHT - screenHeight - 4)
+        : Phaser.Math.Clamp(bounds.y + bounds.h + offset, 4, WORLD_HEIGHT - screenHeight - 4);
+      const advertisement = random.pick(VENUE_ADVERTISEMENTS);
+      const screen: VenueScreenSpec = { x, y, width: screenWidth, height: screenHeight, ...advertisement };
+      screens.push(screen);
+
+      // Cheap baked neon: a translucent outer plate, solid emissive core, and
+      // one crisp frame. There are no filters, shadows, masks, or live updates.
+      graphics.fillStyle(advertisement.accent, 0.13);
+      graphics.fillRoundedRect(x - 4, y - 4, screenWidth + 8, screenHeight + 8, 5);
+      graphics.fillStyle(0x02060d, 1);
+      graphics.fillRoundedRect(x, y, screenWidth, screenHeight, 4);
+      graphics.fillStyle(0x071725, 1);
+      graphics.fillRoundedRect(x + 4, y + 4, screenWidth - 8, screenHeight - 8, 3);
+      graphics.lineStyle(2, advertisement.accent, 0.92);
+      graphics.strokeRoundedRect(x + 1, y + 1, screenWidth - 2, screenHeight - 2, 4);
+      graphics.fillStyle(0x27394d, 1);
+      graphics.fillRoundedRect(x + 15, top ? y + screenHeight : y - 5, 7, 6, 2);
+      graphics.fillRoundedRect(x + screenWidth - 22, top ? y + screenHeight : y - 5, 7, 6, 2);
+      this.drawAdProductGlyph(graphics, advertisement.product, x + 22, y + screenHeight * 0.5, advertisement.accent);
+    }
+    return screens;
+  }
+
+  private drawAdProductGlyph(graphics: Phaser.GameObjects.Graphics, product: string, x: number, y: number, accent: number): void {
+    graphics.fillStyle(accent, 0.88);
+    if (product === 'can') {
+      graphics.fillRoundedRect(x - 7, y - 12, 14, 24, 4);
+      graphics.fillStyle(0xffffff, 0.62);
+      graphics.fillRect(x - 4, y - 7, 8, 2);
+    } else if (product === 'bottle') {
+      graphics.fillRoundedRect(x - 7, y - 7, 14, 18, 5);
+      graphics.fillRect(x - 3, y - 13, 6, 7);
+    } else if (product === 'bolt') {
+      graphics.fillPoints([
+        { x: x + 2, y: y - 13 }, { x: x - 9, y: y + 2 }, { x: x - 1, y: y + 2 },
+        { x: x - 4, y: y + 13 }, { x: x + 10, y: y - 4 }, { x: x + 2, y: y - 4 }
+      ], true);
+    } else if (product === 'cup') {
+      graphics.fillPoints([
+        { x: x - 9, y: y - 9 }, { x: x + 9, y: y - 9 },
+        { x: x + 6, y: y + 11 }, { x: x - 6, y: y + 11 }
+      ], true);
+      graphics.fillRect(x + 2, y - 14, 3, 7);
+    } else if (product === 'chips') {
+      graphics.fillPoints([
+        { x: x - 9, y: y - 12 }, { x: x + 8, y: y - 10 },
+        { x: x + 10, y: y + 12 }, { x: x - 8, y: y + 10 }
+      ], true);
+      graphics.fillStyle(0x02060d, 0.7);
+      graphics.fillCircle(x, y, 4);
+    } else if (product === 'snack') {
+      graphics.fillEllipse(x, y, 23, 11);
+      graphics.fillStyle(0x02060d, 0.72);
+      graphics.fillRoundedRect(x - 8, y - 2, 16, 4, 2);
+    } else {
+      graphics.fillPoints([
+        { x, y: y - 13 }, { x: x + 10, y: y - 4 },
+        { x: x + 7, y: y + 10 }, { x: x - 7, y: y + 10 }, { x: x - 10, y: y - 4 }
+      ], true);
+      graphics.fillStyle(0xffffff, 0.42);
+      graphics.fillCircle(x, y, 3);
+    }
+  }
+
+  private createVenueTextObjects(bounds: RectSpec, screens: readonly VenueScreenSpec[]): Phaser.GameObjects.Text[] {
+    const labels: Phaser.GameObjects.Text[] = [];
+    const topMargin = bounds.y;
+    const bottomMargin = WORLD_HEIGHT - bounds.y - bounds.h;
     const topY = Math.max(8, bounds.y * 0.44);
     const bottomY = Math.min(WORLD_HEIGHT - 8, bounds.y + bounds.h + (WORLD_HEIGHT - bounds.y - bounds.h) * 0.56);
     const style: Phaser.Types.GameObjects.Text.TextStyle = {
@@ -491,11 +664,50 @@ export class ArenaVisualRenderer {
       strokeThickness: 3,
       letterSpacing: 2
     };
-    root.add(this.scene.add.text(bounds.x + bounds.w * 0.5, topY, 'N3ON BEACH CIRCUIT // LIVE', style).setOrigin(0.5).setAlpha(0.82));
-    root.add(this.scene.add.text(bounds.x + bounds.w * 0.5, bottomY, `${this.plan.districtLabel} // COMBAT GRANDSTAND`, {
-      ...style,
-      color: colorCss(this.layout.theme.secondary)
-    }).setOrigin(0.5).setAlpha(0.72));
+    if (topMargin >= 70) {
+      labels.push(this.scene.make.text({
+        x: bounds.x + bounds.w * 0.5,
+        y: topY,
+        text: 'N3ON BEACH CIRCUIT // LIVE',
+        style
+      }, false).setOrigin(0.5).setAlpha(0.82));
+    }
+    if (bottomMargin >= 70) {
+      labels.push(this.scene.make.text({
+        x: bounds.x + bounds.w * 0.5,
+        y: bottomY,
+        text: `${this.plan.districtLabel} // COMBAT GRANDSTAND`,
+        style: { ...style, color: colorCss(this.layout.theme.secondary) }
+      }, false).setOrigin(0.5).setAlpha(0.72));
+    }
+    for (const screen of screens) {
+      labels.push(this.scene.make.text({
+        x: screen.x + 39,
+        y: screen.y + 7,
+        text: screen.brand,
+        style: {
+          fontFamily: 'Orbitron, sans-serif',
+          fontSize: '9px',
+          color: colorCss(screen.accent),
+          fontStyle: 'bold',
+          stroke: '#010308',
+          strokeThickness: 2
+        }
+      }, false));
+      labels.push(this.scene.make.text({
+        x: screen.x + 39,
+        y: screen.y + screen.height - 12,
+        text: screen.slogan,
+        style: {
+          fontFamily: 'Rajdhani, sans-serif',
+          fontSize: '7px',
+          color: '#d9fbff',
+          stroke: '#010308',
+          strokeThickness: 2
+        }
+      }, false).setAlpha(0.78));
+    }
+    return labels;
   }
 
   private createVenueBeacons(bounds: RectSpec): void {
