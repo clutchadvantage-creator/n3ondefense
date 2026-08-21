@@ -11,7 +11,8 @@ import { buildRunEconomySnapshot, getNextLoadoutSlotCost, getRunSetupCost, purch
 import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
 import { loadGaragePreset, normalizeRunSetupSelection, saveCurrentGaragePreset } from '../garage/GarageState.ts';
 import type { GaragePresetId, PlayerGarageState } from '../garage/types.ts';
-import { resolveWeeklyOperationDecks, type WeeklyOperationDecksSnapshot } from '../progression/WeeklyOperations.ts';
+import { resolveWeeklyOperationDecks, type WeeklyOperationDecksSnapshot, type WeeklyOperationProgressSource } from '../progression/WeeklyOperations.ts';
+import type { ArcadeMetricEvent } from '../arcade/types.ts';
 
 export interface PurchaseResult {
   ok: boolean;
@@ -246,6 +247,25 @@ export class PlayerProfileStore {
     }
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
+  }
+
+  static recordArcadeMetric(event: ArcadeMetricEvent): void {
+    const save = PlayerProfileStore.getActiveSave();
+    const targets: WeeklyOperationProgressSource[] = [save.progress];
+    if (isOverdriveProtocol(event.protocol)) targets.push(save.progress.overdriveWeeklyProgress);
+    for (const progress of targets) {
+      if (event.name === 'arcade_event_completed') progress.arcadeEventsCompleted += 1;
+      else if (event.name === 'golden_enemy_killed') progress.goldenEnemiesKilled += 1;
+      else if (event.name === 'arcade_miniboss_killed') progress.arcadeMiniBossesKilled += 1;
+      else if (event.name === 'neon_circuit_completed') progress.neonCircuitsCompleted += 1;
+    }
+    if (event.name === 'arcade_event_completed'
+      || event.name === 'golden_enemy_killed'
+      || event.name === 'arcade_miniboss_killed'
+      || event.name === 'neon_circuit_completed') {
+      save.profile.lastPlayedAt = new Date().toISOString();
+      PlayerProfileStore.save();
+    }
   }
 
   static getWeeklyOperations(nowMs = Date.now()): WeeklyOperationDecksSnapshot {

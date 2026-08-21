@@ -70,6 +70,10 @@ export class TutorialDirector {
     return this.active?.steps[this.stepIndex]?.mode === 'hard-pause';
   }
 
+  isActive(): boolean {
+    return this.active !== null;
+  }
+
   awaits(event: string): boolean {
     return this.acceptingCompletion
       && this.advancePolicy?.type === 'event'

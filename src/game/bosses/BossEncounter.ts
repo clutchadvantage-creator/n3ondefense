@@ -6,6 +6,13 @@ import type { Player } from '../entities/Player';
 import { SeededRandom } from '../systems/SeededRandom';
 import { Boss, type BossDamageSource } from './Boss';
 
+export interface BossEncounterOptions {
+  /** Instance-only health scaling used by variants such as N3ON Arcade Mini-Bosses. */
+  healthMultiplier?: number;
+  /** Compact variants report health through their owning HUD instead of the full boss banner. */
+  showHealthUi?: boolean;
+}
+
 export interface BossProjectileSpec {
   x: number;
   y: number;
@@ -91,7 +98,8 @@ export class BossEncounter {
     private readonly bounds: RectSpec,
     private readonly isBlocked: (x: number, y: number) => boolean,
     private readonly callbacks: BossEncounterCallbacks,
-    modeFamily: RunModeFamily
+    modeFamily: RunModeFamily,
+    options: BossEncounterOptions = {}
   ) {
     this.archetype = archetype;
     this.random = new SeededRandom((seed ^ Math.imul(completedRound, 0x9e3779b1) ^ 0xb055cafe) >>> 0);
@@ -104,7 +112,8 @@ export class BossEncounter {
       completedRound,
       (damage, source) => this.handleBossDamage(damage, source),
       () => callbacks.onDefeated(),
-      modeFamily
+      modeFamily,
+      { healthMultiplier: options.healthMultiplier }
     );
 
     const width = Math.min(900, scene.scale.width - 80);
@@ -121,6 +130,13 @@ export class BossEncounter {
     this.callout = scene.add.text(scene.scale.width * 0.5, BOSS_CALLOUT_Y, '', {
       fontFamily: 'Orbitron, sans-serif', fontSize: '20px', color: '#ffd87a', stroke: '#050812', strokeThickness: 5
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1122);
+    if (options.showHealthUi === false) {
+      this.healthTrack.setVisible(false);
+      this.healthFill.setVisible(false);
+      this.title.setVisible(false);
+      this.healthText.setVisible(false);
+      this.callout.setVisible(false);
+    }
     this.refreshHealthBar();
   }
 

@@ -4,6 +4,11 @@ import type { RunModeFamily } from '../config/modeBalance.ts';
 
 export type BossDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard';
 
+export interface BossInstanceOptions {
+  /** Applies only to this boss instance; normal milestone bosses remain unchanged. */
+  healthMultiplier?: number;
+}
+
 export class Boss extends Phaser.Physics.Arcade.Sprite {
   readonly archetype: BossArchetype;
   readonly maxHp: number;
@@ -23,12 +28,15 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     completedRound: number,
     private readonly onDamaged: (damage: number, source: BossDamageSource) => void,
     private readonly onDefeated: () => void,
-    modeFamily: RunModeFamily
+    modeFamily: RunModeFamily,
+    options: BossInstanceOptions = {}
   ) {
     const definition = BOSS_ARCHETYPES[archetype];
     super(scene, x, y, definition.texture);
     this.archetype = archetype;
-    this.maxHp = getBossHealth(completedRound, modeFamily);
+    this.maxHp = Math.max(1, Math.round(
+      getBossHealth(completedRound, modeFamily) * Math.max(0.01, options.healthMultiplier ?? 1)
+    ));
     this.hp = this.maxHp;
     scene.add.existing(this);
     scene.physics.add.existing(this);

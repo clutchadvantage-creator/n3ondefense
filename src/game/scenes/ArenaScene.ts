@@ -84,6 +84,9 @@ import {
   TemporaryAmmoModeController,
   type TemporaryAmmoMode
 } from '../player/TemporaryAmmoMode.ts';
+import { N3ONArcadeController } from '../arcade/N3ONArcadeController.ts';
+import type { ArcadeEventId, ArcadeMetricEvent } from '../arcade/types.ts';
+import type { Boss } from '../bosses/Boss.ts';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -369,6 +372,7 @@ export class ArenaScene extends Phaser.Scene {
   private bombletHazard: BombletHazardSystem | null = null;
   private gasHazard: GasHazardSystem | null = null;
   private fluxCores: FluxCoreSystem | null = null;
+  private arcadeController: N3ONArcadeController | null = null;
   private bossEncounter: BossEncounter | null = null;
   private bossRound = 0;
   private pendingRoundPayload: RoundFinishedPayload | null = null;
@@ -782,6 +786,7 @@ export class ArenaScene extends Phaser.Scene {
         forceArenaType?:(type:ArenaTemplate|null)=>void;
         regenerateArena?:()=>void;
         toggleTraversalDebug?:()=>void;
+        forceArcadeEvent?:(eventId:ArcadeEventId)=>boolean;
       };
       debugGlobal.forceArenaType=(type)=>{ArenaGenerator.forceArenaType(type);this.createRoundFromDefinition(this.roundManager.currentDefinition());};
       debugGlobal.regenerateArena=()=>this.createRoundFromDefinition(this.roundManager.currentDefinition());
@@ -789,6 +794,7 @@ export class ArenaScene extends Phaser.Scene {
         this.traversalDebugVisible=!this.traversalDebugVisible;
         this.drawTraversalDebug();
       };
+      debugGlobal.forceArcadeEvent=(eventId)=>this.arcadeController?.force(eventId) ?? false;
     }
   }
 
@@ -968,6 +974,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.state.set(RoundState.PrePlant);
     this.hasLiveRoundObjects = true;
+    this.createArcadeController(def.round, def.seed);
 
     this.showBanner(`ROUND ${def.round} - ${this.layout.template.toUpperCase()}\nSeed ${def.seed}`);
   }
@@ -1179,7 +1186,7 @@ export class ArenaScene extends Phaser.Scene {
       && this.player.hp > 0
       && this.player.hp <= this.player.stats.maxHealth * 0.25);
 
-    if (this.tutorialHardPaused || this.state.state === RoundState.Paused || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
+    if (this.tutorialHardPaused || this.state.state === RoundState.Paused || this.legendaryRevealInProgress || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
       return;
     }
 
@@ -1257,6 +1264,14 @@ export class ArenaScene extends Phaser.Scene {
     this.updateRelentlessSpawns(now, activeSites.length > 0);
 
     const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
+    const arcadeBoss = this.arcadeController?.getBossTarget();
+    if (this.gasHazard?.visualGasActive && arcadeBoss) {
+      this.gasHazard.carveVisualTunnel(
+        arcadeBoss.x,
+        arcadeBoss.y,
+        Math.max(GAS_HAZARD_BALANCE.enemyTunnelRadius, arcadeBoss.hazardRadius + 10)
+      );
+    }
     const hazardTargets = this.getHazardDamageTargets();
     this.gasHazard?.update(
       now,
@@ -1271,6 +1286,7 @@ export class ArenaScene extends Phaser.Scene {
     this.laserSecurity?.update(now, dt, this.player, hazardTargets, playerLaserImmune, securityLasersSuppressed);
     this.bombletHazard?.update(now, this.player, hazardTargets, laserDangerWindow);
     this.updateEnemies(now, dt);
+    if (!this.tutorialDirector?.isActive()) this.arcadeController?.update(delta);
     this.bombsiteMods.update(now, delta, this.bombSites.getActiveBombSites(), this.enemies, this.player);
     this.updateHomingMissiles(delta);
     this.updateProjectiles(delta);
@@ -1819,7 +1835,11 @@ export class ArenaScene extends Phaser.Scene {
 
     if (now < this.nextSpawnAt) return;
     this.nextSpawnAt = now + cadenceMs;
-    if (this.enemies.length >= activeCountCap) {
+    const standardEnemyCount = this.enemies.reduce(
+      (count, enemy) => count + (enemy.getData('n3onArcadeEvent') ? 0 : 1),
+      0
+    );
+    if (standardEnemyCount >= activeCountCap) {
       GameplayTelemetryRecorder.recordSpawnAttempt('count-cap', cadenceMs);
       return;
     }
@@ -1829,7 +1849,10 @@ export class ArenaScene extends Phaser.Scene {
       GameplayTelemetryRecorder.recordSpawnAttempt('composition', cadenceMs);
       return;
     }
-    const activeWeight = this.enemies.reduce((sum, enemy) => sum + ENEMY_BALANCE[enemy.stats.type].weight, 0);
+    const activeWeight = this.enemies.reduce(
+      (sum, enemy) => sum + (enemy.getData('n3onArcadeEvent') ? 0 : ENEMY_BALANCE[enemy.stats.type].weight),
+      0
+    );
     if (activeWeight + ENEMY_BALANCE[type].weight > activeWeightCap) {
       GameplayTelemetryRecorder.recordSpawnAttempt('weight-cap', cadenceMs);
       return;
@@ -1854,7 +1877,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private pickEnemyType(profile: ReturnType<typeof getSpawnProfile>, now: number, defensePhase: boolean): EnemyType | null {
-    const activeCount = (type: EnemyType): number => this.enemies.filter((enemy) => enemy.stats.type === type).length;
+    const activeCount = (type: EnemyType): number => this.enemies.filter(
+      (enemy) => !enemy.getData('n3onArcadeEvent') && enemy.stats.type === type
+    ).length;
     const candidates = (Object.keys(profile.composition) as EnemyType[]).filter((type) => {
       if (profile.composition[type] <= 0 || this.roundManager.round < ENEMY_BALANCE[type].unlockRound) return false;
       if (!defensePhase && type === 'defuser') return false;
@@ -1881,9 +1906,9 @@ export class ArenaScene extends Phaser.Scene {
     return candidates[candidates.length - 1];
   }
 
-  private spawnEnemy(type: EnemyType, defensePhase: boolean): void {
+  private spawnEnemy(type: EnemyType, defensePhase: boolean, explicitSpawn?: { x: number; y: number }): Enemy {
     const base = baseEnemyStats[type];
-    const spawn = Phaser.Utils.Array.GetRandom(this.layout.enemySpawns);
+    const spawn = explicitSpawn ?? Phaser.Utils.Array.GetRandom(this.layout.enemySpawns);
     const curve = getDifficultyCurve(this.roundManager.round, this.bombSites.destroyedCount());
     const phaseScale = defensePhase ? 1 : 0.9;
 
@@ -1940,6 +1965,7 @@ export class ArenaScene extends Phaser.Scene {
       recoverySign: navigationSequence % 2 === 0 ? 1 : -1
     });
     this.patrolTargets.set(enemy, { x: spawn.x, y: spawn.y });
+    return enemy;
   }
 
   private updateEnemies(now: number, dt: number): void {
@@ -2849,7 +2875,7 @@ export class ArenaScene extends Phaser.Scene {
           }
         }
 
-        const boss = this.bossEncounter?.boss;
+        const boss = this.activeBossTarget();
         if (boss?.active && !boss.isDefeated
           && (boss.x - p.sprite.x) ** 2 + (boss.y - p.sprite.y) ** 2 < (boss.hazardRadius + 8) ** 2) {
           const applied = boss.takeDamage(p.damage, p.from === 'player' ? 'weapon' : 'turret');
@@ -2858,7 +2884,7 @@ export class ArenaScene extends Phaser.Scene {
           else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
           this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.sprite.tintTopLeft);
           this.retireProjectile(p);
-          if (boss.isDefeated) {
+          if (boss.isDefeated && boss === this.bossEncounter?.boss) {
             // Preserve all unprocessed pooled projectiles for the deferred boss
             // teardown. Nothing else should advance on the fatal-hit frame.
             for (let remaining = readIndex + 1; remaining < this.projectiles.length; remaining += 1) {
@@ -3339,7 +3365,7 @@ export class ArenaScene extends Phaser.Scene {
   private updateAbilities(now: number, dt: number): void {
     for (const turret of this.turrets) {
       const enemyTarget = this.getNearestEnemy(turret.sprite.x, turret.sprite.y, turret.range);
-      const bossTarget = this.bossEncounter?.boss;
+      const bossTarget = this.activeBossTarget();
       const bossInRange = Boolean(bossTarget?.active && !bossTarget.isDefeated
         && (bossTarget.x - turret.sprite.x) ** 2 + (bossTarget.y - turret.sprite.y) ** 2 <= turret.range * turret.range);
       const fluxTarget = this.fluxCores?.getNearestCore(turret.sprite.x, turret.sprite.y, turret.range) ?? null;
@@ -3364,7 +3390,7 @@ export class ArenaScene extends Phaser.Scene {
     for (const mine of this.mines) {
       mine.update(now);
       if (!mine.armed) continue;
-      const bossTarget = this.bossEncounter?.boss;
+      const bossTarget = this.activeBossTarget();
       const radiusSquared = mine.radius * mine.radius;
       const bossDx = (bossTarget?.x ?? 0) - mine.sprite.x;
       const bossDy = (bossTarget?.y ?? 0) - mine.sprite.y;
@@ -3443,7 +3469,7 @@ export class ArenaScene extends Phaser.Scene {
           if (enemy.stats.type === 'tank') fence.hp -= 16 * dt;
         }
       }
-      const bossTarget = this.bossEncounter?.boss;
+      const bossTarget = this.activeBossTarget();
       if (bossTarget?.active && !bossTarget.isDefeated) {
         const distance = this.distancePointToSegment(
           bossTarget.x,
@@ -4044,6 +4070,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private killEnemy(enemy: Enemy): void {
     if (this.tutorialDirector?.awaits('combat.enemyKilled')) TutorialEventBus.emit('combat.enemyKilled', { type: enemy.stats.type });
+    this.arcadeController?.handleGameplayEvent({ type: 'enemy-killed', enemy });
     this.audio.playSfx('enemyDeath');
     const standardCredits = this.scaleModCredits(enemy.stats.valueCredits);
     const bombsiteCreditMultiplier = this.bombsiteMods.onEnemyKilled(enemy.x, enemy.y);
@@ -4105,6 +4132,148 @@ export class ArenaScene extends Phaser.Scene {
 
   private currentModeBalance() {
     return MODE_BALANCE[this.currentModeFamily()];
+  }
+
+  private createArcadeController(round: number, seed: number): void {
+    this.arcadeController?.destroy('replaced');
+    const tutorialProgress = SaveSystem.getTutorialProgress();
+    const teachingComplete = tutorialProgress.firstRunStage === 'complete' && tutorialProgress.replaySequenceId === null;
+    this.arcadeController = new N3ONArcadeController({
+      scene: this,
+      player: this.player,
+      round,
+      seed,
+      protocol: this.protocol,
+      modeFamily: this.currentModeFamily(),
+      bounds: this.layout.generation.bounds,
+      walls: this.walls,
+      particlesEnabled: this.particlesEnabled,
+      isBlocked: (x, y) => this.hitWall(x, y),
+      findSpawnPoints: (count, minimumPlayerDistance) => this.findArcadeSpawnPoints(count, minimumPlayerDistance, seed),
+      findCheckpointPoints: (count) => this.findArcadeCheckpointPoints(count, seed),
+      spawnEnemy: ({ type, x, y }) => this.spawnEnemy(type, this.bombSites.activeBombCount() > 0, { x, y }),
+      removeEnemy: (enemy) => this.removeArcadeEnemy(enemy),
+      fireBossProjectile: (spec) => this.spawnBossProjectile(spec),
+      applyBossAreaDamage: (x, y, radius, damage, attack) => this.applyBossAreaDamage(x, y, radius, damage, attack),
+      retireBossProjectiles: () => this.retireActiveBossProjectiles(),
+      grantCredits: (amount) => {
+        const credits = this.scaleModCredits(amount);
+        this.roundCredits += credits;
+        this.totalCreditsCollected += credits;
+      },
+      grantFluxCores: (amount) => { this.roundFluxCores += Math.max(0, Math.floor(amount)); },
+      grantGuaranteedMod: (x, y) => { this.tryAwardMod('milestone', true, x, y); },
+      emitMetric: (event: ArcadeMetricEvent) => {
+        GameplayTelemetryRecorder.recordArcadeEvent(event);
+        SaveSystem.recordArcadeMetric(event);
+      }
+    }, { enabled: teachingComplete });
+  }
+
+  private findArcadeSpawnPoints(count: number, minimumPlayerDistance: number, seed: number): Array<{ x: number; y: number }> {
+    const random = new SeededRandom((seed ^ Math.imul(count, 0x45d9f3b) ^ 0x601da7e) >>> 0);
+    const candidates = this.buildArcadePointCandidates(random);
+    const accepted: Array<{ x: number; y: number }> = [];
+    const minimumPlayerDistanceSquared = minimumPlayerDistance * minimumPlayerDistance;
+    const minimumSpacingSquared = 150 * 150;
+    for (const candidate of candidates) {
+      if (accepted.length >= count) break;
+      const point = this.pathfinder.findNearestWalkableWorld(candidate.x, candidate.y, 0, 7);
+      if (!point || this.intersectsWallGeometry(point.x, point.y, 24, 24)) continue;
+      if (this.isNearBombSite(point.x, point.y, 105)) continue;
+      const playerDx = point.x - this.player.x;
+      const playerDy = point.y - this.player.y;
+      if (playerDx * playerDx + playerDy * playerDy < minimumPlayerDistanceSquared) continue;
+      if (accepted.some((other) => (other.x - point.x) ** 2 + (other.y - point.y) ** 2 < minimumSpacingSquared)) continue;
+      if (this.pathfinder.findPath(this.player.x, this.player.y, point.x, point.y, { maxIterations: 5_000 }).length === 0) continue;
+      accepted.push(point);
+    }
+    return accepted;
+  }
+
+  private findArcadeCheckpointPoints(count: number, seed: number): Array<{ x: number; y: number }> {
+    const random = new SeededRandom((seed ^ Math.imul(count, 0x27d4eb2d) ^ 0xc1ac017) >>> 0);
+    const candidates = this.buildArcadePointCandidates(random);
+    const accepted: Array<{ x: number; y: number }> = [];
+    let previous = { x: this.player.x, y: this.player.y };
+    const minimumSpacingSquared = 190 * 190;
+    const preferredMaximumStepSquared = 540 * 540;
+    while (accepted.length < count && candidates.length > 0) {
+      let chosenIndex = -1;
+      let fallbackIndex = -1;
+      let fallbackDistanceSquared = Number.POSITIVE_INFINITY;
+      for (let index = 0; index < candidates.length; index += 1) {
+        const point = this.pathfinder.findNearestWalkableWorld(candidates[index].x, candidates[index].y, 0, 7);
+        if (!point || this.intersectsWallGeometry(point.x, point.y, 30, 30)) continue;
+        if (accepted.some((other) => (other.x - point.x) ** 2 + (other.y - point.y) ** 2 < minimumSpacingSquared)) continue;
+        const stepDistanceSquared = (previous.x - point.x) ** 2 + (previous.y - point.y) ** 2;
+        if (stepDistanceSquared < minimumSpacingSquared) continue;
+        if (this.pathfinder.findPath(previous.x, previous.y, point.x, point.y, { maxIterations: 5_000 }).length === 0) continue;
+        candidates[index] = point;
+        if (stepDistanceSquared <= preferredMaximumStepSquared) {
+          chosenIndex = index;
+          break;
+        }
+        if (stepDistanceSquared < fallbackDistanceSquared) {
+          fallbackIndex = index;
+          fallbackDistanceSquared = stepDistanceSquared;
+        }
+      }
+      if (chosenIndex < 0) chosenIndex = fallbackIndex;
+      if (chosenIndex < 0) break;
+      const [chosen] = candidates.splice(chosenIndex, 1);
+      accepted.push(chosen);
+      previous = chosen;
+    }
+    return accepted;
+  }
+
+  private buildArcadePointCandidates(random: SeededRandom): Array<{ x: number; y: number }> {
+    const bounds = this.layout.generation.bounds;
+    const candidates = this.layout.enemySpawns.map((point) => ({ x: point.x, y: point.y }));
+    const columns = 7;
+    const rows = 5;
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        candidates.push({
+          x: bounds.x + bounds.w * ((column + 0.5) / columns),
+          y: bounds.y + bounds.h * ((row + 0.5) / rows)
+        });
+      }
+    }
+    for (const site of this.bombSites.sites) {
+      for (let index = 0; index < 4; index += 1) {
+        const angle = index * Math.PI * 0.5 + random.float(-0.18, 0.18);
+        candidates.push({ x: site.x + Math.cos(angle) * 155, y: site.y + Math.sin(angle) * 155 });
+      }
+    }
+    return random.shuffle(candidates);
+  }
+
+  private isNearBombSite(x: number, y: number, radius: number): boolean {
+    const radiusSquared = radius * radius;
+    return this.bombSites.sites.some((site) => (site.x - x) ** 2 + (site.y - y) ** 2 < radiusSquared);
+  }
+
+  private removeArcadeEnemy(enemy: Enemy): void {
+    const index = this.enemies.indexOf(enemy);
+    if (index >= 0) this.enemies.splice(index, 1);
+    this.destroyEnemyColliders(enemy);
+    this.defuseAssignees.delete(enemy);
+    this.defuseTargetByEnemy.delete(enemy);
+    let missileWriteIndex = 0;
+    for (const missile of this.homingMissiles) {
+      if (missile.owner === enemy) missile.sprite.destroy();
+      else this.homingMissiles[missileWriteIndex++] = missile;
+    }
+    this.homingMissiles.length = missileWriteIndex;
+    enemy.destroy();
+  }
+
+  private activeBossTarget(): Boss | null {
+    const boss = this.bossEncounter?.boss;
+    if (boss?.active && !boss.isDefeated) return boss;
+    return this.arcadeController?.getBossTarget() ?? null;
   }
 
   private destroyEnemyColliders(enemy: Enemy): void {
@@ -4712,6 +4881,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private completeRound(): void {
     if (this.state.state === RoundState.Victory && this.pendingRoundPayload) return;
+    this.arcadeController?.stop('round-ended');
     this.clearRoundInfusionEffects();
     this.audio.stopLowHealthWarning();
     this.showBanner('ALL TARGETS DESTROYED');
@@ -5315,6 +5485,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private triggerDefeat(reason: 'playerDead' | 'bombDefused'): void {
     if (this.state.state === RoundState.Defeat) return;
+    this.arcadeController?.stop(reason === 'playerDead' ? 'player-dead' : 'round-ended');
     this.clearRoundInfusionEffects();
     if (reason === 'playerDead') {
       this.audio.playSfx('playerDeath');
@@ -5466,7 +5637,7 @@ export class ArenaScene extends Phaser.Scene {
     this.hudPayload.energy = this.player.energy;
     this.hudPayload.maxEnergy = this.player.energyStats.max;
     this.hudPayload.level = this.roundManager.round;
-    this.hudPayload.enemies = this.enemies.length;
+    this.hudPayload.enemies = this.enemies.length + (this.arcadeController?.getBossTarget() ? 1 : 0);
     this.hudPayload.credits = this.hudWalletCredits + this.roundCredits;
     this.hudPayload.coreTokens = this.hudWalletCoreTokens + this.roundCoreTokens;
     this.hudPayload.plasmaChips = this.hudWalletPlasmaChips + this.roundPlasmaChips;
@@ -5597,9 +5768,11 @@ export class ArenaScene extends Phaser.Scene {
       this.appendHudRadarContact('enemy', 'normal', enemy.x - playerX, enemy.y - playerY);
     }
 
-    if (this.bossEncounter?.boss.active && !this.bossEncounter.boss.isDefeated) {
-      this.appendHudRadarContact('boss', 'normal', this.bossEncounter.boss.x - playerX, this.bossEncounter.boss.y - playerY);
-    } else if (this.bombSites) {
+    const bossTarget = this.activeBossTarget();
+    if (bossTarget) {
+      this.appendHudRadarContact('boss', 'normal', bossTarget.x - playerX, bossTarget.y - playerY);
+    }
+    if (!this.bossEncounter && this.bombSites) {
       for (const site of this.bombSites.sites) {
         if (site.state === BombSiteState.Destroyed || site.state === BombSiteState.Detonated) continue;
         const state = site.state === BombSiteState.BeingDefused ? 'defusing'
@@ -5651,7 +5824,8 @@ export class ArenaScene extends Phaser.Scene {
   private getHazardDamageTargets(): HazardDamageTarget[] {
     this.hazardDamageTargets.length = 0;
     for (const enemy of this.enemies) this.hazardDamageTargets.push(enemy);
-    if (this.bossEncounter?.boss.active && !this.bossEncounter.boss.isDefeated) this.hazardDamageTargets.push(this.bossEncounter.boss);
+    const bossTarget = this.activeBossTarget();
+    if (bossTarget) this.hazardDamageTargets.push(bossTarget);
     return this.hazardDamageTargets;
   }
 
@@ -6225,6 +6399,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bossEncounter?.resize(width);
     this.bossIntroOverlay?.resize(width, height);
     this.bossNextFightButton?.setGamePosition(width * 0.5, height - 58, 270, 46);
+    this.arcadeController?.resize(width, height);
     this.modAcquisitionPresenter?.resize(width, height);
     if (this.pauseMenu) {
       this.layoutPauseMenu(width, height);
@@ -6330,6 +6505,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private restartFromRoundOne(): void {
+    this.arcadeController?.stop('round-ended');
     this.flushPendingCombatProgress();
     this.captureTelemetryEndState();
     GameplayTelemetryRecorder.endEncounter('quit', { credits: this.roundCredits, coreTokens: this.roundCoreTokens, fluxCores: this.roundFluxCores });
@@ -6338,6 +6514,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private quitToMenu(): void {
+    this.arcadeController?.stop('round-ended');
     this.setMenuCursorMode();
     this.flushPendingCombatProgress();
     this.captureTelemetryEndState();
@@ -6419,6 +6596,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private cleanupRoundObjects(): void {
+    this.arcadeController?.destroy('replaced');
+    this.arcadeController = null;
     this.clearRoundInfusionEffects();
     this.arenaVisuals?.destroy();
     this.arenaVisuals = null;
@@ -6487,6 +6666,8 @@ export class ArenaScene extends Phaser.Scene {
     // references at this point; cleanupRoundObjects handles explicit teardown
     // while the Arena scene and its plugins are still active.
     this.hasLiveRoundObjects = false;
+    this.arcadeController?.destroy('scene-shutdown');
+    this.arcadeController = null;
     this.flushPendingCombatProgress();
     this.arenaVisuals = null;
     this.audio.stopPlantingLoop();
@@ -6551,10 +6732,12 @@ export class ArenaScene extends Phaser.Scene {
         forceArenaType?:unknown;
         regenerateArena?:unknown;
         toggleTraversalDebug?:unknown;
+        forceArcadeEvent?:unknown;
       };
       delete debugGlobal.forceArenaType;
       delete debugGlobal.regenerateArena;
       delete debugGlobal.toggleTraversalDebug;
+      delete debugGlobal.forceArcadeEvent;
     }
     this.setMenuCursorMode();
   }

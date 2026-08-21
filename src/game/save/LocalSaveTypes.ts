@@ -34,6 +34,10 @@ export interface LocalPlayerProgress {
   enemiesDestroyed: number;
   bombSitesDestroyed: number;
   totalCreditsEarned: number;
+  arcadeEventsCompleted: number;
+  goldenEnemiesKilled: number;
+  arcadeMiniBossesKilled: number;
+  neonCircuitsCompleted: number;
   totalCreditsSpent: number;
   creditSpendByCategory: CreditSpendBreakdown;
   totalCoreTokensEarned: number;
@@ -113,7 +117,7 @@ export interface LocalPlayerSaveV1 {
   wallet: Omit<LocalPlayerWallet, 'fluxCores'> & { fluxCores?: number };
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
-  progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
+  progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'arcadeEventsCompleted' | 'goldenEnemiesKilled' | 'arcadeMiniBossesKilled' | 'neonCircuitsCompleted' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
   settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'contextualTutorials' | 'buttonJiggle'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }

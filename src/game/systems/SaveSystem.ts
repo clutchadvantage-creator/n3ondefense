@@ -5,6 +5,7 @@ import type { OnlineProgressSnapshot } from '../../online/onlineTypes';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
 import type { GaragePresetId } from '../garage/types.ts';
+import type { ArcadeMetricEvent } from '../arcade/types.ts';
 
 export class SaveSystem {
   static get(): GameSaveData {
@@ -74,6 +75,10 @@ export class SaveSystem {
 
   static recordCombatProgress(enemiesDestroyed: number, bombSitesDestroyed: number, protocol?: RunProtocolId): void {
     PlayerProfileStore.recordCombatProgress(enemiesDestroyed, bombSitesDestroyed, protocol);
+  }
+
+  static recordArcadeMetric(event: ArcadeMetricEvent): void {
+    PlayerProfileStore.recordArcadeMetric(event);
   }
 
   static setUpgradeLevel(id: string, level: number): void {

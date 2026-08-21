@@ -3,7 +3,11 @@ export type WeeklyOperationStat =
   | 'roundsCompleted'
   | 'bombSitesDestroyed'
   | 'highestRound'
-  | 'totalCreditsEarned';
+  | 'totalCreditsEarned'
+  | 'arcadeEventsCompleted'
+  | 'goldenEnemiesKilled'
+  | 'arcadeMiniBossesKilled'
+  | 'neonCircuitsCompleted';
 
 export type WeeklyOperationDeck = 'regular' | 'overdrive';
 
@@ -38,6 +42,10 @@ export interface WeeklyOperationProgressSource {
   bombSitesDestroyed: number;
   highestRound: number;
   totalCreditsEarned: number;
+  arcadeEventsCompleted: number;
+  goldenEnemiesKilled: number;
+  arcadeMiniBossesKilled: number;
+  neonCircuitsCompleted: number;
 }
 
 export interface WeeklyOperationTrackState {
@@ -105,7 +113,11 @@ const STAT_KEYS: readonly WeeklyOperationStat[] = [
   'roundsCompleted',
   'bombSitesDestroyed',
   'highestRound',
-  'totalCreditsEarned'
+  'totalCreditsEarned',
+  'arcadeEventsCompleted',
+  'goldenEnemiesKilled',
+  'arcadeMiniBossesKilled',
+  'neonCircuitsCompleted'
 ] as const;
 
 export const WEEKLY_OPERATION_ROTATIONS: readonly WeeklyOperationRotationDefinition[] = [
@@ -135,6 +147,15 @@ export const WEEKLY_OPERATION_ROTATIONS: readonly WeeklyOperationRotationDefinit
       { id: 'eliminate-800', title: 'Eliminate 800 enemies', description: 'Destroy hostile units during any deployment.', statKey: 'enemiesDestroyed', target: 800, progressMode: 'rotation' }
     ],
     reward: { credits: 1_250, coreTokens: 2 }
+  },
+  {
+    id: 'arcade-signal',
+    objectives: [
+      { id: 'arcade-complete-5', title: 'Complete 5 N3ON Arcade events', description: 'Clear optional Arcade signals during live deployments.', statKey: 'arcadeEventsCompleted', target: 5, progressMode: 'rotation' },
+      { id: 'arcade-gold-20', title: 'Eliminate 20 Golden Enemies', description: 'Destroy Golden Hunt targets before their signal expires.', statKey: 'goldenEnemiesKilled', target: 20, progressMode: 'rotation' },
+      { id: 'arcade-circuit-3', title: 'Complete 3 Neon Circuits', description: 'Reach every ordered checkpoint before time expires.', statKey: 'neonCircuitsCompleted', target: 3, progressMode: 'rotation' }
+    ],
+    reward: { credits: 1_500, coreTokens: 2, fluxCores: 1 }
   }
 ] as const;
 
@@ -165,6 +186,15 @@ export const OVERDRIVE_WEEKLY_OPERATION_ROTATIONS: readonly WeeklyOperationRotat
       { id: 'overdrive-eliminate-5000', title: 'Eliminate 5,000 enemies', description: 'Destroy hostiles during Overdrive deployments.', statKey: 'enemiesDestroyed', target: 5_000, progressMode: 'rotation' }
     ],
     reward: { credits: 60_000, coreTokens: 12, plasmaChips: 20, fluxCores: 2, randomMod: true }
+  },
+  {
+    id: 'overdrive-arcade-maniac',
+    objectives: [
+      { id: 'overdrive-arcade-12', title: 'Complete 12 N3ON Arcade events', description: 'Clear Arcade signals during Overdrive deployments.', statKey: 'arcadeEventsCompleted', target: 12, progressMode: 'rotation' },
+      { id: 'overdrive-giant-killer-5', title: 'Defeat 5 Arcade Mini-Bosses', description: 'Destroy event Boss variants before they phase out.', statKey: 'arcadeMiniBossesKilled', target: 5, progressMode: 'rotation' },
+      { id: 'overdrive-circuit-8', title: 'Complete 8 Neon Circuits', description: 'Clear ordered checkpoint routes under Overdrive pressure.', statKey: 'neonCircuitsCompleted', target: 8, progressMode: 'rotation' }
+    ],
+    reward: { credits: 50_000, coreTokens: 10, plasmaChips: 18, fluxCores: 2, randomMod: true }
   }
 ] as const;
 
@@ -176,7 +206,11 @@ export const createWeeklyBaselines = (progress?: Partial<WeeklyOperationProgress
   roundsCompleted: finiteCounter(progress?.roundsCompleted),
   bombSitesDestroyed: finiteCounter(progress?.bombSitesDestroyed),
   highestRound: finiteCounter(progress?.highestRound),
-  totalCreditsEarned: finiteCounter(progress?.totalCreditsEarned)
+  totalCreditsEarned: finiteCounter(progress?.totalCreditsEarned),
+  arcadeEventsCompleted: finiteCounter(progress?.arcadeEventsCompleted),
+  goldenEnemiesKilled: finiteCounter(progress?.goldenEnemiesKilled),
+  arcadeMiniBossesKilled: finiteCounter(progress?.arcadeMiniBossesKilled),
+  neonCircuitsCompleted: finiteCounter(progress?.neonCircuitsCompleted)
 });
 
 export const createDefaultWeeklyOperationTrackState = (): WeeklyOperationTrackState => ({
