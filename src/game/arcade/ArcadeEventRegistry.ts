@@ -3,6 +3,26 @@ import { GoldenHuntEvent } from './events/GoldenHuntEvent.ts';
 import { MiniBossEvent } from './events/MiniBossEvent.ts';
 import { NeonCircuitEvent } from './events/NeonCircuitEvent.ts';
 
+const randomRewardPool = (
+  creditsBase: number,
+  creditsPerRound: number,
+  coreTokenBase: number,
+  coreTokensPerRound: number,
+  fluxCoreBase: number,
+  fluxCoresPerRound: number,
+  plasmaBase: number,
+  plasmaPerRound: number
+): ArcadeEventDefinition['reward'] => ({
+  kind: 'random-pool',
+  options: [
+    { kind: 'credits', weight: 28, baseAmount: creditsBase, amountPerRound: creditsPerRound },
+    { kind: 'core-tokens', weight: 18, baseAmount: coreTokenBase, amountPerRound: coreTokensPerRound },
+    { kind: 'flux-cores', weight: 16, baseAmount: fluxCoreBase, amountPerRound: fluxCoresPerRound },
+    { kind: 'plasma-chips', weight: 20, baseAmount: plasmaBase, amountPerRound: plasmaPerRound },
+    { kind: 'mod', weight: 18 }
+  ]
+});
+
 export const ARCADE_SCHEDULING = {
   minimumRound: 2,
   initialOpportunityMinimumMs: 28_000,
@@ -21,7 +41,7 @@ export const ARCADE_EVENT_DEFINITIONS: readonly ArcadeEventDefinition[] = [
     weight: 1.15,
     minimumRound: 2,
     durationMs: 60_000,
-    reward: { kind: 'guaranteed-mod' }
+    reward: randomRewardPool(800, 30, 2, 0.08, 1, 0.025, 5, 0.18)
   },
   {
     id: 'mini-boss',
@@ -30,7 +50,7 @@ export const ARCADE_EVENT_DEFINITIONS: readonly ArcadeEventDefinition[] = [
     weight: 0.72,
     minimumRound: 5,
     durationMs: 78_000,
-    reward: { kind: 'currency', creditsBase: 650, creditsPerRound: 35, fluxCores: 1 }
+    reward: randomRewardPool(1_100, 45, 3, 0.1, 2, 0.035, 8, 0.25)
   },
   {
     id: 'neon-circuit',
@@ -39,7 +59,7 @@ export const ARCADE_EVENT_DEFINITIONS: readonly ArcadeEventDefinition[] = [
     weight: 1,
     minimumRound: 2,
     durationMs: 34_000,
-    reward: { kind: 'currency', creditsBase: 450, creditsPerRound: 25, fluxCores: 1 }
+    reward: randomRewardPool(650, 25, 2, 0.07, 1, 0.02, 5, 0.16)
   }
 ] as const;
 

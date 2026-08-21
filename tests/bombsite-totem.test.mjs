@@ -30,9 +30,14 @@ test('Totem uses a bounded drop, impact, fissure, power-up, and idle lifecycle w
   assert.doesNotMatch(totem, /tweens\.add|delayedCall|\.on\(/);
 });
 
-test('Totem chassis has real neon outlines and visible powered accents during descent', () => {
-  assert.match(totem, /strokePoints\(fin, true, true\)/);
-  assert.match(totem, /strokePoints\(center, true, true\)/);
+test('Totem chassis is a semi-solid pseudo-3D pole with a neon tiki face and visible powered accents', () => {
+  assert.match(totem, /const frontFace = \[/);
+  assert.match(totem, /const sideFace = \[/);
+  assert.match(totem, /const topFace = \[/);
+  assert.match(totem, /fillPoints\(frontFace, true, true\)/);
+  assert.match(totem, /strokePoints\(sideFace, true, true\)/);
+  assert.match(totem, /private drawTikiFace/);
+  assert.match(totem, /slot\.face\.setAlpha/);
   assert.match(totem, /slot\.channels\.setAlpha\(0\.62\)/);
   assert.match(totem, /slot\.innerRing[\s\S]*?setAlpha\(0\.62\)/);
   assert.match(totem, /setDepth\(TOTEM_RENDER_DEPTH\)/);

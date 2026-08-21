@@ -243,6 +243,7 @@ export interface ArenaReward {
   credits: number;
   runCreditsEarned: number;
   coreTokens: number;
+  plasmaChips: number;
   fluxCores: number;
   reason: 'victory' | 'playerDead' | 'bombDefused';
   round?: number;

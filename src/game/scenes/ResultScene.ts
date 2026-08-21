@@ -50,6 +50,7 @@ export class ResultScene extends Phaser.Scene {
     createRewardSummary(this, sections.rewards, [
       { kind: 'credits', value: result?.runCreditsEarned ?? result?.credits ?? 0 },
       { kind: 'coreTokens', value: result?.coreTokens ?? 0 },
+      { kind: 'plasmaChips', value: result?.plasmaChips ?? 0 },
       { kind: 'fluxCores', value: result?.fluxCores ?? 0 }
     ], layout.compact, true);
 

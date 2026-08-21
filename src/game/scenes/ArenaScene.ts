@@ -4162,7 +4162,9 @@ export class ArenaScene extends Phaser.Scene {
         this.roundCredits += credits;
         this.totalCreditsCollected += credits;
       },
+      grantCoreTokens: (amount) => { this.roundCoreTokens += Math.max(0, Math.floor(amount)); },
       grantFluxCores: (amount) => { this.roundFluxCores += Math.max(0, Math.floor(amount)); },
+      grantPlasmaChips: (amount) => { this.roundPlasmaChips += Math.max(0, Math.floor(amount)); },
       grantGuaranteedMod: (x, y) => { this.tryAwardMod('milestone', true, x, y); },
       emitMetric: (event: ArcadeMetricEvent) => {
         GameplayTelemetryRecorder.recordArcadeEvent(event);
@@ -4886,14 +4888,21 @@ export class ArenaScene extends Phaser.Scene {
     const rawRewardCredits = this.roundCredits + this.scaleModCredits(getRoundCompletionCredits(completedRound));
     const rewardCredits = Math.round(rawRewardCredits * (getContract(this.contract)?.creditRewardMultiplier ?? 1));
     const rewardTokens = this.roundCoreTokens + Math.max(REWARD_BALANCE.completionBaseTokens, Math.floor(completedRound / REWARD_BALANCE.tokenRoundDivisor));
+    const rewardPlasmaChips = this.roundPlasmaChips;
     const rewardFluxCores = this.roundFluxCores;
     SaveSystem.addCredits(rewardCredits);
     SaveSystem.addCoreTokens(rewardTokens);
+    SaveSystem.addPlasmaChips(rewardPlasmaChips);
     SaveSystem.addFluxCores(rewardFluxCores);
     SaveSystem.recordRoundCompletion(completedRound, this.protocol);
     OnlineRunManager.recordMilestone(completedRound);
     this.captureTelemetryEndState();
-    GameplayTelemetryRecorder.endEncounter('completed', { credits: rewardCredits, coreTokens: rewardTokens, fluxCores: rewardFluxCores });
+    GameplayTelemetryRecorder.endEncounter('completed', {
+      credits: rewardCredits,
+      coreTokens: rewardTokens,
+      plasmaChips: rewardPlasmaChips,
+      fluxCores: rewardFluxCores
+    });
 
     this.transitionAfterModReveals(1400, () => {
       const completedTeachingRound = SaveSystem.getTutorialProgress().firstRunStage === 'arena-teaching';
@@ -4919,7 +4928,7 @@ export class ArenaScene extends Phaser.Scene {
         objectiveMode: this.roundManager.mode,
         creditsGained: rewardCredits,
         coreTokensGained: rewardTokens,
-        plasmaChipsGained: 0,
+        plasmaChipsGained: rewardPlasmaChips,
         fluxCoresGained: rewardFluxCores,
         bossDefeated: null,
         protocol: this.protocol,
@@ -5455,7 +5464,7 @@ export class ArenaScene extends Phaser.Scene {
       ...this.pendingRoundPayload,
       creditsGained: this.pendingRoundPayload.creditsGained + collectedCredits,
       coreTokensGained: this.pendingRoundPayload.coreTokensGained + collectedTokens,
-      plasmaChipsGained: collectedPlasma,
+      plasmaChipsGained: this.pendingRoundPayload.plasmaChipsGained + collectedPlasma,
       fluxCoresGained: (this.pendingRoundPayload.fluxCoresGained ?? 0) + collectedFluxCores,
       bossDefeated: this.bossEncounter.archetype,
       modsEarned: [...this.modsEarned],
@@ -5498,6 +5507,7 @@ export class ArenaScene extends Phaser.Scene {
       credits: this.roundCredits,
       runCreditsEarned: this.runCreditsEarned + this.roundCredits,
       coreTokens: this.roundCoreTokens,
+      plasmaChips: this.roundPlasmaChips,
       fluxCores: this.roundFluxCores,
       reason,
       round: currentCombatRound,
@@ -5516,9 +5526,15 @@ export class ArenaScene extends Phaser.Scene {
 
     SaveSystem.addCredits(result.credits);
     SaveSystem.addCoreTokens(result.coreTokens);
+    SaveSystem.addPlasmaChips(result.plasmaChips);
     SaveSystem.addFluxCores(result.fluxCores);
     this.captureTelemetryEndState();
-    GameplayTelemetryRecorder.endEncounter(reason, { credits: result.credits, coreTokens: result.coreTokens, fluxCores: result.fluxCores });
+    GameplayTelemetryRecorder.endEncounter(reason, {
+      credits: result.credits,
+      coreTokens: result.coreTokens,
+      plasmaChips: result.plasmaChips,
+      fluxCores: result.fluxCores
+    });
     GameplayTelemetryRecorder.finishRun(reason);
     OnlineRunManager.complete(reason === 'playerDead' ? 'player_dead' : 'bomb_defused', currentCombatRound);
     this.registry.remove('arena-session');

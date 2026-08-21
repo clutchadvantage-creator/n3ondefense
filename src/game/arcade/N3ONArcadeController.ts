@@ -148,12 +148,14 @@ export class N3ONArcadeController {
     if (!this.active || !this.activeDefinition) return;
     const event = this.active;
     const definition = this.activeDefinition;
+    let rewardLabel = '';
     if (outcome.success) {
-      this.rewards.grant(definition);
+      const reward = this.rewards.grant(definition, this.random.next());
+      rewardLabel = reward.label;
       this.context.emitMetric({
         name: 'arcade_event_completed', eventId: definition.id, round: this.context.round,
         protocol: this.context.protocol, elapsedMs: Math.max(0, this.activeElapsedMs - this.activeStartedAt),
-        success: true, reason: outcome.reason
+        success: true, reason: outcome.reason, rewardKind: reward.kind, rewardAmount: reward.amount
       });
     } else {
       this.context.emitMetric({
@@ -172,7 +174,7 @@ export class N3ONArcadeController {
     this.nextOpportunityAt = this.activeElapsedMs + ARCADE_SCHEDULING.eventCooldownMs;
     this.hud.announce(
       outcome.success ? 'N3ON ARCADE COMPLETE' : 'N3ON ARCADE FAILED',
-      `${definition.displayName}${outcome.success ? ' CLEARED' : ' EXPIRED'}`,
+      outcome.success ? `${definition.displayName} CLEARED // ${rewardLabel}` : `${definition.displayName} EXPIRED`,
       outcome.success ? 0x7dffb2 : 0xff5d8f
     );
   }

@@ -34,6 +34,8 @@ export interface ArcadeMetricEvent {
   bossType?: BossArchetype;
   success?: boolean;
   reason?: ArcadeStopReason;
+  rewardKind?: ArcadeRewardKind;
+  rewardAmount?: number;
 }
 
 export type ArcadeGameplayEvent =
@@ -55,9 +57,25 @@ export interface ArcadeEventDefinition {
   reward: ArcadeRewardProfile;
 }
 
-export type ArcadeRewardProfile =
-  | { kind: 'guaranteed-mod' }
-  | { kind: 'currency'; creditsBase: number; creditsPerRound: number; fluxCores: number };
+export type ArcadeRewardKind = 'credits' | 'core-tokens' | 'flux-cores' | 'plasma-chips' | 'mod';
+
+export interface ArcadeRewardOption {
+  kind: ArcadeRewardKind;
+  weight: number;
+  baseAmount?: number;
+  amountPerRound?: number;
+}
+
+export interface ArcadeRewardProfile {
+  kind: 'random-pool';
+  options: readonly ArcadeRewardOption[];
+}
+
+export interface ArcadeGrantedReward {
+  kind: ArcadeRewardKind;
+  amount: number;
+  label: string;
+}
 
 export interface ArcadeEnemySpawnRequest {
   type: EnemyType;
@@ -84,7 +102,9 @@ export interface ArcadeRuntimeContext {
   applyBossAreaDamage(x: number, y: number, radius: number, damage: number, attack: BossAttackKind): void;
   retireBossProjectiles(): void;
   grantCredits(amount: number): void;
+  grantCoreTokens(amount: number): void;
   grantFluxCores(amount: number): void;
+  grantPlasmaChips(amount: number): void;
   grantGuaranteedMod(x: number, y: number): void;
   emitMetric(event: ArcadeMetricEvent): void;
 }

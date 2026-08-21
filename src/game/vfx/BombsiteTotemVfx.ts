@@ -32,6 +32,7 @@ interface TotemSlot {
   shadow: Phaser.GameObjects.Ellipse;
   body: Phaser.GameObjects.Graphics;
   channels: Phaser.GameObjects.Graphics;
+  face: Phaser.GameObjects.Graphics;
   coreGlow: Phaser.GameObjects.Arc;
   core: Phaser.GameObjects.Arc;
   innerRing: Phaser.GameObjects.Arc;
@@ -109,6 +110,7 @@ export class BombsiteTotemVfx {
     // powered state still ramps up after impact, but the orbital device itself
     // no longer arrives as an almost-black silhouette.
     slot.body.setAlpha(1);
+    slot.face.setAlpha(0.82);
     slot.core.setFillStyle(0x63efff, 0.88).setAlpha(0.72).setScale(0.72);
     slot.coreGlow.setFillStyle(0x63efff, 0.2).setAlpha(0.34);
     slot.channels.setAlpha(0.62);
@@ -216,18 +218,20 @@ export class BombsiteTotemVfx {
 
     const fissures = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
     const dynamic = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-    const shadow = this.scene.add.ellipse(0, 12, 58, 24, 0x000000, 0.45);
+    const shadow = this.scene.add.ellipse(2, 30, 72, 26, 0x000000, 0.48);
     ground.add([shadow, marker, fissures, dynamic]);
 
     const body = this.scene.add.graphics();
     this.drawBody(body);
     const channels = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
     this.drawChannels(channels);
-    const coreGlow = this.scene.add.circle(0, 0, 18, 0x63efff, 0.14).setBlendMode(Phaser.BlendModes.ADD);
-    const core = this.scene.add.circle(0, 0, 8, 0x06101a, 1).setStrokeStyle(2, 0xffffff, 0.8);
-    const innerRing = this.scene.add.circle(0, 0, 23, 0x000000, 0).setStrokeStyle(2, 0x63efff, 0.72);
-    const outerRing = this.scene.add.circle(0, 0, 31, 0x000000, 0).setStrokeStyle(2, 0xff5bd6, 0.6);
-    rig.add([coreGlow, body, channels, outerRing, innerRing, core]);
+    const face = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    this.drawTikiFace(face);
+    const coreGlow = this.scene.add.circle(-3, 7, 17, 0x63efff, 0.14).setBlendMode(Phaser.BlendModes.ADD);
+    const core = this.scene.add.circle(-3, 7, 7, 0x06101a, 1).setStrokeStyle(2, 0xffffff, 0.8);
+    const innerRing = this.scene.add.circle(1, 27, 24, 0x000000, 0).setScale(1, 0.35).setStrokeStyle(2, 0x63efff, 0.72);
+    const outerRing = this.scene.add.circle(1, 27, 33, 0x000000, 0).setScale(1, 0.34).setStrokeStyle(2, 0xff5bd6, 0.6);
+    rig.add([body, channels, outerRing, innerRing, coreGlow, core, face]);
     root.add([ground, rig]);
 
     return {
@@ -235,49 +239,72 @@ export class BombsiteTotemVfx {
       resolvingAt: 0, phase: 0, chargeStartedAt: 0, chargeUntil: 0, chargeColor: 0x63efff,
       chargeKind: 'electric', pulseStartedAt: 0, pulseDurationMs: 0, pulseRadius: 0,
       pulseColor: 0x63efff, pulseKind: 'electric', flashStartedAt: 0, flashColor: 0xffffff,
-      root, ground, rig, marker, fissures, dynamic, shadow, body, channels, coreGlow, core, innerRing, outerRing
+      root, ground, rig, marker, fissures, dynamic, shadow, body, channels, face, coreGlow, core, innerRing, outerRing
     };
   }
 
   private drawBody(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.fillStyle(0x071725, 0.98);
-    for (let index = 0; index < 4; index += 1) {
-      const angle = index * Math.PI * 0.5;
-      const forwardX = Math.cos(angle);
-      const forwardY = Math.sin(angle);
-      const sideX = -forwardY;
-      const sideY = forwardX;
-      const fin = [
-        new Phaser.Geom.Point(forwardX * 10 + sideX * 8, forwardY * 10 + sideY * 8),
-        new Phaser.Geom.Point(forwardX * 36 + sideX * 12, forwardY * 36 + sideY * 12),
-        new Phaser.Geom.Point(forwardX * 45, forwardY * 45),
-        new Phaser.Geom.Point(forwardX * 36 - sideX * 12, forwardY * 36 - sideY * 12),
-        new Phaser.Geom.Point(forwardX * 10 - sideX * 8, forwardY * 10 - sideY * 8)
-      ];
-      graphics.fillPoints(fin, true, true);
-      graphics.lineStyle(3, index % 2 === 0 ? 0x63efff : 0xff5bd6, 0.98).strokePoints(fin, true, true);
-
-      const nodeX = forwardX * 35;
-      const nodeY = forwardY * 35;
-      graphics.fillStyle(index % 2 === 0 ? 0x63efff : 0xff5bd6, 0.72).fillCircle(nodeX, nodeY, 3.5);
-      graphics.fillStyle(0x071725, 0.98);
-    }
-    const center = [
-      new Phaser.Geom.Point(0, -21), new Phaser.Geom.Point(21, 0),
-      new Phaser.Geom.Point(0, 21), new Phaser.Geom.Point(-21, 0)
+    // Three opaque faces create a readable pseudo-3D pole while remaining one
+    // retained Graphics object with no texture or per-frame redraw cost.
+    const frontFace = [
+      new Phaser.Geom.Point(-25, -44), new Phaser.Geom.Point(9, -51),
+      new Phaser.Geom.Point(16, 25), new Phaser.Geom.Point(-20, 34)
     ];
-    graphics.fillStyle(0x10263a, 1).fillPoints(center, true, true);
-    graphics.lineStyle(3, 0xff5bd6, 1).strokePoints(center, true, true);
-    graphics.lineStyle(1, 0xffffff, 0.72).strokeCircle(0, 0, 13);
+    const sideFace = [
+      new Phaser.Geom.Point(9, -51), new Phaser.Geom.Point(25, -39),
+      new Phaser.Geom.Point(29, 18), new Phaser.Geom.Point(16, 25)
+    ];
+    const topFace = [
+      new Phaser.Geom.Point(-25, -44), new Phaser.Geom.Point(-10, -59),
+      new Phaser.Geom.Point(9, -51), new Phaser.Geom.Point(-6, -37)
+    ];
+    graphics.fillStyle(0x0a2030, 1).fillPoints(frontFace, true, true);
+    graphics.lineStyle(3, 0x63efff, 0.96).strokePoints(frontFace, true, true);
+    graphics.fillStyle(0x170d28, 1).fillPoints(sideFace, true, true);
+    graphics.lineStyle(3, 0xff5bd6, 0.94).strokePoints(sideFace, true, true);
+    graphics.fillStyle(0x15394a, 1).fillPoints(topFace, true, true);
+    graphics.lineStyle(2, 0xb7fbff, 0.9).strokePoints(topFace, true, true);
+
+    const anchor = [
+      new Phaser.Geom.Point(-29, 27), new Phaser.Geom.Point(3, 19),
+      new Phaser.Geom.Point(34, 25), new Phaser.Geom.Point(20, 39),
+      new Phaser.Geom.Point(-17, 42), new Phaser.Geom.Point(-36, 35)
+    ];
+    graphics.fillStyle(0x06111b, 1).fillPoints(anchor, true, true);
+    graphics.lineStyle(2, 0x63efff, 0.72).strokePoints(anchor, true, true);
+    graphics.lineStyle(2, 0xff5bd6, 0.66).lineBetween(3, 20, 20, 38);
+    graphics.fillStyle(0xf2ffff, 0.88).fillCircle(-16, 31, 2.5).fillCircle(22, 27, 2.5);
   }
 
   private drawChannels(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.lineStyle(3, 0x63efff, 0.78);
-    for (let index = 0; index < 4; index += 1) {
-      const angle = index * Math.PI * 0.5;
-      graphics.lineBetween(Math.cos(angle) * 11, Math.sin(angle) * 11, Math.cos(angle) * 35, Math.sin(angle) * 35);
-    }
-    graphics.lineStyle(1, 0xffffff, 0.64).strokeCircle(0, 0, 14);
+    graphics.lineStyle(3, 0x63efff, 0.78).lineBetween(-18, -4, -16, 25);
+    graphics.lineStyle(2, 0x63efff, 0.72).lineBetween(8, -18, 11, 22);
+    graphics.lineStyle(2, 0xff5bd6, 0.74).lineBetween(18, -31, 22, 13);
+    graphics.lineStyle(1, 0xffffff, 0.62).strokeRoundedRect(-12, -3, 19, 22, 4);
+    graphics.fillStyle(0x63efff, 0.9).fillCircle(-17, 24, 2.5).fillCircle(11, 22, 2.5);
+    graphics.fillStyle(0xff5bd6, 0.86).fillCircle(22, 13, 2.5);
+  }
+
+  private drawTikiFace(graphics: Phaser.GameObjects.Graphics): void {
+    const leftEye = [
+      new Phaser.Geom.Point(-19, -36), new Phaser.Geom.Point(-10, -41),
+      new Phaser.Geom.Point(-7, -31), new Phaser.Geom.Point(-15, -27)
+    ];
+    const rightEye = [
+      new Phaser.Geom.Point(-4, -39), new Phaser.Geom.Point(5, -42),
+      new Phaser.Geom.Point(8, -33), new Phaser.Geom.Point(0, -28)
+    ];
+    graphics.fillStyle(0x63efff, 0.92).fillPoints(leftEye, true, true).fillPoints(rightEye, true, true);
+    graphics.lineStyle(2, 0xeaffff, 0.9).strokePoints(leftEye, true, true).strokePoints(rightEye, true, true);
+    graphics.lineStyle(3, 0xff5bd6, 0.94).lineBetween(-7, -29, -2, -20).lineBetween(-2, -20, -9, -17);
+    graphics.lineStyle(3, 0x63efff, 0.88)
+      .lineBetween(-17, -13, 5, -17)
+      .lineBetween(5, -17, 1, -7)
+      .lineBetween(1, -7, -13, -5)
+      .lineBetween(-13, -5, -17, -13);
+    graphics.lineStyle(1, 0xffffff, 0.76)
+      .lineBetween(-11, -14, -9, -6)
+      .lineBetween(-4, -15, -3, -7);
   }
 
   private updateSlot(slot: TotemSlot, now: number): void {
@@ -333,6 +360,7 @@ export class BombsiteTotemVfx {
     slot.core.setFillStyle(activeColor, 0.92).setAlpha(0.28 + powered * 0.72).setScale((0.58 + powered * 0.42 + chargeBoost * 0.18) * idlePulse);
     slot.coreGlow.setFillStyle(activeColor, 0.2 + chargeBoost * 0.2).setAlpha(powered * (0.34 + chargeBoost * 0.6)).setScale(idlePulse + chargeBoost * 0.35);
     slot.channels.setAlpha(powered * (0.42 + chargeBoost * 0.58));
+    slot.face.setAlpha(powered * (0.7 + idlePulse * 0.22 + chargeBoost * 0.08));
     slot.innerRing.setStrokeStyle(charging ? 3 : 2, activeColor, 0.42 + powered * 0.45).setAlpha(powered);
     slot.outerRing.setStrokeStyle(charging ? 3 : 2, charging ? activeColor : 0xff5bd6, 0.34 + powered * 0.4).setAlpha(powered * 0.9);
     slot.innerRing.setRotation(now * 0.00085 + slot.phase);
