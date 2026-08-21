@@ -20,7 +20,7 @@ export class ArenaVisualRenderer {
 
   constructor(private readonly scene: Phaser.Scene, private readonly layout: ArenaLayout) {
     this.plan = createArenaDressingPlan(layout);
-    this.drawBackdropAndSkyline();
+    this.drawBackdropAndBeachStadium();
     this.drawFloor();
     this.drawArchetypeMotif();
     this.drawContainmentPerimeter();
@@ -41,45 +41,270 @@ export class ArenaVisualRenderer {
     return object;
   }
 
-  private drawBackdropAndSkyline(): void {
+  private drawBackdropAndBeachStadium(): void {
     const { palette } = NEON_CITY_VISUAL_THEME;
     const bounds = this.layout.generation.bounds;
-    const random = new SeededRandom(this.plan.skylineSeed);
+    const random = new SeededRandom(this.plan.venueSeed);
     const graphics = this.keep(this.scene.add.graphics().setDepth(-4));
 
     graphics.fillStyle(palette.void, 1);
     graphics.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    graphics.fillStyle(0x050a12, 1);
-    graphics.fillRect(bounds.x - 34, bounds.y - 34, bounds.w + 68, bounds.h + 68);
+    this.drawCoastalApron(graphics, bounds, random);
+    this.drawStadiumStructure(graphics, bounds, random);
+    this.drawPalmTrees(graphics, bounds, random);
+    this.drawVenueBanners(graphics, bounds, random);
+    this.drawVenueLabels(bounds);
+    this.createVenueBeacons(bounds);
+  }
 
-    const drawTower = (x: number, y: number, w: number, h: number, horizontal: boolean): void => {
-      graphics.fillStyle(random.bool() ? 0x07111b : 0x0a0e19, 0.98);
-      graphics.fillRect(x, y, w, h);
-      const accent = random.bool() ? this.layout.theme.primary : this.layout.theme.secondary;
-      graphics.lineStyle(1, accent, 0.32);
-      graphics.strokeRect(x + 1, y + 1, w - 2, h - 2);
-      graphics.fillStyle(accent, 0.25);
-      if (horizontal) {
-        for (let windowX = x + 8; windowX < x + w - 5; windowX += 13) graphics.fillRect(windowX, y + h * 0.35, 5, 2);
-      } else {
-        for (let windowY = y + 8; windowY < y + h - 5; windowY += 13) graphics.fillRect(x + w * 0.35, windowY, 2, 5);
+  private drawCoastalApron(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, random: SeededRandom): void {
+    // The reference composition keeps the ocean beyond the long stadium sides,
+    // with a narrow warm promenade between the venue and the surf. Everything
+    // remains below the arena floor, so no dressing can enter gameplay space.
+    graphics.fillStyle(0x031329, 1);
+    graphics.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+    const sideMargin = Math.max(0, Math.min(bounds.x, WORLD_WIDTH - bounds.x - bounds.w));
+    const beachWidth = Math.max(8, Math.min(76, sideMargin * 0.42));
+    graphics.fillStyle(0x5a3650, 0.88);
+    graphics.fillRect(Math.max(0, bounds.x - beachWidth), 0, beachWidth, WORLD_HEIGHT);
+    graphics.fillRect(bounds.x + bounds.w, 0, beachWidth, WORLD_HEIGHT);
+    graphics.fillStyle(0xd09270, 0.18);
+    graphics.fillRect(Math.max(0, bounds.x - beachWidth), 0, Math.max(3, beachWidth * 0.55), WORLD_HEIGHT);
+    graphics.fillRect(bounds.x + bounds.w + beachWidth * 0.45, 0, Math.max(3, beachWidth * 0.55), WORLD_HEIGHT);
+
+    graphics.lineStyle(2, 0x2bdff3, 0.2);
+    const waveStride = 34;
+    for (let y = 12; y < WORLD_HEIGHT; y += waveStride) {
+      const wobble = random.int(-5, 5);
+      const leftEnd = Math.max(4, bounds.x - beachWidth - 5);
+      const rightStart = Math.min(WORLD_WIDTH - 4, bounds.x + bounds.w + beachWidth + 5);
+      if (leftEnd > 8) {
+        graphics.beginPath();
+        graphics.moveTo(3, y + wobble);
+        graphics.lineTo(leftEnd * 0.48, y - 3 + wobble);
+        graphics.lineTo(leftEnd, y + 2 + wobble);
+        graphics.strokePath();
+      }
+      if (rightStart < WORLD_WIDTH - 8) {
+        graphics.beginPath();
+        graphics.moveTo(rightStart, y + 2 + wobble);
+        graphics.lineTo(rightStart + (WORLD_WIDTH - rightStart) * 0.52, y - 3 + wobble);
+        graphics.lineTo(WORLD_WIDTH - 3, y + wobble);
+        graphics.strokePath();
+      }
+    }
+
+    graphics.lineStyle(3, 0xbffcff, 0.32);
+    graphics.lineBetween(Math.max(2, bounds.x - beachWidth - 3), 0, Math.max(2, bounds.x - beachWidth - 3), WORLD_HEIGHT);
+    graphics.lineBetween(Math.min(WORLD_WIDTH - 2, bounds.x + bounds.w + beachWidth + 3), 0, Math.min(WORLD_WIDTH - 2, bounds.x + bounds.w + beachWidth + 3), WORLD_HEIGHT);
+  }
+
+  private drawStadiumStructure(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, random: SeededRandom): void {
+    const topMargin = Math.max(0, bounds.y);
+    const bottomMargin = Math.max(0, WORLD_HEIGHT - bounds.y - bounds.h);
+    const leftMargin = Math.max(0, bounds.x);
+    const rightMargin = Math.max(0, WORLD_WIDTH - bounds.x - bounds.w);
+    const topDepth = Math.max(22, Math.min(122, topMargin - 5));
+    const bottomDepth = Math.max(22, Math.min(122, bottomMargin - 5));
+    const leftDepth = Math.max(16, Math.min(82, leftMargin - 5));
+    const rightDepth = Math.max(16, Math.min(82, rightMargin - 5));
+    const topY = Math.max(0, bounds.y - topDepth);
+    const bottomY = Math.min(WORLD_HEIGHT - bottomDepth, bounds.y + bounds.h);
+    const leftX = Math.max(0, bounds.x - leftDepth);
+    const rightX = Math.min(WORLD_WIDTH - rightDepth, bounds.x + bounds.w);
+
+    graphics.fillStyle(0x02050a, 0.9);
+    graphics.fillRoundedRect(leftX - 12, topY - 12, rightX + rightDepth - leftX + 24, bottomY + bottomDepth - topY + 24, 20);
+    graphics.fillStyle(0x09111d, 1);
+    graphics.fillRect(bounds.x, topY, bounds.w, topDepth);
+    graphics.fillRect(bounds.x, bottomY, bounds.w, bottomDepth);
+    graphics.fillRect(leftX, bounds.y, leftDepth, bounds.h);
+    graphics.fillRect(rightX, bounds.y, rightDepth, bounds.h);
+
+    const drawHorizontalStand = (y: number, depth: number, inverted: boolean): void => {
+      const rows = Math.max(2, Math.min(5, Math.floor(depth / 18)));
+      for (let row = 0; row < rows; row += 1) {
+        const rowY = inverted ? y + depth - 8 - row * 15 : y + 8 + row * 15;
+        graphics.fillStyle(row % 2 === 0 ? 0x11182a : 0x0a101d, 0.98);
+        graphics.fillRect(bounds.x + 28 + row * 10, rowY - 5, Math.max(10, bounds.w - 56 - row * 20), 10);
+        graphics.lineStyle(1, row % 2 ? this.layout.theme.primary : this.layout.theme.secondary, 0.25);
+        graphics.lineBetween(bounds.x + 36 + row * 10, rowY, bounds.x + bounds.w - 36 - row * 10, rowY);
+      }
+      const bayWidth = 128;
+      graphics.lineStyle(2, 0x254057, 0.52);
+      for (let x = bounds.x + bayWidth; x < bounds.x + bounds.w; x += bayWidth) {
+        graphics.lineBetween(x, y + 4, x, y + depth - 4);
       }
     };
+    drawHorizontalStand(topY, topDepth, true);
+    drawHorizontalStand(bottomY, bottomDepth, false);
 
-    for (let x = 12; x < WORLD_WIDTH - 30; x += random.int(70, 112)) {
-      const w = random.int(42, 82);
-      const topHeight = Math.max(24, bounds.y - random.int(34, 80));
-      drawTower(x, 4, w, topHeight, true);
-      const lowerY = bounds.y + bounds.h + random.int(42, 72);
-      drawTower(x, lowerY, w, Math.max(20, WORLD_HEIGHT - lowerY - 4), true);
+    const drawVerticalStand = (x: number, depth: number, inverted: boolean): void => {
+      const rows = Math.max(2, Math.min(4, Math.floor(depth / 17)));
+      for (let row = 0; row < rows; row += 1) {
+        const rowX = inverted ? x + depth - 7 - row * 14 : x + 7 + row * 14;
+        graphics.fillStyle(row % 2 === 0 ? 0x101827 : 0x080f19, 0.98);
+        graphics.fillRect(rowX - 5, bounds.y + 34 + row * 8, 10, Math.max(10, bounds.h - 68 - row * 16));
+        graphics.lineStyle(1, row % 2 ? this.layout.theme.secondary : this.layout.theme.primary, 0.22);
+        graphics.lineBetween(rowX, bounds.y + 40, rowX, bounds.y + bounds.h - 40);
+      }
+    };
+    drawVerticalStand(leftX, leftDepth, true);
+    drawVerticalStand(rightX, rightDepth, false);
+
+    // Crowd lights are baked into this one Graphics object rather than created
+    // as individual display objects. They suggest a live venue at near-zero
+    // runtime cost after setup.
+    const spectatorColors = [0x45efff, 0xff4fcf, 0xffc857, 0x8affbd];
+    for (let index = 0; index < this.plan.spectatorLightCount; index += 1) {
+      const top = index % 2 === 0;
+      const depth = top ? topDepth : bottomDepth;
+      const yBase = top ? topY : bottomY;
+      const x = random.int(bounds.x + 32, bounds.x + bounds.w - 32);
+      const y = yBase + random.int(7, Math.max(8, Math.floor(depth - 7)));
+      graphics.fillStyle(random.pick(spectatorColors), random.float(0.32, 0.78));
+      graphics.fillCircle(x, y, random.int(1, 2));
     }
-    for (let y = bounds.y + 24; y < bounds.y + bounds.h - 40; y += random.int(82, 128)) {
-      const h = random.int(48, 92);
-      const leftWidth = Math.max(20, bounds.x - random.int(38, 86));
-      drawTower(4, y, leftWidth, h, false);
-      const rightX = bounds.x + bounds.w + random.int(38, 70);
-      drawTower(rightX, y, Math.max(20, WORLD_WIDTH - rightX - 4), h, false);
+
+    graphics.lineStyle(4, this.layout.theme.primary, 0.54);
+    graphics.lineBetween(bounds.x, bounds.y - 3, bounds.x + bounds.w, bounds.y - 3);
+    graphics.lineBetween(bounds.x, bounds.y + bounds.h + 3, bounds.x + bounds.w, bounds.y + bounds.h + 3);
+    graphics.lineStyle(2, this.layout.theme.secondary, 0.55);
+    graphics.lineBetween(bounds.x - 3, bounds.y, bounds.x - 3, bounds.y + bounds.h);
+    graphics.lineBetween(bounds.x + bounds.w + 3, bounds.y, bounds.x + bounds.w + 3, bounds.y + bounds.h);
+  }
+
+  private drawPalmTrees(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, random: SeededRandom): void {
+    const offsetX = Math.max(14, Math.min(72, bounds.x * 0.55));
+    const offsetY = Math.max(14, Math.min(72, bounds.y * 0.58));
+    const anchors = [
+      { x: bounds.x - offsetX, y: bounds.y - offsetY },
+      { x: bounds.x + bounds.w + offsetX, y: bounds.y - offsetY },
+      { x: bounds.x - offsetX, y: bounds.y + bounds.h + offsetY },
+      { x: bounds.x + bounds.w + offsetX, y: bounds.y + bounds.h + offsetY },
+      { x: bounds.x + bounds.w * 0.16, y: bounds.y - offsetY },
+      { x: bounds.x + bounds.w * 0.84, y: bounds.y - offsetY },
+      { x: bounds.x + bounds.w * 0.18, y: bounds.y + bounds.h + offsetY },
+      { x: bounds.x + bounds.w * 0.82, y: bounds.y + bounds.h + offsetY },
+      { x: bounds.x - offsetX, y: bounds.y + bounds.h * 0.5 },
+      { x: bounds.x + bounds.w + offsetX, y: bounds.y + bounds.h * 0.5 }
+    ];
+    const scale = Math.max(0.58, Math.min(1, Math.min(bounds.x, bounds.y) / 105));
+    const selected = random.shuffle(anchors).slice(0, this.plan.palmTreeCount);
+    for (let index = 0; index < selected.length; index += 1) {
+      const anchor = selected[index];
+      const rotation = random.float(-0.28, 0.28);
+      const trunkLength = random.int(25, 34) * scale;
+      const canopyX = Phaser.Math.Clamp(anchor.x + Math.sin(rotation) * trunkLength, 8, WORLD_WIDTH - 8);
+      const canopyY = Phaser.Math.Clamp(anchor.y - Math.cos(rotation) * trunkLength, 8, WORLD_HEIGHT - 8);
+      const baseX = Phaser.Math.Clamp(anchor.x, 8, WORLD_WIDTH - 8);
+      const baseY = Phaser.Math.Clamp(anchor.y, 8, WORLD_HEIGHT - 8);
+      graphics.lineStyle(Math.max(3, 7 * scale), 0x4e2748, 0.92);
+      graphics.lineBetween(baseX, baseY, canopyX, canopyY);
+      graphics.lineStyle(Math.max(1, 2 * scale), index % 2 ? this.layout.theme.primary : this.layout.theme.secondary, 0.42);
+      graphics.lineBetween(baseX, baseY, canopyX, canopyY);
+      for (let leaf = 0; leaf < 8; leaf += 1) {
+        const angle = leaf * Math.PI / 4 + rotation;
+        const length = random.int(24, 38) * scale;
+        const midX = canopyX + Math.cos(angle) * length * 0.48;
+        const midY = canopyY + Math.sin(angle) * length * 0.48;
+        const tipX = canopyX + Math.cos(angle + (leaf % 2 ? 0.12 : -0.12)) * length;
+        const tipY = canopyY + Math.sin(angle + (leaf % 2 ? 0.12 : -0.12)) * length;
+        graphics.lineStyle(Math.max(2, 5 * scale), 0x123d38, 0.9);
+        graphics.beginPath();
+        graphics.moveTo(canopyX, canopyY);
+        graphics.lineTo(midX, midY);
+        graphics.lineTo(tipX, tipY);
+        graphics.strokePath();
+        graphics.lineStyle(Math.max(1, 1.5 * scale), leaf % 2 ? 0x43ffba : 0x30d7db, 0.48);
+        graphics.lineBetween(canopyX, canopyY, tipX, tipY);
+      }
+      graphics.fillStyle(0xff4fcf, 0.74);
+      graphics.fillCircle(canopyX, canopyY, Math.max(2, 4 * scale));
     }
+  }
+
+  private drawVenueBanners(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, random: SeededRandom): void {
+    const count = this.plan.venueBannerCount;
+    for (let index = 0; index < count; index += 1) {
+      const top = index % 2 === 0;
+      const columns = Math.ceil(count / 2);
+      const x = bounds.x + bounds.w * ((Math.floor(index / 2) + 1) / (columns + 1));
+      const edgeY = top ? bounds.y : bounds.y + bounds.h;
+      const outward = top ? -1 : 1;
+      const available = top ? bounds.y : WORLD_HEIGHT - bounds.y - bounds.h;
+      const poleHeight = Math.max(12, Math.min(38, available * 0.58));
+      const tipY = Phaser.Math.Clamp(edgeY + outward * poleHeight, 5, WORLD_HEIGHT - 5);
+      const accent = index % 2 ? this.layout.theme.primary : this.layout.theme.secondary;
+      graphics.lineStyle(2, 0xa9eafa, 0.48);
+      graphics.lineBetween(x, edgeY + outward * 5, x, tipY);
+      const bannerWidth = random.int(18, 28);
+      const bannerHeight = Math.max(8, Math.min(18, poleHeight * 0.55));
+      graphics.fillStyle(0x08101d, 0.96);
+      graphics.fillPoints([
+        { x, y: tipY },
+        { x: x + (index % 2 ? -bannerWidth : bannerWidth), y: tipY + outward * 3 },
+        { x: x + (index % 2 ? -bannerWidth * 0.72 : bannerWidth * 0.72), y: tipY - outward * bannerHeight },
+        { x, y: tipY - outward * bannerHeight * 0.72 }
+      ], true);
+      graphics.lineStyle(2, accent, 0.78);
+      graphics.strokeTriangle(
+        x, tipY,
+        x + (index % 2 ? -bannerWidth : bannerWidth), tipY + outward * 3,
+        x + (index % 2 ? -bannerWidth * 0.72 : bannerWidth * 0.72), tipY - outward * bannerHeight
+      );
+      graphics.fillStyle(accent, 0.68);
+      graphics.fillCircle(x + (index % 2 ? -bannerWidth * 0.4 : bannerWidth * 0.4), tipY - outward * bannerHeight * 0.35, 2);
+    }
+  }
+
+  private drawVenueLabels(bounds: RectSpec): void {
+    const root = this.keep(this.scene.add.container(0, 0).setDepth(-3.5));
+    const topY = Math.max(8, bounds.y * 0.44);
+    const bottomY = Math.min(WORLD_HEIGHT - 8, bounds.y + bounds.h + (WORLD_HEIGHT - bounds.y - bounds.h) * 0.56);
+    const style: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: 'Orbitron, sans-serif',
+      fontSize: '11px',
+      color: colorCss(this.layout.theme.primary),
+      stroke: '#02050b',
+      strokeThickness: 3,
+      letterSpacing: 2
+    };
+    root.add(this.scene.add.text(bounds.x + bounds.w * 0.5, topY, 'N3ON BEACH CIRCUIT // LIVE', style).setOrigin(0.5).setAlpha(0.82));
+    root.add(this.scene.add.text(bounds.x + bounds.w * 0.5, bottomY, `${this.plan.districtLabel} // COMBAT GRANDSTAND`, {
+      ...style,
+      color: colorCss(this.layout.theme.secondary)
+    }).setOrigin(0.5).setAlpha(0.72));
+  }
+
+  private createVenueBeacons(bounds: RectSpec): void {
+    const offsetY = Math.max(8, Math.min(24, bounds.y * 0.35));
+    const anchors = [
+      { x: bounds.x + bounds.w * 0.18, y: bounds.y - offsetY },
+      { x: bounds.x + bounds.w * 0.5, y: bounds.y - offsetY },
+      { x: bounds.x + bounds.w * 0.82, y: bounds.y - offsetY },
+      { x: bounds.x + bounds.w * 0.18, y: bounds.y + bounds.h + offsetY },
+      { x: bounds.x + bounds.w * 0.5, y: bounds.y + bounds.h + offsetY },
+      { x: bounds.x + bounds.w * 0.82, y: bounds.y + bounds.h + offsetY }
+    ].slice(0, this.plan.animatedVenueLightCount);
+    const beacons = anchors.map((anchor, index) => this.keep(this.scene.add.circle(
+      Phaser.Math.Clamp(anchor.x, 5, WORLD_WIDTH - 5),
+      Phaser.Math.Clamp(anchor.y, 5, WORLD_HEIGHT - 5),
+      3,
+      index % 2 ? this.layout.theme.primary : this.layout.theme.secondary,
+      0.58
+    ).setStrokeStyle(1, 0xffffff, 0.32).setDepth(-2.6)));
+    if (beacons.length === 0) return;
+    this.tweens.push(this.scene.tweens.add({
+      targets: beacons,
+      alpha: { from: 0.28, to: 0.86 },
+      scale: { from: 0.82, to: 1.28 },
+      duration: 1350,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    }));
   }
 
   private drawFloor(): void {

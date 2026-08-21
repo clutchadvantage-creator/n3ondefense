@@ -40,7 +40,24 @@ test('animated neon city dressing remains strictly bounded for late-game renderi
     assert.equal(new Set(plan.animatedNodeIndices).size, plan.animatedNodeIndices.length);
     assert.equal(new Set(plan.signWallIndices).size, plan.signWallIndices.length);
     assert.equal(plan.animatedNodeIndices.some((index) => plan.signWallIndices.includes(index)), false);
+    assert.ok(plan.palmTreeCount >= 8 && plan.palmTreeCount <= NEON_CITY_VISUAL_THEME.maximumPalmTrees);
+    assert.ok(plan.venueBannerCount >= 8 && plan.venueBannerCount <= NEON_CITY_VISUAL_THEME.maximumVenueBanners);
+    assert.ok(plan.spectatorLightCount <= NEON_CITY_VISUAL_THEME.maximumSpectatorLights);
+    assert.ok(plan.animatedVenueLightCount <= NEON_CITY_VISUAL_THEME.maximumAnimatedVenueLights);
   }
+});
+
+test('arena exterior is a non-interactive cyberpunk beach stadium built from bounded static layers', () => {
+  const source = readFileSync(new URL('../src/game/arena/ArenaVisualRenderer.ts', import.meta.url), 'utf8');
+
+  assert.match(source, /drawBackdropAndBeachStadium/);
+  assert.match(source, /drawCoastalApron/);
+  assert.match(source, /drawStadiumStructure/);
+  assert.match(source, /drawPalmTrees/);
+  assert.match(source, /drawVenueBanners/);
+  assert.match(source, /N3ON BEACH CIRCUIT \/\/ LIVE/);
+  assert.match(source, /Crowd lights are baked into this one Graphics object/);
+  assert.doesNotMatch(source, /physics\.(?:add|world)/);
 });
 
 test('different accepted seeds can select distinct city districts without changing topology inputs', () => {

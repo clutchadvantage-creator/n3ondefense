@@ -29,6 +29,10 @@ export interface ArenaVisualTheme {
   maximumAnimatedNodes: number;
   maximumSigns: number;
   maximumLandmarks: number;
+  maximumPalmTrees: number;
+  maximumVenueBanners: number;
+  maximumSpectatorLights: number;
+  maximumAnimatedVenueLights: number;
 }
 
 export interface ArenaDressingPlan {
@@ -42,8 +46,12 @@ export interface ArenaDressingPlan {
   wallPanelStride: number;
   animatedNodeIndices: number[];
   signWallIndices: number[];
-  skylineSeed: number;
+  venueSeed: number;
   landmarkSeed: number;
+  palmTreeCount: number;
+  venueBannerCount: number;
+  spectatorLightCount: number;
+  animatedVenueLightCount: number;
 }
 
 export const NEON_CITY_VISUAL_THEME: ArenaVisualTheme = {
@@ -64,7 +72,11 @@ export const NEON_CITY_VISUAL_THEME: ArenaVisualTheme = {
   },
   maximumAnimatedNodes: 10,
   maximumSigns: 5,
-  maximumLandmarks: 6
+  maximumLandmarks: 6,
+  maximumPalmTrees: 10,
+  maximumVenueBanners: 10,
+  maximumSpectatorLights: 156,
+  maximumAnimatedVenueLights: 6
 };
 
 export const NEON_CITY_ARCHETYPE_PROFILES: Record<ArenaTemplate, ArenaArchetypeVisualProfile> = {
@@ -122,7 +134,11 @@ export function createArenaDressingPlan(layout: Pick<ArenaLayout, 'seed' | 'temp
     wallPanelStride: random.int(74, 112),
     animatedNodeIndices: wallIndices.slice(0, nodeCount),
     signWallIndices: wallIndices.slice(nodeCount, nodeCount + signCount),
-    skylineSeed: random.int(1, 0x7fffffff),
-    landmarkSeed: random.int(1, 0x7fffffff)
+    venueSeed: random.int(1, 0x7fffffff),
+    landmarkSeed: random.int(1, 0x7fffffff),
+    palmTreeCount: random.int(8, NEON_CITY_VISUAL_THEME.maximumPalmTrees),
+    venueBannerCount: random.int(8, NEON_CITY_VISUAL_THEME.maximumVenueBanners),
+    spectatorLightCount: random.int(124, NEON_CITY_VISUAL_THEME.maximumSpectatorLights),
+    animatedVenueLightCount: NEON_CITY_VISUAL_THEME.maximumAnimatedVenueLights
   };
 }
