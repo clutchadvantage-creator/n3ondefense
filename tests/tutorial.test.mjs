@@ -15,11 +15,15 @@ import { TUTORIAL_SEQUENCES } from '../src/game/tutorial/TutorialRegistry.ts';
 import { resolveTutorialAdvancePolicy } from '../src/game/tutorial/TutorialStepRules.ts';
 import {
   projectTutorialBoundsToViewport,
-  projectViewportBoundsToTutorialMount
+  projectViewportBoundsToTutorialMount,
+  resolveTutorialCalloutPlacement,
+  unionTutorialBounds
 } from '../src/game/tutorial/TutorialTargeting.ts';
 
 test('tutorial progress uses stable ids and supports completion, skipping, and replay', () => {
   const progress = createTutorialProgress();
+  assert.equal(progress.version, 2);
+  assert.equal(progress.firstRunWelcomePending, true);
   completeTutorialStep(progress, 'onboarding.basic-controls', 'move');
   completeTutorialStep(progress, 'onboarding.basic-controls', 'move');
   assert.deepEqual(progress.completedSteps['onboarding.basic-controls'], ['move']);
@@ -45,6 +49,26 @@ test('older profiles safely migrate into optional tutorial and contextual-tip de
   assert.equal(migrated.settings.contextualTutorials, true);
   assert.deepEqual(migrated.tutorials.completedSequences, []);
   assert.equal(migrated.tutorials.replaySequenceId, null);
+  assert.equal(migrated.tutorials.firstRunWelcomePending, false);
+});
+
+test('fresh-profile Main Menu welcome is one-time and does not spill into established profiles', () => {
+  const fresh = createTutorialProgress();
+  const welcome = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.menu-welcome');
+  assert.ok(welcome);
+  assert.equal(welcome.scene, 'menu');
+  assert.equal(welcome.freshProfileOnly, true);
+  assert.equal(isTutorialSequenceEligible(fresh, welcome, 'menu'), true);
+  assert.equal(welcome.steps.at(-1).target, 'menu.play-modes');
+  assert.match(welcome.steps.at(-1).body, /eligible scores and statistics can appear on leaderboards/i);
+  assert.match(welcome.steps.at(-1).body, /without publishing run statistics/i);
+  completeTutorialSequence(fresh, welcome.id);
+  assert.equal(fresh.firstRunWelcomePending, false);
+  assert.equal(isTutorialSequenceEligible(fresh, welcome, 'menu'), false);
+
+  const established = createTutorialProgress();
+  established.firstRunWelcomePending = false;
+  assert.equal(isTutorialSequenceEligible(established, welcome, 'menu'), false);
 });
 
 test('tutorial eligibility respects scene, prerequisites, completion, and skip state', () => {
@@ -106,6 +130,25 @@ test('tutorial target projection accounts for canvas and game mount offsets and 
   );
 });
 
+test('tutorial targeting unions live controls and keeps full-height callouts inside the viewport', () => {
+  assert.deepEqual(unionTutorialBounds([
+    { x: 200, y: 300, width: 180, height: 44 },
+    { x: 200, y: 360, width: 180, height: 44 }
+  ]), { x: 200, y: 300, width: 180, height: 104 });
+  assert.deepEqual(resolveTutorialCalloutPlacement(
+    1280, 720,
+    { x: 20, y: 130, width: 900, height: 570 },
+    440, 230
+  ), { x: 640, y: 360, position: 'center' });
+});
+
+test('Mod Collection teaching always exposes acknowledgement instead of an install dead end', () => {
+  const collection = TUTORIAL_SEQUENCES.find(({ id }) => id === 'progression.mod-collection');
+  assert.ok(collection);
+  assert.equal(collection.steps.find(({ id }) => id === 'equip').completion.type, 'manual');
+  assert.equal(collection.steps.every(({ completion }) => completion.type === 'manual'), true);
+});
+
 test('first defuse teaching names the danger and requires acknowledgement', () => {
   const sequence = TUTORIAL_SEQUENCES.find(({ id }) => id === 'context.first-defuse');
   assert.equal(sequence.triggerEvent, 'objective.defuseStarted');
@@ -125,4 +168,20 @@ test('Arena tutorial cleanup and success events are wired to authoritative gamep
   assert.match(arena, /this\.tutorialPointerLockWasActive = this\.pointerLock\?\.locked \?\? false/);
   assert.match(arena, /this\.pointerLock\?\.release\(\)/);
   assert.match(arena, /this\.pointerLock\.requestLock\(\)/);
+  assert.match(arena, /const displayDiameter = diameter \* camera\.zoom/);
+});
+
+test('first-run scene handoff, live Main Menu targets, and undimmed Arena teaching are wired', async () => {
+  const [profiles, menu, overlay, styles] = await Promise.all([
+    readFile(new URL('../src/game/scenes/LocalProfileScene.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/game/tutorial/TutorialOverlay.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/style.css', import.meta.url), 'utf8')
+  ]);
+  assert.match(profiles, /SaveSystem\.createProfile\(value\)[\s\S]*?this\.scene\.start\(SceneKeys\.MainMenu\)/);
+  assert.match(menu, /unionTutorialBounds\(\[startButton\.getBounds\(\), localStartButton\.getBounds\(\)\]\)/);
+  assert.match(menu, /completeActiveManualStep\(sequenceId, 'choose-mode'\)/);
+  assert.match(overlay, /resolveTutorialCalloutPlacement/);
+  assert.match(styles, /\.tutorial-overlay--arena \.tutorial-shade \{ display: none !important; \}/);
+  assert.match(styles, /max-height: calc\(100% - 32px\); overflow-y: auto/);
 });

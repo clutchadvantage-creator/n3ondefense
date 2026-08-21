@@ -7,6 +7,43 @@ export interface TutorialRectLike {
   height: number;
 }
 
+export type TutorialCalloutPosition = 'above' | 'below' | 'center';
+
+export function unionTutorialBounds(bounds: readonly TutorialRectLike[]): TutorialTargetBounds | null {
+  if (!bounds.length) return null;
+  const left = Math.min(...bounds.map((item) => item.x));
+  const top = Math.min(...bounds.map((item) => item.y));
+  const right = Math.max(...bounds.map((item) => item.x + item.width));
+  const bottom = Math.max(...bounds.map((item) => item.y + item.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/** Keeps a tutorial callout wholly inside its UI mount, even for full-height targets. */
+export function resolveTutorialCalloutPlacement(
+  viewportWidth: number,
+  viewportHeight: number,
+  target: TutorialRectLike,
+  calloutWidth: number,
+  calloutHeight: number,
+  gap = 26,
+  safeMargin = 16
+): { x: number; y: number; position: TutorialCalloutPosition } {
+  const halfWidth = Math.min(calloutWidth / 2, Math.max(0, viewportWidth / 2 - safeMargin));
+  const x = Math.max(safeMargin + halfWidth, Math.min(viewportWidth - safeMargin - halfWidth, target.x + target.width / 2));
+  const targetBottom = target.y + target.height;
+  if (targetBottom + gap + calloutHeight <= viewportHeight - safeMargin) {
+    return { x, y: targetBottom + gap, position: 'below' };
+  }
+  if (target.y - gap - calloutHeight >= safeMargin) {
+    return { x, y: target.y - gap, position: 'above' };
+  }
+  return {
+    x: Math.max(safeMargin + halfWidth, Math.min(viewportWidth - safeMargin - halfWidth, viewportWidth / 2)),
+    y: viewportHeight / 2,
+    position: 'center'
+  };
+}
+
 /** Projects Phaser scene coordinates into CSS viewport coordinates. */
 export function projectTutorialBoundsToViewport(
   bounds: TutorialRectLike,

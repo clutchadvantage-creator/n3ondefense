@@ -1,5 +1,5 @@
 import type { TutorialStepDefinition, TutorialTargetBounds } from './TutorialTypes.ts';
-import { projectViewportBoundsToTutorialMount } from './TutorialTargeting.ts';
+import { projectViewportBoundsToTutorialMount, resolveTutorialCalloutPlacement } from './TutorialTargeting.ts';
 
 const make = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string): HTMLElementTagNameMap[K] => {
   const element = document.createElement(tag);
@@ -30,10 +30,11 @@ export class TutorialOverlay {
   private manualHandler: (() => void) | null = null;
   private targetPadding = 12;
 
-  constructor(onSkip: () => void) {
+  constructor(onSkip: () => void, arenaPresentation = false) {
     const mount = document.querySelector<HTMLElement>('#game-ui-root');
     if (!mount) throw new Error('Tutorial overlay requires #game-ui-root.');
     this.mount = mount;
+    this.root.classList.toggle('tutorial-overlay--arena', arenaPresentation);
     this.root.hidden = true;
     this.root.setAttribute('aria-live', 'polite');
     this.skip.type = 'button';
@@ -130,15 +131,20 @@ export class TutorialOverlay {
     Object.assign(this.shadeLeft.style, { left: '0px', top: `${y}px`, width: `${x}px`, height: `${height}px` });
     Object.assign(this.shadeRight.style, { left: `${right}px`, top: `${y}px`, width: `${Math.max(0, viewportWidth - right)}px`, height: `${height}px` });
 
-    const roomBelow = viewportHeight - bottom;
-    const placeBelow = roomBelow > 230 || y < 230;
-    const calloutX = Math.max(210, Math.min(viewportWidth - 210, x + width / 2));
-    const calloutY = placeBelow ? Math.min(viewportHeight - 20, bottom + 26) : Math.max(20, y - 26);
-    this.callout.style.left = `${calloutX}px`;
-    this.callout.style.top = `${calloutY}px`;
-    this.callout.dataset.position = placeBelow ? 'below' : 'above';
+    const placement = resolveTutorialCalloutPlacement(
+      viewportWidth,
+      viewportHeight,
+      { x, y, width, height },
+      this.callout.offsetWidth || 440,
+      this.callout.offsetHeight || 210
+    );
+    this.callout.style.left = `${placement.x}px`;
+    this.callout.style.top = `${placement.y}px`;
+    this.callout.dataset.position = placement.position;
+    const placeBelow = placement.position === 'below';
     this.arrow.style.left = `${x + width / 2}px`;
     this.arrow.style.top = `${placeBelow ? bottom + 5 : y - 5}px`;
     this.arrow.dataset.position = placeBelow ? 'below' : 'above';
+    this.arrow.hidden = placement.position === 'center';
   }
 }

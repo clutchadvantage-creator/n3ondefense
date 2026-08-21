@@ -24,6 +24,7 @@ export interface TutorialStepDefinition {
   mode: TutorialMode;
   spotlight?: TutorialSpotlightShape;
   targetPadding?: number;
+  advanceLabel?: 'NEXT' | 'CONTINUE' | 'GOT IT';
   completion: { type: 'auto'; delayMs?: number } | { type: 'event'; event: string } | { type: 'manual' };
 }
 
@@ -37,6 +38,8 @@ export interface TutorialSequenceDefinition {
   triggerEvent?: string;
   contextual?: boolean;
   skippable?: boolean;
+  /** Restricts an auto-start sequence to a newly-created profile. */
+  freshProfileOnly?: boolean;
 }
 
 export interface TutorialHost {

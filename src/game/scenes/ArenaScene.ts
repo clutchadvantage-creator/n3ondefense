@@ -6052,11 +6052,12 @@ export class ArenaScene extends Phaser.Scene {
     const camera = this.cameras.main;
     const centerX = camera.x + (worldX - camera.worldView.x) * camera.zoom;
     const centerY = camera.y + (worldY - camera.worldView.y) * camera.zoom;
+    const displayDiameter = diameter * camera.zoom;
     return this.canvasBoundsToViewport({
-      x: centerX - diameter / 2,
-      y: centerY - diameter / 2,
-      width: diameter,
-      height: diameter
+      x: centerX - displayDiameter / 2,
+      y: centerY - displayDiameter / 2,
+      width: displayDiameter,
+      height: displayDiameter
     });
   }
 

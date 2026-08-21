@@ -25,7 +25,7 @@ export class TutorialDirector {
   };
 
   constructor(private readonly host: TutorialHost) {
-    this.overlay = new TutorialOverlay(() => this.skip());
+    this.overlay = new TutorialOverlay(() => this.skip(), host.scene === 'arena');
     this.unsubscribe = TutorialEventBus.subscribe((event) => this.onEvent(event));
     window.addEventListener('keydown', this.keyHandler);
   }
@@ -59,6 +59,23 @@ export class TutorialDirector {
     return this.acceptingCompletion
       && this.advancePolicy?.type === 'event'
       && this.advancePolicy.event === event;
+  }
+
+  isActiveSequence(sequenceId: string): boolean {
+    return this.active?.id === sequenceId;
+  }
+
+  isActiveStep(sequenceId: string, stepId: string): boolean {
+    return this.active?.id === sequenceId && this.active.steps[this.stepIndex]?.id === stepId;
+  }
+
+  /** Completes a visible acknowledgement from another trusted UI action. */
+  completeActiveManualStep(sequenceId: string, stepId: string): boolean {
+    if (!this.isActiveStep(sequenceId, stepId)
+      || !this.acceptingCompletion
+      || this.advancePolicy?.type !== 'manual') return false;
+    this.advance();
+    return true;
   }
 
   destroy(): void {
@@ -133,6 +150,9 @@ export class TutorialDirector {
       && this.advancePolicy.reason === 'action-unavailable';
     const step = {
       ...sourceStep,
+      // A normally action-gated live step can fall back to Continue when the
+      // action is unavailable. Give that fallback a usable cursor and pause.
+      mode: actionUnavailable && sourceStep.mode === 'live' ? 'hard-pause' as const : sourceStep.mode,
       body: `${replaceBindings(sourceStep.body)}${actionUnavailable
         ? ' This action is not currently available; continue when ready.'
         : ''}`,
@@ -146,7 +166,9 @@ export class TutorialDirector {
       () => step.target ? this.host.resolveTarget(step.target) : null,
       () => this.advance(),
       this.active.skippable !== false,
-      this.advancePolicy.type === 'manual' ? this.advancePolicy.label : null
+      this.advancePolicy.type === 'manual'
+        ? (this.advancePolicy.reason === 'acknowledgement' ? step.advanceLabel ?? this.advancePolicy.label : this.advancePolicy.label)
+        : null
     );
     TutorialEventBus.emit('tutorial.stepShown', { sequenceId: this.active.id, stepId: step.id });
     if (this.advancePolicy.type === 'auto') {
@@ -182,8 +204,10 @@ export class TutorialDirector {
   private skip(): void {
     if (!this.active || this.active.skippable === false) return;
     const sequenceId = this.active.id;
-    const skippedIds = sequenceId.startsWith('onboarding.')
-      ? ['onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']
+    const skippedIds = sequenceId === 'onboarding.menu-welcome'
+      ? ['onboarding.menu-welcome', 'onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']
+      : sequenceId.startsWith('onboarding.')
+        ? ['onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']
       : [sequenceId];
     SaveSystem.updateTutorialProgress((state) => {
       for (const id of skippedIds) skipTutorialSequence(state, id);

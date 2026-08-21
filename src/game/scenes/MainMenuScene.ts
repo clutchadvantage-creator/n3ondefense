@@ -16,7 +16,7 @@ import type { RunSetupSelection } from '../economy/types.ts';
 import { formatWeeklyCountdown, type WeeklyOperationDeck, type WeeklyOperationDecksSnapshot, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
-import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
+import { projectTutorialBoundsToViewport, unionTutorialBounds } from '../tutorial/TutorialTargeting.ts';
 
 const MAIN_MENU_TIPS = [
   'Shoot through a placed fence to split and multiply your projectiles.',
@@ -190,6 +190,7 @@ export class MainMenuScene extends Phaser.Scene {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
       }
+      if (!this.prepareFirstRunDeployment(onlineStatus)) return false;
       const selection = this.getRunSetupSelection();
       if (!SaveSystem.canAffordRunSetup(selection)) {
         onlineStatus.setText(`RUN CONFIGURATION REQUIRES ${getRunSetupCost(selection).toLocaleString()} CREDITS.`).setColor('#ff9aab');
@@ -236,6 +237,7 @@ export class MainMenuScene extends Phaser.Scene {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
       }
+      if (!this.prepareFirstRunDeployment(onlineStatus)) return false;
       disableButton(localStartButton);
       const selection = this.getRunSetupSelection();
       const purchase = SaveSystem.purchaseRunSetup(selection);
@@ -305,7 +307,9 @@ export class MainMenuScene extends Phaser.Scene {
     this.tutorialDirector = new TutorialDirector({
       scene: 'menu',
       resolveTarget: (target) => {
-        const bounds = tutorialTargets.get(target)?.getBounds();
+        const bounds = target === 'menu.play-modes'
+          ? unionTutorialBounds([startButton.getBounds(), localStartButton.getBounds()])
+          : tutorialTargets.get(target)?.getBounds();
         if (!bounds) return null;
         const canvas = this.game.canvas.getBoundingClientRect();
         return projectTutorialBoundsToViewport(bounds, canvas, this.scale.width, this.scale.height);
@@ -325,6 +329,16 @@ export class MainMenuScene extends Phaser.Scene {
       this.tutorialDirector?.destroy();
       this.tutorialDirector = null;
     });
+  }
+
+  private prepareFirstRunDeployment(status: Phaser.GameObjects.Text): boolean {
+    const sequenceId = 'onboarding.menu-welcome';
+    if (!this.tutorialDirector?.isActiveSequence(sequenceId)) return true;
+    if (!this.tutorialDirector.isActiveStep(sequenceId, 'choose-mode')) {
+      status.setText('READ THE INITIAL DEPLOYMENT BRIEFING, THEN CHOOSE ONLINE OR LOCAL.').setColor('#ffbd85');
+      return false;
+    }
+    return this.tutorialDirector.completeActiveManualStep(sequenceId, 'choose-mode');
   }
 
   private createCommandButton(

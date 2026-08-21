@@ -5,6 +5,14 @@ const key = (binding: Parameters<typeof compactBindingLabel>[0]): string => comp
 
 export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
   {
+    id: 'onboarding.menu-welcome', scene: 'menu', title: 'WELCOME TO N3ONDEFENSE', autoStart: true, freshProfileOnly: true, skippable: true,
+    steps: [
+      { id: 'welcome', eyebrow: 'N3ON PROTOCOL // INITIAL LINK', title: 'WELCOME TO THE ARENA, OPERATIVE!', body: 'Enter the arena, plant charges at active bombsites, and defend them from enemy forces until detonation. Each round pushes back harder.', mode: 'menu', advanceLabel: 'NEXT', completion: { type: 'manual' } },
+      { id: 'progression', eyebrow: 'N3ON PROTOCOL // PERSISTENT POWER', title: 'EVERY DEPLOYMENT BUILDS THE NEXT', body: 'Earn Credits for permanent Store upgrades. Discover and equip Mods that reshape your build. Upgrade, adapt, and push farther on the next deployment.', mode: 'menu', advanceLabel: 'NEXT', completion: { type: 'manual' } },
+      { id: 'choose-mode', target: 'menu.play-modes', eyebrow: 'N3ON PROTOCOL // DEPLOYMENT LINK', title: 'CHOOSE ONLINE OR LOCAL', body: 'DEPLOY ONLINE connects to N3ONDefense services; eligible scores and statistics can appear on leaderboards. DEPLOY LOCAL plays without publishing run statistics. Both preserve your local progression.', mode: 'menu', targetPadding: 14, advanceLabel: 'CONTINUE', completion: { type: 'manual' } }
+    ]
+  },
+  {
     id: 'onboarding.basic-controls', scene: 'arena', title: 'INITIAL DEPLOYMENT', autoStart: true, skippable: true,
     steps: [
       { id: 'welcome', eyebrow: 'N3ON PROTOCOL // LIVE TRAINING', title: 'WELCOME, OPERATIVE', body: 'This training runs inside a real deployment. Read each instruction, acknowledge information screens, then perform the requested combat actions yourself.', mode: 'hard-pause', completion: { type: 'manual' } },
@@ -54,7 +62,7 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     steps: [
       { id: 'archive', target: 'mods.archive', title: 'OWNED CARD ARCHIVE', body: 'Every acquired copy appears here. Border color identifies rarity; the duplicate marker counts extra copies regardless of upgrade level.', mode: 'menu', completion: { type: 'manual' } },
       { id: 'details', target: 'mods.details', title: 'INSPECT & CONFIGURE', body: "The viewer shows the selected card's rank, infusion, category, and complete effect. Equip it to a compatible slot or the Utility/Wildcard dock.", mode: 'menu', completion: { type: 'manual' } },
-      { id: 'equip', target: 'mods.details', title: 'INSTALL A MOD', body: 'Use a valid category slot or the Utility/Wildcard dock to install the selected card into the real next-deployment loadout.', mode: 'menu', completion: { type: 'event', event: 'mods.equipped' } },
+      { id: 'equip', target: 'mods.details', title: 'INSTALL A MOD', body: 'Use a valid category slot or the Utility/Wildcard dock whenever you want to install the selected card into the real next-deployment loadout.', mode: 'menu', completion: { type: 'manual' } },
       { id: 'upgrade', target: 'mods.details', title: 'UPGRADE OR RECYCLE', body: 'Upgrade favorite cards with the displayed currencies. Unupgraded duplicate copies can be recycled into Plasma Chips.', mode: 'menu', completion: { type: 'manual' } }
     ]
   },

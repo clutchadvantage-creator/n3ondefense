@@ -26,7 +26,8 @@ const defaultSettings: LocalPlayerSettings = {
 };
 
 const createDefaultTutorialProgress = (): TutorialProgressState => ({
-  version: 1,
+  version: 2,
+  firstRunWelcomePending: true,
   completedSequences: [],
   skippedSequences: [],
   completedSteps: {},
@@ -45,7 +46,10 @@ const normalizeTutorialProgress = (value: unknown): TutorialProgressState => {
     }
   }
   return {
-    version: 1,
+    version: 2,
+    // Tutorial progress that predates version 2 belongs to an established
+    // profile. Do not surprise those players with a newly-added first-run flow.
+    firstRunWelcomePending: candidate.version === 2 && candidate.firstRunWelcomePending === true,
     completedSequences: uniqueStrings(candidate.completedSequences),
     skippedSequences: uniqueStrings(candidate.skippedSequences),
     completedSteps,

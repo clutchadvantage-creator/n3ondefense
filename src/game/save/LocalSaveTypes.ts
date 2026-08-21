@@ -59,7 +59,9 @@ export interface LocalPlayerSettings {
 }
 
 export interface TutorialProgressState {
-  version: 1;
+  version: 2;
+  /** True only for a profile created after the first-run Main Menu welcome was introduced. */
+  firstRunWelcomePending: boolean;
   completedSequences: string[];
   skippedSequences: string[];
   completedSteps: Record<string, string[]>;
