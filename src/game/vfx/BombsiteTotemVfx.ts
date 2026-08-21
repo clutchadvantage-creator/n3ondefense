@@ -46,6 +46,8 @@ const POWER_UP_MS = 430;
 const FISSURE_HOLD_MS = 420;
 const FISSURE_FADE_MS = 1_250;
 const DROP_HEIGHT = 330;
+const TOTEM_RENDER_DEPTH = 11;
+const TOTEM_VISUAL_SCALE = 1.16;
 const TAU = Math.PI * 2;
 const RAY_COUNT = 14;
 const RAY_COS = new Float32Array(RAY_COUNT);
@@ -98,16 +100,20 @@ export class BombsiteTotemVfx {
 
     slot.root.setPosition(x, y).setAlpha(1).setVisible(true).setActive(true);
     slot.ground.setVisible(true).setAlpha(1);
-    slot.rig.setPosition(0, -DROP_HEIGHT).setScale(0.74).setAlpha(0).setVisible(true);
+    slot.rig.setPosition(0, -DROP_HEIGHT).setScale(TOTEM_VISUAL_SCALE * 0.72).setAlpha(0).setVisible(true);
     slot.marker.setVisible(true).setAlpha(0.8).setRotation(slot.phase);
     slot.fissures.clear().setAlpha(0).setVisible(false);
     slot.dynamic.clear().setVisible(true).setAlpha(1);
     slot.shadow.setVisible(true).setAlpha(0.08).setScale(0.38);
-    slot.core.setFillStyle(0x06101a, 1).setAlpha(0.3).setScale(0.5);
-    slot.coreGlow.setFillStyle(0x63efff, 0.14).setAlpha(0);
-    slot.channels.setAlpha(0.08);
-    slot.innerRing.setStrokeStyle(2, 0x63efff, 0.72).setAlpha(0);
-    slot.outerRing.setStrokeStyle(2, 0xff5bd6, 0.6).setAlpha(0);
+    // Keep the descending chassis unmistakable against the dark arena. The
+    // powered state still ramps up after impact, but the orbital device itself
+    // no longer arrives as an almost-black silhouette.
+    slot.body.setAlpha(1);
+    slot.core.setFillStyle(0x63efff, 0.88).setAlpha(0.72).setScale(0.72);
+    slot.coreGlow.setFillStyle(0x63efff, 0.2).setAlpha(0.34);
+    slot.channels.setAlpha(0.62);
+    slot.innerRing.setStrokeStyle(2, 0x63efff, 0.82).setAlpha(0.62);
+    slot.outerRing.setStrokeStyle(2, 0xff5bd6, 0.74).setAlpha(0.54);
     return true;
   }
 
@@ -196,7 +202,7 @@ export class BombsiteTotemVfx {
   }
 
   private createSlot(): TotemSlot {
-    const root = this.scene.add.container(0, 0).setDepth(7).setVisible(false).setActive(false);
+    const root = this.scene.add.container(0, 0).setDepth(TOTEM_RENDER_DEPTH).setVisible(false).setActive(false);
     const ground = this.scene.add.container(0, 0);
     const rig = this.scene.add.container(0, 0);
     const marker = this.scene.add.graphics();
@@ -234,26 +240,35 @@ export class BombsiteTotemVfx {
   }
 
   private drawBody(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.fillStyle(0x06101a, 0.94).lineStyle(2, 0x2bbfd2, 0.8);
+    graphics.fillStyle(0x071725, 0.98);
     for (let index = 0; index < 4; index += 1) {
       const angle = index * Math.PI * 0.5;
       const forwardX = Math.cos(angle);
       const forwardY = Math.sin(angle);
       const sideX = -forwardY;
       const sideY = forwardX;
-      graphics.fillPoints([
+      const fin = [
         new Phaser.Geom.Point(forwardX * 10 + sideX * 8, forwardY * 10 + sideY * 8),
         new Phaser.Geom.Point(forwardX * 36 + sideX * 12, forwardY * 36 + sideY * 12),
         new Phaser.Geom.Point(forwardX * 45, forwardY * 45),
         new Phaser.Geom.Point(forwardX * 36 - sideX * 12, forwardY * 36 - sideY * 12),
         new Phaser.Geom.Point(forwardX * 10 - sideX * 8, forwardY * 10 - sideY * 8)
-      ], true, true);
+      ];
+      graphics.fillPoints(fin, true, true);
+      graphics.lineStyle(3, index % 2 === 0 ? 0x63efff : 0xff5bd6, 0.98).strokePoints(fin, true, true);
+
+      const nodeX = forwardX * 35;
+      const nodeY = forwardY * 35;
+      graphics.fillStyle(index % 2 === 0 ? 0x63efff : 0xff5bd6, 0.72).fillCircle(nodeX, nodeY, 3.5);
+      graphics.fillStyle(0x071725, 0.98);
     }
-    graphics.fillStyle(0x0b1623, 0.98).lineStyle(2, 0xff5bd6, 0.82);
-    graphics.fillPoints([
+    const center = [
       new Phaser.Geom.Point(0, -21), new Phaser.Geom.Point(21, 0),
       new Phaser.Geom.Point(0, 21), new Phaser.Geom.Point(-21, 0)
-    ], true, true);
+    ];
+    graphics.fillStyle(0x10263a, 1).fillPoints(center, true, true);
+    graphics.lineStyle(3, 0xff5bd6, 1).strokePoints(center, true, true);
+    graphics.lineStyle(1, 0xffffff, 0.72).strokeCircle(0, 0, 13);
   }
 
   private drawChannels(graphics: Phaser.GameObjects.Graphics): void {
@@ -275,13 +290,15 @@ export class BombsiteTotemVfx {
       slot.rig.setAlpha(0);
     } else if (elapsed < IMPACT_MS) {
       const eased = easeInCubic(descendProgress);
-      slot.rig.setPosition(0, -DROP_HEIGHT * (1 - eased)).setScale(0.74 + eased * 0.34).setAlpha(1);
+      slot.rig.setPosition(0, -DROP_HEIGHT * (1 - eased))
+        .setScale(TOTEM_VISUAL_SCALE * (0.72 + eased * 0.28))
+        .setAlpha(1);
       slot.shadow.setScale(0.38 + eased * 0.72).setAlpha(0.08 + eased * 0.34);
     } else {
       if (!slot.impacted) this.beginImpact(slot, now);
       const impactElapsed = now - slot.impactAt;
       const settle = 1 + Math.sin(clamp01(impactElapsed / 240) * Math.PI) * 0.16;
-      slot.rig.setPosition(0, 0).setScale(settle).setAlpha(1);
+      slot.rig.setPosition(0, 0).setScale(TOTEM_VISUAL_SCALE * settle).setAlpha(1);
       slot.shadow.setScale(1).setAlpha(0.38);
       this.updatePoweredRig(slot, now, impactElapsed);
     }
@@ -290,7 +307,7 @@ export class BombsiteTotemVfx {
     this.drawDynamicEffects(slot, now);
     if (slot.resolvingAt > 0) {
       const resolveProgress = clamp01((now - slot.resolvingAt) / 220);
-      slot.rig.setScale(1 + resolveProgress * 0.45).setAlpha(1 - resolveProgress);
+      slot.rig.setScale(TOTEM_VISUAL_SCALE * (1 + resolveProgress * 0.45)).setAlpha(1 - resolveProgress);
       slot.ground.setAlpha(1 - resolveProgress);
     }
   }

@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const totem = readFileSync(new URL('../src/game/vfx/BombsiteTotemVfx.ts', import.meta.url), 'utf8');
 const system = readFileSync(new URL('../src/game/mods/BombsiteModSystem.ts', import.meta.url), 'utf8');
 const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
 
 test('an applicable Bombsite Mod deploys one shared Totem exactly at the armed site center', () => {
   assert.match(system, /const TOTEM_VISUAL_MODS = \[/);
@@ -19,12 +20,22 @@ test('Totem uses a bounded drop, impact, fissure, power-up, and idle lifecycle w
   assert.match(totem, /const MAX_ACTIVE_TOTEMS = 5/);
   assert.match(totem, /const TARGETING_MS = 160/);
   assert.match(totem, /const DROP_MS = 500/);
+  assert.match(totem, /const TOTEM_RENDER_DEPTH = 11/);
+  assert.match(totem, /const TOTEM_VISUAL_SCALE = 1\.16/);
   assert.match(totem, /setPosition\(0, -DROP_HEIGHT \* \(1 - eased\)\)/);
   assert.match(totem, /this\.beginImpact\(slot, now\)/);
   assert.match(totem, /this\.drawFissures\(slot\)/);
   assert.match(totem, /const FISSURE_FADE_MS = 1_250/);
   assert.match(totem, /const powered = easeOutCubic/);
   assert.doesNotMatch(totem, /tweens\.add|delayedCall|\.on\(/);
+});
+
+test('Totem chassis has real neon outlines and visible powered accents during descent', () => {
+  assert.match(totem, /strokePoints\(fin, true, true\)/);
+  assert.match(totem, /strokePoints\(center, true, true\)/);
+  assert.match(totem, /slot\.channels\.setAlpha\(0\.62\)/);
+  assert.match(totem, /slot\.innerRing[\s\S]*?setAlpha\(0\.62\)/);
+  assert.match(totem, /setDepth\(TOTEM_RENDER_DEPTH\)/);
 });
 
 test('Totem effects consume authoritative Bombsite Mod radii and preserve cyan push and orange damage language', () => {
@@ -55,4 +66,12 @@ test('five Totems reuse bounded slots and redraw only active impact, charge, and
   assert.match(totem, /const RAY_COS = new Float32Array/);
   assert.match(totem, /const RAY_SIN = new Float32Array/);
   assert.match(totem, /graphics\.clear\(\)/);
+});
+
+test('bombsite detonation reuses the mine explosion renderer at a larger scale and shared explosion recording', () => {
+  assert.match(arena, /const BOMBSITE_EXPLOSION_VISUAL_RADIUS = 520/);
+  assert.match(arena, /this\.audio\.playSfx\('bomb'\)/);
+  assert.match(arena, /this\.mineExplosionVfx\.emitColors\([\s\S]*?BOMBSITE_EXPLOSION_VISUAL_RADIUS/);
+  assert.doesNotMatch(arena, /for \(let i = 0; i < 70; i \+= 1\)/);
+  assert.match(audio, /case 'bomblet':[\s\S]*?case 'mine':[\s\S]*?case 'bomb':[\s\S]*?this\.playBombletSfx\(name\)/);
 });

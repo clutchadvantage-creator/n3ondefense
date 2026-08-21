@@ -271,6 +271,7 @@ const PICKUP_FLOAT_MAX_SPEED = 20;
 const PICKUP_SEPARATION_PUSH = 0.2;
 const PICKUP_BOUNCE_TRANSFER = 0.5;
 const PICKUP_BOUNCE_KICK = 2;
+const BOMBSITE_EXPLOSION_VISUAL_RADIUS = 520;
 const PICKUP_SFX_BY_TYPE = {
   health: 'healthPickup',
   energy: 'energyPickup',
@@ -4779,32 +4780,22 @@ export class ArenaScene extends Phaser.Scene {
 
     const color = SaveSystem.getCosmeticColor('bombColor', this.time.now);
     const prismBomb = this.prismBombColor;
+    // `bomb` is routed through AudioManager's same pooled bomblet recording
+    // used by mines, while retaining the player's independent Explosion slider.
     this.audio.playSfx('bomb');
     this.cameras.main.shake(760, 0.02);
     this.physics.world.timeScale = 0.35;
-
-    const ring1 = this.add.circle(site.x, site.y, 22, color, 0.38).setDepth(30);
-    const ring2 = this.add.circle(site.x, site.y, 18, 0xffffff, 0.22).setDepth(29);
-    this.tweens.add({ targets: ring1, radius: 520, alpha: 0, duration: 760, onComplete: () => ring1.destroy() });
-    this.tweens.add({ targets: ring2, radius: 360, alpha: 0, duration: 620, onComplete: () => ring2.destroy() });
-
-    for (let i = 0; i < 70; i += 1) {
-      const shardColor = prismBomb
-        ? SaveSystem.getCosmeticColor('bombColor', this.time.now + i * 75)
-        : Math.random() < 0.5 ? color : this.layout.theme.secondary;
-      const shard = this.add.rectangle(site.x, site.y, Phaser.Math.Between(2, 5), Phaser.Math.Between(8, 18), shardColor, 0.95).setDepth(31);
-      const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const dist = Phaser.Math.Between(90, 420);
-      this.tweens.add({
-        targets: shard,
-        x: site.x + Math.cos(a) * dist,
-        y: site.y + Math.sin(a) * dist,
-        angle: Phaser.Math.Between(-220, 220),
-        alpha: 0,
-        duration: Phaser.Math.Between(420, 900),
-        onComplete: () => shard.destroy()
-      });
-    }
+    this.mineExplosionVfx.emitColors(
+      site.x,
+      site.y,
+      BOMBSITE_EXPLOSION_VISUAL_RADIUS,
+      0xffffff,
+      color,
+      prismBomb ? 0x63efff : this.layout.theme.secondary,
+      prismBomb ? 0xff5bd6 : color,
+      this.time.now,
+      false
+    );
 
     if (this.modRuntime.hasInfusion('detonation-fireworks')) this.playDetonationFireworks(site.x, site.y);
 
