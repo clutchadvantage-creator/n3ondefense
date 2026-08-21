@@ -67,6 +67,11 @@ const createCenteredHexagonPoints = (radius: number): number[] => {
   return points;
 };
 
+interface MainMenuLaunchData {
+  /** Set only by successful creation of a brand-new local profile. */
+  showFirstRunWelcome?: boolean;
+}
+
 export class MainMenuScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
   private tutorialDirector: TutorialDirector | null = null;
@@ -83,7 +88,7 @@ export class MainMenuScene extends Phaser.Scene {
     }
   }
 
-  create(): void {
+  create(data: MainMenuLaunchData = {}): void {
     this.audio.startMusicLoop();
     const { width, height } = this.scale;
     if (this.scene.isActive(SceneKeys.Arena) || this.scene.isPaused(SceneKeys.Arena)) this.scene.stop(SceneKeys.Arena);
@@ -316,7 +321,11 @@ export class MainMenuScene extends Phaser.Scene {
       },
       setMode: () => undefined
     });
-    this.tutorialDirector.startEligible();
+    // Fresh profile creation is an authoritative onboarding entry point. The
+    // persisted pending flag still handles reloads/restarts, while this launch
+    // signal guarantees that the greeting is presented on the handoff itself.
+    if (data.showFirstRunWelcome) this.tutorialDirector.replay('onboarding.menu-welcome');
+    else this.tutorialDirector.startEligible();
     window.setTimeout(() => {
       if (!this.scene.isActive()) return;
       const briefing = SaveSystem.getInitialDeploymentBriefingState();

@@ -40,6 +40,7 @@ export class LocalProfilesUi implements LocalProfilesUiHandle {
   private readonly root: HTMLElement;
   private readonly callbacks: Omit<LocalProfilesUiOptions, 'root' | 'profiles' | 'activeProfileId' | 'selectedProfileId' | 'storageMessage' | 'notice' | 'backupAvailability'>;
   private state: LocalProfilesUiState;
+  private screen: HTMLElement | null = null;
 
   constructor(options: LocalProfilesUiOptions) {
     this.root = options.root;
@@ -63,7 +64,10 @@ export class LocalProfilesUi implements LocalProfilesUiHandle {
       backupAvailability: options.backupAvailability ?? {}
     };
 
-    this.root.replaceChildren();
+    // The game UI mount is shared by scene-owned interfaces and transient
+    // overlays. Only remove a stale profiles screen here; clearing the entire
+    // mount can erase UI created by the incoming scene during a transition.
+    this.root.querySelector<HTMLElement>('#local-profiles-ui')?.remove();
     this.render();
   }
 
@@ -76,11 +80,12 @@ export class LocalProfilesUi implements LocalProfilesUiHandle {
   }
 
   destroy(): void {
-    this.root.replaceChildren();
+    this.screen?.remove();
+    this.screen = null;
   }
 
   private render(): void {
-    this.root.replaceChildren();
+    this.screen?.remove();
 
     const screen = document.createElement('div');
     screen.id = 'local-profiles-ui';
@@ -161,6 +166,7 @@ export class LocalProfilesUi implements LocalProfilesUiHandle {
 
     screen.append(shell);
     this.root.append(screen);
+    this.screen = screen;
   }
 
   private renderEmptyState(): HTMLElement {

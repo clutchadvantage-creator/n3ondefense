@@ -149,7 +149,7 @@ export class LocalProfileScene extends Phaser.Scene {
         this.selectedProfileId = SaveSystem.getActiveProfileSummary()?.id ?? LocalSaveManager.getActiveProfileId();
         // A newly-created operative proceeds directly into the profile-owned
         // first-run Main Menu welcome. Existing profile selection is unchanged.
-        this.scene.start(SceneKeys.MainMenu);
+        this.scene.start(SceneKeys.MainMenu, { showFirstRunWelcome: true });
       },
       onCancel: () => {
         this.activeDialog = null;

@@ -53,6 +53,11 @@ test('older profiles safely migrate into optional tutorial and contextual-tip de
 });
 
 test('fresh-profile Main Menu welcome is one-time and does not spill into established profiles', () => {
+  const freshSave = createDefaultLocalSave('fresh-welcome', 'Fresh Welcome');
+  const persistedFreshSave = normalizeLocalSave(structuredClone(freshSave));
+  assert.ok(persistedFreshSave);
+  assert.equal(persistedFreshSave.tutorials.firstRunWelcomePending, true);
+
   const fresh = createTutorialProgress();
   const welcome = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.menu-welcome');
   assert.ok(welcome);
@@ -172,13 +177,17 @@ test('Arena tutorial cleanup and success events are wired to authoritative gamep
 });
 
 test('first-run scene handoff, live Main Menu targets, and undimmed Arena teaching are wired', async () => {
-  const [profiles, menu, overlay, styles] = await Promise.all([
+  const [profiles, profileUi, menu, overlay, styles] = await Promise.all([
     readFile(new URL('../src/game/scenes/LocalProfileScene.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/ui/local-profiles/LocalProfilesUi.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/game/tutorial/TutorialOverlay.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/style.css', import.meta.url), 'utf8')
   ]);
-  assert.match(profiles, /SaveSystem\.createProfile\(value\)[\s\S]*?this\.scene\.start\(SceneKeys\.MainMenu\)/);
+  assert.match(profiles, /SaveSystem\.createProfile\(value\)[\s\S]*?this\.scene\.start\(SceneKeys\.MainMenu, \{ showFirstRunWelcome: true \}\)/);
+  assert.doesNotMatch(profileUi, /this\.root\.replaceChildren\(\)/);
+  assert.match(profileUi, /this\.screen\?\.remove\(\)/);
+  assert.match(menu, /data\.showFirstRunWelcome[\s\S]*?replay\('onboarding\.menu-welcome'\)/);
   assert.match(menu, /unionTutorialBounds\(\[startButton\.getBounds\(\), localStartButton\.getBounds\(\)\]\)/);
   assert.match(menu, /completeActiveManualStep\(sequenceId, 'choose-mode'\)/);
   assert.match(overlay, /resolveTutorialCalloutPlacement/);
