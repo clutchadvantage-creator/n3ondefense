@@ -16,6 +16,7 @@ import type { RunSetupSelection } from '../economy/types.ts';
 import { formatWeeklyCountdown, type WeeklyOperationDeck, type WeeklyOperationDecksSnapshot, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
+import { completeFirstRunTeachingRound } from '../tutorial/TutorialProgress.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 
 const MAIN_MENU_TIPS = [
@@ -99,6 +100,14 @@ export class MainMenuScene extends Phaser.Scene {
     this.createBranding(width, height);
 
     const profile = SaveSystem.getActiveProfileSummary();
+    if (profile) {
+      // Repair profiles already stranded by the previous completion guard.
+      // A persisted completed round proves that this first-run deployment
+      // succeeded, so Main Menu must continue at Store—not START LOCAL.
+      if (SaveSystem.getTutorialProgress().firstRunStage === 'arena-teaching' && profile.roundsCompleted > 0) {
+        SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress); });
+      }
+    }
     const requestedProtocol = profile ? SaveSystem.getPreferredProtocol() : 'normal';
     const protocol = profile && SaveSystem.getHighestRound() >= RUN_PROTOCOLS[requestedProtocol].unlockHighestRound
       ? requestedProtocol

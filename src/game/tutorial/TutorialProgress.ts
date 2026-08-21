@@ -34,10 +34,22 @@ export const setFirstRunTeachingStage = (state: TutorialProgressState, stage: Fi
   state.firstRunWelcomePending = stage === 'welcome-main-menu' || stage === 'waiting-for-start-local';
 };
 
-export const isFirstRunArenaTeachingComplete = (state: TutorialProgressState): boolean =>
-  state.firstRunStage === 'arena-teaching'
-  && ['onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']
-    .every((sequenceId) => isTutorialSequenceComplete(state, sequenceId));
+/**
+ * A successful round is the authoritative completion signal for the Arena
+ * portion of first-run Teaching. Do not require every presentation sequence
+ * flag here: a round can finish while the final acknowledgement is settling,
+ * which previously left the profile at `arena-teaching` and made Main Menu
+ * incorrectly demand another START LOCAL deployment.
+ */
+export const completeFirstRunTeachingRound = (state: TutorialProgressState): boolean => {
+  if (state.firstRunStage !== 'arena-teaching') return false;
+  for (const sequenceId of ['onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']) {
+    addUnique(state.completedSequences, sequenceId);
+    state.skippedSequences = state.skippedSequences.filter((id) => id !== sequenceId);
+  }
+  setFirstRunTeachingStage(state, 'waiting-for-store');
+  return true;
+};
 
 export const completeTutorialStep = (state: TutorialProgressState, sequenceId: string, stepId: string): void => {
   const steps = state.completedSteps[sequenceId] ?? (state.completedSteps[sequenceId] = []);

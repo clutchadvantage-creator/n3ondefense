@@ -5,6 +5,7 @@ import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/Sav
 import {
   completeTutorialSequence,
   completeTutorialStep,
+  completeFirstRunTeachingRound,
   createTutorialProgress,
   isTutorialSequenceComplete,
   isTutorialSequenceEligible,
@@ -109,10 +110,8 @@ test('exact first-run state machine requires real menu actions and ends after Mo
   completeTutorialSequence(progress, 'onboarding.menu-welcome');
   assert.equal(progress.firstRunStage, 'arena-teaching');
 
-  for (const id of ['onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']) {
-    completeTutorialSequence(progress, id);
-  }
-  setFirstRunTeachingStage(progress, 'waiting-for-store');
+  assert.equal(completeFirstRunTeachingRound(progress), true);
+  assert.equal(progress.firstRunStage, 'waiting-for-store');
   completeTutorialStep(progress, 'onboarding.menu-store', 'store');
   assert.equal(progress.firstRunStage, 'store-teaching');
   completeTutorialSequence(progress, 'onboarding.store');
@@ -125,6 +124,25 @@ test('exact first-run state machine requires real menu actions and ends after Mo
   assert.equal(progress.firstRunStage, 'complete');
   assert.equal(isTutorialSequenceComplete(progress, 'progression.store'), true);
   assert.equal(isTutorialSequenceComplete(progress, 'progression.mod-collection'), true);
+});
+
+test('successful Teaching-round completion advances to Store even when a presentation flag is still settling', () => {
+  const progress = createTutorialProgress();
+  setFirstRunTeachingStage(progress, 'arena-teaching');
+  completeTutorialSequence(progress, 'onboarding.basic-controls');
+
+  assert.equal(isTutorialSequenceComplete(progress, 'onboarding.defense'), false);
+  assert.equal(isTutorialSequenceComplete(progress, 'onboarding.hud'), false);
+  assert.equal(completeFirstRunTeachingRound(progress), true);
+  assert.equal(progress.firstRunStage, 'waiting-for-store');
+  assert.equal(isTutorialSequenceComplete(progress, 'onboarding.defense'), true);
+  assert.equal(isTutorialSequenceComplete(progress, 'onboarding.hud'), true);
+
+  const resume = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.menu-resume-training');
+  const store = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.menu-store');
+  assert.equal(isTutorialSequenceEligible(progress, resume, 'menu'), false);
+  assert.equal(isTutorialSequenceEligible(progress, store, 'menu'), true);
+  assert.equal(completeFirstRunTeachingRound(progress), false);
 });
 
 test('tutorial eligibility respects scene, prerequisites, completion, and skip state', () => {
@@ -225,8 +243,8 @@ test('Arena tutorial cleanup and success events are wired to authoritative gamep
   assert.match(arena, /this\.pointerLock\?\.release\(\)/);
   assert.match(arena, /this\.pointerLock\.requestLock\(\)/);
   assert.match(arena, /const displayDiameter = diameter \* camera\.zoom/);
-  assert.match(arena, /isFirstRunArenaTeachingComplete\(SaveSystem\.getTutorialProgress\(\)\)/);
-  assert.match(arena, /setFirstRunTeachingStage\(progress, 'waiting-for-store'\)/);
+  assert.match(arena, /firstRunStage === 'arena-teaching'/);
+  assert.match(arena, /completeFirstRunTeachingRound\(progress\)/);
   assert.match(arena, /this\.scene\.start\(SceneKeys\.MainMenu\)/);
 });
 
@@ -251,6 +269,8 @@ test('first-run scene handoff, live Main Menu targets, and undimmed Arena teachi
   assert.match(menu, /TutorialEventBus\.emit\('ui\.startLocalSelected'\)/);
   assert.match(menu, /TutorialEventBus\.emit\('ui\.storeSelected'\)/);
   assert.match(menu, /TutorialEventBus\.emit\('ui\.garageSelected'\)/);
+  assert.match(menu, /firstRunStage === 'arena-teaching' && profile\.roundsCompleted > 0/);
+  assert.match(menu, /completeFirstRunTeachingRound\(progress\)/);
   assert.match(store, /onboarding\.store[\s\S]*?SceneKeys\.MainMenu/);
   assert.doesNotMatch(storefront, /root\.replaceChildren/);
   assert.match(storefront, /this\.screen\?\.remove\(\)/);

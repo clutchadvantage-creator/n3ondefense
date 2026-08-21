@@ -71,7 +71,7 @@ import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
-import { isFirstRunArenaTeachingComplete, setFirstRunTeachingStage } from '../tutorial/TutorialProgress.ts';
+import { completeFirstRunTeachingRound } from '../tutorial/TutorialProgress.ts';
 import type { TutorialMode, TutorialTargetBounds } from '../tutorial/TutorialTypes.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { nextPickupBuffStack, resourcePickupCap } from '../player/OverdriveRules.ts';
@@ -4622,8 +4622,9 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.endEncounter('completed', { credits: rewardCredits, coreTokens: rewardTokens, fluxCores: rewardFluxCores });
 
     this.transitionAfterModReveals(1400, () => {
-      if (isFirstRunArenaTeachingComplete(SaveSystem.getTutorialProgress())) {
-        SaveSystem.updateTutorialProgress((progress) => setFirstRunTeachingStage(progress, 'waiting-for-store'));
+      const completedTeachingRound = SaveSystem.getTutorialProgress().firstRunStage === 'arena-teaching';
+      if (completedTeachingRound) {
+        SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress); });
         GameplayTelemetryRecorder.finishRun('quit');
         OnlineRunManager.complete('quit', completedRound);
         this.registry.remove('arena-session');
