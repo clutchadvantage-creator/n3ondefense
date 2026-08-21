@@ -725,8 +725,5 @@ export class MainMenuScene extends Phaser.Scene {
     const background = this.add.image(width / 2, height / 2, 'main-menu-background').setDepth(-99);
     const coverScale = Math.max(width / background.width, height / background.height);
     background.setScale(coverScale);
-    // A static veil keeps the action image recognizable without competing
-    // with menu labels. No background tweens or simulated arena objects run.
-    this.add.rectangle(width / 2, height / 2, width, height, 0x02070d, 0.56).setDepth(-98);
   }
 }
