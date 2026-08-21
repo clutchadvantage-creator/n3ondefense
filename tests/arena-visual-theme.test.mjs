@@ -47,16 +47,23 @@ test('animated neon city dressing remains strictly bounded for late-game renderi
   }
 });
 
-test('arena exterior is a non-interactive cyberpunk beach stadium built from bounded static layers', () => {
+test('arena exterior uses recognizable four-sided stadium architecture instead of abstract stripe filler', () => {
   const source = readFileSync(new URL('../src/game/arena/ArenaVisualRenderer.ts', import.meta.url), 'utf8');
 
   assert.match(source, /drawBackdropAndBeachStadium/);
   assert.match(source, /drawCoastalApron/);
   assert.match(source, /drawStadiumStructure/);
+  assert.match(source, /drawHorizontalGrandstand/);
+  assert.match(source, /drawVerticalGrandstand/);
+  assert.match(source, /drawHorizontalEntryGate/);
+  assert.match(source, /drawVerticalEntryGate/);
+  assert.match(source, /drawStadiumLightTowers/);
   assert.match(source, /drawPalmTrees/);
   assert.match(source, /drawVenueBanners/);
   assert.match(source, /N3ON BEACH CIRCUIT \/\/ LIVE/);
-  assert.match(source, /Crowd lights are baked into this one Graphics object/);
+  assert.doesNotMatch(source, /waveStride/);
+  assert.doesNotMatch(source, /drawHorizontalStand/);
+  assert.doesNotMatch(source, /drawVerticalStand/);
   assert.doesNotMatch(source, /physics\.(?:add|world)/);
 });
 

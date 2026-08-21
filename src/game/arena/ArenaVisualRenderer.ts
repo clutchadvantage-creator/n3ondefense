@@ -58,46 +58,48 @@ export class ArenaVisualRenderer {
   }
 
   private drawCoastalApron(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, random: SeededRandom): void {
-    // The reference composition keeps the ocean beyond the long stadium sides,
-    // with a narrow warm promenade between the venue and the surf. Everything
-    // remains below the arena floor, so no dressing can enter gameplay space.
+    // Ocean sits beyond the long sides of the venue. Filled foam clusters and
+    // a tiled promenade replace the former full-height cyan wave stripes.
     graphics.fillStyle(0x031329, 1);
     graphics.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-    const sideMargin = Math.max(0, Math.min(bounds.x, WORLD_WIDTH - bounds.x - bounds.w));
-    const beachWidth = Math.max(8, Math.min(76, sideMargin * 0.42));
-    graphics.fillStyle(0x5a3650, 0.88);
-    graphics.fillRect(Math.max(0, bounds.x - beachWidth), 0, beachWidth, WORLD_HEIGHT);
-    graphics.fillRect(bounds.x + bounds.w, 0, beachWidth, WORLD_HEIGHT);
-    graphics.fillStyle(0xd09270, 0.18);
-    graphics.fillRect(Math.max(0, bounds.x - beachWidth), 0, Math.max(3, beachWidth * 0.55), WORLD_HEIGHT);
-    graphics.fillRect(bounds.x + bounds.w + beachWidth * 0.45, 0, Math.max(3, beachWidth * 0.55), WORLD_HEIGHT);
+    const leftMargin = Math.max(0, bounds.x);
+    const rightMargin = Math.max(0, WORLD_WIDTH - bounds.x - bounds.w);
+    const leftVenueDepth = Math.max(18, Math.min(104, leftMargin * 0.58));
+    const rightVenueDepth = Math.max(18, Math.min(104, rightMargin * 0.58));
+    const leftShore = Math.max(0, bounds.x - leftVenueDepth);
+    const rightShore = Math.min(WORLD_WIDTH, bounds.x + bounds.w + rightVenueDepth);
+    const leftBeachWidth = Math.max(6, Math.min(66, leftShore * 0.45));
+    const rightBeachWidth = Math.max(6, Math.min(66, (WORLD_WIDTH - rightShore) * 0.45));
 
-    graphics.lineStyle(2, 0x2bdff3, 0.2);
-    const waveStride = 34;
-    for (let y = 12; y < WORLD_HEIGHT; y += waveStride) {
-      const wobble = random.int(-5, 5);
-      const leftEnd = Math.max(4, bounds.x - beachWidth - 5);
-      const rightStart = Math.min(WORLD_WIDTH - 4, bounds.x + bounds.w + beachWidth + 5);
-      if (leftEnd > 8) {
-        graphics.beginPath();
-        graphics.moveTo(3, y + wobble);
-        graphics.lineTo(leftEnd * 0.48, y - 3 + wobble);
-        graphics.lineTo(leftEnd, y + 2 + wobble);
-        graphics.strokePath();
-      }
-      if (rightStart < WORLD_WIDTH - 8) {
-        graphics.beginPath();
-        graphics.moveTo(rightStart, y + 2 + wobble);
-        graphics.lineTo(rightStart + (WORLD_WIDTH - rightStart) * 0.52, y - 3 + wobble);
-        graphics.lineTo(WORLD_WIDTH - 3, y + wobble);
-        graphics.strokePath();
-      }
+    graphics.fillStyle(0x6f4a55, 0.94);
+    graphics.fillRect(Math.max(0, leftShore - leftBeachWidth), 0, leftBeachWidth, WORLD_HEIGHT);
+    graphics.fillRect(rightShore, 0, rightBeachWidth, WORLD_HEIGHT);
+    graphics.fillStyle(0xd6a56f, 0.34);
+    graphics.fillRect(Math.max(0, leftShore - leftBeachWidth * 0.72), 0, leftBeachWidth * 0.72, WORLD_HEIGHT);
+    graphics.fillRect(rightShore + rightBeachWidth * 0.28, 0, rightBeachWidth * 0.72, WORLD_HEIGHT);
+
+    // Boardwalk tiles make the shore/venue transition read as a promenade.
+    const tileHeight = 42;
+    for (let y = 0, tile = 0; y < WORLD_HEIGHT; y += tileHeight, tile += 1) {
+      const inset = tile % 2 === 0 ? 2 : 7;
+      graphics.fillStyle(tile % 2 === 0 ? 0x412c42 : 0x34253b, 0.72);
+      graphics.fillRoundedRect(Math.max(0, leftShore - leftBeachWidth + inset), y + 3, Math.max(3, leftBeachWidth - inset - 3), tileHeight - 7, 3);
+      graphics.fillRoundedRect(rightShore + 3, y + 3, Math.max(3, rightBeachWidth - inset - 3), tileHeight - 7, 3);
     }
 
-    graphics.lineStyle(3, 0xbffcff, 0.32);
-    graphics.lineBetween(Math.max(2, bounds.x - beachWidth - 3), 0, Math.max(2, bounds.x - beachWidth - 3), WORLD_HEIGHT);
-    graphics.lineBetween(Math.min(WORLD_WIDTH - 2, bounds.x + bounds.w + beachWidth + 3), 0, Math.min(WORLD_WIDTH - 2, bounds.x + bounds.w + beachWidth + 3), WORLD_HEIGHT);
+    // Small foam patches suggest moving surf without any repeated long lines.
+    for (let y = 18; y < WORLD_HEIGHT; y += 54) {
+      const wobble = random.int(-7, 7);
+      const leftFoamX = Math.max(4, leftShore - leftBeachWidth - random.int(3, 13));
+      const rightFoamX = Math.min(WORLD_WIDTH - 4, rightShore + rightBeachWidth + random.int(3, 13));
+      graphics.fillStyle(0xaafaff, random.float(0.14, 0.3));
+      graphics.fillEllipse(leftFoamX, y + wobble, random.int(10, 24), random.int(4, 8));
+      graphics.fillEllipse(rightFoamX, y - wobble, random.int(10, 24), random.int(4, 8));
+      graphics.fillStyle(0x45dff5, 0.18);
+      graphics.fillCircle(leftFoamX + random.int(-7, 7), y + 9 + wobble, random.int(2, 4));
+      graphics.fillCircle(rightFoamX + random.int(-7, 7), y + 9 - wobble, random.int(2, 4));
+    }
   }
 
   private drawStadiumStructure(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, random: SeededRandom): void {
@@ -105,74 +107,261 @@ export class ArenaVisualRenderer {
     const bottomMargin = Math.max(0, WORLD_HEIGHT - bounds.y - bounds.h);
     const leftMargin = Math.max(0, bounds.x);
     const rightMargin = Math.max(0, WORLD_WIDTH - bounds.x - bounds.w);
-    const topDepth = Math.max(22, Math.min(122, topMargin - 5));
-    const bottomDepth = Math.max(22, Math.min(122, bottomMargin - 5));
-    const leftDepth = Math.max(16, Math.min(82, leftMargin - 5));
-    const rightDepth = Math.max(16, Math.min(82, rightMargin - 5));
+    const topDepth = Math.max(24, Math.min(132, topMargin * 0.82));
+    const bottomDepth = Math.max(24, Math.min(132, bottomMargin * 0.82));
+    const leftDepth = Math.max(20, Math.min(104, leftMargin * 0.58));
+    const rightDepth = Math.max(20, Math.min(104, rightMargin * 0.58));
     const topY = Math.max(0, bounds.y - topDepth);
     const bottomY = Math.min(WORLD_HEIGHT - bottomDepth, bounds.y + bounds.h);
     const leftX = Math.max(0, bounds.x - leftDepth);
     const rightX = Math.min(WORLD_WIDTH - rightDepth, bounds.x + bounds.w);
 
-    graphics.fillStyle(0x02050a, 0.9);
-    graphics.fillRoundedRect(leftX - 12, topY - 12, rightX + rightDepth - leftX + 24, bottomY + bottomDepth - topY + 24, 20);
-    graphics.fillStyle(0x09111d, 1);
-    graphics.fillRect(bounds.x, topY, bounds.w, topDepth);
-    graphics.fillRect(bounds.x, bottomY, bounds.w, bottomDepth);
-    graphics.fillRect(leftX, bounds.y, leftDepth, bounds.h);
-    graphics.fillRect(rightX, bounds.y, rightDepth, bounds.h);
+    graphics.fillStyle(0x010308, 0.96);
+    graphics.fillRoundedRect(leftX - 10, topY - 10, rightX + rightDepth - leftX + 20, bottomY + bottomDepth - topY + 20, 18);
 
-    const drawHorizontalStand = (y: number, depth: number, inverted: boolean): void => {
-      const rows = Math.max(2, Math.min(5, Math.floor(depth / 18)));
-      for (let row = 0; row < rows; row += 1) {
-        const rowY = inverted ? y + depth - 8 - row * 15 : y + 8 + row * 15;
-        graphics.fillStyle(row % 2 === 0 ? 0x11182a : 0x0a101d, 0.98);
-        graphics.fillRect(bounds.x + 28 + row * 10, rowY - 5, Math.max(10, bounds.w - 56 - row * 20), 10);
-        graphics.lineStyle(1, row % 2 ? this.layout.theme.primary : this.layout.theme.secondary, 0.25);
-        graphics.lineBetween(bounds.x + 36 + row * 10, rowY, bounds.x + bounds.w - 36 - row * 10, rowY);
-      }
-      const bayWidth = 128;
-      graphics.lineStyle(2, 0x254057, 0.52);
-      for (let x = bounds.x + bayWidth; x < bounds.x + bounds.w; x += bayWidth) {
-        graphics.lineBetween(x, y + 4, x, y + depth - 4);
-      }
-    };
-    drawHorizontalStand(topY, topDepth, true);
-    drawHorizontalStand(bottomY, bottomDepth, false);
-
-    const drawVerticalStand = (x: number, depth: number, inverted: boolean): void => {
-      const rows = Math.max(2, Math.min(4, Math.floor(depth / 17)));
-      for (let row = 0; row < rows; row += 1) {
-        const rowX = inverted ? x + depth - 7 - row * 14 : x + 7 + row * 14;
-        graphics.fillStyle(row % 2 === 0 ? 0x101827 : 0x080f19, 0.98);
-        graphics.fillRect(rowX - 5, bounds.y + 34 + row * 8, 10, Math.max(10, bounds.h - 68 - row * 16));
-        graphics.lineStyle(1, row % 2 ? this.layout.theme.secondary : this.layout.theme.primary, 0.22);
-        graphics.lineBetween(rowX, bounds.y + 40, rowX, bounds.y + bounds.h - 40);
-      }
-    };
-    drawVerticalStand(leftX, leftDepth, true);
-    drawVerticalStand(rightX, rightDepth, false);
-
-    // Crowd lights are baked into this one Graphics object rather than created
-    // as individual display objects. They suggest a live venue at near-zero
-    // runtime cost after setup.
-    const spectatorColors = [0x45efff, 0xff4fcf, 0xffc857, 0x8affbd];
-    for (let index = 0; index < this.plan.spectatorLightCount; index += 1) {
-      const top = index % 2 === 0;
-      const depth = top ? topDepth : bottomDepth;
-      const yBase = top ? topY : bottomY;
-      const x = random.int(bounds.x + 32, bounds.x + bounds.w - 32);
-      const y = yBase + random.int(7, Math.max(8, Math.floor(depth - 7)));
-      graphics.fillStyle(random.pick(spectatorColors), random.float(0.32, 0.78));
-      graphics.fillCircle(x, y, random.int(1, 2));
+    const topConcourse = Math.max(6, Math.min(20, topDepth * 0.2));
+    const bottomConcourse = Math.max(6, Math.min(20, bottomDepth * 0.2));
+    const leftConcourse = Math.max(6, Math.min(18, leftDepth * 0.2));
+    const rightConcourse = Math.max(6, Math.min(18, rightDepth * 0.2));
+    graphics.fillStyle(0x172638, 1);
+    graphics.fillRect(bounds.x, bounds.y - topConcourse, bounds.w, topConcourse);
+    graphics.fillRect(bounds.x, bounds.y + bounds.h, bounds.w, bottomConcourse);
+    graphics.fillRect(bounds.x - leftConcourse, bounds.y, leftConcourse, bounds.h);
+    graphics.fillRect(bounds.x + bounds.w, bounds.y, rightConcourse, bounds.h);
+    for (let x = bounds.x + 10, tile = 0; x < bounds.x + bounds.w - 10; x += 46, tile += 1) {
+      graphics.fillStyle(tile % 2 ? 0x24384c : 0x1d3043, 0.95);
+      graphics.fillRoundedRect(x, bounds.y - topConcourse + 3, 31, Math.max(3, topConcourse - 6), 2);
+      graphics.fillRoundedRect(x, bounds.y + bounds.h + 3, 31, Math.max(3, bottomConcourse - 6), 2);
+    }
+    for (let y = bounds.y + 10, tile = 0; y < bounds.y + bounds.h - 10; y += 46, tile += 1) {
+      graphics.fillStyle(tile % 2 ? 0x24384c : 0x1d3043, 0.95);
+      graphics.fillRoundedRect(bounds.x - leftConcourse + 3, y, Math.max(3, leftConcourse - 6), 31, 2);
+      graphics.fillRoundedRect(bounds.x + bounds.w + 3, y, Math.max(3, rightConcourse - 6), 31, 2);
     }
 
-    graphics.lineStyle(4, this.layout.theme.primary, 0.54);
-    graphics.lineBetween(bounds.x, bounds.y - 3, bounds.x + bounds.w, bounds.y - 3);
-    graphics.lineBetween(bounds.x, bounds.y + bounds.h + 3, bounds.x + bounds.w, bounds.y + bounds.h + 3);
-    graphics.lineStyle(2, this.layout.theme.secondary, 0.55);
-    graphics.lineBetween(bounds.x - 3, bounds.y, bounds.x - 3, bounds.y + bounds.h);
-    graphics.lineBetween(bounds.x + bounds.w + 3, bounds.y, bounds.x + bounds.w + 3, bounds.y + bounds.h);
+    const horizontalSeatBudget = Math.floor(this.plan.spectatorLightCount * 0.36);
+    const verticalSeatBudget = Math.floor(this.plan.spectatorLightCount * 0.14);
+    this.drawHorizontalGrandstand(graphics, bounds.x, bounds.w, bounds.y, topDepth, true, random, { remaining: horizontalSeatBudget });
+    this.drawHorizontalGrandstand(graphics, bounds.x, bounds.w, bounds.y + bounds.h, bottomDepth, false, random, { remaining: horizontalSeatBudget });
+    this.drawVerticalGrandstand(graphics, bounds.y, bounds.h, bounds.x, leftDepth, true, random, { remaining: verticalSeatBudget });
+    this.drawVerticalGrandstand(graphics, bounds.y, bounds.h, bounds.x + bounds.w, rightDepth, false, random, { remaining: verticalSeatBudget });
+    this.drawStadiumLightTowers(graphics, bounds, topDepth, bottomDepth);
+
+    // A solid concourse and segmented safety rail visually separate spectators
+    // from the combat floor without creating any gameplay object or collider.
+    graphics.fillStyle(0x142232, 0.98);
+    graphics.fillRect(bounds.x, bounds.y - 8, bounds.w, 8);
+    graphics.fillRect(bounds.x, bounds.y + bounds.h, bounds.w, 8);
+    graphics.fillRect(bounds.x - 8, bounds.y, 8, bounds.h);
+    graphics.fillRect(bounds.x + bounds.w, bounds.y, 8, bounds.h);
+    for (let x = bounds.x + 16, segment = 0; x < bounds.x + bounds.w - 10; x += 38, segment += 1) {
+      graphics.fillStyle(segment % 2 ? this.layout.theme.primary : this.layout.theme.secondary, 0.62);
+      graphics.fillRoundedRect(x, bounds.y - 5, 24, 3, 1);
+      graphics.fillRoundedRect(x, bounds.y + bounds.h + 2, 24, 3, 1);
+    }
+    for (let y = bounds.y + 16, segment = 0; y < bounds.y + bounds.h - 10; y += 38, segment += 1) {
+      graphics.fillStyle(segment % 2 ? this.layout.theme.secondary : this.layout.theme.primary, 0.58);
+      graphics.fillRoundedRect(bounds.x - 5, y, 3, 24, 1);
+      graphics.fillRoundedRect(bounds.x + bounds.w + 2, y, 3, 24, 1);
+    }
+  }
+
+  private drawHorizontalGrandstand(
+    graphics: Phaser.GameObjects.Graphics,
+    startX: number,
+    width: number,
+    edgeY: number,
+    depth: number,
+    top: boolean,
+    random: SeededRandom,
+    seatBudget: { remaining: number }
+  ): void {
+    const bayCount = Math.max(5, Math.min(10, Math.round(width / 235)));
+    const bayWidth = width / bayCount;
+    const concourse = Math.max(6, Math.min(20, depth * 0.2));
+    const standDepth = Math.max(12, depth - concourse);
+    const direction = top ? -1 : 1;
+    const centerBay = Math.floor(bayCount * 0.5);
+    for (let bay = 0; bay < bayCount; bay += 1) {
+      const x = startX + bay * bayWidth + 6;
+      const w = Math.max(26, bayWidth - 12);
+      if (bay === centerBay) {
+        this.drawHorizontalEntryGate(graphics, x, w, edgeY, depth, top);
+        continue;
+      }
+      const outerY = edgeY + direction * depth;
+      const innerY = edgeY + direction * concourse;
+      graphics.fillStyle(0x0c1422, 1);
+      graphics.fillPoints([
+        { x: x + 10, y: outerY }, { x: x + w - 10, y: outerY },
+        { x: x + w, y: innerY }, { x, y: innerY }
+      ], true);
+      graphics.lineStyle(2, bay % 2 ? this.layout.theme.primary : this.layout.theme.secondary, 0.38);
+      graphics.strokePoints([
+        { x: x + 10, y: outerY }, { x: x + w - 10, y: outerY },
+        { x: x + w, y: innerY }, { x, y: innerY }
+      ], true);
+      const rearY = top ? outerY - 5 : outerY;
+      graphics.fillStyle(0x31465b, 1);
+      graphics.fillRoundedRect(x + 5, rearY, w - 10, 5, 2);
+      graphics.fillRoundedRect(x + 7, Math.min(outerY, innerY), 5, Math.max(5, Math.abs(innerY - outerY)), 2);
+      graphics.fillRoundedRect(x + w - 12, Math.min(outerY, innerY), 5, Math.max(5, Math.abs(innerY - outerY)), 2);
+
+      const rows = Math.max(2, Math.min(5, Math.floor(standDepth / 15)));
+      for (let row = 0; row < rows; row += 1) {
+        const t0 = row / rows;
+        const t1 = (row + 0.78) / rows;
+        const rowOuterY = Phaser.Math.Linear(outerY, innerY, t0);
+        const rowInnerY = Phaser.Math.Linear(outerY, innerY, t1);
+        const outerInset = 9 * (1 - t0);
+        const innerInset = 9 * (1 - t1);
+        graphics.fillStyle(row % 2 ? 0x1b2638 : 0x253249, 0.98);
+        graphics.fillPoints([
+          { x: x + outerInset, y: rowOuterY }, { x: x + w - outerInset, y: rowOuterY },
+          { x: x + w - innerInset, y: rowInnerY }, { x: x + innerInset, y: rowInnerY }
+        ], true);
+        const seatY = (rowOuterY + rowInnerY) * 0.5;
+        for (let seatX = x + 15; seatX < x + w - 12 && seatBudget.remaining > 0; seatX += 16) {
+          const color = random.pick([0x45efff, 0xff4fcf, 0xffc857, 0x8affbd]);
+          graphics.fillStyle(color, random.float(0.42, 0.82));
+          graphics.fillRoundedRect(seatX, seatY - 2, 8, 4, 1);
+          seatBudget.remaining -= 1;
+        }
+      }
+
+      // Filled aisle wedges and support feet make each bay architectural.
+      graphics.fillStyle(0x03070d, 1);
+      graphics.fillPoints([
+        { x: x, y: innerY }, { x: x + 8, y: innerY },
+        { x: x + 15, y: outerY }, { x: x + 9, y: outerY }
+      ], true);
+      graphics.fillStyle(0x25374a, 1);
+      graphics.fillRoundedRect(x + 7, outerY - (top ? 4 : 0), 9, 4, 1);
+      graphics.fillRoundedRect(x + w - 16, outerY - (top ? 4 : 0), 9, 4, 1);
+    }
+  }
+
+  private drawVerticalGrandstand(
+    graphics: Phaser.GameObjects.Graphics,
+    startY: number,
+    height: number,
+    edgeX: number,
+    depth: number,
+    left: boolean,
+    random: SeededRandom,
+    seatBudget: { remaining: number }
+  ): void {
+    const bayCount = Math.max(4, Math.min(8, Math.round(height / 225)));
+    const bayHeight = height / bayCount;
+    const concourse = Math.max(6, Math.min(18, depth * 0.2));
+    const standDepth = Math.max(12, depth - concourse);
+    const direction = left ? -1 : 1;
+    const centerBay = Math.floor(bayCount * 0.5);
+    for (let bay = 0; bay < bayCount; bay += 1) {
+      const y = startY + bay * bayHeight + 6;
+      const h = Math.max(28, bayHeight - 12);
+      if (bay === centerBay) {
+        this.drawVerticalEntryGate(graphics, y, h, edgeX, depth, left);
+        continue;
+      }
+      const outerX = edgeX + direction * depth;
+      const innerX = edgeX + direction * concourse;
+      graphics.fillStyle(0x0b1421, 1);
+      graphics.fillPoints([
+        { x: outerX, y: y + 10 }, { x: innerX, y },
+        { x: innerX, y: y + h }, { x: outerX, y: y + h - 10 }
+      ], true);
+      graphics.lineStyle(2, bay % 2 ? this.layout.theme.secondary : this.layout.theme.primary, 0.36);
+      graphics.strokePoints([
+        { x: outerX, y: y + 10 }, { x: innerX, y },
+        { x: innerX, y: y + h }, { x: outerX, y: y + h - 10 }
+      ], true);
+      const rearX = left ? outerX - 5 : outerX;
+      graphics.fillStyle(0x31465b, 1);
+      graphics.fillRoundedRect(rearX, y + 5, 5, h - 10, 2);
+      graphics.fillRoundedRect(Math.min(outerX, innerX), y + 7, Math.max(5, Math.abs(innerX - outerX)), 5, 2);
+      graphics.fillRoundedRect(Math.min(outerX, innerX), y + h - 12, Math.max(5, Math.abs(innerX - outerX)), 5, 2);
+
+      const rows = Math.max(2, Math.min(4, Math.floor(standDepth / 15)));
+      for (let row = 0; row < rows; row += 1) {
+        const t0 = row / rows;
+        const t1 = (row + 0.78) / rows;
+        const rowOuterX = Phaser.Math.Linear(outerX, innerX, t0);
+        const rowInnerX = Phaser.Math.Linear(outerX, innerX, t1);
+        const outerInset = 9 * (1 - t0);
+        const innerInset = 9 * (1 - t1);
+        graphics.fillStyle(row % 2 ? 0x1b2739 : 0x26334a, 0.98);
+        graphics.fillPoints([
+          { x: rowOuterX, y: y + outerInset }, { x: rowInnerX, y: y + innerInset },
+          { x: rowInnerX, y: y + h - innerInset }, { x: rowOuterX, y: y + h - outerInset }
+        ], true);
+        const seatX = (rowOuterX + rowInnerX) * 0.5;
+        for (let seatY = y + 15; seatY < y + h - 12 && seatBudget.remaining > 0; seatY += 16) {
+          graphics.fillStyle(random.pick([0x45efff, 0xff4fcf, 0xffc857, 0x8affbd]), random.float(0.4, 0.78));
+          graphics.fillRoundedRect(seatX - 2, seatY, 4, 8, 1);
+          seatBudget.remaining -= 1;
+        }
+      }
+    }
+  }
+
+  private drawHorizontalEntryGate(graphics: Phaser.GameObjects.Graphics, x: number, width: number, edgeY: number, depth: number, top: boolean): void {
+    const direction = top ? -1 : 1;
+    const outerY = edgeY + direction * depth;
+    const innerY = edgeY + direction * Math.max(5, depth * 0.16);
+    graphics.fillStyle(0x020409, 1);
+    graphics.fillPoints([
+      { x: x + 8, y: outerY }, { x: x + width - 8, y: outerY },
+      { x: x + width * 0.72, y: innerY }, { x: x + width * 0.28, y: innerY }
+    ], true);
+    graphics.fillStyle(0x26384d, 1);
+    const supportY = Math.min(outerY, innerY);
+    const supportHeight = Math.max(5, Math.abs(innerY - outerY));
+    graphics.fillRoundedRect(x + 6, supportY, 10, supportHeight, 2);
+    graphics.fillRoundedRect(x + width - 16, supportY, 10, supportHeight, 2);
+    graphics.fillStyle(this.layout.theme.secondary, 0.62);
+    graphics.fillRoundedRect(x + width * 0.28, outerY + direction * 4, width * 0.44, 5, 2);
+  }
+
+  private drawVerticalEntryGate(graphics: Phaser.GameObjects.Graphics, y: number, height: number, edgeX: number, depth: number, left: boolean): void {
+    const direction = left ? -1 : 1;
+    const outerX = edgeX + direction * depth;
+    const innerX = edgeX + direction * Math.max(5, depth * 0.16);
+    graphics.fillStyle(0x020409, 1);
+    graphics.fillPoints([
+      { x: outerX, y: y + 8 }, { x: innerX, y: y + height * 0.28 },
+      { x: innerX, y: y + height * 0.72 }, { x: outerX, y: y + height - 8 }
+    ], true);
+    graphics.fillStyle(0x26384d, 1);
+    graphics.fillRoundedRect(Math.min(outerX, innerX), y + 6, Math.max(5, Math.abs(innerX - outerX)), 10, 2);
+    graphics.fillRoundedRect(Math.min(outerX, innerX), y + height - 16, Math.max(5, Math.abs(innerX - outerX)), 10, 2);
+    graphics.fillStyle(this.layout.theme.primary, 0.62);
+    graphics.fillRoundedRect(outerX + direction * 4 - (left ? 5 : 0), y + height * 0.28, 5, height * 0.44, 2);
+  }
+
+  private drawStadiumLightTowers(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, topDepth: number, bottomDepth: number): void {
+    const rigs = [
+      { x: bounds.x + bounds.w * 0.12, y: Math.max(8, bounds.y - topDepth * 0.82), top: true },
+      { x: bounds.x + bounds.w * 0.88, y: Math.max(8, bounds.y - topDepth * 0.82), top: true },
+      { x: bounds.x + bounds.w * 0.12, y: Math.min(WORLD_HEIGHT - 8, bounds.y + bounds.h + bottomDepth * 0.82), top: false },
+      { x: bounds.x + bounds.w * 0.88, y: Math.min(WORLD_HEIGHT - 8, bounds.y + bounds.h + bottomDepth * 0.82), top: false }
+    ];
+    for (let rigIndex = 0; rigIndex < rigs.length; rigIndex += 1) {
+      const rig = rigs[rigIndex];
+      const accent = rigIndex % 2 ? this.layout.theme.primary : this.layout.theme.secondary;
+      graphics.fillStyle(0x03070d, 0.96);
+      graphics.fillPoints([
+        { x: rig.x - 13, y: rig.y }, { x: rig.x, y: rig.y - 10 },
+        { x: rig.x + 13, y: rig.y }, { x: rig.x, y: rig.y + 10 }
+      ], true);
+      graphics.fillStyle(0x24384c, 1);
+      graphics.fillRect(rig.x - 3, rig.top ? rig.y : rig.y - 22, 6, 22);
+      graphics.fillRoundedRect(rig.x - 24, rig.top ? rig.y + 18 : rig.y - 23, 48, 8, 2);
+      for (let light = 0; light < 4; light += 1) {
+        graphics.fillStyle(accent, 0.72);
+        graphics.fillRoundedRect(rig.x - 19 + light * 11, rig.top ? rig.y + 20 : rig.y - 21, 7, 4, 1);
+      }
+    }
   }
 
   private drawPalmTrees(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, random: SeededRandom): void {
@@ -200,62 +389,93 @@ export class ArenaVisualRenderer {
       const canopyY = Phaser.Math.Clamp(anchor.y - Math.cos(rotation) * trunkLength, 8, WORLD_HEIGHT - 8);
       const baseX = Phaser.Math.Clamp(anchor.x, 8, WORLD_WIDTH - 8);
       const baseY = Phaser.Math.Clamp(anchor.y, 8, WORLD_HEIGHT - 8);
-      graphics.lineStyle(Math.max(3, 7 * scale), 0x4e2748, 0.92);
-      graphics.lineBetween(baseX, baseY, canopyX, canopyY);
-      graphics.lineStyle(Math.max(1, 2 * scale), index % 2 ? this.layout.theme.primary : this.layout.theme.secondary, 0.42);
-      graphics.lineBetween(baseX, baseY, canopyX, canopyY);
+      const trunkSegments = 6;
+      for (let segment = 0; segment < trunkSegments; segment += 1) {
+        const t = segment / (trunkSegments - 1);
+        const x = Phaser.Math.Linear(baseX, canopyX, t);
+        const y = Phaser.Math.Linear(baseY, canopyY, t);
+        graphics.fillStyle(segment % 2 ? 0x6d3a55 : 0x4a2941, 0.96);
+        graphics.fillEllipse(x, y, Math.max(4, (8 - segment * 0.55) * scale), Math.max(3, (6 - segment * 0.4) * scale));
+      }
       for (let leaf = 0; leaf < 8; leaf += 1) {
         const angle = leaf * Math.PI / 4 + rotation;
         const length = random.int(24, 38) * scale;
+        const bend = leaf % 2 ? 0.1 : -0.1;
+        const tipAngle = angle + bend;
+        const tipX = canopyX + Math.cos(tipAngle) * length;
+        const tipY = canopyY + Math.sin(tipAngle) * length;
+        const normalX = -Math.sin(angle) * 5 * scale;
+        const normalY = Math.cos(angle) * 5 * scale;
         const midX = canopyX + Math.cos(angle) * length * 0.48;
         const midY = canopyY + Math.sin(angle) * length * 0.48;
-        const tipX = canopyX + Math.cos(angle + (leaf % 2 ? 0.12 : -0.12)) * length;
-        const tipY = canopyY + Math.sin(angle + (leaf % 2 ? 0.12 : -0.12)) * length;
-        graphics.lineStyle(Math.max(2, 5 * scale), 0x123d38, 0.9);
-        graphics.beginPath();
-        graphics.moveTo(canopyX, canopyY);
-        graphics.lineTo(midX, midY);
-        graphics.lineTo(tipX, tipY);
-        graphics.strokePath();
-        graphics.lineStyle(Math.max(1, 1.5 * scale), leaf % 2 ? 0x43ffba : 0x30d7db, 0.48);
-        graphics.lineBetween(canopyX, canopyY, tipX, tipY);
+        graphics.fillStyle(0x123d38, 0.96);
+        graphics.fillPoints([
+          { x: canopyX, y: canopyY },
+          { x: midX + normalX, y: midY + normalY },
+          { x: tipX, y: tipY },
+          { x: midX - normalX, y: midY - normalY }
+        ], true);
+        graphics.fillStyle(leaf % 2 ? 0x43ffba : 0x30d7db, 0.28);
+        graphics.fillPoints([
+          { x: canopyX, y: canopyY },
+          { x: midX + normalX * 0.42, y: midY + normalY * 0.42 },
+          { x: tipX, y: tipY },
+          { x: midX - normalX * 0.42, y: midY - normalY * 0.42 }
+        ], true);
       }
+      graphics.fillStyle(0x071a18, 1);
+      graphics.fillCircle(canopyX, canopyY, Math.max(4, 7 * scale));
       graphics.fillStyle(0xff4fcf, 0.74);
-      graphics.fillCircle(canopyX, canopyY, Math.max(2, 4 * scale));
+      graphics.fillCircle(canopyX, canopyY, Math.max(2, 3.4 * scale));
     }
   }
 
   private drawVenueBanners(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, random: SeededRandom): void {
     const count = this.plan.venueBannerCount;
     for (let index = 0; index < count; index += 1) {
-      const top = index % 2 === 0;
-      const columns = Math.ceil(count / 2);
-      const x = bounds.x + bounds.w * ((Math.floor(index / 2) + 1) / (columns + 1));
-      const edgeY = top ? bounds.y : bounds.y + bounds.h;
-      const outward = top ? -1 : 1;
-      const available = top ? bounds.y : WORLD_HEIGHT - bounds.y - bounds.h;
-      const poleHeight = Math.max(12, Math.min(38, available * 0.58));
-      const tipY = Phaser.Math.Clamp(edgeY + outward * poleHeight, 5, WORLD_HEIGHT - 5);
+      const side = index % 4;
+      const sideIndex = Math.floor(index / 4);
+      const sideTotal = Math.ceil((count - side) / 4);
+      const fraction = (sideIndex + 1) / (sideTotal + 1);
+      const horizontal = side === 0 || side === 2;
+      const topOrLeft = side === 0 || side === 3;
+      const edgeX = horizontal ? bounds.x + bounds.w * fraction : (side === 1 ? bounds.x + bounds.w : bounds.x);
+      const edgeY = horizontal ? (side === 0 ? bounds.y : bounds.y + bounds.h) : bounds.y + bounds.h * fraction;
+      const outwardX = horizontal ? 0 : (side === 1 ? 1 : -1);
+      const outwardY = horizontal ? (side === 0 ? -1 : 1) : 0;
+      const tangentX = horizontal ? (topOrLeft ? 1 : -1) : 0;
+      const tangentY = horizontal ? 0 : (topOrLeft ? -1 : 1);
+      const available = horizontal
+        ? (side === 0 ? bounds.y : WORLD_HEIGHT - bounds.y - bounds.h)
+        : (side === 1 ? WORLD_WIDTH - bounds.x - bounds.w : bounds.x);
+      const poleHeight = Math.max(13, Math.min(40, available * 0.5));
+      const mastX = Phaser.Math.Clamp(edgeX + outwardX * poleHeight, 5, WORLD_WIDTH - 5);
+      const mastY = Phaser.Math.Clamp(edgeY + outwardY * poleHeight, 5, WORLD_HEIGHT - 5);
       const accent = index % 2 ? this.layout.theme.primary : this.layout.theme.secondary;
       graphics.lineStyle(2, 0xa9eafa, 0.48);
-      graphics.lineBetween(x, edgeY + outward * 5, x, tipY);
-      const bannerWidth = random.int(18, 28);
-      const bannerHeight = Math.max(8, Math.min(18, poleHeight * 0.55));
+      graphics.lineBetween(edgeX + outwardX * 5, edgeY + outwardY * 5, mastX, mastY);
+      const bannerLength = random.int(20, 31);
+      const bannerDepth = Math.max(9, Math.min(19, poleHeight * 0.5));
       graphics.fillStyle(0x08101d, 0.96);
       graphics.fillPoints([
-        { x, y: tipY },
-        { x: x + (index % 2 ? -bannerWidth : bannerWidth), y: tipY + outward * 3 },
-        { x: x + (index % 2 ? -bannerWidth * 0.72 : bannerWidth * 0.72), y: tipY - outward * bannerHeight },
-        { x, y: tipY - outward * bannerHeight * 0.72 }
+        { x: mastX, y: mastY },
+        { x: mastX + tangentX * bannerLength + outwardX * 3, y: mastY + tangentY * bannerLength + outwardY * 3 },
+        { x: mastX + tangentX * bannerLength * 0.76 - outwardX * bannerDepth, y: mastY + tangentY * bannerLength * 0.76 - outwardY * bannerDepth },
+        { x: mastX - outwardX * bannerDepth * 0.72, y: mastY - outwardY * bannerDepth * 0.72 }
       ], true);
       graphics.lineStyle(2, accent, 0.78);
-      graphics.strokeTriangle(
-        x, tipY,
-        x + (index % 2 ? -bannerWidth : bannerWidth), tipY + outward * 3,
-        x + (index % 2 ? -bannerWidth * 0.72 : bannerWidth * 0.72), tipY - outward * bannerHeight
-      );
+      graphics.strokePoints([
+        { x: mastX, y: mastY },
+        { x: mastX + tangentX * bannerLength + outwardX * 3, y: mastY + tangentY * bannerLength + outwardY * 3 },
+        { x: mastX + tangentX * bannerLength * 0.76 - outwardX * bannerDepth, y: mastY + tangentY * bannerLength * 0.76 - outwardY * bannerDepth },
+        { x: mastX - outwardX * bannerDepth * 0.72, y: mastY - outwardY * bannerDepth * 0.72 }
+      ], true);
       graphics.fillStyle(accent, 0.68);
-      graphics.fillCircle(x + (index % 2 ? -bannerWidth * 0.4 : bannerWidth * 0.4), tipY - outward * bannerHeight * 0.35, 2);
+      graphics.fillCircle(
+        mastX + tangentX * bannerLength * 0.4 - outwardX * bannerDepth * 0.32,
+        mastY + tangentY * bannerLength * 0.4 - outwardY * bannerDepth * 0.32,
+        2.5
+      );
     }
   }
 
@@ -279,14 +499,15 @@ export class ArenaVisualRenderer {
   }
 
   private createVenueBeacons(bounds: RectSpec): void {
+    const offsetX = Math.max(8, Math.min(24, bounds.x * 0.35));
     const offsetY = Math.max(8, Math.min(24, bounds.y * 0.35));
     const anchors = [
-      { x: bounds.x + bounds.w * 0.18, y: bounds.y - offsetY },
-      { x: bounds.x + bounds.w * 0.5, y: bounds.y - offsetY },
-      { x: bounds.x + bounds.w * 0.82, y: bounds.y - offsetY },
-      { x: bounds.x + bounds.w * 0.18, y: bounds.y + bounds.h + offsetY },
-      { x: bounds.x + bounds.w * 0.5, y: bounds.y + bounds.h + offsetY },
-      { x: bounds.x + bounds.w * 0.82, y: bounds.y + bounds.h + offsetY }
+      { x: bounds.x + bounds.w * 0.22, y: bounds.y - offsetY },
+      { x: bounds.x + bounds.w * 0.78, y: bounds.y - offsetY },
+      { x: bounds.x + bounds.w + offsetX, y: bounds.y + bounds.h * 0.5 },
+      { x: bounds.x + bounds.w * 0.78, y: bounds.y + bounds.h + offsetY },
+      { x: bounds.x + bounds.w * 0.22, y: bounds.y + bounds.h + offsetY },
+      { x: bounds.x - offsetX, y: bounds.y + bounds.h * 0.5 }
     ].slice(0, this.plan.animatedVenueLightCount);
     const beacons = anchors.map((anchor, index) => this.keep(this.scene.add.circle(
       Phaser.Math.Clamp(anchor.x, 5, WORLD_WIDTH - 5),
