@@ -5,15 +5,20 @@ const key = (binding: Parameters<typeof compactBindingLabel>[0]): string => comp
 
 export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
   {
-    id: 'onboarding.menu-welcome', scene: 'menu', title: 'WELCOME TO N3ONDEFENSE', autoStart: true, freshProfileOnly: true, skippable: true,
+    id: 'onboarding.menu-welcome', scene: 'menu', title: 'WELCOME TO N3ONDEFENSE', autoStart: true, freshProfileOnly: true,
+    firstRunStages: ['welcome-main-menu', 'waiting-for-start-local'], skippable: true,
     steps: [
-      { id: 'welcome', eyebrow: 'N3ON PROTOCOL // INITIAL LINK', title: 'WELCOME TO THE ARENA, OPERATIVE!', body: 'Enter the arena, plant charges at active bombsites, and defend them from enemy forces until detonation. Each round pushes back harder.', mode: 'menu', advanceLabel: 'NEXT', completion: { type: 'manual' } },
-      { id: 'progression', eyebrow: 'N3ON PROTOCOL // PERSISTENT POWER', title: 'EVERY DEPLOYMENT BUILDS THE NEXT', body: 'Earn Credits for permanent Store upgrades. Discover and equip Mods that reshape your build. Upgrade, adapt, and push farther on the next deployment.', mode: 'menu', advanceLabel: 'NEXT', completion: { type: 'manual' } },
-      { id: 'choose-mode', target: 'menu.play-modes', eyebrow: 'N3ON PROTOCOL // DEPLOYMENT LINK', title: 'CHOOSE ONLINE OR LOCAL', body: 'DEPLOY ONLINE connects to N3ONDefense services; eligible scores and statistics can appear on leaderboards. DEPLOY LOCAL plays without publishing run statistics. Both preserve your local progression.', mode: 'menu', targetPadding: 14, advanceLabel: 'CONTINUE', completion: { type: 'manual' } }
+      { id: 'welcome', eyebrow: 'N3ON PROTOCOL // INITIAL LINK', title: 'WELCOME TO THE ARENA, OPERATIVE!', body: 'Enter the arena, plant charges, defend them from enemies, and survive increasingly difficult rounds. Earn Credits for permanent upgrades and recover Mods that reshape future builds.', mode: 'menu', advanceLabel: 'NEXT', completion: { type: 'manual' } },
+      { id: 'start-local', target: 'menu.start-local', eyebrow: 'N3ON PROTOCOL // TRAINING DEPLOYMENT', title: 'START LOCAL', body: 'Start your first training run here. Local play keeps the run local and does not publish scores to the online leaderboards. Click START LOCAL to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }
     ]
   },
   {
-    id: 'onboarding.basic-controls', scene: 'arena', title: 'INITIAL DEPLOYMENT', autoStart: true, skippable: true,
+    id: 'onboarding.menu-resume-training', scene: 'menu', title: 'RESUME TRAINING', autoStart: true,
+    firstRunStages: ['arena-teaching'], skippable: true,
+    steps: [{ id: 'start-local', target: 'menu.start-local', eyebrow: 'N3ON PROTOCOL // TRAINING INCOMPLETE', title: 'RETURN TO LOCAL TRAINING', body: 'Your Arena Teaching is still in progress. Click START LOCAL to resume the training deployment.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }]
+  },
+  {
+    id: 'onboarding.basic-controls', scene: 'arena', title: 'INITIAL DEPLOYMENT', autoStart: true, firstRunStages: ['arena-teaching'], skippable: true,
     steps: [
       { id: 'welcome', eyebrow: 'N3ON PROTOCOL // LIVE TRAINING', title: 'WELCOME, OPERATIVE', body: 'This training runs inside a real deployment. Read each instruction, acknowledge information screens, then perform the requested combat actions yourself.', mode: 'hard-pause', completion: { type: 'manual' } },
       { id: 'identify-player', target: 'world.player', title: 'YOUR OPERATIVE', body: 'The highlighted unit is your operative. Keep it moving to avoid attacks and protect it while defending each planted charge.', mode: 'hard-pause', spotlight: 'circle', completion: { type: 'manual' } },
@@ -23,7 +28,7 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     ]
   },
   {
-    id: 'onboarding.defense', scene: 'arena', title: 'BOMBSITE DEFENSE', autoStart: true, prerequisite: 'onboarding.basic-controls', skippable: true,
+    id: 'onboarding.defense', scene: 'arena', title: 'BOMBSITE DEFENSE', autoStart: true, firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.basic-controls', skippable: true,
     steps: [
       { id: 'bombsite', target: 'world.bombsite', title: 'ARM THE CHARGE', body: `Move into the available bombsite and hold ${key(INTERACT_BINDING)}. Once planted, defend it until detonation.`, inputDemo: ['E'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'objective.bombArmed' } },
       { id: 'enemy', target: 'world.enemy', title: 'HOSTILE CONTACT', body: 'Damage a hostile. Defusers must be interrupted before they disarm the active charge.', mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.enemyDamaged' } },
@@ -33,12 +38,48 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     ]
   },
   {
-    id: 'onboarding.hud', scene: 'arena', title: 'TACTICAL HUD', autoStart: true, prerequisite: 'onboarding.defense', skippable: true,
+    id: 'onboarding.hud', scene: 'arena', title: 'TACTICAL HUD', autoStart: true, firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.defense', skippable: true,
     steps: [
       { id: 'vitals', target: 'hud.vitals', title: 'OPERATIVE VITALS', body: 'Pink tracks Health and cyan tracks Energy. Weapon fire and abilities consume Energy; incoming damage reduces Health.', mode: 'hard-pause', completion: { type: 'manual' } },
       { id: 'objective', target: 'hud.objective', title: 'TACTICAL OBJECTIVE', body: 'This center console shows what to do next, the active charge timer, and an urgent DEFUSE alert when enemies begin disarming a bomb.', mode: 'hard-pause', completion: { type: 'manual' } },
       { id: 'stats', target: 'hud.stats', title: 'RUN CACHE', body: 'This panel tracks the current round, active hostiles, and persistent resources collected during the deployment.', mode: 'hard-pause', completion: { type: 'manual' } },
       { id: 'abilities', target: 'hud.abilities', title: 'COMBAT COMMAND DECK', body: 'Each module shows its key, remaining uses, and readiness. A cooldown number appears while that ability is recharging.', mode: 'hard-pause', completion: { type: 'manual' } }
+    ]
+  },
+  {
+    id: 'onboarding.menu-store', scene: 'menu', title: 'PERMANENT PROGRESSION', autoStart: true,
+    firstRunStages: ['waiting-for-store'], skippable: true,
+    steps: [{ id: 'store', target: 'menu.store', eyebrow: 'N3ON PROTOCOL // POST-DEPLOYMENT', title: 'STORE / UPGRADES', body: 'Credits earned in the Arena persist between runs. Spend them on permanent upgrades that help your operative push farther. Click STORE to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.storeSelected' } }]
+  },
+  {
+    id: 'onboarding.store', scene: 'upgrades', title: 'PERMANENT UPGRADES', autoStart: true,
+    firstRunStages: ['store-teaching'], skippable: true,
+    steps: [
+      { id: 'credits', target: 'store.wallet.credits', title: 'CREDITS PERSIST', body: 'Credits earned during deployments remain in your wallet and fund permanent improvements.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
+      { id: 'card', target: 'store.upgrade-card', title: 'CHOOSE A SYSTEM', body: 'Each upgrade module shows its current level, next improvement, and cost. Upgrades apply to future deployments.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
+      { id: 'action', target: 'store.upgrade-action', title: 'RETURN STRONGER', body: 'Select and purchase upgrades when you are ready. Every permanent improvement helps your next run push farther.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } }
+    ]
+  },
+  {
+    id: 'onboarding.menu-garage', scene: 'menu', title: 'MOD LOADOUT', autoStart: true,
+    firstRunStages: ['waiting-for-garage'], skippable: true,
+    steps: [{ id: 'garage', target: 'menu.garage', eyebrow: 'N3ON PROTOCOL // LOADOUT SYSTEMS', title: 'OPERATOR GARAGE / MOD COLLECTION', body: 'Mods recovered during runs can alter your build. Inspect and equip them through the Operator Garage and its Mod Collection station. Click OPERATOR GARAGE to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.garageSelected' } }]
+  },
+  {
+    id: 'onboarding.garage', scene: 'garage', title: 'OPERATOR LOADOUT', autoStart: true,
+    firstRunStages: ['garage-teaching'], skippable: true,
+    steps: [
+      { id: 'loadout', target: 'garage.loadout', title: 'YOUR INSTALLED MODS', body: 'These five docks show the Mods installed for your next deployment. Each slot accepts its matching category, while Utility can support flexible builds.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
+      { id: 'mod-collection', target: 'garage.mod-collection', title: 'OPEN MOD COLLECTION', body: 'The Mod Collection is where recovered cards are inspected, upgraded, infused, equipped, or recycled. Click MOD COLLECTION to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.modCollectionSelected' } }
+    ]
+  },
+  {
+    id: 'onboarding.mod-collection', scene: 'mods', title: 'MOD COLLECTION', autoStart: true,
+    firstRunStages: ['mod-collection-teaching'], skippable: true,
+    steps: [
+      { id: 'archive', target: 'mods.archive', title: 'RECOVERED MOD ARCHIVE', body: 'Every Mod card recovered during a run appears in this archive. Rarity, rank, infusion, and duplicate status remain attached to the exact card.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
+      { id: 'details', target: 'mods.details', title: 'INSPECT YOUR BUILD', body: 'Select a card to read its complete effect and manage compatible loadout slots. New Mods create new ways to approach future rounds.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
+      { id: 'complete', target: 'mods.details', title: 'TEACHING COMPLETE', body: 'Your workstation is ready. Keep earning Credits, improving Mods, adapting your build, and pushing farther.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } }
     ]
   },
   {

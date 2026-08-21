@@ -121,7 +121,7 @@ test('Main Menu is display/deploy only while Garage owns Signal and Contract sel
 
 test('Main Menu uses one deployment stack and removes profile, save, and control clutter', () => {
   const menu = readFileSync(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8');
-  for (const label of ['DEPLOY ONLINE', 'DEPLOY LOCAL', 'OPERATOR GARAGE', 'MOD COLLECTION', 'STORE', 'LEADERBOARDS', 'OPTIONS']) {
+  for (const label of ['DEPLOY ONLINE', 'START LOCAL', 'OPERATOR GARAGE', 'MOD COLLECTION', 'STORE', 'LEADERBOARDS', 'OPTIONS']) {
     assert.match(menu, new RegExp(`'${label}'`));
   }
   assert.doesNotMatch(menu, /'Switch Profile'/);

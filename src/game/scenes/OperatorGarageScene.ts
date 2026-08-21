@@ -62,6 +62,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private operatorPreviewLayout: { rect: GarageRect; compact: boolean } | null = null;
   private cosmeticPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
   private tutorialDirector: TutorialDirector | null = null;
+  private readonly tutorialTargets = new Map<string, Phaser.GameObjects.Container>();
   private cosmeticPreviewColorTargets: Array<{ item: CosmeticOption; setColor: (color: number) => void }> = [];
   private status = '';
   private libraryCategoryIndex = 0;
@@ -92,6 +93,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.audio.startMusicLoop();
     const { width, height } = this.scale;
     const layout = calculateGarageLayout(width, height);
+    this.tutorialTargets.clear();
     createGarageEnvironment(this, layout);
     createModWorkbench(
       this,
@@ -154,13 +156,16 @@ export class OperatorGarageScene extends Phaser.Scene {
                   width: layout.stationWidth,
                   height: layout.stationHeight
                 }
-              : null;
+              : target === 'garage.mod-collection'
+                ? this.tutorialTargets.get(target)?.getBounds() ?? null
+                : null;
         if (!rect) return null;
         const canvas = this.game.canvas.getBoundingClientRect();
         return projectTutorialBoundsToViewport(rect, canvas, this.scale.width, this.scale.height);
       },
       setMode: () => undefined
     });
+    this.tutorialDirector.startEligible();
     window.setTimeout(() => {
       if (!this.scene.isActive()) return;
       TutorialEventBus.emit('ui.garageSceneOpened');
@@ -457,12 +462,14 @@ export class OperatorGarageScene extends Phaser.Scene {
     stations.forEach((station, index) => {
       createStationHousing(this, centers[index], width, index, height);
       const button = createButton(this, centers[index].x, centers[index].y, station.label, () => {
+        if (station.label === 'MOD COLLECTION') TutorialEventBus.emit('ui.modCollectionSelected');
         station.action();
       }, width, 'menu', {
         height,
         fontSize: Phaser.Math.Clamp(height * 0.34, 16, 21),
         horizontalPadding: 28
       }).setDepth(80);
+      if (station.label === 'MOD COLLECTION') this.tutorialTargets.set('garage.mod-collection', button);
       const led = this.add.circle(centers[index].x - width / 2 + 11, centers[index].y, Phaser.Math.Clamp(height * 0.045, 2, 3), index % 2 ? 0xff5bcf : 0x62f4ff, 0.9).setDepth(82);
       this.tweens.add({ targets: led, alpha: { from: 0.25, to: 1 }, duration: 850 + index * 180, yoyo: true, repeat: -1 });
       button.setDepth(80);
@@ -951,6 +958,8 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private returnToPrevious(): void {
+    if (SaveSystem.getTutorialProgress().firstRunStage === 'garage-teaching'
+      && this.tutorialDirector?.isActiveSequence('onboarding.garage')) return;
     this.scene.start(this.returnScene);
   }
 }

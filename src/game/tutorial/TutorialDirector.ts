@@ -20,14 +20,29 @@ export class TutorialDirector {
   private advancePolicy: TutorialAdvancePolicy | null = null;
   private destroyed = false;
   private readonly keyHandler = (event: KeyboardEvent): void => {
-    if (event.code === 'KeyK' && this.active && this.active.skippable !== false) this.skip();
-    else if (event.code === 'Enter' && this.acceptingCompletion && this.advancePolicy?.type === 'manual') this.advance();
+    if (!this.active) return;
+    if (event.code === 'Escape') {
+      // An active Teaching step owns navigation. Prevent scene-level Escape
+      // handlers from abandoning Store/Garage/Collection midway through it.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (event.code === 'KeyK' && this.active.skippable !== false) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.skip();
+    } else if (event.code === 'Enter' && this.acceptingCompletion && this.advancePolicy?.type === 'manual') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.advance();
+    }
   };
 
   constructor(private readonly host: TutorialHost) {
     this.overlay = new TutorialOverlay(() => this.skip(), host.scene === 'arena');
     this.unsubscribe = TutorialEventBus.subscribe((event) => this.onEvent(event));
-    window.addEventListener('keydown', this.keyHandler);
+    window.addEventListener('keydown', this.keyHandler, { capture: true });
   }
 
   startEligible(): void {
@@ -85,7 +100,7 @@ export class TutorialDirector {
     this.clearTransitionTimer();
     this.host.setMode('live');
     this.unsubscribe();
-    window.removeEventListener('keydown', this.keyHandler);
+    window.removeEventListener('keydown', this.keyHandler, { capture: true });
     this.overlay.destroy();
   }
 
@@ -204,10 +219,8 @@ export class TutorialDirector {
   private skip(): void {
     if (!this.active || this.active.skippable === false) return;
     const sequenceId = this.active.id;
-    const skippedIds = sequenceId === 'onboarding.menu-welcome'
-      ? ['onboarding.menu-welcome', 'onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']
-      : sequenceId.startsWith('onboarding.')
-        ? ['onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']
+    const skippedIds = sequenceId.startsWith('onboarding.')
+      ? TUTORIAL_SEQUENCES.filter(({ id }) => id.startsWith('onboarding.')).map(({ id }) => id)
       : [sequenceId];
     SaveSystem.updateTutorialProgress((state) => {
       for (const id of skippedIds) skipTutorialSequence(state, id);

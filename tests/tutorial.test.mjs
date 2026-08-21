@@ -9,6 +9,7 @@ import {
   isTutorialSequenceComplete,
   isTutorialSequenceEligible,
   requestTutorialReplay,
+  setFirstRunTeachingStage,
   skipTutorialSequence
 } from '../src/game/tutorial/TutorialProgress.ts';
 import { TUTORIAL_SEQUENCES } from '../src/game/tutorial/TutorialRegistry.ts';
@@ -22,8 +23,9 @@ import {
 
 test('tutorial progress uses stable ids and supports completion, skipping, and replay', () => {
   const progress = createTutorialProgress();
-  assert.equal(progress.version, 2);
+  assert.equal(progress.version, 3);
   assert.equal(progress.firstRunWelcomePending, true);
+  assert.equal(progress.firstRunStage, 'welcome-main-menu');
   completeTutorialStep(progress, 'onboarding.basic-controls', 'move');
   completeTutorialStep(progress, 'onboarding.basic-controls', 'move');
   assert.deepEqual(progress.completedSteps['onboarding.basic-controls'], ['move']);
@@ -50,6 +52,24 @@ test('older profiles safely migrate into optional tutorial and contextual-tip de
   assert.deepEqual(migrated.tutorials.completedSequences, []);
   assert.equal(migrated.tutorials.replaySequenceId, null);
   assert.equal(migrated.tutorials.firstRunWelcomePending, false);
+  assert.equal(migrated.tutorials.firstRunStage, 'complete');
+});
+
+test('version-2 fresh-profile progress resumes before Start Local instead of opening another scene', () => {
+  const source = createDefaultLocalSave('repair-welcome', 'Repair Welcome');
+  const legacy = structuredClone(source);
+  legacy.tutorials = {
+    version: 2,
+    firstRunWelcomePending: true,
+    completedSequences: [],
+    skippedSequences: [],
+    completedSteps: { 'onboarding.menu-welcome': ['welcome'] },
+    replaySequenceId: null
+  };
+  const migrated = normalizeLocalSave(legacy);
+  assert.ok(migrated);
+  assert.equal(migrated.tutorials.firstRunStage, 'waiting-for-start-local');
+  assert.equal(migrated.tutorials.firstRunWelcomePending, true);
 });
 
 test('fresh-profile Main Menu welcome is one-time and does not spill into established profiles', () => {
@@ -64,20 +84,52 @@ test('fresh-profile Main Menu welcome is one-time and does not spill into establ
   assert.equal(welcome.scene, 'menu');
   assert.equal(welcome.freshProfileOnly, true);
   assert.equal(isTutorialSequenceEligible(fresh, welcome, 'menu'), true);
-  assert.equal(welcome.steps.at(-1).target, 'menu.play-modes');
-  assert.match(welcome.steps.at(-1).body, /eligible scores and statistics can appear on leaderboards/i);
-  assert.match(welcome.steps.at(-1).body, /without publishing run statistics/i);
+  assert.equal(welcome.steps.at(-1).target, 'menu.start-local');
+  assert.equal(welcome.steps.at(-1).completion.event, 'ui.startLocalSelected');
+  assert.match(welcome.steps.at(-1).body, /does not publish scores/i);
+  completeTutorialStep(fresh, welcome.id, 'welcome');
+  assert.equal(fresh.firstRunStage, 'waiting-for-start-local');
+  assert.equal(fresh.firstRunWelcomePending, true);
+  completeTutorialStep(fresh, welcome.id, 'start-local');
   completeTutorialSequence(fresh, welcome.id);
+  assert.equal(fresh.firstRunStage, 'arena-teaching');
   assert.equal(fresh.firstRunWelcomePending, false);
   assert.equal(isTutorialSequenceEligible(fresh, welcome, 'menu'), false);
 
   const established = createTutorialProgress();
-  established.firstRunWelcomePending = false;
+  setFirstRunTeachingStage(established, 'complete');
   assert.equal(isTutorialSequenceEligible(established, welcome, 'menu'), false);
+});
+
+test('exact first-run state machine requires real menu actions and ends after Mod Collection teaching', () => {
+  const progress = createTutorialProgress();
+  completeTutorialStep(progress, 'onboarding.menu-welcome', 'welcome');
+  assert.equal(progress.firstRunStage, 'waiting-for-start-local');
+  completeTutorialStep(progress, 'onboarding.menu-welcome', 'start-local');
+  completeTutorialSequence(progress, 'onboarding.menu-welcome');
+  assert.equal(progress.firstRunStage, 'arena-teaching');
+
+  for (const id of ['onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']) {
+    completeTutorialSequence(progress, id);
+  }
+  setFirstRunTeachingStage(progress, 'waiting-for-store');
+  completeTutorialStep(progress, 'onboarding.menu-store', 'store');
+  assert.equal(progress.firstRunStage, 'store-teaching');
+  completeTutorialSequence(progress, 'onboarding.store');
+  assert.equal(progress.firstRunStage, 'waiting-for-garage');
+  completeTutorialStep(progress, 'onboarding.menu-garage', 'garage');
+  assert.equal(progress.firstRunStage, 'garage-teaching');
+  completeTutorialStep(progress, 'onboarding.garage', 'mod-collection');
+  assert.equal(progress.firstRunStage, 'mod-collection-teaching');
+  completeTutorialSequence(progress, 'onboarding.mod-collection');
+  assert.equal(progress.firstRunStage, 'complete');
+  assert.equal(isTutorialSequenceComplete(progress, 'progression.store'), true);
+  assert.equal(isTutorialSequenceComplete(progress, 'progression.mod-collection'), true);
 });
 
 test('tutorial eligibility respects scene, prerequisites, completion, and skip state', () => {
   const progress = createTutorialProgress();
+  setFirstRunTeachingStage(progress, 'arena-teaching');
   const defense = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.defense');
   assert.equal(isTutorialSequenceEligible(progress, defense, 'arena'), false);
   completeTutorialSequence(progress, 'onboarding.basic-controls');
@@ -170,17 +222,23 @@ test('Arena tutorial cleanup and success events are wired to authoritative gamep
   assert.match(arena, /this\.tutorialDirector\?\.destroy\(\)/);
   assert.match(arena, /this\.tutorialHardPaused \|\| this\.state\.state === RoundState\.Paused/);
   assert.match(arena, /TutorialEventBus\.emit\('objective\.defuseStarted'/);
-  assert.match(arena, /this\.tutorialPointerLockWasActive = this\.pointerLock\?\.locked \?\? false/);
   assert.match(arena, /this\.pointerLock\?\.release\(\)/);
   assert.match(arena, /this\.pointerLock\.requestLock\(\)/);
   assert.match(arena, /const displayDiameter = diameter \* camera\.zoom/);
+  assert.match(arena, /isFirstRunArenaTeachingComplete\(SaveSystem\.getTutorialProgress\(\)\)/);
+  assert.match(arena, /setFirstRunTeachingStage\(progress, 'waiting-for-store'\)/);
+  assert.match(arena, /this\.scene\.start\(SceneKeys\.MainMenu\)/);
 });
 
 test('first-run scene handoff, live Main Menu targets, and undimmed Arena teaching are wired', async () => {
-  const [profiles, profileUi, menu, overlay, styles] = await Promise.all([
+  const [profiles, profileUi, menu, store, storefront, garage, mods, overlay, styles] = await Promise.all([
     readFile(new URL('../src/game/scenes/LocalProfileScene.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/ui/local-profiles/LocalProfilesUi.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/game/scenes/UpgradeStoreScene.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/ui/stores/StorefrontUi.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/game/scenes/ModCollectionScene.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/game/tutorial/TutorialOverlay.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/style.css', import.meta.url), 'utf8')
   ]);
@@ -188,9 +246,22 @@ test('first-run scene handoff, live Main Menu targets, and undimmed Arena teachi
   assert.doesNotMatch(profileUi, /this\.root\.replaceChildren\(\)/);
   assert.match(profileUi, /this\.screen\?\.remove\(\)/);
   assert.match(menu, /data\.showFirstRunWelcome[\s\S]*?replay\('onboarding\.menu-welcome'\)/);
-  assert.match(menu, /unionTutorialBounds\(\[startButton\.getBounds\(\), localStartButton\.getBounds\(\)\]\)/);
-  assert.match(menu, /completeActiveManualStep\(sequenceId, 'choose-mode'\)/);
+  assert.match(menu, /'menu\.start-local', localStartButton/);
+  assert.match(menu, /allowTeachingMenuAction\('local'/);
+  assert.match(menu, /TutorialEventBus\.emit\('ui\.startLocalSelected'\)/);
+  assert.match(menu, /TutorialEventBus\.emit\('ui\.storeSelected'\)/);
+  assert.match(menu, /TutorialEventBus\.emit\('ui\.garageSelected'\)/);
+  assert.match(store, /onboarding\.store[\s\S]*?SceneKeys\.MainMenu/);
+  assert.doesNotMatch(storefront, /root\.replaceChildren/);
+  assert.match(storefront, /this\.screen\?\.remove\(\)/);
+  assert.match(garage, /'garage\.mod-collection'/);
+  assert.match(garage, /TutorialEventBus\.emit\('ui\.modCollectionSelected'\)/);
+  assert.match(mods, /onboarding\.mod-collection[\s\S]*?SceneKeys\.MainMenu/);
+  assert.match(mods, /this\.tutorialDirector\.startEligible\(\)/);
   assert.match(overlay, /resolveTutorialCalloutPlacement/);
+  assert.match(overlay, /event\.stopPropagation\(\)/);
+  assert.match(overlay, /event\.preventDefault\(\)/);
   assert.match(styles, /\.tutorial-overlay--arena \.tutorial-shade \{ display: none !important; \}/);
   assert.match(styles, /max-height: calc\(100% - 32px\); overflow-y: auto/);
+  assert.match(styles, /\.tutorial-continue \{[\s\S]*?position: sticky/);
 });

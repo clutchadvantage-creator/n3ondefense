@@ -68,8 +68,12 @@ export class UpgradeStoreScene extends Phaser.Scene {
         return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
       },
       setMode: () => undefined,
-      isEventActionAvailable: (event) => event !== 'economy.upgradePurchaseAttempted' || this.hasAffordableUpgrade()
+      isEventActionAvailable: (event) => event !== 'economy.upgradePurchaseAttempted' || this.hasAffordableUpgrade(),
+      onComplete: (sequenceId) => {
+        if (sequenceId === 'onboarding.store') this.scene.start(SceneKeys.MainMenu);
+      }
     });
+    this.tutorialDirector.startEligible();
     window.setTimeout(() => {
       if (this.scene.isActive()) TutorialEventBus.emit('ui.upgradeStoreOpened');
     }, 180);
@@ -99,6 +103,8 @@ export class UpgradeStoreScene extends Phaser.Scene {
   }
 
   private returnToMainMenu(route: StoreReturnRoute): void {
+    if (SaveSystem.getTutorialProgress().firstRunStage === 'store-teaching'
+      && this.tutorialDirector?.isActiveSequence('onboarding.store')) return;
     if (route.returnScene === SceneKeys.Arena && route.resumePausedScene && this.scene.isPaused(SceneKeys.Arena)) {
       this.scene.get(SceneKeys.Arena).events.emit('quit-from-store');
       this.scene.stop();

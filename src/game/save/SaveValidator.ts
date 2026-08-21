@@ -2,7 +2,7 @@ import { COSMETICS } from '../../data/cosmetics.ts';
 import { UPGRADE_DEFINITIONS } from '../../data/upgrades.ts';
 import type { CosmeticOption } from '../types.ts';
 import { DEFAULT_AUDIO_VOLUME, SFX_DEFINITIONS, createDefaultSoundVolumes } from '../config/audio.ts';
-import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type LocalPlayerMetadata, type LocalPlayerProgress, type LocalPlayerSave, type LocalPlayerSaveV1, type LocalPlayerSettings, type ProfileSummary, type TutorialProgressState } from './LocalSaveTypes.ts';
+import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type FirstRunTeachingStage, type LocalPlayerMetadata, type LocalPlayerProgress, type LocalPlayerSave, type LocalPlayerSaveV1, type LocalPlayerSettings, type ProfileSummary, type TutorialProgressState } from './LocalSaveTypes.ts';
 import { DEFAULT_ABILITY_BINDINGS, normalizeAbilityBindings } from '../config/controls.ts';
 import { normalizeModCollection, normalizeProtocolPreference } from '../mods/ModSaveNormalizer.ts';
 import { createEmptyCreditSpendBreakdown } from '../economy/EconomyService.ts';
@@ -26,8 +26,9 @@ const defaultSettings: LocalPlayerSettings = {
 };
 
 const createDefaultTutorialProgress = (): TutorialProgressState => ({
-  version: 2,
+  version: 3,
   firstRunWelcomePending: true,
+  firstRunStage: 'welcome-main-menu',
   completedSequences: [],
   skippedSequences: [],
   completedSteps: {},
@@ -45,11 +46,27 @@ const normalizeTutorialProgress = (value: unknown): TutorialProgressState => {
       if (sequenceId) completedSteps[sequenceId] = uniqueStrings(steps);
     }
   }
+  const stages = new Set<FirstRunTeachingStage>([
+    'welcome-main-menu', 'waiting-for-start-local', 'arena-teaching', 'waiting-for-store',
+    'store-teaching', 'waiting-for-garage', 'garage-teaching', 'mod-collection-teaching', 'complete'
+  ]);
+  const version = toInteger(candidate.version);
+  let firstRunStage: FirstRunTeachingStage = 'complete';
+  if (version === 3 && typeof candidate.firstRunStage === 'string' && stages.has(candidate.firstRunStage as FirstRunTeachingStage)) {
+    firstRunStage = candidate.firstRunStage as FirstRunTeachingStage;
+  } else if (version === 2 && candidate.firstRunWelcomePending === true) {
+    // Repair profiles created by the prior implementation. If Welcome was
+    // acknowledged before its click-through bug opened Store, resume at the
+    // required Start Local step instead of replaying or skipping ahead.
+    const welcomeSteps = completedSteps['onboarding.menu-welcome'] ?? [];
+    firstRunStage = welcomeSteps.includes('welcome') ? 'waiting-for-start-local' : 'welcome-main-menu';
+  }
   return {
-    version: 2,
-    // Tutorial progress that predates version 2 belongs to an established
-    // profile. Do not surprise those players with a newly-added first-run flow.
-    firstRunWelcomePending: candidate.version === 2 && candidate.firstRunWelcomePending === true,
+    version: 3,
+    // Tutorial progress older than v2 belongs to an established profile. Do
+    // not surprise those players with a newly-added first-run flow.
+    firstRunWelcomePending: firstRunStage === 'welcome-main-menu' || firstRunStage === 'waiting-for-start-local',
+    firstRunStage,
     completedSequences: uniqueStrings(candidate.completedSequences),
     skippedSequences: uniqueStrings(candidate.skippedSequences),
     completedSteps,

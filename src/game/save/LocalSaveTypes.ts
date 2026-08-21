@@ -58,10 +58,23 @@ export interface LocalPlayerSettings {
   buttonJiggle: number;
 }
 
+export type FirstRunTeachingStage =
+  | 'welcome-main-menu'
+  | 'waiting-for-start-local'
+  | 'arena-teaching'
+  | 'waiting-for-store'
+  | 'store-teaching'
+  | 'waiting-for-garage'
+  | 'garage-teaching'
+  | 'mod-collection-teaching'
+  | 'complete';
+
 export interface TutorialProgressState {
-  version: 2;
+  version: 3;
   /** True only for a profile created after the first-run Main Menu welcome was introduced. */
   firstRunWelcomePending: boolean;
+  /** Authoritative cross-scene state for the one-time new-operative teaching flow. */
+  firstRunStage: FirstRunTeachingStage;
   completedSequences: string[];
   skippedSequences: string[];
   completedSteps: Record<string, string[]>;

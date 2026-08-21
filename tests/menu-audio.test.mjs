@@ -120,7 +120,7 @@ test('shared Phaser buttons use normal audio for accepted actions and locked aud
   assert.match(ui, /if \(state\) state\.enabled = false/);
 });
 
-test('deployment start recording is restricted to Deploy Online and Deploy Local buttons', () => {
+test('deployment start recording is restricted to Deploy Online and Start Local buttons', () => {
   const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
   const menu = readFileSync(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8');
   const ui = readFileSync(new URL('../src/game/utils/ui.ts', import.meta.url), 'utf8');
@@ -129,7 +129,7 @@ test('deployment start recording is restricted to Deploy Online and Deploy Local
   assert.match(ui, /buttonSound: Extract<AudioSfxName, 'menu' \| 'runStart'> = 'menu'/);
   assert.equal((menu.match(/singleButtonWidth, menuButtonHeight(?: \+ 2)?, '(?:primary|secondary)', 'runStart'/g) ?? []).length, 2);
   assert.match(menu, /'DEPLOY ONLINE'[\s\S]*?singleButtonWidth, menuButtonHeight \+ 2, 'primary', 'runStart'/);
-  assert.match(menu, /'DEPLOY LOCAL'[\s\S]*?singleButtonWidth, menuButtonHeight, 'secondary', 'runStart'/);
+  assert.match(menu, /'START LOCAL'[\s\S]*?singleButtonWidth, menuButtonHeight, 'secondary', 'runStart'/);
 });
 
 test('HTML menus are centrally covered while unaffordable Store actions defer to locked feedback', () => {

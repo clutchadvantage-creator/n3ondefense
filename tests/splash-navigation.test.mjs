@@ -33,5 +33,5 @@ test('a replayed splash is topmost, resumes a paused Arena, or reopens Options f
 });
 
 test('Main Menu always opens Options with a fresh non-gameplay return route', () => {
-  assert.match(mainMenu, /'OPTIONS', \(\) => this\.scene\.start\(SceneKeys\.Options, \{[\s\S]*?returnScene: SceneKeys\.MainMenu,[\s\S]*?resumeGameplay: false/);
+  assert.match(mainMenu, /'OPTIONS', \(\) => \{[\s\S]*?this\.scene\.start\(SceneKeys\.Options, \{ returnScene: SceneKeys\.MainMenu, resumeGameplay: false \}\)/);
 });

@@ -54,6 +54,7 @@ export class StorefrontUi {
   private actionLocked = false;
   private dialogOpen = false;
   private walletFeedback: { credits: number; coreTokens: number } | null = null;
+  private screen: HTMLElement | null = null;
   private readonly keyHandler = (event: KeyboardEvent): void => this.handleKey(event);
 
   constructor(options: StorefrontUiOptions) {
@@ -61,14 +62,16 @@ export class StorefrontUi {
     const categories = this.getCategories();
     this.selectedCategory = categories[0] ?? '';
     this.selectedId = this.getVisibleItems()[0]?.id ?? null;
-    this.options.root.replaceChildren();
+    this.options.root.querySelector<HTMLElement>('.storefront-screen')?.remove();
     window.addEventListener('keydown', this.keyHandler);
     this.render();
   }
 
   destroy(): void {
     window.removeEventListener('keydown', this.keyHandler);
-    this.options.root.replaceChildren();
+    this.screen?.remove();
+    this.screen = null;
+    this.options.root.querySelectorAll<HTMLElement>('.store-dialog-backdrop').forEach((dialog) => dialog.remove());
   }
 
   private getCategories(): string[] {
@@ -105,7 +108,9 @@ export class StorefrontUi {
     shell.className = 'store-shell';
     shell.append(this.renderConsoleDecor(), this.renderHeader(snapshot), this.renderModeTabs(), this.renderBody(snapshot));
     screen.append(ambient, shell);
-    this.options.root.replaceChildren(screen);
+    this.screen?.remove();
+    this.options.root.append(screen);
+    this.screen = screen;
     if (scrollState) this.restoreScrollState(scrollState);
   }
 

@@ -1,3 +1,5 @@
+import type { FirstRunTeachingStage } from '../save/LocalSaveTypes.ts';
+
 export type TutorialMode = 'hard-pause' | 'slow' | 'live' | 'menu';
 export type TutorialSpotlightShape = 'rect' | 'circle';
 
@@ -40,6 +42,8 @@ export interface TutorialSequenceDefinition {
   skippable?: boolean;
   /** Restricts an auto-start sequence to a newly-created profile. */
   freshProfileOnly?: boolean;
+  /** Explicit first-run stages in which this sequence may run. */
+  firstRunStages?: readonly FirstRunTeachingStage[];
 }
 
 export interface TutorialHost {

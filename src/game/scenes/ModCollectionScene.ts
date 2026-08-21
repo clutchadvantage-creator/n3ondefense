@@ -177,8 +177,17 @@ export class ModCollectionScene extends Phaser.Scene {
         const canvas = this.game.canvas.getBoundingClientRect();
         return projectTutorialBoundsToViewport(rect, canvas, this.scale.width, this.scale.height);
       },
-      setMode: () => undefined
+      setMode: () => undefined,
+      onComplete: (sequenceId) => {
+        if (sequenceId === 'onboarding.mod-collection' && this.scene.isActive()) {
+          this.scene.start(SceneKeys.MainMenu);
+        }
+      }
     });
+    // First-run Mod Collection teaching is state-driven and must work even if
+    // the training reward inventory is empty. Contextual teaching still uses
+    // the delayed collection-open event below.
+    this.tutorialDirector.startEligible();
     window.setTimeout(() => {
       if (this.scene.isActive() && SaveSystem.getModCollection().cards.length > 0) TutorialEventBus.emit('ui.modCollectionOpened');
     }, 160);
@@ -424,6 +433,8 @@ export class ModCollectionScene extends Phaser.Scene {
   }
 
   private returnToPreviousScene(): void {
+    if (SaveSystem.getTutorialProgress().firstRunStage === 'mod-collection-teaching'
+      && this.tutorialDirector?.isActiveSequence('onboarding.mod-collection')) return;
     if (this.returnScene === SceneKeys.Arena && this.resumePausedScene) {
       const arenaCanResume = this.scene.isPaused(SceneKeys.Arena) && this.registry.has('arena-session');
       if (!arenaCanResume) {

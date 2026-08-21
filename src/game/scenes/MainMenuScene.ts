@@ -16,7 +16,7 @@ import type { RunSetupSelection } from '../economy/types.ts';
 import { formatWeeklyCountdown, type WeeklyOperationDeck, type WeeklyOperationDecksSnapshot, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
-import { projectTutorialBoundsToViewport, unionTutorialBounds } from '../tutorial/TutorialTargeting.ts';
+import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 
 const MAIN_MENU_TIPS = [
   'Shoot through a placed fence to split and multiply your projectiles.',
@@ -195,7 +195,7 @@ export class MainMenuScene extends Phaser.Scene {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
       }
-      if (!this.prepareFirstRunDeployment(onlineStatus)) return false;
+      if (!this.allowTeachingMenuAction('online', onlineStatus)) return false;
       const selection = this.getRunSetupSelection();
       if (!SaveSystem.canAffordRunSetup(selection)) {
         onlineStatus.setText(`RUN CONFIGURATION REQUIRES ${getRunSetupCost(selection).toLocaleString()} CREDITS.`).setColor('#ff9aab');
@@ -237,12 +237,12 @@ export class MainMenuScene extends Phaser.Scene {
       return true;
     }, singleButtonWidth, menuButtonHeight + 2, 'primary', 'runStart', tiny ? 15 : short ? 18 : 21);
 
-    const localStartButton = this.createCommandButton(centerX, menuStartY + menuRowGap, 'DEPLOY LOCAL', () => {
+    const localStartButton = this.createCommandButton(centerX, menuStartY + menuRowGap, 'START LOCAL', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
       }
-      if (!this.prepareFirstRunDeployment(onlineStatus)) return false;
+      if (!this.allowTeachingMenuAction('local', onlineStatus)) return false;
       disableButton(localStartButton);
       const selection = this.getRunSetupSelection();
       const purchase = SaveSystem.purchaseRunSetup(selection);
@@ -253,6 +253,7 @@ export class MainMenuScene extends Phaser.Scene {
       }
       const economySnapshot = SaveSystem.buildRunEconomySnapshot(selection, purchase.cost);
       this.clearRunSetupSelection();
+      this.confirmLocalTeachingSelection();
       OnlineRunManager.beginLocalRun();
       startArenaLoad(this, {
         reason: 'new-run',
@@ -273,25 +274,37 @@ export class MainMenuScene extends Phaser.Scene {
 
     const navFontSize = tiny ? 14 : short ? 16 : 19;
     const garageButton = this.createCommandButton(centerX, menuStartY + menuRowGap * 2, 'OPERATOR GARAGE', () => {
+      if (!this.allowTeachingMenuAction('garage', onlineStatus)) return false;
+      TutorialEventBus.emit('ui.garageSelected');
       TutorialEventBus.emit('ui.garageOpened');
       this.scene.start(SceneKeys.Garage, { returnScene: SceneKeys.MainMenu });
+      return true;
     }, singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
-    this.createCommandButton(centerX, menuStartY + menuRowGap * 3, 'MOD COLLECTION', () => this.scene.start(SceneKeys.Mods, {
-      returnScene: SceneKeys.MainMenu,
-      resumePausedScene: false
-    }), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
+    this.createCommandButton(centerX, menuStartY + menuRowGap * 3, 'MOD COLLECTION', () => {
+      if (!this.allowTeachingMenuAction('mods', onlineStatus)) return false;
+      this.scene.start(SceneKeys.Mods, { returnScene: SceneKeys.MainMenu, resumePausedScene: false });
+      return true;
+    }, singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
     const storeButton = this.createCommandButton(centerX, menuStartY + menuRowGap * 4, 'STORE', () => {
+      if (!this.allowTeachingMenuAction('store', onlineStatus)) return false;
+      TutorialEventBus.emit('ui.storeSelected');
       TutorialEventBus.emit('ui.storeOpened');
       this.scene.start(SceneKeys.Upgrades, {
         returnScene: SceneKeys.MainMenu,
         resumePausedScene: false
       });
+      return true;
     }, singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
-    this.createCommandButton(centerX, menuStartY + menuRowGap * 5, 'LEADERBOARDS', () => this.scene.start(SceneKeys.OnlineLeaderboards), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
-    this.createCommandButton(centerX, menuStartY + menuRowGap * 6, 'OPTIONS', () => this.scene.start(SceneKeys.Options, {
-      returnScene: SceneKeys.MainMenu,
-      resumeGameplay: false
-    }), singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
+    this.createCommandButton(centerX, menuStartY + menuRowGap * 5, 'LEADERBOARDS', () => {
+      if (!this.allowTeachingMenuAction('other', onlineStatus)) return false;
+      this.scene.start(SceneKeys.OnlineLeaderboards);
+      return true;
+    }, singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
+    this.createCommandButton(centerX, menuStartY + menuRowGap * 6, 'OPTIONS', () => {
+      if (!this.allowTeachingMenuAction('other', onlineStatus)) return false;
+      this.scene.start(SceneKeys.Options, { returnScene: SceneKeys.MainMenu, resumeGameplay: false });
+      return true;
+    }, singleButtonWidth, menuButtonHeight, 'navigation', 'menu', navFontSize);
 
     const lastMenuY = menuStartY + menuRowGap * 6;
     const tipBottom = Math.min(height - 22, lastMenuY + (tiny ? 82 : short ? 124 : 154));
@@ -306,15 +319,14 @@ export class MainMenuScene extends Phaser.Scene {
     this.scale.off('resize', this.handleResize, this);
     this.scale.on('resize', this.handleResize, this);
     const tutorialTargets = new Map<string, Phaser.GameObjects.Container>([
+      ['menu.start-local', localStartButton],
       ['menu.store', storeButton],
       ['menu.garage', garageButton]
     ]);
     this.tutorialDirector = new TutorialDirector({
       scene: 'menu',
       resolveTarget: (target) => {
-        const bounds = target === 'menu.play-modes'
-          ? unionTutorialBounds([startButton.getBounds(), localStartButton.getBounds()])
-          : tutorialTargets.get(target)?.getBounds();
+        const bounds = tutorialTargets.get(target)?.getBounds();
         if (!bounds) return null;
         const canvas = this.game.canvas.getBoundingClientRect();
         return projectTutorialBoundsToViewport(bounds, canvas, this.scale.width, this.scale.height);
@@ -340,14 +352,39 @@ export class MainMenuScene extends Phaser.Scene {
     });
   }
 
-  private prepareFirstRunDeployment(status: Phaser.GameObjects.Text): boolean {
-    const sequenceId = 'onboarding.menu-welcome';
-    if (!this.tutorialDirector?.isActiveSequence(sequenceId)) return true;
-    if (!this.tutorialDirector.isActiveStep(sequenceId, 'choose-mode')) {
-      status.setText('READ THE INITIAL DEPLOYMENT BRIEFING, THEN CHOOSE ONLINE OR LOCAL.').setColor('#ffbd85');
-      return false;
+  private allowTeachingMenuAction(
+    action: 'local' | 'online' | 'store' | 'garage' | 'mods' | 'other',
+    status: Phaser.GameObjects.Text
+  ): boolean {
+    const stage = SaveSystem.getTutorialProgress().firstRunStage;
+    if (stage === 'complete') return true;
+    const allowed = stage === 'waiting-for-start-local' || stage === 'arena-teaching'
+      ? action === 'local'
+      : stage === 'waiting-for-store' || stage === 'store-teaching'
+        ? action === 'store'
+        : stage === 'waiting-for-garage' || stage === 'garage-teaching'
+          ? action === 'garage'
+          : stage === 'mod-collection-teaching'
+            ? action === 'garage' || action === 'mods'
+            : false;
+    if (allowed) return true;
+    const instruction = stage === 'welcome-main-menu'
+      ? 'READ THE WELCOME BRIEFING, THEN SELECT NEXT.'
+      : stage === 'waiting-for-start-local' || stage === 'arena-teaching'
+        ? 'TRAINING LINK ACTIVE // SELECT START LOCAL.'
+        : stage === 'waiting-for-store' || stage === 'store-teaching'
+          ? 'TEACHING LINK ACTIVE // SELECT STORE.'
+          : 'TEACHING LINK ACTIVE // SELECT OPERATOR GARAGE.';
+    status.setText(instruction).setColor('#ffbd85');
+    return false;
+  }
+
+  private confirmLocalTeachingSelection(): void {
+    const stage = SaveSystem.getTutorialProgress().firstRunStage;
+    if ((stage === 'waiting-for-start-local' || stage === 'arena-teaching')
+      && this.tutorialDirector?.awaits('ui.startLocalSelected')) {
+      TutorialEventBus.emit('ui.startLocalSelected');
     }
-    return this.tutorialDirector.completeActiveManualStep(sequenceId, 'choose-mode');
   }
 
   private createCommandButton(

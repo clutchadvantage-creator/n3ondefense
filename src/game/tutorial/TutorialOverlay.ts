@@ -29,6 +29,10 @@ export class TutorialOverlay {
   private frame = 0;
   private manualHandler: (() => void) | null = null;
   private targetPadding = 12;
+  private readonly consumePointerEvent = (event: Event): void => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
   constructor(onSkip: () => void, arenaPresentation = false) {
     const mount = document.querySelector<HTMLElement>('#game-ui-root');
@@ -39,12 +43,30 @@ export class TutorialOverlay {
     this.root.setAttribute('aria-live', 'polite');
     this.skip.type = 'button';
     this.skip.textContent = 'SKIP TUTORIAL  [K]';
-    this.skip.addEventListener('click', onSkip);
+    for (const type of ['pointerdown', 'pointerup'] as const) {
+      this.callout.addEventListener(type, this.consumePointerEvent);
+      this.skip.addEventListener(type, this.consumePointerEvent);
+    }
+    this.skip.addEventListener('click', (event) => {
+      this.consumePointerEvent(event);
+      onSkip();
+    });
     this.continueButton.type = 'button';
     this.continueButton.textContent = 'CONTINUE';
-    this.continueButton.addEventListener('click', () => this.manualHandler?.());
+    this.continueButton.addEventListener('click', (event) => {
+      // Consume the complete click before advancing or navigating. At common
+      // viewport sizes this control overlaps the Phaser Store button beneath
+      // it, so allowing the event to bubble causes an unintended Store launch.
+      this.consumePointerEvent(event);
+      this.manualHandler?.();
+    });
     this.callout.append(this.eyebrow, this.title, this.body, this.illustration, this.keys, this.progress, this.continueButton);
     this.root.append(this.shadeTop, this.shadeRight, this.shadeBottom, this.shadeLeft, this.focus, this.arrow, this.callout, this.skip);
+    for (const shade of [this.shadeTop, this.shadeRight, this.shadeBottom, this.shadeLeft]) {
+      shade.addEventListener('pointerdown', this.consumePointerEvent);
+      shade.addEventListener('pointerup', this.consumePointerEvent);
+      shade.addEventListener('click', this.consumePointerEvent);
+    }
     mount.append(this.root);
   }
 

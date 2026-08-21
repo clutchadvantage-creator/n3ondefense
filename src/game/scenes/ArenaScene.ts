@@ -71,6 +71,7 @@ import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
+import { isFirstRunArenaTeachingComplete, setFirstRunTeachingStage } from '../tutorial/TutorialProgress.ts';
 import type { TutorialMode, TutorialTargetBounds } from '../tutorial/TutorialTypes.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { nextPickupBuffStack, resourcePickupCap } from '../player/OverdriveRules.ts';
@@ -419,7 +420,6 @@ export class ArenaScene extends Phaser.Scene {
   private tutorialDirector: TutorialDirector | null = null;
   private tutorialHardPaused = false;
   private tutorialClockWasPaused = false;
-  private tutorialPointerLockWasActive = false;
   private tutorialAimAngle: number | null = null;
   private readonly performanceMonitor = new FramePerformanceMonitor(600);
   private nextPerformanceTelemetryAt = 0;
@@ -4622,6 +4622,16 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.endEncounter('completed', { credits: rewardCredits, coreTokens: rewardTokens, fluxCores: rewardFluxCores });
 
     this.transitionAfterModReveals(1400, () => {
+      if (isFirstRunArenaTeachingComplete(SaveSystem.getTutorialProgress())) {
+        SaveSystem.updateTutorialProgress((progress) => setFirstRunTeachingStage(progress, 'waiting-for-store'));
+        GameplayTelemetryRecorder.finishRun('quit');
+        OnlineRunManager.complete('quit', completedRound);
+        this.registry.remove('arena-session');
+        this.registry.remove('round-finished');
+        RunTransitionManager.clearForMenu(this);
+        this.scene.start(SceneKeys.MainMenu);
+        return;
+      }
       const next = this.roundManager.nextRound();
       const payload: RoundFinishedPayload = {
         baseSeed: this.roundManager.seedBase,
@@ -5987,7 +5997,6 @@ export class ArenaScene extends Phaser.Scene {
     this.tutorialHardPaused = shouldPause;
     if (shouldPause) {
       this.tutorialClockWasPaused = this.time.paused;
-      this.tutorialPointerLockWasActive = this.pointerLock?.locked ?? false;
       this.clearGameplayInput();
       this.setMenuCursorMode();
       this.pointerLock?.hidePrompt();
@@ -6004,13 +6013,15 @@ export class ArenaScene extends Phaser.Scene {
         && this.state.state !== RoundState.Defeat;
       if (canResumeGameplay) {
         this.physics.resume();
-        if (this.tutorialPointerLockWasActive && this.scene.isActive() && this.pointerLock?.supported) {
+        this.setGameplayCursorMode();
+        this.pointerLock?.hidePrompt();
+        // Hard-pause Teaching always exits through a trusted Continue click.
+        // Restore capture on every gameplay transition rather than depending
+        // on whether a prior lock snapshot happened to be retained.
+        if (this.scene.isActive() && this.pointerLock?.supported) {
           this.pointerLock.requestLock();
-        } else {
-          this.setGameplayCursorMode();
         }
       }
-      this.tutorialPointerLockWasActive = false;
     }
   }
 
@@ -6353,7 +6364,6 @@ export class ArenaScene extends Phaser.Scene {
     this.tutorialDirector = null;
     this.tutorialHardPaused = false;
     this.tutorialClockWasPaused = false;
-    this.tutorialPointerLockWasActive = false;
     this.legendaryRevealInProgress = false;
     this.scale.off('resize', this.handleResize, this);
     this.events.off('resume-from-options', this.onResumeFromOptions);
