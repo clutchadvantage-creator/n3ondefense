@@ -47,7 +47,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.energy = energyStats.max;
     scene.add.existing(this);
     scene.physics.add.existing(this);
-    if (texture === 'player-spaceship') this.setCircle(12, 10, 3);
+    if (texture.startsWith('player-premium-')) {
+      // Premium artwork may be wide or tall, but every frame retains the
+      // exact same centered 12px gameplay collision radius.
+      this.setCircle(12, (this.width - 24) * 0.5, (this.height - 24) * 0.5);
+    } else if (texture === 'player-spaceship') this.setCircle(12, 10, 3);
     else if (texture === 'player-clover') this.setCircle(12, 7, 7);
     else if (texture === 'player-ice-cream') this.setCircle(12, 6, 10);
     else if (texture === 'player-airplane') this.setCircle(12, 11, 5);

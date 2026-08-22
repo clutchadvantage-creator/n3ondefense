@@ -38,7 +38,11 @@ export const createCosmeticPreview = (
     const fallback = scene.textures.exists('player-circle') ? 'player-circle' : 'circle';
     const image = scene.add.image(0, 0, scene.textures.exists(textureKey) ? textureKey : fallback);
     const scale = Math.min(width / Math.max(1, image.width), height / Math.max(1, image.height));
-    image.setScale(scale).setTint(initialColor);
+    const previewScale = Phaser.Math.Clamp(item.previewScale ?? 1, 0.7, 1.1);
+    image
+      .setPosition(item.previewOffsetX ?? 0, item.previewOffsetY ?? 0)
+      .setScale(scale * previewScale)
+      .setTint(initialColor);
     colorSetters.push((color) => image.setTint(color));
     container.add(image);
     return image;

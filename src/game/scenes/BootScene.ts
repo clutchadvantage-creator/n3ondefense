@@ -4,6 +4,7 @@ import { SceneKeys } from '../flow/SceneKeys';
 import { publicAssetUrl } from '../utils/assetUrl';
 import { ENEMY_ROBOT_FRAMES } from '../enemies/EnemyRobotFrames.ts';
 import type { EnemyType } from '../types';
+import { createPremiumOperativeFrameTextures } from '../cosmetics/PremiumOperativeFrameTextures.ts';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -208,6 +209,8 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0x7c8799, 1);
     g.fillTriangle(19, 3, 23, 3, 21, 8);
     g.generateTexture('player-ufo', 42, 42);
+
+    createPremiumOperativeFrameTextures(g);
 
     const createProjectileTexture = (key: string, width: number, height: number, draw: (graphics: Phaser.GameObjects.Graphics) => void): void => {
       g.clear();

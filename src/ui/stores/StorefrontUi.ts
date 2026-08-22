@@ -2,8 +2,9 @@ import type { CosmeticOption, UpgradeDefinition } from '../../game/types';
 import { getUpgradeCost, getUpgradeLevel } from '../../data/upgrades';
 import { getUpgradeComparison, getUpgradeVisual } from './upgradePresentation';
 import { createUpgradeSvgIcon, directionIcon } from './UpgradeIconRegistry.ts';
-import { getCosmeticPriceTier, getCosmeticPurchaseCosts } from '../../data/cosmetics.ts';
+import { getCosmeticPriceTier, getCosmeticPurchaseCosts, isPremiumCosmetic } from '../../data/cosmetics.ts';
 import { AudioManager } from '../../game/systems/AudioManager.ts';
+import { createPremiumOperativeFrameSvg } from './PremiumOperativeFrameSvg.ts';
 import './storefront.css';
 
 export type StoreMode = 'cosmetics' | 'upgrades';
@@ -309,17 +310,30 @@ export class StorefrontUi {
     const owned = snapshot.ownedCosmetics.includes(item.id) || item.cost === 0;
     const equipped = snapshot.equippedCosmetics[item.category] === item.id;
     const affordable = this.canAffordCosmetic(snapshot, item);
-    const card = this.cardButton(item.id, `cosmetic-card tier-${getCosmeticPriceTier(item)} ${owned ? 'owned' : 'locked'} ${equipped ? 'equipped' : ''}`, !owned && !affordable);
+    const premium = isPremiumCosmetic(item);
+    const card = this.cardButton(
+      item.id,
+      `cosmetic-card tier-${getCosmeticPriceTier(item)} ${premium ? 'premium' : 'regular'} ${owned ? 'owned' : 'locked'} ${equipped ? 'equipped' : ''}`,
+      !owned && !affordable
+    );
+    card.dataset.cosmeticClass = premium ? 'premium' : 'regular';
     const visual = this.renderCosmeticVisual(item, false);
+    const topLine = document.createElement('div');
+    topLine.className = 'card-topline';
     const badge = document.createElement('span');
     badge.className = 'card-badge';
     badge.textContent = equipped ? 'EQUIPPED' : owned ? 'OWNED' : affordable ? 'AVAILABLE' : 'LOCKED';
+    const tier = document.createElement('span');
+    tier.className = `cosmetic-tier-marker ${premium ? 'premium' : 'regular'}`;
+    tier.textContent = premium ? 'PREMIUM' : 'REGULAR';
+    topLine.append(badge, tier);
     const name = document.createElement('h3');
     name.textContent = item.label;
-    const price = document.createElement('p');
+    const price = document.createElement('div');
     price.className = `card-price ${item.currency}`;
-    price.textContent = `${getCosmeticPriceTier(item).toUpperCase()} • ${owned ? 'READY TO EQUIP' : this.formatCosmeticCost(item)}`;
-    card.append(badge, visual, name, price);
+    price.textContent = owned ? 'READY TO EQUIP' : '';
+    if (!owned) price.append(this.renderCosmeticCostBreakdown(item, true));
+    card.append(topLine, visual, name, price);
     return card;
   }
 
@@ -380,9 +394,11 @@ export class StorefrontUi {
     const owned = snapshot.ownedCosmetics.includes(item.id) || item.cost === 0;
     const equipped = snapshot.equippedCosmetics[item.category] === item.id;
     const affordable = this.canAffordCosmetic(snapshot, item);
+    const premium = isPremiumCosmetic(item);
+    aside.classList.add(premium ? 'premium-cosmetic-details' : 'regular-cosmetic-details');
     const label = document.createElement('span');
-    label.className = 'detail-eyebrow';
-    label.textContent = `${getCosmeticPriceTier(item).toUpperCase()} • ${COSMETIC_LABELS[item.category].toUpperCase()} PREVIEW`;
+    label.className = `detail-eyebrow ${premium ? 'premium' : 'regular'}`;
+    label.textContent = `${premium ? 'PREMIUM' : 'REGULAR'} // ${COSMETIC_LABELS[item.category].toUpperCase()} PREVIEW`;
     const preview = document.createElement('div');
     preview.className = 'cosmetic-preview-stage';
     preview.append(this.renderCosmeticVisual(item, true));
@@ -391,6 +407,8 @@ export class StorefrontUi {
     const description = document.createElement('p');
     description.className = 'detail-description';
     description.textContent = item.description ?? this.cosmeticDescription(item.category);
+    const purchaseCost = this.renderCosmeticCostBreakdown(item, false);
+    purchaseCost.classList.add('detail-cosmetic-cost');
     const status = document.createElement('div');
     status.className = 'detail-status';
     status.innerHTML = `<span>${equipped ? 'EQUIPPED' : owned ? 'OWNED' : 'LOCKED'}</span><strong>${owned ? 'Collection item ready' : this.formatCosmeticCost(item)}</strong>`;
@@ -410,7 +428,9 @@ export class StorefrontUi {
       else if (getCosmeticPriceTier(item) === 'prestige' || item.currency !== 'credits' || item.cost >= 650) this.confirm(`UNLOCK ${item.label.toUpperCase()}?`, `Cost: ${this.formatCosmeticCost(item)}`, 'UNLOCK', () => this.perform(() => this.options.onUnlock?.(item)));
       else this.perform(() => this.options.onUnlock?.(item));
     });
-    aside.append(label, preview, title, description, status, action, this.renderMessage());
+    aside.append(label, preview, title, description);
+    if (!owned) aside.append(purchaseCost);
+    aside.append(status, action, this.renderMessage());
   }
 
   private fillUpgradeDetails(aside: HTMLElement, item: UpgradeDefinition, snapshot: StoreSnapshot): void {
@@ -511,6 +531,27 @@ export class StorefrontUi {
       .join(' + ');
   }
 
+  private renderCosmeticCostBreakdown(item: CosmeticOption, compact: boolean): HTMLElement {
+    const costs = getCosmeticPurchaseCosts(item);
+    const breakdown = document.createElement('div');
+    breakdown.className = `cosmetic-cost-breakdown ${compact ? 'compact' : ''}`;
+    breakdown.setAttribute('aria-label', this.formatCosmeticCost(item));
+    const currencyMeta = {
+      credits: { glyph: '¢', label: 'CREDITS' },
+      coreTokens: { glyph: '⬡', label: 'CORE TOKENS' },
+      plasmaChips: { glyph: '◆', label: 'PLASMA CHIPS' }
+    } as const;
+    for (const currency of ['credits', 'coreTokens', 'plasmaChips'] as const) {
+      if (costs[currency] <= 0) continue;
+      const value = document.createElement('span');
+      value.className = `cosmetic-currency-cost ${currency}`;
+      value.title = `${costs[currency].toLocaleString()} ${currencyMeta[currency].label}`;
+      value.innerHTML = `<b aria-hidden="true">${currencyMeta[currency].glyph}</b><strong>${costs[currency].toLocaleString()}</strong>${compact ? '' : `<small>${currencyMeta[currency].label}</small>`}`;
+      breakdown.append(value);
+    }
+    return breakdown;
+  }
+
   private formatCosmeticShortfall(snapshot: StoreSnapshot, item: CosmeticOption): string {
     const costs = getCosmeticPurchaseCosts(item);
     const balances = { credits: snapshot.credits, coreTokens: snapshot.coreTokens, plasmaChips: snapshot.plasmaChips };
@@ -548,13 +589,23 @@ export class StorefrontUi {
 
   private renderCosmeticVisual(item: CosmeticOption, large: boolean): HTMLElement {
     const visual = document.createElement('div');
-    visual.className = `cosmetic-visual ${item.category} ${item.colorMode === 'prism' ? 'prism' : ''} ${large ? 'large' : ''}`;
+    const premium = isPremiumCosmetic(item);
+    visual.className = `cosmetic-visual ${item.category} ${item.colorMode === 'prism' ? 'prism' : ''} ${premium ? 'premium' : 'regular'} ${large ? 'large' : ''}`;
     const previewColor = item.colorMode === 'prism' ? 0xff4ed3 : item.color;
     visual.style.setProperty('--item-color', `#${previewColor.toString(16).padStart(6, '0')}`);
+    visual.style.setProperty('--item-accent', `#${(item.accentColor ?? previewColor).toString(16).padStart(6, '0')}`);
+    visual.dataset.cosmeticClass = premium ? 'premium' : 'regular';
     visual.dataset.shape = item.visualShape ?? 'circle';
     if (item.bombExplosionEffect) visual.dataset.effect = item.bombExplosionEffect;
     if (item.dashTrailEffect) visual.dataset.trailEffect = item.dashTrailEffect;
     visual.innerHTML = '<i class="trail-a"></i><i class="trail-b"></i><b></b><span></span>';
+    if (item.category === 'playerShape' && premium) {
+      const detailedFrame = createPremiumOperativeFrameSvg(item.visualShape);
+      if (detailedFrame) {
+        visual.classList.add('premium-operative-art');
+        visual.append(detailedFrame);
+      }
+    }
     return visual;
   }
 

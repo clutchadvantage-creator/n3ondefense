@@ -228,6 +228,15 @@ export type CosmeticVisualShape =
   | 'iceCream'
   | 'airplane'
   | 'ufo'
+  | 'cerealBox'
+  | 'alienHead'
+  | 'hypercar'
+  | 'cyberLeaf'
+  | 'tugboat'
+  | 'stealthWing'
+  | 'eyeball'
+  | 'wheelchair'
+  | 'frog'
   | 'pulse'
   | 'missile'
   | 'lightning'
@@ -259,6 +268,9 @@ export interface CosmeticOption {
   previewAnimation?: 'float' | 'pulse' | 'rotate' | 'trail';
   previewEffect?: string;
   previewRenderer?: string;
+  previewScale?: number;
+  previewOffsetX?: number;
+  previewOffsetY?: number;
   categoryIcon?: string;
   accentColor?: number;
   /** Optional signature overlay layered over the authoritative bombsite explosion. */
