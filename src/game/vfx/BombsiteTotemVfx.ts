@@ -28,6 +28,9 @@ interface TotemSlot {
   rig: Phaser.GameObjects.Container;
   marker: Phaser.GameObjects.Graphics;
   fissures: Phaser.GameObjects.Graphics;
+  fissureBranches: Phaser.GameObjects.Graphics;
+  debris: Phaser.GameObjects.Graphics;
+  lastDebrisFrame: number;
   dynamic: Phaser.GameObjects.Graphics;
   shadow: Phaser.GameObjects.Ellipse;
   body: Phaser.GameObjects.Graphics;
@@ -44,8 +47,16 @@ const TARGETING_MS = 160;
 const DROP_MS = 500;
 const IMPACT_MS = TARGETING_MS + DROP_MS;
 const POWER_UP_MS = 430;
-const FISSURE_HOLD_MS = 420;
-const FISSURE_FADE_MS = 1_250;
+const FISSURE_HOLD_MS = 760;
+const FISSURE_FADE_MS = 1_900;
+const FISSURE_BRANCH_HOLD_MS = 480;
+const FISSURE_BRANCH_FADE_MS = 1_850;
+const IMPACT_FLASH_MS = 520;
+const DEBRIS_DRAW_INTERVAL_MS = 1000 / 30;
+const DEBRIS_COUNT = 38;
+const LARGE_DEBRIS_COUNT = 8;
+const MEDIUM_DEBRIS_COUNT = 22;
+const DEBRIS_MAX_LIFETIME_MS = 2_950;
 const DROP_HEIGHT = 330;
 const TOTEM_RENDER_DEPTH = 11;
 const TOTEM_VISUAL_SCALE = 1.16;
@@ -53,11 +64,44 @@ const TAU = Math.PI * 2;
 const RAY_COUNT = 14;
 const RAY_COS = new Float32Array(RAY_COUNT);
 const RAY_SIN = new Float32Array(RAY_COUNT);
+const DEBRIS_COS = new Float32Array(DEBRIS_COUNT);
+const DEBRIS_SIN = new Float32Array(DEBRIS_COUNT);
+const DEBRIS_DISTANCE = new Float32Array(DEBRIS_COUNT);
+const DEBRIS_HEIGHT = new Float32Array(DEBRIS_COUNT);
+const DEBRIS_SPIN = new Float32Array(DEBRIS_COUNT);
+const DEBRIS_SIZE = new Float32Array(DEBRIS_COUNT);
+const DEBRIS_DELAY = new Float32Array(DEBRIS_COUNT);
+const DEBRIS_LIFETIME = new Float32Array(DEBRIS_COUNT);
+const DEBRIS_TYPE = new Uint8Array(DEBRIS_COUNT);
 
 for (let index = 0; index < RAY_COUNT; index += 1) {
   const angle = index / RAY_COUNT * TAU;
   RAY_COS[index] = Math.cos(angle);
   RAY_SIN[index] = Math.sin(angle);
+}
+
+const seededUnit = (index: number, salt: number): number => {
+  const value = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43_758.5453;
+  return value - Math.floor(value);
+};
+
+for (let index = 0; index < DEBRIS_COUNT; index += 1) {
+  const angle = index / DEBRIS_COUNT * TAU + (seededUnit(index, 1) - 0.5) * 0.34;
+  const large = index < LARGE_DEBRIS_COUNT;
+  const medium = index >= LARGE_DEBRIS_COUNT && index < MEDIUM_DEBRIS_COUNT;
+  DEBRIS_COS[index] = Math.cos(angle);
+  DEBRIS_SIN[index] = Math.sin(angle);
+  DEBRIS_DISTANCE[index] = (large ? 116 : medium ? 94 : 76) + seededUnit(index, 2) * (large ? 76 : medium ? 64 : 54);
+  DEBRIS_HEIGHT[index] = (large ? 48 : medium ? 34 : 20) + seededUnit(index, 3) * (large ? 38 : medium ? 31 : 25);
+  DEBRIS_SPIN[index] = (index % 2 === 0 ? 1 : -1) * (2.1 + seededUnit(index, 4) * 5.4);
+  DEBRIS_SIZE[index] = (large ? 7.5 : medium ? 4.5 : 2.5) + seededUnit(index, 5) * (large ? 5 : medium ? 3.5 : 2.5);
+  DEBRIS_DELAY[index] = seededUnit(index, 6) * 115;
+  DEBRIS_LIFETIME[index] = large
+    ? 1_850 + seededUnit(index, 7) * 1_000
+    : medium
+      ? 1_150 + seededUnit(index, 7) * 1_050
+      : 720 + seededUnit(index, 7) * 780;
+  DEBRIS_TYPE[index] = Math.floor(seededUnit(index, 8) * 4);
 }
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
@@ -109,6 +153,9 @@ export class BombsiteTotemVfx {
     slot.rig.setPosition(0, -DROP_HEIGHT).setScale(TOTEM_VISUAL_SCALE * 0.72).setAlpha(0).setVisible(true);
     slot.marker.setVisible(true).setAlpha(0.8).setRotation(slot.phase);
     slot.fissures.clear().setAlpha(0).setVisible(false);
+    slot.fissureBranches.clear().setAlpha(0).setVisible(false);
+    slot.debris.clear().setAlpha(1).setVisible(false);
+    slot.lastDebrisFrame = -1;
     slot.dynamic.clear().setVisible(true).setAlpha(1);
     slot.shadow.setVisible(true).setAlpha(0.08).setScale(0.38);
     // Keep the descending chassis unmistakable against the dark arena. The
@@ -223,9 +270,11 @@ export class BombsiteTotemVfx {
     }
 
     const fissures = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    const fissureBranches = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    const debris = this.scene.add.graphics();
     const dynamic = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
     const shadow = this.scene.add.ellipse(2, 30, 72, 26, 0x000000, 0.48);
-    ground.add([shadow, marker, fissures, dynamic]);
+    ground.add([shadow, marker, fissures, fissureBranches, debris, dynamic]);
 
     const body = this.scene.add.graphics();
     this.drawBody(body);
@@ -245,7 +294,8 @@ export class BombsiteTotemVfx {
       resolvingAt: 0, phase: 0, chargeStartedAt: 0, chargeUntil: 0, chargeColor: 0x63efff,
       chargeKind: 'electric', pulseStartedAt: 0, pulseDurationMs: 0, pulseRadius: 0,
       pulseColor: 0x63efff, pulseKind: 'electric', flashStartedAt: 0, flashColor: 0xffffff,
-      root, ground, rig, marker, fissures, dynamic, shadow, body, channels, face, coreGlow, core, innerRing, outerRing
+      root, ground, rig, marker, fissures, fissureBranches, debris, lastDebrisFrame: -1,
+      dynamic, shadow, body, channels, face, coreGlow, core, innerRing, outerRing
     };
   }
 
@@ -337,6 +387,7 @@ export class BombsiteTotemVfx {
     }
 
     this.updateFissures(slot, now);
+    this.updateImpactDebris(slot, now);
     this.drawDynamicEffects(slot, now);
     if (slot.resolvingAt > 0) {
       const resolveProgress = clamp01((now - slot.resolvingAt) / 220);
@@ -350,6 +401,9 @@ export class BombsiteTotemVfx {
     slot.impactAt = now;
     this.drawFissures(slot);
     slot.fissures.setVisible(true).setAlpha(1);
+    slot.fissureBranches.setVisible(true).setAlpha(1);
+    slot.debris.setVisible(true).setAlpha(1);
+    slot.lastDebrisFrame = -1;
     this.scene.cameras.main.shake(105, 0.0018, false);
   }
 
@@ -375,24 +429,57 @@ export class BombsiteTotemVfx {
   }
 
   private drawFissures(slot: TotemSlot): void {
-    const graphics = slot.fissures;
-    graphics.clear();
-    for (let ray = 0; ray < RAY_COUNT; ray += 1) {
+    const primary = slot.fissures;
+    const branches = slot.fissureBranches;
+    primary.clear();
+    branches.clear();
+    const primaryRayCount = 11;
+    for (let ray = 0; ray < primaryRayCount; ray += 1) {
       const color = ray % 3 === 0 ? 0xff5bd6 : ray % 2 === 0 ? 0x63efff : 0x8b7dff;
-      graphics.lineStyle(ray % 4 === 0 ? 3 : 2, color, ray % 3 === 0 ? 0.82 : 0.68);
-      const initialAngle = ray / RAY_COUNT * TAU + slot.phase;
-      let previousX = Math.cos(initialAngle) * 19;
-      let previousY = Math.sin(initialAngle) * 19;
-      for (let segment = 1; segment <= 4; segment += 1) {
-        const distance = 20 + segment * (13 + (ray % 3) * 3.5);
-        const bend = Math.sin((ray + 1) * (segment + 2) * 1.71) * 0.16;
-        const angle = ray / RAY_COUNT * TAU + slot.phase + bend;
+      const baseAngle = ray / primaryRayCount * TAU + slot.phase + (seededUnit(ray, 19) - 0.5) * 0.31;
+      const targetLength = 112 + seededUnit(ray, 20) * 66;
+      const startRadius = 20 + seededUnit(ray, 21) * 9;
+      let previousX = Math.cos(baseAngle) * startRadius;
+      let previousY = Math.sin(baseAngle) * startRadius;
+
+      for (let segment = 1; segment <= 6; segment += 1) {
+        const distance = startRadius + targetLength * (segment / 6);
+        const bend = Math.sin((ray + 1) * (segment + 2) * 1.713 + slot.phase) * (0.11 + segment * 0.012);
+        const angle = baseAngle + bend;
         const nextX = Math.cos(angle) * distance;
         const nextY = Math.sin(angle) * distance;
-        graphics.lineBetween(previousX, previousY, nextX, nextY);
-        if (segment === 2 && ray % 2 === 0) {
-          const branchAngle = angle + (ray % 4 === 0 ? 0.34 : -0.34);
-          graphics.lineBetween(nextX, nextY, nextX + Math.cos(branchAngle) * 16, nextY + Math.sin(branchAngle) * 16);
+        const width = Math.max(1.5, (ray % 4 === 0 ? 5.4 : 4.1) - segment * 0.42);
+        const gap = segment >= 4 && (ray + segment) % 4 === 0 ? 0.86 : 1;
+        const endX = previousX + (nextX - previousX) * gap;
+        const endY = previousY + (nextY - previousY) * gap;
+        this.drawCrackSegment(primary, previousX, previousY, endX, endY, color, width, 0.92);
+
+        if ((segment === 2 || segment === 4) && (ray + segment) % 3 !== 1) {
+          const direction = (ray + segment) % 2 === 0 ? 1 : -1;
+          const branchAngle = angle + direction * (0.36 + seededUnit(ray * 7 + segment, 22) * 0.3);
+          const branchLength = 25 + seededUnit(ray * 7 + segment, 23) * 27;
+          const branchMidX = nextX + Math.cos(branchAngle) * branchLength * 0.56;
+          const branchMidY = nextY + Math.sin(branchAngle) * branchLength * 0.56;
+          const branchEndAngle = branchAngle - direction * (0.08 + seededUnit(ray + segment, 24) * 0.16);
+          const branchEndX = branchMidX + Math.cos(branchEndAngle) * branchLength * 0.44;
+          const branchEndY = branchMidY + Math.sin(branchEndAngle) * branchLength * 0.44;
+          this.drawCrackSegment(branches, nextX, nextY, branchMidX, branchMidY, color, Math.max(1.2, width * 0.55), 0.76);
+          this.drawCrackSegment(branches, branchMidX, branchMidY, branchEndX, branchEndY, color, Math.max(1, width * 0.38), 0.66);
+
+          if ((ray + segment) % 2 === 0) {
+            const offshootAngle = branchAngle - direction * 0.58;
+            const offshootLength = 12 + seededUnit(ray * 11 + segment, 25) * 15;
+            this.drawCrackSegment(
+              branches,
+              branchMidX,
+              branchMidY,
+              branchMidX + Math.cos(offshootAngle) * offshootLength,
+              branchMidY + Math.sin(offshootAngle) * offshootLength,
+              color,
+              1,
+              0.54
+            );
+          }
         }
         previousX = nextX;
         previousY = nextY;
@@ -400,16 +487,148 @@ export class BombsiteTotemVfx {
     }
   }
 
+  private drawCrackSegment(
+    graphics: Phaser.GameObjects.Graphics,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    color: number,
+    width: number,
+    alpha: number
+  ): void {
+    graphics.lineStyle(width + 5, color, alpha * 0.11).lineBetween(startX, startY, endX, endY);
+    graphics.lineStyle(width, color, alpha * 0.6).lineBetween(startX, startY, endX, endY);
+    graphics.lineStyle(Math.max(0.8, width * 0.3), 0xeaffff, alpha * 0.88).lineBetween(startX, startY, endX, endY);
+  }
+
   private updateFissures(slot: TotemSlot, now: number): void {
     if (!slot.impacted || !slot.fissures.visible) return;
     const elapsed = now - slot.impactAt;
-    if (elapsed <= FISSURE_HOLD_MS) {
-      slot.fissures.setAlpha(0.72 + Math.sin(elapsed * 0.025) * 0.24);
+    const primaryFade = elapsed <= FISSURE_HOLD_MS
+      ? 1
+      : 1 - clamp01((elapsed - FISSURE_HOLD_MS) / FISSURE_FADE_MS);
+    const branchFade = elapsed <= FISSURE_BRANCH_HOLD_MS
+      ? 1
+      : 1 - clamp01((elapsed - FISSURE_BRANCH_HOLD_MS) / FISSURE_BRANCH_FADE_MS);
+    const primaryFlicker = 0.82 + Math.sin(elapsed * 0.021) * 0.12 + Math.sin(elapsed * 0.057 + slot.phase) * 0.06;
+    const branchFlicker = Math.floor(elapsed / 83) % 9 === 2
+      ? 0.38
+      : 0.66 + Math.sin(elapsed * 0.033 + slot.phase * 2) * 0.2;
+    slot.fissures.setAlpha(Math.max(0, primaryFade * primaryFlicker));
+    slot.fissureBranches.setAlpha(Math.max(0, branchFade * branchFlicker));
+    if (primaryFade <= 0) slot.fissures.setVisible(false);
+    if (branchFade <= 0) slot.fissureBranches.setVisible(false);
+  }
+
+  private updateImpactDebris(slot: TotemSlot, now: number): void {
+    if (!slot.impacted || !slot.debris.visible) return;
+    const elapsed = now - slot.impactAt;
+    if (elapsed >= DEBRIS_MAX_LIFETIME_MS) {
+      slot.debris.clear().setVisible(false);
       return;
     }
-    const fade = 1 - clamp01((elapsed - FISSURE_HOLD_MS) / FISSURE_FADE_MS);
-    slot.fissures.setAlpha(fade * 0.7);
-    if (fade <= 0) slot.fissures.setVisible(false);
+    const frame = Math.floor(elapsed / DEBRIS_DRAW_INTERVAL_MS);
+    if (frame === slot.lastDebrisFrame) return;
+    slot.lastDebrisFrame = frame;
+    this.drawImpactDebris(slot, elapsed);
+  }
+
+  private drawImpactDebris(slot: TotemSlot, elapsed: number): void {
+    const graphics = slot.debris;
+    graphics.clear();
+    const phaseCos = Math.cos(slot.phase);
+    const phaseSin = Math.sin(slot.phase);
+
+    for (let index = 0; index < DEBRIS_COUNT; index += 1) {
+      const age = elapsed - DEBRIS_DELAY[index];
+      if (age < 0 || age >= DEBRIS_LIFETIME[index]) continue;
+      const progress = clamp01(age / DEBRIS_LIFETIME[index]);
+      const glitchFrame = Math.floor((elapsed + index * 47) / 58);
+      const glitchState = (glitchFrame + index * 3) % 17;
+      if (glitchState === 0 || (index % 7 === 0 && glitchState === 6)) continue;
+
+      const directionX = DEBRIS_COS[index] * phaseCos - DEBRIS_SIN[index] * phaseSin;
+      const directionY = DEBRIS_SIN[index] * phaseCos + DEBRIS_COS[index] * phaseSin;
+      const travel = easeOutCubic(progress);
+      const distance = DEBRIS_DISTANCE[index] * travel;
+      const lateral = Math.sin(progress * Math.PI * 2 + index) * (index % 3) * 1.4;
+      const floorX = directionX * distance - directionY * lateral;
+      const floorY = directionY * distance + directionX * lateral;
+      const height = Math.sin(progress * Math.PI) * DEBRIS_HEIGHT[index];
+      const fragmentX = floorX;
+      const fragmentY = floorY - height;
+      const fadeStart = index < LARGE_DEBRIS_COUNT ? 0.72 : index < MEDIUM_DEBRIS_COUNT ? 0.62 : 0.48;
+      const fade = progress <= fadeStart ? 1 : 1 - clamp01((progress - fadeStart) / (1 - fadeStart));
+      const color = index % 5 === 0 ? 0xffffff : index % 3 === 0 ? 0xff5bd6 : index % 2 === 0 ? 0x63efff : 0x8b7dff;
+      const size = DEBRIS_SIZE[index];
+
+      graphics.fillStyle(0x00040a, 0.18 * fade).fillEllipse(floorX, floorY + 2, size * (2.1 - progress * 0.5), size * 0.62);
+      graphics.lineStyle(index < MEDIUM_DEBRIS_COUNT ? 1.2 : 0.8, color, 0.2 * fade)
+        .lineBetween(fragmentX - directionX * size * 2.4, fragmentY + directionY * size * 0.5, fragmentX, fragmentY);
+
+      const rotation = slot.phase + index * 0.61 + progress * DEBRIS_SPIN[index];
+      const rotationCos = Math.cos(rotation);
+      const rotationSin = Math.sin(rotation);
+      const type = DEBRIS_TYPE[index];
+      const halfWidth = size * (type === 1 ? 1.48 : type === 3 ? 1.16 : 1);
+      const halfHeight = size * (type === 1 ? 0.28 : type === 2 ? 0.7 : 0.58);
+      const axisX = rotationCos * halfWidth;
+      const axisY = rotationSin * halfWidth;
+      const normalX = -rotationSin * halfHeight;
+      const normalY = rotationCos * halfHeight;
+      const x1 = fragmentX - axisX - normalX;
+      const y1 = fragmentY - axisY - normalY;
+      const x2 = fragmentX + axisX - normalX;
+      const y2 = fragmentY + axisY - normalY;
+      const x3 = fragmentX + axisX + normalX;
+      const y3 = fragmentY + axisY + normalY;
+      const x4 = fragmentX - axisX + normalX;
+      const y4 = fragmentY - axisY + normalY;
+
+      if (type === 2) {
+        graphics.fillStyle(index < MEDIUM_DEBRIS_COUNT ? 0x081522 : color, (index < MEDIUM_DEBRIS_COUNT ? 0.84 : 0.42) * fade)
+          .fillTriangle(x1, y1, x2, y2, x3, y3);
+        graphics.lineStyle(index < LARGE_DEBRIS_COUNT ? 2 : 1, color, 0.86 * fade)
+          .lineBetween(x1, y1, x2, y2)
+          .lineBetween(x2, y2, x3, y3)
+          .lineBetween(x3, y3, x1, y1);
+      } else if (type === 3) {
+        graphics.lineStyle(index < MEDIUM_DEBRIS_COUNT ? 2.4 : 1.4, color, 0.88 * fade)
+          .lineBetween(x1, y1, x3, y3)
+          .lineBetween(fragmentX, fragmentY, x2, y2);
+        graphics.fillStyle(0xeaffff, 0.86 * fade).fillCircle(fragmentX, fragmentY, Math.max(1, size * 0.2));
+      } else {
+        graphics.fillStyle(0x07131d, 0.86 * fade)
+          .fillTriangle(x1, y1, x2, y2, x3, y3)
+          .fillTriangle(x1, y1, x3, y3, x4, y4);
+        graphics.lineStyle(index < LARGE_DEBRIS_COUNT ? 2.2 : 1.2, color, 0.9 * fade)
+          .lineBetween(x1, y1, x2, y2)
+          .lineBetween(x2, y2, x3, y3)
+          .lineBetween(x3, y3, x4, y4)
+          .lineBetween(x4, y4, x1, y1);
+        graphics.lineStyle(0.8, 0xeaffff, 0.46 * fade).lineBetween(x1, y1, x3, y3);
+      }
+
+      if (index % 3 === 0) {
+        const glitchOffset = glitchState % 2 === 0 ? 3 : -3;
+        graphics.lineStyle(Math.max(1, size * 0.18), color, 0.4 * fade)
+          .lineBetween(fragmentX - halfWidth, fragmentY + glitchOffset, fragmentX + halfWidth * 0.72, fragmentY + glitchOffset);
+      }
+      if (index % 5 === 0) {
+        graphics.fillStyle(color, 0.15 * fade).fillRect(fragmentX + 3, fragmentY - 2, Math.max(2, size * 1.2), Math.max(1, size * 0.3));
+      }
+      if (index % 2 === 0) {
+        const pixelDistance = size * (2.1 + progress * 2.4);
+        graphics.fillStyle(index % 4 === 0 ? 0xffffff : color, 0.62 * fade)
+          .fillRect(
+            fragmentX - directionX * pixelDistance - 1,
+            fragmentY - directionY * pixelDistance - 1,
+            index < MEDIUM_DEBRIS_COUNT ? 2 : 1.5,
+            index < MEDIUM_DEBRIS_COUNT ? 2 : 1.5
+          );
+      }
+    }
   }
 
   private drawDynamicEffects(slot: TotemSlot, now: number): void {
@@ -425,7 +644,7 @@ export class BombsiteTotemVfx {
     }
 
     const impactElapsed = now - slot.impactAt;
-    if (impactElapsed < 470) this.drawImpact(graphics, slot, impactElapsed);
+    if (impactElapsed < IMPACT_FLASH_MS) this.drawImpact(graphics, impactElapsed);
 
     if (now < slot.chargeUntil) this.drawCharge(graphics, slot, now);
     if (slot.pulseStartedAt > 0 && now >= slot.pulseStartedAt) {
@@ -439,9 +658,9 @@ export class BombsiteTotemVfx {
     }
   }
 
-  private drawImpact(graphics: Phaser.GameObjects.Graphics, slot: TotemSlot, elapsed: number): void {
+  private drawImpact(graphics: Phaser.GameObjects.Graphics, elapsed: number): void {
     const progress = easeOutCubic(clamp01(elapsed / 420));
-    const fade = 1 - clamp01(elapsed / 470);
+    const fade = 1 - clamp01(elapsed / IMPACT_FLASH_MS);
     graphics.fillStyle(0xffffff, 0.68 * Math.max(0, 1 - elapsed / 105)).fillCircle(0, 0, 8 + progress * 20);
     graphics.fillStyle(0x63efff, 0.12 * fade).fillCircle(0, 0, 28 + progress * 48);
     graphics.lineStyle(5 - progress * 3, 0x63efff, 0.9 * fade).strokeCircle(0, 0, 18 + progress * 78);
@@ -452,30 +671,6 @@ export class BombsiteTotemVfx {
       const outer = 34 + progress * (50 + (ray % 3) * 9);
       graphics.lineStyle(ray % 3 === 0 ? 3 : 2, ray % 2 === 0 ? 0x63efff : 0xff5bd6, 0.68 * fade);
       graphics.lineBetween(RAY_COS[ray] * inner, RAY_SIN[ray] * inner, RAY_COS[ray] * outer, RAY_SIN[ray] * outer);
-
-      // Digital floor pieces follow a ballistic arc and are drawn into the
-      // existing per-Totem batch instead of spawning physics debris objects.
-      const fragmentProgress = clamp01((elapsed - 28) / 410);
-      const distance = (30 + (ray % 4) * 12) * easeOutCubic(fragmentProgress);
-      const height = Math.sin(fragmentProgress * Math.PI) * (24 + (ray % 3) * 10);
-      const fragmentX = RAY_COS[ray] * distance;
-      const floorY = RAY_SIN[ray] * distance;
-      const fragmentY = floorY - height;
-      const rotation = slot.phase + ray * 0.73 + fragmentProgress * (ray % 2 === 0 ? 2.2 : -2.8);
-      const cos = Math.cos(rotation);
-      const sin = Math.sin(rotation);
-      const halfWidth = 3 + (ray % 3) * 1.5;
-      const halfHeight = 2 + (ray % 2) * 1.5;
-      const ax = cos * halfWidth;
-      const ay = sin * halfWidth;
-      const bx = -sin * halfHeight;
-      const by = cos * halfHeight;
-      const debrisColor = ray % 3 === 0 ? 0xffffff : ray % 2 === 0 ? 0x63efff : 0xff5bd6;
-      graphics.fillStyle(debrisColor, 0.76 * fade)
-        .fillTriangle(fragmentX - ax - bx, fragmentY - ay - by, fragmentX + ax - bx, fragmentY + ay - by, fragmentX + ax + bx, fragmentY + ay + by)
-        .fillTriangle(fragmentX - ax - bx, fragmentY - ay - by, fragmentX + ax + bx, fragmentY + ay + by, fragmentX - ax + bx, fragmentY - ay + by);
-      graphics.lineStyle(1, debrisColor, 0.22 * fade).lineBetween(fragmentX, floorY, fragmentX, fragmentY);
-      graphics.fillStyle(0x63efff, 0.08 * fade).fillEllipse(fragmentX, floorY + 2, halfWidth * 2.2, halfHeight);
     }
     graphics.lineStyle(5, 0xffffff, 0.42 * fade).lineBetween(0, -165 * fade, 0, -12);
     graphics.lineStyle(2, 0x63efff, 0.52 * fade).lineBetween(-9, -145 * fade, -2, -10);
@@ -552,7 +747,10 @@ export class BombsiteTotemVfx {
     slot.siteId = '';
     slot.root.setVisible(false).setActive(false).setAlpha(1);
     slot.fissures.clear();
+    slot.fissureBranches.clear();
+    slot.debris.clear();
     slot.dynamic.clear();
+    slot.lastDebrisFrame = -1;
     slot.chargeUntil = 0;
     slot.pulseStartedAt = 0;
     slot.flashStartedAt = 0;

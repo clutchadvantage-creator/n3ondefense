@@ -12,6 +12,8 @@ import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/Sav
 const boot = readFileSync(new URL('../src/game/scenes/BootScene.ts', import.meta.url), 'utf8');
 const textures = readFileSync(new URL('../src/game/cosmetics/PremiumOperativeFrameTextures.ts', import.meta.url), 'utf8');
 const player = readFileSync(new URL('../src/game/entities/Player.ts', import.meta.url), 'utf8');
+const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+const garage = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
 const preview = readFileSync(new URL('../src/game/cosmetics/CosmeticPreview.ts', import.meta.url), 'utf8');
 const store = readFileSync(new URL('../src/ui/stores/StorefrontUi.ts', import.meta.url), 'utf8');
 const storeCss = readFileSync(new URL('../src/ui/stores/storefront.css', import.meta.url), 'utf8');
@@ -72,6 +74,11 @@ test('premium operative art is available in Boot, Garage previews, and arena pla
   for (const [, , , texture] of EXPECTED) assert.match(textures, new RegExp(`'${texture}'`));
   assert.match(preview, /item\.previewScale/);
   assert.match(preview, /addImage\(item\.previewIcon \?\? item\.textureKey \?\? item\.id\)/);
+  assert.match(arena, /const playerTextureKey = getCosmeticTextureKey\(playerShapeId, 'player-circle'\)/);
+  assert.match(arena, /new Player\([^;]+playerTextureKey/s);
+  assert.doesNotMatch(arena, /new Player\([^;]+playerShapeId/s);
+  assert.match(garage, /const resolvedTexture = getCosmeticTextureKey\(shapeId, 'player-circle'\)/);
+  assert.match(garage, /this\.textures\.exists\(resolvedTexture\) \? resolvedTexture : 'player-circle'/);
   assert.match(player, /texture\.startsWith\('player-premium-'\)/);
   assert.match(player, /this\.setCircle\(12/);
 });

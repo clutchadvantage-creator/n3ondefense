@@ -342,7 +342,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     const ring = this.add.circle(0, ringY, large ? 60 : compact ? 38 : 49, 0x08131c, 0.38).setStrokeStyle(2, 0xff5bcf, 0.48);
     const projectionScan = this.add.rectangle(0, bayTop + (large ? 29 : 19), large ? 112 : compact ? 68 : 88, 2, 0x6af6ff, 0.28);
     const shapeId = SaveSystem.getEquippedCosmeticId('playerShape') ?? 'player-circle';
-    const texture = this.textures.exists(shapeId) ? shapeId : 'player-circle';
+    const resolvedTexture = getCosmeticTextureKey(shapeId, 'player-circle');
+    const texture = this.textures.exists(resolvedTexture) ? resolvedTexture : 'player-circle';
     const operative = this.add.image(0, ringY, texture).setScale(large ? 2.75 : compact ? 1.72 : 2.2);
     const tint = SaveSystem.getCosmeticColor('playerColor', this.time.now);
     operative.setTint(tint);

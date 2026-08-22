@@ -1058,8 +1058,9 @@ export class ArenaScene extends Phaser.Scene {
         cooldownRate: starterWeapon.cooldownRate * this.modRuntime.multiplier('weaponCooling')
       };
 
-      const playerShape = SaveSystem.getEquippedCosmeticId('playerShape') ?? 'player-circle';
-      this.player = new Player(this, this.layout.playerSpawn.x, this.layout.playerSpawn.y, playerShape, stats, energy, weapon);
+      const playerShapeId = SaveSystem.getEquippedCosmeticId('playerShape');
+      const playerTextureKey = getCosmeticTextureKey(playerShapeId, 'player-circle');
+      this.player = new Player(this, this.layout.playerSpawn.x, this.layout.playerSpawn.y, playerTextureKey, stats, energy, weapon);
       this.player.permanentModSpeedMultiplier = this.modRuntime.permanentMoveSpeedMultiplier();
       this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor', this.time.now));
       this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
