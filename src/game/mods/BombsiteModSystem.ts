@@ -23,6 +23,7 @@ export interface BombsiteModCallbacks {
   damagePlayer(amount: number): boolean;
   announce(message: string): void;
   playCue(cue: EffectCue): void;
+  playTotemCue?(cue: 'entrance' | 'pulse'): void;
 }
 
 export interface BombsiteDefuseResolution {
@@ -94,7 +95,10 @@ export class BombsiteModSystem {
     private readonly runtime: ModRuntime,
     private readonly callbacks: BombsiteModCallbacks
   ) {
-    this.totems = new BombsiteTotemVfx(scene);
+    this.totems = new BombsiteTotemVfx(scene, {
+      onEntrance: () => this.callbacks.playTotemCue?.('entrance'),
+      onPulse: () => this.callbacks.playTotemCue?.('pulse')
+    });
   }
 
   onBombArmed(site: BombSiteRuntime, defenseMs: number, now: number): void {

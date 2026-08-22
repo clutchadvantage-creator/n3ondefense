@@ -15,6 +15,28 @@ const PICKUP_SFX_MAX_CONCURRENT = 6;
 const LOW_HEALTH_LOOP_GAP_MS = 900;
 const ABILITY_FEEDBACK_SFX_POOL_SIZE = 6;
 const UNAVAILABLE_SFX_MIN_INTERVAL_MS = 90;
+const PRESENTATION_SFX_SOURCES = {
+  gasCanImpact: 'soundeffects/gascanhitting.mp3',
+  gasFizz: 'soundeffects/gasfizz.mp3',
+  totemEntrance: 'soundeffects/totementrance.mp3',
+  totemPulse: 'soundeffects/totempulsesound.mp3',
+  miniBossSpawn: 'soundeffects/minibossspawn.mp3'
+} as const;
+type PresentationSfxName = keyof typeof PRESENTATION_SFX_SOURCES;
+const PRESENTATION_SFX_POOL_SIZES: Record<PresentationSfxName, number> = {
+  gasCanImpact: 3,
+  gasFizz: 2,
+  totemEntrance: 3,
+  totemPulse: 4,
+  miniBossSpawn: 2
+};
+const PRESENTATION_SFX_MIN_INTERVAL_MS: Record<PresentationSfxName, number> = {
+  gasCanImpact: 70,
+  gasFizz: 220,
+  totemEntrance: 100,
+  totemPulse: 55,
+  miniBossSpawn: 300
+};
 type AbilityFeedbackSfxName = 'placeTurret' | 'electricFence' | 'placeMine' | 'unavailable';
 const PICKUP_SFX_SOURCES = {
   pickup: 'soundeffects/pickupsound.mp3',
@@ -81,6 +103,16 @@ export class AudioManager {
   private readonly abilityFeedbackSfxCursors: Record<AbilityFeedbackSfxName, number> = {
     placeTurret: 0, electricFence: 0, placeMine: 0, unavailable: 0
   };
+  private readonly presentationSfxPools: Record<PresentationSfxName, HTMLAudioElement[]> = {
+    gasCanImpact: [], gasFizz: [], totemEntrance: [], totemPulse: [], miniBossSpawn: []
+  };
+  private readonly presentationSfxCursors: Record<PresentationSfxName, number> = {
+    gasCanImpact: 0, gasFizz: 0, totemEntrance: 0, totemPulse: 0, miniBossSpawn: 0
+  };
+  private readonly lastPresentationSfxAt: Record<PresentationSfxName, number> = {
+    gasCanImpact: -Infinity, gasFizz: -Infinity, totemEntrance: -Infinity,
+    totemPulse: -Infinity, miniBossSpawn: -Infinity
+  };
   private runStartSfx: HTMLAudioElement | null = null;
   private securityLaserAudio: HTMLAudioElement | null = null;
   private lasersOffSfx: HTMLAudioElement | null = null;
@@ -139,6 +171,7 @@ export class AudioManager {
     this.initMenuSfxPools();
     this.initRunStartSfx();
     this.initAbilityFeedbackSfxPools();
+    this.initPresentationSfxPools();
   }
 
   static get(): AudioManager {
@@ -248,6 +281,45 @@ export class AudioManager {
     this.gasSfx.preload = 'auto';
     this.gasSfx.volume = this.getSfxVolume('gas');
     this.gasSfx.load();
+  }
+
+  private initPresentationSfxPools(): void {
+    for (const name of Object.keys(PRESENTATION_SFX_SOURCES) as PresentationSfxName[]) {
+      const source = audioAssetUrl(PRESENTATION_SFX_SOURCES[name]);
+      for (let index = 0; index < PRESENTATION_SFX_POOL_SIZES[name]; index += 1) {
+        const audio = new Audio(source);
+        audio.preload = 'auto';
+        audio.volume = this.getSfxVolume(name);
+        audio.load();
+        this.presentationSfxPools[name].push(audio);
+      }
+    }
+  }
+
+  private playPresentationSfx(name: PresentationSfxName): void {
+    const now = performance.now();
+    if (now - this.lastPresentationSfxAt[name] < PRESENTATION_SFX_MIN_INTERVAL_MS[name]) return;
+    const pool = this.presentationSfxPools[name];
+    let availableIndex = -1;
+    for (let offset = 0; offset < pool.length; offset += 1) {
+      const candidateIndex = (this.presentationSfxCursors[name] + offset) % pool.length;
+      const candidate = pool[candidateIndex];
+      if (candidate.paused || candidate.ended) {
+        availableIndex = candidateIndex;
+        break;
+      }
+    }
+    if (availableIndex < 0) return;
+    this.lastPresentationSfxAt[name] = now;
+    this.presentationSfxCursors[name] = (availableIndex + 1) % pool.length;
+    const audio = pool[availableIndex];
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Metadata may still be loading on the first presentation event.
+    }
+    audio.volume = this.getSfxVolume(name);
+    void audio.play().catch(() => undefined);
   }
 
   private initPickupSfxPools(): void {
@@ -862,6 +934,9 @@ export class AudioManager {
     for (const name of Object.keys(this.abilityFeedbackSfxPools) as AbilityFeedbackSfxName[]) {
       for (const audio of this.abilityFeedbackSfxPools[name]) audio.volume = this.getSfxVolume(name);
     }
+    for (const name of Object.keys(this.presentationSfxPools) as PresentationSfxName[]) {
+      for (const audio of this.presentationSfxPools[name]) audio.volume = this.getSfxVolume(name);
+    }
     if (this.runStartSfx) this.runStartSfx.volume = this.getSfxVolume('runStart');
     if (this.securityLaserAudio) this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
     if (this.lasersOffSfx) this.lasersOffSfx.volume = this.getSfxVolume('lasersOff');
@@ -1032,6 +1107,13 @@ export class AudioManager {
         break;
       case 'gas':
         this.playGasSfx();
+        break;
+      case 'gasCanImpact':
+      case 'gasFizz':
+      case 'totemEntrance':
+      case 'totemPulse':
+      case 'miniBossSpawn':
+        this.playPresentationSfx(name);
         break;
       case 'pickup':
       case 'healthPickup':

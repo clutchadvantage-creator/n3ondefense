@@ -49,10 +49,16 @@ export class MiniBossEvent implements ArcadeEvent {
         onDefeated: () => { this.defeated = true; }
       },
       this.context.modeFamily,
-      { healthMultiplier: ARCADE_MINIBOSS_HEALTH_MULTIPLIER, showHealthUi: false }
+      {
+        healthMultiplier: ARCADE_MINIBOSS_HEALTH_MULTIPLIER,
+        showHealthUi: false,
+        particlesEnabled: this.context.particlesEnabled
+      }
     );
     this.wallCollider = this.context.scene.physics.add.collider(this.encounter.boss, this.context.walls);
     this.marker = this.createMarker(this.encounter.boss, this.archetype);
+    this.encounter.playEntrance();
+    this.context.presentMiniBossSpawn(point.x, point.y, BOSS_ARCHETYPES[this.archetype].color);
     this.context.emitMetric({
       name: 'arcade_miniboss_spawned', eventId: this.id, round: this.context.round,
       protocol: this.context.protocol, elapsedMs: 0, bossType: this.archetype

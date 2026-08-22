@@ -76,7 +76,8 @@ export class GasHazardSystem {
     private readonly isBlocked: (x: number, y: number) => boolean,
     private readonly particlesEnabled: boolean,
     private readonly onPlayerDamaged?: (damage: number) => void,
-    private readonly onGasReleased?: () => void
+    private readonly onGasReleased?: () => void,
+    private readonly onCanisterImpact?: () => void
   ) {
     this.random = new SeededRandom((seed ^ Math.imul(round + 31, 0x85ebca6b) ^ 0x6a55e11) >>> 0);
     this.nextPhaseAt = scene.time.now + GAS_HAZARD_BALANCE.initialDelayMs + this.random.int(0, 5000);
@@ -366,6 +367,7 @@ export class GasHazardSystem {
   private releaseGas(target: GasCanisterTarget): void {
     target.released = true;
     this.releasedCanisterCount += 1;
+    this.onCanisterImpact?.();
     target.marker.setAlpha(0);
     target.canister.setAlpha(0);
     this.cloudBrush.setPosition(target.x - this.bounds.x, target.y - this.bounds.y);
@@ -431,7 +433,7 @@ export class GasHazardSystem {
     }
   }
 
-  /** Redraws a small fixed set of drifting wisps at 12.5 Hz, not every frame. */
+  /** Redraws a fixed, bounded set of drifting wisps at 12.5 Hz, not every frame. */
   private updateGasAnimation(now: number, dissipateProgress: number): void {
     const fade = 1 - dissipateProgress;
     const breathing = 0.82 + Math.sin(now * 0.0018) * 0.08 + Math.sin(now * 0.00071) * 0.04;
@@ -446,26 +448,31 @@ export class GasHazardSystem {
     for (let index = 0; index < this.canisters.length; index += 1) {
       const target = this.canisters[index];
       if (!target.released) continue;
-      for (let wisp = 0; wisp < 3; wisp += 1) {
+      for (let wisp = 0; wisp < (this.particlesEnabled ? 5 : 3); wisp += 1) {
         const direction = wisp % 2 === 0 ? 1 : -1;
-        const angle = target.wispPhase + wisp * 2.094 + time * direction;
-        const orbit = GAS_HAZARD_BALANCE.cloudRadius * (0.14 + wisp * 0.075);
+        const angle = target.wispPhase + wisp * 1.257 + time * direction * (0.8 + wisp * 0.07);
+        const orbit = GAS_HAZARD_BALANCE.cloudRadius * (0.12 + wisp * 0.052);
         const x = target.x + Math.cos(angle) * orbit;
         const y = target.y + Math.sin(angle * 1.17) * orbit * 0.64 - Math.sin(time * 1.7 + target.wispPhase) * 18;
         if (!this.hasVisibleGasAt(x, y)) continue;
-        const radius = 24 + wisp * 7 + Math.sin(time * 2.3 + index + wisp) * 5;
-        this.wispGraphics.fillStyle(wisp === 1 ? 0xb8ff68 : GAS_COLOR, 0.045);
+        const radius = 22 + wisp * 5.5 + Math.sin(time * 2.3 + index + wisp) * 5;
+        this.wispGraphics.fillStyle(wisp % 3 === 1 ? 0xb8ff68 : GAS_COLOR, 0.043);
         this.wispGraphics.fillCircle(x, y, radius);
         this.wispGraphics.fillStyle(0xd7ffa3, 0.026);
         this.wispGraphics.fillCircle(x - radius * 0.18, y - radius * 0.16, radius * 0.58);
+        this.wispGraphics.lineStyle(1.2, wisp % 2 === 0 ? 0xbfff65 : GAS_COLOR, 0.11);
+        this.wispGraphics.beginPath();
+        this.wispGraphics.arc(x, y, radius * 0.86, angle, angle + 2.4, false);
+        this.wispGraphics.strokePath();
       }
       this.drawGasBubbles(target, index, now, time);
     }
   }
 
-  /** Three batched bubbles per cloud; no sprites, tweens, physics, or allocations. */
+  /** Batched toxic pockets per cloud; no sprites, tweens, physics, or allocations. */
   private drawGasBubbles(target: GasCanisterTarget, cloudIndex: number, now: number, time: number): void {
-    for (let bubble = 0; bubble < 3; bubble += 1) {
+    const bubbleCount = this.particlesEnabled ? 5 : 3;
+    for (let bubble = 0; bubble < bubbleCount; bubble += 1) {
       const phase = target.wispPhase + bubble * 2.17 + cloudIndex * 0.43;
       const orbit = GAS_HAZARD_BALANCE.cloudRadius * (0.13 + bubble * 0.065);
       const x = target.x + Math.sin(time * (1.1 + bubble * 0.08) + phase) * orbit;
@@ -482,6 +489,11 @@ export class GasHazardSystem {
       this.wispGraphics.strokeCircle(x, y, radius + 1.5);
       this.wispGraphics.fillStyle(0xf1ffb0, 0.3);
       this.wispGraphics.fillCircle(x - radius * 0.3, y - radius * 0.34, Math.max(1, radius * 0.2));
+      if (bubble % 2 === 0) {
+        const tail = 5 + bubble * 1.5;
+        this.wispGraphics.lineStyle(1, color, 0.16 + pulse * 0.08)
+          .lineBetween(x, y + radius, x - Math.sin(phase) * tail, y + radius + tail);
+      }
     }
   }
 

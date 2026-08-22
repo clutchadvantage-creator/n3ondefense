@@ -4,6 +4,7 @@ import type { RunModeFamily } from '../config/modeBalance.ts';
 import type { RectSpec } from '../types';
 import type { Player } from '../entities/Player';
 import { SeededRandom } from '../systems/SeededRandom';
+import { BossCombatVfx } from '../vfx/BossCombatVfx.ts';
 import { Boss, type BossDamageSource } from './Boss';
 
 export interface BossEncounterOptions {
@@ -11,6 +12,8 @@ export interface BossEncounterOptions {
   healthMultiplier?: number;
   /** Compact variants report health through their owning HUD instead of the full boss banner. */
   showHealthUi?: boolean;
+  /** Preserves the Options particle toggle while retaining reduced core telegraphs. */
+  particlesEnabled?: boolean;
 }
 
 export interface BossProjectileSpec {
@@ -50,7 +53,12 @@ interface PendingStrike {
   radius: number;
   damage: number;
   triggerAt: number;
-  marker: Phaser.GameObjects.Arc;
+  startedAt: number;
+  marker: Phaser.GameObjects.Container;
+  targetRing: Phaser.GameObjects.Arc;
+  timingRing: Phaser.GameObjects.Arc;
+  reticle: Phaser.GameObjects.Graphics;
+  payload: Phaser.GameObjects.Image;
   color: number;
   attack: BossAttackKind;
 }
@@ -66,6 +74,7 @@ export class BossEncounter {
   private readonly damageMultiplier: number;
   private readonly effects = new Set<Phaser.GameObjects.GameObject>();
   private readonly pendingStrikes: PendingStrike[] = [];
+  private readonly vfx: BossCombatVfx;
   private readonly healthTrack: Phaser.GameObjects.Rectangle;
   private readonly healthFill: Phaser.GameObjects.Rectangle;
   private readonly title: Phaser.GameObjects.Text;
@@ -85,6 +94,8 @@ export class BossEncounter {
   private pounceStartsAt = 0;
   private pounceEndsAt = 0;
   private pounceAngle = 0;
+  private pounceLaunchPlayed = false;
+  private lastPounceTrailAt = -99_999;
   private creditDamage = 0;
   private calloutUntil = 0;
   private combatActive = true;
@@ -104,6 +115,7 @@ export class BossEncounter {
     this.archetype = archetype;
     this.random = new SeededRandom((seed ^ Math.imul(completedRound, 0x9e3779b1) ^ 0xb055cafe) >>> 0);
     this.damageMultiplier = getBossDamageMultiplier(completedRound, modeFamily);
+    this.vfx = new BossCombatVfx(scene, options.particlesEnabled ?? true);
     this.boss = new Boss(
       scene,
       spawn.x,
@@ -143,6 +155,7 @@ export class BossEncounter {
   update(deltaMs: number, player: Player): void {
     if (!this.combatActive || this.boss.isDefeated) return;
     this.elapsedMs += Math.max(0, deltaMs);
+    this.vfx.update(this.elapsedMs);
     this.callout.setAlpha(this.elapsedMs < this.calloutUntil ? 0.75 + Math.sin(this.elapsedMs * 0.018) * 0.2 : 0);
 
     if (this.archetype === 'artillery') this.updateArtillery(player);
@@ -150,9 +163,13 @@ export class BossEncounter {
     else this.updateVoidBrawler(player);
     this.updatePendingStrikes(player);
     const aim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
-    const charge = this.archetype === 'storm-mage' && this.mageChargeEndsAt > this.elapsedMs
+    const mageCharge = this.archetype === 'storm-mage' && this.mageChargeEndsAt > this.elapsedMs
       ? Phaser.Math.Clamp((this.elapsedMs - this.mageChargeStartsAt) / Math.max(1, this.mageChargeEndsAt - this.mageChargeStartsAt), 0, 1)
       : 0;
+    const brawlerCharge = this.archetype === 'void-brawler' && this.pounceStartsAt > this.elapsedMs
+      ? Phaser.Math.Clamp(1 - (this.pounceStartsAt - this.elapsedMs) / BOSS_BALANCE.voidBrawler.pounceTelegraphMs, 0, 1)
+      : 0;
+    const charge = Math.max(mageCharge, brawlerCharge);
     this.boss.updatePresentation(this.elapsedMs, aim, charge);
     this.refreshHealthBar();
   }
@@ -173,20 +190,21 @@ export class BossEncounter {
     this.title.destroy();
     this.healthText.destroy();
     this.callout.destroy();
-    for (const strike of this.pendingStrikes) strike.marker.destroy();
+    for (const strike of this.pendingStrikes) strike.marker.destroy(true);
     this.pendingStrikes.length = 0;
     for (const effect of this.effects) {
       this.scene.tweens.killTweensOf(effect);
       effect.destroy();
     }
     this.effects.clear();
+    this.vfx.destroy();
   }
 
   cancelCombat(): void {
     if (!this.combatActive) return;
     this.combatActive = false;
     this.boss.setVelocity(0, 0);
-    for (const strike of this.pendingStrikes) strike.marker.destroy();
+    for (const strike of this.pendingStrikes) strike.marker.destroy(true);
     this.pendingStrikes.length = 0;
     this.mageChargeEndsAt = 0;
     this.mageSuperVolleyAt = 0;
@@ -197,6 +215,7 @@ export class BossEncounter {
       effect.destroy();
     }
     this.effects.clear();
+    this.vfx.reset();
     this.callout.setAlpha(0);
     this.healthTrack.setVisible(false);
     this.healthFill.setVisible(false);
@@ -212,6 +231,22 @@ export class BossEncounter {
     this.title.setVisible(visible);
     if (!visible) this.callout.setVisible(false);
     else this.callout.setVisible(true);
+  }
+
+  /** Plays an encounter arrival without affecting the boss's active state. */
+  playEntrance(): void {
+    this.vfx.emitArrival(
+      this.archetype,
+      this.boss.x,
+      this.boss.y,
+      BOSS_ARCHETYPES[this.archetype].color,
+      this.elapsedMs
+    );
+  }
+
+  /** Boss-themed reinforcement portal/drop effect used by controlled support waves. */
+  playSupportEntrance(x: number, y: number): void {
+    this.vfx.emitArrival(this.archetype, x, y, BOSS_ARCHETYPES[this.archetype].color, this.elapsedMs, true);
   }
 
   private updateArtillery(player: Player): void {
@@ -250,6 +285,16 @@ export class BossEncounter {
       for (let index = 0; index < config.rocketCount; index += 1) {
         this.fire(aim + (index - center) * 0.17, config.rocketSpeed, config.rocketDamage, 0xffbc62, 17, 'artillery-rocket');
       }
+      this.vfx.emit(
+        'muzzle-heavy',
+        this.boss.x + Math.cos(aim) * 54,
+        this.boss.y + Math.sin(aim) * 54,
+        62,
+        0xffbc62,
+        this.elapsedMs,
+        240,
+        aim
+      );
     }
     if (this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
       this.lastSuperAt = this.elapsedMs;
@@ -294,6 +339,10 @@ export class BossEncounter {
       this.mageChargeEndsAt = this.elapsedMs + config.chargeMs;
       this.mageChargeAim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
       this.showCallout('ARC CHARGE', config.chargeMs);
+      this.vfx.emit(
+        'mage-cast', this.boss.x, this.boss.y, 92, BOSS_ARCHETYPES['storm-mage'].color,
+        this.elapsedMs, config.chargeMs, this.mageChargeAim
+      );
     }
     if (this.mageSuperVolleyAt > 0 && this.elapsedMs >= this.mageSuperVolleyAt) {
       this.callbacks.onAttackCast('storm-super');
@@ -302,11 +351,16 @@ export class BossEncounter {
       for (let index = 0; index < config.superProjectileCount; index += 1) {
         this.fire(aim + (index - center) * 0.105, config.superProjectileSpeed, config.superProjectileDamage, 0xb980ff, 10, 'storm-super');
       }
+      this.vfx.emit('mage-volley', this.boss.x, this.boss.y, 128, 0xb980ff, this.elapsedMs, 620, aim);
       this.mageSuperVolleyAt = 0;
     } else if (this.mageSuperVolleyAt <= 0 && this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
       this.lastSuperAt = this.elapsedMs;
       this.showCallout('SUPER: PRISMATIC TEMPEST', config.superTelegraphMs);
       this.mageSuperVolleyAt = this.elapsedMs + config.superTelegraphMs;
+      this.vfx.emit(
+        'mage-cast', this.boss.x, this.boss.y, 132, 0xb980ff,
+        this.elapsedMs, config.superTelegraphMs
+      );
     }
   }
 
@@ -316,6 +370,10 @@ export class BossEncounter {
       this.lastSuperAt = this.elapsedMs;
       this.callbacks.onAttackCast('brawler-super');
       this.showCallout('SUPER: VOID AMBUSH', config.superTelegraphMs);
+      this.vfx.emit(
+        'brawler-depart', this.boss.x, this.boss.y, 92, 0xff4e82,
+        this.elapsedMs, Math.min(460, config.superTelegraphMs * 0.5)
+      );
       this.boss.setAlpha(0.12).setVelocity(0, 0);
       const target = this.findClearNear(player.x, player.y, 80, 150);
       this.scheduleStrike(target.x, target.y, config.superRadius, config.superDamage * this.damageMultiplier, config.superTelegraphMs, 0xff4e82, 'brawler-super');
@@ -325,9 +383,9 @@ export class BossEncounter {
     if (this.boss.alpha < 0.5) {
       const ambush = this.pendingStrikes.find((strike) => strike.color === 0xff4e82);
       if (ambush && this.elapsedMs >= ambush.triggerAt - 40) {
-        this.flashAt(this.boss.x, this.boss.y, 0xff4e82);
+        this.vfx.emit('brawler-depart', this.boss.x, this.boss.y, 78, 0xff4e82, this.elapsedMs, 320);
         this.boss.setPosition(ambush.x, ambush.y).setAlpha(1);
-        this.flashAt(this.boss.x, this.boss.y, 0xffffff);
+        this.vfx.emit('brawler-arrive', this.boss.x, this.boss.y, 96, 0xffffff, this.elapsedMs, 470);
       } else {
         return;
       }
@@ -335,15 +393,30 @@ export class BossEncounter {
 
     if (this.elapsedMs - this.lastTeleportAt >= config.teleportCooldownMs) {
       this.lastTeleportAt = this.elapsedMs;
-      this.flashAt(this.boss.x, this.boss.y, 0xff4e82);
+      this.vfx.emit('brawler-depart', this.boss.x, this.boss.y, 76, 0xff4e82, this.elapsedMs, 300);
       const target = this.findClearNear(player.x, player.y, 150, 270);
       this.boss.setPosition(target.x, target.y);
-      this.flashAt(target.x, target.y, 0xffffff);
+      this.vfx.emit('brawler-arrive', target.x, target.y, 88, 0xffffff, this.elapsedMs, 420);
     }
 
     if (this.pounceStartsAt > 0 && this.elapsedMs >= this.pounceStartsAt && this.elapsedMs < this.pounceEndsAt) {
+      if (!this.pounceLaunchPlayed) {
+        this.pounceLaunchPlayed = true;
+        this.lastPounceTrailAt = this.elapsedMs;
+        this.vfx.emit(
+          'brawler-launch', this.boss.x, this.boss.y, 125, 0xff4e82,
+          this.elapsedMs, 460, this.pounceAngle
+        );
+      } else if (this.elapsedMs - this.lastPounceTrailAt >= 70) {
+        this.lastPounceTrailAt = this.elapsedMs;
+        this.vfx.emit(
+          'brawler-trail', this.boss.x, this.boss.y, 72, 0xff4e82,
+          this.elapsedMs, 260, this.pounceAngle
+        );
+      }
       this.boss.setVelocity(Math.cos(this.pounceAngle) * config.pounceSpeed, Math.sin(this.pounceAngle) * config.pounceSpeed);
     } else if (this.pounceStartsAt > 0 && this.elapsedMs >= this.pounceEndsAt) {
+      this.vfx.emit('brawler-impact', this.boss.x, this.boss.y, 92, 0xff4e82, this.elapsedMs, 620, this.pounceAngle);
       this.pounceStartsAt = 0;
       this.pounceEndsAt = 0;
     } else if (this.elapsedMs - this.lastPounceAt >= config.pounceCooldownMs) {
@@ -352,8 +425,13 @@ export class BossEncounter {
       this.pounceStartsAt = this.elapsedMs + config.pounceTelegraphMs;
       this.pounceEndsAt = this.pounceStartsAt + config.pounceDurationMs;
       this.pounceAngle = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
+      this.pounceLaunchPlayed = false;
       this.showCallout('POUNCE LOCKED', config.pounceTelegraphMs);
       this.spawnPounceTelegraph(this.pounceAngle, config.pounceTelegraphMs);
+      this.vfx.emit(
+        'brawler-windup', this.boss.x, this.boss.y, 78, 0xff4e82,
+        this.elapsedMs, config.pounceTelegraphMs, this.pounceAngle
+      );
       this.boss.setVelocity(0, 0);
     } else {
       let directionX = player.x - this.boss.x;
@@ -373,6 +451,10 @@ export class BossEncounter {
       const pouncing = this.pounceStartsAt > 0 && this.elapsedMs >= this.pounceStartsAt && this.elapsedMs < this.pounceEndsAt;
       if (!pouncing) this.callbacks.onAttackCast('brawler-contact');
       this.callbacks.damageArea(this.boss.x, this.boss.y, this.boss.hazardRadius + 18, config.contactDamage * this.damageMultiplier, pouncing ? 'brawler-pounce' : 'brawler-contact');
+      this.vfx.emit(
+        'brawler-impact', this.boss.x, this.boss.y, pouncing ? 84 : 58, 0xff4e82,
+        this.elapsedMs, pouncing ? 560 : 380, this.pounceAngle
+      );
     }
   }
 
@@ -393,39 +475,98 @@ export class BossEncounter {
   private scheduleStrike(x: number, y: number, radius: number, damage: number, delayMs: number, color: number, attack: BossAttackKind): void {
     if (!this.combatActive || this.boss.isDefeated) return;
     const target = this.clampPoint(x, y);
-    const marker = this.scene.add.circle(target.x, target.y, radius, color, 0.08).setStrokeStyle(3, color, 0.9).setDepth(7);
-    this.pendingStrikes.push({ ...target, radius, damage, triggerAt: this.elapsedMs + delayMs, marker, color, attack });
+    const targetRing = this.scene.add.circle(0, 0, radius, color, 0.055)
+      .setStrokeStyle(3, color, 0.94)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const timingRing = this.scene.add.circle(0, 0, radius * 0.72, 0x000000, 0)
+      .setStrokeStyle(2, 0xffffff, 0.82)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const reticle = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    reticle.lineStyle(2, color, 0.78);
+    for (let index = 0; index < 12; index += 1) {
+      const angle = index * Math.PI / 6;
+      const inner = radius * (index % 3 === 0 ? 0.7 : 0.82);
+      const outer = radius * (index % 3 === 0 ? 1.18 : 1.04);
+      reticle.lineBetween(Math.cos(angle) * inner, Math.sin(angle) * inner, Math.cos(angle) * outer, Math.sin(angle) * outer);
+    }
+    reticle.lineStyle(1, 0xffffff, 0.56)
+      .lineBetween(-radius * 0.34, 0, radius * 0.34, 0)
+      .lineBetween(0, -radius * 0.34, 0, radius * 0.34);
+    const payload = this.scene.add.image(0, -270, 'projectile-missile')
+      .setDisplaySize(34, 17)
+      .setTint(attack === 'artillery-strike' ? 0xffd070 : color)
+      .setRotation(Math.PI * 0.5)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(attack === 'artillery-strike');
+    const marker = this.scene.add.container(target.x, target.y, [targetRing, timingRing, reticle, payload]).setDepth(7);
+    this.pendingStrikes.push({
+      ...target,
+      radius,
+      damage,
+      startedAt: this.elapsedMs,
+      triggerAt: this.elapsedMs + delayMs,
+      marker,
+      targetRing,
+      timingRing,
+      reticle,
+      payload,
+      color,
+      attack
+    });
   }
 
   private updatePendingStrikes(_player: Player): void {
     for (let index = this.pendingStrikes.length - 1; index >= 0; index -= 1) {
       const strike = this.pendingStrikes[index];
       const remaining = Math.max(0, strike.triggerAt - this.elapsedMs);
-      strike.marker.setAlpha(0.18 + Math.sin(this.elapsedMs * 0.025 + index) * 0.12).setScale(1 + remaining / 5000);
+      const duration = Math.max(1, strike.triggerAt - strike.startedAt);
+      const progress = Phaser.Math.Clamp(1 - remaining / duration, 0, 1);
+      const urgency = 0.5 + Math.sin(this.elapsedMs * (0.018 + progress * 0.025) + index) * 0.5;
+      strike.targetRing
+        .setFillStyle(strike.color, 0.035 + progress * 0.09)
+        .setStrokeStyle(3 + progress * 2, strike.color, 0.62 + progress * 0.34)
+        .setScale(1 + urgency * 0.025);
+      strike.timingRing
+        .setScale(1.5 - progress * 0.82)
+        .setStrokeStyle(2 + progress * 2, progress > 0.78 ? 0xffffff : strike.color, 0.54 + progress * 0.42);
+      strike.reticle.setRotation(this.elapsedMs * (0.0008 + progress * 0.0018));
+      if (strike.payload.visible) {
+        const descent = progress * progress * progress;
+        strike.payload.setY(-270 * (1 - descent)).setScale(0.7 + descent * 0.5).setAlpha(0.36 + progress * 0.64);
+      }
       if (this.elapsedMs < strike.triggerAt) continue;
       this.callbacks.damageArea(strike.x, strike.y, strike.radius, strike.damage, strike.attack);
       this.spawnStrikeEffect(strike.x, strike.y, strike.radius, strike.color);
-      strike.marker.destroy();
+      strike.marker.destroy(true);
       this.pendingStrikes.splice(index, 1);
     }
   }
 
   private spawnStrikeEffect(x: number, y: number, radius: number, color: number): void {
-    const core = this.scene.add.circle(x, y, 8, 0xffffff, 0.9).setDepth(12).setBlendMode(Phaser.BlendModes.ADD);
-    const ring = this.scene.add.circle(x, y, 12, color, 0.25).setStrokeStyle(4, color, 1).setDepth(11);
-    this.effects.add(core);
-    this.effects.add(ring);
-    this.scene.tweens.add({ targets: core, radius: radius * 0.55, alpha: 0, duration: 260, onComplete: () => { this.effects.delete(core); core.destroy(); } });
-    this.scene.tweens.add({ targets: ring, radius, alpha: 0, duration: 420, onComplete: () => { this.effects.delete(ring); ring.destroy(); } });
+    this.vfx.emit(
+      color === 0xff4e82 ? 'brawler-impact' : 'artillery-impact',
+      x,
+      y,
+      radius,
+      color,
+      this.elapsedMs,
+      color === 0xff4e82 ? 650 : 720
+    );
   }
 
   private spawnMuzzleEffect(angle: number, color: number): void {
     const x = this.boss.x + Math.cos(angle) * 55;
     const y = this.boss.y + Math.sin(angle) * 55;
-    const flash = this.scene.add.polygon(x, y, [0, -7, 24, 0, 0, 7, 6, 0], color, 0.9)
-      .setRotation(angle).setDepth(12).setBlendMode(Phaser.BlendModes.ADD);
-    this.effects.add(flash);
-    this.scene.tweens.add({ targets: flash, scaleX: 1.65, alpha: 0, duration: 130, onComplete: () => { this.effects.delete(flash); flash.destroy(); } });
+    this.vfx.emit(
+      this.archetype === 'artillery' ? 'muzzle-light' : 'mage-volley',
+      x,
+      y,
+      this.archetype === 'artillery' ? 42 : 56,
+      color,
+      this.elapsedMs,
+      this.archetype === 'artillery' ? 170 : 340,
+      angle
+    );
   }
 
   private spawnPounceTelegraph(angle: number, durationMs: number): void {
@@ -447,12 +588,6 @@ export class BossEncounter {
       yoyo: true,
       onComplete: () => { this.effects.delete(line); line.destroy(); }
     });
-  }
-
-  private flashAt(x: number, y: number, color: number): void {
-    const flash = this.scene.add.circle(x, y, 16, color, 0.5).setDepth(10);
-    this.effects.add(flash);
-    this.scene.tweens.add({ targets: flash, radius: 70, alpha: 0, duration: 360, onComplete: () => { this.effects.delete(flash); flash.destroy(); } });
   }
 
   private handleBossDamage(damage: number, source: BossDamageSource): void {

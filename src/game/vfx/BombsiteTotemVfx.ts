@@ -21,6 +21,7 @@ interface TotemSlot {
   pulseRadius: number;
   pulseColor: number;
   pulseKind: BombsiteTotemEffectKind;
+  pulseSoundPlayed: boolean;
   flashStartedAt: number;
   flashColor: number;
   root: Phaser.GameObjects.Container;
@@ -71,7 +72,13 @@ const easeOutCubic = (value: number): number => 1 - (1 - value) ** 3;
 export class BombsiteTotemVfx {
   private readonly slots: TotemSlot[] = [];
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly callbacks: {
+      onEntrance?: (siteId: string) => void;
+      onPulse?: (siteId: string, kind: BombsiteTotemEffectKind) => void;
+    } = {}
+  ) {}
 
   deploy(siteId: string, x: number, y: number, now: number): boolean {
     this.remove(siteId);
@@ -96,6 +103,7 @@ export class BombsiteTotemVfx {
     slot.pulseRadius = 0;
     slot.pulseColor = 0x63efff;
     slot.pulseKind = 'electric';
+    slot.pulseSoundPlayed = false;
     slot.flashStartedAt = 0;
     slot.flashColor = 0xffffff;
 
@@ -116,6 +124,7 @@ export class BombsiteTotemVfx {
     slot.channels.setAlpha(0.62);
     slot.innerRing.setStrokeStyle(2, 0x63efff, 0.82).setAlpha(0.62);
     slot.outerRing.setStrokeStyle(2, 0xff5bd6, 0.74).setAlpha(0.54);
+    this.callbacks.onEntrance?.(siteId);
     return true;
   }
 
@@ -148,6 +157,7 @@ export class BombsiteTotemVfx {
     slot.pulseRadius = Math.max(20, radius);
     slot.pulseColor = color;
     slot.pulseKind = kind;
+    slot.pulseSoundPlayed = false;
     return true;
   }
 
@@ -239,6 +249,7 @@ export class BombsiteTotemVfx {
       resolvingAt: 0, phase: 0, chargeStartedAt: 0, chargeUntil: 0, chargeColor: 0x63efff,
       chargeKind: 'electric', pulseStartedAt: 0, pulseDurationMs: 0, pulseRadius: 0,
       pulseColor: 0x63efff, pulseKind: 'electric', flashStartedAt: 0, flashColor: 0xffffff,
+      pulseSoundPlayed: false,
       root, ground, rig, marker, fissures, dynamic, shadow, body, channels, face, coreGlow, core, innerRing, outerRing
     };
   }
@@ -423,6 +434,12 @@ export class BombsiteTotemVfx {
 
     if (now < slot.chargeUntil) this.drawCharge(graphics, slot, now);
     if (slot.pulseStartedAt > 0 && now >= slot.pulseStartedAt) {
+      if (!slot.pulseSoundPlayed) {
+        slot.pulseSoundPlayed = true;
+        if (slot.pulseKind === 'push' || slot.pulseKind === 'damage') {
+          this.callbacks.onPulse?.(slot.siteId, slot.pulseKind);
+        }
+      }
       const progress = clamp01((now - slot.pulseStartedAt) / slot.pulseDurationMs);
       if (progress < 1) this.drawPulse(graphics, slot, progress);
       else slot.pulseStartedAt = 0;
@@ -437,16 +454,43 @@ export class BombsiteTotemVfx {
     const progress = easeOutCubic(clamp01(elapsed / 420));
     const fade = 1 - clamp01(elapsed / 470);
     graphics.fillStyle(0xffffff, 0.68 * Math.max(0, 1 - elapsed / 105)).fillCircle(0, 0, 8 + progress * 20);
+    graphics.fillStyle(0x63efff, 0.12 * fade).fillCircle(0, 0, 28 + progress * 48);
     graphics.lineStyle(5 - progress * 3, 0x63efff, 0.9 * fade).strokeCircle(0, 0, 18 + progress * 78);
     graphics.lineStyle(2, 0xff5bd6, 0.68 * fade).strokeCircle(0, 0, 10 + progress * 104);
+    graphics.lineStyle(1.5, 0xffffff, 0.42 * fade).strokeEllipse(0, 8, 35 + progress * 190, 15 + progress * 72);
     for (let ray = 0; ray < RAY_COUNT; ray += 1) {
       const inner = 18 + progress * 20;
       const outer = 34 + progress * (50 + (ray % 3) * 9);
       graphics.lineStyle(ray % 3 === 0 ? 3 : 2, ray % 2 === 0 ? 0x63efff : 0xff5bd6, 0.68 * fade);
       graphics.lineBetween(RAY_COS[ray] * inner, RAY_SIN[ray] * inner, RAY_COS[ray] * outer, RAY_SIN[ray] * outer);
+
+      // Digital floor pieces follow a ballistic arc and are drawn into the
+      // existing per-Totem batch instead of spawning physics debris objects.
+      const fragmentProgress = clamp01((elapsed - 28) / 410);
+      const distance = (30 + (ray % 4) * 12) * easeOutCubic(fragmentProgress);
+      const height = Math.sin(fragmentProgress * Math.PI) * (24 + (ray % 3) * 10);
+      const fragmentX = RAY_COS[ray] * distance;
+      const floorY = RAY_SIN[ray] * distance;
+      const fragmentY = floorY - height;
+      const rotation = slot.phase + ray * 0.73 + fragmentProgress * (ray % 2 === 0 ? 2.2 : -2.8);
+      const cos = Math.cos(rotation);
+      const sin = Math.sin(rotation);
+      const halfWidth = 3 + (ray % 3) * 1.5;
+      const halfHeight = 2 + (ray % 2) * 1.5;
+      const ax = cos * halfWidth;
+      const ay = sin * halfWidth;
+      const bx = -sin * halfHeight;
+      const by = cos * halfHeight;
+      const debrisColor = ray % 3 === 0 ? 0xffffff : ray % 2 === 0 ? 0x63efff : 0xff5bd6;
+      graphics.fillStyle(debrisColor, 0.76 * fade)
+        .fillTriangle(fragmentX - ax - bx, fragmentY - ay - by, fragmentX + ax - bx, fragmentY + ay - by, fragmentX + ax + bx, fragmentY + ay + by)
+        .fillTriangle(fragmentX - ax - bx, fragmentY - ay - by, fragmentX + ax + bx, fragmentY + ay + by, fragmentX - ax + bx, fragmentY - ay + by);
+      graphics.lineStyle(1, debrisColor, 0.22 * fade).lineBetween(fragmentX, floorY, fragmentX, fragmentY);
+      graphics.fillStyle(0x63efff, 0.08 * fade).fillEllipse(fragmentX, floorY + 2, halfWidth * 2.2, halfHeight);
     }
-    graphics.lineStyle(3, 0xffffff, 0.35 * fade).lineBetween(0, -140 * fade, 0, -14);
-    void slot;
+    graphics.lineStyle(5, 0xffffff, 0.42 * fade).lineBetween(0, -165 * fade, 0, -12);
+    graphics.lineStyle(2, 0x63efff, 0.52 * fade).lineBetween(-9, -145 * fade, -2, -10);
+    graphics.lineStyle(2, 0xff5bd6, 0.46 * fade).lineBetween(10, -132 * fade, 3, -8);
   }
 
   private drawCharge(graphics: Phaser.GameObjects.Graphics, slot: TotemSlot, now: number): void {
@@ -466,8 +510,13 @@ export class BombsiteTotemVfx {
     const fade = (1 - progress) ** 1.45;
     const radius = 18 + (slot.pulseRadius - 18) * eased;
     const isDamage = slot.pulseKind === 'damage';
+    const isPush = slot.pulseKind === 'push';
+    graphics.fillStyle(slot.pulseColor, (isDamage ? 0.12 : 0.07) * fade).fillCircle(0, 0, radius);
     graphics.lineStyle(isDamage ? 5 : 4, slot.pulseColor, 0.94 * fade).strokeCircle(0, 0, radius);
     graphics.lineStyle(2, isDamage ? 0xff3f2f : 0xffffff, 0.54 * fade).strokeCircle(0, 0, radius * 0.84);
+    graphics.lineStyle(1.5, isDamage ? 0xffd45e : 0x63efff, 0.46 * fade).strokeCircle(0, 0, radius * 1.08);
+    graphics.lineStyle(isDamage ? 3 : 2, 0xffffff, 0.34 * fade).strokeEllipse(0, 4, radius * 2.2, radius * (isPush ? 0.62 : 0.82));
+    graphics.fillStyle(isDamage ? 0xffffff : slot.pulseColor, 0.5 * fade).fillRect(-3, -30 * fade, 6, 30 * fade);
     const streakCount = slot.pulseKind === 'push' ? 14 : isDamage ? 12 : 8;
     for (let index = 0; index < streakCount; index += 1) {
       const ray = index % RAY_COUNT;
@@ -475,6 +524,32 @@ export class BombsiteTotemVfx {
       const outer = radius + (slot.pulseKind === 'push' ? 22 : isDamage ? 13 + (index % 3) * 5 : 8);
       graphics.lineStyle(isDamage && index % 3 === 0 ? 3 : 2, index % 2 === 0 ? slot.pulseColor : 0xffffff, 0.62 * fade);
       graphics.lineBetween(RAY_COS[ray] * inner, RAY_SIN[ray] * inner, RAY_COS[ray] * outer, RAY_SIN[ray] * outer);
+      const fragmentSize = isDamage ? 4 + (index % 3) : 3 + (index % 2);
+      const fragmentX = RAY_COS[ray] * (outer + progress * (isPush ? 16 : 8));
+      const fragmentY = RAY_SIN[ray] * (outer + progress * (isPush ? 16 : 8));
+      if (isDamage && index % 2 === 0) {
+        const tangentX = -RAY_SIN[ray] * fragmentSize;
+        const tangentY = RAY_COS[ray] * fragmentSize;
+        graphics.fillStyle(index % 3 === 0 ? 0xffffff : slot.pulseColor, 0.74 * fade).fillTriangle(
+          fragmentX + RAY_COS[ray] * fragmentSize * 1.8,
+          fragmentY + RAY_SIN[ray] * fragmentSize * 1.8,
+          fragmentX + tangentX,
+          fragmentY + tangentY,
+          fragmentX - tangentX,
+          fragmentY - tangentY
+        );
+      } else {
+        graphics.fillStyle(index % 2 === 0 ? slot.pulseColor : 0xffffff, 0.64 * fade)
+          .fillRect(fragmentX - fragmentSize * 0.5, fragmentY - fragmentSize * 0.5, fragmentSize, fragmentSize);
+      }
+      if (isDamage && index % 3 === 0) {
+        const arcRadius = radius * (0.56 + (index % 4) * 0.08);
+        const start = index * TAU / streakCount + progress * 1.4;
+        graphics.lineStyle(2, 0xffffff, 0.7 * fade);
+        graphics.beginPath();
+        graphics.arc(0, 0, arcRadius, start, start + 0.48, false);
+        graphics.strokePath();
+      }
     }
   }
 
@@ -491,6 +566,7 @@ export class BombsiteTotemVfx {
     slot.dynamic.clear();
     slot.chargeUntil = 0;
     slot.pulseStartedAt = 0;
+    slot.pulseSoundPlayed = false;
     slot.flashStartedAt = 0;
     slot.resolvingAt = 0;
   }

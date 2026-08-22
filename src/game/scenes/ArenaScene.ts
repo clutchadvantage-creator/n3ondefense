@@ -34,7 +34,7 @@ import { FluxCoreSystem } from '../systems/FluxCoreSystem';
 import { FLUX_CORE_BALANCE } from '../config/fluxCores';
 import { GAS_HAZARD_BALANCE } from '../config/gasHazards';
 import type { HazardDamageTarget } from '../config/hazardScaling';
-import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossRewards, isBossRound, selectBossArchetype, type BossArchetype } from '../config/bossBalance';
+import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossRewards, getBossTier, isBossRound, selectBossArchetype, type BossArchetype } from '../config/bossBalance';
 import { BossEncounter, type BossAttackKind, type BossProjectileSpec } from '../bosses/BossEncounter';
 import { BossIntroOverlay } from '../bosses/BossIntroOverlay.ts';
 import { SeededRandom } from '../systems/SeededRandom';
@@ -379,6 +379,8 @@ export class ArenaScene extends Phaser.Scene {
   private pendingRoundPayload: RoundFinishedPayload | null = null;
   private bossPickupRandom: SeededRandom | null = null;
   private nextBossSupportPickupAt = 0;
+  private readonly bossSupportEnemies = new Set<Enemy>();
+  private nextBossSupportEnemyWaveAt = 0;
   private bossVictoryHandled = false;
   private bossFlowPhase: BossFlowPhase = 'none';
   private bossIntroOverlay: BossIntroOverlay | null = null;
@@ -885,7 +887,8 @@ export class ArenaScene extends Phaser.Scene {
         else if (cue === 'warning') this.audio.playSfx('defuseAlarm');
         else if (cue === 'gravity') this.audio.playSfx('shieldOn');
         else this.audio.playSfx('beep');
-      }
+      },
+      playTotemCue: (cue) => this.audio.playSfx(cue === 'entrance' ? 'totemEntrance' : 'totemPulse')
     });
     this.laserSecurity = new LaserSecuritySystem(
       this,
@@ -931,7 +934,8 @@ export class ArenaScene extends Phaser.Scene {
         (damage) => {
           GameplayTelemetryRecorder.recordPlayerDamage('gas', damage);
         },
-        () => this.audio.playSfx('gas')
+        () => this.audio.playSfx('gasFizz'),
+        () => this.audio.playSfx('gasCanImpact')
       );
     }
     this.fluxCores = new FluxCoreSystem(
@@ -1234,6 +1238,8 @@ export class ArenaScene extends Phaser.Scene {
         if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
         this.bombletHazard?.update(now, this.player, bossHazardTargets, laserDangerWindow);
         if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
+        this.updateBossSupportWave(now);
+        this.updateBossSupportEnemies(now);
       }
       this.updateProjectiles(delta);
       if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
@@ -2796,7 +2802,8 @@ export class ArenaScene extends Phaser.Scene {
           continue;
         }
         if (p.telemetryOwner) GameplayTelemetryRecorder.recordProjectileMiss(p.telemetryOwner, 'wall');
-        this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.trailColor);
+        if (p.bossAttack) this.spawnBossProjectileImpact(p, p.sprite.x, p.sprite.y);
+        else this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.trailColor);
         this.retireProjectile(p);
         continue;
       }
@@ -2822,6 +2829,25 @@ export class ArenaScene extends Phaser.Scene {
       }
       if (now >= p.nextTrailAt) {
         this.spawnProjectileTrail(p.sprite.x, p.sprite.y, visualTrailColor, now);
+        if (p.bossAttack) {
+          const directionX = Math.cos(p.sprite.rotation);
+          const directionY = Math.sin(p.sprite.rotation);
+          const trailingDistance = p.bossAttack === 'artillery-rocket' ? 18 : 10;
+          this.spawnProjectileTrail(
+            p.sprite.x - directionX * trailingDistance,
+            p.sprite.y - directionY * trailingDistance,
+            p.bossAttack === 'artillery-rocket' ? 0xff6a35 : 0xffffff,
+            now
+          );
+          if (p.bossAttack === 'artillery-rocket') {
+            this.spawnProjectileTrail(
+              p.sprite.x - directionX * 29,
+              p.sprite.y - directionY * 29,
+              0xffc05a,
+              now
+            );
+          }
+        }
         p.nextTrailAt = now + 30;
       }
 
@@ -2945,6 +2971,7 @@ export class ArenaScene extends Phaser.Scene {
           if (hit) {
             GameplayTelemetryRecorder.recordPlayerDamage(p.bossAttack ? 'boss' : 'enemy-projectile', p.damage);
           }
+          if (p.bossAttack) this.spawnBossProjectileImpact(p, p.sprite.x, p.sprite.y);
           this.retireProjectile(p);
           continue;
         }
@@ -2955,6 +2982,7 @@ export class ArenaScene extends Phaser.Scene {
             const applied = t.takeDamage(p.damage);
             GameplayTelemetryRecorder.recordTurretDamaged(t.telemetryId, applied);
             if (p.telemetryOwner) GameplayTelemetryRecorder.recordProjectileHit(p.telemetryOwner, applied);
+            if (p.bossAttack) this.spawnBossProjectileImpact(p, p.sprite.x, p.sprite.y);
             this.retireProjectile(p);
             hitTurret = true;
             break;
@@ -2977,9 +3005,21 @@ export class ArenaScene extends Phaser.Scene {
     const x = projectile.sprite.x;
     const y = projectile.sprite.y;
     this.audio.playSfx('bomblet');
-    this.createDeathExplosion(x, y, 0xffb65c);
     this.applyBossAreaDamage(x, y, 68, projectile.damage, 'artillery-rocket');
     this.retireProjectile(projectile);
+  }
+
+  private spawnBossProjectileImpact(projectile: Projectile, x: number, y: number): void {
+    const attack = projectile.bossAttack;
+    if (!attack || attack === 'artillery-rocket') return;
+    if (attack === 'storm-basic' || attack === 'storm-super') {
+      this.mineExplosionVfx.emitColors(
+        x, y, attack === 'storm-super' ? 38 : 30,
+        0xffffff, 0xb980ff, 0x5deaff, 0x442080, this.time.now, false
+      );
+      return;
+    }
+    this.mineExplosionVfx.emitColors(x, y, 24, 0xffffff, 0xffb14f, 0xff6548, 0x57dfff, this.time.now, false);
   }
 
   private ricochetProjectileFromWall(projectile: Projectile): boolean {
@@ -4157,6 +4197,11 @@ export class ArenaScene extends Phaser.Scene {
       fireBossProjectile: (spec) => this.spawnBossProjectile(spec),
       applyBossAreaDamage: (x, y, radius, damage, attack) => this.applyBossAreaDamage(x, y, radius, damage, attack),
       retireBossProjectiles: () => this.retireActiveBossProjectiles(),
+      presentMiniBossSpawn: (x, y, color) => {
+        this.audio.playSfx('miniBossSpawn');
+        this.mineExplosionVfx.emitColors(x, y, 72, 0xffffff, color, 0x8f6cff, 0x45eaff, this.time.now, false);
+        this.cameras.main.flash(150, 86, 24, 128, false);
+      },
       grantCredits: (amount) => {
         const credits = this.scaleModCredits(amount);
         this.roundCredits += credits;
@@ -5030,7 +5075,8 @@ export class ArenaScene extends Phaser.Scene {
         (damage) => {
           GameplayTelemetryRecorder.recordPlayerDamage('gas', damage);
         },
-        () => this.audio.playSfx('gas')
+        () => this.audio.playSfx('gasFizz'),
+        () => this.audio.playSfx('gasCanImpact')
       );
     }
     this.fluxCores = new FluxCoreSystem(
@@ -5087,7 +5133,8 @@ export class ArenaScene extends Phaser.Scene {
         onAttackCast: (attack) => GameplayTelemetryRecorder.recordBossAttackCast(attack),
         onDefeated: () => this.completeBossFight()
       },
-      this.currentModeFamily()
+      this.currentModeFamily(),
+      { particlesEnabled: this.particlesEnabled }
     );
     GameplayTelemetryRecorder.startBoss(archetype, this.bossEncounter.boss.maxHp);
     this.bossWallCollider?.destroy();
@@ -5120,6 +5167,8 @@ export class ArenaScene extends Phaser.Scene {
     this.bossIntroOverlay?.destroy();
     this.bossIntroOverlay = null;
     this.bossEncounter.setPresentationVisible(true);
+    this.bossEncounter.playEntrance();
+    this.nextBossSupportEnemyWaveAt = this.time.now + BOSS_BALANCE.supportEnemyFirstDelayMs;
     this.clearGameplayInput();
     this.pointerDown = false;
     TutorialEventBus.emit('combat.bossStarted', { archetype: this.bossEncounter.archetype, round: this.bossRound });
@@ -5136,8 +5185,23 @@ export class ArenaScene extends Phaser.Scene {
 
   private spawnBossProjectile(spec: BossProjectileSpec): void {
     GameplayTelemetryRecorder.recordBossProjectileFired(spec.attack);
+    const texture = spec.attack === 'artillery-rocket'
+      ? 'projectile-missile'
+      : spec.attack === 'storm-basic' || spec.attack === 'storm-super'
+        ? 'projectile-boss-arcane'
+        : 'projectile-boss-cannon';
+    const projectileWidth = spec.attack === 'artillery-rocket'
+      ? 36
+      : spec.attack === 'storm-basic' || spec.attack === 'storm-super'
+        ? (spec.size ?? 10) * 2.15
+        : 28;
+    const projectileHeight = spec.attack === 'artillery-rocket'
+      ? 17
+      : spec.attack === 'storm-basic' || spec.attack === 'storm-super'
+        ? (spec.size ?? 10) * 2.15
+        : 9;
     this.projectiles.push(this.obtainProjectile({
-      x: spec.x, y: spec.y, texture: 'projectile-orb', width: spec.size ?? 9, height: spec.size ?? 9,
+      x: spec.x, y: spec.y, texture, width: projectileWidth, height: projectileHeight,
       tint: spec.color, rotation: spec.angle,
       velocityX: Math.cos(spec.angle) * spec.speed, velocityY: Math.sin(spec.angle) * spec.speed, depth: 8,
       damage: spec.damage,
@@ -5152,6 +5216,16 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private applyBossAreaDamage(x: number, y: number, radius: number, damage: number, attack: BossAttackKind): void {
+    if (attack === 'artillery-strike' || attack === 'artillery-super') {
+      this.mineExplosionVfx.emitColors(x, y, radius * 1.15, 0xffffff, 0xffc15f, 0xff744a, 0x55dfff, this.time.now, false);
+    } else if (attack === 'artillery-rocket') {
+      this.mineExplosionVfx.emitColors(x, y, radius, 0xffffff, 0xffb54f, 0xff5c4a, 0x7ce8ff, this.time.now, false);
+    } else if (attack === 'brawler-pounce' || attack === 'brawler-super' || attack === 'brawler-contact') {
+      this.mineExplosionVfx.emitColors(
+        x, y, attack === 'brawler-contact' ? radius * 0.72 : radius,
+        0xffffff, 0xff4e82, 0x9a72ff, 0x45dfff, this.time.now, false
+      );
+    }
     if (attack === 'brawler-pounce' || attack === 'brawler-super' || attack === 'artillery-strike') {
       this.cameras.main.shake(135, attack === 'brawler-super' ? 0.004 : 0.0025);
     }
@@ -5216,6 +5290,132 @@ export class ArenaScene extends Phaser.Scene {
     if (spawned > 0) this.showBanner('HEALTH + ENERGY SUPPORT ONLINE');
   }
 
+  private updateBossSupportWave(now: number): void {
+    const encounter = this.bossEncounter;
+    const random = this.bossPickupRandom;
+    if (!encounter || !random || now < this.nextBossSupportEnemyWaveAt) return;
+    this.nextBossSupportEnemyWaveAt = now + random.int(
+      BOSS_BALANCE.supportEnemyMinimumIntervalMs,
+      BOSS_BALANCE.supportEnemyMaximumIntervalMs
+    );
+
+    const archetype = encounter.archetype;
+    const maximumActive = BOSS_BALANCE.supportEnemyMaximumActive[archetype];
+    let activeCount = 0;
+    for (const enemy of this.bossSupportEnemies) {
+      if (enemy.active && !enemy.isDead()) activeCount += 1;
+    }
+    const available = Math.max(0, maximumActive - activeCount);
+    if (available <= 0) return;
+
+    const tierBonus = Math.min(2, Math.floor(Math.max(0, getBossTier(this.bossRound) - 1) / 3));
+    const overdriveBonus = this.currentModeFamily() === 'overdrive' && getBossTier(this.bossRound) >= 3 ? 1 : 0;
+    const requested = Math.min(
+      available,
+      BOSS_BALANCE.supportEnemyBaseWaveSize[archetype] + tierBonus + overdriveBonus
+    );
+    let spawned = 0;
+    for (let index = 0; index < requested; index += 1) {
+      const point = this.findBossSupportPickupPoint();
+      if (!point) break;
+      const enemy = this.spawnEnemy('shooter', false, point);
+      enemy.setData('bossSupport', true);
+      enemy.lastShotMs = now + index * 180;
+      this.bossSupportEnemies.add(enemy);
+      encounter.playSupportEntrance(point.x, point.y);
+      spawned += 1;
+    }
+    if (spawned > 0) {
+      const label = archetype === 'storm-mage'
+        ? 'CORRUPTED SENTINELS SUMMONED'
+        : archetype === 'artillery'
+          ? 'RANGED SUPPORT DEPLOYED'
+          : 'INTERCEPTOR SUPPORT INBOUND';
+      this.showBanner(label);
+    }
+  }
+
+  private updateBossSupportEnemies(now: number): void {
+    if (this.bossSupportEnemies.size === 0) return;
+    const idealRange = 235;
+    for (const enemy of this.bossSupportEnemies) {
+      if (!enemy.active || enemy.isDead()) continue;
+      enemy.updateDamageFlash(now);
+      this.gasHazard?.carveVisualTunnel(enemy.x, enemy.y, GAS_HAZARD_BALANCE.enemyTunnelRadius);
+
+      const target = this.getSecondaryTurretTarget(enemy, now);
+      const targetX = target?.sprite.x ?? this.player.x;
+      const targetY = target?.sprite.y ?? this.player.y;
+      const dx = targetX - enemy.x;
+      const dy = targetY - enemy.y;
+      const distanceSquared = dx * dx + dy * dy;
+      const movementSpeed = enemy.effectiveSpeed(enemy.stats.speed, now);
+      if (distanceSquared > (idealRange + 30) ** 2) {
+        this.navigateEnemy(enemy, targetX, targetY, now, movementSpeed);
+      } else if (distanceSquared < (idealRange - 34) ** 2) {
+        const inverseDistance = distanceSquared > 0 ? 1 / Math.sqrt(distanceSquared) : 0;
+        const bounds = this.layout.generation.bounds;
+        this.navigateEnemy(
+          enemy,
+          Phaser.Math.Clamp(enemy.x - dx * inverseDistance * 145, bounds.x + 55, bounds.x + bounds.w - 55),
+          Phaser.Math.Clamp(enemy.y - dy * inverseDistance * 145, bounds.y + 55, bounds.y + bounds.h - 55),
+          now,
+          movementSpeed * 0.85
+        );
+      } else {
+        enemy.setVelocity(0, 0);
+      }
+
+      if (now - enemy.lastShotMs >= ENEMY_BALANCE.shooter.attackCooldownMs) {
+        enemy.lastShotMs = now;
+        const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, targetX, targetY);
+        GameplayTelemetryRecorder.recordProjectileFired('enemy');
+        this.projectiles.push(this.obtainProjectile({
+          x: enemy.x, y: enemy.y, texture: 'projectile-boss-cannon', width: 22, height: 7, tint: COLORS.orange,
+          rotation: angle, velocityX: Math.cos(angle) * 420, velocityY: Math.sin(angle) * 420, depth: 7,
+          damage: enemy.stats.damage, from: 'enemy', lifeMs: 1400, trailColor: COLORS.orange, telemetryOwner: 'enemy'
+        }));
+      }
+    }
+    this.applyEnemySeparation();
+
+    let writeIndex = 0;
+    for (const enemy of this.enemies) {
+      if (this.bossSupportEnemies.has(enemy) && enemy.isDead()) {
+        this.killBossSupportEnemy(enemy);
+        this.bossSupportEnemies.delete(enemy);
+        continue;
+      }
+      this.enemies[writeIndex++] = enemy;
+    }
+    this.enemies.length = writeIndex;
+  }
+
+  private killBossSupportEnemy(enemy: Enemy): void {
+    this.audio.playSfx('enemyDeath');
+    GameplayTelemetryRecorder.recordEnemyKill({
+      type: enemy.stats.type,
+      maximumHealth: enemy.stats.hp,
+      spawnedAtActiveMs: enemy.telemetrySpawnedAtActiveMs,
+      firstDamagedAtActiveMs: enemy.telemetryFirstDamagedAtActiveMs,
+      finalSource: enemy.lastDamageSource,
+      damageBySource: enemy.damageTakenBySource,
+      credits: 0,
+      coreTokens: 0
+    });
+    this.createDeathExplosion(enemy.x, enemy.y, enemy.stats.color);
+    this.destroyEnemyColliders(enemy);
+    enemy.destroy();
+  }
+
+  private clearBossSupportEnemies(): void {
+    for (const enemy of [...this.bossSupportEnemies]) {
+      if (enemy.active) this.removeArcadeEnemy(enemy);
+    }
+    this.bossSupportEnemies.clear();
+    this.nextBossSupportEnemyWaveAt = 0;
+  }
+
   private findBossSupportPickupPoint(): { x: number; y: number } | null {
     if (!this.bossEncounter || !this.bossPickupRandom) return null;
     const bounds = this.layout.generation.bounds;
@@ -5261,6 +5461,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private beginBossDestruction(snapshot: BossDeathSnapshot): void {
     if (this.bossFlowPhase !== 'destruction' || this.bossEncounter !== snapshot.encounter) return;
+    this.clearBossSupportEnemies();
     this.laserSecurity?.silence();
     this.laserSecurity?.destroy();
     this.laserSecurity = null;
@@ -6568,6 +6769,8 @@ export class ArenaScene extends Phaser.Scene {
     this.bossLootLaunchesPending = 0;
     this.wallRects.length = 0;
     this.enemies.length = 0;
+    this.bossSupportEnemies.clear();
+    this.nextBossSupportEnemyWaveAt = 0;
     this.enemyColliders.clear();
     this.projectiles.length = 0;
     this.pendingSplitProjectiles.length = 0;
@@ -6620,6 +6823,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bossNextFightButton = null;
     this.bossEncounter?.destroy();
     this.bossEncounter = null;
+    this.clearBossSupportEnemies();
     this.bossIntroOverlay?.destroy();
     this.bossIntroOverlay = null;
     this.bossFlowPhase = 'none';

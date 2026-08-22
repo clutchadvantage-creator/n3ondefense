@@ -50,7 +50,7 @@ test('gas phases remain occasional, suppress lasers, permit bomblets, and carve 
   assert.match(gas, /gasLayer\.erase\(this\.tunnelBrush\)/);
   assert.match(gas, /GAS_SKULL_TEXTURE/);
   assert.match(gas, /updateGasAnimation\(now, dissipateProgress\)/);
-  assert.match(gas, /Three batched bubbles per cloud; no sprites, tweens, physics, or allocations/);
+  assert.match(gas, /Batched toxic pockets per cloud; no sprites, tweens, physics, or allocations/);
   assert.match(gas, /this\.drawGasBubbles\(target, index, now, time\)/);
   assert.match(gas, /Persistent logical footprint: tunneling never removes gas exposure/);
   assert.match(gas, /this\.tunnelMask\[densityIndex\] = 255/);
@@ -76,17 +76,23 @@ test('gas exposure starts light and scales substantially but safely with round p
   assert.ok(extremeRoundDamage < 100);
 });
 
-test('gas release audio is reused and fires once after the complete canister pattern lands', () => {
-  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/gassound.mp3', import.meta.url)));
-  assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'gas'));
+test('gas impact and vent audio use bounded pooled playback at their authoritative stages', () => {
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/gascanhitting.mp3', import.meta.url)));
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/gasfizz.mp3', import.meta.url)));
+  assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'gasCanImpact'));
+  assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'gasFizz'));
   const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
   const gas = readFileSync(new URL('../src/game/systems/GasHazardSystem.ts', import.meta.url), 'utf8');
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
-  assert.match(audio, /audioAssetUrl\('soundeffects\/gassound\.mp3'\)/);
-  assert.match(audio, /private gasSfx: HTMLAudioElement \| null = null/);
+  assert.match(audio, /gasCanImpact: 'soundeffects\/gascanhitting\.mp3'/);
+  assert.match(audio, /gasFizz: 'soundeffects\/gasfizz\.mp3'/);
+  assert.match(audio, /gasCanImpact: 3/);
+  assert.match(audio, /gasFizz: 2/);
   assert.match(gas, /this\.releasedCanisterCount === this\.canisters\.length/);
   assert.match(gas, /this\.onGasReleased\?\.\(\)/);
-  assert.match(arena, /\(\) => this\.audio\.playSfx\('gas'\)/);
+  assert.match(gas, /this\.onCanisterImpact\?\.\(\)/);
+  assert.match(arena, /\(\) => this\.audio\.playSfx\('gasFizz'\)/);
+  assert.match(arena, /\(\) => this\.audio\.playSfx\('gasCanImpact'\)/);
 });
 
 test('security laser and per-bomblet audio use active-state and pooled playback', () => {

@@ -32,6 +32,19 @@ export const BOSS_BALANCE = {
   supportPickupLifetimeMs: 60_000,
   maximumSupportPickups: 4,
   supportPickupTargetPerType: 2,
+  supportEnemyFirstDelayMs: 12_000,
+  supportEnemyMinimumIntervalMs: 22_000,
+  supportEnemyMaximumIntervalMs: 29_000,
+  supportEnemyMaximumActive: {
+    artillery: 4,
+    'storm-mage': 4,
+    'void-brawler': 2
+  },
+  supportEnemyBaseWaveSize: {
+    artillery: 2,
+    'storm-mage': 2,
+    'void-brawler': 1
+  },
   artillery: {
     movementSpeed: 68,
     projectileDamage: 13,
