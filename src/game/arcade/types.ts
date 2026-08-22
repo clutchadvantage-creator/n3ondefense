@@ -16,6 +16,19 @@ export type ArcadeEventId =
   | 'packet-snatcher'
   | 'redline';
 export type ArcadeStopReason = 'success' | 'failed' | 'timeout' | 'round-ended' | 'player-dead' | 'scene-shutdown' | 'replaced';
+export type ArcadePresentationCue =
+  | 'circuit-gate'
+  | 'hot-package-inbound'
+  | 'hot-package-impact'
+  | 'hot-package-open'
+  | 'hot-package-failed'
+  | 'packet-snatcher-alert'
+  | 'packet-snatcher-intercepted'
+  | 'packet-snatcher-escaped'
+  | 'redline-boot'
+  | 'redline-stage'
+  | 'redline-rupture'
+  | 'redline-failed';
 
 export type ArcadeMetricName =
   | 'arcade_event_started'
@@ -135,7 +148,7 @@ export interface ArcadeRuntimeContext {
   retireBossProjectiles(): void;
   presentMiniBossSpawn(x: number, y: number, color: number): void;
   playBossAttackCue(attack: BossAttackKind): void;
-  playArcadeCue(cue: 'circuit-gate'): void;
+  playArcadeCue(cue: ArcadePresentationCue): void;
   navigateEventEnemy(enemy: Enemy, targetX: number, targetY: number, speed: number): void;
   findExtractionPoint(fromX: number, fromY: number): { x: number; y: number } | null;
   spawnPhysicalRewards(

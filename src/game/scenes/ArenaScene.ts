@@ -4394,6 +4394,10 @@ export class ArenaScene extends Phaser.Scene {
       },
       playBossAttackCue: (attack) => this.playBossAttackCue(attack),
       playArcadeCue: (cue) => {
+        // Keep presentation audio behind the Arena audio boundary. The new
+        // event-specific cue names are ready for dedicated assets without
+        // coupling Arcade event logic to AudioManager or reusing misleading
+        // combat sounds in the meantime.
         if (cue === 'circuit-gate') this.audio.playSfx('circuitGate');
       },
       navigateEventEnemy: (enemy, targetX, targetY, speed) => {

@@ -112,6 +112,72 @@ test('new Arcade events keep distinct objectives, bounded timing, physical rewar
   }
 });
 
+test('new Arcade events delegate presentation to distinct bounded visual controllers', () => {
+  const hotEvent = source('../src/game/arcade/events/HotPackageEvent.ts');
+  const packetEvent = source('../src/game/arcade/events/PacketSnatcherEvent.ts');
+  const redlineEvent = source('../src/game/arcade/events/RedlineEvent.ts');
+  const hotVisual = source('../src/game/arcade/visuals/HotPackageVisualController.ts');
+  const packetVisual = source('../src/game/arcade/visuals/PacketSnatcherVisualController.ts');
+  const redlineVisual = source('../src/game/arcade/visuals/RedlineVisualController.ts');
+
+  assert.match(hotEvent, /new HotPackageVisualController/);
+  assert.match(packetEvent, /new PacketSnatcherVisualController/);
+  assert.match(redlineEvent, /new RedlineVisualController/);
+  assert.match(hotVisual, /orbital pod presentation/);
+  assert.match(packetVisual, /moving data-heist presentation/);
+  assert.match(redlineVisual, /unstable override reactor/);
+  assert.doesNotMatch(hotVisual, /physics\.add|scene\.time\.addEvent|scene\.events\.on/);
+  assert.doesNotMatch(packetVisual, /physics\.add|scene\.time\.addEvent|scene\.events\.on/);
+  assert.doesNotMatch(redlineVisual, /physics\.add|scene\.time\.addEvent|scene\.events\.on/);
+});
+
+test('Arcade event VFX expose activation, live progress, urgency, terminal feedback, and complete cleanup', () => {
+  const hotEvent = source('../src/game/arcade/events/HotPackageEvent.ts');
+  const packetEvent = source('../src/game/arcade/events/PacketSnatcherEvent.ts');
+  const redlineEvent = source('../src/game/arcade/events/RedlineEvent.ts');
+  const hotVisual = source('../src/game/arcade/visuals/HotPackageVisualController.ts');
+  const packetVisual = source('../src/game/arcade/visuals/PacketSnatcherVisualController.ts');
+  const redlineVisual = source('../src/game/arcade/visuals/RedlineVisualController.ts');
+
+  assert.match(hotEvent, /const LANDING_MS = 1_350/);
+  assert.match(packetVisual, /elapsed \/ 1_050/);
+  assert.match(redlineVisual, /elapsed \/ 980/);
+  for (const visual of [hotVisual, packetVisual, redlineVisual]) {
+    assert.match(visual, /remainingMs/);
+    assert.match(visual, /beginSuccess/);
+    assert.match(visual, /beginFailure/);
+    assert.match(visual, /destroy\(\): void/);
+    assert.match(visual, /particlesEnabled/);
+  }
+  assert.match(hotVisual, /captureProgress/);
+  assert.match(packetVisual, /healthFraction/);
+  assert.match(packetVisual, /Float32Array\(TRAIL_SAMPLES\)/);
+  assert.match(redlineVisual, /drawSegmentedRing[\s\S]*?progress/);
+  assert.match(hotEvent, /this\.nextVisualAt = activeElapsedMs \+ 42/);
+  assert.match(packetEvent, /this\.nextVisualAt = activeElapsedMs \+ 42/);
+  assert.match(redlineEvent, /this\.nextVisualAt = activeElapsedMs \+ 42/);
+});
+
+test('Arcade VFX polish leaves mechanics and economy constants unchanged while adding isolated audio hooks', () => {
+  const hot = source('../src/game/arcade/events/HotPackageEvent.ts');
+  const packet = source('../src/game/arcade/events/PacketSnatcherEvent.ts');
+  const redline = source('../src/game/arcade/events/RedlineEvent.ts');
+  const types = source('../src/game/arcade/types.ts');
+  const arena = source('../src/game/scenes/ArenaScene.ts');
+
+  assert.match(hot, /const CAPTURE_MS = 5_000/);
+  assert.match(hot, /const CAPTURE_RADIUS = 112/);
+  assert.match(packet, /const THIEF_SPEED_MULTIPLIER = 1\.72/);
+  assert.match(packet, /thief\.hp \*= 2\.2/);
+  assert.match(redline, /const ACTIVATION_RADIUS = 118/);
+  assert.match(redline, /const REQUIRED_MS = 9_000/);
+  assert.match(redline, /const DECAY_RATE = 0\.24/);
+  for (const cue of ['hot-package-impact', 'packet-snatcher-alert', 'redline-rupture']) {
+    assert.match(types, new RegExp(`'${cue}'`));
+  }
+  assert.match(arena, /event-specific cue names are ready for dedicated assets/);
+});
+
 test('Golden Hunt always creates five regular-enemy variants and tracks their kills', () => {
   const golden = source('../src/game/arcade/events/GoldenHuntEvent.ts');
   assert.match(golden, /const GOLDEN_TARGET_COUNT = 5/);

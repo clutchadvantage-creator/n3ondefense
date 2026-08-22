@@ -1,5 +1,5 @@
-import Phaser from 'phaser';
 import { SeededRandom } from '../../systems/SeededRandom.ts';
+import { HotPackageVisualController, type HotPackageQuality as PackageQuality } from '../visuals/HotPackageVisualController.ts';
 import type {
   ArcadeEvent,
   ArcadeEventDefinition,
@@ -10,12 +10,10 @@ import type {
   ArcadeStopReason
 } from '../types.ts';
 
-type PackageQuality = 'standard' | 'enhanced' | 'jackpot';
-
 const CAPTURE_MS = 5_000;
 const CAPTURE_RADIUS = 112;
 const LANDING_MS = 1_350;
-const OPENING_HOLD_MS = 360;
+const OPENING_HOLD_MS = 650;
 const QUALITY_COLOR: Record<PackageQuality, number> = {
   standard: 0x55efff,
   enhanced: 0xb55cff,
@@ -42,10 +40,7 @@ const rewardProfile = (quality: PackageQuality): ArcadeRewardProfile => {
 
 export class HotPackageEvent implements ArcadeEvent {
   readonly id = 'hot-package' as const;
-  private root: Phaser.GameObjects.Container | null = null;
-  private zone: Phaser.GameObjects.Arc | null = null;
-  private pod: Phaser.GameObjects.Container | null = null;
-  private doors: Phaser.GameObjects.Rectangle[] = [];
+  private visuals: HotPackageVisualController | null = null;
   private startedAt = 0;
   private landedAt = 0;
   private capturedMs = 0;
@@ -55,6 +50,8 @@ export class HotPackageEvent implements ArcadeEvent {
   private openedAt = 0;
   private completionMetricSent = false;
   private nextVisualAt = 0;
+  private landedCueSent = false;
+  private failureAt = 0;
 
   constructor(
     private readonly context: ArcadeRuntimeContext,
@@ -71,51 +68,52 @@ export class HotPackageEvent implements ArcadeEvent {
     const qualityRoll = random.next();
     this.quality = qualityRoll < 0.68 ? 'standard' : qualityRoll < 0.93 ? 'enhanced' : 'jackpot';
     const color = QUALITY_COLOR[this.quality];
-
-    this.zone = this.context.scene.add.circle(0, 0, CAPTURE_RADIUS, color, 0.035)
-      .setStrokeStyle(3, color, 0.82)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const reticle = this.context.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-    reticle.lineStyle(2, color, 0.72);
-    for (let index = 0; index < 12; index += 1) {
-      const angle = index * Math.PI / 6;
-      reticle.lineBetween(Math.cos(angle) * 88, Math.sin(angle) * 88, Math.cos(angle) * 108, Math.sin(angle) * 108);
-    }
-    const shadow = this.context.scene.add.ellipse(0, 15, 84, 30, 0x000000, 0.65);
-    const shell = this.context.scene.add.polygon(0, 0, [-38, -31, 26, -31, 39, -16, 39, 29, -39, 29, -39, -16], 0x07131d, 0.99)
-      .setStrokeStyle(3, color, 0.95);
-    const window = this.context.scene.add.rectangle(0, -10, 47, 18, color, 0.13).setStrokeStyle(1, 0xffffff, 0.6);
-    const leftDoor = this.context.scene.add.rectangle(-15, 13, 27, 20, 0x101f29, 1).setStrokeStyle(1, color, 0.8);
-    const rightDoor = this.context.scene.add.rectangle(15, 13, 27, 20, 0x101f29, 1).setStrokeStyle(1, color, 0.8);
-    const quality = this.context.scene.add.text(0, -49, `${this.quality.toUpperCase()} PACKAGE`, {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '12px', fontStyle: 'bold',
-      color: Phaser.Display.Color.IntegerToColor(color).rgba, stroke: '#02050b', strokeThickness: 4
-    }).setOrigin(0.5);
-    this.pod = this.context.scene.add.container(0, -290, [shadow, shell, window, leftDoor, rightDoor, quality]);
-    this.doors = [leftDoor, rightDoor];
-    this.root = this.context.scene.add.container(point.x, point.y, [this.zone, reticle, this.pod]).setDepth(13);
-    this.context.scene.tweens.add({
-      targets: this.pod, y: 0, duration: LANDING_MS, ease: 'Cubic.easeIn',
-      onComplete: () => {
-        if (!this.root?.active) return;
-        this.context.scene.cameras.main.shake(130, 0.0023);
-        this.context.scene.tweens.add({ targets: this.zone, scaleX: 1.22, scaleY: 1.22, alpha: 0.12, duration: 180, yoyo: true });
-      }
-    });
+    this.visuals = new HotPackageVisualController(this.context.scene, {
+      x: point.x,
+      y: point.y,
+      radius: CAPTURE_RADIUS,
+      landingMs: LANDING_MS,
+      quality: this.quality,
+      color,
+      particlesEnabled: this.context.particlesEnabled
+    }, activeElapsedMs);
+    this.context.playArcadeCue('hot-package-inbound');
     return true;
   }
 
   update(activeElapsedMs: number, deltaMs: number): ArcadeEventOutcome | null {
+    if (this.failureAt > 0) {
+      this.refreshVisuals(activeElapsedMs, false, 0);
+      return activeElapsedMs - this.failureAt >= OPENING_HOLD_MS
+        ? { success: false, reason: 'timeout' }
+        : null;
+    }
     if (this.opened) {
+      this.refreshVisuals(activeElapsedMs, true, 0);
       return activeElapsedMs - this.openedAt >= OPENING_HOLD_MS
         ? { success: true, reason: 'success' }
         : null;
     }
-    if (activeElapsedMs - this.startedAt >= this.definition.durationMs) return { success: false, reason: 'timeout' };
-    if (activeElapsedMs < this.landedAt) return null;
+    const remainingMs = Math.max(0, this.definition.durationMs - (activeElapsedMs - this.startedAt));
+    if (remainingMs <= 0) {
+      this.failureAt = activeElapsedMs;
+      this.visuals?.beginFailure(activeElapsedMs);
+      this.context.playArcadeCue('hot-package-failed');
+      return null;
+    }
+    if (activeElapsedMs >= this.landedAt && !this.landedCueSent) {
+      this.landedCueSent = true;
+      this.context.scene.cameras.main.shake(130, 0.0023);
+      this.context.playArcadeCue('hot-package-impact');
+    }
+    if (activeElapsedMs < this.landedAt) {
+      this.refreshVisuals(activeElapsedMs, false, remainingMs);
+      return null;
+    }
     const dx = this.context.player.x - this.origin.x;
     const dy = this.context.player.y - this.origin.y;
-    if (dx * dx + dy * dy <= CAPTURE_RADIUS * CAPTURE_RADIUS) this.capturedMs += Math.min(deltaMs, 250);
+    const inside = dx * dx + dy * dy <= CAPTURE_RADIUS * CAPTURE_RADIUS;
+    if (inside) this.capturedMs += Math.min(deltaMs, 250);
     if (this.capturedMs >= CAPTURE_MS) {
       if (!this.opened) {
         this.openedAt = activeElapsedMs;
@@ -131,13 +129,20 @@ export class HotPackageEvent implements ArcadeEvent {
       }
       return null;
     }
-    if (activeElapsedMs >= this.nextVisualAt) {
-      this.nextVisualAt = activeElapsedMs + 55;
-      const pulse = 0.5 + Math.sin(activeElapsedMs * 0.009) * 0.5;
-      this.zone?.setAlpha(0.035 + pulse * 0.075).setScale(0.98 + pulse * 0.04);
-      this.pod?.setScale(0.98 + pulse * 0.025);
-    }
+    this.refreshVisuals(activeElapsedMs, inside, remainingMs);
     return null;
+  }
+
+  private refreshVisuals(activeElapsedMs: number, inside: boolean, remainingMs: number): void {
+    if (activeElapsedMs < this.nextVisualAt) return;
+    this.nextVisualAt = activeElapsedMs + 42;
+    this.visuals?.update(
+      activeElapsedMs,
+      this.startedAt,
+      Math.min(1, this.capturedMs / CAPTURE_MS),
+      inside,
+      remainingMs
+    );
   }
 
   handleGameplayEvent(_event: ArcadeGameplayEvent): ArcadeEventOutcome | null { return null; }
@@ -154,20 +159,15 @@ export class HotPackageEvent implements ArcadeEvent {
   }
 
   cleanup(_reason: ArcadeStopReason): void {
-    if (this.root) this.context.scene.tweens.killTweensOf([this.root, this.pod, this.zone, ...this.doors]);
-    this.root?.destroy(true);
-    this.root = null;
-    this.pod = null;
-    this.zone = null;
-    this.doors = [];
+    this.visuals?.destroy();
+    this.visuals = null;
   }
 
   private openPod(): void {
     if (this.opened) return;
     this.opened = true;
-    const [left, right] = this.doors;
-    if (left) this.context.scene.tweens.add({ targets: left, x: -34, rotation: -0.3, duration: 180, ease: 'Back.easeOut' });
-    if (right) this.context.scene.tweens.add({ targets: right, x: 34, rotation: 0.3, duration: 180, ease: 'Back.easeOut' });
+    this.visuals?.beginSuccess(this.openedAt);
+    this.context.playArcadeCue('hot-package-open');
     this.context.scene.cameras.main.flash(120, 80, 240, 255, false);
   }
 }

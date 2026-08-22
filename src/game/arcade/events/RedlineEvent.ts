@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { RedlineVisualController } from '../visuals/RedlineVisualController.ts';
 import type {
   ArcadeEvent,
   ArcadeEventDefinition,
@@ -12,7 +13,7 @@ import type {
 const ACTIVATION_RADIUS = 118;
 const REQUIRED_MS = 9_000;
 const DECAY_RATE = 0.24;
-const RUPTURE_HOLD_MS = 420;
+const RUPTURE_HOLD_MS = 680;
 const REDLINE_REWARDS: ArcadeRewardProfile = {
   kind: 'random-pool',
   options: [
@@ -28,10 +29,7 @@ const REDLINE_REWARDS: ArcadeRewardProfile = {
 
 export class RedlineEvent implements ArcadeEvent {
   readonly id = 'redline' as const;
-  private root: Phaser.GameObjects.Container | null = null;
-  private zone: Phaser.GameObjects.Arc | null = null;
-  private core: Phaser.GameObjects.Polygon | null = null;
-  private arcs: Phaser.GameObjects.Graphics | null = null;
+  private visuals: RedlineVisualController | null = null;
   private startedAt = 0;
   private progressMs = 0;
   private stage = 0;
@@ -39,6 +37,7 @@ export class RedlineEvent implements ArcadeEvent {
   private nextVisualAt = 0;
   private bonusRoll = false;
   private overloadAt = 0;
+  private failureAt = 0;
 
   constructor(
     private readonly context: ArcadeRuntimeContext,
@@ -51,32 +50,36 @@ export class RedlineEvent implements ArcadeEvent {
     this.startedAt = activeElapsedMs;
     this.origin = point;
     this.bonusRoll = ((this.context.seed ^ Math.imul(this.context.round, 0x9e3779b1) ^ 0x6ed11e) >>> 0) % 100 < 28;
-    this.zone = this.context.scene.add.circle(0, 0, ACTIVATION_RADIUS, 0x48efff, 0.035)
-      .setStrokeStyle(3, 0x48efff, 0.72).setBlendMode(Phaser.BlendModes.ADD);
-    const base = this.context.scene.add.polygon(0, 16, [-35, -13, -20, -29, 20, -29, 35, -13, 31, 13, -31, 13], 0x07121b, 0.98)
-      .setStrokeStyle(2, 0xff4cbe, 0.88);
-    this.core = this.context.scene.add.polygon(0, -9, [0, -24, 17, -8, 12, 18, -12, 18, -17, -8], 0x48efff, 0.38)
-      .setStrokeStyle(2, 0xffffff, 0.88).setBlendMode(Phaser.BlendModes.ADD);
-    this.arcs = this.context.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-    const label = this.context.scene.add.text(0, 48, 'SYSTEM OVERRIDE', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#8cf8ff',
-      stroke: '#02050b', strokeThickness: 4
-    }).setOrigin(0.5);
-    this.root = this.context.scene.add.container(point.x, point.y, [this.zone, base, this.core, this.arcs, label]).setDepth(12);
+    this.visuals = new RedlineVisualController(this.context.scene, {
+      x: point.x,
+      y: point.y,
+      radius: ACTIVATION_RADIUS,
+      particlesEnabled: this.context.particlesEnabled
+    });
+    this.context.playArcadeCue('redline-boot');
     return true;
   }
 
   update(activeElapsedMs: number, deltaMs: number): ArcadeEventOutcome | null {
+    if (this.failureAt > 0) {
+      this.refreshVisuals(activeElapsedMs, false, 0);
+      return activeElapsedMs - this.failureAt >= RUPTURE_HOLD_MS
+        ? { success: false, reason: 'timeout' }
+        : null;
+    }
     if (this.overloadAt > 0) {
-      if (activeElapsedMs >= this.nextVisualAt) {
-        this.nextVisualAt = activeElapsedMs + 36;
-        this.drawVisuals(activeElapsedMs, true);
-      }
+      this.refreshVisuals(activeElapsedMs, true, 0);
       return activeElapsedMs - this.overloadAt >= RUPTURE_HOLD_MS
         ? { success: true, reason: 'success' }
         : null;
     }
-    if (activeElapsedMs - this.startedAt >= this.definition.durationMs) return { success: false, reason: 'timeout' };
+    const remainingMs = Math.max(0, this.definition.durationMs - (activeElapsedMs - this.startedAt));
+    if (remainingMs <= 0) {
+      this.failureAt = activeElapsedMs;
+      this.visuals?.beginFailure(activeElapsedMs);
+      this.context.playArcadeCue('redline-failed');
+      return null;
+    }
     const dx = this.context.player.x - this.origin.x;
     const dy = this.context.player.y - this.origin.y;
     const inside = dx * dx + dy * dy <= ACTIVATION_RADIUS * ACTIVATION_RADIUS;
@@ -94,6 +97,7 @@ export class RedlineEvent implements ArcadeEvent {
         progress: this.stage, target: 3
       });
       this.context.scene.cameras.main.flash(75, 40 + this.stage * 20, 170, 230, false);
+      this.context.playArcadeCue('redline-stage');
     }
     if (this.progressMs >= REQUIRED_MS) {
       this.overloadAt = activeElapsedMs;
@@ -104,13 +108,11 @@ export class RedlineEvent implements ArcadeEvent {
       });
       this.context.scene.cameras.main.shake(170, 0.0032);
       this.context.scene.cameras.main.flash(120, 70, 210, 255, false);
-      if (this.core) this.context.scene.tweens.add({ targets: this.core, scaleX: 0.34, scaleY: 0.34, duration: RUPTURE_HOLD_MS, ease: 'Cubic.easeIn' });
+      this.visuals?.beginSuccess(activeElapsedMs);
+      this.context.playArcadeCue('redline-rupture');
       return null;
     }
-    if (activeElapsedMs >= this.nextVisualAt) {
-      this.nextVisualAt = activeElapsedMs + 52;
-      this.drawVisuals(activeElapsedMs, inside);
-    }
+    this.refreshVisuals(activeElapsedMs, inside, remainingMs);
     return null;
   }
 
@@ -127,31 +129,20 @@ export class RedlineEvent implements ArcadeEvent {
   }
 
   cleanup(_reason: ArcadeStopReason): void {
-    if (this.root) this.context.scene.tweens.killTweensOf([this.root, this.zone, this.core]);
-    this.root?.destroy(true);
-    this.root = null;
-    this.zone = null;
-    this.core = null;
-    this.arcs = null;
+    this.visuals?.destroy();
+    this.visuals = null;
   }
 
-  private drawVisuals(activeElapsedMs: number, inside: boolean): void {
-    const intensity = this.progressMs / REQUIRED_MS;
-    const color = intensity > 0.66 ? 0xff4cbe : intensity > 0.33 ? 0xaa65ff : 0x48efff;
-    const pulse = 0.5 + Math.sin(activeElapsedMs * (0.009 + intensity * 0.012)) * 0.5;
-    this.zone?.setStrokeStyle(2 + this.stage, color, 0.58 + pulse * 0.36)
-      .setFillStyle(color, 0.025 + intensity * 0.055).setScale(0.98 + pulse * 0.035);
-    this.core?.setFillStyle(color, 0.28 + pulse * 0.5).setScale(0.9 + pulse * (0.12 + intensity * 0.1));
-    this.arcs?.clear();
-    this.arcs?.lineStyle(1 + this.stage * 0.5, color, 0.58 + intensity * 0.35);
-    const arcCount = 3 + this.stage * 2;
-    for (let index = 0; index < arcCount; index += 1) {
-      const angle = activeElapsedMs * 0.0024 * (index % 2 ? -1 : 1) + index * Math.PI * 2 / arcCount;
-      const radius = 31 + index % 3 * 9;
-      this.arcs?.lineBetween(
-        Math.cos(angle) * 18, Math.sin(angle) * 18 - 7,
-        Math.cos(angle + (inside ? 0.18 : 0.08)) * radius, Math.sin(angle + (inside ? 0.18 : 0.08)) * radius - 7
-      );
-    }
+  private refreshVisuals(activeElapsedMs: number, inside: boolean, remainingMs: number): void {
+    if (activeElapsedMs < this.nextVisualAt) return;
+    this.nextVisualAt = activeElapsedMs + 42;
+    this.visuals?.update(
+      activeElapsedMs,
+      this.startedAt,
+      Math.min(1, this.progressMs / REQUIRED_MS),
+      this.stage,
+      inside,
+      remainingMs
+    );
   }
 }
