@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import { ArcadeRewardService } from '../src/game/arcade/ArcadeRewardService.ts';
 
@@ -107,6 +107,17 @@ test('Neon Circuit uses five ordered reachable, body-free checkered gates with c
   assert.match(circuit, /name: 'neon_checkpoint_reached'/);
   assert.match(circuit, /name: 'neon_circuit_completed'/);
   assert.match(circuit, /marker\.root\.destroy\(true\)/);
+});
+
+test('Neon Circuit plays the pooled arena gate cue once at each authoritative checkpoint', () => {
+  const circuit = source('../src/game/arcade/events/NeonCircuitEvent.ts');
+  const arena = source('../src/game/scenes/ArenaScene.ts');
+  const audio = source('../src/game/systems/AudioManager.ts');
+  assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/arenacircuitgate.mp3', import.meta.url)));
+  assert.match(circuit, /private activateCheckpoint[\s\S]*?this\.context\.playArcadeCue\('circuit-gate'\)/);
+  assert.match(arena, /playArcadeCue:[\s\S]*?playSfx\('circuitGate'\)/);
+  assert.match(audio, /circuitGate: 'soundeffects\/arenacircuitgate\.mp3'/);
+  assert.match(audio, /case 'circuitGate':[\s\S]*?this\.playPresentationSfx\(name\)/);
 });
 
 test('Arena integration suppresses Arcade during Teaching and preserves live combat systems', () => {

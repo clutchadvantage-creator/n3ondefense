@@ -171,6 +171,37 @@ export interface AbilityStats {
   maxActive: number;
 }
 
+export type UpgradeSystemIcon = 'operative' | 'weapon' | 'fence' | 'turret' | 'mine';
+export type UpgradeEffectIcon =
+  | 'health'
+  | 'speed'
+  | 'dash'
+  | 'pickupRadius'
+  | 'shield'
+  | 'battery'
+  | 'energyRegen'
+  | 'damage'
+  | 'fireRate'
+  | 'projectileSpeed'
+  | 'critical'
+  | 'efficiency'
+  | 'duration'
+  | 'armor'
+  | 'capacity'
+  | 'range'
+  | 'explosion'
+  | 'arming';
+export type UpgradeDirection = 'increase' | 'decrease' | 'add';
+export type UpgradeVisualLayout = 'hero-effect' | 'capacity' | 'radial' | 'directional';
+
+export interface UpgradeVisualDefinition {
+  hero: UpgradeSystemIcon;
+  effect: UpgradeEffectIcon;
+  direction: UpgradeDirection;
+  layout: UpgradeVisualLayout;
+  accent?: 'cyan' | 'green' | 'gold' | 'magenta';
+}
+
 export interface UpgradeDefinition {
   id: string;
   category: 'player' | 'weapon' | 'fence' | 'turret' | 'mine';
@@ -180,6 +211,8 @@ export interface UpgradeDefinition {
   baseCost: number;
   growth: number;
   effectPerLevel: number;
+  /** Presentation-only equipment/effect language used by the Upgrade Store. */
+  visual?: UpgradeVisualDefinition;
 }
 
 export type CosmeticVisualShape =

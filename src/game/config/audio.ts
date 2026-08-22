@@ -49,6 +49,7 @@ export const SFX_DEFINITIONS = [
   { key: 'mageBossLargeAttack', label: 'Mage Boss Large Attack' },
   { key: 'mageBossMagicAttack', label: 'Mage Boss Magic Attack' },
   { key: 'brawlerBossChargeAttack', label: 'Brawler Boss Charge' },
+  { key: 'circuitGate', label: 'Arena Circuit Gate' },
   { key: 'menuHover', label: 'Menu Hover' },
   { key: 'menu', label: 'Menu Select' },
   { key: 'itemLocked', label: 'Locked / Unavailable' },

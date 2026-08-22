@@ -194,6 +194,7 @@ export class NeonCircuitEvent implements ArcadeEvent {
 
   private activateCheckpoint(activeElapsedMs: number, marker: CircuitGate): void {
     this.current += 1;
+    this.context.playArcadeCue('circuit-gate');
     this.context.emitMetric({
       name: 'neon_checkpoint_reached', eventId: this.id, round: this.context.round,
       protocol: this.context.protocol, elapsedMs: activeElapsedMs - this.startedAt,

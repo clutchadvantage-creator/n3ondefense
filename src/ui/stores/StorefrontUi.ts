@@ -1,6 +1,7 @@
 import type { CosmeticOption, UpgradeDefinition } from '../../game/types';
 import { getUpgradeCost, getUpgradeLevel } from '../../data/upgrades';
-import { getUpgradeComparison } from './upgradePresentation';
+import { getUpgradeComparison, getUpgradeVisual } from './upgradePresentation';
+import { createUpgradeSvgIcon, directionIcon } from './UpgradeIconRegistry.ts';
 import { getCosmeticPriceTier } from '../../data/cosmetics.ts';
 import { AudioManager } from '../../game/systems/AudioManager.ts';
 import './storefront.css';
@@ -246,7 +247,22 @@ export class StorefrontUi {
       const label = this.options.mode === 'cosmetics'
         ? COSMETIC_LABELS[category as CosmeticOption['category']]
         : UPGRADE_LABELS[category as UpgradeDefinition['category']];
-      button.innerHTML = `<i></i><span>${label}</span><small>${complete} / ${total}</small>`;
+      if (this.options.mode === 'upgrades') {
+        button.classList.add('has-system-icon');
+        const indicator = document.createElement('i');
+        const systemCategory = category as UpgradeDefinition['category'];
+        const systemIcon = createUpgradeSvgIcon(
+          systemCategory === 'player' ? 'operative' : systemCategory,
+          'store-category-icon'
+        );
+        const text = document.createElement('span');
+        text.textContent = label;
+        const count = document.createElement('small');
+        count.textContent = `${complete} / ${total}`;
+        button.append(indicator, systemIcon, text, count);
+      } else {
+        button.innerHTML = `<i></i><span>${label}</span><small>${complete} / ${total}</small>`;
+      }
       button.addEventListener('click', () => {
         this.selectedCategory = category;
         this.selectedId = null;
@@ -311,9 +327,7 @@ export class StorefrontUi {
     const comparison = getUpgradeComparison(item, level);
     const card = this.cardButton(item.id, `upgrade-card ${maxed ? 'maxed' : ''}`);
     card.dataset.tutorialTarget = 'store.upgrade-card';
-    const icon = document.createElement('div');
-    icon.className = 'upgrade-icon';
-    icon.textContent = this.upgradeIcon(item.category);
+    const icon = this.renderUpgradeVisual(item, snapshot, false);
     const badge = document.createElement('span');
     badge.className = 'card-badge';
     badge.textContent = maxed ? 'MAX LEVEL' : `LEVEL ${level} / ${item.maxLevel}`;
@@ -408,7 +422,12 @@ export class StorefrontUi {
     label.textContent = `${UPGRADE_LABELS[item.category].toUpperCase()} SYSTEM`;
     const preview = document.createElement('div');
     preview.className = 'upgrade-preview-stage';
-    preview.innerHTML = `<div class="tech-ring"><b>${this.upgradeIcon(item.category)}</b></div><div class="circuit-lines"></div>`;
+    const scanner = document.createElement('div');
+    scanner.className = 'tech-ring';
+    scanner.append(this.renderUpgradeVisual(item, snapshot, true));
+    const circuitLines = document.createElement('div');
+    circuitLines.className = 'circuit-lines';
+    preview.append(scanner, circuitLines);
     const title = document.createElement('h2');
     title.textContent = item.label;
     const progress = document.createElement('div');
@@ -519,8 +538,54 @@ export class StorefrontUi {
     })[category];
   }
 
-  private upgradeIcon(category: UpgradeDefinition['category']): string {
-    return ({ player: '⬡', weapon: '⌁', fence: '╫', turret: '△', mine: '✦' })[category];
+  private renderUpgradeVisual(item: UpgradeDefinition, snapshot: StoreSnapshot, large: boolean): HTMLElement {
+    const visual = getUpgradeVisual(item);
+    const cluster = document.createElement('div');
+    cluster.className = `upgrade-visual-cluster layout-${visual.layout} accent-${visual.accent ?? 'cyan'} ${large ? 'large' : ''}`;
+    cluster.setAttribute('role', 'img');
+    cluster.setAttribute('aria-label', `${UPGRADE_LABELS[item.category]} ${item.label} upgrade visualization`);
+
+    const scanner = document.createElement('span');
+    scanner.className = 'upgrade-cluster-scanner';
+    const connector = document.createElement('span');
+    connector.className = 'upgrade-cluster-connector';
+
+    const hero = document.createElement('span');
+    hero.className = `upgrade-hero upgrade-hero-${visual.hero}`;
+    if (visual.hero === 'operative') hero.append(this.renderEquippedOperative(snapshot, large));
+    else hero.append(createUpgradeSvgIcon(visual.hero, 'upgrade-svg hero-svg'));
+
+    const effect = document.createElement('span');
+    effect.className = `upgrade-effect effect-${visual.effect}`;
+    effect.append(createUpgradeSvgIcon(visual.effect, 'upgrade-svg effect-svg'));
+
+    const direction = document.createElement('span');
+    direction.className = `upgrade-direction direction-${visual.direction}`;
+    direction.append(createUpgradeSvgIcon(directionIcon(visual.direction), 'upgrade-svg direction-svg'));
+
+    cluster.append(scanner, connector, hero, effect, direction);
+    return cluster;
+  }
+
+  private renderEquippedOperative(snapshot: StoreSnapshot, large: boolean): HTMLElement {
+    const cosmetics = this.options.cosmetics ?? [];
+    const frame = cosmetics.find((item) => item.category === 'playerShape' && item.id === snapshot.equippedCosmetics.playerShape)
+      ?? cosmetics.find((item) => item.category === 'playerShape' && item.cost === 0);
+    const color = cosmetics.find((item) => item.category === 'playerColor' && item.id === snapshot.equippedCosmetics.playerColor)
+      ?? cosmetics.find((item) => item.category === 'playerColor' && item.cost === 0);
+    if (!frame) {
+      const fallback = document.createElement('span');
+      fallback.className = 'upgrade-operative-fallback';
+      fallback.append(createUpgradeSvgIcon('operative', 'upgrade-svg hero-svg'));
+      return fallback;
+    }
+    const operative = this.renderCosmeticVisual({
+      ...frame,
+      color: color?.color ?? frame.color,
+      colorMode: color?.colorMode
+    }, large);
+    operative.classList.add('upgrade-operative-visual');
+    return operative;
   }
 
   private handleKey(event: KeyboardEvent): void {

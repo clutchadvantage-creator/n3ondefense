@@ -103,6 +103,7 @@ export interface ArcadeRuntimeContext {
   retireBossProjectiles(): void;
   presentMiniBossSpawn(x: number, y: number, color: number): void;
   playBossAttackCue(attack: BossAttackKind): void;
+  playArcadeCue(cue: 'circuit-gate'): void;
   grantCredits(amount: number): void;
   grantCoreTokens(amount: number): void;
   grantFluxCores(amount: number): void;

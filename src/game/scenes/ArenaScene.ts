@@ -4215,6 +4215,9 @@ export class ArenaScene extends Phaser.Scene {
         this.cameras.main.flash(150, 86, 24, 128, false);
       },
       playBossAttackCue: (attack) => this.playBossAttackCue(attack),
+      playArcadeCue: (cue) => {
+        if (cue === 'circuit-gate') this.audio.playSfx('circuitGate');
+      },
       grantCredits: (amount) => {
         const credits = this.scaleModCredits(amount);
         this.roundCredits += credits;

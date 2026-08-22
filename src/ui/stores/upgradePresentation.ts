@@ -1,5 +1,5 @@
-import type { UpgradeDefinition } from '../../game/types';
-import { ABILITY_BALANCE, PLAYER_BALANCE, WEAPON_BALANCE } from '../../game/config/balance';
+import type { UpgradeDefinition, UpgradeVisualDefinition } from '../../game/types.ts';
+import { ABILITY_BALANCE, PLAYER_BALANCE, WEAPON_BALANCE } from '../../game/config/balance/index.ts';
 
 interface UpgradeValue {
   value: number;
@@ -54,3 +54,15 @@ export const getUpgradeComparison = (definition: UpgradeDefinition, level: numbe
     percentage: percentage >= 0.1 ? `${percentage.toFixed(1)}%` : null
   };
 };
+
+const FALLBACK_VISUALS: Record<UpgradeDefinition['category'], UpgradeVisualDefinition> = {
+  player: { hero: 'operative', effect: 'health', direction: 'increase', layout: 'hero-effect', accent: 'cyan' },
+  weapon: { hero: 'weapon', effect: 'damage', direction: 'increase', layout: 'hero-effect', accent: 'gold' },
+  fence: { hero: 'fence', effect: 'duration', direction: 'increase', layout: 'hero-effect', accent: 'cyan' },
+  turret: { hero: 'turret', effect: 'damage', direction: 'increase', layout: 'hero-effect', accent: 'gold' },
+  mine: { hero: 'mine', effect: 'explosion', direction: 'increase', layout: 'radial', accent: 'gold' }
+};
+
+/** Safe visual fallback keeps newly registered upgrades renderable before art tuning. */
+export const getUpgradeVisual = (definition: UpgradeDefinition): UpgradeVisualDefinition =>
+  definition.visual ?? FALLBACK_VISUALS[definition.category];
