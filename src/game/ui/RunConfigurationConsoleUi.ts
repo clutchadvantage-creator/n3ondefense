@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { RunSetupSelection } from '../economy/types.ts';
+import { calculateRunConfigurationLayout, type RunConfigurationConsoleLayout } from './RunConfigurationLayout.ts';
 
 export interface RunConfigurationWallet {
   credits: number;
@@ -17,18 +18,6 @@ export interface RunConfigurationConsoleData {
   contractEnemyHealthMultiplier: number;
   contractSpawnCadenceMultiplier: number;
   wallet: RunConfigurationWallet;
-}
-
-export interface RunConfigurationConsoleLayout {
-  compact: boolean;
-  leftX: number;
-  rightX: number;
-  columnWidth: number;
-  panelTop: number;
-  panelBottom: number;
-  monitorTop: number;
-  monitorHeight: number;
-  bottomSummaryY: number;
 }
 
 const chamfer = (width: number, height: number, cut: number): number[] => [
@@ -66,7 +55,8 @@ const createEmbeddedMonitor = (
   width: number,
   height: number,
   title: string,
-  accent: number
+  accent: number,
+  titleSize = Math.round(Phaser.Math.Clamp(height * 0.105, 12, 15))
 ): Phaser.GameObjects.Container => {
   const monitor = scene.add.container(x, y);
   const shadow = scene.add.polygon(5, 6, chamfer(width, height, 10), 0x000000, 0.48).setOrigin(0.5);
@@ -76,7 +66,7 @@ const createEmbeddedMonitor = (
     .setStrokeStyle(1, accent, 0.16);
   const rail = scene.add.rectangle(0, -height / 2 + 6, width - 28, 3, accent, 0.62);
   const header = scene.add.text(-width / 2 + 16, -height / 2 + 15, title, {
-    fontFamily: 'Orbitron, sans-serif', fontSize: `${height < 90 ? 9 : 11}px`, fontStyle: 'bold',
+    fontFamily: 'Orbitron, sans-serif', fontSize: `${titleSize}px`, fontStyle: 'bold',
     color: Phaser.Display.Color.IntegerToColor(accent).rgba, letterSpacing: 1
   }).setOrigin(0, 0.5);
   const led = scene.add.circle(width / 2 - 17, -height / 2 + 15, 2.5, accent, 0.95);
@@ -93,17 +83,25 @@ export const createRunConfigurationConsole = (
   height: number,
   data: RunConfigurationConsoleData
 ): { layout: RunConfigurationConsoleLayout; animatedTargets: Phaser.GameObjects.GameObject[] } => {
-  const compact = width < 1080 || height < 760;
-  const outerMargin = compact ? 18 : 28;
-  const gap = compact ? 14 : 24;
-  const columnWidth = (width - outerMargin * 2 - gap) * 0.5;
-  const leftX = outerMargin + columnWidth * 0.5;
-  const rightX = width - outerMargin - columnWidth * 0.5;
-  const panelTop = compact ? 126 : 146;
-  const bottomSummaryY = height - (compact ? 48 : 60);
-  const panelBottom = bottomSummaryY - (compact ? 39 : 50);
-  const monitorHeight = compact ? 94 : 142;
-  const monitorTop = panelBottom - monitorHeight - (compact ? 8 : 12);
+  const layout = calculateRunConfigurationLayout(width, height);
+  const {
+    density,
+    compact,
+    outerMargin,
+    columnGap,
+    columnWidth,
+    leftX,
+    rightX,
+    statusY,
+    statusHeight,
+    panelTop,
+    panelBottom,
+    monitorHeight,
+    monitorTop,
+    bottomSummaryY,
+    summaryHeight,
+    typography
+  } = layout;
   const animatedTargets: Phaser.GameObjects.GameObject[] = [];
 
   const shellWidth = width - 14;
@@ -133,19 +131,19 @@ export const createRunConfigurationConsole = (
     root.add(vent);
   }
 
-  const statusY = compact ? 94 : 104;
-  const system = createEmbeddedMonitor(scene, root, leftX, statusY, Math.min(columnWidth - 10, compact ? 330 : 390), compact ? 42 : 50, 'SYSTEM STATUS', 0x55efff);
-  addText(scene, system, -system.getBounds().width * 0.5 + 17, 7, 'CORE ONLINE   //   SECURE LINK', compact ? 9 : 11, '#72ffae');
-  const statusLed = scene.add.circle((Math.min(columnWidth - 10, compact ? 330 : 390) / 2) - 38, 7, 3, 0x72ffae, 0.95);
+  const systemWidth = Math.min(columnWidth - 8, density === 'compressed' ? 330 : compact ? 420 : 500);
+  const systemX = outerMargin + systemWidth * 0.5;
+  const system = createEmbeddedMonitor(scene, root, systemX, statusY, systemWidth, statusHeight, 'SYSTEM STATUS', 0x55efff, typography.monitorTitle);
+  addText(scene, system, -systemWidth * 0.5 + 17, statusHeight * 0.16, 'CORE ONLINE   //   SECURE LINK', typography.diagnosticLabel, '#72ffae');
+  const statusLed = scene.add.circle(systemWidth / 2 - 38, statusHeight * 0.16, 3, 0x72ffae, 0.95);
   system.add(statusLed);
   animatedTargets.push(statusLed);
 
-  const walletWidth = Math.min(columnWidth - 10, compact ? 410 : 500);
-  const wallet = createEmbeddedMonitor(scene, root, rightX, statusY, walletWidth, compact ? 42 : 50, 'TACTICAL WALLET', 0xff5bcf);
-  const walletLine = compact
-    ? `${data.wallet.credits.toLocaleString()}C  //  ${data.wallet.coreTokens} CT  //  ${data.wallet.fluxCores} FC`
-    : `${data.wallet.credits.toLocaleString()} CREDITS   //   ${data.wallet.coreTokens} CORE   //   ${data.wallet.plasmaChips} PLASMA   //   ${data.wallet.fluxCores} FLUX`;
-  addText(scene, wallet, 0, 7, walletLine, compact ? 13 : 15, '#ffe4f8', 0.5, 'Orbitron, sans-serif');
+  const walletWidth = Math.min(width - outerMargin * 2 - systemWidth - columnGap, density === 'compressed' ? 680 : 900);
+  const walletX = width - outerMargin - walletWidth * 0.5;
+  const wallet = createEmbeddedMonitor(scene, root, walletX, statusY, walletWidth, statusHeight, 'TACTICAL WALLET', 0xff5bcf, typography.monitorTitle);
+  const walletLine = `${data.wallet.credits.toLocaleString()} CREDITS  //  ${data.wallet.coreTokens.toLocaleString()} CORE  //  ${data.wallet.plasmaChips.toLocaleString()} PLASMA  //  ${data.wallet.fluxCores.toLocaleString()} FLUX`;
+  addText(scene, wallet, 0, statusHeight * 0.16, walletLine, typography.walletValue, '#ffe4f8', 0.5, 'Orbitron, sans-serif');
 
   const createModuleFrame = (centerX: number, title: string, accent: number, channel: string): void => {
     const moduleHeight = panelBottom - panelTop;
@@ -157,22 +155,22 @@ export const createRunConfigurationConsole = (
       .setStrokeStyle(1, accent, 0.3);
     const rail = scene.add.rectangle(centerX, panelTop + 4, columnWidth - 54, 3, accent, 0.65);
     const label = scene.add.text(centerX - columnWidth / 2 + 24, panelTop + 21, title, {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 13 : 17}px`, fontStyle: 'bold',
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 15 : 18}px`, fontStyle: 'bold',
       color: Phaser.Display.Color.IntegerToColor(accent).rgba, letterSpacing: 1
     }).setOrigin(0, 0.5);
     const channelLabel = scene.add.text(centerX + columnWidth / 2 - 24, panelTop + 21, channel, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, fontStyle: 'bold', color: '#6f91a0'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${typography.channel}px`, fontStyle: 'bold', color: '#7899a7'
     }).setOrigin(1, 0.5);
     root.add([frame, recess, header, rail, label, channelLabel]);
   };
   createModuleFrame(leftX, 'SIGNAL // FOCUSED MOD HUNT', 0x55efff, 'CHANNEL A-03');
   createModuleFrame(rightX, 'CONTRACT // ENGAGEMENT RULES', 0xff5bcf, 'CHANNEL B-07');
 
-  const halfMonitorWidth = (columnWidth - (compact ? 18 : 24)) * 0.5;
+  const halfMonitorWidth = (columnWidth - columnGap) * 0.5;
   const monitorCenterY = monitorTop + monitorHeight * 0.5;
   const signalWeight = createEmbeddedMonitor(
     scene, root, leftX - halfMonitorWidth * 0.5 - 3, monitorCenterY,
-    halfMonitorWidth, monitorHeight, 'SIGNAL WEIGHTING PREVIEW', 0x55efff
+    halfMonitorWidth, monitorHeight, 'SIGNAL WEIGHTING PREVIEW', 0x55efff, typography.monitorTitle
   );
   const categoryLabels = ['WPN', 'PLY', 'DEF', 'BMB', 'UTL'];
   const selectedIndex = data.setup.modFocus ? ['weapon', 'player', 'defense', 'bombSite', 'utility'].indexOf(data.setup.modFocus) : -1;
@@ -180,27 +178,27 @@ export const createRunConfigurationConsole = (
   categoryLabels.forEach((label, index) => {
     const barWidth = graphWidth / categoryLabels.length - 5;
     const active = index === selectedIndex;
-    const barHeight = (compact ? 21 : 48) * (active ? 1 : 1 / data.signalMultiplier);
+    const barHeight = (density === 'compressed' ? 20 : compact ? 30 : 55) * (active ? 1 : 1 / data.signalMultiplier);
     const x = -graphWidth / 2 + index * (barWidth + 5) + barWidth / 2;
-    const bottom = monitorHeight / 2 - (compact ? 17 : 22);
+    const bottom = monitorHeight / 2 - (density === 'compressed' ? 26 : compact ? 32 : 38);
     const bar = scene.add.rectangle(x, bottom - barHeight / 2, barWidth, barHeight, active ? 0x55efff : 0x234858, active ? 0.86 : 0.52);
     const text = scene.add.text(x, bottom + 5, label, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 7 : 9}px`, color: active ? '#b9fbff' : '#668896', fontStyle: 'bold'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${typography.diagnosticLabel}px`, color: active ? '#b9fbff' : '#7597a5', fontStyle: 'bold'
     }).setOrigin(0.5, 0);
     signalWeight.add([bar, text]);
   });
 
   const focus = createEmbeddedMonitor(
     scene, root, leftX + halfMonitorWidth * 0.5 + 3, monitorCenterY,
-    halfMonitorWidth, monitorHeight, 'ACTIVE MOD FOCUS', 0x55efff
+    halfMonitorWidth, monitorHeight, 'ACTIVE MOD FOCUS', 0x55efff, typography.monitorTitle
   );
   const focusName = data.setup.modFocus ? data.setup.modFocus.toUpperCase() : 'NONE';
-  addText(scene, focus, 0, compact ? -2 : -8, focusName, compact ? 13 : 18, '#adfaff', 0.5, 'Orbitron, sans-serif');
-  addText(scene, focus, 0, compact ? 15 : 20, data.setup.modFocus ? `${data.signalMultiplier.toFixed(1)}x CATEGORY WEIGHT` : 'STANDARD DISTRIBUTION', compact ? 8 : 10, '#79aab8', 0.5);
+  addText(scene, focus, 0, density === 'compressed' ? -3 : compact ? -7 : -12, focusName, typography.diagnosticValue, '#adfaff', 0.5, 'Orbitron, sans-serif');
+  addText(scene, focus, 0, density === 'compressed' ? 17 : compact ? 21 : 26, data.setup.modFocus ? `${data.signalMultiplier.toFixed(1)}x CATEGORY WEIGHT` : 'STANDARD DISTRIBUTION', typography.diagnosticLabel, '#8bc4d2', 0.5);
 
   const simulation = createEmbeddedMonitor(
     scene, root, rightX - halfMonitorWidth * 0.5 - 3, monitorCenterY,
-    halfMonitorWidth, monitorHeight, 'ENCOUNTER SIMULATION', 0xff5bcf
+    halfMonitorWidth, monitorHeight, 'ENCOUNTER SIMULATION', 0xff5bcf, typography.monitorTitle
   );
   const waveform = scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
   waveform.lineStyle(2, 0xff5bcf, 0.75).beginPath();
@@ -213,22 +211,22 @@ export const createRunConfigurationConsole = (
   }
   waveform.strokePath();
   simulation.add(waveform);
-  addText(scene, simulation, 0, compact ? 22 : 42, data.setup.contract ? 'PROTOCOL ARMED' : 'BASELINE PRESSURE', compact ? 8 : 10, data.setup.contract ? '#ff9ee4' : '#8aa8b4', 0.5);
+  addText(scene, simulation, 0, monitorHeight / 2 - (compact ? 23 : 29), data.setup.contract ? 'PROTOCOL ARMED' : 'BASELINE PRESSURE', typography.diagnosticLabel, data.setup.contract ? '#ff9ee4' : '#9bb7c2', 0.5);
 
   const rewards = createEmbeddedMonitor(
     scene, root, rightX + halfMonitorWidth * 0.5 + 3, monitorCenterY,
-    halfMonitorWidth, monitorHeight, 'REWARD PARAMETERS', 0xff5bcf
+    halfMonitorWidth, monitorHeight, 'REWARD PARAMETERS', 0xff5bcf, typography.monitorTitle
   );
   const creditBonus = Math.round((data.contractCreditMultiplier - 1) * 100);
-  addText(scene, rewards, 0, compact ? -3 : -10, creditBonus > 0 ? `CREDITS +${creditBonus}%` : 'STANDARD REWARDS', compact ? 12 : 17, creditBonus > 0 ? '#ffd37c' : '#a4bbc5', 0.5, 'Orbitron, sans-serif');
-  addText(scene, rewards, 0, compact ? 16 : 22, data.contractLabel.toUpperCase(), compact ? 8 : 10, '#dd8ec5', 0.5);
+  addText(scene, rewards, 0, density === 'compressed' ? -3 : compact ? -7 : -12, creditBonus > 0 ? `CREDITS +${creditBonus}%` : 'STANDARD REWARDS', typography.diagnosticValue, creditBonus > 0 ? '#ffd37c' : '#b4cbd4', 0.5, 'Orbitron, sans-serif');
+  addText(scene, rewards, 0, density === 'compressed' ? 17 : compact ? 21 : 26, data.contractLabel.toUpperCase(), typography.diagnosticLabel, '#ef9bd5', 0.5);
 
-  const summaryWidth = Math.min(width - 64, 1280);
-  const summary = createEmbeddedMonitor(scene, root, width / 2, bottomSummaryY, summaryWidth, compact ? 52 : 68, 'DEPLOYMENT SUMMARY // SYSTEM FEED', 0x6fffb1);
+  const summaryWidth = Math.min(width - (compact ? 40 : 64), 1600);
+  const summary = createEmbeddedMonitor(scene, root, width / 2, bottomSummaryY, summaryWidth, summaryHeight, 'DEPLOYMENT SUMMARY // SYSTEM FEED', 0x6fffb1, typography.monitorTitle);
   const signalSummary = data.setup.modFocus ? data.setup.modFocus.toUpperCase() : 'STANDARD';
   const summaryLine = `SIGNAL ${signalSummary}   //   CONTRACT ${data.contractLabel.toUpperCase()}   //   RUN FEE ${data.totalCost.toLocaleString()}C`;
-  addText(scene, summary, -summaryWidth / 2 + 18, compact ? 7 : 10, summaryLine, compact ? 9 : 12, '#d4f8ff', 0);
-  addText(scene, summary, summaryWidth / 2 - 18, compact ? 7 : 10, data.totalCost <= data.wallet.credits ? 'CONFIGURATION VALID // AWAITING DEPLOYMENT' : 'INSUFFICIENT CREDITS', compact ? 8 : 10, data.totalCost <= data.wallet.credits ? '#71ffad' : '#ff7a96', 1);
+  addText(scene, summary, 0, density === 'compressed' ? 0 : compact ? 1 : 2, summaryLine, typography.summary, '#d4f8ff', 0.5, 'Orbitron, sans-serif');
+  addText(scene, summary, 0, density === 'compressed' ? 20 : compact ? 24 : 29, data.totalCost <= data.wallet.credits ? 'CONFIGURATION VALID // AWAITING DEPLOYMENT' : 'INSUFFICIENT CREDITS', typography.summaryStatus, data.totalCost <= data.wallet.credits ? '#71ffad' : '#ff7a96', 0.5);
 
   const sweep = scene.add.rectangle(outerMargin + 10, height / 2, 2, height - 54, 0x55efff, 0.045);
   root.add(sweep);
@@ -238,7 +236,7 @@ export const createRunConfigurationConsole = (
   scene.tweens.add({ targets: statusLed, alpha: { from: 0.2, to: 1 }, duration: 760, yoyo: true, repeat: -1 });
 
   return {
-    layout: { compact, leftX, rightX, columnWidth, panelTop, panelBottom, monitorTop, monitorHeight, bottomSummaryY },
+    layout,
     animatedTargets
   };
 };

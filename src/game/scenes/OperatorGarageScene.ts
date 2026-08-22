@@ -63,6 +63,8 @@ export class OperatorGarageScene extends Phaser.Scene {
   private operatorPreviewRoot: Phaser.GameObjects.Container | null = null;
   private operatorPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
   private operatorPreviewLayout: { rect: GarageRect; compact: boolean } | null = null;
+  private readonly configurationValueTexts = new Map<'contract' | 'signal', Phaser.GameObjects.Text>();
+  private configurationFeeText: Phaser.GameObjects.Text | null = null;
   private cosmeticPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
   private tutorialDirector: TutorialDirector | null = null;
   private readonly tutorialTargets = new Map<string, Phaser.GameObjects.Container>();
@@ -229,6 +231,8 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private createConfigurationTerminal(rect: GarageRect, compact: boolean): void {
+    this.configurationValueTexts.clear();
+    this.configurationFeeText = null;
     const root = this.terminalFrame(rect, 'DEPLOYMENT CONFIGURATION');
     const roomy = !compact && rect.height >= 180;
     const contentScale = roomy ? Phaser.Math.Clamp(rect.width / 400, 1, 1.36) : 1;
@@ -252,6 +256,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       const value = this.add.text(roomy ? rect.width - 15 * contentScale : 15, y + (roomy ? 4 * contentScale : 10), row.value, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomy ? Math.round(17 * contentScale) : 10}px`, fontStyle: 'bold', color: '#e4fcff'
       }).setOrigin(roomy ? 1 : 0, 0).setMaxLines(1);
+      if (row.label === 'CONTRACT' || row.label === 'SIGNAL') this.configurationValueTexts.set(row.label.toLowerCase() as 'contract' | 'signal', value);
       hit.on('pointerover', () => {
         hit.setFillStyle(0x17374a, 0.75);
         this.audio.playSfx('menuHover');
@@ -265,10 +270,21 @@ export class OperatorGarageScene extends Phaser.Scene {
     });
     if (roomy) {
       const cost = getRunSetupCost(setup);
-      root.add(this.add.text(rect.width / 2, rect.height - 19, cost > 0 ? `NEXT RUN FEE // ${cost.toLocaleString()} CREDITS` : 'NEXT RUN FEE // FREE', {
+      this.configurationFeeText = this.add.text(rect.width / 2, rect.height - 19, cost > 0 ? `NEXT RUN FEE // ${cost.toLocaleString()} CREDITS` : 'NEXT RUN FEE // FREE', {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${Math.round(15 * contentScale)}px`, fontStyle: 'bold', color: cost > 0 ? '#ffd077' : '#7fffc2'
-      }).setOrigin(0.5));
+      }).setOrigin(0.5);
+      root.add(this.configurationFeeText);
     }
+  }
+
+  private refreshConfigurationTerminalState(): void {
+    const setup = SaveSystem.getNextRunSetupSelection();
+    this.configurationValueTexts.get('contract')?.setText(`${setup.contract ? RUN_CONTRACTS[setup.contract].label : 'NO CONTRACT ACTIVE'}  [CHANGE]`);
+    this.configurationValueTexts.get('signal')?.setText(`${setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus] : 'NO SIGNAL ACTIVE'}  [CHANGE]`);
+    const cost = getRunSetupCost(setup);
+    this.configurationFeeText
+      ?.setText(cost > 0 ? `NEXT RUN FEE // ${cost.toLocaleString()} CREDITS` : 'NEXT RUN FEE // FREE')
+      .setColor(cost > 0 ? '#ffd077' : '#7fffc2');
   }
 
   private createWalletTerminal(rect: GarageRect, compact: boolean): void {
@@ -527,33 +543,41 @@ export class OperatorGarageScene extends Phaser.Scene {
         fluxCores: save.fluxCores
       }
     });
-    const { compact, leftX, rightX, columnWidth, panelTop, monitorTop } = consoleView.layout;
+    const {
+      density,
+      compact,
+      leftX,
+      rightX,
+      columnWidth,
+      statusY,
+      statusHeight,
+      panelTop,
+      selectionStartY,
+      signalGap,
+      contractGap,
+      typography
+    } = consoleView.layout;
     this.overlayAnimatedTargets.push(...consoleView.animatedTargets);
 
     const feeSummary = totalCost > 0
       ? `RUN FEE // ${totalCost.toLocaleString()} CREDITS // CHARGED ON DEPLOYMENT`
       : 'RUN FEE // FREE // STANDARD PARAMETERS';
-    root.add(this.add.text(width / 2, compact ? 69 : 78, feeSummary, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 14}px`, fontStyle: 'bold',
+    root.add(this.add.text(width / 2, statusY - statusHeight / 2 - 15, feeSummary, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${typography.runFee}px`, fontStyle: 'bold',
       color: totalCost > 0 ? '#ffd27d' : '#75ffb1', align: 'center', letterSpacing: 2,
       backgroundColor: '#030a11'
     }).setOrigin(0.5).setPadding(12, 3));
 
-    root.add(this.add.text(leftX, panelTop + (compact ? 48 : 52), `Program a category frequency at ${ECONOMY_BALANCE.modFocus.categoryWeightMultiplier.toFixed(1)}x weighting. Rarity and total drop quantity remain unchanged.`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, color: '#a9d3df', align: 'center',
-      wordWrap: { width: columnWidth - 48, useAdvancedWrap: true }
+    root.add(this.add.text(leftX, panelTop + (density === 'compressed' ? 42 : 48), `Program a category frequency at ${ECONOMY_BALANCE.modFocus.categoryWeightMultiplier.toFixed(1)}x weighting. Rarity and total drop quantity remain unchanged.`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${typography.introduction}px`, color: '#b8dde7', align: 'center',
+      wordWrap: { width: columnWidth - 38, useAdvancedWrap: true }
     }).setOrigin(0.5, 0).setMaxLines(2));
 
     const signalOptions: Array<{ id: RunSetupSelection['modFocus']; label: string }> = [
       { id: null, label: 'NO SIGNAL // STANDARD DROPS' },
       ...MOD_FOCUS_CATEGORIES.map((id) => ({ id, label: MOD_FOCUS_LABELS[id].toUpperCase() }))
     ];
-    const signalStartY = panelTop + (compact ? 88 : 104);
-    const signalGap = Phaser.Math.Clamp(
-      (monitorTop - signalStartY - 18) / signalOptions.length,
-      compact ? 39 : 50,
-      compact ? 55 : 68
-    );
+    const signalStartY = selectionStartY;
     signalOptions.forEach((option, index) => {
       const selected = setup.modFocus === option.id;
       const fee = option.id ? `${ECONOMY_BALANCE.modFocus.cost.toLocaleString()}C` : 'FREE';
@@ -563,33 +587,35 @@ export class OperatorGarageScene extends Phaser.Scene {
         leftX - rowWidth / 2 + 7,
         y,
         selected ? 5 : 2,
-        Math.min(compact ? 31 : 42, signalGap - 7),
+        Math.min(density === 'compressed' ? 28 : compact ? 36 : 42, signalGap - 7),
         selected ? 0x55efff : 0x315563,
         selected ? 0.95 : 0.35
       );
       const icon = this.add.text(leftX - rowWidth / 2 + 24, y, option.id ? option.id.slice(0, 1).toUpperCase() : '0', {
-        fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 11 : 14}px`, fontStyle: 'bold',
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${typography.selectionMarker}px`, fontStyle: 'bold',
         color: selected ? '#b9fbff' : '#557b88'
       }).setOrigin(0.5);
       root.add([indicator, icon]);
       const button = createButton(this, leftX, y, `${selected ? 'SIGNAL LOCKED // ' : ''}${option.label}  //  ${fee}`, () => {
-        SaveSystem.setNextRunSetupSelection({ ...setup, modFocus: option.id });
+        const result = SaveSystem.setNextRunSetupSelection({ ...setup, modFocus: option.id });
+        if (!result.ok) return false;
         this.status = `SUCCESS // ${option.id ? MOD_FOCUS_LABELS[option.id] : 'Signal removed'} configured for next deployment.`;
+        this.refreshConfigurationTerminalState();
         // Rebuild only the overlay so its selected state and diagnostics update
         // while the player remains in Run Configuration until choosing Close.
         this.showRunConfiguration();
         return true;
       }, rowWidth, 'menu', {
-        height: Math.min(compact ? 35 : 44, signalGap - 6),
-        fontSize: compact ? 14 : 18,
+        height: Math.min(density === 'compressed' ? 36 : compact ? 42 : 48, signalGap - 6),
+        fontSize: typography.selection,
         horizontalPadding: compact ? 34 : 52
       });
       root.add(button);
     });
 
-    root.add(this.add.text(rightX, panelTop + (compact ? 48 : 52), 'Load one-run engagement rules. Threat and real reward parameters update in the embedded diagnostics.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, color: '#d6b3ce', align: 'center',
-      wordWrap: { width: columnWidth - 48, useAdvancedWrap: true }
+    root.add(this.add.text(rightX, panelTop + (density === 'compressed' ? 42 : 48), 'Load one-run engagement rules. Threat and real reward parameters update in the embedded diagnostics.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${typography.introduction}px`, color: '#e1bed6', align: 'center',
+      wordWrap: { width: columnWidth - 38, useAdvancedWrap: true }
     }).setOrigin(0.5, 0).setMaxLines(2));
 
     const contractOptions: Array<{ id: RunSetupSelection['contract']; label: string; description: string; cost: number }> = [
@@ -601,12 +627,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         cost: RUN_CONTRACTS[id].cost
       }))
     ];
-    const contractStartY = panelTop + (compact ? 88 : 104);
-    const contractGap = Phaser.Math.Clamp(
-      (monitorTop - contractStartY - 18) / contractOptions.length,
-      compact ? 62 : 77,
-      compact ? 82 : 106
-    );
+    const contractStartY = selectionStartY;
     contractOptions.forEach((option, index) => {
       const selected = setup.contract === option.id;
       const y = contractStartY + index * contractGap;
@@ -615,32 +636,34 @@ export class OperatorGarageScene extends Phaser.Scene {
         rightX - rowWidth / 2 + 7,
         y,
         selected ? 5 : 2,
-        compact ? 31 : 42,
+        density === 'compressed' ? 28 : compact ? 36 : 42,
         selected ? 0xff5bcf : 0x513548,
         selected ? 0.96 : 0.35
       );
       const threat = this.add.text(rightX + rowWidth / 2 - 15, y, option.id ? 'ARM' : 'BASE', {
-        fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 7 : 9}px`, fontStyle: 'bold',
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${typography.selectionMarker}px`, fontStyle: 'bold',
         color: selected ? '#ff9fe5' : '#6d7583'
       }).setOrigin(1, 0.5);
       root.add([indicator, threat]);
       const button = createButton(this, rightX, y, `${selected ? 'PROTOCOL ARMED // ' : ''}${option.label}  //  ${option.cost > 0 ? `${option.cost.toLocaleString()}C` : 'FREE'}`, () => {
-        SaveSystem.setNextRunSetupSelection({ ...setup, contract: option.id });
+        const result = SaveSystem.setNextRunSetupSelection({ ...setup, contract: option.id });
+        if (!result.ok) return false;
         this.status = `SUCCESS // ${option.id ? RUN_CONTRACTS[option.id].label : 'Contract removed'} configured for next deployment.`;
+        this.refreshConfigurationTerminalState();
         // Keep the console open so Signal and Contract can be configured in a
         // single visit; Close remains the only route back to the Garage.
         this.showRunConfiguration();
         return true;
       }, rowWidth, 'menu', {
-        height: compact ? 34 : 42,
-        fontSize: compact ? 14 : 18,
+        height: density === 'compressed' ? 36 : compact ? 42 : 48,
+        fontSize: typography.selection,
         horizontalPadding: compact ? 46 : 64
       });
       root.add(button);
-      root.add(this.add.text(rightX, y + (compact ? 20 : 25), option.description, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 18 : 21}px`, color: '#b9d4df', align: 'center',
-        wordWrap: { width: columnWidth - 64, useAdvancedWrap: true }
-      }).setOrigin(0.5, 0).setMaxLines(2));
+      root.add(this.add.text(rightX, y + (density === 'compressed' ? 21 : compact ? 26 : 31), option.description, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${typography.selectionDescription}px`, color: '#c5dce5', align: 'center',
+        wordWrap: { width: columnWidth - 38, useAdvancedWrap: true }
+      }).setOrigin(0.5, 0).setMaxLines(1));
     });
   }
 

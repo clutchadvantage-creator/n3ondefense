@@ -40,8 +40,10 @@ test('one-run setup uses the advanced console shell and keeps the console open w
   assert.match(runSetup, /SaveSystem\.setNextRunSetupSelection/);
   assert.doesNotMatch(runSetup, /this\.scene\.restart\(\{ returnScene: this\.returnScene \}\)/);
   assert.equal((runSetup.match(/this\.showRunConfiguration\(\)/g) ?? []).length, 2);
-  assert.match(runSetup, /fontSize: compact \? 14 : 18/);
-  assert.match(runSetup, /fontSize: `\$\{compact \? 18 : 21\}px`/);
-  assert.match(consoleUi, /walletLine, compact \? 13 : 15/);
+  assert.equal((runSetup.match(/this\.refreshConfigurationTerminalState\(\)/g) ?? []).length, 2);
+  assert.match(runSetup, /fontSize: typography\.selection/);
+  assert.match(runSetup, /fontSize: `\$\{typography\.selectionDescription\}px`/);
+  assert.match(consoleUi, /calculateRunConfigurationLayout\(width, height\)/);
+  assert.match(consoleUi, /walletLine, typography\.walletValue/);
   assert.match(garage, /this\.tweens\.killTweensOf\(this\.overlayAnimatedTargets\)/);
 });

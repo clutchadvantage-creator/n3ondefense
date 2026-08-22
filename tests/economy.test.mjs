@@ -66,6 +66,29 @@ test('run setup purchase is all-or-nothing and never permits a negative wallet',
   assert.equal(wallet.credits, 100);
 });
 
+test('every displayed setup combination resolves to the exact authoritative deployment charge', () => {
+  const signalCost = ECONOMY_BALANCE.modFocus.cost;
+  const contractCost = RUN_CONTRACTS['elite-hunt'].cost;
+  const base = { modFocus: null, contract: null };
+  const signalOnly = { modFocus: 'player', contract: null };
+  const contractOnly = { modFocus: null, contract: 'elite-hunt' };
+  const combined = { modFocus: 'player', contract: 'elite-hunt' };
+
+  assert.equal(getRunSetupCost(base), 0);
+  assert.equal(getRunSetupCost(signalOnly), signalCost);
+  assert.equal(getRunSetupCost(contractOnly), contractCost);
+  assert.equal(getRunSetupCost(combined), signalCost + contractCost);
+  assert.equal(getRunSetupCost({ ...combined, modFocus: null }), contractCost);
+  assert.equal(getRunSetupCost({ ...combined, contract: null }), signalCost);
+
+  const wallet = { credits: 100_000, coreTokens: 0 };
+  const tracked = progress();
+  const purchase = purchaseRunSetup(wallet, tracked, combined);
+  assert.equal(purchase.ok, true);
+  assert.equal(purchase.cost, getRunSetupCost(combined));
+  assert.equal(wallet.credits, 100_000 - getRunSetupCost(combined));
+});
+
 test('focused Mod selection remains deterministic and changes category weighting, not drop count', () => {
   const request = { source: 'milestone', round: 20, seed: 13579, sequence: 4, protocol: 'normal', guaranteed: true };
   assert.equal(rollModDrop(request)?.id, rollModDrop(request)?.id);
