@@ -23,6 +23,9 @@ export const getProfileAvatarColor = (profile: ProfileSummary): string => {
   return avatarColorMap.get(profile.equippedPlayerColor) ?? '#61f4ff';
 };
 
+export const usesNativeProfilePalette = (profile: ProfileSummary): boolean =>
+  profile.equippedPlayerColor === 'player-native';
+
 export const createProfileCard = ({ profile, selected, active, onSelect }: ProfileCardOptions): HTMLButtonElement => {
   const card = document.createElement('button');
   card.type = 'button';
@@ -35,7 +38,7 @@ export const createProfileCard = ({ profile, selected, active, onSelect }: Profi
   top.className = 'profile-card-top';
 
   const avatar = document.createElement('div');
-  avatar.className = 'profile-avatar';
+  avatar.className = `profile-avatar${usesNativeProfilePalette(profile) ? ' native-palette' : ''}`;
   avatar.style.setProperty('--avatar-color', getProfileAvatarColor(profile));
 
   const heading = document.createElement('div');

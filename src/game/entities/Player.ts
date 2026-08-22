@@ -24,7 +24,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   invulnUntil = 0;
   lastDashMs = -9_999;
   dashUntil = 0;
-  private cosmeticTint = 0xffffff;
+  private cosmeticTint: number | null = 0xffffff;
   private damageFlashUntil = 0;
   permanentModSpeedMultiplier = 1;
   modSpeedBoostUntil = 0;
@@ -120,9 +120,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.energy = Math.max(0, this.energy - amount);
   }
 
-  setCosmeticTint(color: number): void {
+  setCosmeticTint(color: number | null): void {
     this.cosmeticTint = color;
-    if (this.scene.time.now >= this.damageFlashUntil) this.setTint(color);
+    if (this.scene.time.now < this.damageFlashUntil) return;
+    if (color === null) this.clearTint();
+    else this.setTint(color);
   }
 
   takeDamage(amount: number): boolean {
@@ -135,7 +137,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.damageFlashUntil = now + 90;
     this.setTintFill(0xffffff);
     this.scene.time.delayedCall(90, () => {
-      if (this.active && this.scene.time.now >= this.damageFlashUntil) this.setTint(this.cosmeticTint);
+      if (!this.active || this.scene.time.now < this.damageFlashUntil) return;
+      if (this.cosmeticTint === null) this.clearTint();
+      else this.setTint(this.cosmeticTint);
     });
     return true;
   }

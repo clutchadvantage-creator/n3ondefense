@@ -394,6 +394,14 @@
   height: 68px;
 }
 
+.profile-avatar.native-palette,
+.selected-profile-avatar.native-palette {
+  background:
+    radial-gradient(circle at 38% 30%, rgba(255, 255, 255, 0.68), transparent 19%),
+    conic-gradient(from 35deg, #62efff, #70ff79, #ffd84f, #ff5bce, #9d6cff, #62efff);
+  box-shadow: inset 0 0 16px rgba(1, 7, 13, 0.62), 0 0 8px #62efff, 0 0 15px rgba(255, 91, 206, 0.58);
+}
+
 .profile-stat-grid,
 .selected-profile-stat-grid {
   display: grid;

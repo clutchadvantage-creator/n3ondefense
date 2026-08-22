@@ -88,7 +88,7 @@ const defaultEquipped: Partial<Record<CosmeticOption['category'], string>> = {
   dashTrail: 'dash-cyan'
 };
 
-const defaultOwned = ['player-cyan', 'player-circle', 'projectile-cyan', 'projectile-shape-pulse', 'turret-default', 'fence-default', 'dash-cyan'];
+const defaultOwned = ['player-cyan', 'player-native', 'player-circle', 'projectile-cyan', 'projectile-shape-pulse', 'turret-default', 'fence-default', 'dash-cyan'];
 
 const upgradeDefaults = (): Record<string, number> => {
   const result: Record<string, number> = {};

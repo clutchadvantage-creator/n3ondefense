@@ -5,9 +5,11 @@ import {
   COSMETICS,
   getCosmeticPurchaseCosts,
   getCosmeticTextureKey,
-  isPremiumCosmetic
+  isPremiumCosmetic,
+  resolveOperativeFrameAppearance
 } from '../src/data/cosmetics.ts';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
+import { createPremiumOperativeFrameSvgDataUri } from '../src/ui/stores/PremiumOperativeFrameSvg.ts';
 
 const boot = readFileSync(new URL('../src/game/scenes/BootScene.ts', import.meta.url), 'utf8');
 const textures = readFileSync(new URL('../src/game/cosmetics/PremiumOperativeFrameTextures.ts', import.meta.url), 'utf8');
@@ -71,16 +73,84 @@ test('store cards expose premium framing, exact currency chips, and detailed vec
 test('premium operative art is available in Boot, Garage previews, and arena player rendering', () => {
   assert.match(boot, /createPremiumOperativeFrameTextures/);
   assert.match(boot, /createPremiumOperativeFrameTextures\(g\)/);
+  assert.match(boot, /createPremiumOperativeFrameSvgDataUri/);
+  assert.match(boot, /this\.load\.svg\(frame\.nativeTextureKey/);
   for (const [, , , texture] of EXPECTED) assert.match(textures, new RegExp(`'${texture}'`));
   assert.match(preview, /item\.previewScale/);
-  assert.match(preview, /addImage\(item\.previewIcon \?\? item\.textureKey \?\? item\.id\)/);
-  assert.match(arena, /const playerTextureKey = getCosmeticTextureKey\(playerShapeId, 'player-circle'\)/);
-  assert.match(arena, /new Player\([^;]+playerTextureKey/s);
+  assert.match(preview, /resolveOperativeFrameAppearance/);
+  assert.match(arena, /SaveSystem\.getOperativeFrameAppearance\(this\.time\.now\)/);
+  assert.match(arena, /new Player\([^;]+operativeAppearance\.textureKey/s);
   assert.doesNotMatch(arena, /new Player\([^;]+playerShapeId/s);
-  assert.match(garage, /const resolvedTexture = getCosmeticTextureKey\(shapeId, 'player-circle'\)/);
-  assert.match(garage, /this\.textures\.exists\(resolvedTexture\) \? resolvedTexture : 'player-circle'/);
+  assert.match(garage, /SaveSystem\.getOperativeFrameAppearance\(this\.time\.now\)/);
   assert.match(player, /texture\.startsWith\('player-premium-'\)/);
   assert.match(player, /this\.setCircle\(12/);
+});
+
+test('Native Palette is free, owned by default, and preserves authored premium colors', () => {
+  const native = COSMETICS.find((item) => item.id === 'player-native');
+  assert.ok(native);
+  assert.equal(native.category, 'playerColor');
+  assert.equal(native.cost, 0);
+  assert.equal(native.colorMode, 'native');
+
+  const defaultSave = createDefaultLocalSave('native-default', 'Native Default');
+  assert.ok(defaultSave.cosmetics.owned.includes('player-native'));
+  assert.equal(defaultSave.cosmetics.equipped.playerColor, 'player-cyan', 'existing default appearance must not change');
+
+  for (const [frameId, , , textureKey] of EXPECTED) {
+    const appearance = resolveOperativeFrameAppearance(frameId, 'player-native', 1_000);
+    assert.equal(appearance.mode, 'native');
+    assert.equal(appearance.textureKey, `${textureKey}-native`);
+    assert.equal(appearance.tint, null);
+    assert.notEqual(appearance.primaryColor, appearance.accentColor, `${frameId} should retain its authored accent`);
+  }
+
+  const source = createPremiumOperativeFrameSvgDataUri('frog', 0x70ff79, 0x6eefff);
+  assert.ok(source?.startsWith('data:image/svg+xml;base64,'));
+  const decoded = Buffer.from(source.split(',')[1], 'base64').toString('utf8');
+  assert.match(decoded, /class="pf-mouth"/);
+  assert.match(decoded, /#70ff79/);
+  assert.match(decoded, /#6eefff/);
+});
+
+test('existing operative colors still apply a single override tint and survive migration', () => {
+  const override = resolveOperativeFrameAppearance('player-ribbit-exe', 'player-pink', 1_000);
+  assert.equal(override.mode, 'override');
+  assert.equal(override.textureKey, 'player-premium-ribbit-exe');
+  assert.equal(override.tint, 0xff4df2);
+  assert.equal(override.primaryColor, override.accentColor);
+
+  const oldSave = createDefaultLocalSave('old-color-save', 'Old Color Save');
+  oldSave.cosmetics.owned = oldSave.cosmetics.owned.filter((id) => id !== 'player-native');
+  oldSave.cosmetics.owned.push('player-pink');
+  oldSave.cosmetics.equipped.playerColor = 'player-pink';
+  const normalized = normalizeLocalSave(oldSave);
+  assert.ok(normalized);
+  assert.ok(normalized.cosmetics.owned.includes('player-native'));
+  assert.equal(normalized.cosmetics.equipped.playerColor, 'player-pink');
+});
+
+test('Native Palette persists explicitly, restores reversibly, and keeps regular frames intact', () => {
+  const nativeSave = createDefaultLocalSave('native-save', 'Native Save');
+  nativeSave.cosmetics.equipped.playerColor = 'player-native';
+  const normalized = normalizeLocalSave(nativeSave);
+  assert.ok(normalized);
+  assert.equal(normalized.cosmetics.equipped.playerColor, 'player-native');
+
+  const firstNative = resolveOperativeFrameAppearance('player-tug-life', 'player-native', 5_000);
+  const recolored = resolveOperativeFrameAppearance('player-tug-life', 'player-lime', 5_000);
+  const restoredNative = resolveOperativeFrameAppearance('player-tug-life', 'player-native', 5_000);
+  assert.deepEqual(restoredNative, firstNative);
+  assert.equal(recolored.tint, 0x5cff7a);
+  assert.notEqual(recolored.textureKey, firstNative.textureKey);
+
+  for (const frameId of ['player-circle', 'player-star', 'player-airplane']) {
+    const frame = COSMETICS.find((item) => item.id === frameId);
+    const appearance = resolveOperativeFrameAppearance(frameId, 'player-native', 5_000);
+    assert.ok(frame);
+    assert.equal(appearance.textureKey, frame.textureKey);
+    assert.equal(appearance.tint, frame.color);
+  }
 });
 
 test('premium frame ownership and equipped choice survive existing save normalization', () => {

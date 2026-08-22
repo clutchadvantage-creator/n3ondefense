@@ -11,9 +11,9 @@ const finish = (graphics: Phaser.GameObjects.Graphics, key: string, width: numbe
 };
 
 /**
- * Detailed grayscale source art for premium operative frames. Player tinting is
- * applied by the existing runtime, so material values remain shaded while the
- * equipped operative color stays authoritative.
+ * Neutral color-override textures for premium operative frames. Existing
+ * Operative Color cosmetics tint these as a whole. Native Palette variants
+ * come from the same layered SVG artwork used by the Store.
  */
 export const createPremiumOperativeFrameTextures = (g: Phaser.GameObjects.Graphics): void => {
   // CRITICAL CRUNCH // folded cereal carton, mascot, bowl, side label, and barcode.
@@ -189,4 +189,3 @@ export const createPremiumOperativeFrameTextures = (g: Phaser.GameObjects.Graphi
   g.fillStyle(0xffffff, 1).fillCircle(28, 35, 1.5);
   finish(g, 'player-premium-ribbit-exe', 58, 54);
 };
-

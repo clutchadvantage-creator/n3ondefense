@@ -1077,11 +1077,10 @@ export class ArenaScene extends Phaser.Scene {
         cooldownRate: starterWeapon.cooldownRate * this.modRuntime.multiplier('weaponCooling')
       };
 
-      const playerShapeId = SaveSystem.getEquippedCosmeticId('playerShape');
-      const playerTextureKey = getCosmeticTextureKey(playerShapeId, 'player-circle');
-      this.player = new Player(this, this.layout.playerSpawn.x, this.layout.playerSpawn.y, playerTextureKey, stats, energy, weapon);
+      const operativeAppearance = SaveSystem.getOperativeFrameAppearance(this.time.now);
+      this.player = new Player(this, this.layout.playerSpawn.x, this.layout.playerSpawn.y, operativeAppearance.textureKey, stats, energy, weapon);
       this.player.permanentModSpeedMultiplier = this.modRuntime.permanentMoveSpeedMultiplier();
-      this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor', this.time.now));
+      this.player.setCosmeticTint(operativeAppearance.tint);
       this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
       this.cameras.main.setZoom(0.9);
     } else {
@@ -1102,7 +1101,9 @@ export class ArenaScene extends Phaser.Scene {
       this.player.buffs.ricochetUntil = 0;
       this.player.buffs.speedBoostStacks = 0;
       this.player.buffs.rapidFireStacks = 0;
-      this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor', this.time.now));
+      const operativeAppearance = SaveSystem.getOperativeFrameAppearance(this.time.now);
+      this.player.setTexture(operativeAppearance.textureKey);
+      this.player.setCosmeticTint(operativeAppearance.tint);
     }
 
     this.playerWallCollider?.destroy();
@@ -1468,7 +1469,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private updatePrismCosmetics(now: number): void {
     if (this.prismPlayerColor) {
-      this.player.setCosmeticTint(SaveSystem.getCosmeticColor('playerColor', now));
+      this.player.setCosmeticTint(SaveSystem.getOperativeFrameAppearance(now).tint);
     }
     if (this.prismFenceStyle) {
       const color = SaveSystem.getCosmeticColor('fenceStyle', now);
@@ -5963,7 +5964,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bombExplosionCosmeticVfx.reset();
     if (reason === 'playerDead') {
       this.audio.playSfx('playerDeath');
-      this.createDeathExplosion(this.player.x, this.player.y, SaveSystem.getCosmeticColor('playerColor', this.time.now), true);
+      this.createDeathExplosion(this.player.x, this.player.y, SaveSystem.getOperativeFrameAppearance(this.time.now).primaryColor, true);
       this.player.setVisible(false);
     }
     this.boostVisual.reset();

@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
-import { getCosmeticDisplayColor } from '../../data/cosmetics.ts';
+import { getCosmeticDisplayColor, resolveOperativeFrameAppearance } from '../../data/cosmetics.ts';
 import type { CosmeticOption } from '../types.ts';
 
 export interface CosmeticPreviewOptions {
   maxWidth: number;
   maxHeight: number;
   operatorTextureKey?: string;
+  operatorFrameId?: string | null;
+  operativeColorId?: string | null;
   projectileTextureKey?: string;
 }
 
@@ -28,21 +30,28 @@ export const createCosmeticPreview = (
 ): CosmeticPreviewHandle => {
   const container = scene.add.container(x, y);
   const colorSetters: Array<(color: number) => void> = [];
-  const initialColor = item.colorMode === 'prism'
+  const operativeAppearance = item.category === 'playerShape'
+    ? resolveOperativeFrameAppearance(item.id, options.operativeColorId, scene.time.now)
+    : item.category === 'playerColor'
+      ? resolveOperativeFrameAppearance(options.operatorFrameId, item.id, scene.time.now)
+      : null;
+  const initialColor = operativeAppearance?.primaryColor ?? (item.colorMode === 'prism'
     ? getCosmeticDisplayColor(item, scene.time.now)
-    : item.previewColor ?? getCosmeticDisplayColor(item, scene.time.now);
+    : item.previewColor ?? getCosmeticDisplayColor(item, scene.time.now));
   const maxWidth = Math.max(12, options.maxWidth);
   const maxHeight = Math.max(12, options.maxHeight);
 
-  const addImage = (textureKey: string, width = maxWidth, height = maxHeight): Phaser.GameObjects.Image => {
+  const addImage = (textureKey: string, width = maxWidth, height = maxHeight, tint: number | null = initialColor): Phaser.GameObjects.Image => {
     const fallback = scene.textures.exists('player-circle') ? 'player-circle' : 'circle';
-    const image = scene.add.image(0, 0, scene.textures.exists(textureKey) ? textureKey : fallback);
+    const resolvedTexture = scene.textures.exists(textureKey) ? textureKey : fallback;
+    const image = scene.add.image(0, 0, resolvedTexture);
     const scale = Math.min(width / Math.max(1, image.width), height / Math.max(1, image.height));
     const previewScale = Phaser.Math.Clamp(item.previewScale ?? 1, 0.7, 1.1);
     image
       .setPosition(item.previewOffsetX ?? 0, item.previewOffsetY ?? 0)
-      .setScale(scale * previewScale)
-      .setTint(initialColor);
+      .setScale(scale * previewScale);
+    if (tint === null && resolvedTexture === textureKey) image.clearTint();
+    else image.setTint(tint ?? initialColor);
     colorSetters.push((color) => image.setTint(color));
     container.add(image);
     return image;
@@ -194,10 +203,10 @@ export const createCosmeticPreview = (
 
   switch (item.category) {
     case 'playerShape':
-      addImage(item.previewIcon ?? item.textureKey ?? item.id);
+      addImage(item.previewIcon ?? operativeAppearance?.textureKey ?? item.textureKey ?? item.id, maxWidth, maxHeight, operativeAppearance ? operativeAppearance.tint : initialColor);
       break;
     case 'playerColor':
-      addImage(item.previewIcon ?? options.operatorTextureKey ?? 'player-circle');
+      addImage(item.previewIcon ?? operativeAppearance?.textureKey ?? options.operatorTextureKey ?? 'player-circle', maxWidth, maxHeight, operativeAppearance ? operativeAppearance.tint : initialColor);
       break;
     case 'projectileShape':
       addImage(item.previewIcon ?? item.textureKey ?? 'projectile-pulse', maxWidth, maxHeight * 0.72);

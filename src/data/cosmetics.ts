@@ -19,6 +19,11 @@ export const getCosmeticPurchaseCosts = (item: CosmeticOption): CosmeticPurchase
 
 export const COSMETICS: CosmeticOption[] = [
   { id: 'player-cyan', category: 'playerColor', label: 'Cyan Operative', currency: 'credits', cost: 0, color: 0x00f5ff },
+  {
+    id: 'player-native', category: 'playerColor', label: 'Native Palette', currency: 'credits', cost: 0,
+    color: 0x62efff, accentColor: 0xff5bce, colorMode: 'native',
+    description: 'Preserves each operative frame\'s original authored colors and layered material details.'
+  },
   { id: 'player-pink', category: 'playerColor', label: 'Rose Strike', currency: 'credits', cost: 450, color: 0xff4df2 },
   { id: 'player-lime', category: 'playerColor', label: 'Lime Phantom', currency: 'credits', cost: 550, color: 0x5cff7a },
   { id: 'player-amber', category: 'playerColor', label: 'Amber Vanguard', currency: 'credits', cost: 625, color: 0xffbd45 },
@@ -42,55 +47,55 @@ export const COSMETICS: CosmeticOption[] = [
   {
     id: 'player-critical-crunch', category: 'playerShape', label: 'CRITICAL CRUNCH', currency: 'credits', cost: 10_000,
     additionalCosts: { coreTokens: 220 }, color: 0xffd84f, accentColor: 0xff5bce, visualShape: 'cerealBox',
-    textureKey: 'player-premium-critical-crunch', priceTier: 'prestige', previewScale: 0.94,
+    textureKey: 'player-premium-critical-crunch', nativeTextureKey: 'player-premium-critical-crunch-native', priceTier: 'prestige', previewScale: 0.94,
     description: 'Weaponized breakfast technology: folded carton armor, counterfeit cereal graphics, nutrition telemetry, and a deeply suspicious mascot.'
   },
   {
     id: 'player-probe-ably-fine', category: 'playerShape', label: 'PROBE-ABLY FINE', currency: 'credits', cost: 12_000,
     additionalCosts: { coreTokens: 250 }, color: 0x8cffc9, accentColor: 0x70eaff, visualShape: 'alienHead',
-    textureKey: 'player-premium-probe-fine', priceTier: 'prestige', previewScale: 0.96,
+    textureKey: 'player-premium-probe-fine', nativeTextureKey: 'player-premium-probe-fine-native', priceTier: 'prestige', previewScale: 0.96,
     description: 'An oversized alien command cranium with reflective void eyes, cybernetic glyphs, and absolutely normal intentions.'
   },
   {
     id: 'player-midlife-crisis-mk4', category: 'playerShape', label: 'MIDLIFE CRISIS Mk. IV', currency: 'credits', cost: 20_000,
     additionalCosts: { coreTokens: 400, plasmaChips: 90 }, color: 0xff4d72, accentColor: 0x62efff, visualShape: 'hypercar',
-    textureKey: 'player-premium-midlife-crisis', priceTier: 'prestige', previewScale: 0.96,
+    textureKey: 'player-premium-midlife-crisis', nativeTextureKey: 'player-premium-midlife-crisis-native', priceTier: 'prestige', previewScale: 0.96,
     description: 'A needlessly expensive low-slung hypercar frame with active aero, oversized intakes, racing hardware, and weaponized underglow.'
   },
   {
     id: 'player-highly-tactical', category: 'playerShape', label: 'HIGHLY TACTICAL', currency: 'credits', cost: 13_000,
     additionalCosts: { coreTokens: 270, plasmaChips: 25 }, color: 0x67ff70, accentColor: 0x7cecff, visualShape: 'cyberLeaf',
-    textureKey: 'player-premium-highly-tactical', priceTier: 'prestige', previewScale: 0.94,
+    textureKey: 'player-premium-highly-tactical', nativeTextureKey: 'player-premium-highly-tactical-native', priceTier: 'prestige', previewScale: 0.94,
     description: 'A seven-bladed botanical combat platform threaded with luminous veins and highly classified recreational circuitry.'
   },
   {
     id: 'player-tug-life', category: 'playerShape', label: 'TUG LIFE', currency: 'credits', cost: 10_500,
     additionalCosts: { coreTokens: 220 }, color: 0xffb94f, accentColor: 0x61efff, visualShape: 'tugboat',
-    textureKey: 'player-premium-tug-life', priceTier: 'prestige', previewScale: 0.94,
+    textureKey: 'player-premium-tug-life', nativeTextureKey: 'player-premium-tug-life-native', priceTier: 'prestige', previewScale: 0.94,
     description: 'A compact harbor bruiser with a fendered hull, raised wheelhouse, deck rails, navigation lamps, radar, and more torque than dignity.'
   },
   {
     id: 'player-air-superiority-complex', category: 'playerShape', label: 'AIR SUPERIORITY COMPLEX', currency: 'credits', cost: 18_000,
     additionalCosts: { coreTokens: 350, plasmaChips: 65 }, color: 0x65eaff, accentColor: 0xff5fca, visualShape: 'stealthWing',
-    textureKey: 'player-premium-air-superiority', priceTier: 'prestige', previewScale: 0.94,
+    textureKey: 'player-premium-air-superiority', nativeTextureKey: 'player-premium-air-superiority-native', priceTier: 'prestige', previewScale: 0.94,
     description: 'A broad tailless stealth interceptor with a radically different flying-wing silhouette, twin intakes, split control surfaces, and cold engine light.'
   },
   {
     id: 'player-eye-dont-like-that', category: 'playerShape', label: "EYE DON'T LIKE THAT", currency: 'credits', cost: 20_000,
     additionalCosts: { coreTokens: 400, plasmaChips: 90 }, color: 0xeaf7ff, accentColor: 0xff4b81, visualShape: 'eyeball',
-    textureKey: 'player-premium-eye-dont-like-that', priceTier: 'prestige', previewScale: 0.98,
+    textureKey: 'player-premium-eye-dont-like-that', nativeTextureKey: 'player-premium-eye-dont-like-that-native', priceTier: 'prestige', previewScale: 0.98,
     description: 'A sleepless surveillance organ with concentric iris hardware, a light-swallowing pupil, glossy reflections, and crawling corrupted veins.'
   },
   {
     id: 'player-roll-model', category: 'playerShape', label: 'ROLL MODEL', currency: 'credits', cost: 15_000,
     additionalCosts: { coreTokens: 300, plasmaChips: 45 }, color: 0xb66cff, accentColor: 0x68f4ff, visualShape: 'wheelchair',
-    textureKey: 'player-premium-roll-model', priceTier: 'prestige', previewScale: 0.94,
+    textureKey: 'player-premium-roll-model', nativeTextureKey: 'player-premium-roll-model-native', priceTier: 'prestige', previewScale: 0.94,
     description: 'A neon racing wheelchair with performance rims, visible spokes, reinforced seating, articulated footrests, and compact boost hardware.'
   },
   {
     id: 'player-ribbit-exe', category: 'playerShape', label: 'RIBBIT.EXE', currency: 'credits', cost: 11_000,
     additionalCosts: { coreTokens: 230, plasmaChips: 20 }, color: 0x70ff79, accentColor: 0x6eefff, visualShape: 'frog',
-    textureKey: 'player-premium-ribbit-exe', priceTier: 'prestige', previewScale: 0.96,
+    textureKey: 'player-premium-ribbit-exe', nativeTextureKey: 'player-premium-ribbit-exe-native', priceTier: 'prestige', previewScale: 0.96,
     description: 'A wide-eyed cyber frog with powerful rear legs, webbed hardware, toxic markings, expressive optics, and one extremely executable grin.'
   },
 
@@ -253,3 +258,52 @@ export const getCosmeticDisplayColor = (item: CosmeticOption, timeMs: number): n
 
 export const getCosmeticTextureKey = (id: string | null, fallback: string): string =>
   getCosmeticById(id)?.textureKey ?? fallback;
+
+export interface OperativeFrameAppearance {
+  frame: CosmeticOption;
+  operativeColor: CosmeticOption;
+  textureKey: string;
+  /** Null means retain the texture's authored colors without a Phaser tint. */
+  tint: number | null;
+  primaryColor: number;
+  accentColor: number;
+  mode: 'native' | 'override' | 'prism';
+}
+
+/**
+ * Authoritative operative-frame appearance resolver shared by gameplay and
+ * every preview. Frame selection owns geometry; Operative Color owns whether
+ * that geometry keeps its native palette or receives one uniform tint.
+ */
+export const resolveOperativeFrameAppearance = (
+  frameId: string | null | undefined,
+  operativeColorId: string | null | undefined,
+  timeMs = Date.now()
+): OperativeFrameAppearance => {
+  const frame = getCosmeticById(frameId) ?? getCosmeticById('player-circle')!;
+  const operativeColor = getCosmeticById(operativeColorId) ?? getCosmeticById('player-cyan')!;
+  const baseTextureKey = frame.textureKey ?? 'player-circle';
+
+  if (operativeColor.colorMode === 'native') {
+    return {
+      frame,
+      operativeColor,
+      textureKey: frame.nativeTextureKey ?? baseTextureKey,
+      tint: frame.nativeTextureKey ? null : frame.color,
+      primaryColor: frame.color,
+      accentColor: frame.accentColor ?? frame.color,
+      mode: 'native'
+    };
+  }
+
+  const tint = getCosmeticDisplayColor(operativeColor, timeMs);
+  return {
+    frame,
+    operativeColor,
+    textureKey: baseTextureKey,
+    tint,
+    primaryColor: tint,
+    accentColor: tint,
+    mode: operativeColor.colorMode === 'prism' ? 'prism' : 'override'
+  };
+};

@@ -92,3 +92,61 @@ export const createPremiumOperativeFrameSvg = (shape: CosmeticVisualShape | unde
   return svg;
 };
 
+const colorHex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`;
+const mixColor = (first: number, second: number, firstWeight: number): number => {
+  const mixChannel = (shift: number): number => Math.round(
+    ((first >> shift) & 0xff) * firstWeight + ((second >> shift) & 0xff) * (1 - firstWeight)
+  );
+  return (mixChannel(16) << 16) | (mixChannel(8) << 8) | mixChannel(0);
+};
+
+/**
+ * Produces the same authored layered SVG used by Store cards as a Phaser-ready
+ * image source. Keeping the markup here prevents gameplay, Garage, and Store
+ * premium frames from drifting into separate silhouettes.
+ */
+export const createPremiumOperativeFrameSvgDataUri = (
+  shape: CosmeticVisualShape | undefined,
+  primaryColor: number,
+  accentColor: number
+): string | null => {
+  if (!shape) return null;
+  const markup = PREMIUM_FRAME_MARKUP[shape];
+  if (!markup) return null;
+  const primary = colorHex(primaryColor);
+  const accent = colorHex(accentColor);
+  const shell = colorHex(mixColor(primaryColor, 0x07121b, 0.42));
+  const panel = colorHex(mixColor(accentColor, 0x07131d, 0.25));
+  const panelEdge = colorHex(mixColor(primaryColor, 0x17232d, 0.5));
+  const line = colorHex(mixColor(primaryColor, 0xdffaff, 0.78));
+  const stem = colorHex(mixColor(primaryColor, 0xeafff0, 0.7));
+  const irisOuter = colorHex(mixColor(accentColor, 0x10212c, 0.32));
+  const iris = colorHex(mixColor(primaryColor, 0x07131c, 0.55));
+  const styles = `
+    .pf-shadow{fill:#02070c;stroke:#233642;stroke-width:4}
+    .pf-shell{fill:${shell};stroke:${primary};stroke-width:3;stroke-linejoin:round}
+    .pf-panel{fill:${panel};stroke:${accent};stroke-width:2}
+    .pf-panel-dark{fill:#030910;stroke:${panelEdge};stroke-width:2}
+    .pf-metal{fill:#304654;stroke:#bdd8e1;stroke-width:2}
+    .pf-glass{fill:#071826;stroke:#adf7ff;stroke-width:2}
+    .pf-accent{fill:${accent};stroke:#fff0ad;stroke-width:1.5}
+    .pf-light{fill:#f6ffff;stroke:${accent};stroke-width:1.5}
+    .pf-eye{fill:#02070d;stroke:#dffbff;stroke-width:2}
+    .pf-lines,.pf-veins,.pf-vein,.pf-barcode,.pf-rail,.pf-spoke,.pf-frame,.pf-web,.pf-mouth{fill:none;stroke:${line};stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .pf-glyph,.pf-glitch{fill:${accent};stroke:#f3ffff;stroke-width:1.2}
+    .pf-wheel,.pf-wheel-ring{fill:#03070c;stroke:#d8f7ff;stroke-width:3}
+    .pf-fender{fill:#04090f;stroke:${accent};stroke-width:2}
+    .pf-stem{fill:none;stroke:${stem};stroke-width:7;stroke-linecap:round}
+    .pf-eye-white{fill:#dce9ed;stroke:#fff;stroke-width:2.5}
+    .pf-iris-outer{fill:${irisOuter};stroke:${accent};stroke-width:2}
+    .pf-iris{fill:${iris};stroke:#e8ffff;stroke-width:2}
+    .pf-pupil{fill:#010307;stroke:${accent};stroke-width:1.5}
+    .pf-brand{fill:#061019;font:900 13px sans-serif;letter-spacing:1px}.pf-micro{fill:#061019;font:800 6px sans-serif;letter-spacing:.7px}
+    .pf-mascot{fill:none;stroke:#071019;stroke-width:3;stroke-linecap:round}.pf-mascot circle{fill:#071019;stroke:none}
+  `;
+  const source = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160"><style>${styles}</style>${markup}</svg>`;
+  const bytes = new TextEncoder().encode(source);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `data:image/svg+xml;base64,${btoa(binary)}`;
+};

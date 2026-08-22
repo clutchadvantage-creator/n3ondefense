@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COSMETICS, getCosmeticDisplayColor, getCosmeticTextureKey } from '../../data/cosmetics.ts';
+import { COSMETICS, getCosmeticById, getCosmeticDisplayColor, getCosmeticTextureKey } from '../../data/cosmetics.ts';
 import { createCosmeticPreview } from '../cosmetics/CosmeticPreview.ts';
 import { ECONOMY_BALANCE, MOD_FOCUS_CATEGORIES, MOD_FOCUS_LABELS, RUN_CONTRACT_IDS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
@@ -343,11 +343,11 @@ export class OperatorGarageScene extends Phaser.Scene {
     const ring = this.add.circle(0, ringY, large ? 60 : compact ? 38 : 49, 0x08131c, 0.38).setStrokeStyle(2, 0xff5bcf, 0.48);
     const projectionScan = this.add.rectangle(0, bayTop + (large ? 29 : 19), large ? 112 : compact ? 68 : 88, 2, 0x6af6ff, 0.28);
     const shapeId = SaveSystem.getEquippedCosmeticId('playerShape') ?? 'player-circle';
-    const resolvedTexture = getCosmeticTextureKey(shapeId, 'player-circle');
-    const texture = this.textures.exists(resolvedTexture) ? resolvedTexture : 'player-circle';
+    const appearance = SaveSystem.getOperativeFrameAppearance(this.time.now);
+    const texture = this.textures.exists(appearance.textureKey) ? appearance.textureKey : appearance.frame.textureKey ?? 'player-circle';
     const operative = this.add.image(0, ringY, texture).setScale(large ? 2.75 : compact ? 1.72 : 2.2);
-    const tint = SaveSystem.getCosmeticColor('playerColor', this.time.now);
-    operative.setTint(tint);
+    if (appearance.tint === null && texture === appearance.textureKey) operative.clearTint();
+    else operative.setTint(appearance.tint ?? appearance.primaryColor);
     const shape = COSMETICS.find((item) => item.id === shapeId)?.label ?? 'Operative';
     const caption = this.add.text(0, large ? 82 : compact ? 43 : 64, shape.toUpperCase(), {
       fontFamily: 'Rajdhani, sans-serif', fontSize: large ? '15px' : compact ? '11px' : '13px', fontStyle: 'bold', color: '#c9f3ff'
@@ -366,11 +366,14 @@ export class OperatorGarageScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut'
     });
-    if (SaveSystem.isPrismCosmetic('playerColor')) {
+    if (appearance.mode === 'prism') {
       this.operatorPreviewColorTimer = this.time.addEvent({
         delay: 90,
         loop: true,
-        callback: () => operative.active && operative.setTint(SaveSystem.getCosmeticColor('playerColor', this.time.now))
+        callback: () => {
+          const tint = SaveSystem.getOperativeFrameAppearance(this.time.now).tint;
+          if (operative.active && tint !== null) operative.setTint(tint);
+        }
       });
     }
   }
@@ -1093,7 +1096,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const cellGap = layout.compact ? 5 : 7;
     const cellWidth = (dataWidth - cellGap * 2) / 3;
     const dataValues = [
-      { label: 'COLOR CODE', value: item.colorMode === 'prism' ? 'DYNAMIC' : formatCosmeticColorCode(item.color), color: accent },
+      { label: 'COLOR CODE', value: item.colorMode === 'prism' ? 'DYNAMIC' : item.colorMode === 'native' ? 'NATIVE' : formatCosmeticColorCode(item.color), color: accent },
       { label: 'ACCESS CLASS', value: item.priceTier?.toUpperCase() ?? (item.currency === 'coreTokens' ? 'CORE ISSUE' : 'STANDARD'), color: 0x79ddeb },
       { label: 'LOAD STATE', value: 'EQUIPPED', color: 0xffd84f }
     ];
@@ -1117,9 +1120,12 @@ export class OperatorGarageScene extends Phaser.Scene {
 
   private createLockerCosmeticVisual(item: CosmeticOption, x: number, y: number, maxWidth: number, maxHeight: number): Phaser.GameObjects.Container {
     const operatorTextureKey = getCosmeticTextureKey(SaveSystem.getEquippedCosmeticId('playerShape'), 'player-circle');
+    const operatorFrameId = SaveSystem.getEquippedCosmeticId('playerShape');
+    const operativeColorId = SaveSystem.getEquippedCosmeticId('playerColor');
     const projectileTextureKey = getCosmeticTextureKey(SaveSystem.getEquippedCosmeticId('projectileShape'), 'projectile-pulse');
-    const preview = createCosmeticPreview(this, item, x, y, { maxWidth, maxHeight, operatorTextureKey, projectileTextureKey });
-    if (item.colorMode === 'prism') this.cosmeticPreviewColorTargets.push({ item, setColor: preview.setColor });
+    const preview = createCosmeticPreview(this, item, x, y, { maxWidth, maxHeight, operatorTextureKey, operatorFrameId, operativeColorId, projectileTextureKey });
+    const dynamicColor = item.category === 'playerShape' ? getCosmeticById(operativeColorId) : item;
+    if (dynamicColor?.colorMode === 'prism') this.cosmeticPreviewColorTargets.push({ item: dynamicColor, setColor: preview.setColor });
     return preview.container;
   }
 

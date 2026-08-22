@@ -267,7 +267,7 @@ test('equipping an operative frame or color refreshes the Garage showcase', () =
   assert.match(source, /item\.category === 'playerShape' \|\| item\.category === 'playerColor'/);
   assert.match(source, /this\.refreshOperatorPreview\(\)/);
   assert.match(source, /getEquippedCosmeticId\('playerShape'\)/);
-  assert.match(source, /getCosmeticColor\('playerColor'/);
+  assert.match(source, /getOperativeFrameAppearance\(this\.time\.now\)/);
 });
 
 test('Gear Locker uses category-aware cosmetic previews instead of generic color balls', () => {

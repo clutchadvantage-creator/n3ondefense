@@ -1,4 +1,4 @@
-import { getCosmeticById, getCosmeticDisplayColor, isPrismCosmetic } from '../../data/cosmetics';
+import { getCosmeticById, getCosmeticDisplayColor, isPrismCosmetic, resolveOperativeFrameAppearance } from '../../data/cosmetics';
 import { PlayerProfileStore } from '../state/PlayerProfileStore';
 import type { CosmeticOption, GameSaveData } from '../types';
 import type { OnlineProgressSnapshot } from '../../online/onlineTypes';
@@ -118,6 +118,11 @@ export class SaveSystem {
     const save = PlayerProfileStore.getActiveSave();
     const chosenId = save.cosmetics.equipped[category];
     return isPrismCosmetic(getCosmeticById(chosenId));
+  }
+
+  static getOperativeFrameAppearance(timeMs = Date.now()) {
+    const equipped = PlayerProfileStore.getActiveSave().cosmetics.equipped;
+    return resolveOperativeFrameAppearance(equipped.playerShape, equipped.playerColor, timeMs);
   }
 
   static getEquippedCosmeticId(category: CosmeticOption['category']): string | null {

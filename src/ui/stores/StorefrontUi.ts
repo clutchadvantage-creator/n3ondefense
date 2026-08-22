@@ -2,7 +2,7 @@ import type { CosmeticOption, UpgradeDefinition } from '../../game/types';
 import { getUpgradeCost, getUpgradeLevel } from '../../data/upgrades';
 import { getUpgradeComparison, getUpgradeVisual } from './upgradePresentation';
 import { createUpgradeSvgIcon, directionIcon } from './UpgradeIconRegistry.ts';
-import { getCosmeticPriceTier, getCosmeticPurchaseCosts, isPremiumCosmetic } from '../../data/cosmetics.ts';
+import { getCosmeticPriceTier, getCosmeticPurchaseCosts, isPremiumCosmetic, resolveOperativeFrameAppearance } from '../../data/cosmetics.ts';
 import { AudioManager } from '../../game/systems/AudioManager.ts';
 import { createPremiumOperativeFrameSvg } from './PremiumOperativeFrameSvg.ts';
 import './storefront.css';
@@ -590,7 +590,7 @@ export class StorefrontUi {
   private renderCosmeticVisual(item: CosmeticOption, large: boolean): HTMLElement {
     const visual = document.createElement('div');
     const premium = isPremiumCosmetic(item);
-    visual.className = `cosmetic-visual ${item.category} ${item.colorMode === 'prism' ? 'prism' : ''} ${premium ? 'premium' : 'regular'} ${large ? 'large' : ''}`;
+    visual.className = `cosmetic-visual ${item.category} ${item.colorMode ?? ''} ${premium ? 'premium' : 'regular'} ${large ? 'large' : ''}`;
     const previewColor = item.colorMode === 'prism' ? 0xff4ed3 : item.color;
     visual.style.setProperty('--item-color', `#${previewColor.toString(16).padStart(6, '0')}`);
     visual.style.setProperty('--item-accent', `#${(item.accentColor ?? previewColor).toString(16).padStart(6, '0')}`);
@@ -664,9 +664,11 @@ export class StorefrontUi {
       fallback.append(createUpgradeSvgIcon('operative', 'upgrade-svg hero-svg'));
       return fallback;
     }
-    const operative = this.renderCosmeticVisual({
+    const appearance = resolveOperativeFrameAppearance(frame.id, color?.id, Date.now());
+    const operative = this.renderCosmeticVisual(appearance.mode === 'native' ? frame : {
       ...frame,
-      color: color?.color ?? frame.color,
+      color: appearance.primaryColor,
+      accentColor: appearance.primaryColor,
       colorMode: color?.colorMode
     }, large);
     operative.classList.add('upgrade-operative-visual');

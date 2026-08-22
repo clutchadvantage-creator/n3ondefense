@@ -1,5 +1,5 @@
 import type { ProfileSummary } from '../../game/save/LocalSaveTypes';
-import { createProfileCard, formatProfileDate, getProfileAvatarColor } from './ProfileCard';
+import { createProfileCard, formatProfileDate, getProfileAvatarColor, usesNativeProfilePalette } from './ProfileCard';
 import './local-profiles.css';
 
 export interface LocalProfilesUiOptions {
@@ -266,7 +266,7 @@ export class LocalProfilesUi implements LocalProfilesUiHandle {
     top.className = 'selected-profile-top';
 
     const avatar = document.createElement('div');
-    avatar.className = 'selected-profile-avatar';
+    avatar.className = `selected-profile-avatar${usesNativeProfilePalette(selected) ? ' native-palette' : ''}`;
     avatar.style.setProperty('--avatar-color', getProfileAvatarColor(selected));
 
     const nameBlock = document.createElement('div');

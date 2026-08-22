@@ -5,6 +5,8 @@ import { publicAssetUrl } from '../utils/assetUrl';
 import { ENEMY_ROBOT_FRAMES } from '../enemies/EnemyRobotFrames.ts';
 import type { EnemyType } from '../types';
 import { createPremiumOperativeFrameTextures } from '../cosmetics/PremiumOperativeFrameTextures.ts';
+import { COSMETICS } from '../../data/cosmetics.ts';
+import { createPremiumOperativeFrameSvgDataUri } from '../../ui/stores/PremiumOperativeFrameSvg.ts';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -13,6 +15,11 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     this.load.audio('sfx-boost', publicAssetUrl('assets/audio/soundeffects/boostsound.mp3'));
+    for (const frame of COSMETICS) {
+      if (frame.category !== 'playerShape' || !frame.nativeTextureKey) continue;
+      const source = createPremiumOperativeFrameSvgDataUri(frame.visualShape, frame.color, frame.accentColor ?? frame.color);
+      if (source) this.load.svg(frame.nativeTextureKey, source, { width: 62, height: 50 });
+    }
   }
 
   async create(): Promise<void> {

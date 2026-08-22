@@ -258,10 +258,13 @@ export interface CosmeticOption {
   /** Optional extra premium charges; purchase is validated and applied atomically. */
   additionalCosts?: Partial<Record<'credits' | 'coreTokens' | 'plasmaChips', number>>;
   color: number;
-  colorMode?: 'prism';
+  /** Native preserves authored multi-color frame art; prism remains animated. */
+  colorMode?: 'prism' | 'native';
   priceTier?: CosmeticPriceTier;
   visualShape?: CosmeticVisualShape;
   textureKey?: string;
+  /** Optional untinted, authored-color texture used by Native Palette. */
+  nativeTextureKey?: string;
   /** Optional presentation hints used by richer cosmetic viewers. */
   previewColor?: number;
   previewIcon?: string;
