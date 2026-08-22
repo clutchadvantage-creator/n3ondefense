@@ -21,7 +21,6 @@ interface TotemSlot {
   pulseRadius: number;
   pulseColor: number;
   pulseKind: BombsiteTotemEffectKind;
-  pulseSoundPlayed: boolean;
   flashStartedAt: number;
   flashColor: number;
   root: Phaser.GameObjects.Container;
@@ -76,7 +75,6 @@ export class BombsiteTotemVfx {
     private readonly scene: Phaser.Scene,
     private readonly callbacks: {
       onEntrance?: (siteId: string) => void;
-      onPulse?: (siteId: string, kind: BombsiteTotemEffectKind) => void;
     } = {}
   ) {}
 
@@ -103,7 +101,6 @@ export class BombsiteTotemVfx {
     slot.pulseRadius = 0;
     slot.pulseColor = 0x63efff;
     slot.pulseKind = 'electric';
-    slot.pulseSoundPlayed = false;
     slot.flashStartedAt = 0;
     slot.flashColor = 0xffffff;
 
@@ -157,7 +154,6 @@ export class BombsiteTotemVfx {
     slot.pulseRadius = Math.max(20, radius);
     slot.pulseColor = color;
     slot.pulseKind = kind;
-    slot.pulseSoundPlayed = false;
     return true;
   }
 
@@ -249,7 +245,6 @@ export class BombsiteTotemVfx {
       resolvingAt: 0, phase: 0, chargeStartedAt: 0, chargeUntil: 0, chargeColor: 0x63efff,
       chargeKind: 'electric', pulseStartedAt: 0, pulseDurationMs: 0, pulseRadius: 0,
       pulseColor: 0x63efff, pulseKind: 'electric', flashStartedAt: 0, flashColor: 0xffffff,
-      pulseSoundPlayed: false,
       root, ground, rig, marker, fissures, dynamic, shadow, body, channels, face, coreGlow, core, innerRing, outerRing
     };
   }
@@ -434,12 +429,6 @@ export class BombsiteTotemVfx {
 
     if (now < slot.chargeUntil) this.drawCharge(graphics, slot, now);
     if (slot.pulseStartedAt > 0 && now >= slot.pulseStartedAt) {
-      if (!slot.pulseSoundPlayed) {
-        slot.pulseSoundPlayed = true;
-        if (slot.pulseKind === 'push' || slot.pulseKind === 'damage') {
-          this.callbacks.onPulse?.(slot.siteId, slot.pulseKind);
-        }
-      }
       const progress = clamp01((now - slot.pulseStartedAt) / slot.pulseDurationMs);
       if (progress < 1) this.drawPulse(graphics, slot, progress);
       else slot.pulseStartedAt = 0;
@@ -566,7 +555,6 @@ export class BombsiteTotemVfx {
     slot.dynamic.clear();
     slot.chargeUntil = 0;
     slot.pulseStartedAt = 0;
-    slot.pulseSoundPlayed = false;
     slot.flashStartedAt = 0;
     slot.resolvingAt = 0;
   }

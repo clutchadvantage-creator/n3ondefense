@@ -96,8 +96,7 @@ export class BombsiteModSystem {
     private readonly callbacks: BombsiteModCallbacks
   ) {
     this.totems = new BombsiteTotemVfx(scene, {
-      onEntrance: () => this.callbacks.playTotemCue?.('entrance'),
-      onPulse: () => this.callbacks.playTotemCue?.('pulse')
+      onEntrance: () => this.callbacks.playTotemCue?.('entrance')
     });
   }
 
@@ -663,7 +662,12 @@ export class BombsiteModSystem {
     duration: number,
     kind: BombsiteTotemEffectKind = 'support'
   ): void {
-    if (this.totems.trigger(site.id, color, radius, this.scene.time.now, duration, kind)) return;
+    if (this.totems.trigger(site.id, color, radius, this.scene.time.now, duration, kind)) {
+      // Dispatch from the authoritative pulse request rather than a later
+      // renderer frame so overlapping visual state can never swallow the cue.
+      if (kind === 'push' || kind === 'damage') this.callbacks.playTotemCue?.('pulse');
+      return;
+    }
     const ring = this.track(this.scene.add.circle(site.x, site.y, 18, color, 0.08).setStrokeStyle(4, color, 0.95).setDepth(12));
     this.scene.tweens.add({
       targets: ring,

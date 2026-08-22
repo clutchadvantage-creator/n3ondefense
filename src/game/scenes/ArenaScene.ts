@@ -3206,6 +3206,7 @@ export class ArenaScene extends Phaser.Scene {
     directlyHitEnemy: Enemy | null
   ): void {
     const radius = TEMPORARY_AMMO_BALANCE.grenade.splashRadius;
+    this.audio.playSfx('grenadeShotExplosion');
     const primaryColor = projectile.sprite.tintTopLeft;
     const secondaryColor = projectile.trailColor;
     this.mineExplosionVfx.emitColors(
@@ -4202,6 +4203,7 @@ export class ArenaScene extends Phaser.Scene {
         this.mineExplosionVfx.emitColors(x, y, 72, 0xffffff, color, 0x8f6cff, 0x45eaff, this.time.now, false);
         this.cameras.main.flash(150, 86, 24, 128, false);
       },
+      playBossAttackCue: (attack) => this.playBossAttackCue(attack),
       grantCredits: (amount) => {
         const credits = this.scaleModCredits(amount);
         this.roundCredits += credits;
@@ -5130,7 +5132,10 @@ export class ArenaScene extends Phaser.Scene {
         damageArea: (x, y, radius, damage, attack) => this.applyBossAreaDamage(x, y, radius, damage, attack),
         dropCredit: (x, y) => this.dropBossCredit(x, y),
         onDamaged: (damage, source) => GameplayTelemetryRecorder.recordBossDamage(source, damage),
-        onAttackCast: (attack) => GameplayTelemetryRecorder.recordBossAttackCast(attack),
+        onAttackCast: (attack) => {
+          GameplayTelemetryRecorder.recordBossAttackCast(attack);
+          this.playBossAttackCue(attack);
+        },
         onDefeated: () => this.completeBossFight()
       },
       this.currentModeFamily(),
@@ -5217,6 +5222,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private applyBossAreaDamage(x: number, y: number, radius: number, damage: number, attack: BossAttackKind): void {
     if (attack === 'artillery-strike' || attack === 'artillery-super') {
+      this.audio.playSfx('bossArtilleryExplosion');
       this.mineExplosionVfx.emitColors(x, y, radius * 1.15, 0xffffff, 0xffc15f, 0xff744a, 0x55dfff, this.time.now, false);
     } else if (attack === 'artillery-rocket') {
       this.mineExplosionVfx.emitColors(x, y, radius, 0xffffff, 0xffb54f, 0xff5c4a, 0x7ce8ff, this.time.now, false);
@@ -5246,6 +5252,12 @@ export class ArenaScene extends Phaser.Scene {
     for (const fence of this.fences) {
       if (Phaser.Math.Distance.Between(fence.sprite.x, fence.sprite.y, x, y) <= radius + 24) fence.hp -= damage * 0.55;
     }
+  }
+
+  private playBossAttackCue(attack: BossAttackKind): void {
+    if (attack === 'storm-basic') this.audio.playSfx('mageBossMagicAttack');
+    else if (attack === 'storm-super') this.audio.playSfx('mageBossLargeAttack');
+    else if (attack === 'brawler-pounce') this.audio.playSfx('brawlerBossChargeAttack');
   }
 
   private dropBossCredit(x: number, y: number): void {

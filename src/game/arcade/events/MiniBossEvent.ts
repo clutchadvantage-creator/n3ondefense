@@ -45,7 +45,7 @@ export class MiniBossEvent implements ArcadeEvent {
         damageArea: (x, y, radius, damage, attack) => this.context.applyBossAreaDamage(x, y, radius, damage, attack),
         dropCredit: () => undefined,
         onDamaged: () => undefined,
-        onAttackCast: () => undefined,
+        onAttackCast: (attack) => this.context.playBossAttackCue(attack),
         onDefeated: () => { this.defeated = true; }
       },
       this.context.modeFamily,

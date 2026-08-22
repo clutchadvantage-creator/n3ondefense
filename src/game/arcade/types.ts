@@ -102,6 +102,7 @@ export interface ArcadeRuntimeContext {
   applyBossAreaDamage(x: number, y: number, radius: number, damage: number, attack: BossAttackKind): void;
   retireBossProjectiles(): void;
   presentMiniBossSpawn(x: number, y: number, color: number): void;
+  playBossAttackCue(attack: BossAttackKind): void;
   grantCredits(amount: number): void;
   grantCoreTokens(amount: number): void;
   grantFluxCores(amount: number): void;

@@ -79,11 +79,34 @@ test('Totem entrance and gameplay pulses trigger their sounds from authoritative
   assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'totemEntrance'));
   assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === 'totemPulse'));
   assert.match(totem, /this\.callbacks\.onEntrance\?\.\(siteId\)/);
-  assert.match(totem, /this\.callbacks\.onPulse\?\.\(slot\.siteId, slot\.pulseKind\)/);
-  assert.match(totem, /pulseSoundPlayed/);
   assert.match(bombsiteMods, /playTotemCue\?\(cue: 'entrance' \| 'pulse'\)/);
+  assert.match(bombsiteMods, /if \(kind === 'push' \|\| kind === 'damage'\) this\.callbacks\.playTotemCue\?\.\('pulse'\)/);
+  assert.doesNotMatch(totem, /onPulse|pulseSoundPlayed/);
   assert.match(arena, /cue === 'entrance' \? 'totemEntrance' : 'totemPulse'/);
   assert.doesNotMatch(totem, /tweens\.add|delayedCall|\.on\(/);
+});
+
+test('boss attack and grenade recordings use exact authoritative events and bounded voice pools', () => {
+  const recordings = [
+    ['bossArtilleryExplosion', 'bossartillaryexplosion.mp3'],
+    ['grenadeShotExplosion', 'grenadeshotexplosion.mp3'],
+    ['mageBossLargeAttack', 'magebosslargeattack.mp3'],
+    ['mageBossMagicAttack', 'magebossmagicattack.mp3'],
+    ['brawlerBossChargeAttack', 'brawlerbosschargeattack.mp3']
+  ];
+  for (const [key, filename] of recordings) {
+    assert.ok(existsSync(new URL(`../public/assets/audio/soundeffects/${filename}`, import.meta.url)), filename);
+    assert.ok(SFX_DEFINITIONS.some((definition) => definition.key === key), key);
+    assert.match(audio, new RegExp(`${key}: 'soundeffects/${filename.replace('.', '\\.')}'`));
+  }
+  assert.match(audio, /grenadeShotExplosion: 6/);
+  assert.match(arena, /attack === 'artillery-strike' \|\| attack === 'artillery-super'[\s\S]*?playSfx\('bossArtilleryExplosion'\)/);
+  assert.match(arena, /private detonateGrenadeRound[\s\S]*?playSfx\('grenadeShotExplosion'\)/);
+  assert.match(arena, /attack === 'storm-basic'[\s\S]*?playSfx\('mageBossMagicAttack'\)/);
+  assert.match(arena, /attack === 'storm-super'[\s\S]*?playSfx\('mageBossLargeAttack'\)/);
+  assert.match(arena, /attack === 'brawler-pounce'[\s\S]*?playSfx\('brawlerBossChargeAttack'\)/);
+  assert.match(boss, /this\.callbacks\.onAttackCast\('brawler-pounce'\)/);
+  assert.match(miniBoss, /onAttackCast: \(attack\) => this\.context\.playBossAttackCue\(attack\)/);
 });
 
 test('Mini-Boss entrance sound and visuals occur only after a successful encounter spawn', () => {
