@@ -150,12 +150,23 @@ export class N3ONArcadeController {
     const definition = this.activeDefinition;
     let rewardLabel = '';
     if (outcome.success) {
-      const reward = this.rewards.grant(definition, this.random.next());
-      rewardLabel = reward.label;
+      const plan = event.rewardPlan?.() ?? {
+        origin: { x: this.context.player.x, y: this.context.player.y },
+        rolls: 1
+      };
+      const rewards = this.rewards.spawn(definition.id, definition, plan, () => this.random.next());
+      rewardLabel = rewards.length === 1 ? rewards[0].label : `${rewards.length} PHYSICAL DROPS DEPLOYED`;
+      for (const reward of rewards) {
+        this.context.emitMetric({
+          name: 'arcade_reward_rolled', eventId: definition.id, round: this.context.round,
+          protocol: this.context.protocol, elapsedMs: Math.max(0, this.activeElapsedMs - this.activeStartedAt),
+          rewardKind: reward.kind, rewardAmount: reward.amount
+        });
+      }
       this.context.emitMetric({
         name: 'arcade_event_completed', eventId: definition.id, round: this.context.round,
         protocol: this.context.protocol, elapsedMs: Math.max(0, this.activeElapsedMs - this.activeStartedAt),
-        success: true, reason: outcome.reason, rewardKind: reward.kind, rewardAmount: reward.amount
+        success: true, reason: outcome.reason
       });
     } else {
       this.context.emitMetric({

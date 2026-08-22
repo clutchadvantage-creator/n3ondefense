@@ -45,6 +45,7 @@ export const SFX_DEFINITIONS = [
   { key: 'totemPulse', label: 'Totem Pulse' },
   { key: 'miniBossSpawn', label: 'Mini-Boss Spawn' },
   { key: 'bossArtilleryExplosion', label: 'Boss Artillery Impact' },
+  { key: 'sentryBossAttack', label: 'Sentry Boss Attack' },
   { key: 'grenadeShotExplosion', label: 'Grenade Shot Explosion' },
   { key: 'mageBossLargeAttack', label: 'Mage Boss Large Attack' },
   { key: 'mageBossMagicAttack', label: 'Mage Boss Magic Attack' },

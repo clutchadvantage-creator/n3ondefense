@@ -8,7 +8,13 @@ import type { Player } from '../entities/Player.ts';
 import type { RunProtocolId } from '../mods/types.ts';
 import type { EnemyType, RectSpec } from '../types.ts';
 
-export type ArcadeEventId = 'golden-hunt' | 'mini-boss' | 'neon-circuit';
+export type ArcadeEventId =
+  | 'golden-hunt'
+  | 'mini-boss'
+  | 'neon-circuit'
+  | 'hot-package'
+  | 'packet-snatcher'
+  | 'redline';
 export type ArcadeStopReason = 'success' | 'failed' | 'timeout' | 'round-ended' | 'player-dead' | 'scene-shutdown' | 'replaced';
 
 export type ArcadeMetricName =
@@ -21,7 +27,16 @@ export type ArcadeMetricName =
   | 'arcade_miniboss_killed'
   | 'arcade_miniboss_completed'
   | 'neon_checkpoint_reached'
-  | 'neon_circuit_completed';
+  | 'neon_circuit_completed'
+  | 'hot_package_secured'
+  | 'packet_snatcher_destroyed'
+  | 'packet_snatcher_escaped'
+  | 'redline_stage_reached'
+  | 'redline_completed'
+  | 'arcade_reward_rolled'
+  | 'arcade_pickup_spawned'
+  | 'arcade_pickup_collected'
+  | 'arcade_pickup_expired';
 
 export interface ArcadeMetricEvent {
   name: ArcadeMetricName;
@@ -47,6 +62,16 @@ export interface ArcadeEventOutcome {
   reason: ArcadeStopReason;
 }
 
+export interface ArcadeRewardPlan {
+  origin: { x: number; y: number };
+  /** Random rolls against profile. Defaults to one for legacy events. */
+  rolls?: number;
+  /** Fixed physical rewards, useful for guaranteed Mod drops. */
+  guaranteed?: ReadonlyArray<{ kind: ArcadeRewardKind; amount?: number }>;
+  /** Event/quality-specific pool override. */
+  profile?: ArcadeRewardProfile;
+}
+
 export interface ArcadeEventDefinition {
   id: ArcadeEventId;
   displayName: string;
@@ -57,7 +82,14 @@ export interface ArcadeEventDefinition {
   reward: ArcadeRewardProfile;
 }
 
-export type ArcadeRewardKind = 'credits' | 'core-tokens' | 'flux-cores' | 'plasma-chips' | 'mod';
+export type ArcadeRewardKind =
+  | 'credits'
+  | 'core-tokens'
+  | 'flux-cores'
+  | 'plasma-chips'
+  | 'mod'
+  | 'grenade-rounds'
+  | 'scattershot-rounds';
 
 export interface ArcadeRewardOption {
   kind: ArcadeRewardKind;
@@ -104,11 +136,13 @@ export interface ArcadeRuntimeContext {
   presentMiniBossSpawn(x: number, y: number, color: number): void;
   playBossAttackCue(attack: BossAttackKind): void;
   playArcadeCue(cue: 'circuit-gate'): void;
-  grantCredits(amount: number): void;
-  grantCoreTokens(amount: number): void;
-  grantFluxCores(amount: number): void;
-  grantPlasmaChips(amount: number): void;
-  grantGuaranteedMod(x: number, y: number): void;
+  navigateEventEnemy(enemy: Enemy, targetX: number, targetY: number, speed: number): void;
+  findExtractionPoint(fromX: number, fromY: number): { x: number; y: number } | null;
+  spawnPhysicalRewards(
+    eventId: ArcadeEventId,
+    origin: { x: number; y: number },
+    rewards: readonly ArcadeGrantedReward[]
+  ): void;
   emitMetric(event: ArcadeMetricEvent): void;
 }
 
@@ -118,6 +152,7 @@ export interface ArcadeEvent {
   update(activeElapsedMs: number, deltaMs: number): ArcadeEventOutcome | null;
   handleGameplayEvent(event: ArcadeGameplayEvent, activeElapsedMs: number): ArcadeEventOutcome | null;
   objectiveText(activeElapsedMs: number): string;
+  rewardPlan?(): ArcadeRewardPlan;
   cleanup(reason: ArcadeStopReason): void;
   getBossTarget?(): Boss | null;
 }

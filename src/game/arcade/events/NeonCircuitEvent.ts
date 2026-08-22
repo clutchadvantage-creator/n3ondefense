@@ -41,6 +41,7 @@ export class NeonCircuitEvent implements ArcadeEvent {
   private nextVisualUpdateAt = 0;
   private previousPlayerX = 0;
   private previousPlayerY = 0;
+  private rewardOrigin: { x: number; y: number } | null = null;
 
   constructor(
     private readonly context: ArcadeRuntimeContext,
@@ -139,6 +140,10 @@ export class NeonCircuitEvent implements ArcadeEvent {
     this.markers.length = 0;
   }
 
+  rewardPlan() {
+    return { origin: this.rewardOrigin ?? { x: this.context.player.x, y: this.context.player.y }, rolls: 1 };
+  }
+
   private drawGateFrame(graphics: Phaser.GameObjects.Graphics, active: boolean): void {
     const cyan = active ? 0x4ef9ff : 0x55778a;
     const magenta = active ? 0xff5bd6 : 0x513c5d;
@@ -193,6 +198,7 @@ export class NeonCircuitEvent implements ArcadeEvent {
   }
 
   private activateCheckpoint(activeElapsedMs: number, marker: CircuitGate): void {
+    this.rewardOrigin = { x: marker.x, y: marker.y };
     this.current += 1;
     this.context.playArcadeCue('circuit-gate');
     this.context.emitMetric({

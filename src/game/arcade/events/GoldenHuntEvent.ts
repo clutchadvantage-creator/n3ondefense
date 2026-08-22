@@ -28,6 +28,7 @@ export class GoldenHuntEvent implements ArcadeEvent {
   private startedAt = 0;
   private killed = 0;
   private nextVisualUpdateAt = 0;
+  private rewardOrigin: { x: number; y: number } | null = null;
 
   constructor(
     private readonly context: ArcadeRuntimeContext,
@@ -94,6 +95,7 @@ export class GoldenHuntEvent implements ArcadeEvent {
 
   handleGameplayEvent(event: ArcadeGameplayEvent, activeElapsedMs: number): ArcadeEventOutcome | null {
     if (event.type !== 'enemy-killed' || !this.targets.has(event.enemy)) return null;
+    this.rewardOrigin = { x: event.enemy.x, y: event.enemy.y };
     this.targets.delete(event.enemy);
     this.destroyVisual(event.enemy);
     this.killed += 1;
@@ -114,6 +116,10 @@ export class GoldenHuntEvent implements ArcadeEvent {
   objectiveText(activeElapsedMs: number): string {
     const remaining = Math.max(0, this.definition.durationMs - (activeElapsedMs - this.startedAt));
     return `GOLDEN HUNT  —  ${this.killed}/${GOLDEN_TARGET_COUNT}  —  ${(remaining / 1000).toFixed(1)}s`;
+  }
+
+  rewardPlan() {
+    return { origin: this.rewardOrigin ?? { x: this.context.player.x, y: this.context.player.y }, rolls: 1 };
   }
 
   cleanup(reason: ArcadeStopReason): void {

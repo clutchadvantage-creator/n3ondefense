@@ -28,6 +28,7 @@ import { AudioManager } from '../systems/AudioManager.ts';
 import { SaveSystem } from '../systems/SaveSystem.ts';
 import type { CosmeticOption } from '../types.ts';
 import { createModCollectionButton, createModCollectionFrame } from '../ui/ModCollectionUi.ts';
+import { createRunConfigurationConsole } from '../ui/RunConfigurationConsoleUi.ts';
 import { createButton, disableButton } from '../utils/ui.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
@@ -505,101 +506,135 @@ export class OperatorGarageScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const setup = SaveSystem.getNextRunSetupSelection();
     const totalCost = getRunSetupCost(setup);
-    const narrow = width < 900;
-    const columnGap = narrow ? 12 : 28;
-    const columnWidth = Math.min(narrow ? (width - 40 - columnGap) * 0.5 : 620, (width - 64 - columnGap) * 0.5);
-    const leftX = width / 2 - (columnWidth + columnGap) / 2;
-    const rightX = width / 2 + (columnWidth + columnGap) / 2;
-    const panelTop = narrow ? 108 : 120;
-    const panelHeight = height - panelTop - 24;
+    const save = SaveSystem.get();
+    const modCollection = SaveSystem.getModCollection();
+    const contract = setup.contract ? RUN_CONTRACTS[setup.contract] : null;
+    const consoleView = createRunConfigurationConsole(this, root, width, height, {
+      setup,
+      totalCost,
+      signalMultiplier: ECONOMY_BALANCE.modFocus.categoryWeightMultiplier,
+      contractLabel: contract?.label ?? 'No Contract',
+      contractCreditMultiplier: contract?.creditRewardMultiplier ?? 1,
+      contractEnemyHealthMultiplier: contract?.enemyHealthMultiplier ?? 1,
+      contractSpawnCadenceMultiplier: contract?.spawnCadenceMultiplier ?? 1,
+      wallet: {
+        credits: save.credits,
+        coreTokens: save.coreTokens,
+        plasmaChips: modCollection.plasmaChips,
+        fluxCores: save.fluxCores
+      }
+    });
+    const { compact, leftX, rightX, columnWidth, panelTop, monitorTop } = consoleView.layout;
+    this.overlayAnimatedTargets.push(...consoleView.animatedTargets);
 
-    const summary = totalCost > 0
-      ? `CURRENT RUN FEE // ${totalCost.toLocaleString()} CREDITS  //  CHARGED ONCE WHEN DEPLOYMENT STARTS`
-      : 'CURRENT RUN FEE // FREE  //  STANDARD DROP AND CHALLENGE RULES';
-    const summaryY = narrow ? 82 : 80;
-    const summaryWidth = Math.max(260, Math.min(width - 340, 1040));
-    const summaryRail = this.add.rectangle(width / 2, summaryY, summaryWidth, narrow ? 28 : 32, 0x071722, 0.94)
-      .setStrokeStyle(1, totalCost > 0 ? 0xffbd68 : 0x6effae, 0.34);
-    const summaryEdge = this.add.rectangle(width / 2 - summaryWidth / 2 + 5, summaryY, 3, narrow ? 20 : 24, totalCost > 0 ? 0xff5bcf : 0x55efff, 0.72);
-    const summaryLed = this.add.circle(width / 2 + summaryWidth / 2 - 15, summaryY, 3, totalCost > 0 ? 0xffbd68 : 0x6effae, 0.95);
-    root.add([summaryRail, summaryEdge, summaryLed]);
-    root.add(this.add.text(width / 2, summaryY, summary, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 13 : 17}px`, fontStyle: 'bold',
-      color: totalCost > 0 ? '#ffd17f' : '#82ffc1', align: 'center'
-    }).setOrigin(0.5).setWordWrapWidth(summaryWidth - 42, true).setMaxLines(2));
-    root.add(this.add.text(30, panelTop - 19, 'LOADOUT PROCUREMENT // TEMPORARY PARAMETERS', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 11}px`, color: '#69bdca', fontStyle: 'bold', letterSpacing: 1
-    }).setOrigin(0, 0.5));
-    root.add(this.add.text(width - 30, panelTop - 19, 'NEXT DEPLOYMENT LINK // STANDBY', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 11}px`, color: '#72ffad', fontStyle: 'bold', letterSpacing: 1
-    }).setOrigin(1, 0.5));
+    const feeSummary = totalCost > 0
+      ? `RUN FEE // ${totalCost.toLocaleString()} CREDITS // CHARGED ON DEPLOYMENT`
+      : 'RUN FEE // FREE // STANDARD PARAMETERS';
+    root.add(this.add.text(width / 2, compact ? 69 : 78, feeSummary, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 14}px`, fontStyle: 'bold',
+      color: totalCost > 0 ? '#ffd27d' : '#75ffb1', align: 'center', letterSpacing: 2,
+      backgroundColor: '#030a11'
+    }).setOrigin(0.5).setPadding(12, 3));
 
-    const createColumn = (centerX: number, title: string, accent: number): void => {
-      const frame = createModCollectionFrame(this, {
-        x: centerX - columnWidth / 2,
-        y: panelTop,
-        width: columnWidth,
-        height: panelHeight
-      }, title, accent);
-      const lowerRail = this.add.rectangle(centerX, panelTop + panelHeight - 8, columnWidth - 34, 2, accent, 0.24);
-      root.add([frame, lowerRail]);
-      this.overlayAnimatedTargets.push(...frame.list);
-    };
-    createColumn(leftX, 'SIGNAL // FOCUSED MOD HUNT', 0x55efff);
-    createColumn(rightX, 'CONTRACT // ENGAGEMENT RULES', 0xff5bcf);
-
-    root.add(this.add.text(leftX, panelTop + (narrow ? 42 : 50), `Signals weight one Mod category ${ECONOMY_BALANCE.modFocus.categoryWeightMultiplier}x without changing rarity or total drop quantity.`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 11 : 15}px`, color: '#a9d3df', align: 'center',
-      wordWrap: { width: columnWidth - 34, useAdvancedWrap: true }
-    }).setOrigin(0.5, 0).setMaxLines(3));
+    root.add(this.add.text(leftX, panelTop + (compact ? 48 : 52), `Program a category frequency at ${ECONOMY_BALANCE.modFocus.categoryWeightMultiplier.toFixed(1)}x weighting. Rarity and total drop quantity remain unchanged.`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, color: '#a9d3df', align: 'center',
+      wordWrap: { width: columnWidth - 48, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0).setMaxLines(2));
 
     const signalOptions: Array<{ id: RunSetupSelection['modFocus']; label: string }> = [
       { id: null, label: 'NO SIGNAL // STANDARD DROPS' },
       ...MOD_FOCUS_CATEGORIES.map((id) => ({ id, label: MOD_FOCUS_LABELS[id].toUpperCase() }))
     ];
-    const signalStartY = panelTop + (narrow ? 92 : 108);
-    const signalGap = Phaser.Math.Clamp((panelHeight - (narrow ? 112 : 136)) / signalOptions.length, narrow ? 39 : 46, 56);
+    const signalStartY = panelTop + (compact ? 88 : 104);
+    const signalGap = Phaser.Math.Clamp(
+      (monitorTop - signalStartY - 18) / signalOptions.length,
+      compact ? 39 : 50,
+      compact ? 55 : 68
+    );
     signalOptions.forEach((option, index) => {
       const selected = setup.modFocus === option.id;
       const fee = option.id ? `${ECONOMY_BALANCE.modFocus.cost.toLocaleString()}C` : 'FREE';
-      const button = createButton(this, leftX, signalStartY + index * signalGap, `${selected ? '● ' : ''}${option.label}  //  ${fee}`, () => {
+      const y = signalStartY + index * signalGap;
+      const rowWidth = columnWidth - (compact ? 30 : 54);
+      const indicator = this.add.rectangle(
+        leftX - rowWidth / 2 + 7,
+        y,
+        selected ? 5 : 2,
+        Math.min(compact ? 31 : 42, signalGap - 7),
+        selected ? 0x55efff : 0x315563,
+        selected ? 0.95 : 0.35
+      );
+      const icon = this.add.text(leftX - rowWidth / 2 + 24, y, option.id ? option.id.slice(0, 1).toUpperCase() : '0', {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 11 : 14}px`, fontStyle: 'bold',
+        color: selected ? '#b9fbff' : '#557b88'
+      }).setOrigin(0.5);
+      root.add([indicator, icon]);
+      const button = createButton(this, leftX, y, `${selected ? 'SIGNAL LOCKED // ' : ''}${option.label}  //  ${fee}`, () => {
         SaveSystem.setNextRunSetupSelection({ ...setup, modFocus: option.id });
         this.status = `SUCCESS // ${option.id ? MOD_FOCUS_LABELS[option.id] : 'Signal removed'} configured for next deployment.`;
         this.scene.restart({ returnScene: this.returnScene });
         return true;
-      }, columnWidth - 30, 'menu', { height: Math.min(40, signalGap - 5), fontSize: narrow ? 10 : 14 });
-      if (selected) button.setAlpha(1);
+      }, rowWidth, 'menu', {
+        height: Math.min(compact ? 35 : 44, signalGap - 6),
+        fontSize: compact ? 9 : 13,
+        horizontalPadding: compact ? 34 : 52
+      });
       root.add(button);
     });
 
-    root.add(this.add.text(rightX, panelTop + (narrow ? 42 : 50), 'Contracts modify encounter rules and rewards for the next deployment only.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 11 : 15}px`, color: '#d6b3ce', align: 'center',
-      wordWrap: { width: columnWidth - 34, useAdvancedWrap: true }
+    root.add(this.add.text(rightX, panelTop + (compact ? 48 : 52), 'Load one-run engagement rules. Threat and real reward parameters update in the embedded diagnostics.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, color: '#d6b3ce', align: 'center',
+      wordWrap: { width: columnWidth - 48, useAdvancedWrap: true }
     }).setOrigin(0.5, 0).setMaxLines(2));
 
     const contractOptions: Array<{ id: RunSetupSelection['contract']; label: string; description: string; cost: number }> = [
       { id: null, label: 'NO CONTRACT', description: 'Standard enemy, reward, and drop rules.', cost: 0 },
-      ...RUN_CONTRACT_IDS.map((id) => ({ id, label: RUN_CONTRACTS[id].label.toUpperCase(), description: RUN_CONTRACTS[id].description, cost: RUN_CONTRACTS[id].cost }))
+      ...RUN_CONTRACT_IDS.map((id) => ({
+        id,
+        label: RUN_CONTRACTS[id].label.toUpperCase(),
+        description: RUN_CONTRACTS[id].description,
+        cost: RUN_CONTRACTS[id].cost
+      }))
     ];
-    const contractStartY = panelTop + (narrow ? 88 : 102);
-    const contractGap = Phaser.Math.Clamp((panelHeight - (narrow ? 102 : 120)) / contractOptions.length, narrow ? 66 : 82, 106);
+    const contractStartY = panelTop + (compact ? 88 : 104);
+    const contractGap = Phaser.Math.Clamp(
+      (monitorTop - contractStartY - 18) / contractOptions.length,
+      compact ? 62 : 77,
+      compact ? 82 : 106
+    );
     contractOptions.forEach((option, index) => {
       const selected = setup.contract === option.id;
       const y = contractStartY + index * contractGap;
-      const button = createButton(this, rightX, y, `${selected ? '● ' : ''}${option.label}  //  ${option.cost > 0 ? `${option.cost.toLocaleString()}C` : 'FREE'}`, () => {
+      const rowWidth = columnWidth - (compact ? 30 : 54);
+      const indicator = this.add.rectangle(
+        rightX - rowWidth / 2 + 7,
+        y,
+        selected ? 5 : 2,
+        compact ? 31 : 42,
+        selected ? 0xff5bcf : 0x513548,
+        selected ? 0.96 : 0.35
+      );
+      const threat = this.add.text(rightX + rowWidth / 2 - 15, y, option.id ? 'ARM' : 'BASE', {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 7 : 9}px`, fontStyle: 'bold',
+        color: selected ? '#ff9fe5' : '#6d7583'
+      }).setOrigin(1, 0.5);
+      root.add([indicator, threat]);
+      const button = createButton(this, rightX, y, `${selected ? 'PROTOCOL ARMED // ' : ''}${option.label}  //  ${option.cost > 0 ? `${option.cost.toLocaleString()}C` : 'FREE'}`, () => {
         SaveSystem.setNextRunSetupSelection({ ...setup, contract: option.id });
         this.status = `SUCCESS // ${option.id ? RUN_CONTRACTS[option.id].label : 'Contract removed'} configured for next deployment.`;
         this.scene.restart({ returnScene: this.returnScene });
         return true;
-      }, columnWidth - 30, 'menu', { height: narrow ? 34 : 40, fontSize: narrow ? 10 : 14 });
+      }, rowWidth, 'menu', {
+        height: compact ? 34 : 42,
+        fontSize: compact ? 9 : 13,
+        horizontalPadding: compact ? 46 : 64
+      });
       root.add(button);
-      root.add(this.add.text(rightX, y + (narrow ? 20 : 24), option.description, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 13}px`, color: '#9fb9c5', align: 'center',
-        wordWrap: { width: columnWidth - 40, useAdvancedWrap: true }
-      }).setOrigin(0.5, 0).setMaxLines(narrow ? 2 : 3));
+      root.add(this.add.text(rightX, y + (compact ? 20 : 25), option.description, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 8 : 11}px`, color: '#9fb9c5', align: 'center',
+        wordWrap: { width: columnWidth - 64, useAdvancedWrap: true }
+      }).setOrigin(0.5, 0).setMaxLines(2));
     });
-    this.overlayAnimatedTargets.push(summaryLed);
-    this.tweens.add({ targets: summaryLed, alpha: { from: 0.25, to: 1 }, duration: 760, yoyo: true, repeat: -1 });
   }
 
   private showLibrary(): void {

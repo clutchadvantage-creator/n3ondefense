@@ -26,11 +26,17 @@ test('HUD cooldown modules mirror the deployed fence, turret, mine, and shield a
   assert.match(iconRenderer, /Layered energy bubble with orbit segments and crackling core/);
 });
 
-test('one-run setup reuses the collection cyber-console frame without changing setup callbacks', () => {
+test('one-run setup uses the advanced console shell without changing setup callbacks', () => {
   const runSetup = garage.slice(garage.indexOf('private showRunConfiguration'), garage.indexOf('private showLibrary'));
-  assert.match(runSetup, /createModCollectionFrame\(this/);
-  assert.match(runSetup, /LOADOUT PROCUREMENT \/\/ TEMPORARY PARAMETERS/);
-  assert.match(runSetup, /NEXT DEPLOYMENT LINK \/\/ STANDBY/);
+  const consoleUi = readFileSync(new URL('../src/game/ui/RunConfigurationConsoleUi.ts', import.meta.url), 'utf8');
+  assert.match(runSetup, /createRunConfigurationConsole\(this/);
+  assert.match(consoleUi, /SYSTEM STATUS/);
+  assert.match(consoleUi, /TACTICAL WALLET/);
+  assert.match(consoleUi, /SIGNAL WEIGHTING PREVIEW/);
+  assert.match(consoleUi, /ACTIVE MOD FOCUS/);
+  assert.match(consoleUi, /ENCOUNTER SIMULATION/);
+  assert.match(consoleUi, /REWARD PARAMETERS/);
+  assert.match(consoleUi, /DEPLOYMENT SUMMARY \/\/ SYSTEM FEED/);
   assert.match(runSetup, /SaveSystem\.setNextRunSetupSelection/);
   assert.match(runSetup, /this\.scene\.restart\(\{ returnScene: this\.returnScene \}\)/);
   assert.match(garage, /this\.tweens\.killTweensOf\(this\.overlayAnimatedTargets\)/);

@@ -89,6 +89,7 @@ test('Totem entrance and gameplay pulses trigger their sounds from authoritative
 test('boss attack and grenade recordings use exact authoritative events and bounded voice pools', () => {
   const recordings = [
     ['bossArtilleryExplosion', 'bossartillaryexplosion.mp3'],
+    ['sentryBossAttack', 'senturybossattack.mp3'],
     ['grenadeShotExplosion', 'grenadeshotexplosion.mp3'],
     ['mageBossLargeAttack', 'magebosslargeattack.mp3'],
     ['mageBossMagicAttack', 'magebossmagicattack.mp3'],
@@ -100,6 +101,10 @@ test('boss attack and grenade recordings use exact authoritative events and boun
     assert.match(audio, new RegExp(`${key}: 'soundeffects/${filename.replace('.', '\\.')}'`));
   }
   assert.match(audio, /grenadeShotExplosion: 6/);
+  assert.match(audio, /sentryBossAttack: 2/);
+  assert.match(audio, /sentryBossAttack: 140/);
+  assert.match(arena, /attack === 'artillery-basic'[\s\S]*?playSfx\('sentryBossAttack'\)/);
+  assert.equal((boss.match(/onAttackCast\('artillery-basic'\)/g) ?? []).length, 1);
   assert.match(arena, /attack === 'artillery-strike' \|\| attack === 'artillery-super'[\s\S]*?playSfx\('bossArtilleryExplosion'\)/);
   assert.match(arena, /private detonateGrenadeRound[\s\S]*?playSfx\('grenadeShotExplosion'\)/);
   assert.match(arena, /attack === 'storm-basic'[\s\S]*?playSfx\('mageBossMagicAttack'\)/);

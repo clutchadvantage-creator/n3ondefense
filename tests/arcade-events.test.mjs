@@ -30,29 +30,25 @@ test('new and legacy profiles receive persistent N3ON Arcade challenge counters'
   assert.equal(legacy.progress.neonCircuitsCompleted, 0);
 });
 
-test('Arcade registry centralizes scheduling and gives all three events the complete randomized reward pool', () => {
+test('Arcade registry centralizes scheduling and registers all six events with physical reward profiles', () => {
   const registry = source('../src/game/arcade/ArcadeEventRegistry.ts');
-  assert.match(registry, /id: 'golden-hunt'/);
-  assert.match(registry, /id: 'mini-boss'/);
-  assert.match(registry, /id: 'neon-circuit'/);
+  for (const eventId of ['golden-hunt', 'mini-boss', 'neon-circuit', 'hot-package', 'packet-snatcher', 'redline']) {
+    assert.match(registry, new RegExp(`id: '${eventId}'`));
+  }
   assert.match(registry, /recentHistorySize: 2/);
   assert.match(registry, /eventCooldownMs: 105_000/);
-  assert.equal((registry.match(/reward: randomRewardPool\(/g) ?? []).length, 3);
+  assert.equal((registry.match(/reward: randomRewardPool\(/g) ?? []).length, 6);
   for (const rewardKind of ['credits', 'core-tokens', 'flux-cores', 'plasma-chips', 'mod']) {
     assert.match(registry, new RegExp(`kind: '${rewardKind}'`));
   }
 });
 
-test('Arcade reward rolls award exactly one authoritative resource category', () => {
-  const granted = [];
+test('Arcade reward rolls stay side-effect free until the complete plan is physically spawned', () => {
+  const spawned = [];
   const context = {
     round: 10,
     player: { x: 12, y: 24 },
-    grantCredits: (amount) => granted.push(['credits', amount]),
-    grantCoreTokens: (amount) => granted.push(['core-tokens', amount]),
-    grantFluxCores: (amount) => granted.push(['flux-cores', amount]),
-    grantPlasmaChips: (amount) => granted.push(['plasma-chips', amount]),
-    grantGuaranteedMod: (x, y) => granted.push(['mod', x, y])
+    spawnPhysicalRewards: (eventId, origin, rewards) => spawned.push({ eventId, origin, rewards })
   };
   const definition = {
     reward: {
@@ -67,12 +63,53 @@ test('Arcade reward rolls award exactly one authoritative resource category', ()
     }
   };
   const rewards = new ArcadeRewardService(context);
-  assert.deepEqual(rewards.grant(definition, 0), { kind: 'credits', amount: 150, label: '+150 CREDITS' });
-  assert.equal(rewards.grant(definition, 0.21).kind, 'core-tokens');
-  assert.equal(rewards.grant(definition, 0.41).kind, 'flux-cores');
-  assert.equal(rewards.grant(definition, 0.61).kind, 'plasma-chips');
-  assert.deepEqual(rewards.grant(definition, 0.99), { kind: 'mod', amount: 1, label: 'RANDOM MOD' });
-  assert.deepEqual(granted.map(([kind]) => kind), ['credits', 'core-tokens', 'flux-cores', 'plasma-chips', 'mod']);
+  assert.deepEqual(rewards.roll(definition, 0), { kind: 'credits', amount: 150, label: '+150 CREDITS' });
+  assert.equal(rewards.roll(definition, 0.21).kind, 'core-tokens');
+  assert.equal(rewards.roll(definition, 0.41).kind, 'flux-cores');
+  assert.equal(rewards.roll(definition, 0.61).kind, 'plasma-chips');
+  assert.deepEqual(rewards.roll(definition, 0.99), { kind: 'mod', amount: 1, label: 'RANDOM MOD' });
+  assert.equal(spawned.length, 0);
+
+  const planRewards = rewards.spawn('redline', definition, {
+    origin: { x: 80, y: 120 },
+    guaranteed: [{ kind: 'mod', amount: 1 }],
+    rolls: 2
+  }, (() => {
+    const rolls = [0, 0.99];
+    return () => rolls.shift();
+  })());
+  assert.deepEqual(planRewards.map(({ kind }) => kind), ['mod', 'credits', 'mod']);
+  assert.equal(spawned.length, 1);
+  assert.deepEqual(spawned[0], { eventId: 'redline', origin: { x: 80, y: 120 }, rewards: planRewards });
+});
+
+test('new Arcade events keep distinct objectives, bounded timing, physical reward plans, and cleanup', () => {
+  const hotPackage = source('../src/game/arcade/events/HotPackageEvent.ts');
+  assert.match(hotPackage, /const CAPTURE_MS = 5_000/);
+  assert.match(hotPackage, /qualityRoll < 0\.68 \? 'standard' : qualityRoll < 0\.93 \? 'enhanced' : 'jackpot'/);
+  assert.match(hotPackage, /standard: 2, enhanced: 3, jackpot: 5/);
+  assert.match(hotPackage, /this\.capturedMs \+= Math\.min\(deltaMs, 250\)/);
+  assert.doesNotMatch(hotPackage, /grantCredits|grantCoreTokens|grantGuaranteedMod/);
+
+  const packetSnatcher = source('../src/game/arcade/events/PacketSnatcherEvent.ts');
+  assert.match(packetSnatcher, /THIEF_SPEED_MULTIPLIER = 1\.72/);
+  assert.match(packetSnatcher, /findExtractionPoint/);
+  assert.match(packetSnatcher, /navigateEventEnemy/);
+  assert.match(packetSnatcher, /guaranteed: \[[\s\S]*?\{ kind: 'mod'/);
+  assert.match(packetSnatcher, /this\.bonusMod[\s\S]*?kind: 'mod'/);
+  assert.match(packetSnatcher, /n3onArcadeSuppressBaseLoot/);
+
+  const redline = source('../src/game/arcade/events/RedlineEvent.ts');
+  assert.match(redline, /const REQUIRED_MS = 9_000/);
+  assert.match(redline, /const DECAY_RATE = 0\.24/);
+  assert.match(redline, /redline_stage_reached/);
+  assert.match(redline, /rolls: this\.bonusRoll \? 3 : 2/);
+  assert.doesNotMatch(redline, /speedBoost|rapidFire|energyRegen|cooldown|damageBoost/);
+
+  for (const eventSource of [hotPackage, packetSnatcher, redline]) {
+    assert.match(eventSource, /cleanup\(/);
+    assert.match(eventSource, /rewardPlan\(\)/);
+  }
 });
 
 test('Golden Hunt always creates five regular-enemy variants and tracks their kills', () => {
@@ -126,9 +163,10 @@ test('Arena integration suppresses Arcade during Teaching and preserves live com
   assert.match(arena, /tutorialProgress\.replaySequenceId === null/);
   assert.match(arena, /!this\.tutorialDirector\?\.isActive\(\).*this\.arcadeController\?\.update\(delta\)/);
   assert.match(arena, /this\.arcadeController\?\.handleGameplayEvent\(\{ type: 'enemy-killed', enemy \}\)/);
-  assert.match(arena, /this\.tryAwardMod\('milestone', true, x, y\)/);
-  assert.match(arena, /grantCoreTokens: \(amount\)/);
-  assert.match(arena, /grantPlasmaChips: \(amount\)/);
+  assert.match(arena, /this\.tryAwardMod\('milestone', isGuaranteedMilestone\(completedRound\)\)/);
+  assert.match(arena, /spawnPhysicalRewards:/);
+  assert.match(arena, /this\.spawnPhysicalLootBurst\(/);
+  assert.match(arena, /'arcade-loot'/);
   assert.match(arena, /forceArcadeEvent/);
   assert.match(arena, /this\.arcadeController\?\.destroy\('replaced'\)/);
   assert.match(arena, /private activeBossTarget\(\)/);

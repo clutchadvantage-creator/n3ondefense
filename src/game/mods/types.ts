@@ -14,7 +14,7 @@ export type RunProtocolId =
   | 'overdrive-andromeda'
   | 'overdrive-perseus'
   | 'overdrive-pegasus';
-export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone' | 'boss';
+export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone' | 'boss' | 'arcade';
 export type ModVariant = 'standard' | 'corrupted';
 export type ModInfusionId =
   | 'enemy-growth'

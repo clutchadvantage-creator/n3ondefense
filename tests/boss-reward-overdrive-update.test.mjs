@@ -62,7 +62,7 @@ test('round transitions explicitly retire standalone infusion timers and effects
 });
 
 test('arena Mod drops are physical before inventory award and boss chance increases modestly', () => {
-  assert.match(arenaSource, /spawnModPickup\(definition, source, x, y\)/);
+  assert.match(arenaSource, /spawnModPickup\(definition, source, x, y, arcadeEventId\)/);
   assert.match(arenaSource, /distanceSquared <= collectionRadiusSquared/);
   assert.match(arenaSource, /awardResolvedMod\(pickup\.definition, pickup\.source/);
   assert.equal(MOD_BALANCE.dropChance.boss, 0.62);

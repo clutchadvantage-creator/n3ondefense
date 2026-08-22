@@ -21,6 +21,7 @@ export class MiniBossEvent implements ArcadeEvent {
   private startedAt = 0;
   private defeated = false;
   private archetype: BossArchetype | null = null;
+  private rewardOrigin: { x: number; y: number } | null = null;
 
   constructor(
     private readonly context: ArcadeRuntimeContext,
@@ -69,6 +70,7 @@ export class MiniBossEvent implements ArcadeEvent {
   update(activeElapsedMs: number, deltaMs: number): ArcadeEventOutcome | null {
     if (!this.encounter) return { success: false, reason: 'failed' };
     if (this.defeated || this.encounter.boss.isDefeated) {
+      this.rewardOrigin = { x: this.encounter.boss.x, y: this.encounter.boss.y };
       this.context.emitMetric({
         name: 'arcade_miniboss_killed', eventId: this.id, round: this.context.round,
         protocol: this.context.protocol, elapsedMs: activeElapsedMs - this.startedAt,
@@ -105,6 +107,10 @@ export class MiniBossEvent implements ArcadeEvent {
   getBossTarget(): Boss | null {
     const boss = this.encounter?.boss;
     return boss?.active && !boss.isDefeated ? boss : null;
+  }
+
+  rewardPlan() {
+    return { origin: this.rewardOrigin ?? { x: this.context.player.x, y: this.context.player.y }, rolls: 1 };
   }
 
   cleanup(reason: ArcadeStopReason): void {

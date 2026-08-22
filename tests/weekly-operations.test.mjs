@@ -112,8 +112,8 @@ test('Main Menu is display/deploy only while Garage owns Signal and Contract sel
   assert.doesNotMatch(menu, /MOD_FOCUS_CATEGORIES|RUN_CONTRACT_IDS/);
   assert.match(menu, /RUN CONFIG \/\/ SIGNAL:/);
   assert.match(garage, /showRunConfiguration/);
-  assert.match(garage, /Signals weight one Mod category/);
-  assert.match(garage, /Contracts modify encounter rules and rewards/);
+  assert.match(garage, /Program a category frequency/);
+  assert.match(garage, /Load one-run engagement rules/);
   assert.match(garage, /getRunSetupCost\(setup\)/);
   assert.match(garage, /modFocus: option\.id/);
   assert.match(garage, /contract: option\.id/);

@@ -1,7 +1,10 @@
 import type { ArcadeEventDefinition, ArcadeEventFactory, ArcadeEventId, ArcadeRuntimeContext } from './types.ts';
 import { GoldenHuntEvent } from './events/GoldenHuntEvent.ts';
+import { HotPackageEvent } from './events/HotPackageEvent.ts';
 import { MiniBossEvent } from './events/MiniBossEvent.ts';
 import { NeonCircuitEvent } from './events/NeonCircuitEvent.ts';
+import { PacketSnatcherEvent } from './events/PacketSnatcherEvent.ts';
+import { RedlineEvent } from './events/RedlineEvent.ts';
 
 const randomRewardPool = (
   creditsBase: number,
@@ -60,13 +63,43 @@ export const ARCADE_EVENT_DEFINITIONS: readonly ArcadeEventDefinition[] = [
     minimumRound: 2,
     durationMs: 34_000,
     reward: randomRewardPool(650, 25, 2, 0.07, 1, 0.02, 5, 0.16)
+  },
+  {
+    id: 'hot-package',
+    displayName: 'HOT PACKAGE INBOUND',
+    description: 'Hold the drop zone and crack the Supply Pod.',
+    weight: 0.92,
+    minimumRound: 3,
+    durationMs: 58_000,
+    reward: randomRewardPool(260, 11, 1, 0.035, 1, 0.012, 3, 0.1)
+  },
+  {
+    id: 'packet-snatcher',
+    displayName: 'PACKET SNATCHER',
+    description: 'Intercept the Data Thief before extraction.',
+    weight: 0.68,
+    minimumRound: 4,
+    durationMs: 31_000,
+    reward: randomRewardPool(420, 17, 1, 0.035, 1, 0.012, 4, 0.14)
+  },
+  {
+    id: 'redline',
+    displayName: 'REDLINE',
+    description: 'Hold the unstable override node for physical loot.',
+    weight: 0.84,
+    minimumRound: 4,
+    durationMs: 52_000,
+    reward: randomRewardPool(330, 14, 2, 0.04, 1, 0.018, 4, 0.12)
   }
 ] as const;
 
 const FACTORIES: Record<ArcadeEventId, ArcadeEventFactory> = {
   'golden-hunt': { create: (context, definition) => new GoldenHuntEvent(context, definition) },
   'mini-boss': { create: (context, definition) => new MiniBossEvent(context, definition) },
-  'neon-circuit': { create: (context, definition) => new NeonCircuitEvent(context, definition) }
+  'neon-circuit': { create: (context, definition) => new NeonCircuitEvent(context, definition) },
+  'hot-package': { create: (context, definition) => new HotPackageEvent(context, definition) },
+  'packet-snatcher': { create: (context, definition) => new PacketSnatcherEvent(context, definition) },
+  'redline': { create: (context, definition) => new RedlineEvent(context, definition) }
 };
 
 export const getEligibleArcadeDefinitions = (round: number): ArcadeEventDefinition[] =>

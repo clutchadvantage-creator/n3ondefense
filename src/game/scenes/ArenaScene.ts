@@ -61,7 +61,7 @@ import { MOD_PICKUP_REVEAL_LEAD_IN_MS } from '../mods/ModAcquisition.ts';
 import { BombsiteModSystem } from '../mods/BombsiteModSystem.ts';
 import { MOD_FOCUS_CATEGORIES, RUN_CONTRACT_IDS, getContract, getRoundCompletionCredits } from '../economy/economyBalance.ts';
 import type { AccountProgressionTier, ModFocusSignalId, RunContractId } from '../economy/types.ts';
-import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
+import { GameplayTelemetryRecorder, type PickupDropSource } from '../telemetry/GameplayTelemetryRecorder.ts';
 import { ReusableObjectPool } from '../performance/ReusableObjectPool.ts';
 import { FramePerformanceMonitor } from '../performance/FramePerformanceMonitor.ts';
 import { shouldReplaceTurretTarget } from '../performance/Targeting.ts';
@@ -87,8 +87,9 @@ import {
   type TemporaryAmmoMode
 } from '../player/TemporaryAmmoMode.ts';
 import { N3ONArcadeController } from '../arcade/N3ONArcadeController.ts';
-import type { ArcadeEventId, ArcadeMetricEvent } from '../arcade/types.ts';
+import type { ArcadeEventId, ArcadeGrantedReward, ArcadeMetricEvent } from '../arcade/types.ts';
 import type { Boss } from '../bosses/Boss.ts';
+import { createPhysicalLootPlan, type PhysicalLootReward } from '../loot/PhysicalLootService.ts';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -149,9 +150,10 @@ interface Pickup {
   type: PickupType;
   sprite: Phaser.GameObjects.Container;
   expiresAt: number;
-  source: 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support' | 'boss-loot' | 'flux-core';
+  source: PickupDropSource;
   amount?: number;
   collectibleAt?: number;
+  arcadeEventId?: ArcadeEventId;
 }
 
 interface PickupVisual {
@@ -181,6 +183,7 @@ interface ModPickup {
   expiresAt: number;
   collectibleAt: number;
   collected: boolean;
+  arcadeEventId?: ArcadeEventId;
 }
 
 interface FluxCorePickupVisual {
@@ -289,6 +292,21 @@ const PICKUP_SFX_BY_TYPE = {
   fluxCore: 'fluxCorePickup'
 } as const satisfies Record<PickupType, Parameters<AudioManager['playSfx']>[0]>;
 
+const PICKUP_COLOR_BY_TYPE: Record<PickupType, number> = {
+  health: COLORS.green,
+  energy: COLORS.cyan,
+  damageBoost: COLORS.red,
+  speedBoost: COLORS.pink,
+  rapidFire: COLORS.orange,
+  ricochet: 0x6fffd2,
+  grenadeRounds: 0xff7a3d,
+  scattershot: 0x58b8ff,
+  credits: 0xf5ff58,
+  coreToken: COLORS.purple,
+  plasmaChip: 0xd06dff,
+  fluxCore: COLORS.cyan
+};
+
 export class ArenaScene extends Phaser.Scene {
   private readonly state = new GameStateMachine(RoundState.PrePlant);
   private readonly audio = AudioManager.get();
@@ -360,6 +378,7 @@ export class ArenaScene extends Phaser.Scene {
   private projectileHeight = 8;
   private modsEarned: ModRewardRecord[] = [];
   private modDropSequence = 0;
+  private physicalLootSequence = 0;
   private runStartedAt = Date.now();
   private readonly detonatingSiteIds = new Set<string>();
   private readonly enemyTurretTargets = new WeakMap<Enemy, TurretTargetDecision>();
@@ -2001,6 +2020,15 @@ export class ArenaScene extends Phaser.Scene {
       if (!enemy.active || enemy.isDead()) continue;
       enemy.updateDamageFlash(now);
 
+      if (enemy.getData('arcadeMovementControlled')) {
+        gasHazard?.carveVisualTunnel(
+          enemy.x,
+          enemy.y,
+          Math.max(GAS_HAZARD_BALANCE.enemyTunnelRadius, enemy.hazardRadius + 6)
+        );
+        continue;
+      }
+
       const assignedSite = this.defuseTargetByEnemy.get(enemy);
       const targetSite = assignedSite ?? this.selectEnemyObjective(enemy, activeSites);
       if (enemy.stats.type === 'tank' && !assignedSite) this.updateTankHomingMissile(enemy, now);
@@ -2108,7 +2136,7 @@ export class ArenaScene extends Phaser.Scene {
     const candidates = this.defuseCandidateBuffer;
     candidates.length = 0;
     for (const enemy of this.enemies) {
-      if (!enemy.active || enemy.isDead() || now < enemy.defuseInterruptedUntil) continue;
+      if (!enemy.active || enemy.isDead() || enemy.getData('arcadeMovementControlled') || now < enemy.defuseInterruptedUntil) continue;
       let nearestDistanceSquared = Number.POSITIVE_INFINITY;
       for (const site of activeSites) {
         const dx = enemy.x - site.x;
@@ -3651,6 +3679,7 @@ export class ArenaScene extends Phaser.Scene {
       else p.sprite.rotation += dt * 2;
       if (now > p.expiresAt) {
         GameplayTelemetryRecorder.recordPickupExpired(p.type);
+        if (p.arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_expired', p.arcadeEventId, p.type, p.amount ?? 1);
         p.sprite.destroy();
         continue;
       }
@@ -3668,6 +3697,7 @@ export class ArenaScene extends Phaser.Scene {
           continue;
         }
         this.collectPickup(p.type, p.source, p.amount);
+        if (p.arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_collected', p.arcadeEventId, p.type, p.amount ?? 1);
         p.sprite.destroy();
         continue;
       }
@@ -4128,13 +4158,12 @@ export class ArenaScene extends Phaser.Scene {
     if (this.tutorialDirector?.awaits('combat.enemyKilled')) TutorialEventBus.emit('combat.enemyKilled', { type: enemy.stats.type });
     this.arcadeController?.handleGameplayEvent({ type: 'enemy-killed', enemy });
     this.audio.playSfx('enemyDeath');
-    const standardCredits = this.scaleModCredits(enemy.stats.valueCredits);
-    const bombsiteCreditMultiplier = this.bombsiteMods.onEnemyKilled(enemy.x, enemy.y);
-    const enemyCredits = this.scaleModCredits(enemy.stats.valueCredits * bombsiteCreditMultiplier);
+    const suppressBaseLoot = Boolean(enemy.getData('n3onArcadeSuppressBaseLoot'));
+    const standardCredits = suppressBaseLoot ? 0 : this.scaleModCredits(enemy.stats.valueCredits);
+    const bombsiteCreditMultiplier = suppressBaseLoot ? 1 : this.bombsiteMods.onEnemyKilled(enemy.x, enemy.y);
+    const enemyCredits = suppressBaseLoot ? 0 : this.scaleModCredits(enemy.stats.valueCredits * bombsiteCreditMultiplier);
+    const enemyCoreTokens = suppressBaseLoot ? 0 : enemy.stats.valueCoreTokens;
     this.bombsiteMods.recordBonusCredits(Math.max(0, enemyCredits - standardCredits));
-    this.roundCredits += enemyCredits;
-    this.roundCoreTokens += enemy.stats.valueCoreTokens;
-    this.totalCreditsCollected += enemyCredits;
     this.pendingProgressEnemyKills += 1;
 
     GameplayTelemetryRecorder.recordEnemyKill({
@@ -4145,13 +4174,25 @@ export class ArenaScene extends Phaser.Scene {
       finalSource: enemy.lastDamageSource,
       damageBySource: enemy.damageTakenBySource,
       credits: enemyCredits,
-      coreTokens: enemy.stats.valueCoreTokens
+      coreTokens: enemyCoreTokens
     });
 
-    this.tryAwardMod(enemy.stats.type === 'star' ? 'eliteEnemy' : 'normalEnemy', false, enemy.x, enemy.y);
+    if (!suppressBaseLoot) {
+      this.spawnPhysicalLootBurst(
+        [
+          { kind: 'credits', amount: enemyCredits },
+          { kind: 'core-tokens', amount: enemyCoreTokens }
+        ],
+        { x: enemy.x, y: enemy.y },
+        'enemy',
+        undefined,
+        { maximumCreditBundles: 1, minimumCreditBundles: 1, compact: true }
+      );
+      this.tryAwardMod(enemy.stats.type === 'star' ? 'eliteEnemy' : 'normalEnemy', false, enemy.x, enemy.y);
+    }
 
     const pickupChance = Math.min(1, PICKUP_BALANCE.enemyDropChance * this.modRuntime.multiplier('enemyPickupChance'));
-    if (Math.random() < pickupChance) this.dropPickup(enemy.x, enemy.y);
+    if (!suppressBaseLoot && Math.random() < pickupChance) this.dropPickup(enemy.x, enemy.y);
 
     if (this.modRuntime.hasInfusion('ghost-echoes')) this.playEnemyGhostEcho(enemy);
     if (this.modRuntime.hasInfusion('arcade-pop')) this.playArcadePop(enemy.x, enemy.y);
@@ -4190,6 +4231,142 @@ export class ArenaScene extends Phaser.Scene {
     return MODE_BALANCE[this.currentModeFamily()];
   }
 
+  /**
+   * The authoritative arena path for loot that is described as a physical drop.
+   * It creates pickups only; wallet/inventory mutation still happens on collision.
+   */
+  private spawnPhysicalLootBurst(
+    rewards: readonly PhysicalLootReward[],
+    origin: { x: number; y: number },
+    source: PickupDropSource,
+    arcadeEventId?: ArcadeEventId,
+    options: {
+      maximumCreditBundles?: number;
+      minimumCreditBundles?: number;
+      compact?: boolean;
+      expiresAt?: number;
+    } = {}
+  ): void {
+    const plan = createPhysicalLootPlan(rewards, {
+      maximumCreditBundles: options.maximumCreditBundles,
+      minimumCreditBundles: options.minimumCreditBundles,
+      seed: (this.layout.seed ^ Math.imul(++this.physicalLootSequence, 0x45d9f3b)) >>> 0
+    });
+    const now = this.time.now;
+    const expiresAt = options.expiresAt ?? now + PICKUP_BALANCE.lifetimeMs;
+    for (const entry of plan) {
+      const distanceScale = options.compact ? 0.48 : 1;
+      const landing = this.findPhysicalLootLanding(
+        origin.x,
+        origin.y,
+        entry.angle,
+        entry.distance * distanceScale
+      );
+      if (entry.kind === 'mod') {
+        const pickup = this.tryAwardMod('arcade', true, origin.x, origin.y, true, arcadeEventId);
+        if (!pickup) continue;
+        pickup.collectibleAt = now + (options.compact ? 180 : 680);
+        pickup.expiresAt = expiresAt;
+        this.animatePhysicalLootLaunch(pickup.sprite, landing.x, landing.y, entry.index, options.compact);
+        continue;
+      }
+      if (!entry.pickupType) continue;
+      const sprite = this.createPickupSprite(entry.pickupType, origin.x, origin.y, PICKUP_COLOR_BY_TYPE[entry.pickupType]).setDepth(14);
+      this.pickupMotion.delete(sprite);
+      const pickup: Pickup = {
+        type: entry.pickupType,
+        amount: entry.amount,
+        sprite,
+        expiresAt,
+        collectibleAt: now + (options.compact ? 180 : 680),
+        source,
+        arcadeEventId
+      };
+      this.pickups.push(pickup);
+      GameplayTelemetryRecorder.recordPickupDropped(entry.pickupType, source);
+      if (arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_spawned', arcadeEventId, entry.pickupType, entry.amount);
+      this.animatePhysicalLootLaunch(sprite, landing.x, landing.y, entry.index, options.compact, () => {
+        const phase = Math.abs(landing.x * 0.019 + landing.y * 0.027 + entry.index);
+        this.pickupMotion.set(sprite, {
+          velocityX: Math.cos(phase) * (options.compact ? 5 : 8),
+          velocityY: Math.sin(phase) * (options.compact ? 5 : 8),
+          phase
+        });
+      });
+    }
+  }
+
+  private animatePhysicalLootLaunch(
+    sprite: Phaser.GameObjects.Container,
+    landingX: number,
+    landingY: number,
+    index: number,
+    compact = false,
+    onLanded?: () => void
+  ): void {
+    const startX = sprite.x;
+    const startY = sprite.y;
+    const duration = compact ? 170 : 290;
+    this.tweens.add({
+      targets: sprite,
+      x: Phaser.Math.Linear(startX, landingX, 0.48),
+      y: Math.min(startY, landingY) - (compact ? 30 : 74) - index % 3 * (compact ? 4 : 12),
+      duration,
+      delay: compact ? Math.min(75, index * 8) : Math.min(230, index * 24),
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        if (!sprite.active) return;
+        this.tweens.add({
+          targets: sprite,
+          x: landingX,
+          y: landingY,
+          duration: compact ? 190 : 330,
+          ease: 'Bounce.easeOut',
+          onComplete: () => { if (sprite.active) onLanded?.(); }
+        });
+      }
+    });
+  }
+
+  private findPhysicalLootLanding(originX: number, originY: number, angle: number, distance: number): { x: number; y: number } {
+    const bounds = this.layout.generation.bounds;
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      const candidateAngle = angle + attempt * 0.47;
+      const candidateDistance = Math.max(24, distance - attempt * 3);
+      const x = Phaser.Math.Clamp(originX + Math.cos(candidateAngle) * candidateDistance, bounds.x + 36, bounds.x + bounds.w - 36);
+      const y = Phaser.Math.Clamp(originY + Math.sin(candidateAngle) * candidateDistance, bounds.y + 36, bounds.y + bounds.h - 36);
+      if (!this.hitWall(x, y) && !this.isNearBombSite(x, y, 42)) return { x, y };
+    }
+    return { x: originX, y: originY };
+  }
+
+  private recordArcadeLootMetric(
+    name: Extract<ArcadeMetricEvent['name'], 'arcade_pickup_spawned' | 'arcade_pickup_collected' | 'arcade_pickup_expired'>,
+    eventId: ArcadeEventId,
+    pickup: PickupType | 'mod',
+    amount: number
+  ): void {
+    const rewardKind = pickup === 'credits' ? 'credits'
+      : pickup === 'coreToken' ? 'core-tokens'
+        : pickup === 'fluxCore' ? 'flux-cores'
+          : pickup === 'plasmaChip' ? 'plasma-chips'
+            : pickup === 'grenadeRounds' ? 'grenade-rounds'
+              : pickup === 'scattershot' ? 'scattershot-rounds'
+                : pickup === 'mod' ? 'mod' : undefined;
+    if (!rewardKind) return;
+    const event: ArcadeMetricEvent = {
+      name,
+      eventId,
+      round: this.currentCombatRound(),
+      protocol: this.protocol,
+      elapsedMs: GameplayTelemetryRecorder.activeEncounterElapsedMs(),
+      rewardKind,
+      rewardAmount: amount
+    };
+    GameplayTelemetryRecorder.recordArcadeEvent(event);
+    SaveSystem.recordArcadeMetric(event);
+  }
+
   private createArcadeController(round: number, seed: number): void {
     this.arcadeController?.destroy('replaced');
     const tutorialProgress = SaveSystem.getTutorialProgress();
@@ -4221,15 +4398,22 @@ export class ArenaScene extends Phaser.Scene {
       playArcadeCue: (cue) => {
         if (cue === 'circuit-gate') this.audio.playSfx('circuitGate');
       },
-      grantCredits: (amount) => {
-        const credits = this.scaleModCredits(amount);
-        this.roundCredits += credits;
-        this.totalCreditsCollected += credits;
+      navigateEventEnemy: (enemy, targetX, targetY, speed) => {
+        this.navigateEnemy(enemy, targetX, targetY, this.time.now, speed);
       },
-      grantCoreTokens: (amount) => { this.roundCoreTokens += Math.max(0, Math.floor(amount)); },
-      grantFluxCores: (amount) => { this.roundFluxCores += Math.max(0, Math.floor(amount)); },
-      grantPlasmaChips: (amount) => { this.roundPlasmaChips += Math.max(0, Math.floor(amount)); },
-      grantGuaranteedMod: (x, y) => { this.tryAwardMod('milestone', true, x, y); },
+      findExtractionPoint: (fromX, fromY) => this.findArcadeExtractionPoint(fromX, fromY, seed),
+      spawnPhysicalRewards: (eventId: ArcadeEventId, origin, rewards: readonly ArcadeGrantedReward[]) => {
+        this.spawnPhysicalLootBurst(
+          rewards.map((reward) => ({
+            kind: reward.kind,
+            amount: reward.kind === 'credits' ? this.scaleModCredits(reward.amount) : reward.amount
+          })),
+          origin,
+          'arcade-loot',
+          eventId,
+          { maximumCreditBundles: 6, minimumCreditBundles: 2 }
+        );
+      },
       emitMetric: (event: ArcadeMetricEvent) => {
         GameplayTelemetryRecorder.recordArcadeEvent(event);
         SaveSystem.recordArcadeMetric(event);
@@ -4293,6 +4477,36 @@ export class ArenaScene extends Phaser.Scene {
       previous = chosen;
     }
     return accepted;
+  }
+
+  private findArcadeExtractionPoint(fromX: number, fromY: number, seed: number): { x: number; y: number } | null {
+    const bounds = this.layout.generation.bounds;
+    const random = new SeededRandom((seed ^ Math.floor(fromX * 31) ^ Math.floor(fromY * 17) ^ 0xe871ac7) >>> 0);
+    const inset = 64;
+    const candidates: Array<{ x: number; y: number }> = [];
+    for (let index = 1; index <= 6; index += 1) {
+      const horizontal = index / 7;
+      candidates.push(
+        { x: bounds.x + bounds.w * horizontal, y: bounds.y + inset },
+        { x: bounds.x + bounds.w * horizontal, y: bounds.y + bounds.h - inset },
+        { x: bounds.x + inset, y: bounds.y + bounds.h * horizontal },
+        { x: bounds.x + bounds.w - inset, y: bounds.y + bounds.h * horizontal }
+      );
+    }
+    let best: { x: number; y: number } | null = null;
+    let bestDistanceSquared = 0;
+    for (const candidate of random.shuffle(candidates)) {
+      const point = this.pathfinder.findNearestWalkableWorld(candidate.x, candidate.y, 0, 7);
+      if (!point || this.intersectsWallGeometry(point.x, point.y, 28, 28) || this.isNearBombSite(point.x, point.y, 105)) continue;
+      const dx = point.x - fromX;
+      const dy = point.y - fromY;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared < 360 * 360 || distanceSquared <= bestDistanceSquared) continue;
+      if (this.pathfinder.findPath(fromX, fromY, point.x, point.y, { maxIterations: 5_500 }).length === 0) continue;
+      best = point;
+      bestDistanceSquared = distanceSquared;
+    }
+    return best;
   }
 
   private buildArcadePointCandidates(random: SeededRandom): Array<{ x: number; y: number }> {
@@ -4394,7 +4608,14 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
-  private tryAwardMod(source: ModDropSource, guaranteed = false, x = this.player.x, y = this.player.y): ModPickup | null {
+  private tryAwardMod(
+    source: ModDropSource,
+    guaranteed = false,
+    x = this.player.x,
+    y = this.player.y,
+    forcePhysical = false,
+    arcadeEventId?: ArcadeEventId
+  ): ModPickup | null {
     const definition = rollModDrop({
       source,
       round: this.currentCombatRound(),
@@ -4406,8 +4627,8 @@ export class ArenaScene extends Phaser.Scene {
       guaranteed
     });
     if (!definition) return null;
-    if (source !== 'milestone') {
-      return this.spawnModPickup(definition, source, x, y);
+    if (source !== 'milestone' || forcePhysical) {
+      return this.spawnModPickup(definition, source, x, y, arcadeEventId);
     }
     // Milestone rewards occur after the objective is already complete, so
     // retain their existing immediate grant. In-arena enemy/boss drops use
@@ -4416,7 +4637,13 @@ export class ArenaScene extends Phaser.Scene {
     return null;
   }
 
-  private spawnModPickup(definition: ModDefinition, source: ModDropSource, x: number, y: number): ModPickup {
+  private spawnModPickup(
+    definition: ModDefinition,
+    source: ModDropSource,
+    x: number,
+    y: number,
+    arcadeEventId?: ArcadeEventId
+  ): ModPickup {
     const corrupted = definition.variant === 'corrupted';
     const rarityColor = corrupted ? 0xff2ba7 : MOD_RARITY_COLORS[definition.rarity];
     const root = this.add.container(x, y).setDepth(12);
@@ -4443,9 +4670,11 @@ export class ArenaScene extends Phaser.Scene {
       phase: Math.abs(x * 0.019 + y * 0.031 + definition.id.length),
       expiresAt: source === 'boss' ? Number.POSITIVE_INFINITY : this.time.now + 28_000,
       collectibleAt: this.time.now + 120,
-      collected: false
+      collected: false,
+      arcadeEventId
     };
     this.modPickups.push(pickup);
+    if (arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_spawned', arcadeEventId, 'mod', 1);
     return pickup;
   }
 
@@ -4459,6 +4688,7 @@ export class ArenaScene extends Phaser.Scene {
     for (const pickup of this.modPickups) {
       if (!pickup.sprite.active || pickup.collected) continue;
       if (now > pickup.expiresAt) {
+        if (pickup.arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_expired', pickup.arcadeEventId, 'mod', 1);
         pickup.sprite.destroy();
         continue;
       }
@@ -4478,6 +4708,7 @@ export class ArenaScene extends Phaser.Scene {
         pickup.sprite.destroy();
         this.audio.playSfx('modPickup');
         this.awardResolvedMod(pickup.definition, pickup.source, x, y, MOD_PICKUP_REVEAL_LEAD_IN_MS);
+        if (pickup.arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_collected', pickup.arcadeEventId, 'mod', 1);
         continue;
       }
       if (now >= pickup.collectibleAt && magneticField.pullSpeed > 0 && distanceSquared < attractionRadiusSquared) {
@@ -5283,7 +5514,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private playBossAttackCue(attack: BossAttackKind): void {
-    if (attack === 'storm-basic') this.audio.playSfx('mageBossMagicAttack');
+    if (attack === 'artillery-basic') this.audio.playSfx('sentryBossAttack');
+    else if (attack === 'storm-basic') this.audio.playSfx('mageBossMagicAttack');
     else if (attack === 'storm-super') this.audio.playSfx('mageBossLargeAttack');
     else if (attack === 'brawler-pounce') this.audio.playSfx('brawlerBossChargeAttack');
   }
@@ -6837,6 +7069,7 @@ export class ArenaScene extends Phaser.Scene {
     this.hudRadarContactCount = 0;
     this.nextHoloAfterimageAt = 0;
     this.arcadePopSequence = 0;
+    this.physicalLootSequence = 0;
     this.temporaryAmmo.reset();
     this.enemyNavigationSequence = 0;
     this.navState = new WeakMap<Enemy, NavState>();

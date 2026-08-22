@@ -22,6 +22,7 @@ const PRESENTATION_SFX_SOURCES = {
   totemPulse: 'soundeffects/totempulsesound.mp3',
   miniBossSpawn: 'soundeffects/minibossspawn.mp3',
   bossArtilleryExplosion: 'soundeffects/bossartillaryexplosion.mp3',
+  sentryBossAttack: 'soundeffects/senturybossattack.mp3',
   grenadeShotExplosion: 'soundeffects/grenadeshotexplosion.mp3',
   mageBossLargeAttack: 'soundeffects/magebosslargeattack.mp3',
   mageBossMagicAttack: 'soundeffects/magebossmagicattack.mp3',
@@ -40,6 +41,7 @@ const PRESENTATION_SFX_POOL_SIZES: Record<PresentationSfxName, number> = {
   totemPulse: 4,
   miniBossSpawn: 2,
   bossArtilleryExplosion: 4,
+  sentryBossAttack: 2,
   grenadeShotExplosion: 6,
   mageBossLargeAttack: 2,
   mageBossMagicAttack: 3,
@@ -57,6 +59,7 @@ const PRESENTATION_SFX_MIN_INTERVAL_MS: Record<PresentationSfxName, number> = {
   totemPulse: 55,
   miniBossSpawn: 300,
   bossArtilleryExplosion: 65,
+  sentryBossAttack: 140,
   grenadeShotExplosion: 35,
   mageBossLargeAttack: 500,
   mageBossMagicAttack: 180,
@@ -135,19 +138,19 @@ export class AudioManager {
   };
   private readonly presentationSfxPools: Record<PresentationSfxName, HTMLAudioElement[]> = {
     gasCanImpact: [], gasFizz: [], totemEntrance: [], totemPulse: [], miniBossSpawn: [],
-    bossArtilleryExplosion: [], grenadeShotExplosion: [], mageBossLargeAttack: [],
+    bossArtilleryExplosion: [], sentryBossAttack: [], grenadeShotExplosion: [], mageBossLargeAttack: [],
     mageBossMagicAttack: [], brawlerBossChargeAttack: [], circuitGate: [],
     bombsiteSkull: [], bombsiteFlower: [], bombsiteBats: [], bombsiteWitch: []
   };
   private readonly presentationSfxCursors: Record<PresentationSfxName, number> = {
     gasCanImpact: 0, gasFizz: 0, totemEntrance: 0, totemPulse: 0, miniBossSpawn: 0,
-    bossArtilleryExplosion: 0, grenadeShotExplosion: 0, mageBossLargeAttack: 0,
+    bossArtilleryExplosion: 0, sentryBossAttack: 0, grenadeShotExplosion: 0, mageBossLargeAttack: 0,
     mageBossMagicAttack: 0, brawlerBossChargeAttack: 0, circuitGate: 0,
     bombsiteSkull: 0, bombsiteFlower: 0, bombsiteBats: 0, bombsiteWitch: 0
   };
   private readonly lastPresentationSfxAt: Record<PresentationSfxName, number> = {
     gasCanImpact: -Infinity, gasFizz: -Infinity, totemEntrance: -Infinity,
-    totemPulse: -Infinity, miniBossSpawn: -Infinity, bossArtilleryExplosion: -Infinity,
+    totemPulse: -Infinity, miniBossSpawn: -Infinity, bossArtilleryExplosion: -Infinity, sentryBossAttack: -Infinity,
     grenadeShotExplosion: -Infinity, mageBossLargeAttack: -Infinity,
     mageBossMagicAttack: -Infinity, brawlerBossChargeAttack: -Infinity, circuitGate: -Infinity,
     bombsiteSkull: -Infinity, bombsiteFlower: -Infinity, bombsiteBats: -Infinity, bombsiteWitch: -Infinity
@@ -1153,6 +1156,7 @@ export class AudioManager {
       case 'totemPulse':
       case 'miniBossSpawn':
       case 'bossArtilleryExplosion':
+      case 'sentryBossAttack':
       case 'grenadeShotExplosion':
       case 'mageBossLargeAttack':
       case 'mageBossMagicAttack':
