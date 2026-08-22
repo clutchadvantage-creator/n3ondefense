@@ -145,7 +145,7 @@ export const createRunConfigurationConsole = (
   const walletLine = compact
     ? `${data.wallet.credits.toLocaleString()}C  //  ${data.wallet.coreTokens} CT  //  ${data.wallet.fluxCores} FC`
     : `${data.wallet.credits.toLocaleString()} CREDITS   //   ${data.wallet.coreTokens} CORE   //   ${data.wallet.plasmaChips} PLASMA   //   ${data.wallet.fluxCores} FLUX`;
-  addText(scene, wallet, 0, 7, walletLine, compact ? 9 : 11, '#ffe4f8', 0.5, 'Orbitron, sans-serif');
+  addText(scene, wallet, 0, 7, walletLine, compact ? 13 : 15, '#ffe4f8', 0.5, 'Orbitron, sans-serif');
 
   const createModuleFrame = (centerX: number, title: string, accent: number, channel: string): void => {
     const moduleHeight = panelBottom - panelTop;

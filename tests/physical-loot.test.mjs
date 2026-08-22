@@ -51,3 +51,14 @@ test('Arena grants physical resources and exact rolled Mods only on collision', 
   assert.match(modCollection, /pickup\.expiresAt/);
   assert.doesNotMatch(modCollection, /rollModDrop/);
 });
+
+test('ordinary enemy value remains an automatic kill reward while random pickups keep their chance gate', () => {
+  const arena = source('../src/game/scenes/ArenaScene.ts');
+  const enemyKill = arena.slice(arena.indexOf('private killEnemy'), arena.indexOf('private isOverdriveProtocol'));
+
+  assert.match(enemyKill, /this\.roundCredits \+= enemyCredits/);
+  assert.match(enemyKill, /this\.roundCoreTokens \+= enemyCoreTokens/);
+  assert.match(enemyKill, /Math\.random\(\) < pickupChance/);
+  assert.match(enemyKill, /this\.dropPickup\(enemy\.x, enemy\.y\)/);
+  assert.doesNotMatch(enemyKill, /this\.spawnPhysicalLootBurst\(/);
+});

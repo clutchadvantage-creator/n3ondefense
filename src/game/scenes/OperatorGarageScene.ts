@@ -575,11 +575,13 @@ export class OperatorGarageScene extends Phaser.Scene {
       const button = createButton(this, leftX, y, `${selected ? 'SIGNAL LOCKED // ' : ''}${option.label}  //  ${fee}`, () => {
         SaveSystem.setNextRunSetupSelection({ ...setup, modFocus: option.id });
         this.status = `SUCCESS // ${option.id ? MOD_FOCUS_LABELS[option.id] : 'Signal removed'} configured for next deployment.`;
-        this.scene.restart({ returnScene: this.returnScene });
+        // Rebuild only the overlay so its selected state and diagnostics update
+        // while the player remains in Run Configuration until choosing Close.
+        this.showRunConfiguration();
         return true;
       }, rowWidth, 'menu', {
         height: Math.min(compact ? 35 : 44, signalGap - 6),
-        fontSize: compact ? 9 : 13,
+        fontSize: compact ? 14 : 18,
         horizontalPadding: compact ? 34 : 52
       });
       root.add(button);
@@ -625,16 +627,18 @@ export class OperatorGarageScene extends Phaser.Scene {
       const button = createButton(this, rightX, y, `${selected ? 'PROTOCOL ARMED // ' : ''}${option.label}  //  ${option.cost > 0 ? `${option.cost.toLocaleString()}C` : 'FREE'}`, () => {
         SaveSystem.setNextRunSetupSelection({ ...setup, contract: option.id });
         this.status = `SUCCESS // ${option.id ? RUN_CONTRACTS[option.id].label : 'Contract removed'} configured for next deployment.`;
-        this.scene.restart({ returnScene: this.returnScene });
+        // Keep the console open so Signal and Contract can be configured in a
+        // single visit; Close remains the only route back to the Garage.
+        this.showRunConfiguration();
         return true;
       }, rowWidth, 'menu', {
         height: compact ? 34 : 42,
-        fontSize: compact ? 9 : 13,
+        fontSize: compact ? 14 : 18,
         horizontalPadding: compact ? 46 : 64
       });
       root.add(button);
       root.add(this.add.text(rightX, y + (compact ? 20 : 25), option.description, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 8 : 11}px`, color: '#9fb9c5', align: 'center',
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 18 : 21}px`, color: '#b9d4df', align: 'center',
         wordWrap: { width: columnWidth - 64, useAdvancedWrap: true }
       }).setOrigin(0.5, 0).setMaxLines(2));
     });

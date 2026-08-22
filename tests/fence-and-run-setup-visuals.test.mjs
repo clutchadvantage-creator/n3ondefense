@@ -26,7 +26,7 @@ test('HUD cooldown modules mirror the deployed fence, turret, mine, and shield a
   assert.match(iconRenderer, /Layered energy bubble with orbit segments and crackling core/);
 });
 
-test('one-run setup uses the advanced console shell without changing setup callbacks', () => {
+test('one-run setup uses the advanced console shell and keeps the console open while selecting', () => {
   const runSetup = garage.slice(garage.indexOf('private showRunConfiguration'), garage.indexOf('private showLibrary'));
   const consoleUi = readFileSync(new URL('../src/game/ui/RunConfigurationConsoleUi.ts', import.meta.url), 'utf8');
   assert.match(runSetup, /createRunConfigurationConsole\(this/);
@@ -38,6 +38,10 @@ test('one-run setup uses the advanced console shell without changing setup callb
   assert.match(consoleUi, /REWARD PARAMETERS/);
   assert.match(consoleUi, /DEPLOYMENT SUMMARY \/\/ SYSTEM FEED/);
   assert.match(runSetup, /SaveSystem\.setNextRunSetupSelection/);
-  assert.match(runSetup, /this\.scene\.restart\(\{ returnScene: this\.returnScene \}\)/);
+  assert.doesNotMatch(runSetup, /this\.scene\.restart\(\{ returnScene: this\.returnScene \}\)/);
+  assert.equal((runSetup.match(/this\.showRunConfiguration\(\)/g) ?? []).length, 2);
+  assert.match(runSetup, /fontSize: compact \? 14 : 18/);
+  assert.match(runSetup, /fontSize: `\$\{compact \? 18 : 21\}px`/);
+  assert.match(consoleUi, /walletLine, compact \? 13 : 15/);
   assert.match(garage, /this\.tweens\.killTweensOf\(this\.overlayAnimatedTargets\)/);
 });

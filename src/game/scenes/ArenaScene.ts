@@ -4165,6 +4165,13 @@ export class ArenaScene extends Phaser.Scene {
     const enemyCredits = suppressBaseLoot ? 0 : this.scaleModCredits(enemy.stats.valueCredits * bombsiteCreditMultiplier);
     const enemyCoreTokens = suppressBaseLoot ? 0 : enemy.stats.valueCoreTokens;
     this.bombsiteMods.recordBonusCredits(Math.max(0, enemyCredits - standardCredits));
+    // Standard enemy value is the guaranteed kill reward, as it was before the
+    // physical-loot service was introduced for Arcade rewards. Turning every
+    // kill value into a world pickup made every enemy appear to drop loot and
+    // bypassed the intentional enemyDropChance gate below.
+    this.roundCredits += enemyCredits;
+    this.roundCoreTokens += enemyCoreTokens;
+    this.totalCreditsCollected += enemyCredits;
     this.pendingProgressEnemyKills += 1;
 
     GameplayTelemetryRecorder.recordEnemyKill({
@@ -4179,16 +4186,6 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     if (!suppressBaseLoot) {
-      this.spawnPhysicalLootBurst(
-        [
-          { kind: 'credits', amount: enemyCredits },
-          { kind: 'core-tokens', amount: enemyCoreTokens }
-        ],
-        { x: enemy.x, y: enemy.y },
-        'enemy',
-        undefined,
-        { maximumCreditBundles: 1, minimumCreditBundles: 1, compact: true }
-      );
       this.tryAwardMod(enemy.stats.type === 'star' ? 'eliteEnemy' : 'normalEnemy', false, enemy.x, enemy.y);
     }
 
