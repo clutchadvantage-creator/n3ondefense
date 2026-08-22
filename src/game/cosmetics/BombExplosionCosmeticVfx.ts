@@ -77,11 +77,17 @@ export class BombExplosionCosmeticVfx {
     };
   }
 
-  emitEquipped(cosmeticId: string | null, x: number, y: number, radius: number, now: number): boolean {
+  emitEquipped(
+    cosmeticId: string | null,
+    x: number,
+    y: number,
+    radius: number,
+    now: number
+  ): BombExplosionCosmeticEffectId | null {
     const effectId = getCosmeticById(cosmeticId)?.bombExplosionEffect;
-    if (!effectId) return false;
+    if (!effectId) return null;
     this.emit(effectId, x, y, radius, now);
-    return true;
+    return effectId;
   }
 
   emit(effectId: BombExplosionCosmeticEffectId, x: number, y: number, radius: number, now: number): void {

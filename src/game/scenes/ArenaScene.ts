@@ -70,6 +70,7 @@ import { UniformSpatialGrid } from '../performance/UniformSpatialGrid.ts';
 import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
 import { MineExplosionVfx } from '../vfx/MineExplosionVfx.ts';
 import { BombExplosionCosmeticVfx } from '../cosmetics/BombExplosionCosmeticVfx.ts';
+import { BOMB_EXPLOSION_COSMETIC_DEFINITIONS } from '../cosmetics/BombExplosionCosmeticDefinitions.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
@@ -4860,13 +4861,16 @@ export class ArenaScene extends Phaser.Scene {
       this.time.now,
       false
     );
-    this.bombExplosionCosmeticVfx.emitEquipped(
+    const bombExplosionCosmeticEffect = this.bombExplosionCosmeticVfx.emitEquipped(
       SaveSystem.getEquippedCosmeticId('bombColor'),
       site.x,
       site.y,
       BOMBSITE_EXPLOSION_VISUAL_RADIUS,
       this.time.now
     );
+    if (bombExplosionCosmeticEffect) {
+      this.audio.playSfx(BOMB_EXPLOSION_COSMETIC_DEFINITIONS[bombExplosionCosmeticEffect].sound);
+    }
 
     if (this.modRuntime.hasInfusion('detonation-fireworks')) this.playDetonationFireworks(site.x, site.y);
 

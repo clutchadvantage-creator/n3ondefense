@@ -26,7 +26,11 @@ const PRESENTATION_SFX_SOURCES = {
   mageBossLargeAttack: 'soundeffects/magebosslargeattack.mp3',
   mageBossMagicAttack: 'soundeffects/magebossmagicattack.mp3',
   brawlerBossChargeAttack: 'soundeffects/brawlerbosschargeattack.mp3',
-  circuitGate: 'soundeffects/arenacircuitgate.mp3'
+  circuitGate: 'soundeffects/arenacircuitgate.mp3',
+  bombsiteSkull: 'soundeffects/skullbombsite.mp3',
+  bombsiteFlower: 'soundeffects/flowerbombsite.mp3',
+  bombsiteBats: 'soundeffects/batbombsite.mp3',
+  bombsiteWitch: 'soundeffects/witchlaugh.mp3'
 } as const;
 type PresentationSfxName = keyof typeof PRESENTATION_SFX_SOURCES;
 const PRESENTATION_SFX_POOL_SIZES: Record<PresentationSfxName, number> = {
@@ -40,7 +44,11 @@ const PRESENTATION_SFX_POOL_SIZES: Record<PresentationSfxName, number> = {
   mageBossLargeAttack: 2,
   mageBossMagicAttack: 3,
   brawlerBossChargeAttack: 2,
-  circuitGate: 2
+  circuitGate: 2,
+  bombsiteSkull: 2,
+  bombsiteFlower: 2,
+  bombsiteBats: 2,
+  bombsiteWitch: 2
 };
 const PRESENTATION_SFX_MIN_INTERVAL_MS: Record<PresentationSfxName, number> = {
   gasCanImpact: 70,
@@ -53,7 +61,11 @@ const PRESENTATION_SFX_MIN_INTERVAL_MS: Record<PresentationSfxName, number> = {
   mageBossLargeAttack: 500,
   mageBossMagicAttack: 180,
   brawlerBossChargeAttack: 400,
-  circuitGate: 80
+  circuitGate: 80,
+  bombsiteSkull: 80,
+  bombsiteFlower: 80,
+  bombsiteBats: 80,
+  bombsiteWitch: 80
 };
 type AbilityFeedbackSfxName = 'placeTurret' | 'electricFence' | 'placeMine' | 'unavailable';
 const PICKUP_SFX_SOURCES = {
@@ -124,18 +136,21 @@ export class AudioManager {
   private readonly presentationSfxPools: Record<PresentationSfxName, HTMLAudioElement[]> = {
     gasCanImpact: [], gasFizz: [], totemEntrance: [], totemPulse: [], miniBossSpawn: [],
     bossArtilleryExplosion: [], grenadeShotExplosion: [], mageBossLargeAttack: [],
-    mageBossMagicAttack: [], brawlerBossChargeAttack: [], circuitGate: []
+    mageBossMagicAttack: [], brawlerBossChargeAttack: [], circuitGate: [],
+    bombsiteSkull: [], bombsiteFlower: [], bombsiteBats: [], bombsiteWitch: []
   };
   private readonly presentationSfxCursors: Record<PresentationSfxName, number> = {
     gasCanImpact: 0, gasFizz: 0, totemEntrance: 0, totemPulse: 0, miniBossSpawn: 0,
     bossArtilleryExplosion: 0, grenadeShotExplosion: 0, mageBossLargeAttack: 0,
-    mageBossMagicAttack: 0, brawlerBossChargeAttack: 0, circuitGate: 0
+    mageBossMagicAttack: 0, brawlerBossChargeAttack: 0, circuitGate: 0,
+    bombsiteSkull: 0, bombsiteFlower: 0, bombsiteBats: 0, bombsiteWitch: 0
   };
   private readonly lastPresentationSfxAt: Record<PresentationSfxName, number> = {
     gasCanImpact: -Infinity, gasFizz: -Infinity, totemEntrance: -Infinity,
     totemPulse: -Infinity, miniBossSpawn: -Infinity, bossArtilleryExplosion: -Infinity,
     grenadeShotExplosion: -Infinity, mageBossLargeAttack: -Infinity,
-    mageBossMagicAttack: -Infinity, brawlerBossChargeAttack: -Infinity, circuitGate: -Infinity
+    mageBossMagicAttack: -Infinity, brawlerBossChargeAttack: -Infinity, circuitGate: -Infinity,
+    bombsiteSkull: -Infinity, bombsiteFlower: -Infinity, bombsiteBats: -Infinity, bombsiteWitch: -Infinity
   };
   private runStartSfx: HTMLAudioElement | null = null;
   private securityLaserAudio: HTMLAudioElement | null = null;
@@ -1143,6 +1158,10 @@ export class AudioManager {
       case 'mageBossMagicAttack':
       case 'brawlerBossChargeAttack':
       case 'circuitGate':
+      case 'bombsiteSkull':
+      case 'bombsiteFlower':
+      case 'bombsiteBats':
+      case 'bombsiteWitch':
         this.playPresentationSfx(name);
         break;
       case 'pickup':

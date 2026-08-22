@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { COSMETICS } from '../src/data/cosmetics.ts';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import { BOMB_EXPLOSION_COSMETIC_DEFINITIONS } from '../src/game/cosmetics/BombExplosionCosmeticDefinitions.ts';
@@ -54,8 +54,26 @@ test('arena leaves the authoritative bomb explosion intact and invokes one gener
   assert.match(detonation, /this\.bombExplosionCosmeticVfx\.emitEquipped\([\s\S]*?getEquippedCosmeticId\('bombColor'\)/);
   assert.ok(detonation.indexOf('mineExplosionVfx.emitColors') < detonation.indexOf('bombExplosionCosmeticVfx.emitEquipped'));
   assert.match(detonation, /this\.audio\.playSfx\('bomb'\)/);
+  assert.match(detonation, /const bombExplosionCosmeticEffect = this\.bombExplosionCosmeticVfx\.emitEquipped/);
+  assert.match(detonation, /this\.audio\.playSfx\(BOMB_EXPLOSION_COSMETIC_DEFINITIONS\[bombExplosionCosmeticEffect\]\.sound\)/);
   assert.match(detonation, /this\.fluxCores\?\.damageArea/);
   assert.doesNotMatch(detonation, /death-signal|neon-bloom/);
+});
+
+test('each equipped premium bomb signature owns its matching recorded audio cue', () => {
+  const expected = {
+    'death-signal': ['bombsiteSkull', 'skullbombsite.mp3'],
+    'neon-bloom': ['bombsiteFlower', 'flowerbombsite.mp3'],
+    'neon-bats': ['bombsiteBats', 'batbombsite.mp3'],
+    'witch-signal': ['bombsiteWitch', 'witchlaugh.mp3']
+  };
+  const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+  for (const [effectId, [sound, filename]] of Object.entries(expected)) {
+    assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS[effectId].sound, sound);
+    assert.ok(existsSync(new URL(`../public/assets/audio/soundeffects/${filename}`, import.meta.url)), filename);
+    assert.match(audio, new RegExp(`${sound}: 'soundeffects/${filename.replace('.', '\\.')}'`));
+    assert.match(audio, new RegExp(`case '${sound}':`));
+  }
 });
 
 test('signature renderer is bounded, batched, data-driven, and has complete lifecycle cleanup', () => {
