@@ -28,7 +28,9 @@ export const createCosmeticPreview = (
 ): CosmeticPreviewHandle => {
   const container = scene.add.container(x, y);
   const colorSetters: Array<(color: number) => void> = [];
-  const initialColor = getCosmeticDisplayColor(item, scene.time.now);
+  const initialColor = item.colorMode === 'prism'
+    ? getCosmeticDisplayColor(item, scene.time.now)
+    : item.previewColor ?? getCosmeticDisplayColor(item, scene.time.now);
   const maxWidth = Math.max(12, options.maxWidth);
   const maxHeight = Math.max(12, options.maxHeight);
 
@@ -62,16 +64,16 @@ export const createCosmeticPreview = (
 
   switch (item.category) {
     case 'playerShape':
-      addImage(item.textureKey ?? item.id);
+      addImage(item.previewIcon ?? item.textureKey ?? item.id);
       break;
     case 'playerColor':
-      addImage(options.operatorTextureKey ?? 'player-circle');
+      addImage(item.previewIcon ?? options.operatorTextureKey ?? 'player-circle');
       break;
     case 'projectileShape':
-      addImage(item.textureKey ?? 'projectile-pulse', maxWidth, maxHeight * 0.72);
+      addImage(item.previewIcon ?? item.textureKey ?? 'projectile-pulse', maxWidth, maxHeight * 0.72);
       break;
     case 'projectileColor':
-      addImage(options.projectileTextureKey ?? 'projectile-pulse', maxWidth, maxHeight * 0.72);
+      addImage(item.previewIcon ?? options.projectileTextureKey ?? 'projectile-pulse', maxWidth, maxHeight * 0.72);
       break;
     case 'trailColor':
     case 'dashTrail': {

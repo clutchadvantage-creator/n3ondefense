@@ -15,6 +15,7 @@ import {
   saveCurrentGaragePreset
 } from '../src/game/garage/GarageState.ts';
 import { calculateGarageLayout } from '../src/game/garage/garageLayout.ts';
+import { calculateGearLockerLayout } from '../src/game/garage/gearLockerLayout.ts';
 import { MOD_BY_ID, MOD_DEFINITIONS } from '../src/game/mods/definitions.ts';
 import { addModDrop, deleteModCard, equipMod, unequipMod } from '../src/game/mods/ModInventoryService.ts';
 import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
@@ -275,6 +276,31 @@ test('Gear Locker uses category-aware cosmetic previews instead of generic color
   assert.match(garage, /createCosmeticPreview\(this, item/);
   for (const category of ['playerShape', 'playerColor', 'projectileShape', 'projectileColor', 'trailColor', 'dashTrail', 'bombColor', 'turretSkin', 'fenceStyle']) {
     assert.match(preview, new RegExp(`case '${category}'`));
+  }
+});
+
+test('Gear Locker uses the cyber terminal category strip, tall owned cards, and equipped hologram chamber', () => {
+  const garage = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
+  const presentation = readFileSync(new URL('../src/game/garage/GearLockerUi.ts', import.meta.url), 'utf8');
+  assert.match(garage, /createCosmeticCategoryNavigation/);
+  assert.match(garage, /GEAR_LOCKER_CATEGORY_LABELS\[category\]/);
+  assert.match(garage, /createCosmeticLockerCard/);
+  assert.match(garage, /\/\/ CURRENTLY EQUIPPED/);
+  assert.match(garage, /DYNAMIC.*COLOR CODE|COLOR CODE.*DYNAMIC/s);
+  assert.match(garage, /SaveSystem\.equipCosmetic\(item\.category, item\.id\)/);
+  assert.match(presentation, /createGearLockerCategoryIcon/);
+  assert.doesNotMatch(garage, /LOCKER: \$\{COSMETIC_CATEGORY_LABELS/);
+});
+
+test('Gear Locker responsive layout keeps inventory and preview separate at supported desktop sizes', () => {
+  for (const [width, height] of [[2560, 1440], [1920, 1080], [1600, 900], [1366, 768]]) {
+    const layout = calculateGearLockerLayout(width, height, 9);
+    assert.ok(layout.inventory.width >= 650, `${width} inventory width`);
+    assert.ok(layout.preview.width >= 270, `${width} preview width`);
+    assert.ok(layout.inventory.x + layout.inventory.width < layout.preview.x, `${width} module gap`);
+    assert.ok(layout.preview.x + layout.preview.width <= width - layout.safe, `${width} preview safe edge`);
+    assert.ok(layout.inventory.y + layout.inventory.height < layout.footerY - layout.footerHeight / 2, `${width} footer clearance`);
+    assert.ok(layout.visibleCategoryCount >= 3 && layout.visibleCategoryCount <= 9, `${width} tab count`);
   }
 });
 

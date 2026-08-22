@@ -7,6 +7,13 @@ import type { RunSetupSelection } from '../economy/types.ts';
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys.ts';
 import { calculateGarageLayout, type GarageRect } from '../garage/garageLayout.ts';
 import {
+  GEAR_LOCKER_CATEGORY_LABELS,
+  createGearLockerCategoryIcon,
+  createGearLockerPanel,
+  formatCosmeticColorCode
+} from '../garage/GearLockerUi.ts';
+import { calculateGearLockerLayout, type GearLockerLayout } from '../garage/gearLockerLayout.ts';
+import {
   addTerminalMount,
   createGarageEnvironment,
   createModWorkbench,
@@ -20,7 +27,7 @@ import type { ModCardInstance, ModCategory, ModDefinition, ModRarity, RunProtoco
 import { AudioManager } from '../systems/AudioManager.ts';
 import { SaveSystem } from '../systems/SaveSystem.ts';
 import type { CosmeticOption } from '../types.ts';
-import { createModCollectionFrame } from '../ui/ModCollectionUi.ts';
+import { createModCollectionButton, createModCollectionFrame } from '../ui/ModCollectionUi.ts';
 import { createButton, disableButton } from '../utils/ui.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
@@ -33,11 +40,6 @@ const LIBRARY_CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player
 const LIBRARY_RARITIES: Array<'all' | ModRarity> = ['all', 'common', 'uncommon', 'rare', 'epic', 'legendary'];
 const LIBRARY_OWNERSHIP: LibraryOwnershipFilter[] = ['all', 'owned', 'unowned', 'corrupted'];
 const COSMETIC_CATEGORIES = Array.from(new Set(COSMETICS.map((item) => item.category)));
-const COSMETIC_CATEGORY_LABELS: Record<CosmeticOption['category'], string> = {
-  playerColor: 'OPERATIVE COLOR', playerShape: 'OPERATIVE FRAME', projectileColor: 'PROJECTILE COLOR', projectileShape: 'PROJECTILE SHAPE',
-  trailColor: 'MOVEMENT TRAIL', bombColor: 'CHARGE COLOR', turretSkin: 'TURRET SKIN', fenceStyle: 'FENCE STYLE', dashTrail: 'DASH TRAIL'
-};
-
 const syntheticLibraryCard = (definition: ModDefinition): ModCardInstance => ({
   instanceId: `library-${definition.id}`,
   modId: definition.id,
@@ -678,65 +680,403 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private showCosmetics(): void {
-    const root = this.createOverlay('GEAR LOCKER // OWNED COSMETICS');
-    const { width, height } = this.scale;
+    const { width } = this.scale;
+    const layout = calculateGearLockerLayout(this.scale.width, this.scale.height, COSMETIC_CATEGORIES.length);
+    const root = this.createGearLockerOverlay(layout);
     const save = SaveSystem.get();
     const category = COSMETIC_CATEGORIES[this.cosmeticCategoryIndex];
     const owned = COSMETICS.filter((item) => item.category === category && save.unlockedCosmetics.includes(item.id));
     const equippedId = save.equippedCosmetics[category];
-    const selectorWidth = Math.min(260, width - 220);
-    root.add(createButton(this, 20 + selectorWidth / 2, 80, `LOCKER: ${COSMETIC_CATEGORY_LABELS[category]}`, () => { this.cosmeticCategoryIndex = (this.cosmeticCategoryIndex + 1) % COSMETIC_CATEGORIES.length; this.cosmeticPage = 0; this.showCosmetics(); }, selectorWidth));
-    root.add(this.add.text(24, 108, `${owned.length} OWNED // STORE ITEMS DO NOT APPEAR UNTIL UNLOCKED`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#83b1c0' }).setOrigin(0));
-    const previewWidth = Phaser.Math.Clamp(width * 0.26, 180, 300);
-    const gridLeft = 22;
-    const gridRight = width - previewWidth - 28;
-    const itemWidth = Phaser.Math.Clamp((gridRight - gridLeft - 20) / 3, 112, 180);
-    const columns = Math.max(2, Math.floor((gridRight - gridLeft) / (itemWidth + 10)));
-    const itemHeight = 94;
-    const rows = Math.max(1, Math.floor((height - 175) / (itemHeight + 10)));
-    const perPage = columns * rows;
+
+    this.createCosmeticCategoryNavigation(root, layout);
+
+    const inventoryFrame = createGearLockerPanel(this, layout.inventory, {
+      title: `OWNED MODULES // ${GEAR_LOCKER_CATEGORY_LABELS[category]}`,
+      accent: 0x55efff
+    });
+    root.add(inventoryFrame);
+    this.trackGearLockerPanel(inventoryFrame);
+
+    const countY = layout.inventory.y + (layout.compact ? 50 : 58);
+    root.add(this.add.text(layout.inventory.x + 22, countY, `${owned.length} OWNED`, {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 11 : 14}px`, color: '#68f4ff', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0, 0.5));
+    root.add(this.add.text(layout.inventory.x + layout.inventory.width - 22, countY, 'STORE ITEMS REMAIN HIDDEN UNTIL UNLOCKED', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 9 : 12}px`, color: '#739ba9', fontStyle: 'bold', letterSpacing: layout.compact ? 0 : 1
+    }).setOrigin(1, 0.5));
+
+    const gridGap = layout.compact ? 8 : 12;
+    const gridPadding = layout.compact ? 14 : 20;
+    const gridWidth = layout.inventory.width - gridPadding * 2;
+    const minimumCardWidth = layout.compact ? 124 : 146;
+    const columns = Phaser.Math.Clamp(Math.floor((gridWidth + gridGap) / (minimumCardWidth + gridGap)), 2, 8);
+    const itemWidth = (gridWidth - gridGap * (columns - 1)) / columns;
+    const gridTop = countY + (layout.compact ? 18 : 24);
+    const gridBottom = layout.inventory.y + layout.inventory.height - (layout.compact ? 14 : 20);
+    const availableCardHeight = Math.max(210, gridBottom - gridTop);
+    const itemHeight = Math.min(
+      availableCardHeight,
+      Phaser.Math.Clamp(itemWidth * 2.32, layout.compact ? 245 : 280, layout.compact ? 350 : 430)
+    );
+    const perPage = columns;
     const maxPage = Math.max(0, Math.ceil(owned.length / perPage) - 1);
     this.cosmeticPage = Math.min(this.cosmeticPage, maxPage);
     owned.slice(this.cosmeticPage * perPage, (this.cosmeticPage + 1) * perPage).forEach((item, index) => {
-      const x = gridLeft + itemWidth / 2 + index % columns * (itemWidth + 10);
-      const y = 152 + itemHeight / 2 + Math.floor(index / columns) * (itemHeight + 10);
-      const equipped = item.id === equippedId;
-      const color = getCosmeticDisplayColor(item, this.time.now);
-      const panel = this.add.rectangle(x, y, itemWidth, itemHeight, 0x0a1823, 0.96).setStrokeStyle(equipped ? 3 : 1, equipped ? 0x66ffad : color, equipped ? 1 : 0.55).setInteractive({ useHandCursor: true });
-      const visual = this.createLockerCosmeticVisual(item, x, y - 20, Math.min(76, itemWidth * 0.55), 38);
-      const label = this.add.text(x, y + 7, item.label.toUpperCase(), { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', fontStyle: 'bold', color: '#e4faff', align: 'center' }).setOrigin(0.5).setWordWrapWidth(itemWidth - 12, true).setMaxLines(2);
-      const state = this.add.text(x, y + 35, equipped ? 'EQUIPPED' : 'OWNED // CLICK TO EQUIP', { fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: equipped ? '#70ffac' : '#89abba' }).setOrigin(0.5);
-      panel.on('pointerover', () => this.audio.playSfx('menuHover'));
-      panel.on('pointerdown', () => {
-        SaveSystem.equipCosmetic(item.category, item.id);
-        if (item.category === 'playerShape' || item.category === 'playerColor') this.refreshOperatorPreview();
-        this.audio.playSfx('menu');
-        this.status = `SUCCESS // ${item.label.toUpperCase()} EQUIPPED`;
-        this.showCosmetics();
-      });
-      root.add([panel, visual, label, state]);
+      const x = layout.inventory.x + gridPadding + itemWidth / 2 + index * (itemWidth + gridGap);
+      const y = gridTop + availableCardHeight / 2;
+      root.add(this.createCosmeticLockerCard(item, x, y, itemWidth, itemHeight, item.id === equippedId, layout.compact));
     });
-    if (!owned.length) root.add(this.add.text((gridLeft + gridRight) / 2, height / 2, 'NO OWNED COSMETICS IN THIS LOCKER\nVISIT THE STORE TO UNLOCK ITEMS', { fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#688694', align: 'center' }).setOrigin(0.5));
-    const previous = createButton(this, gridLeft + 50, height - 35, '◀', () => { this.cosmeticPage = Math.max(0, this.cosmeticPage - 1); this.showCosmetics(); }, 82);
-    const next = createButton(this, gridRight - 50, height - 35, '▶', () => { this.cosmeticPage = Math.min(maxPage, this.cosmeticPage + 1); this.showCosmetics(); }, 82);
+
+    if (!owned.length) {
+      root.add(this.add.text(layout.inventory.x + layout.inventory.width / 2, gridTop + availableCardHeight / 2, 'NO OWNED COSMETICS IN THIS LOCKER\nVISIT THE STORE TO UNLOCK ITEMS', {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 13 : 17}px`, color: '#688e9d', align: 'center', lineSpacing: 8
+      }).setOrigin(0.5));
+    }
+
+    const pagerCenter = layout.inventory.x + layout.inventory.width / 2;
+    const pagerOffset = layout.compact ? 88 : 118;
+    const previous = createModCollectionButton(this, pagerCenter - pagerOffset, layout.footerY, '<', () => {
+      this.cosmeticPage = Math.max(0, this.cosmeticPage - 1);
+      this.showCosmetics();
+    }, layout.compact ? 70 : 90, 'standard', { height: layout.footerHeight - 10, fontSize: layout.compact ? 18 : 24 });
+    const next = createModCollectionButton(this, pagerCenter + pagerOffset, layout.footerY, '>', () => {
+      this.cosmeticPage = Math.min(maxPage, this.cosmeticPage + 1);
+      this.showCosmetics();
+    }, layout.compact ? 70 : 90, 'standard', { height: layout.footerHeight - 10, fontSize: layout.compact ? 18 : 24 });
     if (this.cosmeticPage === 0) disableButton(previous);
     if (this.cosmeticPage === maxPage) disableButton(next);
-    root.add([previous, this.add.text((gridLeft + gridRight) / 2, height - 35, `PAGE ${this.cosmeticPage + 1} / ${maxPage + 1}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#add7e4' }).setOrigin(0.5), next]);
-    this.createCosmeticLockerPreview(root, width - previewWidth / 2 - 12, 130, previewWidth - 12, height - 155, category, equippedId);
+    root.add([previous, next]);
+    root.add(this.add.text(pagerCenter, layout.footerY, `PAGE ${this.cosmeticPage + 1} / ${maxPage + 1}`, {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 11 : 14}px`, color: '#add7e4', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0.5));
+    root.add(this.add.text(layout.safe + 22, layout.footerY, 'LOCKER STATUS\nACTIVE  //  LOCAL VAULT', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 9 : 11}px`, color: '#70ffad', fontStyle: 'bold', lineSpacing: 2
+    }).setOrigin(0, 0.5));
+    root.add(this.add.text(width - layout.safe - 22, layout.footerY, 'DATA NODE\nSYNCED  //  PROFILE LINK', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 9 : 11}px`, color: '#72ceda', fontStyle: 'bold', align: 'right', lineSpacing: 2
+    }).setOrigin(1, 0.5));
+
+    this.createCosmeticLockerPreview(root, layout, category, equippedId);
     this.startLockerPrismPreviewUpdates();
   }
 
-  private createCosmeticLockerPreview(root: Phaser.GameObjects.Container, x: number, y: number, width: number, height: number, category: CosmeticOption['category'], equippedId?: string): void {
-    root.add(this.add.rectangle(x, y + height / 2, width, height, 0x07131d, 0.96).setStrokeStyle(2, 0xff5bcf, 0.5));
-    root.add(this.add.text(x, y + 18, 'CURRENTLY EQUIPPED', { fontFamily: 'Orbitron, sans-serif', fontSize: '13px', color: '#ff9ddb' }).setOrigin(0.5));
+  private createGearLockerOverlay(layout: GearLockerLayout): Phaser.GameObjects.Container {
+    this.closeOverlay();
+    const { width, height } = this.scale;
+    const root = this.add.container(0, 0).setDepth(2000);
+    const blocker = this.add.rectangle(width / 2, height / 2, width, height, 0x01050a, 0.995).setInteractive();
+    const grid = this.add.grid(width / 2, height / 2, width, height, layout.compact ? 34 : 46, layout.compact ? 34 : 46, 0x02080e, 0.2, 0x1b5263, 0.11);
+    const shellWidth = width - layout.safe * 2;
+    const shellHeight = height - layout.safe * 2;
+    const shellPoints = createConsoleChamferPoints(shellWidth, shellHeight, layout.compact ? 12 : 22);
+    const shadow = this.add.polygon(width / 2 + 6, height / 2 + 7, shellPoints, 0x000000, 0.68);
+    const chassis = this.add.polygon(width / 2, height / 2, shellPoints, 0x06101a, 0.97).setStrokeStyle(2, 0x55efff, 0.72);
+    const inner = this.add.rectangle(width / 2, height / 2, shellWidth - 20, shellHeight - 20, 0x06131c, 0.62).setStrokeStyle(1, 0xff5bcf, 0.2);
+    const topRail = this.add.rectangle(width / 2, layout.safe + 8, shellWidth - 58, 4, 0x55efff, 0.6);
+    const leftRail = this.add.rectangle(layout.safe + 8, height / 2, 3, shellHeight - 54, 0xff5bcf, 0.42);
+    const rightRail = this.add.rectangle(width - layout.safe - 8, height / 2, 3, shellHeight - 54, 0x55efff, 0.38);
+    root.add([blocker, grid, shadow, chassis, inner, topRail, leftRail, rightRail]);
+
+    const utilityY = layout.safe + (layout.compact ? 14 : 17);
+    root.add(this.add.text(layout.safe + 32, utilityY, '// GARAGE TERMINAL', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 9 : 12}px`, color: '#6edce8', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0, 0.5));
+    root.add(this.add.text(width / 2, utilityY, 'SECURE LINK  /////  ONLINE', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 8 : 10}px`, color: '#6effac', fontStyle: 'bold', letterSpacing: 2
+    }).setOrigin(0.5));
+    const secureLed = this.add.circle(width / 2 + (layout.compact ? 90 : 126), utilityY, 3, 0x6effac, 0.92);
+    root.add(secureLed);
+    this.overlayAnimatedTargets.push(secureLed);
+    this.tweens.add({ targets: secureLed, alpha: { from: 0.2, to: 1 }, duration: 720, yoyo: true, repeat: -1 });
+
+    const titleSize = layout.compact ? 22 : Phaser.Math.Clamp(width * 0.026, 30, 42);
+    const titleLeft = this.add.text(0, layout.titleY, 'GEAR LOCKER', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${titleSize}px`, color: '#69f5ff', fontStyle: 'bold', shadow: { color: '#2aeaff', blur: 8, fill: true }
+    }).setOrigin(0, 0.5);
+    const titleSlash = this.add.text(0, layout.titleY, '//', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${titleSize}px`, color: '#ff62c9', fontStyle: 'bold', shadow: { color: '#ff2da9', blur: 7, fill: true }
+    }).setOrigin(0, 0.5);
+    const titleRight = this.add.text(0, layout.titleY, 'OWNED COSMETICS', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${titleSize}px`, color: '#69f5ff', fontStyle: 'bold', shadow: { color: '#2aeaff', blur: 8, fill: true }
+    }).setOrigin(0, 0.5);
+    const titleGap = layout.compact ? 8 : 12;
+    const totalTitleWidth = titleLeft.width + titleSlash.width + titleRight.width + titleGap * 2;
+    const titleStart = width / 2 - totalTitleWidth / 2;
+    titleLeft.setX(titleStart);
+    titleSlash.setX(titleStart + titleLeft.width + titleGap);
+    titleRight.setX(titleSlash.x + titleSlash.width + titleGap);
+    root.add([titleLeft, titleSlash, titleRight]);
+
+    const titleUnderlight = this.add.rectangle(width / 2, layout.titleY + titleSize * 0.7, Math.min(width * 0.52, 860), 2, 0x55efff, 0.42);
+    root.add(titleUnderlight);
+    this.overlayAnimatedTargets.push(titleUnderlight);
+    this.tweens.add({ targets: titleUnderlight, alpha: { from: 0.2, to: 0.65 }, duration: 1900, yoyo: true, repeat: -1 });
+
+    const close = createModCollectionButton(this, width - layout.safe - (layout.compact ? 62 : 86), layout.safe + (layout.compact ? 27 : 34), 'CLOSE // X', () => this.closeOverlay(), layout.compact ? 112 : 152, 'utility', {
+      height: layout.compact ? 38 : 48, fontSize: layout.compact ? 12 : 16
+    });
+    root.add(close);
+
+    const sweep = this.add.rectangle(layout.safe + 18, height / 2, 2, shellHeight - 44, 0x55efff, 0.06);
+    root.add(sweep);
+    this.overlayAnimatedTargets.push(sweep);
+    this.tweens.add({ targets: sweep, x: width - layout.safe - 18, alpha: { from: 0.015, to: 0.1 }, duration: 4800, repeat: -1, repeatDelay: 2400, ease: 'Sine.easeInOut' });
+
+    this.overlay = root;
+    return root;
+  }
+
+  private createCosmeticCategoryNavigation(root: Phaser.GameObjects.Container, layout: GearLockerLayout): void {
+    const total = COSMETIC_CATEGORIES.length;
+    const visible = layout.visibleCategoryCount;
+    const maxStart = Math.max(0, total - visible);
+    const start = Phaser.Math.Clamp(this.cosmeticCategoryIndex - Math.floor(visible / 2), 0, maxStart);
+    const visibleCategories = COSMETIC_CATEGORIES.slice(start, start + visible);
+    const arrowGap = layout.compact ? 8 : 12;
+    const leftArrowX = layout.categoryLeft + layout.categoryArrowWidth / 2;
+    const rightArrowX = layout.categoryRight - layout.categoryArrowWidth / 2;
+    const previous = createModCollectionButton(this, leftArrowX, layout.categoryY, '<', () => {
+      this.cosmeticCategoryIndex = Math.max(0, this.cosmeticCategoryIndex - 1);
+      this.cosmeticPage = 0;
+      this.showCosmetics();
+    }, layout.categoryArrowWidth, 'standard', { height: layout.categoryHeight, fontSize: layout.compact ? 18 : 24, horizontalPadding: 4 });
+    const next = createModCollectionButton(this, rightArrowX, layout.categoryY, '>', () => {
+      this.cosmeticCategoryIndex = Math.min(total - 1, this.cosmeticCategoryIndex + 1);
+      this.cosmeticPage = 0;
+      this.showCosmetics();
+    }, layout.categoryArrowWidth, 'standard', { height: layout.categoryHeight, fontSize: layout.compact ? 18 : 24, horizontalPadding: 4 });
+    if (this.cosmeticCategoryIndex === 0) disableButton(previous);
+    if (this.cosmeticCategoryIndex === total - 1) disableButton(next);
+    root.add([previous, next]);
+
+    const tabsLeft = layout.categoryLeft + layout.categoryArrowWidth + arrowGap;
+    const tabsRight = layout.categoryRight - layout.categoryArrowWidth - arrowGap;
+    const tabGap = layout.compact ? 5 : 8;
+    const tabWidth = (tabsRight - tabsLeft - tabGap * (visibleCategories.length - 1)) / visibleCategories.length;
+    visibleCategories.forEach((category, index) => {
+      const categoryIndex = start + index;
+      const active = categoryIndex === this.cosmeticCategoryIndex;
+      const x = tabsLeft + tabWidth / 2 + index * (tabWidth + tabGap);
+      const button = createModCollectionButton(this, x, layout.categoryY, GEAR_LOCKER_CATEGORY_LABELS[category], () => {
+        this.cosmeticCategoryIndex = categoryIndex;
+        this.cosmeticPage = 0;
+        this.showCosmetics();
+      }, tabWidth, 'standard', {
+        height: layout.categoryHeight,
+        fontSize: layout.compact ? 9 : Phaser.Math.Clamp(tabWidth / 12, 10, 13),
+        horizontalPadding: layout.compact ? 16 : 24
+      });
+      button.setAlpha(active ? 1 : 0.66);
+      const label = button.getByName('button-label') as Phaser.GameObjects.Text | null;
+      label?.setX(layout.compact ? 7 : 10);
+      const icon = createGearLockerCategoryIcon(this, category, -tabWidth / 2 + (layout.compact ? 14 : 19), -7, active ? 0x73f7ff : 0x6299a8, layout.compact ? 0.62 : 0.75);
+      const activeRail = this.add.rectangle(0, layout.categoryHeight / 2 - 5, Math.max(24, tabWidth - 24), active ? 4 : 2, active ? 0x55efff : 0x315766, active ? 0.95 : 0.35);
+      button.add([icon, activeRail]);
+      if (active) {
+        this.overlayAnimatedTargets.push(activeRail);
+        this.tweens.add({ targets: activeRail, alpha: { from: 0.45, to: 1 }, duration: 960, yoyo: true, repeat: -1 });
+      }
+      root.add(button);
+    });
+  }
+
+  private createCosmeticLockerCard(
+    item: CosmeticOption,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    equipped: boolean,
+    compact: boolean
+  ): Phaser.GameObjects.Container {
+    const root = this.add.container(x, y);
+    const itemColor = getCosmeticDisplayColor(item, this.time.now);
+    const accent = equipped ? 0xffd84f : itemColor;
+    const points = createConsoleChamferPoints(width, height, Math.min(12, width * 0.08));
+    const shadow = this.add.polygon(5, 7, points, 0x000000, 0.55);
+    const chassis = this.add.polygon(0, 0, points, equipped ? 0x17170a : 0x08151f, 0.985)
+      .setStrokeStyle(equipped ? 3 : 1, accent, equipped ? 0.98 : 0.58);
+    const glass = this.add.rectangle(0, 0, width - 14, height - 14, equipped ? 0x17190d : 0x07131d, 0.84)
+      .setStrokeStyle(1, accent, equipped ? 0.45 : 0.18);
+    const scanlines = this.add.grid(0, 0, width - 18, height - 18, width, compact ? 7 : 9, 0x000000, 0, accent, 0.028);
+    const topRail = this.add.rectangle(0, -height / 2 + 6, width - 24, equipped ? 4 : 2, accent, equipped ? 0.95 : 0.52);
+    const sideRail = this.add.rectangle(-width / 2 + 6, 0, 2, height - 34, accent, equipped ? 0.72 : 0.3);
+    root.add([shadow, chassis, glass, scanlines, topRail, sideRail]);
+
+    if (equipped) {
+      const badgeWidth = Math.min(width - 28, compact ? 84 : 104);
+      const badge = this.add.rectangle(width / 2 - badgeWidth / 2 - 7, -height / 2 + (compact ? 16 : 19), badgeWidth, compact ? 22 : 26, 0x2b2405, 0.96)
+        .setStrokeStyle(1, 0xffd84f, 0.78);
+      const badgeText = this.add.text(badge.x, badge.y, 'EQUIPPED  /', {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 8 : 10}px`, color: '#ffe465', fontStyle: 'bold'
+      }).setOrigin(0.5);
+      const check = this.add.text(width / 2 - 15, badge.y, 'V', {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 11 : 14}px`, color: '#fff36b', fontStyle: 'bold'
+      }).setOrigin(0.5);
+      root.add([badge, badgeText, check]);
+      this.overlayAnimatedTargets.push(topRail);
+      this.tweens.add({ targets: topRail, alpha: { from: 0.5, to: 1 }, duration: 1050, yoyo: true, repeat: -1 });
+    } else {
+      for (let node = 0; node < 3; node += 1) {
+        root.add(this.add.circle(-width / 2 + 16 + node * 10, -height / 2 + 16, 3, itemColor, node === 0 ? 0.9 : 0.25).setStrokeStyle(1, itemColor, 0.8));
+      }
+    }
+
+    const visual = this.createLockerCosmeticVisual(item, 0, -height * 0.18, width * 0.66, Math.min(height * 0.28, compact ? 82 : 116));
+    const visualHalo = this.add.circle(0, -height * 0.18, Math.min(width * 0.32, height * 0.14), itemColor, equipped ? 0.07 : 0.035)
+      .setStrokeStyle(1, itemColor, equipped ? 0.48 : 0.26);
+    root.add([visualHalo, visual]);
+
+    const label = this.add.text(0, height * 0.14, item.label.toUpperCase(), {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(width / 11, compact ? 10 : 11, compact ? 13 : 15)}px`,
+      color: equipped ? '#fff0a1' : '#e6faff', fontStyle: 'bold', align: 'center', lineSpacing: -1
+    }).setOrigin(0.5).setWordWrapWidth(width - 20, true).setMaxLines(2);
+    const category = this.add.text(0, height * 0.29, GEAR_LOCKER_CATEGORY_LABELS[item.category], {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, color: '#73aebc', fontStyle: 'bold', letterSpacing: compact ? 0 : 1
+    }).setOrigin(0.5).setMaxLines(1);
+    const idLabel = this.add.text(-width / 2 + 13, height / 2 - (compact ? 40 : 48), `ID // ${item.id.toUpperCase()}`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 7 : 9}px`, color: '#416d79', fontStyle: 'bold'
+    }).setOrigin(0, 0.5).setMaxLines(1);
+    const state = this.add.text(0, height / 2 - (compact ? 19 : 23), equipped ? 'EQUIPPED // SYSTEM LINKED' : 'OWNED // CLICK TO EQUIP', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, color: equipped ? '#ffe56b' : '#77c9d4', fontStyle: 'bold', letterSpacing: compact ? 0 : 1
+    }).setOrigin(0.5);
+    root.add([label, category, idLabel, state]);
+
+    const hit = this.add.rectangle(0, 0, width, height, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+    hit.on('pointerover', () => {
+      this.audio.playSfx('menuHover');
+      chassis.setStrokeStyle(equipped ? 3 : 2, accent, 1);
+      this.tweens.killTweensOf(root);
+      this.tweens.add({ targets: root, scaleX: 1.018, scaleY: 1.018, y: y - 3, duration: 120, ease: 'Sine.easeOut' });
+    });
+    hit.on('pointerout', () => {
+      chassis.setStrokeStyle(equipped ? 3 : 1, accent, equipped ? 0.98 : 0.58);
+      this.tweens.killTweensOf(root);
+      this.tweens.add({ targets: root, scaleX: 1, scaleY: 1, y, duration: 130, ease: 'Sine.easeOut' });
+    });
+    hit.on('pointerdown', () => {
+      SaveSystem.equipCosmetic(item.category, item.id);
+      if (item.category === 'playerShape' || item.category === 'playerColor') this.refreshOperatorPreview();
+      this.audio.playSfx('menu');
+      this.status = `SUCCESS // ${item.label.toUpperCase()} EQUIPPED`;
+      this.showCosmetics();
+    });
+    root.add(hit);
+    return root;
+  }
+
+  private createCosmeticLockerPreview(
+    root: Phaser.GameObjects.Container,
+    layout: GearLockerLayout,
+    category: CosmeticOption['category'],
+    equippedId?: string
+  ): void {
+    const rect = layout.preview;
+    const panel = createGearLockerPanel(this, rect, {
+      title: '// CURRENTLY EQUIPPED', accent: 0xff5bcf, titleAccent: 0xff73d0, reinforced: true
+    });
+    root.add(panel);
+    this.trackGearLockerPanel(panel);
     const item = COSMETICS.find((entry) => entry.id === equippedId);
     if (!item) {
-      root.add(this.add.text(x, y + height / 2, 'NO ITEM EQUIPPED', { fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#7793a0' }).setOrigin(0.5));
+      root.add(this.add.text(rect.x + rect.width / 2, rect.y + rect.height / 2, 'NO ITEM EQUIPPED', {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 13 : 17}px`, color: '#7793a0'
+      }).setOrigin(0.5));
       return;
     }
-    root.add(this.createLockerCosmeticVisual(item, x, y + height * 0.42, width * 0.62, Math.min(130, height * 0.32)));
-    root.add(this.add.text(x, y + height * 0.72, item.label.toUpperCase(), { fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#e4fbff', align: 'center' }).setOrigin(0.5).setWordWrapWidth(width - 20, true));
-    root.add(this.add.text(x, y + height * 0.83, COSMETIC_CATEGORY_LABELS[category], { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#94b4c2', align: 'center' }).setOrigin(0.5));
+
+    const accent = getCosmeticDisplayColor(item, this.time.now);
+    const chamberX = rect.x + (layout.compact ? 18 : 24);
+    const chamberY = rect.y + (layout.compact ? 48 : 58);
+    const chamberWidth = rect.width - (layout.compact ? 36 : 48);
+    const chamberHeight = rect.height * (layout.compact ? 0.53 : 0.57);
+    const chamber = this.add.rectangle(chamberX, chamberY, chamberWidth, chamberHeight, 0x030a10, 0.98)
+      .setOrigin(0, 0).setStrokeStyle(1, 0x55efff, 0.45);
+    const chamberGrid = this.add.grid(chamberX + chamberWidth / 2, chamberY + chamberHeight / 2, chamberWidth - 8, chamberHeight - 8, 26, 26, 0x02080d, 0.15, accent, 0.055);
+    const haze = this.add.ellipse(chamberX + chamberWidth / 2, chamberY + chamberHeight * 0.78, chamberWidth * 0.76, chamberHeight * 0.3, accent, 0.055);
+    const beam = this.add.triangle(chamberX + chamberWidth / 2, chamberY + chamberHeight * 0.62, 0, chamberHeight * 0.5, chamberWidth * 0.34, chamberHeight * 0.5, chamberWidth * 0.17, 0, accent, 0.06);
+    const ringY = chamberY + chamberHeight * 0.79;
+    const outerRing = this.add.ellipse(chamberX + chamberWidth / 2, ringY, chamberWidth * 0.66, Math.max(20, chamberHeight * 0.12), 0x06131b, 0.96).setStrokeStyle(3, accent, 0.82);
+    const innerRing = this.add.ellipse(chamberX + chamberWidth / 2, ringY, chamberWidth * 0.48, Math.max(14, chamberHeight * 0.08), accent, 0.08).setStrokeStyle(1, 0x70f5ff, 0.78);
+    const coreRing = this.add.ellipse(chamberX + chamberWidth / 2, ringY, chamberWidth * 0.28, Math.max(9, chamberHeight * 0.05), accent, 0.14).setStrokeStyle(1, accent, 0.95);
+    const scanner = this.add.rectangle(chamberX + 4, chamberY + 10, chamberWidth - 8, 2, accent, 0.18).setOrigin(0, 0.5);
+    root.add([chamber, chamberGrid, haze, beam, outerRing, innerRing, coreRing, scanner]);
+
+    const controlsX = chamberX + (layout.compact ? 14 : 18);
+    ['EYE', 'ROT', 'SCAN', 'LINK'].forEach((label, index) => {
+      const controlY = chamberY + 24 + index * (layout.compact ? 31 : 38);
+      const control = this.add.rectangle(controlsX, controlY, layout.compact ? 24 : 30, layout.compact ? 24 : 30, index === 0 ? 0x250f25 : 0x08141e, 0.92)
+        .setStrokeStyle(1, index === 0 ? 0xff5bcf : 0x426573, index === 0 ? 0.75 : 0.45);
+      const glyph = this.add.text(controlsX, controlY, label.slice(0, 1), {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 8 : 10}px`, color: index === 0 ? '#ff9bdc' : '#6f929e', fontStyle: 'bold'
+      }).setOrigin(0.5);
+      root.add([control, glyph]);
+    });
+
+    const visualY = chamberY + chamberHeight * 0.46;
+    const visual = this.createLockerCosmeticVisual(item, chamberX + chamberWidth / 2, visualY, chamberWidth * 0.58, chamberHeight * 0.38);
+    visual.setAlpha(0).setScale(0.82);
+    root.add(visual);
+    this.overlayAnimatedTargets.push(visual, outerRing, innerRing, coreRing, scanner);
+    this.tweens.add({ targets: visual, alpha: 1, scaleX: 1, scaleY: 1, duration: 420, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: visual, y: visualY - (layout.compact ? 4 : 7), duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: outerRing, angle: 360, duration: 8800, repeat: -1 });
+    this.tweens.add({ targets: innerRing, angle: -360, duration: 6200, repeat: -1 });
+    this.tweens.add({ targets: coreRing, scaleX: { from: 0.9, to: 1.08 }, scaleY: { from: 0.9, to: 1.08 }, alpha: { from: 0.45, to: 1 }, duration: 980, yoyo: true, repeat: -1 });
+    this.tweens.add({ targets: scanner, y: chamberY + chamberHeight - 10, alpha: { from: 0.06, to: 0.3 }, duration: 2600, yoyo: true, repeat: -1, repeatDelay: 800 });
+
+    for (let particleIndex = 0; particleIndex < 6; particleIndex += 1) {
+      const particleX = chamberX + chamberWidth * (0.34 + particleIndex * 0.065);
+      const particle = this.add.circle(particleX, ringY - 4, particleIndex % 2 ? 2 : 1.5, accent, 0.45);
+      root.add(particle);
+      this.overlayAnimatedTargets.push(particle);
+      this.tweens.add({
+        targets: particle,
+        y: visualY - chamberHeight * (0.18 + (particleIndex % 3) * 0.08),
+        alpha: { from: 0.1, to: 0.72 },
+        duration: 1250 + particleIndex * 170,
+        delay: particleIndex * 120,
+        yoyo: true,
+        repeat: -1,
+        repeatDelay: 420
+      });
+    }
+
+    const infoTop = chamberY + chamberHeight + (layout.compact ? 12 : 18);
+    root.add(this.add.text(rect.x + rect.width / 2, infoTop, item.label.toUpperCase(), {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 14 : Phaser.Math.Clamp(rect.width / 24, 16, 21)}px`,
+      color: item.colorMode === 'prism' ? '#ffe66c' : '#e9fbff', fontStyle: 'bold', align: 'center'
+    }).setOrigin(0.5, 0).setWordWrapWidth(rect.width - 36, true).setMaxLines(2));
+    root.add(this.add.text(rect.x + rect.width / 2, infoTop + (layout.compact ? 31 : 39), GEAR_LOCKER_CATEGORY_LABELS[category], {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 11 : 14}px`, color: '#86abb8', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0.5, 0));
+
+    const dataY = rect.y + rect.height - (layout.compact ? 47 : 58);
+    const dataLeft = rect.x + (layout.compact ? 16 : 22);
+    const dataWidth = rect.width - (layout.compact ? 32 : 44);
+    const cellGap = layout.compact ? 5 : 7;
+    const cellWidth = (dataWidth - cellGap * 2) / 3;
+    const dataValues = [
+      { label: 'COLOR CODE', value: item.colorMode === 'prism' ? 'DYNAMIC' : formatCosmeticColorCode(item.color), color: accent },
+      { label: 'ACCESS CLASS', value: item.priceTier?.toUpperCase() ?? (item.currency === 'coreTokens' ? 'CORE ISSUE' : 'STANDARD'), color: 0x79ddeb },
+      { label: 'LOAD STATE', value: 'EQUIPPED', color: 0xffd84f }
+    ];
+    dataValues.forEach((entry, index) => {
+      const dataX = dataLeft + index * (cellWidth + cellGap);
+      const cell = this.add.rectangle(dataX, dataY, cellWidth, layout.compact ? 38 : 46, 0x07141e, 0.94).setOrigin(0, 0.5).setStrokeStyle(1, entry.color, 0.32);
+      const label = this.add.text(dataX + 8, dataY - (layout.compact ? 9 : 11), entry.label, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 7 : 9}px`, color: '#668b97', fontStyle: 'bold'
+      }).setOrigin(0, 0.5);
+      const value = this.add.text(dataX + 8, dataY + (layout.compact ? 7 : 9), entry.value, {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 8 : 10}px`, color: Phaser.Display.Color.IntegerToColor(entry.color).rgba, fontStyle: 'bold'
+      }).setOrigin(0, 0.5).setMaxLines(1);
+      root.add([cell, label, value]);
+    });
+  }
+
+  private trackGearLockerPanel(panel: Phaser.GameObjects.Container): void {
+    const targets = panel.getData('animatedTargets') as Phaser.GameObjects.GameObject[] | undefined;
+    if (targets) this.overlayAnimatedTargets.push(...targets);
   }
 
   private createLockerCosmeticVisual(item: CosmeticOption, x: number, y: number, maxWidth: number, maxHeight: number): Phaser.GameObjects.Container {

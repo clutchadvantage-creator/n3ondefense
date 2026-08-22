@@ -215,6 +215,14 @@ export interface CosmeticOption {
   priceTier?: CosmeticPriceTier;
   visualShape?: CosmeticVisualShape;
   textureKey?: string;
+  /** Optional presentation hints used by richer cosmetic viewers. */
+  previewColor?: number;
+  previewIcon?: string;
+  previewAnimation?: 'float' | 'pulse' | 'rotate' | 'trail';
+  previewEffect?: string;
+  previewRenderer?: string;
+  categoryIcon?: string;
+  accentColor?: number;
 }
 
 export interface GameSaveData {
