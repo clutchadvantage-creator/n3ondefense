@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { starterWeapon } from '../../data/weapons';
 import { getUpgradeEffect, getUpgradeLevel } from '../../data/upgrades';
-import { getCosmeticTextureKey } from '../../data/cosmetics';
+import { getCosmeticById, getCosmeticTextureKey } from '../../data/cosmetics';
 import { COLORS, WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { OBJECTIVE_CONFIG } from '../config/gameplay';
 import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, TANK_HOMING_MISSILE_BALANCE, WEAPON_BALANCE, getConcurrentSpawnPressure, getDefuseAssigneeCount, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
@@ -727,7 +727,8 @@ export class ArenaScene extends Phaser.Scene {
         obtain: (state) => this.obtainFxCircle(state),
         release: (circle) => { this.retireFxCircle(circle); }
       },
-      (sampleTime) => SaveSystem.getCosmeticColor('dashTrail', sampleTime)
+      (sampleTime) => SaveSystem.getCosmeticColor('dashTrail', sampleTime),
+      () => getCosmeticById(SaveSystem.getEquippedCosmeticId('dashTrail'))?.dashTrailEffect ?? 'ion'
     );
     this.mineExplosionVfx = new MineExplosionVfx(this, this.particlesEnabled);
     this.bombExplosionCosmeticVfx = new BombExplosionCosmeticVfx(this, this.particlesEnabled);

@@ -2,7 +2,7 @@ import type { CosmeticOption, UpgradeDefinition } from '../../game/types';
 import { getUpgradeCost, getUpgradeLevel } from '../../data/upgrades';
 import { getUpgradeComparison, getUpgradeVisual } from './upgradePresentation';
 import { createUpgradeSvgIcon, directionIcon } from './UpgradeIconRegistry.ts';
-import { getCosmeticPriceTier } from '../../data/cosmetics.ts';
+import { getCosmeticPriceTier, getCosmeticPurchaseCosts } from '../../data/cosmetics.ts';
 import { AudioManager } from '../../game/systems/AudioManager.ts';
 import './storefront.css';
 
@@ -11,6 +11,7 @@ export type StoreMode = 'cosmetics' | 'upgrades';
 export interface StoreSnapshot {
   credits: number;
   coreTokens: number;
+  plasmaChips: number;
   upgrades: Record<string, number>;
   ownedCosmetics: string[];
   equippedCosmetics: Partial<Record<CosmeticOption['category'], string>>;
@@ -54,7 +55,7 @@ export class StorefrontUi {
   private message = '';
   private actionLocked = false;
   private dialogOpen = false;
-  private walletFeedback: { credits: number; coreTokens: number } | null = null;
+  private walletFeedback: { credits: number; coreTokens: number; plasmaChips: number } | null = null;
   private screen: HTMLElement | null = null;
   private readonly keyHandler = (event: KeyboardEvent): void => this.handleKey(event);
 
@@ -189,13 +190,15 @@ export class StorefrontUi {
     const wallet = document.createElement('div');
     wallet.className = 'store-wallet';
     wallet.dataset.tutorialTarget = 'store.wallet';
-    wallet.innerHTML = `<span class="credits" data-tutorial-target="store.wallet.credits"><b>◆</b> ${snapshot.credits.toLocaleString()} <small>CREDITS</small></span><span class="tokens" data-tutorial-target="store.wallet.core-tokens"><b>⬡</b> ${snapshot.coreTokens.toLocaleString()} <small>CORE TOKENS</small></span>`;
+    wallet.innerHTML = `<span class="credits" data-tutorial-target="store.wallet.credits"><b>◆</b> ${snapshot.credits.toLocaleString()} <small>CREDITS</small></span><span class="tokens" data-tutorial-target="store.wallet.core-tokens"><b>⬡</b> ${snapshot.coreTokens.toLocaleString()} <small>CORE TOKENS</small></span><span class="chips"><b>◇</b> ${snapshot.plasmaChips.toLocaleString()} <small>PLASMA CHIPS</small></span>`;
     const feedback = this.walletFeedback;
     this.walletFeedback = null;
     const creditDelta = this.createCurrencyDelta(feedback?.credits);
     const tokenDelta = this.createCurrencyDelta(feedback?.coreTokens);
+    const chipDelta = this.createCurrencyDelta(feedback?.plasmaChips);
     if (creditDelta) wallet.querySelector('.credits')?.insertBefore(creditDelta, wallet.querySelector('.credits small'));
     if (tokenDelta) wallet.querySelector('.tokens')?.insertBefore(tokenDelta, wallet.querySelector('.tokens small'));
+    if (chipDelta) wallet.querySelector('.chips')?.insertBefore(chipDelta, wallet.querySelector('.chips small'));
     const actions = document.createElement('div');
     actions.className = 'store-header-actions';
     if (this.options.onReturn) {
@@ -305,7 +308,7 @@ export class StorefrontUi {
   private renderCosmeticCard(item: CosmeticOption, snapshot: StoreSnapshot): HTMLElement {
     const owned = snapshot.ownedCosmetics.includes(item.id) || item.cost === 0;
     const equipped = snapshot.equippedCosmetics[item.category] === item.id;
-    const affordable = item.currency === 'credits' ? snapshot.credits >= item.cost : snapshot.coreTokens >= item.cost;
+    const affordable = this.canAffordCosmetic(snapshot, item);
     const card = this.cardButton(item.id, `cosmetic-card tier-${getCosmeticPriceTier(item)} ${owned ? 'owned' : 'locked'} ${equipped ? 'equipped' : ''}`, !owned && !affordable);
     const visual = this.renderCosmeticVisual(item, false);
     const badge = document.createElement('span');
@@ -315,7 +318,7 @@ export class StorefrontUi {
     name.textContent = item.label;
     const price = document.createElement('p');
     price.className = `card-price ${item.currency}`;
-    price.textContent = `${getCosmeticPriceTier(item).toUpperCase()} • ${owned ? 'READY TO EQUIP' : `${item.cost.toLocaleString()} ${item.currency === 'credits' ? 'CREDITS' : 'CORE TOKENS'}`}`;
+    price.textContent = `${getCosmeticPriceTier(item).toUpperCase()} • ${owned ? 'READY TO EQUIP' : this.formatCosmeticCost(item)}`;
     card.append(badge, visual, name, price);
     return card;
   }
@@ -376,8 +379,7 @@ export class StorefrontUi {
   private fillCosmeticDetails(aside: HTMLElement, item: CosmeticOption, snapshot: StoreSnapshot): void {
     const owned = snapshot.ownedCosmetics.includes(item.id) || item.cost === 0;
     const equipped = snapshot.equippedCosmetics[item.category] === item.id;
-    const balance = item.currency === 'credits' ? snapshot.credits : snapshot.coreTokens;
-    const affordable = balance >= item.cost;
+    const affordable = this.canAffordCosmetic(snapshot, item);
     const label = document.createElement('span');
     label.className = 'detail-eyebrow';
     label.textContent = `${getCosmeticPriceTier(item).toUpperCase()} • ${COSMETIC_LABELS[item.category].toUpperCase()} PREVIEW`;
@@ -391,7 +393,7 @@ export class StorefrontUi {
     description.textContent = item.description ?? this.cosmeticDescription(item.category);
     const status = document.createElement('div');
     status.className = 'detail-status';
-    status.innerHTML = `<span>${equipped ? 'EQUIPPED' : owned ? 'OWNED' : 'LOCKED'}</span><strong>${owned ? 'Collection item ready' : `${item.cost.toLocaleString()} ${item.currency === 'credits' ? 'Credits' : 'Core Tokens'}`}</strong>`;
+    status.innerHTML = `<span>${equipped ? 'EQUIPPED' : owned ? 'OWNED' : 'LOCKED'}</span><strong>${owned ? 'Collection item ready' : this.formatCosmeticCost(item)}</strong>`;
     const action = document.createElement('button');
     action.type = 'button';
     action.className = 'store-action';
@@ -399,13 +401,13 @@ export class StorefrontUi {
     action.dataset.menuAudio = 'deferred';
     action.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
     action.textContent = equipped ? 'EQUIPPED' : owned ? 'EQUIP' : affordable
-      ? `UNLOCK — ${item.cost.toLocaleString()} ${item.currency === 'credits' ? 'CREDITS' : 'CORE TOKENS'}`
-      : `NEED ${(item.cost - balance).toLocaleString()} MORE ${item.currency === 'credits' ? 'CREDITS' : 'TOKENS'}`;
+      ? `UNLOCK — ${this.formatCosmeticCost(item)}`
+      : this.formatCosmeticShortfall(snapshot, item);
     action.addEventListener('click', () => {
       AudioManager.get().playSfx(unavailable ? 'itemLocked' : 'menu');
       if (unavailable) return;
       if (owned) this.perform(() => this.options.onEquip?.(item));
-      else if (item.currency === 'coreTokens' || item.cost >= 650) this.confirm(`UNLOCK ${item.label.toUpperCase()}?`, `Cost: ${item.cost} ${item.currency === 'credits' ? 'Credits' : 'Core Tokens'}`, 'UNLOCK', () => this.perform(() => this.options.onUnlock?.(item)));
+      else if (getCosmeticPriceTier(item) === 'prestige' || item.currency !== 'credits' || item.cost >= 650) this.confirm(`UNLOCK ${item.label.toUpperCase()}?`, `Cost: ${this.formatCosmeticCost(item)}`, 'UNLOCK', () => this.perform(() => this.options.onUnlock?.(item)));
       else this.perform(() => this.options.onUnlock?.(item));
     });
     aside.append(label, preview, title, description, status, action, this.renderMessage());
@@ -472,7 +474,8 @@ export class StorefrontUi {
     const after = this.options.getSnapshot();
     this.walletFeedback = result.ok ? {
       credits: after.credits - before.credits,
-      coreTokens: after.coreTokens - before.coreTokens
+      coreTokens: after.coreTokens - before.coreTokens,
+      plasmaChips: after.plasmaChips - before.plasmaChips
     } : null;
     this.message = result.message ?? (result.ok ? 'SYSTEM UPDATED' : 'ACTION FAILED');
     this.actionLocked = false;
@@ -485,6 +488,36 @@ export class StorefrontUi {
     feedback.className = `currency-delta ${delta > 0 ? 'gain' : 'loss'}`;
     feedback.textContent = `${delta > 0 ? '+' : '−'}${Math.abs(delta).toLocaleString()}`;
     return feedback;
+  }
+
+  private currencyLabel(currency: CosmeticOption['currency']): string {
+    if (currency === 'credits') return 'CREDITS';
+    if (currency === 'coreTokens') return 'CORE TOKENS';
+    return 'PLASMA CHIPS';
+  }
+
+  private canAffordCosmetic(snapshot: StoreSnapshot, item: CosmeticOption): boolean {
+    const costs = getCosmeticPurchaseCosts(item);
+    return snapshot.credits >= costs.credits
+      && snapshot.coreTokens >= costs.coreTokens
+      && snapshot.plasmaChips >= costs.plasmaChips;
+  }
+
+  private formatCosmeticCost(item: CosmeticOption): string {
+    const costs = getCosmeticPurchaseCosts(item);
+    return (['credits', 'coreTokens', 'plasmaChips'] as const)
+      .filter((currency) => costs[currency] > 0)
+      .map((currency) => `${costs[currency].toLocaleString()} ${this.currencyLabel(currency)}`)
+      .join(' + ');
+  }
+
+  private formatCosmeticShortfall(snapshot: StoreSnapshot, item: CosmeticOption): string {
+    const costs = getCosmeticPurchaseCosts(item);
+    const balances = { credits: snapshot.credits, coreTokens: snapshot.coreTokens, plasmaChips: snapshot.plasmaChips };
+    const missing = (['credits', 'coreTokens', 'plasmaChips'] as const)
+      .filter((currency) => costs[currency] > balances[currency])
+      .map((currency) => `${(costs[currency] - balances[currency]).toLocaleString()} ${this.currencyLabel(currency)}`);
+    return `NEED ${missing.join(' + ')}`;
   }
 
   private confirm(titleText: string, bodyText: string, confirmText: string, onConfirm: () => void): void {
@@ -520,6 +553,7 @@ export class StorefrontUi {
     visual.style.setProperty('--item-color', `#${previewColor.toString(16).padStart(6, '0')}`);
     visual.dataset.shape = item.visualShape ?? 'circle';
     if (item.bombExplosionEffect) visual.dataset.effect = item.bombExplosionEffect;
+    if (item.dashTrailEffect) visual.dataset.trailEffect = item.dashTrailEffect;
     visual.innerHTML = '<i class="trail-a"></i><i class="trail-b"></i><b></b><span></span>';
     return visual;
   }

@@ -12,19 +12,23 @@ const storefront = readFileSync(new URL('../src/ui/stores/StorefrontUi.ts', impo
 const storefrontCss = readFileSync(new URL('../src/ui/stores/storefront.css', import.meta.url), 'utf8');
 const garage = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
 
-test('Death Signal and Neon Bloom are paid, exclusive bomb-category cosmetics', () => {
+test('premium bomb signatures are paid, exclusive bomb-category cosmetics', () => {
   const deathSignal = COSMETICS.find((item) => item.id === 'bomb-death-signal');
   const neonBloom = COSMETICS.find((item) => item.id === 'bomb-neon-bloom');
+  const neonBats = COSMETICS.find((item) => item.id === 'bomb-neon-bats');
+  const witchSignal = COSMETICS.find((item) => item.id === 'bomb-witch-signal');
   assert.ok(deathSignal);
   assert.ok(neonBloom);
   assert.deepEqual(
     [deathSignal.category, deathSignal.currency, deathSignal.cost, deathSignal.bombExplosionEffect],
-    ['bombColor', 'credits', 650, 'death-signal']
+    ['bombColor', 'credits', 12_000, 'death-signal']
   );
   assert.deepEqual(
     [neonBloom.category, neonBloom.currency, neonBloom.cost, neonBloom.bombExplosionEffect],
-    ['bombColor', 'credits', 600, 'neon-bloom']
+    ['bombColor', 'credits', 10_000, 'neon-bloom']
   );
+  assert.deepEqual([neonBats?.category, neonBats?.currency, neonBats?.cost, neonBats?.bombExplosionEffect], ['bombColor', 'credits', 18_000, 'neon-bats']);
+  assert.deepEqual([witchSignal?.category, witchSignal?.currency, witchSignal?.cost, witchSignal?.bombExplosionEffect], ['bombColor', 'plasmaChips', 90, 'witch-signal']);
   assert.ok(deathSignal.description?.includes('cyber-skull'));
   assert.ok(neonBloom.description?.includes('flower'));
   assert.ok(deathSignal.cost > 0 && neonBloom.cost > 0);
@@ -57,8 +61,10 @@ test('arena leaves the authoritative bomb explosion intact and invokes one gener
 test('signature renderer is bounded, batched, data-driven, and has complete lifecycle cleanup', () => {
   assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS['death-signal'].lifetimeMs, 2_700);
   assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS['neon-bloom'].lifetimeMs, 2_750);
+  assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS['neon-bats'].lifetimeMs, 2_850);
+  assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS['witch-signal'].lifetimeMs, 2_900);
   assert.match(runtime, /const MAX_ACTIVE_EFFECTS = 6/);
-  assert.match(runtime, /this\.renderers = \{[\s\S]*?'death-signal'[\s\S]*?'neon-bloom'/);
+  assert.match(runtime, /this\.renderers = \{[\s\S]*?'death-signal'[\s\S]*?'neon-bloom'[\s\S]*?'neon-bats'[\s\S]*?'witch-signal'/);
   assert.match(runtime, /crowded \|\| !this\.particlesEnabled/);
   assert.match(runtime, /recommendedSceneHoldMs/);
   assert.doesNotMatch(runtime, /physics\.add|add\.sprite|tweens\.add|delayedCall|setInteractive/);
@@ -72,6 +78,8 @@ test('store and redesigned Gear Locker expose distinct procedural previews for b
   assert.match(storefront, /visual\.dataset\.effect = item\.bombExplosionEffect/);
   assert.match(storefrontCss, /data-effect=death-signal/);
   assert.match(storefrontCss, /data-effect=neon-bloom/);
+  assert.match(storefrontCss, /data-effect=neon-bats/);
+  assert.match(storefrontCss, /data-effect=witch-signal/);
   assert.match(preview, /item\.bombExplosionEffect === 'death-signal'/);
   assert.match(preview, /drawFlower/);
   assert.match(preview, /skull\.strokeEllipse/);

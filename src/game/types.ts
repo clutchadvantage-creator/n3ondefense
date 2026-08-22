@@ -237,14 +237,17 @@ export type CosmeticVisualShape =
   | 'balloons'
   | 'carrot';
 
-export type BombExplosionCosmeticEffectId = 'death-signal' | 'neon-bloom';
+export type BombExplosionCosmeticEffectId = 'death-signal' | 'neon-bloom' | 'neon-bats' | 'witch-signal';
+export type DashTrailCosmeticEffectId = 'ion' | 'fire-smoke' | 'grass-clippings' | 'bubbles' | 'plasma' | 'jet-plume' | 'stars';
 
 export interface CosmeticOption {
   id: string;
   category: 'playerColor' | 'playerShape' | 'projectileColor' | 'projectileShape' | 'trailColor' | 'bombColor' | 'turretSkin' | 'fenceStyle' | 'dashTrail';
   label: string;
-  currency: 'credits' | 'coreTokens';
+  currency: 'credits' | 'coreTokens' | 'plasmaChips';
   cost: number;
+  /** Optional extra premium charges; purchase is validated and applied atomically. */
+  additionalCosts?: Partial<Record<'credits' | 'coreTokens' | 'plasmaChips', number>>;
   color: number;
   colorMode?: 'prism';
   priceTier?: CosmeticPriceTier;
@@ -260,6 +263,8 @@ export interface CosmeticOption {
   accentColor?: number;
   /** Optional signature overlay layered over the authoritative bombsite explosion. */
   bombExplosionEffect?: BombExplosionCosmeticEffectId;
+  /** Presentation-only dash wake. Movement, dash duration, and energy are unchanged. */
+  dashTrailEffect?: DashTrailCosmeticEffectId;
   /** Store and locker presentation copy; gameplay never reads this field. */
   description?: string;
 }

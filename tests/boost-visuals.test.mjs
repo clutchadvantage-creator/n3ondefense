@@ -15,13 +15,17 @@ test('dash boost uses a continuous layered flame and paired smoke-vortex present
   assert.match(boost, /emitSmokeVortex/);
   assert.match(boost, /Math\.sin\(progress \* Math\.PI \* 3\.2/);
   assert.match(boost, /side: -1 \| 1/);
+  assert.match(boost, /smokeLifetimeMs: 1_080/);
+  assert.match(boost, /const outerLength = \(52 \+ flicker \* 22\)/);
 });
 
 test('boost visuals reuse the combat FX pool and cap temporary particle pressure', () => {
   assert.match(arena, /obtain: \(state\) => this\.obtainFxCircle\(state\)/);
   assert.match(arena, /this\.retireFxCircle\(circle\)/);
-  assert.match(boost, /maximumTrackedParticles: 72/);
+  assert.match(boost, /maximumTrackedParticles: 88/);
+  assert.match(boost, /maximumAccentParticles: 54/);
   assert.match(boost, /this\.particles\.size >= BOOST_VISUAL_CONFIG\.maximumTrackedParticles/);
+  assert.match(boost, /private readonly accentGraphics/);
   assert.match(boost, /this\.scene\.tweens\.killTweensOf\(particle\)/);
   assert.match(arena, /this\.boostVisual\?\.reset\(\)/);
   assert.match(arena, /this\.boostVisual\?\.destroy\(\)/);
@@ -30,6 +34,17 @@ test('boost visuals reuse the combat FX pool and cap temporary particle pressure
 test('boost upgrade remains presentation-only and preserves authoritative dash behavior', () => {
   assert.match(arena, /this\.player\.spendEnergy\(PLAYER_BALANCE\.dashEnergyCost\)/);
   assert.match(arena, /this\.player\.dashTowardPoint\(aim\.x, aim\.y, now\)/);
-  assert.match(boost, /never changes movement, timing, energy, or physics/);
+  assert.match(boost, /never changes movement, timing, energy, collision, or other gameplay state/);
   assert.doesNotMatch(boost, /setVelocity|dashUntil\s*=|spendEnergy|takeDamage/);
+});
+
+test('premium dash variants are data-driven and keep distinct bounded presentations', () => {
+  for (const effect of ['fire-smoke', 'grass-clippings', 'bubbles', 'plasma', 'jet-plume', 'stars']) {
+    assert.match(boost, new RegExp(`'${effect}'`));
+  }
+  assert.match(arena, /dashTrailEffect \?\? 'ion'/);
+  assert.match(boost, /drawShockDiamonds/);
+  assert.match(boost, /emitBubble/);
+  assert.match(boost, /drawStar/);
+  assert.doesNotMatch(boost, /physics\.add|setVelocity|setInteractive/);
 });

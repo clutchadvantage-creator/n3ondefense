@@ -2,7 +2,18 @@ import type { CosmeticOption } from '../game/types.ts';
 import type { CosmeticPriceTier } from '../game/economy/types.ts';
 
 export const getCosmeticPriceTier = (item: CosmeticOption): CosmeticPriceTier => item.priceTier
-  ?? (item.currency === 'coreTokens' ? 'rare' : 'standard');
+  ?? (item.currency === 'plasmaChips' ? 'prestige' : item.currency === 'coreTokens' ? 'rare' : 'standard');
+
+export interface CosmeticPurchaseCosts { credits: number; coreTokens: number; plasmaChips: number }
+
+export const getCosmeticPurchaseCosts = (item: CosmeticOption): CosmeticPurchaseCosts => {
+  const costs: CosmeticPurchaseCosts = { credits: 0, coreTokens: 0, plasmaChips: 0 };
+  costs[item.currency] = Math.max(0, Math.floor(item.cost));
+  for (const currency of ['credits', 'coreTokens', 'plasmaChips'] as const) {
+    costs[currency] += Math.max(0, Math.floor(item.additionalCosts?.[currency] ?? 0));
+  }
+  return costs;
+};
 
 export const COSMETICS: CosmeticOption[] = [
   { id: 'player-cyan', category: 'playerColor', label: 'Cyan Operative', currency: 'credits', cost: 0, color: 0x00f5ff },
@@ -12,7 +23,7 @@ export const COSMETICS: CosmeticOption[] = [
   { id: 'player-violet', category: 'playerColor', label: 'Violet Specter', currency: 'credits', cost: 800, color: 0x9d6cff },
   { id: 'player-white', category: 'playerColor', label: 'Prism White', currency: 'coreTokens', cost: 3, color: 0xf1fbff },
   { id: 'player-red', category: 'playerColor', label: 'Crimson Operative', currency: 'credits', cost: 725, color: 0xff506d },
-  { id: 'player-prism', category: 'playerColor', label: 'Prism Operative', currency: 'coreTokens', cost: 7, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
+  { id: 'player-prism', category: 'playerColor', label: 'Prism Operative', currency: 'coreTokens', cost: 220, additionalCosts: { credits: 7_500 }, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
 
   { id: 'player-circle', category: 'playerShape', label: 'Circle Frame', currency: 'credits', cost: 0, color: 0x00f5ff, visualShape: 'circle', textureKey: 'player-circle' },
   { id: 'player-square', category: 'playerShape', label: 'Square Frame', currency: 'credits', cost: 300, color: 0x61f4ff, visualShape: 'square', textureKey: 'player-square' },
@@ -21,11 +32,11 @@ export const COSMETICS: CosmeticOption[] = [
   { id: 'player-hexagon', category: 'playerShape', label: 'Hex Core Frame', currency: 'credits', cost: 700, color: 0x6bffde, visualShape: 'hexagon', textureKey: 'player-hexagon' },
   { id: 'player-diamond', category: 'playerShape', label: 'Diamond Vector', currency: 'credits', cost: 825, color: 0xff70c8, visualShape: 'diamond', textureKey: 'player-diamond' },
   { id: 'player-cross', category: 'playerShape', label: 'Crossguard Frame', currency: 'coreTokens', cost: 4, color: 0xffe879, visualShape: 'cross', textureKey: 'player-cross' },
-  { id: 'player-spaceship', category: 'playerShape', label: 'Starhopper Frame', currency: 'coreTokens', cost: 6, color: 0x62eaff, visualShape: 'spaceship', textureKey: 'player-spaceship', priceTier: 'prestige' },
+  { id: 'player-spaceship', category: 'playerShape', label: 'Starhopper Frame', currency: 'coreTokens', cost: 180, additionalCosts: { credits: 6_000 }, color: 0x62eaff, visualShape: 'spaceship', textureKey: 'player-spaceship', priceTier: 'prestige' },
   { id: 'player-clover', category: 'playerShape', label: 'Lucky Clover Frame', currency: 'credits', cost: 975, color: 0x66ff91, visualShape: 'clover', textureKey: 'player-clover' },
   { id: 'player-ice-cream', category: 'playerShape', label: 'Neon Scoop Frame', currency: 'credits', cost: 1_100, color: 0xff9edc, visualShape: 'iceCream', textureKey: 'player-ice-cream' },
   { id: 'player-airplane', category: 'playerShape', label: 'Skywing Frame', currency: 'coreTokens', cost: 5, color: 0x7cecff, visualShape: 'airplane', textureKey: 'player-airplane' },
-  { id: 'player-ufo', category: 'playerShape', label: 'Orbit Saucer Frame', currency: 'coreTokens', cost: 6, color: 0x8dffcf, visualShape: 'ufo', textureKey: 'player-ufo', priceTier: 'prestige' },
+  { id: 'player-ufo', category: 'playerShape', label: 'Orbit Saucer Frame', currency: 'coreTokens', cost: 240, additionalCosts: { credits: 8_500, plasmaChips: 40 }, color: 0x8dffcf, visualShape: 'ufo', textureKey: 'player-ufo', priceTier: 'prestige' },
 
   { id: 'projectile-cyan', category: 'projectileColor', label: 'Pulse Cyan', currency: 'credits', cost: 0, color: 0x4ef9ff },
   { id: 'projectile-orange', category: 'projectileColor', label: 'Thermal Orange', currency: 'credits', cost: 650, color: 0xff9b3d },
@@ -33,7 +44,7 @@ export const COSMETICS: CosmeticOption[] = [
   { id: 'projectile-lime', category: 'projectileColor', label: 'Reactor Lime', currency: 'credits', cost: 575, color: 0x72ff72 },
   { id: 'projectile-violet', category: 'projectileColor', label: 'Void Violet', currency: 'credits', cost: 750, color: 0xa570ff },
   { id: 'projectile-gold', category: 'projectileColor', label: 'Solar Gold', currency: 'coreTokens', cost: 4, color: 0xffd84d },
-  { id: 'projectile-prism', category: 'projectileColor', label: 'Prism Pulse', currency: 'coreTokens', cost: 6, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
+  { id: 'projectile-prism', category: 'projectileColor', label: 'Prism Pulse', currency: 'coreTokens', cost: 190, additionalCosts: { credits: 6_500 }, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
 
   { id: 'projectile-shape-pulse', category: 'projectileShape', label: 'Pulse Round', currency: 'credits', cost: 0, color: 0x4ef9ff, visualShape: 'pulse', textureKey: 'projectile-pulse' },
   { id: 'projectile-shape-missile', category: 'projectileShape', label: 'Micro Missile', currency: 'credits', cost: 700, color: 0xff9b3d, visualShape: 'missile', textureKey: 'projectile-missile' },
@@ -49,20 +60,21 @@ export const COSMETICS: CosmeticOption[] = [
   { id: 'trail-pink', category: 'trailColor', label: 'Rose Wake', currency: 'credits', cost: 575, color: 0xff62d7 },
   { id: 'trail-lime', category: 'trailColor', label: 'Toxic Wake', currency: 'credits', cost: 675, color: 0x6dff91 },
   { id: 'trail-gold', category: 'trailColor', label: 'Solar Wake', currency: 'coreTokens', cost: 3, color: 0xffcf5a },
-  { id: 'trail-prism', category: 'trailColor', label: 'Prism Wake', currency: 'coreTokens', cost: 6, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
+  { id: 'trail-prism', category: 'trailColor', label: 'Prism Wake', currency: 'plasmaChips', cost: 70, additionalCosts: { credits: 7_500, coreTokens: 200 }, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
 
   { id: 'bomb-purple', category: 'bombColor', label: 'Violet Detonation', currency: 'credits', cost: 700, color: 0xbe62ff },
   { id: 'bomb-red', category: 'bombColor', label: 'Scarlet Detonation', currency: 'coreTokens', cost: 4, color: 0xff4d4d },
   { id: 'bomb-cyan', category: 'bombColor', label: 'Cryo Detonation', currency: 'credits', cost: 750, color: 0x4eeaff },
   { id: 'bomb-green', category: 'bombColor', label: 'Emerald Detonation', currency: 'credits', cost: 825, color: 0x55ff8c },
   { id: 'bomb-gold', category: 'bombColor', label: 'Solar Detonation', currency: 'coreTokens', cost: 5, color: 0xffc94f },
-  { id: 'bomb-prism', category: 'bombColor', label: 'Prism Detonation', currency: 'coreTokens', cost: 8, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
+  { id: 'bomb-prism', category: 'bombColor', label: 'Prism Detonation', currency: 'coreTokens', cost: 260, additionalCosts: { credits: 9_500 }, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
   {
     id: 'bomb-death-signal',
     category: 'bombColor',
     label: 'Death Signal',
     currency: 'credits',
-    cost: 650,
+    cost: 12_000,
+    additionalCosts: { coreTokens: 250 },
     color: 0x62efff,
     accentColor: 0xff56ce,
     previewColor: 0x62efff,
@@ -77,7 +89,8 @@ export const COSMETICS: CosmeticOption[] = [
     category: 'bombColor',
     label: 'Neon Bloom',
     currency: 'credits',
-    cost: 600,
+    cost: 10_000,
+    additionalCosts: { coreTokens: 220 },
     color: 0xff64d7,
     accentColor: 0x6af7ff,
     previewColor: 0xff64d7,
@@ -87,27 +100,65 @@ export const COSMETICS: CosmeticOption[] = [
     priceTier: 'prestige',
     description: 'The blast violently blooms into a multicolored cyber-flower storm of rotating blossoms, petals, pollen, and digital fragments.'
   },
+  {
+    id: 'bomb-neon-bats',
+    category: 'bombColor',
+    label: 'Nightwing Swarm',
+    currency: 'credits',
+    cost: 18_000,
+    additionalCosts: { coreTokens: 350, plasmaChips: 50 },
+    color: 0xb05cff,
+    accentColor: 0xff4fc8,
+    previewColor: 0xb05cff,
+    previewEffect: 'neon-bat-swarm',
+    previewRenderer: 'bomb-neon-bats',
+    bombExplosionEffect: 'neon-bats',
+    priceTier: 'prestige',
+    description: 'The bombsite fractures into a neon night swarm. Cyber-bats spiral outward and flap through the blast haze before dissolving.'
+  },
+  {
+    id: 'bomb-witch-signal',
+    category: 'bombColor',
+    label: 'Hexcaster Signal',
+    currency: 'plasmaChips',
+    cost: 90,
+    additionalCosts: { credits: 20_000, coreTokens: 400 },
+    color: 0x75ff73,
+    accentColor: 0xc65cff,
+    previewColor: 0x75ff73,
+    previewEffect: 'witch-face-apparition',
+    previewRenderer: 'bomb-witch-signal',
+    bombExplosionEffect: 'witch-signal',
+    priceTier: 'prestige',
+    description: 'A grinning neon witch in a towering hat erupts over the bombsite, cackling in violet static before burning out.'
+  },
 
   { id: 'turret-default', category: 'turretSkin', label: 'Sentinel Cyan', currency: 'credits', cost: 0, color: 0x4ffcff },
   { id: 'turret-orange', category: 'turretSkin', label: 'Sentinel Ember', currency: 'credits', cost: 500, color: 0xff9a33 },
   { id: 'turret-pink', category: 'turretSkin', label: 'Sentinel Rose', currency: 'credits', cost: 625, color: 0xff65d8 },
   { id: 'turret-green', category: 'turretSkin', label: 'Sentinel Reactor', currency: 'credits', cost: 725, color: 0x63ff8e },
   { id: 'turret-violet', category: 'turretSkin', label: 'Sentinel Void', currency: 'coreTokens', cost: 4, color: 0xa978ff },
-  { id: 'turret-prism', category: 'turretSkin', label: 'Prism Sentinel', currency: 'coreTokens', cost: 8, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
+  { id: 'turret-prism', category: 'turretSkin', label: 'Prism Sentinel', currency: 'coreTokens', cost: 225, additionalCosts: { credits: 8_500 }, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
 
   { id: 'fence-default', category: 'fenceStyle', label: 'Cyan Lattice', currency: 'credits', cost: 0, color: 0x41d8ff },
   { id: 'fence-green', category: 'fenceStyle', label: 'Green Lattice', currency: 'credits', cost: 450, color: 0x59ff9b },
   { id: 'fence-pink', category: 'fenceStyle', label: 'Rose Lattice', currency: 'credits', cost: 575, color: 0xff59ce },
   { id: 'fence-amber', category: 'fenceStyle', label: 'Amber Lattice', currency: 'credits', cost: 650, color: 0xffb74d },
   { id: 'fence-violet', category: 'fenceStyle', label: 'Void Lattice', currency: 'coreTokens', cost: 3, color: 0x9a6cff },
-  { id: 'fence-prism', category: 'fenceStyle', label: 'Prism Lattice', currency: 'coreTokens', cost: 7, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
+  { id: 'fence-prism', category: 'fenceStyle', label: 'Prism Lattice', currency: 'coreTokens', cost: 210, additionalCosts: { credits: 7_500 }, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
 
-  { id: 'dash-cyan', category: 'dashTrail', label: 'Dash Ion', currency: 'credits', cost: 0, color: 0x57f8ff },
-  { id: 'dash-pink', category: 'dashTrail', label: 'Dash Bloom', currency: 'credits', cost: 550, color: 0xff5ae6 },
-  { id: 'dash-green', category: 'dashTrail', label: 'Dash Reactor', currency: 'credits', cost: 625, color: 0x5dff91 },
-  { id: 'dash-amber', category: 'dashTrail', label: 'Dash Flare', currency: 'credits', cost: 700, color: 0xffb248 },
-  { id: 'dash-violet', category: 'dashTrail', label: 'Dash Rift', currency: 'coreTokens', cost: 4, color: 0xa26cff },
-  { id: 'dash-prism', category: 'dashTrail', label: 'Prism Dash', currency: 'coreTokens', cost: 7, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' }
+  { id: 'dash-cyan', category: 'dashTrail', label: 'Dash Ion', currency: 'credits', cost: 0, color: 0x57f8ff, dashTrailEffect: 'ion' },
+  { id: 'dash-pink', category: 'dashTrail', label: 'Dash Bloom', currency: 'credits', cost: 550, color: 0xff5ae6, dashTrailEffect: 'ion' },
+  { id: 'dash-green', category: 'dashTrail', label: 'Dash Reactor', currency: 'credits', cost: 625, color: 0x5dff91, dashTrailEffect: 'ion' },
+  { id: 'dash-amber', category: 'dashTrail', label: 'Dash Flare', currency: 'credits', cost: 700, color: 0xffb248, dashTrailEffect: 'ion' },
+  { id: 'dash-violet', category: 'dashTrail', label: 'Dash Rift', currency: 'coreTokens', cost: 4, color: 0xa26cff, dashTrailEffect: 'ion' },
+  { id: 'dash-prism', category: 'dashTrail', label: 'Prism Dash', currency: 'coreTokens', cost: 200, additionalCosts: { credits: 7_000 }, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige', dashTrailEffect: 'ion' },
+  { id: 'dash-firestorm', category: 'dashTrail', label: 'Firestorm Wake', currency: 'credits', cost: 8_500, additionalCosts: { coreTokens: 180 }, color: 0xff6a24, accentColor: 0xffd35c, priceTier: 'prestige', dashTrailEffect: 'fire-smoke', description: 'A long, turbulent wake of hot neon flame, embers, and rolling smoke.' },
+  { id: 'dash-grass', category: 'dashTrail', label: 'Neon Mower', currency: 'credits', cost: 6_500, additionalCosts: { coreTokens: 140 }, color: 0x69ff58, accentColor: 0xe5ff69, priceTier: 'prestige', dashTrailEffect: 'grass-clippings', description: 'Sprays bright green cyber-grass clippings into the operative wake.' },
+  { id: 'dash-bubbles', category: 'dashTrail', label: 'Bubble Drive', currency: 'credits', cost: 7_500, additionalCosts: { coreTokens: 160 }, color: 0x5feaff, accentColor: 0xff81df, priceTier: 'prestige', dashTrailEffect: 'bubbles', description: 'Leaves buoyant, iridescent bubbles tumbling behind every dash.' },
+  { id: 'dash-plasma', category: 'dashTrail', label: 'Plasma Rift', currency: 'coreTokens', cost: 240, additionalCosts: { credits: 11_000, plasmaChips: 55 }, color: 0xb75cff, accentColor: 0x64f5ff, priceTier: 'prestige', dashTrailEffect: 'plasma', description: 'Tears open a vivid plasma wake threaded with cyan electrical arcs.' },
+  { id: 'dash-jet-plume', category: 'dashTrail', label: 'Afterburner Plume', currency: 'plasmaChips', cost: 95, additionalCosts: { credits: 15_000, coreTokens: 300 }, color: 0x55eaff, accentColor: 0xffb44f, priceTier: 'prestige', dashTrailEffect: 'jet-plume', description: 'A focused jet-engine afterburner with shock diamonds and a dense exhaust plume.' },
+  { id: 'dash-stars', category: 'dashTrail', label: 'Starfall Wake', currency: 'coreTokens', cost: 320, additionalCosts: { credits: 16_000 }, color: 0xffed68, accentColor: 0xff71d6, priceTier: 'prestige', dashTrailEffect: 'stars', description: 'Fires spinning neon stars outward in a bright arcade constellation.' }
 ];
 
 const COSMETICS_BY_ID = new Map(COSMETICS.map((cosmetic) => [cosmetic.id, cosmetic]));

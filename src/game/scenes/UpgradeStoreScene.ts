@@ -47,6 +47,7 @@ export class UpgradeStoreScene extends Phaser.Scene {
         return {
           credits: current.credits,
           coreTokens: current.coreTokens,
+          plasmaChips: SaveSystem.getModCollection().plasmaChips,
           upgrades: current.upgrades,
           ownedCosmetics: current.unlockedCosmetics,
           equippedCosmetics: current.equippedCosmetics
@@ -150,14 +151,8 @@ export class UpgradeStoreScene extends Phaser.Scene {
   private unlockCosmetic(item: CosmeticOption): { ok: boolean; message: string } {
     const save = SaveSystem.get();
     if (save.unlockedCosmetics.includes(item.id) || item.cost === 0) return this.equipCosmetic(item);
-    const paid = item.currency === 'credits' ? SaveSystem.spendCredits(item.cost, 'cosmetic') : SaveSystem.spendCoreTokens(item.cost);
-    if (!paid) {
-      const balance = item.currency === 'credits' ? save.credits : save.coreTokens;
-      return { ok: false, message: `NEED ${(item.cost - balance).toLocaleString()} MORE ${item.currency === 'credits' ? 'CREDITS' : 'CORE TOKENS'}` };
-    }
-    SaveSystem.unlockCosmetic(item.id);
-    SaveSystem.equipCosmetic(item.category, item.id);
-    return { ok: true, message: 'ITEM UNLOCKED • EQUIPPED' };
+    const result = SaveSystem.purchaseAndEquipCosmetic(item.id);
+    return { ok: result.ok, message: result.message ?? (result.ok ? 'ITEM UNLOCKED • EQUIPPED' : 'PURCHASE FAILED') };
   }
 
   private equipCosmetic(item: CosmeticOption): { ok: boolean; message: string } {

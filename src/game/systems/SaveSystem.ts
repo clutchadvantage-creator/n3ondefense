@@ -61,6 +61,10 @@ export class SaveSystem {
     return PlayerProfileStore.spendCoreTokens(amount);
   }
 
+  static spendPlasmaChips(amount: number): boolean {
+    return PlayerProfileStore.spendPlasmaChips(amount);
+  }
+
   static recordRoundCompletion(round: number, protocol?: RunProtocolId): void {
     PlayerProfileStore.recordRoundCompletion(round, protocol);
   }
@@ -93,6 +97,10 @@ export class SaveSystem {
 
   static unlockCosmetic(id: string): void {
     PlayerProfileStore.unlockCosmetic(id);
+  }
+
+  static purchaseAndEquipCosmetic(id: string) {
+    return PlayerProfileStore.purchaseAndEquipCosmetic(id);
   }
 
   static equipCosmetic(category: CosmeticOption['category'], id: string): void {

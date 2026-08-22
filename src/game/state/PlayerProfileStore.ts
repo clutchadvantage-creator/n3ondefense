@@ -1,4 +1,4 @@
-import { COSMETICS } from '../../data/cosmetics';
+import { COSMETICS, getCosmeticPurchaseCosts } from '../../data/cosmetics';
 import { UPGRADE_DEFINITIONS, getUpgradeCost } from '../../data/upgrades';
 import type { CosmeticOption } from '../types';
 import { type LocalPlayerSave, type ProfileSummary } from '../save/LocalSaveTypes';
@@ -484,6 +484,17 @@ export class PlayerProfileStore {
     PlayerProfileStore.save();
   }
 
+  static spendPlasmaChips(amount: number): boolean {
+    const save = PlayerProfileStore.getActiveSave();
+    if (!Number.isFinite(amount) || amount < 0) return false;
+    const spent = Math.floor(amount);
+    if (save.mods.plasmaChips < spent) return false;
+    save.mods.plasmaChips -= spent;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return true;
+  }
+
   static sellDuplicateMod(instanceId: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
     const result = sellDuplicateMod(save.mods, instanceId);
@@ -540,6 +551,35 @@ export class PlayerProfileStore {
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
     return { ok: true };
+  }
+
+  static purchaseAndEquipCosmetic(cosmeticKey: string): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const cosmetic = COSMETICS.find((item) => item.id === cosmeticKey);
+    if (!cosmetic) return { ok: false, message: 'UNKNOWN COSMETIC' };
+    if (save.cosmetics.owned.includes(cosmeticKey) || cosmetic.cost === 0) {
+      if (!save.cosmetics.owned.includes(cosmeticKey)) save.cosmetics.owned.push(cosmeticKey);
+      save.cosmetics.equipped[cosmetic.category] = cosmeticKey;
+      save.profile.lastPlayedAt = new Date().toISOString();
+      PlayerProfileStore.save();
+      return { ok: true, message: 'COSMETIC EQUIPPED' };
+    }
+
+    const costs = getCosmeticPurchaseCosts(cosmetic);
+    const missing: string[] = [];
+    if (save.wallet.credits < costs.credits) missing.push(`${(costs.credits - save.wallet.credits).toLocaleString()} CREDITS`);
+    if (save.wallet.coreTokens < costs.coreTokens) missing.push(`${(costs.coreTokens - save.wallet.coreTokens).toLocaleString()} CORE TOKENS`);
+    if (save.mods.plasmaChips < costs.plasmaChips) missing.push(`${(costs.plasmaChips - save.mods.plasmaChips).toLocaleString()} PLASMA CHIPS`);
+    if (missing.length > 0) return { ok: false, message: `NEED ${missing.join(' + ')}` };
+
+    if (costs.credits > 0 && !spendCreditsAtomic(save.wallet, save.progress, costs.credits, 'cosmetic')) return { ok: false, message: 'PURCHASE FAILED' };
+    save.wallet.coreTokens -= costs.coreTokens;
+    save.mods.plasmaChips -= costs.plasmaChips;
+    save.cosmetics.owned.push(cosmeticKey);
+    save.cosmetics.equipped[cosmetic.category] = cosmeticKey;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return { ok: true, message: 'ITEM UNLOCKED • EQUIPPED' };
   }
 
   static equipCosmetic(slot: string, cosmeticKey: string): void {

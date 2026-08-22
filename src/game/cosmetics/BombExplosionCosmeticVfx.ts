@@ -71,7 +71,9 @@ export class BombExplosionCosmeticVfx {
     }
     this.renderers = {
       'death-signal': (state, elapsed, reducedDetail) => this.drawDeathSignal(state, elapsed, reducedDetail),
-      'neon-bloom': (state, elapsed, reducedDetail) => this.drawNeonBloom(state, elapsed, reducedDetail)
+      'neon-bloom': (state, elapsed, reducedDetail) => this.drawNeonBloom(state, elapsed, reducedDetail),
+      'neon-bats': (state, elapsed, reducedDetail) => this.drawNeonBats(state, elapsed, reducedDetail),
+      'witch-signal': (state, elapsed, reducedDetail) => this.drawWitchSignal(state, elapsed, reducedDetail)
     };
   }
 
@@ -375,6 +377,126 @@ export class BombExplosionCosmeticVfx {
       this.graphics.fillStyle(color, 0.82 * fade);
       if (index % 4 === 0) this.graphics.fillRect(px, py, size, size);
       else this.graphics.fillEllipse(px, py, size * 1.8, size * 0.72);
+    }
+  }
+
+  private drawNeonBats(state: BombExplosionCosmeticState, elapsed: number, reducedDetail: boolean): void {
+    const lifetime = BOMB_EXPLOSION_COSMETIC_DEFINITIONS['neon-bats'].lifetimeMs;
+    const fade = Math.min(1, elapsed / 120) * (1 - clamp01((elapsed - 2_180) / (lifetime - 2_180)));
+    const burst = easeOutCubic(clamp01(elapsed / 760));
+    const ringFade = 1 - clamp01((elapsed - 180) / 920);
+    this.smokeGraphics.fillStyle(0x16051f, 0.13 * fade);
+    this.smokeGraphics.fillCircle(state.x, state.y, state.radius * (0.18 + burst * 0.62));
+    if (ringFade > 0) {
+      this.graphics.lineStyle(4, 0xb35cff, 0.72 * ringFade);
+      this.graphics.strokeCircle(state.x, state.y, state.radius * (0.12 + burst * 0.9));
+      this.graphics.lineStyle(2, 0xff55ce, 0.55 * ringFade);
+      this.graphics.strokeCircle(state.x, state.y, state.radius * (0.08 + burst * 0.68));
+    }
+
+    const count = reducedDetail ? 8 : 15;
+    for (let index = 0; index < count; index += 1) {
+      const delay = 90 + pseudoRandom(state.seed, index * 5 + 1) * 420;
+      const localElapsed = elapsed - delay;
+      if (localElapsed <= 0) continue;
+      const progress = clamp01(localElapsed / (1_650 + (index % 4) * 120));
+      const localFade = fade * Math.min(1, localElapsed / 130) * (1 - progress * 0.74);
+      const angle = state.phase + index * 2.399963229728653 + progress * (index % 2 ? 1.2 : -1.05);
+      const distance = state.radius * (0.08 + progress * (0.62 + pseudoRandom(state.seed, index * 5 + 2) * 0.36));
+      const x = state.x + Math.cos(angle) * distance;
+      const y = state.y + Math.sin(angle) * distance - state.radius * progress * 0.28;
+      const size = state.radius * (0.027 + pseudoRandom(state.seed, index * 5 + 3) * 0.025) * (0.7 + Math.sin(Math.min(1, localElapsed / 260) * Math.PI) * 0.3);
+      const flap = 0.38 + Math.abs(Math.sin(localElapsed * 0.021 + index)) * 0.62;
+      const color = index % 3 === 0 ? 0x68efff : index % 2 ? 0xff55ce : 0xb35cff;
+      this.drawBat(x, y, size, angle + Math.PI, flap, color, localFade);
+    }
+  }
+
+  private drawBat(x: number, y: number, size: number, rotation: number, flap: number, color: number, alpha: number): void {
+    const dx = Math.cos(rotation);
+    const dy = Math.sin(rotation);
+    const px = -dy;
+    const py = dx;
+    const wing = size * (1.2 + flap * 0.8);
+    const wingBack = size * (0.5 + flap * 0.25);
+    this.graphics.fillStyle(color, 0.54 * alpha);
+    this.graphics.fillTriangle(
+      x - px * size * 0.22, y - py * size * 0.22,
+      x - px * wing - dx * wingBack, y - py * wing - dy * wingBack,
+      x - px * size * 0.62 + dx * size * 0.85, y - py * size * 0.62 + dy * size * 0.85
+    );
+    this.graphics.fillTriangle(
+      x + px * size * 0.22, y + py * size * 0.22,
+      x + px * wing - dx * wingBack, y + py * wing - dy * wingBack,
+      x + px * size * 0.62 + dx * size * 0.85, y + py * size * 0.62 + dy * size * 0.85
+    );
+    this.graphics.fillStyle(0x090311, 0.75 * alpha);
+    this.graphics.fillEllipse(x, y, size * 0.48, size * 1.45);
+    this.graphics.lineStyle(Math.max(1, size * 0.12), color, 0.9 * alpha);
+    this.graphics.strokeEllipse(x, y, size * 0.48, size * 1.45);
+    this.graphics.fillStyle(0xffffff, 0.8 * alpha);
+    this.graphics.fillCircle(x + dx * size * 0.42, y + dy * size * 0.42, Math.max(0.8, size * 0.09));
+  }
+
+  private drawWitchSignal(state: BombExplosionCosmeticState, elapsed: number, reducedDetail: boolean): void {
+    const lifetime = BOMB_EXPLOSION_COSMETIC_DEFINITIONS['witch-signal'].lifetimeMs;
+    const formation = easeOutBack(clamp01(elapsed / 520));
+    const fade = Math.min(1, elapsed / 110) * (1 - clamp01((elapsed - 2_180) / (lifetime - 2_180)));
+    const rise = easeOutCubic(clamp01(elapsed / 2_200)) * state.radius * 0.16;
+    const bob = Math.sin(elapsed * 0.005 + state.phase) * state.radius * 0.018;
+    const x = state.x + Math.sin(elapsed * 0.037) * state.radius * 0.007;
+    const y = state.y - state.radius * 0.18 - rise + bob;
+    const width = state.radius * 0.58 * formation;
+    const height = state.radius * 0.63 * formation;
+    if (width <= 1) return;
+
+    this.smokeGraphics.fillStyle(0x10200c, 0.12 * fade);
+    this.smokeGraphics.fillCircle(x, y, width * 0.78);
+    this.graphics.lineStyle(Math.max(2, width * 0.025), 0x75ff73, 0.88 * fade);
+    this.graphics.strokeEllipse(x, y + height * 0.07, width * 0.72, height * 0.69);
+    this.graphics.fillStyle(0x75ff73, 0.18 * fade);
+    this.graphics.fillEllipse(x, y + height * 0.07, width * 0.7, height * 0.67);
+
+    // Tall crooked hat and bright brim establish the silhouette at a glance.
+    this.graphics.fillStyle(0x8d46dc, 0.38 * fade);
+    this.graphics.fillTriangle(x - width * 0.35, y - height * 0.18, x + width * 0.26, y - height * 0.18, x + width * 0.03, y - height * 0.88);
+    this.graphics.lineStyle(Math.max(2, width * 0.026), 0xc65cff, 0.92 * fade);
+    this.graphics.beginPath();
+    this.graphics.moveTo(x - width * 0.35, y - height * 0.18);
+    this.graphics.lineTo(x + width * 0.03, y - height * 0.88);
+    this.graphics.lineTo(x + width * 0.26, y - height * 0.18);
+    this.graphics.strokePath();
+    this.graphics.lineStyle(Math.max(3, width * 0.042), 0xff5fcf, 0.94 * fade);
+    this.graphics.lineBetween(x - width * 0.47, y - height * 0.15, x + width * 0.47, y - height * 0.15);
+
+    const eyeY = y + height * 0.01;
+    const eyePulse = 0.72 + Math.sin(elapsed * 0.018) * 0.22;
+    this.graphics.fillStyle(0x020806, 0.9 * fade);
+    this.graphics.fillEllipse(x - width * 0.16, eyeY, width * 0.14, height * 0.1);
+    this.graphics.fillEllipse(x + width * 0.16, eyeY, width * 0.14, height * 0.1);
+    this.graphics.fillStyle(0xffffff, eyePulse * fade);
+    this.graphics.fillCircle(x - width * 0.16, eyeY, Math.max(1.2, width * 0.026));
+    this.graphics.fillCircle(x + width * 0.16, eyeY, Math.max(1.2, width * 0.026));
+    this.graphics.fillStyle(0xc65cff, 0.72 * fade);
+    this.graphics.fillTriangle(x, y + height * 0.03, x - width * 0.055, y + height * 0.2, x + width * 0.095, y + height * 0.16);
+    const grinY = y + height * 0.29;
+    this.graphics.lineStyle(Math.max(1.4, width * 0.018), 0xfff47a, 0.9 * fade);
+    this.graphics.beginPath();
+    this.graphics.arc(x, grinY - height * 0.1, width * 0.22, 0.12, Math.PI - 0.12, false);
+    this.graphics.strokePath();
+    for (let tooth = -2; tooth <= 2; tooth += 1) {
+      const toothX = x + tooth * width * 0.065;
+      this.graphics.lineBetween(toothX, grinY - height * 0.07, toothX, grinY + height * 0.015);
+    }
+
+    const glyphCount = reducedDetail ? 5 : 10;
+    for (let index = 0; index < glyphCount; index += 1) {
+      const angle = state.phase + index * Math.PI * 2 / glyphCount + elapsed * (index % 2 ? -0.0008 : 0.0011);
+      const distance = state.radius * (0.48 + (index % 3) * 0.08);
+      const gx = state.x + Math.cos(angle) * distance;
+      const gy = state.y + Math.sin(angle) * distance - rise * 0.35;
+      this.graphics.fillStyle(index % 2 ? 0x75ff73 : 0xc65cff, 0.62 * fade);
+      this.graphics.fillRect(gx, gy, Math.max(1.5, state.radius * 0.012), Math.max(1.5, state.radius * 0.012));
     }
   }
 
