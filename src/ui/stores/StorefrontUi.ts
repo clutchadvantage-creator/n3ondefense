@@ -374,7 +374,7 @@ export class StorefrontUi {
     title.textContent = item.label;
     const description = document.createElement('p');
     description.className = 'detail-description';
-    description.textContent = this.cosmeticDescription(item.category);
+    description.textContent = item.description ?? this.cosmeticDescription(item.category);
     const status = document.createElement('div');
     status.className = 'detail-status';
     status.innerHTML = `<span>${equipped ? 'EQUIPPED' : owned ? 'OWNED' : 'LOCKED'}</span><strong>${owned ? 'Collection item ready' : `${item.cost.toLocaleString()} ${item.currency === 'credits' ? 'Credits' : 'Core Tokens'}`}</strong>`;
@@ -500,6 +500,7 @@ export class StorefrontUi {
     const previewColor = item.colorMode === 'prism' ? 0xff4ed3 : item.color;
     visual.style.setProperty('--item-color', `#${previewColor.toString(16).padStart(6, '0')}`);
     visual.dataset.shape = item.visualShape ?? 'circle';
+    if (item.bombExplosionEffect) visual.dataset.effect = item.bombExplosionEffect;
     visual.innerHTML = '<i class="trail-a"></i><i class="trail-b"></i><b></b><span></span>';
     return visual;
   }

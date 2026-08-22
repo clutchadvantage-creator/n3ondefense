@@ -69,6 +69,7 @@ import { ProjectileTrailBatch } from '../performance/ProjectileTrailBatch.ts';
 import { UniformSpatialGrid } from '../performance/UniformSpatialGrid.ts';
 import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
 import { MineExplosionVfx } from '../vfx/MineExplosionVfx.ts';
+import { BombExplosionCosmeticVfx } from '../cosmetics/BombExplosionCosmeticVfx.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
@@ -315,6 +316,7 @@ export class ArenaScene extends Phaser.Scene {
   private projectileTrails: ProjectileTrailBatch | null = null;
   private boostVisual!: BoostVisualSystem;
   private mineExplosionVfx!: MineExplosionVfx;
+  private bombExplosionCosmeticVfx!: BombExplosionCosmeticVfx;
   private readonly temporaryAmmo = new TemporaryAmmoModeController();
   private readonly hazardDamageTargets: HazardDamageTarget[] = [];
   private homingMissiles: HomingMissile[] = [];
@@ -728,6 +730,7 @@ export class ArenaScene extends Phaser.Scene {
       (sampleTime) => SaveSystem.getCosmeticColor('dashTrail', sampleTime)
     );
     this.mineExplosionVfx = new MineExplosionVfx(this, this.particlesEnabled);
+    this.bombExplosionCosmeticVfx = new BombExplosionCosmeticVfx(this, this.particlesEnabled);
     if (session) {
       this.roundManager = new RoundManager(session.baseSeed, session.objectiveMode, session.round);
       this.registry.set('arena-session', session);
@@ -1191,6 +1194,16 @@ export class ArenaScene extends Phaser.Scene {
       && this.player.hp > 0
       && this.player.hp <= this.player.stats.maxHealth * 0.25);
 
+    const cosmeticEffectsCanAdvance = !this.tutorialHardPaused
+      && this.state.state !== RoundState.Paused
+      && !this.legendaryRevealInProgress;
+    if (cosmeticEffectsCanAdvance) {
+      // Bomb signatures deliberately outlive the authoritative blast and must
+      // continue rendering during the short non-interactive Victory hold.
+      this.mineExplosionVfx.update(now);
+      this.bombExplosionCosmeticVfx.update(now);
+    }
+
     if (this.tutorialHardPaused || this.state.state === RoundState.Paused || this.legendaryRevealInProgress || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
       return;
     }
@@ -1198,8 +1211,6 @@ export class ArenaScene extends Phaser.Scene {
     this.performanceMonitor.record(delta);
     this.updatePerformanceTelemetry(now);
     this.maintainCombatPools(now);
-    this.mineExplosionVfx.update(now);
-
     this.recordTelemetryFrame(delta, now);
     const energyBeforeRegeneration = this.player.energy;
     const requestedRegeneration = this.player.energyStats.regenPerSecond * dt;
@@ -4845,6 +4856,13 @@ export class ArenaScene extends Phaser.Scene {
       this.time.now,
       false
     );
+    this.bombExplosionCosmeticVfx.emitEquipped(
+      SaveSystem.getEquippedCosmeticId('bombColor'),
+      site.x,
+      site.y,
+      BOMBSITE_EXPLOSION_VISUAL_RADIUS,
+      this.time.now
+    );
 
     if (this.modRuntime.hasInfusion('detonation-fireworks')) this.playDetonationFireworks(site.x, site.y);
 
@@ -4951,7 +4969,8 @@ export class ArenaScene extends Phaser.Scene {
       fluxCores: rewardFluxCores
     });
 
-    this.transitionAfterModReveals(1400, () => {
+    const resultTransitionDelay = this.bombExplosionCosmeticVfx.recommendedSceneHoldMs(1400, this.time.now);
+    this.transitionAfterModReveals(resultTransitionDelay, () => {
       const completedTeachingRound = SaveSystem.getTutorialProgress().firstRunStage === 'arena-teaching';
       if (completedTeachingRound) {
         SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress); });
@@ -5700,6 +5719,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.state.state === RoundState.Defeat) return;
     this.arcadeController?.stop(reason === 'playerDead' ? 'player-dead' : 'round-ended');
     this.clearRoundInfusionEffects();
+    this.bombExplosionCosmeticVfx.reset();
     if (reason === 'playerDead') {
       this.audio.playSfx('playerDeath');
       this.createDeathExplosion(this.player.x, this.player.y, SaveSystem.getCosmeticColor('playerColor', this.time.now), true);
@@ -6860,6 +6880,7 @@ export class ArenaScene extends Phaser.Scene {
     this.projectilePool.releaseAll();
     this.fxCirclePool.releaseAll();
     this.mineExplosionVfx.reset();
+    this.bombExplosionCosmeticVfx.reset();
     this.projectileTrails?.reset();
     for (const missile of this.homingMissiles) missile.sprite.destroy();
     for (const p of this.pickups) p.sprite.destroy();
@@ -6939,6 +6960,7 @@ export class ArenaScene extends Phaser.Scene {
     this.destroyShieldOrb();
     this.boostVisual?.destroy();
     this.mineExplosionVfx?.destroy();
+    this.bombExplosionCosmeticVfx?.destroy();
     this.projectilePool?.destroy((projectile) => projectile.sprite.destroy());
     this.fxCirclePool?.destroy((circle) => circle.destroy());
     this.projectileTrails?.destroy();

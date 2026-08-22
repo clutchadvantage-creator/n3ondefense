@@ -15,7 +15,7 @@ export const GEAR_LOCKER_CATEGORY_LABELS: Record<CosmeticOption['category'], str
   projectileColor: 'PROJECTILE COLOR',
   projectileShape: 'PROJECTILE SHAPE',
   trailColor: 'MOVEMENT TRAIL',
-  bombColor: 'CHARGE COLOR',
+  bombColor: 'BOMBSITE EXPLOSION',
   turretSkin: 'TURRET SKIN',
   fenceStyle: 'FENCE STYLE',
   dashTrail: 'DASH TRAIL'

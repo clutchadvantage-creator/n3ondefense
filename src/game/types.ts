@@ -204,6 +204,8 @@ export type CosmeticVisualShape =
   | 'balloons'
   | 'carrot';
 
+export type BombExplosionCosmeticEffectId = 'death-signal' | 'neon-bloom';
+
 export interface CosmeticOption {
   id: string;
   category: 'playerColor' | 'playerShape' | 'projectileColor' | 'projectileShape' | 'trailColor' | 'bombColor' | 'turretSkin' | 'fenceStyle' | 'dashTrail';
@@ -223,6 +225,10 @@ export interface CosmeticOption {
   previewRenderer?: string;
   categoryIcon?: string;
   accentColor?: number;
+  /** Optional signature overlay layered over the authoritative bombsite explosion. */
+  bombExplosionEffect?: BombExplosionCosmeticEffectId;
+  /** Store and locker presentation copy; gameplay never reads this field. */
+  description?: string;
 }
 
 export interface GameSaveData {
