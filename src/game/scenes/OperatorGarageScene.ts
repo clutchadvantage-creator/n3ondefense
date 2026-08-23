@@ -37,6 +37,7 @@ import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { calculateProtocolTerminalVerticalLayout } from '../garage/protocolTerminalLayout.ts';
+import { getSupremeStage } from '../progression/SupremeProgression.ts';
 
 interface OperatorGarageSceneData { returnScene?: SceneKeyValue }
 
@@ -1313,7 +1314,8 @@ export class OperatorGarageScene extends Phaser.Scene {
       const progressRight = x + cardWidth / 2 - (narrow ? 10 : 17);
       const progressWidth = Math.max(24, progressRight - progressLeft);
       const progressY = y + cardHeight / 2 - (narrow ? 7 : 11);
-      const progressValue = definition.family === 'supreme' && definition.startingRound > 50 ? supremeHighest : highest;
+      const supremeStage = getSupremeStage(id);
+      const progressValue = supremeStage?.unlockSource === 'supreme' ? supremeHighest : highest;
       const progressRatio = unlocked ? 1 : Phaser.Math.Clamp(progressValue / definition.unlockHighestRound, 0, 1);
       const progressTrack = this.add.rectangle(progressLeft, progressY, progressWidth, narrow ? 2 : 4, 0x02070c, 1)
         .setOrigin(0, 0.5).setStrokeStyle(1, accent, 0.22);

@@ -20,9 +20,11 @@ import { calculateProtocolTerminalVerticalLayout } from '../src/game/garage/prot
 
 const source = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 
-test('Supreme progression owns eleven unique five-round constellation deployments from 50 through 100', () => {
+test('Supreme progression starts after Overdrive Round 50 and runs through the Round 100 terminal', () => {
   assert.equal(SUPREME_STAGE_DEFINITIONS.length, 11);
-  assert.deepEqual(SUPREME_STAGE_DEFINITIONS.map((stage) => stage.level), [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]);
+  assert.deepEqual(SUPREME_STAGE_DEFINITIONS.map((stage) => stage.level), [51, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]);
+  assert.equal(RUN_PROTOCOLS['overdrive-pegasus'].startingRound, 50);
+  assert.equal(RUN_PROTOCOLS['supreme-leo'].startingRound, 51);
   assert.equal(new Set(SUPREME_STAGE_DEFINITIONS.map((stage) => stage.constellation)).size, 11);
   const existingNames = new Set(RUN_PROTOCOL_IDS
     .map((id) => RUN_PROTOCOLS[id])
@@ -41,6 +43,8 @@ test('Supreme progression owns eleven unique five-round constellation deployment
 
 test('Supreme unlocks use global clearance once, then persistent Supreme round progression', () => {
   const [leo, gemini, cassiopeia, aquila] = SUPREME_STAGE_DEFINITIONS;
+  assert.equal(leo.unlockSource, 'global');
+  assert.equal(gemini.unlockSource, 'supreme');
   assert.equal(isSupremeStageUnlocked(leo, { highestRound: 52, supremeHighestRound: 100 }), false);
   assert.equal(isSupremeStageUnlocked(leo, { highestRound: 53, supremeHighestRound: 0 }), true);
   assert.equal(isSupremeStageUnlocked(gemini, { highestRound: 200, supremeHighestRound: 57 }), false);
