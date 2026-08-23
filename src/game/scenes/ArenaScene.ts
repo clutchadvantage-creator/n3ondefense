@@ -42,14 +42,16 @@ import { startArenaLoad } from '../utils/runFlow';
 import { createButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { GameplayPointerLock } from '../input/GameplayPointerLock';
+import { PlayerInput } from '../input/PlayerInput.ts';
 import { MineSalvoInput, type MineSalvoInputResolution } from '../input/MineSalvoInput.ts';
 import { DEFAULT_AIM_SETTINGS, normalizeAimSettings, type AimSettings } from '../config/interfaceSettings';
+import { normalizeControllerSettings } from '../config/controllerSettings.ts';
 import { applyEnemyDamageMode, applyEnemyHealthMode, getEnemyDefuseDuration, getModeSpawnCadence, getProtocolModeBalance, type RunModeFamily } from '../config/modeBalance.ts';
 import { ARENA_GENERATION_CONFIG } from '../config/arenaGeneration.ts';
 import { drawReticle } from '../ui/ReticleRenderer';
 import { createPauseMenuView, type PauseMenuView } from '../ui/PauseMenuUi.ts';
 import { ArenaCommandButton } from '../ui/ArenaCommandButton.ts';
-import { ABILITY_ACTIONS, INTERACT_BINDING, MOVEMENT_BINDINGS, PRIMARY_FIRE_BINDING, bindingLabel, compactBindingLabel, type AbilityAction, type AbilityBindings } from '../config/controls';
+import { compactBindingLabel } from '../config/controls';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_BALANCE, RUN_PROTOCOLS, normalizeRunProtocolId } from '../mods/modBalance.ts';
 import { isGuaranteedMilestone, rollModDrop } from '../mods/ModDropService.ts';
@@ -439,12 +441,12 @@ export class ArenaScene extends Phaser.Scene {
   private plantingProgressMs = 0;
   private lastPlayerShotMs = 0;
   private lastShotEnergyDeniedAt = -99_999;
-  private pointerDown = false;
   private pointerLock: GameplayPointerLock | null = null;
+  private playerInput!: PlayerInput;
+  private pointerLockInitialGate = false;
   private readonly aimWorldPoint = new Phaser.Math.Vector2();
+  private controllerAimDistance = 280;
   private aimSettings: AimSettings = { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } };
-  private abilityBindings!: AbilityBindings;
-  private readonly pressedAbilityActions = new Set<AbilityAction>();
   private readonly mineSalvoInput = new MineSalvoInput();
   private pendingMineSalvo = false;
 
@@ -499,14 +501,6 @@ export class ArenaScene extends Phaser.Scene {
   };
 
   private keys!: {
-    w: Phaser.Input.Keyboard.Key;
-    a: Phaser.Input.Keyboard.Key;
-    s: Phaser.Input.Keyboard.Key;
-    d: Phaser.Input.Keyboard.Key;
-    e: Phaser.Input.Keyboard.Key;
-    one: Phaser.Input.Keyboard.Key;
-    two: Phaser.Input.Keyboard.Key;
-    three: Phaser.Input.Keyboard.Key;
     f8: Phaser.Input.Keyboard.Key;
     f7: Phaser.Input.Keyboard.Key;
     f6: Phaser.Input.Keyboard.Key;
@@ -622,25 +616,6 @@ export class ArenaScene extends Phaser.Scene {
     }
     return penalty;
   };
-  private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
-    if (this.bossFlowPhase === 'loot-collection' && this.bossNextFightButton) return;
-    if (this.state.state === RoundState.Paused || this.tutorialHardPaused) return;
-    if (pointer.button === Number(PRIMARY_FIRE_BINDING.slice('Mouse:'.length))) {
-      this.pointerDown = true;
-      return;
-    }
-    const action = this.actionForBinding(`Mouse:${pointer.button}`);
-    if (action) {
-      pointer.event?.preventDefault();
-      this.handleAbilityInputDown(action, `Mouse:${pointer.button}`);
-    }
-  };
-  private readonly onPointerUp = (pointer: Phaser.Input.Pointer): void => {
-    if (pointer.button === Number(PRIMARY_FIRE_BINDING.slice('Mouse:'.length))) {
-      this.pointerDown = false;
-    }
-    this.handleMineInputRelease(`Mouse:${pointer.button}`);
-  };
   private readonly onResumeFromOptions = (): void => {
     this.refreshAbilityBindings();
     const settings = SaveSystem.get().settings;
@@ -660,42 +635,6 @@ export class ArenaScene extends Phaser.Scene {
     if (this.state.state === RoundState.Paused) this.showPauseMenu();
   };
   private readonly onQuitFromStore = (): void => this.quitToMenu();
-  private readonly onAbilityKeyDown = (event: KeyboardEvent): void => {
-    if (event.repeat || !this.scene.isActive()) return;
-    if (event.code === 'Escape' && this.tutorialHardPaused) {
-      // Training owns the gameplay pause while a hard-pause step is visible.
-      // Do not let Escape open a second pause surface underneath the tutorial.
-      event.preventDefault();
-      return;
-    }
-    if (event.code === 'Escape') {
-      if (this.bossFlowPhase === 'intro' || this.bossFlowPhase === 'destruction' || this.bossFlowPhase === 'transitioning') {
-        event.preventDefault();
-        return;
-      }
-      // Pointer-lock loss may deliver the same Escape after its asynchronous
-      // unlock callback has already opened the menu. Ignore only that duplicate
-      // edge. Escape itself is not a browser user-activation gesture, so an
-      // already-paused operation returns to the explicit click-to-resume gate.
-      if (this.state.state === RoundState.Paused && this.pauseMenu && Date.now() - this.pauseMenuOpenedAt < 150) return;
-      event.preventDefault();
-      if (this.state.state === RoundState.Paused) {
-        this.hideEquippedModsViewer();
-        this.hidePauseMenu();
-        this.pointerLock?.showResume();
-      } else {
-        this.togglePause();
-      }
-      return;
-    }
-    if (this.state.state === RoundState.Paused || this.tutorialHardPaused) return;
-    const action = this.actionForBinding(`Keyboard:${event.code}`);
-    if (action) this.handleAbilityInputDown(action, `Keyboard:${event.code}`);
-  };
-  private readonly onAbilityKeyUp = (event: KeyboardEvent): void => {
-    this.handleMineInputRelease(`Keyboard:${event.code}`);
-  };
-
   constructor() {
     super(SceneKeys.Arena);
   }
@@ -817,6 +756,7 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.aimSettings = normalizeAimSettings(SaveSystem.get().settings.aim);
     this.pointerLock.setSensitivity(this.aimSettings.mouseSensitivity);
+    this.pointerLockInitialGate = true;
     this.pauseForPointerLock('initial');
     this.pointerLock.showInitial();
     if(import.meta.env.DEV){
@@ -829,6 +769,7 @@ export class ArenaScene extends Phaser.Scene {
         previewSupremeMod?:(modId?:string)=>boolean;
         forceSupremeFinale?:()=>void;
         previewSupremeVictory?:()=>void;
+        n3onInputDebug?:()=>Record<string, unknown>;
       };
       debugGlobal.forceArenaType=(type)=>{ArenaGenerator.forceArenaType(type);this.createRoundFromDefinition(this.roundManager.currentDefinition());};
       debugGlobal.regenerateArena=()=>this.createRoundFromDefinition(this.roundManager.currentDefinition());
@@ -882,6 +823,7 @@ export class ArenaScene extends Phaser.Scene {
           this.physics.resume();
         });
       };
+      debugGlobal.n3onInputDebug=()=>this.playerInput.debugSnapshot();
     }
   }
 
@@ -1255,6 +1197,20 @@ export class ArenaScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     const now = this.time.now;
     const dt = delta / 1000;
+    const inputContext = this.tutorialHardPaused
+      ? 'tutorial'
+      : this.legendaryRevealInProgress
+        ? 'modal'
+        : this.state.state === RoundState.Paused
+          ? 'paused'
+          : this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat
+            ? 'modal'
+            : 'gameplay';
+    if (this.playerInput.update(inputContext)) {
+      this.refreshAbilityBindings();
+      if (this.playerInput.activeDevice === 'gamepad') this.pointerLock?.release();
+    }
+    this.handleSystemInput();
     this.supremeConstellation?.update(now);
 
     if (import.meta.env.DEV && Phaser.Input.Keyboard.JustDown(this.keys.f8)) {
@@ -1420,25 +1376,15 @@ export class ArenaScene extends Phaser.Scene {
     if (!kb) throw new Error('Keyboard input unavailable.');
 
     this.keys = {
-      w: kb.addKey(bindingLabel(MOVEMENT_BINDINGS[0])),
-      a: kb.addKey(bindingLabel(MOVEMENT_BINDINGS[1])),
-      s: kb.addKey(bindingLabel(MOVEMENT_BINDINGS[2])),
-      d: kb.addKey(bindingLabel(MOVEMENT_BINDINGS[3])),
-      e: kb.addKey(bindingLabel(INTERACT_BINDING)),
-      one: kb.addKey('ONE'),
-      two: kb.addKey('TWO'),
-      three: kb.addKey('THREE')
-      ,f8: kb.addKey('F8')
+      f8: kb.addKey('F8')
       ,f7: kb.addKey('F7')
       ,f6: kb.addKey('F6')
       ,f5: kb.addKey('F5')
     };
 
-    this.input.on('pointerdown', this.onPointerDown);
-    this.input.on('pointerup', this.onPointerUp);
+    const settings = SaveSystem.get().settings;
+    this.playerInput = new PlayerInput(this, settings.abilityBindings, normalizeControllerSettings(settings.controller));
     this.refreshAbilityBindings();
-    window.addEventListener('keydown', this.onAbilityKeyDown);
-    window.addEventListener('keyup', this.onAbilityKeyUp);
     this.setGameplayCursorMode();
   }
 
@@ -1473,36 +1419,18 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private refreshAbilityBindings(): void {
-    this.abilityBindings = { ...SaveSystem.get().settings.abilityBindings };
+    const settings = SaveSystem.get().settings;
+    const abilityBindings = settings.abilityBindings;
+    this.playerInput?.refresh(abilityBindings, normalizeControllerSettings(settings.controller));
     const slots = this.hudPayload.abilities;
-    slots[0].keybind = compactBindingLabel(this.abilityBindings.fence);
-    slots[1].keybind = compactBindingLabel(this.abilityBindings.turret);
-    slots[2].keybind = compactBindingLabel(this.abilityBindings.mine);
-    slots[3].keybind = compactBindingLabel(this.abilityBindings.shield);
-  }
-
-  private actionForBinding(binding: string): AbilityAction | null {
-    return ABILITY_ACTIONS.find(({ action }) => this.abilityBindings?.[action] === binding)?.action ?? null;
-  }
-
-  private handleAbilityInputDown(action: AbilityAction, binding: string): void {
-    if (action === 'mine' && this.modRuntime.has('full-rack-salvo')) {
-      this.mineSalvoInput.press(binding, this.time.now);
-      return;
-    }
-    this.pressedAbilityActions.add(action);
-  }
-
-  private handleMineInputRelease(binding: string): void {
-    const resolution = this.mineSalvoInput.release(binding, this.time.now);
-    if (this.state.state === RoundState.Paused
-      || this.state.state === RoundState.Victory
-      || this.state.state === RoundState.Defeat) return;
-    this.queueMineInputResolution(resolution);
+    slots[0].keybind = this.playerInput?.prompt('fence', compactBindingLabel(abilityBindings.fence)) ?? compactBindingLabel(abilityBindings.fence);
+    slots[1].keybind = this.playerInput?.prompt('turret', compactBindingLabel(abilityBindings.turret)) ?? compactBindingLabel(abilityBindings.turret);
+    slots[2].keybind = this.playerInput?.prompt('mine', compactBindingLabel(abilityBindings.mine)) ?? compactBindingLabel(abilityBindings.mine);
+    slots[3].keybind = this.playerInput?.prompt('shield', compactBindingLabel(abilityBindings.shield)) ?? compactBindingLabel(abilityBindings.shield);
   }
 
   private queueMineInputResolution(resolution: MineSalvoInputResolution | null): void {
-    if (resolution === 'tap') this.pressedAbilityActions.add('mine');
+    if (resolution === 'tap') this.placeAbility('mine', this.time.now);
     if (resolution === 'salvo') this.pendingMineSalvo = true;
   }
 
@@ -1512,13 +1440,11 @@ export class ArenaScene extends Phaser.Scene {
       this.pendingMineSalvo = false;
       return;
     }
+    if (this.playerInput.pressed('mine')) this.mineSalvoInput.press('action:mine', now);
+    if (this.playerInput.released('mine')) {
+      this.queueMineInputResolution(this.mineSalvoInput.release('action:mine', now));
+    }
     this.queueMineInputResolution(this.mineSalvoInput.update(now));
-  }
-
-  private consumeAbilityAction(action: AbilityAction): boolean {
-    if (!this.pressedAbilityActions.has(action)) return false;
-    this.pressedAbilityActions.delete(action);
-    return true;
   }
 
   private createCrosshair(): void {
@@ -1669,26 +1595,24 @@ export class ArenaScene extends Phaser.Scene {
     const forwardFacingFrame = this.player.texture.key === 'player-spaceship' || this.player.texture.key === 'player-airplane';
     this.player.setRotation(angle + (forwardFacingFrame ? 0 : Math.PI / 2));
 
-    let movementX = 0;
-    let movementY = 0;
-    if (this.keys.w.isDown) movementY -= 1;
-    if (this.keys.s.isDown) movementY += 1;
-    if (this.keys.a.isDown) movementX -= 1;
-    if (this.keys.d.isDown) movementX += 1;
+    const movementX = this.playerInput.move.x;
+    const movementY = this.playerInput.move.y;
 
     if (now >= this.player.dashUntil) {
       const movementLengthSquared = movementX * movementX + movementY * movementY;
       if (movementLengthSquared > 0) {
         if (this.tutorialDirector?.awaits('combat.playerMoved')) TutorialEventBus.emit('combat.playerMoved');
         const fieldSpeed = this.bombsiteMods?.playerMoveSpeedMultiplier(this.player.x, this.player.y) ?? 1;
-        const speedScale = this.player.speed * fieldSpeed / Math.sqrt(movementLengthSquared);
+        const speedScale = this.playerInput.activeDevice === 'gamepad'
+          ? this.player.speed * fieldSpeed
+          : this.player.speed * fieldSpeed / Math.sqrt(movementLengthSquared);
         this.player.setVelocity(movementX * speedScale, movementY * speedScale);
       } else {
         this.player.setVelocity(0, 0);
       }
     }
 
-    if (this.consumeAbilityAction('dash')) {
+    if (this.playerInput.pressed('dash')) {
       if (!this.player.canDash(now)) {
         GameplayTelemetryRecorder.recordAbilityDenied('dash', 'cooldown');
         this.audio.playSfx('unavailable');
@@ -1710,20 +1634,20 @@ export class ArenaScene extends Phaser.Scene {
 
     this.boostVisual.update(this.player, now);
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.one)) this.selectedAbility = 'fence';
-    if (Phaser.Input.Keyboard.JustDown(this.keys.two)) this.selectedAbility = 'turret';
-    if (Phaser.Input.Keyboard.JustDown(this.keys.three)) this.selectedAbility = 'mine';
+    if (this.playerInput.pressed('selectFence')) this.selectedAbility = 'fence';
+    if (this.playerInput.pressed('selectTurret')) this.selectedAbility = 'turret';
+    if (this.playerInput.pressed('selectMine')) this.selectedAbility = 'mine';
 
     this.updateMineSalvoInput(now);
-    if (this.consumeAbilityAction('fence')) this.placeAbility('fence', now);
-    if (this.consumeAbilityAction('turret')) this.placeAbility('turret', now);
-    if (this.consumeAbilityAction('mine')) this.placeAbility('mine', now);
+    if (this.playerInput.pressed('fence')) this.placeAbility('fence', now);
+    if (this.playerInput.pressed('turret')) this.placeAbility('turret', now);
+    if (!this.modRuntime.has('full-rack-salvo') && this.playerInput.pressed('mine')) this.placeAbility('mine', now);
     if (this.pendingMineSalvo) {
       this.pendingMineSalvo = false;
       const { x, y } = this.getAimWorldPoint();
       this.placeFullRackSalvo(now, this.getAbilityConfig('mine'), x, y);
     }
-    if (this.consumeAbilityAction('shield')) this.activateShield(now);
+    if (this.playerInput.pressed('shield')) this.activateShield(now);
     this.updateHoloAfterimage(now);
   }
 
@@ -1751,7 +1675,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePlayerShooting(now: number): void {
-    if (!this.pointerDown) return;
+    if (!this.playerInput.held('fire')) return;
     if (this.player.heat >= this.player.weapon.maxHeat) return;
 
     const fieldFireRate = this.bombsiteMods?.playerFireRateMultiplier(this.player.x, this.player.y) ?? 1;
@@ -1869,6 +1793,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePlanting(delta: number): void {
+    const interactPrompt = this.playerInput.prompt('interact', 'E');
     const activeBombCount = this.bombSites.activeBombCount();
 
     const near = this.bombSites.getNearestAvailable(this.player.x, this.player.y, 90);
@@ -1878,7 +1803,7 @@ export class ArenaScene extends Phaser.Scene {
       this.plantingProgressMs = 0;
       this.siteActionText.setText(activeBombCount > 0
         ? `${activeBombCount} charge${activeBombCount === 1 ? '' : 's'} active. Defend them or move to another available site to plant.`
-        : 'Move to an available site and hold E to plant.');
+        : `Move to an available site and hold ${interactPrompt} to plant.`);
       return;
     }
 
@@ -1888,7 +1813,7 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
-    if (this.keys.e.isDown) {
+    if (this.playerInput.held('interact')) {
       this.audio.startPlantingLoop();
       if (this.activePlantingSite?.id !== near.id) {
         this.activePlantingSite = near;
@@ -1915,7 +1840,7 @@ export class ArenaScene extends Phaser.Scene {
       this.activePlantingSite = null;
       this.plantingProgressMs = 0;
       this.state.set(activeBombCount > 0 ? RoundState.Defense : RoundState.PrePlant);
-      this.siteActionText.setText(`Site ${near.letter} ready. Hold E to plant${activeBombCount > 0 ? ' while defending active charges' : ''}.`);
+      this.siteActionText.setText(`Site ${near.letter} ready. Hold ${interactPrompt} to plant${activeBombCount > 0 ? ' while defending active charges' : ''}.`);
     }
   }
 
@@ -1981,7 +1906,14 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private refreshAimWorldPoint(): void {
-    if (this.pointerLock) {
+    if (this.playerInput.activeDevice === 'gamepad') {
+      const aim = this.playerInput.controllerAim;
+      if (aim.magnitude > 0) this.controllerAimDistance = 150 + aim.magnitude * 260;
+      this.aimWorldPoint.set(
+        this.player.x + aim.x * this.controllerAimDistance,
+        this.player.y + aim.y * this.controllerAimDistance
+      );
+    } else if (this.pointerLock?.locked) {
       this.pointerLock.worldPoint(this.cameras.main, this.aimWorldPoint);
     } else {
       this.aimWorldPoint.set(this.input.activePointer.worldX, this.input.activePointer.worldY);
@@ -5561,12 +5493,11 @@ export class ArenaScene extends Phaser.Scene {
     this.supremeFinale?.playEntrance();
     this.nextBossSupportEnemyWaveAt = this.time.now + BOSS_BALANCE.supportEnemyFirstDelayMs;
     this.clearGameplayInput();
-    this.pointerDown = false;
     if (this.bossEncounter) TutorialEventBus.emit('combat.bossStarted', { archetype: this.bossEncounter.archetype, round: this.bossRound });
     this.showBanner(this.supremeFinale
       ? 'SUPREME PROTOCOL // TERMINAL ENGAGEMENT\nALL COMMAND SIGNATURES ACTIVE'
       : `BOSS INTERCEPT\n${BOSS_ARCHETYPES[this.bossEncounter!.archetype].label}`);
-    if (this.pointerLock?.supported) {
+    if (this.pointerLock?.supported && this.playerInput.activeDevice !== 'gamepad') {
       this.state.set(RoundState.Paused);
       this.pointerLock.requestLock();
     } else {
@@ -5849,7 +5780,6 @@ export class ArenaScene extends Phaser.Scene {
     };
     this.boostVisual.reset();
     this.state.set(RoundState.Paused);
-    this.pointerDown = false;
     this.clearGameplayInput();
     encounter.cancelCombat();
     this.physics.pause();
@@ -5889,7 +5819,6 @@ export class ArenaScene extends Phaser.Scene {
       if (!this.supremeFinale || !this.pendingRoundPayload || this.bossFlowPhase !== 'destruction') return;
       this.boostVisual.reset();
       this.state.set(RoundState.Victory);
-      this.pointerDown = false;
       this.clearGameplayInput();
       this.physics.pause();
       this.clearBossSupportEnemies();
@@ -6931,9 +6860,45 @@ export class ArenaScene extends Phaser.Scene {
     this.showPauseMenu();
   }
 
+  private handleSystemInput(): void {
+    if (this.pointerLockInitialGate
+      && this.playerInput.activeDevice === 'gamepad'
+      && this.playerInput.meaningfulGamepadInput) {
+      this.pointerLockInitialGate = false;
+      this.pointerLock?.hidePrompt();
+      this.restoreGameplayAfterPause();
+      return;
+    }
+    if (this.playerInput.pressed('confirm')) {
+      if (this.bossFlowPhase === 'intro') {
+        this.startBossCombat();
+        return;
+      }
+      if (this.bossFlowPhase === 'loot-collection' && this.bossNextFightButton) {
+        this.finishBossCollection();
+        return;
+      }
+    }
+    if (!this.playerInput.pressed('pause') || this.tutorialHardPaused) return;
+    if (this.bossFlowPhase === 'intro' || this.bossFlowPhase === 'destruction' || this.bossFlowPhase === 'transitioning') return;
+    if (this.state.state !== RoundState.Paused) {
+      this.togglePause();
+      return;
+    }
+    if (this.pauseMenu && Date.now() - this.pauseMenuOpenedAt < 150) return;
+    if (this.playerInput.activeDevice === 'gamepad') {
+      this.resumeGameplay();
+      return;
+    }
+    // Preserve the existing keyboard Escape behavior: leave the Pause console
+    // and return to the explicit browser mouse-capture gate.
+    this.hideEquippedModsViewer();
+    this.hidePauseMenu();
+    this.pointerLock?.showResume();
+  }
+
   private clearGameplayInput(): void {
-    this.pointerDown = false;
-    this.pressedAbilityActions.clear();
+    this.playerInput?.clear();
     this.mineSalvoInput.cancel();
     this.pendingMineSalvo = false;
     this.player?.setVelocity(0, 0);
@@ -6983,6 +6948,7 @@ export class ArenaScene extends Phaser.Scene {
     this.state.set(RoundState.Paused);
     this.physics.pause();
     this.setMenuCursorMode();
+    if (reason === 'initial') this.pointerLockInitialGate = true;
     if (this.bossFlowPhase === 'intro' || this.bossFlowPhase === 'destruction' || this.bossFlowPhase === 'transitioning') {
       this.pointerLock?.hidePrompt();
       return;
@@ -6996,6 +6962,12 @@ export class ArenaScene extends Phaser.Scene {
   private resumeFromPointerLock(): void {
     if (this.state.state !== RoundState.Paused || this.pauseMenu) return;
     if (this.bossFlowPhase === 'intro' || this.bossFlowPhase === 'destruction' || this.bossFlowPhase === 'transitioning') return;
+    this.pointerLockInitialGate = false;
+    this.restoreGameplayAfterPause();
+  }
+
+  private restoreGameplayAfterPause(): void {
+    if (this.state.state !== RoundState.Paused) return;
     this.setGameplayCursorMode();
     if (this.bossEncounter) {
       this.state.set(RoundState.Defense);
@@ -7038,7 +7010,7 @@ export class ArenaScene extends Phaser.Scene {
         // Hard-pause Teaching always exits through a trusted Continue click.
         // Restore capture on every gameplay transition rather than depending
         // on whether a prior lock snapshot happened to be retained.
-        if (this.scene.isActive() && this.pointerLock?.supported) {
+        if (this.scene.isActive() && this.pointerLock?.supported && this.playerInput.activeDevice !== 'gamepad') {
           this.pointerLock.requestLock();
         }
       }
@@ -7216,8 +7188,14 @@ export class ArenaScene extends Phaser.Scene {
       this.physics.resume();
       return;
     }
-    this.pointerLock?.showResume();
-    this.pointerLock?.requestLock();
+    if (this.playerInput.activeDevice === 'gamepad') {
+      this.pointerLockInitialGate = false;
+      this.pointerLock?.hidePrompt();
+      this.restoreGameplayAfterPause();
+    } else {
+      this.pointerLock?.showResume();
+      this.pointerLock?.requestLock();
+    }
   }
 
   private restartFromRoundOne(): void {
@@ -7297,7 +7275,7 @@ export class ArenaScene extends Phaser.Scene {
     this.assignedDefusersPerSite.clear();
     this.defuseTargetByEnemy.clear();
     this.detonatingSiteIds.clear();
-    this.pressedAbilityActions.clear();
+    this.playerInput?.clear();
     this.hudBuffs.length = 0;
     this.hudRadarContacts.length = 0;
     this.hudRadarContactPool.length = 0;
@@ -7326,7 +7304,7 @@ export class ArenaScene extends Phaser.Scene {
     this.boostVisual?.reset();
     this.mineSalvoInput.cancel();
     this.pendingMineSalvo = false;
-    this.pressedAbilityActions.clear();
+    this.playerInput?.clear();
     this.audio.stopFluxCoreLoop();
     for (const timer of this.bossSequenceTimers) timer.remove(false);
     this.bossSequenceTimers.length = 0;
@@ -7461,10 +7439,7 @@ export class ArenaScene extends Phaser.Scene {
     this.projectileTrails?.destroy();
     this.projectileTrails = null;
     this.clearRoundCollections();
-    this.input.off('pointerdown', this.onPointerDown);
-    this.input.off('pointerup', this.onPointerUp);
-    window.removeEventListener('keydown', this.onAbilityKeyDown);
-    window.removeEventListener('keyup', this.onAbilityKeyUp);
+    this.playerInput?.destroy();
     this.pointerLock?.destroy();
     this.pointerLock = null;
     if (import.meta.env.DEV) {
@@ -7477,6 +7452,7 @@ export class ArenaScene extends Phaser.Scene {
         previewSupremeMod?:unknown;
         forceSupremeFinale?:unknown;
         previewSupremeVictory?:unknown;
+        n3onInputDebug?:unknown;
       };
       delete debugGlobal.forceArenaType;
       delete debugGlobal.regenerateArena;
@@ -7486,6 +7462,7 @@ export class ArenaScene extends Phaser.Scene {
       delete debugGlobal.previewSupremeMod;
       delete debugGlobal.forceSupremeFinale;
       delete debugGlobal.previewSupremeVictory;
+      delete debugGlobal.n3onInputDebug;
     }
     this.setMenuCursorMode();
   }

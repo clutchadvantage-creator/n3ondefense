@@ -301,6 +301,7 @@ export interface GameSaveData {
     abilityBindings: AbilityBindings;
     hud: HudSettings;
     aim: AimSettings;
+    controller: import('./config/controllerSettings.ts').ControllerSettings;
     contextualTutorials: boolean;
     buttonJiggle: number;
   };

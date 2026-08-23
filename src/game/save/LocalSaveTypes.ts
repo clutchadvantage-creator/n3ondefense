@@ -7,6 +7,7 @@ import type { CreditSpendBreakdown } from '../economy/types.ts';
 import type { PlayerGarageState } from '../garage/types.ts';
 import type { WeeklyOperationProgressSource, WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import type { AimSettings, HudSettings } from '../config/interfaceSettings.ts';
+import type { ControllerSettings } from '../config/controllerSettings.ts';
 
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
@@ -62,6 +63,7 @@ export interface LocalPlayerSettings {
   abilityBindings: AbilityBindings;
   hud: HudSettings;
   aim: AimSettings;
+  controller: ControllerSettings;
   contextualTutorials: boolean;
   buttonJiggle: number;
 }
@@ -122,7 +124,7 @@ export interface LocalPlayerSaveV1 {
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
   progress: Omit<LocalPlayerProgress, 'supremeHighestRound' | 'supremeOverdriveCompleted' | 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'arcadeEventsCompleted' | 'goldenEnemiesKilled' | 'arcadeMiniBossesKilled' | 'neonCircuitsCompleted' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
-  settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'contextualTutorials' | 'buttonJiggle'>;
+  settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'controller' | 'contextualTutorials' | 'buttonJiggle'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }
 

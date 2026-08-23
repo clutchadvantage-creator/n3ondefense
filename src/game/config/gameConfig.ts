@@ -16,6 +16,9 @@ export const createGameConfig = (parent: string): Phaser.Types.Core.GameConfig =
     antialias: true,
     pixelArt: false
   },
+  input: {
+    gamepad: true
+  },
   physics: {
     default: 'arcade',
     arcade: {

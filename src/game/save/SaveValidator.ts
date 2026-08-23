@@ -10,6 +10,7 @@ import type { CreditSpendCategory } from '../economy/types.ts';
 import { createDefaultGarageState, normalizeGarageState } from '../garage/GarageState.ts';
 import { createDefaultWeeklyOperationsState, createWeeklyBaselines, normalizeWeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import { DEFAULT_AIM_SETTINGS, DEFAULT_HUD_SETTINGS, normalizeAimSettings, normalizeHudSettings } from '../config/interfaceSettings.ts';
+import { DEFAULT_CONTROLLER_SETTINGS, normalizeControllerSettings } from '../config/controllerSettings.ts';
 
 const defaultSettings: LocalPlayerSettings = {
   masterVolume: DEFAULT_AUDIO_VOLUME,
@@ -21,6 +22,7 @@ const defaultSettings: LocalPlayerSettings = {
   abilityBindings: { ...DEFAULT_ABILITY_BINDINGS },
   hud: { ...DEFAULT_HUD_SETTINGS },
   aim: { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } },
+  controller: { ...DEFAULT_CONTROLLER_SETTINGS },
   contextualTutorials: true,
   buttonJiggle: 1
 };
@@ -190,6 +192,7 @@ const normalizeSettings = (settings: unknown): LocalPlayerSettings => {
     abilityBindings: normalizeAbilityBindings(candidate.abilityBindings),
     hud: normalizeHudSettings(candidate.hud),
     aim: normalizeAimSettings(candidate.aim),
+    controller: normalizeControllerSettings(candidate.controller),
     contextualTutorials: toBoolean(candidate.contextualTutorials, true),
     buttonJiggle: clamp(toFiniteNumber(candidate.buttonJiggle, defaultSettings.buttonJiggle), 0, 1)
   };

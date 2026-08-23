@@ -126,8 +126,8 @@ test('base mine placement validates energy and geometry before consuming a charg
   assert.doesNotMatch(arena, /if \(this\.mines\.length >= cfg\.maxActive\)[\s\S]{0,180}recordAbilityDenied\('mine'/);
   const basePlacement = arena.slice(arena.indexOf('private placeAbility('), arena.indexOf('private placeFullRackSalvo('));
   assert.equal([...basePlacement.matchAll(/this\.player\.spendEnergy\(cfg\.energyCost\)/g)].length, 1);
-  assert.match(arena, /private readonly pressedAbilityActions = new Set<AbilityAction>\(\)/);
-  assert.match(arena, /this\.pressedAbilityActions\.delete\(action\)/);
+  assert.match(arena, /this\.playerInput\.pressed\('mine'\)/);
+  assert.match(arena, /this\.placeAbility\('mine', now\)/);
 });
 
 test('mine rack formations preserve requested capacity and use the five-pip layout', () => {
@@ -195,10 +195,10 @@ test('mine salvo placement atomically consumes current charges and preserves geo
 
 test('Arena wires Salvo tap-hold input without delaying an unmodded mine press', () => {
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
-  assert.match(arena, /action === 'mine' && this\.modRuntime\.has\('full-rack-salvo'\)/);
-  assert.match(arena, /this\.mineSalvoInput\.press\(binding, this\.time\.now\);[\s\S]*?return;[\s\S]*?this\.pressedAbilityActions\.add\(action\)/);
-  assert.match(arena, /window\.addEventListener\('keyup', this\.onAbilityKeyUp\)/);
-  assert.match(arena, /window\.removeEventListener\('keyup', this\.onAbilityKeyUp\)/);
+  assert.match(arena, /this\.playerInput\.pressed\('mine'\)[\s\S]*?this\.mineSalvoInput\.press\('action:mine', now\)/);
+  assert.match(arena, /this\.playerInput\.released\('mine'\)[\s\S]*?this\.mineSalvoInput\.release\('action:mine', now\)/);
+  assert.match(arena, /!this\.modRuntime\.has\('full-rack-salvo'\) && this\.playerInput\.pressed\('mine'\)/);
+  assert.match(arena, /this\.playerInput\?\.destroy\(\)/);
   assert.match(arena, /this\.mineSalvoInput\.cancel\(\);[\s\S]*?this\.pendingMineSalvo = false/);
 });
 

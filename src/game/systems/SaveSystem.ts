@@ -27,6 +27,7 @@ export class SaveSystem {
         abilityBindings: { ...save.settings.abilityBindings },
         hud: { ...save.settings.hud },
         aim: { ...save.settings.aim, reticle: { ...save.settings.aim.reticle } },
+        controller: { ...save.settings.controller },
         contextualTutorials: save.settings.contextualTutorials,
         buttonJiggle: save.settings.buttonJiggle
       }

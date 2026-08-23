@@ -27,6 +27,7 @@ import { drawReticle } from '../ui/ReticleRenderer';
 import { drawHudAbilityIcon, drawHudResourceIcon } from '../systems/Hud';
 import { TUTORIAL_REPLAY_GROUPS } from '../tutorial/TutorialRegistry.ts';
 import { requestTutorialReplay, resetTutorialSequence, skipTutorialSequence } from '../tutorial/TutorialProgress.ts';
+import { DEFAULT_CONTROLLER_SETTINGS, normalizeControllerSettings } from '../config/controllerSettings.ts';
 
 type OptionsTabId = 'audio' | 'gameplay' | 'interface' | 'profile' | 'system';
 
@@ -367,11 +368,63 @@ export class OptionsScene extends Phaser.Scene {
     this.registerScrollTarget('gameplay', reset, resetY, 22);
 
     y = panelTop + panelHeight + 22;
+    this.addSectionHeader(container, centerX, y, 'CONTROLLER', 'STANDARD GAMEPAD CALIBRATION');
+    const controllerBottom = this.createControllerSettingsPanel(container, centerX, y + 32, innerWidth, save.settings.controller);
+    y = controllerBottom + 22;
     this.addSectionHeader(container, centerX, y, 'CONTROLS / GAMEPLAY REFERENCE', 'CURRENT PROFILE BINDINGS');
     const referenceBottom = this.createGameplayReferencePanel(container, centerX, y + 34, innerWidth);
     const keybindBottom = this.createKeybindPanel(container, centerX, referenceBottom + 12, innerWidth);
     const tutorialBottom = this.createTutorialSettingsPanel(container, centerX, keybindBottom + 18, innerWidth, save.settings.contextualTutorials);
     this.configureTabScrolling('gameplay', container, tutorialBottom + 22);
+  }
+
+  private createControllerSettingsPanel(
+    container: Phaser.GameObjects.Container,
+    centerX: number,
+    topY: number,
+    contentWidth: number,
+    initial: ReturnType<typeof normalizeControllerSettings>
+  ): number {
+    const panelWidth = Math.min(contentWidth, 900);
+    const panelHeight = 226;
+    const controlWidth = Math.min(panelWidth - 44, 650);
+    const controlLeft = centerX - controlWidth * 0.5;
+    const trackWidth = Phaser.Math.Clamp(controlWidth * 0.38, 160, 230);
+    const trackX = controlLeft + controlWidth - trackWidth * 0.5 - 42;
+    const labelWidth = Math.max(150, trackX - trackWidth * 0.5 - controlLeft - 14);
+    container.add(this.add.rectangle(centerX, topY + panelHeight * 0.5, panelWidth, panelHeight, 0x091522, 0.9)
+      .setStrokeStyle(1, 0x3a9db2, 0.58));
+    container.add(this.add.text(centerX, topY + 12, 'Xbox / XInput, PlayStation, and standard browser-mapped controllers', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#91bdca', align: 'center'
+    }).setOrigin(0.5, 0));
+
+    let controller = normalizeControllerSettings(initial);
+    const commit = (): void => {
+      SaveSystem.setSettings({ controller: { ...controller } });
+      this.scheduleSettingsPersist();
+    };
+    const leftDeadZone = this.createRangeSlider(container, 'gameplay', controlLeft, trackX, topY + 60, 'MOVE STICK DEAD ZONE', controller.leftStickDeadZone, 0.05, 0.45, trackWidth, (value) => {
+      controller = { ...controller, leftStickDeadZone: value };
+      commit();
+    }, (value) => `${Math.round(value * 100)}%`, labelWidth);
+    const rightDeadZone = this.createRangeSlider(container, 'gameplay', controlLeft, trackX, topY + 104, 'AIM STICK DEAD ZONE', controller.rightStickDeadZone, 0.05, 0.45, trackWidth, (value) => {
+      controller = { ...controller, rightStickDeadZone: value };
+      commit();
+    }, (value) => `${Math.round(value * 100)}%`, labelWidth);
+    const aimSensitivity = this.createRangeSlider(container, 'gameplay', controlLeft, trackX, topY + 148, 'CONTROLLER AIM SENSITIVITY', controller.aimSensitivity, 0.5, 2, trackWidth, (value) => {
+      controller = { ...controller, aimSensitivity: value };
+      commit();
+    }, (value) => value.toFixed(2), labelWidth);
+    const reset = this.addTabButton(container, centerX, topY + 195, 'RESET CONTROLLER SETTINGS', () => {
+      controller = normalizeControllerSettings(DEFAULT_CONTROLLER_SETTINGS);
+      leftDeadZone.setValue?.(controller.leftStickDeadZone);
+      rightDeadZone.setValue?.(controller.rightStickDeadZone);
+      aimSensitivity.setValue?.(controller.aimSensitivity);
+      commit();
+      SaveSystem.persist();
+    }, Math.min(310, panelWidth - 44));
+    this.registerScrollTarget('gameplay', reset, topY + 195, 22);
+    return topY + panelHeight;
   }
 
   private createTutorialSettingsPanel(

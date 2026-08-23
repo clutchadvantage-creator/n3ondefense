@@ -23,6 +23,7 @@ test('pause command console remains inside supported viewport safe areas', () =>
 test('pause menu uses the shared cyber-console presentation and keeps every existing action route', () => {
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   const ui = readFileSync(new URL('../src/game/ui/PauseMenuUi.ts', import.meta.url), 'utf8');
+  const input = readFileSync(new URL('../src/game/input/PlayerInput.ts', import.meta.url), 'utf8');
 
   assert.match(arena, /createPauseMenuView\(this/);
   for (const label of ['Resume', 'Equipped Mod Cards', 'Mod Collection (Next Run)', 'Restart From Round 1', 'Options', 'Store', 'Quit To Main Menu']) {
@@ -42,7 +43,8 @@ test('pause menu uses the shared cyber-console presentation and keeps every exis
   assert.doesNotMatch(ui, /new Phaser\.Geom\.Rectangle\(-width \* 0\.5, -height \* 0\.5/);
   assert.match(ui, /root\.on\('pointerover'/);
   assert.match(ui, /root\.on\('pointerdown'/);
-  assert.match(arena, /event\.code === 'Escape'/);
+  assert.match(input, /pause: keyboard\.addKey\('ESC'\)/);
+  assert.match(arena, /this\.playerInput\.pressed\('pause'\)/);
   assert.match(arena, /this\.pointerLock\?\.showResume\(\)/);
   assert.doesNotMatch(arena, /JustDown\(this\.keys\.esc\)/);
 });

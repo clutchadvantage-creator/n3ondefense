@@ -106,6 +106,7 @@ test('Arena routes all standard projectiles through the reusable pool', () => {
 
 test('pooled combat objects and Arena listeners are fully retired on restart and shutdown', () => {
   const source = fs.readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const input = fs.readFileSync(new URL('../src/game/input/PlayerInput.ts', import.meta.url), 'utf8');
   assert.match(source, /body\.enable = false/);
   assert.match(source, /projectile\.crossedFences\?\.clear\(\)/);
   assert.match(source, /projectile\.telemetryOwner = undefined/);
@@ -115,7 +116,9 @@ test('pooled combat objects and Arena listeners are fully retired on restart and
   assert.match(source, /this\.destroyEnemyColliders\(enemy\)/);
   assert.match(source, /for \(const collider of colliders\) collider\.destroy\(\)/);
   assert.match(source, /this\.scale\.off\('resize'/);
-  assert.match(source, /window\.removeEventListener\('keydown'/);
+  assert.match(source, /this\.playerInput\?\.destroy\(\)/);
+  assert.match(input, /window\.removeEventListener\('keydown'/);
+  assert.match(input, /this\.scene\.input\.off\('pointerdown'/);
 });
 
 test('projectile trails are batched without per-projectile display objects or tweens', () => {
