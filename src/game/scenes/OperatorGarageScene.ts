@@ -27,12 +27,13 @@ import type { ModCardInstance, ModCategory, ModDefinition, ModRarity, RunProtoco
 import { AudioManager } from '../systems/AudioManager.ts';
 import { SaveSystem } from '../systems/SaveSystem.ts';
 import type { CosmeticOption } from '../types.ts';
-import { createModCollectionButton, createModCollectionFrame } from '../ui/ModCollectionUi.ts';
+import { createModCollectionButton, createModCollectionFrame, getModCollectionFrameHeaderHeight } from '../ui/ModCollectionUi.ts';
 import { createRunConfigurationConsole } from '../ui/RunConfigurationConsoleUi.ts';
 import { createButton, disableButton } from '../utils/ui.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
+import { calculateProtocolTerminalVerticalLayout } from '../garage/protocolTerminalLayout.ts';
 
 interface OperatorGarageSceneData { returnScene?: SceneKeyValue }
 type LibraryOwnershipFilter = 'all' | 'owned' | 'unowned' | 'corrupted';
@@ -1210,12 +1211,18 @@ export class OperatorGarageScene extends Phaser.Scene {
     root.add(progressionFrame);
     this.overlayAnimatedTargets.push(...progressionFrame.list);
 
+    const terminalLayout = calculateProtocolTerminalVerticalLayout(
+      frameTop,
+      frameHeight,
+      getModCollectionFrameHeaderHeight(frameHeight),
+      narrow
+    );
     const familyButtonWidth = narrow ? Math.min(134, frameWidth * .27) : 190;
-    const overdriveButton = createButton(this, outerMargin + 22 + familyButtonWidth * .5, frameTop + 48, 'OVERDRIVE', () => this.showOverdrive('overdrive'), familyButtonWidth);
-    const supremeButton = createButton(this, outerMargin + 30 + familyButtonWidth * 1.5, frameTop + 48, 'SUPREME', () => this.showOverdrive('supreme'), familyButtonWidth);
+    const overdriveButton = createButton(this, outerMargin + 22 + familyButtonWidth * .5, terminalLayout.switchRowY, 'OVERDRIVE', () => this.showOverdrive('overdrive'), familyButtonWidth, 'menu', { height: terminalLayout.switchButtonHeight });
+    const supremeButton = createButton(this, outerMargin + 30 + familyButtonWidth * 1.5, terminalLayout.switchRowY, 'SUPREME', () => this.showOverdrive('supreme'), familyButtonWidth, 'menu', { height: terminalLayout.switchButtonHeight });
     overdriveButton.setAlpha(this.protocolTerminalFamily === 'overdrive' ? 1 : .58);
     supremeButton.setAlpha(this.protocolTerminalFamily === 'supreme' ? 1 : .58);
-    const instruction = this.add.text(width - outerMargin - 22, frameTop + 48, 'SELECT ANY UNLOCKED PROTOCOL', {
+    const instruction = this.add.text(width - outerMargin - 22, terminalLayout.switchRowY, 'SELECT ANY UNLOCKED PROTOCOL', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 12}px`, color: '#75ffb3', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(1, 0.5);
     root.add([overdriveButton, supremeButton, instruction]);
@@ -1226,8 +1233,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     const columnGap = narrow ? 7 : 18;
     const rowGap = narrow ? 6 : 11;
     const cardWidth = Math.min(720, (frameWidth - (narrow ? 24 : 54) - columnGap) / columns);
-    const cardsTop = frameTop + (narrow ? 74 : 82);
-    const cardsBottom = frameTop + frameHeight - (narrow ? 10 : 16);
+    const cardsTop = terminalLayout.cardsTop;
+    const cardsBottom = terminalLayout.cardsBottom;
     const availableHeight = cardsBottom - cardsTop;
     const cardHeight = Phaser.Math.Clamp((availableHeight - rowGap * (rows - 1)) / rows, narrow ? 48 : 58, 118);
     const usedHeight = cardHeight * rows + rowGap * (rows - 1);

@@ -51,6 +51,11 @@ const MOD_COLLECTION_SPACING = {
   returnInset: { narrow: 26, regular: 34 }
 } as const;
 
+export const getModCollectionFrameHeaderHeight = (frameHeight: number): number =>
+  frameHeight < 80
+    ? MOD_COLLECTION_SPACING.frameHeaderHeight.compact
+    : MOD_COLLECTION_SPACING.frameHeaderHeight.regular;
+
 /**
  * Keeps the collection's top chrome and scene-owned controls on one responsive
  * spacing model so header polish does not turn into scattered per-scene offsets.
@@ -227,10 +232,7 @@ export const createModCollectionFrame = (
   const root = scene.add.container(rect.x, rect.y);
   const shadow = scene.add.rectangle(5, 6, rect.width, rect.height, 0x000000, 0.4).setOrigin(0, 0);
   const frame = scene.add.rectangle(0, 0, rect.width, rect.height, 0x071621, 0.89).setOrigin(0, 0).setStrokeStyle(1, accent, 0.46);
-  const compactHeader = rect.height < 80;
-  const headerHeight = compactHeader
-    ? MOD_COLLECTION_SPACING.frameHeaderHeight.compact
-    : MOD_COLLECTION_SPACING.frameHeaderHeight.regular;
+  const headerHeight = getModCollectionFrameHeaderHeight(rect.height);
   const header = scene.add.rectangle(0, 0, rect.width, headerHeight, 0x0c2330, 0.94).setOrigin(0, 0);
   const rail = scene.add.rectangle(12, 5, rect.width - 24, 3, accent, 0.6).setOrigin(0, 0);
   const headerDivider = scene.add.rectangle(12, headerHeight - 3, rect.width - 24, 1, accent, 0.28).setOrigin(0, 0);

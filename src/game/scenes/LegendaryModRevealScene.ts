@@ -76,7 +76,8 @@ export class LegendaryModRevealScene extends Phaser.Scene {
     const card = createModCardView(this, sourceX, sourceY, this.request.card, this.request.card.upgradeLevel, {
       width: cardWidth,
       height: cardHeight,
-      interactive: false
+      interactive: false,
+      presentationState: supreme ? 'acquired' : 'idle'
     }).setScale(0.12).setAlpha(0.2);
 
     const titleY = cardTargetY - cardHeight * 0.5 - 50;

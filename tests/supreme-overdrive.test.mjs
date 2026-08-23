@@ -16,6 +16,7 @@ import {
   isSupremeStageUnlocked,
   isSupremeTerminalRound
 } from '../src/game/progression/SupremeProgression.ts';
+import { calculateProtocolTerminalVerticalLayout } from '../src/game/garage/protocolTerminalLayout.ts';
 
 const source = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 
@@ -159,4 +160,46 @@ test('Supreme floor and terminal presentation remain bounded and clean up with A
   assert.match(arena, /previewSupremeMod/);
   assert.match(victory, /index < 72/);
   assert.match(victory, /this\.timers\.forEach[\s\S]*?this\.tweens\.forEach[\s\S]*?this\.objects\.forEach/);
+});
+
+test('Supreme terminal switch row is anchored below its real header at supported desktop sizes', () => {
+  for (const [width, height] of [[1920, 1080], [1600, 900], [1366, 768]]) {
+    const compact = width < 760;
+    const frameTop = compact ? 94 : 104;
+    const frameHeight = height - frameTop - (compact ? 12 : 20);
+    const headerHeight = frameHeight < 80 ? 34 : 38;
+    const layout = calculateProtocolTerminalVerticalLayout(frameTop, frameHeight, headerHeight, compact);
+    const switchTop = layout.switchRowY - layout.switchButtonHeight / 2;
+    const switchBottom = layout.switchRowY + layout.switchButtonHeight / 2;
+    assert.ok(switchTop >= frameTop + headerHeight + 9, `${width}x${height} switch row overlaps header`);
+    assert.ok(layout.cardsTop >= switchBottom + 11, `${width}x${height} cards overlap switch row`);
+    assert.ok(layout.cardsBottom > layout.cardsTop, `${width}x${height} has no stage-card region`);
+  }
+  const garage = source('../src/game/scenes/OperatorGarageScene.ts');
+  assert.match(garage, /getModCollectionFrameHeaderHeight\(frameHeight\)/);
+  assert.match(garage, /terminalLayout\.switchRowY/);
+  assert.doesNotMatch(garage, /frameTop \+ 48, 'OVERDRIVE'/);
+});
+
+test('all ten Supreme Mods use one layered, personality-driven, motion-aware card controller', () => {
+  const effects = source('../src/game/mods/SupremeModCardEffects.ts');
+  const card = source('../src/game/mods/ModCardView.ts');
+  const reveal = source('../src/game/scenes/LegendaryModRevealScene.ts');
+  const supremeIds = MOD_DEFINITIONS.filter((definition) => definition.rarity === 'supreme').map((definition) => definition.id);
+  for (const id of supremeIds) assert.match(effects, new RegExp(`'${id}'`));
+  const personalities = [...effects.matchAll(/energyStyle: '([^']+)'/g)].map((match) => match[1]);
+  assert.equal(new Set(personalities).size, 10);
+  for (const layer of ['holographic substrate', 'energized frame', 'foil system', 'Reactor chamber', 'electrical discharges']) {
+    assert.match(effects, new RegExp(layer, 'i'));
+  }
+  assert.match(effects, /detail === 'full'/);
+  assert.match(effects, /detail === 'reduced'/);
+  assert.match(effects, /motion === 'off'/);
+  assert.match(effects, /setHovered\(hovered: boolean\)/);
+  assert.match(effects, /presentationState === 'acquired'/);
+  assert.match(effects, /this\.tweens\.forEach\(\(tween\) => tween\.remove\(\)\)/);
+  assert.match(card, /new SupremeModCardEffects/);
+  assert.match(card, /supremeEffects\?\.setHovered\(true\)/);
+  assert.match(card, /supremeEffects\?\.setHovered\(false\)/);
+  assert.match(reveal, /presentationState: supreme \? 'acquired' : 'idle'/);
 });

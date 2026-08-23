@@ -3,6 +3,12 @@ import { MOD_BY_ID } from './definitions.ts';
 import type { ModCardInstance, ModRank } from './types.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
+import type { HudAnimationLevel } from '../config/interfaceSettings.ts';
+import { PlayerProfileStore } from '../state/PlayerProfileStore.ts';
+import {
+  SupremeModCardEffects,
+  type SupremeCardPresentationState
+} from './SupremeModCardEffects.ts';
 
 export const MOD_RARITY_COLORS = {
   common: 0xffffff,
@@ -21,7 +27,18 @@ export interface ModCardViewOptions {
   interactive?: boolean;
   equipped?: boolean;
   duplicateCount?: number;
+  motion?: HudAnimationLevel;
+  presentationState?: SupremeCardPresentationState;
 }
+
+const resolveCardMotion = (requested?: HudAnimationLevel): HudAnimationLevel => {
+  if (requested) return requested;
+  try {
+    return PlayerProfileStore.getActiveSave().settings.hud.animation;
+  } catch {
+    return 'full';
+  }
+};
 
 export const createModCardView = (
   scene: Phaser.Scene,
@@ -55,33 +72,31 @@ export const createModCardView = (
     ? Phaser.Math.Clamp(width * 0.064, 7, 10)
     : Phaser.Math.Clamp(width * 0.06, 11, 13));
   const shadow = scene.add.rectangle(4, 6, width, height, 0x000000, 0.45).setOrigin(0.5);
-  const body = scene.add.rectangle(0, 0, width, height, corrupted ? 0x190817 : supreme ? 0x07141c : 0x091521, 0.97)
-    .setStrokeStyle(options.selected ? 4 : 2, options.selected ? 0xffffff : rarityColor, 1);
+  const body = scene.add.rectangle(0, 0, width, height, corrupted ? 0x190817 : supreme ? 0x030c14 : 0x091521, 0.97)
+    .setStrokeStyle(options.selected ? 4 : supreme ? 3 : 2, options.selected ? 0xffffff : rarityColor, 1);
   const inner = scene.add.rectangle(0, 0, width - 12, height - 12, corrupted ? 0x4d0d42 : rarityColor, 0.05)
     .setStrokeStyle(1, corrupted ? 0xff3ed7 : rarityColor, 0.38);
   const sheen = scene.add.graphics();
   container.add([shadow, body, inner]);
 
+  let supremeEffects: SupremeModCardEffects | null = null;
+  let supremeMotion: HudAnimationLevel = 'full';
+  let supremeBadgeTween: Phaser.Tweens.Tween | null = null;
   if (supreme) {
-    const spectralA = scene.add.rectangle(-width * .28, 0, Math.max(3, width * .035), height - 16, 0x5ef5ff, .1)
-      .setRotation(-.16).setBlendMode(Phaser.BlendModes.ADD);
-    const spectralB = scene.add.rectangle(width * .22, 0, Math.max(2, width * .022), height - 18, 0xff72e6, .1)
-      .setRotation(-.16).setBlendMode(Phaser.BlendModes.ADD);
-    const circuitry = scene.add.graphics();
-    circuitry.lineStyle(1, 0x8cffff, .24);
-    circuitry.lineBetween(-width * .42, -height * .3, -width * .18, -height * .3);
-    circuitry.lineBetween(-width * .18, -height * .3, -width * .1, -height * .22);
-    circuitry.lineBetween(width * .42, height * .31, width * .2, height * .31);
-    circuitry.lineBetween(width * .2, height * .31, width * .11, height * .22);
-    const emblem = scene.add.polygon(0, -height * .41, [0,-7,6,-2,4,6,-4,6,-6,-2], 0xe8ffff, .18)
-      .setStrokeStyle(1, 0xffffff, .72).setBlendMode(Phaser.BlendModes.ADD);
-    container.add([spectralA, spectralB, circuitry, emblem]);
-    const supremeTweens = [
-      scene.tweens.add({ targets: spectralA, x: { from: -width * .34, to: width * .34 }, alpha: { from: .035, to: .2 }, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
-      scene.tweens.add({ targets: spectralB, x: { from: width * .3, to: -width * .3 }, alpha: { from: .03, to: .15 }, duration: 2700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
-      scene.tweens.add({ targets: emblem, angle: 360, alpha: { from: .35, to: .8 }, duration: 3200, repeat: -1 })
-    ];
-    container.once('destroy', () => supremeTweens.forEach((tween) => tween.remove()));
+    supremeMotion = resolveCardMotion(options.motion);
+    supremeEffects = new SupremeModCardEffects(scene, {
+      modId: definition.id,
+      width,
+      height,
+      iconY: -height * 0.12,
+      iconColor,
+      equipped: options.equipped === true,
+      detail: supremeMotion === 'off' ? 'static' : compact || width < 160 ? 'reduced' : 'full',
+      motion: supremeMotion,
+      presentationState: options.presentationState ?? 'idle'
+    });
+    container.add(supremeEffects.root);
+    container.once('destroy', () => supremeEffects?.dispose());
   }
 
   const corruptionTweens: Phaser.Tweens.Tween[] = [];
@@ -129,22 +144,73 @@ export const createModCardView = (
       .setStrokeStyle(1, rarityColor, 0.9));
   }
   const rarity = scene.add.text(width / 2 - 8, -height / 2 + 9, corrupted ? 'CORRUPTED' : definition.rarity.toUpperCase(), {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${rarityFontSize}px`, fontStyle: 'bold', color: corrupted ? '#ff5bd9' : Phaser.Display.Color.IntegerToColor(rarityColor).rgba
+    fontFamily: supreme ? 'Orbitron, sans-serif' : 'Rajdhani, sans-serif', fontSize: `${rarityFontSize}px`, fontStyle: 'bold', color: corrupted ? '#ff5bd9' : Phaser.Display.Color.IntegerToColor(rarityColor).rgba,
+    letterSpacing: supreme ? 1 : 0
   }).setOrigin(1, 0);
+  if (supreme) rarity.setShadow(0, 0, '#80f8ff', 7, true, true);
   const iconRing = scene.add.circle(0, -height * 0.12, width * 0.25, iconColor, corrupted ? 0.13 : 0.09)
-    .setStrokeStyle(2, corrupted ? 0xff4ddd : iconColor, 0.82);
+    .setStrokeStyle(supreme ? 3 : 2, corrupted ? 0xff4ddd : supreme ? 0xf1ffff : iconColor, supreme ? 0.92 : 0.82);
   const icon = scene.add.text(0, -height * 0.12, definition.icon, {
     fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.max(24, width * 0.25)}px`, color: iconCssColor
-  }).setOrigin(0.5);
+  }).setOrigin(0.5).setShadow(0, 0, supreme ? '#9ffcff' : iconCssColor, supreme ? 10 : 0, true, true);
   const name = scene.add.text(0, height * 0.075, definition.name.toUpperCase(), {
     fontFamily: 'Orbitron, sans-serif', fontSize: `${nameFontSize}px`, color: '#f4fdff', align: 'center', lineSpacing: compact ? -1 : 1
-  }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(2);
+  }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(2).setShadow(0, 1, '#02050a', 4, true, false);
   const stat = scene.add.text(0, height * 0.25, definition.rankDescriptions[rank], {
     fontFamily: 'Rajdhani, sans-serif', fontSize: `${statFontSize}px`, color: '#d8f2f8', align: 'center', lineSpacing: compact ? 0 : 2
   }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(compact && card.infusionId ? 2 : 3);
   const infusion = scene.add.text(0, height / 2 - 10, card.infusionId ? `◆ ${MOD_INFUSION_BY_ID.get(card.infusionId)?.name.toUpperCase() ?? 'INFUSED'}` : '', {
     fontFamily: 'Rajdhani, sans-serif', fontSize: `${infusionFontSize}px`, fontStyle: 'bold', color: '#a5fff0', align: 'center'
   }).setOrigin(0.5, 1);
+  if (supreme) {
+    const badgeWidth = Math.max(compact ? 54 : 68, rarity.displayWidth + (compact ? 18 : 24));
+    const badgeHeight = Math.max(compact ? 15 : 19, rarity.displayHeight + 6);
+    const badgeX = width / 2 - 8 - badgeWidth / 2;
+    const badgeY = -height / 2 + 9 + badgeHeight / 2;
+    const badge = scene.add.rectangle(badgeX, badgeY, badgeWidth, badgeHeight, 0x071825, 0.92)
+      .setStrokeStyle(1, 0xeaffff, 0.82);
+    const badgeSpectral = scene.add.rectangle(badgeX, badgeY + badgeHeight / 2 - 2, badgeWidth - 6, 2, 0xff62d9, 0.72)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const badgeEmblem = scene.add.star(badgeX - badgeWidth / 2 + (compact ? 7 : 9), badgeY, 4, compact ? 1.5 : 2, compact ? 4 : 5, 0xdfffff, 0.96)
+      .setStrokeStyle(1, 0xff6fe3, 0.8);
+    container.add([badge, badgeSpectral, badgeEmblem]);
+    if (supremeMotion !== 'off') {
+      supremeBadgeTween = scene.tweens.add({
+        targets: badgeSpectral,
+        x: { from: badgeX - badgeWidth * 0.22, to: badgeX + badgeWidth * 0.22 },
+        alpha: { from: 0.22, to: 0.92 },
+        duration: compact ? 2800 : 1900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+      container.once('destroy', () => supremeBadgeTween?.remove());
+    }
+    const textPlate = scene.add.rectangle(0, height * 0.285, width - 16, height * 0.3, 0x01050a, 0.58)
+      .setStrokeStyle(1, 0x73f7ff, 0.12);
+    container.add(textPlate);
+  }
+  if (supreme) {
+    const ghostCyan = scene.add.text(-2, -height * 0.12, definition.icon, {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.max(24, width * 0.25)}px`, color: '#55f7ff'
+    }).setOrigin(0.5).setAlpha(supremeMotion === 'off' ? 0.1 : 0.04);
+    const ghostMagenta = scene.add.text(2, -height * 0.12, definition.icon, {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.max(24, width * 0.25)}px`, color: '#ff62dc'
+    }).setOrigin(0.5).setAlpha(supremeMotion === 'off' ? 0.08 : 0.03);
+    container.add([ghostCyan, ghostMagenta]);
+    if (supremeMotion === 'full') {
+      const iconGlitchTween = scene.tweens.add({
+        targets: [ghostCyan, ghostMagenta],
+        x: { from: -3, to: 3 },
+        alpha: { from: 0.02, to: 0.26 },
+        duration: 72,
+        yoyo: true,
+        repeat: -1,
+        repeatDelay: 3100 + definition.id.length * 47
+      });
+      container.once('destroy', () => iconGlitchTween.remove());
+    }
+  }
   container.add([rarity, iconRing, icon, name, stat, infusion]);
 
   if (options.equipped) {
@@ -252,6 +318,7 @@ export const createModCardView = (
     container.setSize(width, height).setInteractive({ useHandCursor: true });
     container.on('pointerover', () => {
       AudioManager.get().playSfx('menuHover');
+      supremeEffects?.setHovered(true);
       scene.tweens.killTweensOf(container);
       scene.tweens.killTweensOf(shadow);
       sheenTween?.stop();
@@ -267,9 +334,10 @@ export const createModCardView = (
       });
       scene.tweens.add({ targets: container, y: restingY - 2, scale: 1.025, duration: 150, ease: 'Quad.Out' });
       scene.tweens.add({ targets: shadow, alpha: 0.72, duration: 150 });
-      body.setStrokeStyle(options.selected ? 4 : 3, options.selected ? 0xffffff : rarityColor, 1);
+      body.setStrokeStyle(options.selected ? 4 : supreme ? 4 : 3, options.selected ? 0xffffff : rarityColor, 1);
     });
     container.on('pointerout', () => {
+      supremeEffects?.setHovered(false);
       scene.tweens.killTweensOf(container);
       scene.tweens.killTweensOf(shadow);
       sheenTween?.stop();
@@ -277,7 +345,7 @@ export const createModCardView = (
       sheen.clear();
       scene.tweens.add({ targets: container, y: restingY, scale: 1, duration: 150, ease: 'Quad.Out' });
       scene.tweens.add({ targets: shadow, alpha: 0.45, duration: 150 });
-      body.setStrokeStyle(options.selected ? 4 : 2, options.selected ? 0xffffff : rarityColor, 1);
+      body.setStrokeStyle(options.selected ? 4 : supreme ? 3 : 2, options.selected ? 0xffffff : rarityColor, 1);
     });
   }
   return container;
