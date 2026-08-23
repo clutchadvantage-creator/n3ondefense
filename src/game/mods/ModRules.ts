@@ -1,4 +1,4 @@
-import { MOD_BALANCE, RUN_PROTOCOLS } from './modBalance.ts';
+import { MOD_BALANCE, RUN_PROTOCOLS, isRunProtocolUnlocked } from './modBalance.ts';
 import type { ModRank, RunProtocolId } from './types.ts';
 
 export const splitCurrentSecondaryDamage = (finalKillingHitDamage: number, rank: ModRank, isSecondaryEffect: boolean): number => {
@@ -32,8 +32,8 @@ export const prioritizeTurretTargets = <T extends { distance: number; activelyDe
   });
 };
 
-export const protocolStart = (protocol: RunProtocolId, highestRound: number) => {
+export const protocolStart = (protocol: RunProtocolId, highestRound: number, supremeHighestRound = 0) => {
   const requested = RUN_PROTOCOLS[protocol];
-  const active = highestRound >= requested.unlockHighestRound ? requested : RUN_PROTOCOLS.normal;
+  const active = isRunProtocolUnlocked(protocol, { highestRound, supremeHighestRound }) ? requested : RUN_PROTOCOLS.normal;
   return { protocol: active.id, startingRound: active.startingRound, scoreMultiplier: active.scoreMultiplier, modDropMultiplier: active.modDropMultiplier, skippedRewards: { credits: 0, coreTokens: 0, mods: 0, kills: 0, score: 0 } } as const;
 };

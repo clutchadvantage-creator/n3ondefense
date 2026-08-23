@@ -152,6 +152,8 @@ const normalizeProgress = (progress: unknown): LocalPlayerProgress => {
   }
   return {
     highestRound: toInteger(candidate.highestRound),
+    supremeHighestRound: toInteger(candidate.supremeHighestRound),
+    supremeOverdriveCompleted: toBoolean(candidate.supremeOverdriveCompleted, false),
     roundsCompleted: toInteger(candidate.roundsCompleted),
     enemiesDestroyed: toInteger(candidate.enemiesDestroyed),
     bombSitesDestroyed: toInteger(candidate.bombSitesDestroyed),
@@ -282,6 +284,8 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
     };
     current.progress = {
       highestRound: toInteger(v1.progress?.highestRound),
+      supremeHighestRound: 0,
+      supremeOverdriveCompleted: false,
       roundsCompleted: toInteger(v1.progress?.roundsCompleted),
       enemiesDestroyed: toInteger(v1.progress?.enemiesDestroyed),
       bombSitesDestroyed: toInteger(v1.progress?.bombSitesDestroyed),
@@ -313,7 +317,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === 12 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === 12 || version === 13 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;

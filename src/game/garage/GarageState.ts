@@ -3,7 +3,7 @@ import { MOD_FOCUS_CATEGORIES, RUN_CONTRACTS } from '../economy/economyBalance.t
 import type { ModFocusSignalId, RunContractId, RunSetupSelection } from '../economy/types.ts';
 import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
 import { createDefaultModLoadout, equipMod } from '../mods/ModInventoryService.ts';
-import { isRunProtocolId, RUN_PROTOCOLS } from '../mods/modBalance.ts';
+import { isRunProtocolId, isRunProtocolUnlocked } from '../mods/modBalance.ts';
 import type { LocalModCollection, ModCardInstance, ModSlot, RunProtocolId } from '../mods/types.ts';
 import type { LocalPlayerSave } from '../save/LocalSaveTypes.ts';
 import type { CosmeticOption } from '../types.ts';
@@ -164,13 +164,12 @@ export const loadGaragePreset = (save: LocalPlayerSave, presetId: GaragePresetId
   save.garage.nextRun = normalizeRunSetupSelection({ contract: preset.contract, modFocus: preset.modFocus });
   let ignoredProtocol = false;
   if (preset.protocol) {
-    const definition = RUN_PROTOCOLS[preset.protocol];
-    if (save.progress.highestRound >= definition.unlockHighestRound) save.protocol.preferred = preset.protocol;
+    if (isRunProtocolUnlocked(preset.protocol, save.progress)) save.protocol.preferred = preset.protocol;
     else ignoredProtocol = true;
   }
   const notes = [missingCards > 0 ? `${missingCards} missing Mod${missingCards === 1 ? '' : 's'} skipped` : '', ignoredProtocol ? 'locked Protocol ignored' : ''].filter(Boolean);
   return { ok: true, message: `${preset.name} loaded${notes.length ? ` // ${notes.join(' // ')}` : ''}.`, missingCards, ignoredProtocol };
 };
 
-export const isGarageProtocolUnlocked = (protocol: RunProtocolId, highestRound: number): boolean =>
-  highestRound >= RUN_PROTOCOLS[protocol].unlockHighestRound;
+export const isGarageProtocolUnlocked = (protocol: RunProtocolId, highestRound: number, supremeHighestRound = 0): boolean =>
+  isRunProtocolUnlocked(protocol, { highestRound, supremeHighestRound });

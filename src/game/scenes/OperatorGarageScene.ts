@@ -22,7 +22,7 @@ import {
 import { getGarageDockModels, getModLibraryEntries, getModLibraryProgress } from '../garage/GarageState.ts';
 import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
 import { MOD_RARITY_COLORS, createModCardView } from '../mods/ModCardView.ts';
-import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol } from '../mods/modBalance.ts';
+import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, isRunProtocolUnlocked } from '../mods/modBalance.ts';
 import type { ModCardInstance, ModCategory, ModDefinition, ModRarity, RunProtocolId } from '../mods/types.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
 import { SaveSystem } from '../systems/SaveSystem.ts';
@@ -38,7 +38,7 @@ interface OperatorGarageSceneData { returnScene?: SceneKeyValue }
 type LibraryOwnershipFilter = 'all' | 'owned' | 'unowned' | 'corrupted';
 
 const LIBRARY_CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player', 'defense', 'bombSite', 'utility'];
-const LIBRARY_RARITIES: Array<'all' | ModRarity> = ['all', 'common', 'uncommon', 'rare', 'epic', 'legendary'];
+const LIBRARY_RARITIES: Array<'all' | ModRarity> = ['all', 'common', 'uncommon', 'rare', 'epic', 'legendary', 'supreme'];
 const LIBRARY_OWNERSHIP: LibraryOwnershipFilter[] = ['all', 'owned', 'unowned', 'corrupted'];
 const COSMETIC_CATEGORIES = Array.from(new Set(COSMETICS.map((item) => item.category)));
 const syntheticLibraryCard = (definition: ModDefinition): ModCardInstance => ({
@@ -75,6 +75,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private libraryOwnershipIndex = 0;
   private libraryPage = 0;
   private librarySelectedId = MOD_DEFINITIONS[0]?.id ?? '';
+  private protocolTerminalFamily: 'overdrive' | 'supreme' | null = null;
   private cosmeticCategoryIndex = 0;
   private cosmeticPage = 0;
   private readonly handleEscape = (): void => {
@@ -238,7 +239,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const contentScale = roomy ? Phaser.Math.Clamp(rect.width / 400, 1, 1.36) : 1;
     const highestRound = SaveSystem.getHighestRound();
     const requested = SaveSystem.getPreferredProtocol();
-    const protocol = highestRound >= RUN_PROTOCOLS[requested].unlockHighestRound ? requested : 'normal';
+    const protocol = isRunProtocolUnlocked(requested, { highestRound, supremeHighestRound: SaveSystem.getSupremeHighestRound() }) ? requested : 'normal';
     const setup = SaveSystem.getNextRunSetupSelection();
     const rows = [
       { label: 'PROTOCOL', value: RUN_PROTOCOLS[protocol].label, action: () => this.cycleProtocol(protocol) },
@@ -1168,17 +1169,22 @@ export class OperatorGarageScene extends Phaser.Scene {
     });
   }
 
-  private showOverdrive(): void {
-    const root = this.createOverlay('OVERDRIVE PROGRESSION TERMINAL');
+  private showOverdrive(requestedFamily?: 'overdrive' | 'supreme'): void {
+    const current = SaveSystem.getPreferredProtocol();
+    this.protocolTerminalFamily = requestedFamily
+      ?? (RUN_PROTOCOLS[current].family === 'supreme' ? 'supreme' : this.protocolTerminalFamily ?? 'overdrive');
+    const root = this.createOverlay(this.protocolTerminalFamily === 'supreme'
+      ? 'SUPREME OVERDRIVE // CONSTELLATION TERMINAL'
+      : 'OVERDRIVE PROGRESSION TERMINAL');
     const { width, height } = this.scale;
     const highest = SaveSystem.getHighestRound();
-    const current = SaveSystem.getPreferredProtocol();
+    const supremeHighest = SaveSystem.getSupremeHighestRound();
     const narrow = width < 760;
     const outerMargin = narrow ? 14 : 28;
     const frameTop = narrow ? 94 : 104;
     const frameWidth = width - outerMargin * 2;
     const frameHeight = height - frameTop - (narrow ? 12 : 20);
-    const activeLabel = RUN_PROTOCOLS[current].family === 'overdrive'
+    const activeLabel = RUN_PROTOCOLS[current].family !== 'normal'
       ? RUN_PROTOCOLS[current].label
       : 'NORMAL PROTOCOL';
 
@@ -1188,7 +1194,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       .setStrokeStyle(1, 0x55efff, 0.32);
     const statusEdge = this.add.rectangle(width / 2 - statusWidth / 2 + 5, statusY, 3, narrow ? 20 : 25, 0xff5bcf, 0.78);
     const statusLed = this.add.circle(width / 2 + statusWidth / 2 - 14, statusY, 3, 0x67ffad, 0.96);
-    const statusText = this.add.text(width / 2, statusY, `CLEARANCE // HIGHEST ROUND ${highest}     ACTIVE // ${activeLabel}`, {
+    const statusText = this.add.text(width / 2, statusY, `CLEARANCE // ROUND ${highest}  //  SUPREME ${supremeHighest}     ACTIVE // ${activeLabel}`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 11 : 16}px`, color: '#bfeaf3', fontStyle: 'bold', letterSpacing: narrow ? 0 : 1
     }).setOrigin(0.5).setMaxLines(1);
     root.add([statusRail, statusEdge, statusLed, statusText]);
@@ -1204,21 +1210,23 @@ export class OperatorGarageScene extends Phaser.Scene {
     root.add(progressionFrame);
     this.overlayAnimatedTargets.push(...progressionFrame.list);
 
-    const uplink = this.add.text(outerMargin + 22, frameTop + 48, 'N3ON OVERDRIVE NETWORK // TIERED DEPLOYMENT ACCESS', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 12}px`, color: '#72bdca', fontStyle: 'bold', letterSpacing: 1
-    }).setOrigin(0, 0.5);
+    const familyButtonWidth = narrow ? Math.min(134, frameWidth * .27) : 190;
+    const overdriveButton = createButton(this, outerMargin + 22 + familyButtonWidth * .5, frameTop + 48, 'OVERDRIVE', () => this.showOverdrive('overdrive'), familyButtonWidth);
+    const supremeButton = createButton(this, outerMargin + 30 + familyButtonWidth * 1.5, frameTop + 48, 'SUPREME', () => this.showOverdrive('supreme'), familyButtonWidth);
+    overdriveButton.setAlpha(this.protocolTerminalFamily === 'overdrive' ? 1 : .58);
+    supremeButton.setAlpha(this.protocolTerminalFamily === 'supreme' ? 1 : .58);
     const instruction = this.add.text(width - outerMargin - 22, frameTop + 48, 'SELECT ANY UNLOCKED PROTOCOL', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 12}px`, color: '#75ffb3', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(1, 0.5);
-    root.add([uplink, instruction]);
+    root.add([overdriveButton, supremeButton, instruction]);
 
-    const protocols = RUN_PROTOCOL_IDS.slice(1);
+    const protocols = RUN_PROTOCOL_IDS.filter((id) => RUN_PROTOCOLS[id].family === this.protocolTerminalFamily);
     const columns = 2;
     const rows = Math.ceil(protocols.length / columns);
     const columnGap = narrow ? 7 : 18;
     const rowGap = narrow ? 6 : 11;
     const cardWidth = Math.min(720, (frameWidth - (narrow ? 24 : 54) - columnGap) / columns);
-    const cardsTop = frameTop + (narrow ? 62 : 70);
+    const cardsTop = frameTop + (narrow ? 74 : 82);
     const cardsBottom = frameTop + frameHeight - (narrow ? 10 : 16);
     const availableHeight = cardsBottom - cardsTop;
     const cardHeight = Phaser.Math.Clamp((availableHeight - rowGap * (rows - 1)) / rows, narrow ? 48 : 58, 118);
@@ -1226,13 +1234,17 @@ export class OperatorGarageScene extends Phaser.Scene {
     const firstCenterY = cardsTop + Math.max(0, (availableHeight - usedHeight) / 2) + cardHeight / 2;
     protocols.forEach((id, index) => {
       const definition = RUN_PROTOCOLS[id];
-      const unlocked = highest >= definition.unlockHighestRound;
+      const unlocked = isRunProtocolUnlocked(id, { highestRound: highest, supremeHighestRound: supremeHighest });
       const selected = current === id;
       const column = index % columns;
       const row = Math.floor(index / columns);
       const x = width / 2 + (column === 0 ? -(cardWidth + columnGap) / 2 : (cardWidth + columnGap) / 2);
       const y = firstCenterY + row * (cardHeight + rowGap);
-      const accent = selected ? 0xffb45f : unlocked ? (column === 0 ? 0x55efff : 0x68ffad) : 0x75506f;
+      const accent = selected
+        ? 0xffb45f
+        : unlocked
+          ? definition.family === 'supreme' ? (column === 0 ? 0xe8ffff : 0xff72e6) : (column === 0 ? 0x55efff : 0x68ffad)
+          : 0x75506f;
       const framePoints = createConsoleChamferPoints(cardWidth, cardHeight, Math.min(13, cardHeight * 0.18));
       const shadow = this.add.polygon(x + 4, y + 5, framePoints, 0x000000, 0.5);
       const chassis = this.add.polygon(x, y, framePoints, unlocked ? 0x081a24 : 0x0a1018, 0.98)
@@ -1247,7 +1259,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       const tierX = x - cardWidth / 2 + (narrow ? 22 : 34);
       const tierBadge = this.add.circle(tierX, y, tierRadius, selected ? 0x2b2114 : unlocked ? 0x09222a : 0x15131d, 1)
         .setStrokeStyle(2, accent, unlocked ? 0.76 : 0.35);
-      const tierText = this.add.text(tierX, y, `${String(definition.tier).padStart(2, '0')}`, {
+      const tierText = this.add.text(tierX, y, `${definition.family === 'supreme' ? definition.startingRound : String(definition.tier).padStart(2, '0')}`, {
         fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(cardHeight * 0.16, 8, 15)}px`, color: unlocked ? '#e8ffff' : '#786c7a', fontStyle: 'bold'
       }).setOrigin(0.5);
       const textLeft = tierX + tierRadius + (narrow ? 7 : 14);
@@ -1270,7 +1282,8 @@ export class OperatorGarageScene extends Phaser.Scene {
       const progressRight = x + cardWidth / 2 - (narrow ? 10 : 17);
       const progressWidth = Math.max(24, progressRight - progressLeft);
       const progressY = y + cardHeight / 2 - (narrow ? 7 : 11);
-      const progressRatio = unlocked ? 1 : Phaser.Math.Clamp(highest / definition.unlockHighestRound, 0, 1);
+      const progressValue = definition.family === 'supreme' && definition.startingRound > 50 ? supremeHighest : highest;
+      const progressRatio = unlocked ? 1 : Phaser.Math.Clamp(progressValue / definition.unlockHighestRound, 0, 1);
       const progressTrack = this.add.rectangle(progressLeft, progressY, progressWidth, narrow ? 2 : 4, 0x02070c, 1)
         .setOrigin(0, 0.5).setStrokeStyle(1, accent, 0.22);
       const progressFill = this.add.rectangle(progressLeft, progressY, Math.max(1, progressWidth * progressRatio), narrow ? 2 : 4, accent, unlocked ? 0.72 : 0.42)
@@ -1294,7 +1307,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         const result = SaveSystem.setPreferredProtocol(id);
         this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? `${definition.label} SELECTED`}`;
         this.audio.playSfx(result.ok ? 'menu' : 'itemLocked');
-        this.showOverdrive();
+        this.showOverdrive(definition.family === 'supreme' ? 'supreme' : 'overdrive');
       });
       root.add([shadow, chassis, inner, topRail, sideEdge, tierBadge, tierText, tierName, stateText, detail, progressTrack, progressFill, led, hitZone]);
       this.overlayAnimatedTargets.push(led);
@@ -1345,7 +1358,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private cycleProtocol(current: RunProtocolId): boolean {
-    const next = cycleUnlockedProtocol(current, SaveSystem.getHighestRound(), 1);
+    const next = cycleUnlockedProtocol(current, SaveSystem.getHighestRound(), 1, SaveSystem.getSupremeHighestRound());
     const result = SaveSystem.setPreferredProtocol(next);
     this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? RUN_PROTOCOLS[next].label}`;
     this.scene.restart({ returnScene: this.returnScene });

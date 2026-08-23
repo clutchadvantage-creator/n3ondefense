@@ -9,7 +9,8 @@ export const MOD_RARITY_COLORS = {
   uncommon: 0x55ff88,
   rare: 0x38b6ff,
   epic: 0xc05cff,
-  legendary: 0xff8a00
+  legendary: 0xff8a00,
+  supreme: 0xe8ffff
 } as const;
 
 export interface ModCardViewOptions {
@@ -35,6 +36,7 @@ export const createModCardView = (
   const width = options.width ?? 150;
   const height = options.height ?? 210;
   const corrupted = definition.variant === 'corrupted';
+  const supreme = definition.rarity === 'supreme';
   const rarityColor = MOD_RARITY_COLORS[definition.rarity];
   const iconColor = definition.iconColor;
   const iconCssColor = Phaser.Display.Color.IntegerToColor(iconColor).rgba;
@@ -53,12 +55,34 @@ export const createModCardView = (
     ? Phaser.Math.Clamp(width * 0.064, 7, 10)
     : Phaser.Math.Clamp(width * 0.06, 11, 13));
   const shadow = scene.add.rectangle(4, 6, width, height, 0x000000, 0.45).setOrigin(0.5);
-  const body = scene.add.rectangle(0, 0, width, height, corrupted ? 0x190817 : 0x091521, 0.97)
+  const body = scene.add.rectangle(0, 0, width, height, corrupted ? 0x190817 : supreme ? 0x07141c : 0x091521, 0.97)
     .setStrokeStyle(options.selected ? 4 : 2, options.selected ? 0xffffff : rarityColor, 1);
   const inner = scene.add.rectangle(0, 0, width - 12, height - 12, corrupted ? 0x4d0d42 : rarityColor, 0.05)
     .setStrokeStyle(1, corrupted ? 0xff3ed7 : rarityColor, 0.38);
   const sheen = scene.add.graphics();
   container.add([shadow, body, inner]);
+
+  if (supreme) {
+    const spectralA = scene.add.rectangle(-width * .28, 0, Math.max(3, width * .035), height - 16, 0x5ef5ff, .1)
+      .setRotation(-.16).setBlendMode(Phaser.BlendModes.ADD);
+    const spectralB = scene.add.rectangle(width * .22, 0, Math.max(2, width * .022), height - 18, 0xff72e6, .1)
+      .setRotation(-.16).setBlendMode(Phaser.BlendModes.ADD);
+    const circuitry = scene.add.graphics();
+    circuitry.lineStyle(1, 0x8cffff, .24);
+    circuitry.lineBetween(-width * .42, -height * .3, -width * .18, -height * .3);
+    circuitry.lineBetween(-width * .18, -height * .3, -width * .1, -height * .22);
+    circuitry.lineBetween(width * .42, height * .31, width * .2, height * .31);
+    circuitry.lineBetween(width * .2, height * .31, width * .11, height * .22);
+    const emblem = scene.add.polygon(0, -height * .41, [0,-7,6,-2,4,6,-4,6,-6,-2], 0xe8ffff, .18)
+      .setStrokeStyle(1, 0xffffff, .72).setBlendMode(Phaser.BlendModes.ADD);
+    container.add([spectralA, spectralB, circuitry, emblem]);
+    const supremeTweens = [
+      scene.tweens.add({ targets: spectralA, x: { from: -width * .34, to: width * .34 }, alpha: { from: .035, to: .2 }, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
+      scene.tweens.add({ targets: spectralB, x: { from: width * .3, to: -width * .3 }, alpha: { from: .03, to: .15 }, duration: 2700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
+      scene.tweens.add({ targets: emblem, angle: 360, alpha: { from: .35, to: .8 }, duration: 3200, repeat: -1 })
+    ];
+    container.once('destroy', () => supremeTweens.forEach((tween) => tween.remove()));
+  }
 
   const corruptionTweens: Phaser.Tweens.Tween[] = [];
   if (corrupted) {

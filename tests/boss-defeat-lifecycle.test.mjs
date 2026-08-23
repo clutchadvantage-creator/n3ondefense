@@ -14,7 +14,7 @@ const methodBody = (source, start, end) => {
 };
 
 test('boss defeat claims one authoritative combat-to-destruction transition before rewards', () => {
-  const complete = methodBody(arenaSource, 'private completeBossFight()', 'private beginBossDestruction');
+  const complete = methodBody(arenaSource, 'private completeBossFight()', 'private handleSupremeBossDefeated');
   assert.match(complete, /transitionBossFlow\('combat', 'destruction'\)/);
   assert.match(complete, /this\.bossVictoryHandled = true/);
   assert.match(bossSource, /this\.defeated = true;[\s\S]*?this\.onDefeated\(\)/);
@@ -23,7 +23,7 @@ test('boss defeat claims one authoritative combat-to-destruction transition befo
 });
 
 test('fatal-hit callbacks defer destructive cleanup until active combat iterators unwind', () => {
-  const complete = methodBody(arenaSource, 'private completeBossFight()', 'private beginBossDestruction');
+  const complete = methodBody(arenaSource, 'private completeBossFight()', 'private handleSupremeBossDefeated');
   const destruction = methodBody(arenaSource, 'private beginBossDestruction', 'private retireActiveBossProjectiles');
   assert.match(complete, /this\.time\.delayedCall\(0, \(\) => this\.beginBossDestruction\(snapshot\)\)/);
   assert.doesNotMatch(complete, /laserSecurity\?\.destroy|bombletHazard\?\.destroy|retireActiveBossProjectiles/);

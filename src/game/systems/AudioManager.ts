@@ -1103,6 +1103,14 @@ export class AudioManager {
     this.disarmAudio.currentTime = 0;
   }
 
+  /** Dedicated Supreme reveal hook. Until a bespoke recording is supplied it
+   * reuses the normalized Legendary impact and adds a quiet high-band system
+   * confirmation, keeping the event distinct without bypassing the mixer. */
+  playSupremeModAcquired(): void {
+    this.playModRevealSfx('legendaryMod');
+    this.beep('sfx', 1040, 220, 0.035, 'legendaryMod');
+  }
+
   playSfx(name: Exclude<AudioSfxName, 'planting' | 'disarm' | 'securityLaser' | 'fluxCore' | 'lowHealth'>): void {
     switch (name) {
       case 'shot':

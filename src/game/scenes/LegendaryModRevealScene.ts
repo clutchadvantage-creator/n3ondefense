@@ -5,6 +5,7 @@ import { createModCardView, MOD_RARITY_COLORS } from '../mods/ModCardView.ts';
 import {
   LEGENDARY_MOD_REVEAL_COMPLETE_EVENT,
   LEGENDARY_MOD_REVEAL_HOLD_MS,
+  SUPREME_MOD_REVEAL_HOLD_MS,
   calculateModRevealCardWidth,
   type ModAcquisitionPresentation
 } from '../mods/ModAcquisition.ts';
@@ -47,7 +48,8 @@ export class LegendaryModRevealScene extends Phaser.Scene {
     this.createPresentation();
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
-    AudioManager.get().playSfx('legendaryMod');
+    if (this.request.rarity === 'supreme') AudioManager.get().playSupremeModAcquired();
+    else AudioManager.get().playSfx('legendaryMod');
   }
 
   private createPresentation(): void {
@@ -56,11 +58,12 @@ export class LegendaryModRevealScene extends Phaser.Scene {
     const cardWidth = calculateModRevealCardWidth(width, height, true);
     const cardHeight = cardWidth * 1.4;
     const cardTargetY = Math.min(28, Math.max(12, height * 0.05));
-    const rarityColor = MOD_RARITY_COLORS.legendary;
+    const supreme = this.request.rarity === 'supreme';
+    const rarityColor = supreme ? MOD_RARITY_COLORS.supreme : MOD_RARITY_COLORS.legendary;
     const root = this.add.container(width * 0.5, height * 0.5).setDepth(2000);
     const blocker = this.add.rectangle(0, 0, width, height, 0x020205, 0.001).setInteractive();
     const backdrop = this.add.rectangle(0, 0, width, height, 0x020205, 0);
-    const vignette = this.add.rectangle(0, 0, Math.min(width * 0.78, 880), Math.min(height * 0.88, 760), 0x130b02, 0)
+    const vignette = this.add.rectangle(0, 0, Math.min(width * 0.78, 880), Math.min(height * 0.88, 760), supreme ? 0x061c24 : 0x130b02, 0)
       .setStrokeStyle(2, rarityColor, 0.25);
     const outerGlow = this.add.rectangle(0, cardTargetY, cardWidth + 30, cardHeight + 30, rarityColor, 0)
       .setStrokeStyle(4, rarityColor, 0.2);
@@ -86,9 +89,10 @@ export class LegendaryModRevealScene extends Phaser.Scene {
       strokeThickness: 9,
       wordWrap: { width: width - 38, useAdvancedWrap: true }
     };
-    const titleRed = this.add.text(-5, titleY, 'LEGENDARY MOD ACQUIRED', { ...titleStyle, color: '#ff315f' }).setOrigin(0.5).setAlpha(0);
-    const titleCyan = this.add.text(5, titleY, 'LEGENDARY MOD ACQUIRED', { ...titleStyle, color: '#39efff' }).setOrigin(0.5).setAlpha(0);
-    const title = this.add.text(0, titleY, 'LEGENDARY MOD ACQUIRED', { ...titleStyle, color: '#ff9b22' }).setOrigin(0.5).setAlpha(0);
+    const announcement = supreme ? 'SUPREME MOD ACQUIRED' : 'LEGENDARY MOD ACQUIRED';
+    const titleRed = this.add.text(-5, titleY, announcement, { ...titleStyle, color: supreme ? '#ff6ee7' : '#ff315f' }).setOrigin(0.5).setAlpha(0);
+    const titleCyan = this.add.text(5, titleY, announcement, { ...titleStyle, color: '#39efff' }).setOrigin(0.5).setAlpha(0);
+    const title = this.add.text(0, titleY, announcement, { ...titleStyle, color: supreme ? '#efffff' : '#ff9b22' }).setOrigin(0.5).setAlpha(0);
     const duplicate = this.add.text(0, titleY + title.height + 7, this.request.duplicate ? '+1 COPY // DUPLICATE' : '', {
       fontFamily: 'Rajdhani, sans-serif',
       fontSize: `${Phaser.Math.Clamp(width * 0.022, 16, 22)}px`,
@@ -115,6 +119,20 @@ export class LegendaryModRevealScene extends Phaser.Scene {
     }
 
     root.add([blocker, backdrop, vignette, scanlines, outerGlow, rgbLeft, rgbRight, card, titleRed, titleCyan, title, duplicate, ...glitchBars]);
+    if (supreme) {
+      const beam = this.add.rectangle(0, cardTargetY, Math.max(80, cardWidth * .42), height * 1.25, 0xbdfcff, .09)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      const ringA = this.add.circle(0, cardTargetY, cardWidth * .78, 0x000000, 0).setStrokeStyle(3, 0xeaffff, .58);
+      const ringB = this.add.circle(0, cardTargetY, cardWidth * .98, 0x000000, 0).setStrokeStyle(2, 0xff73e5, .32);
+      root.addAt(beam, 4);
+      root.addAt(ringA, 5);
+      root.addAt(ringB, 6);
+      this.idleTweens.push(
+        this.tweens.add({ targets: beam, alpha: { from: .035, to: .16 }, scaleX: { from: .7, to: 1.2 }, duration: 760, yoyo: true, repeat: -1 }),
+        this.tweens.add({ targets: ringA, angle: 360, scale: { from: .8, to: 1.18 }, alpha: { from: .08, to: .62 }, duration: 1650, repeat: -1 }),
+        this.tweens.add({ targets: ringB, angle: -360, scale: { from: 1.2, to: .82 }, duration: 2100, repeat: -1 })
+      );
+    }
     this.root = root;
     this.backdrop = backdrop;
     this.scanlines = scanlines;
@@ -164,7 +182,7 @@ export class LegendaryModRevealScene extends Phaser.Scene {
       this.tweens.add({ targets: card, y: card.y - 6, duration: 720, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
       this.tweens.add({ targets: outerGlow, alpha: { from: 0.08, to: 0.34 }, scale: { from: 0.98, to: 1.05 }, duration: 620, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
     );
-    this.time.delayedCall(LEGENDARY_MOD_REVEAL_HOLD_MS, () => this.dismissPresentation());
+    this.time.delayedCall(this.request?.rarity === 'supreme' ? SUPREME_MOD_REVEAL_HOLD_MS : LEGENDARY_MOD_REVEAL_HOLD_MS, () => this.dismissPresentation());
   }
 
   private dismissPresentation(): void {
@@ -189,7 +207,7 @@ export class LegendaryModRevealScene extends Phaser.Scene {
 
   private drawScanlines(graphics: Phaser.GameObjects.Graphics, width: number, height: number): void {
     graphics.clear();
-    graphics.lineStyle(1, 0xffa13b, 0.1);
+    graphics.lineStyle(1, this.request?.rarity === 'supreme' ? 0xb8ffff : 0xffa13b, 0.1);
     for (let y = -height * 0.5; y <= height * 0.5; y += 12) {
       graphics.lineBetween(-width * 0.5, y, width * 0.5, y);
     }

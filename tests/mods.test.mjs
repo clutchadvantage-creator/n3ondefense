@@ -21,13 +21,13 @@ const equippedRuntimeAtRank = (modId, rank) => {
 };
 
 test('the expanded collection includes the full Bombsite roster without duplicate IDs', () => {
-  const expectedCounts = { common: 13, uncommon: 18, rare: 20, epic: 18, legendary: 15 };
+  const expectedCounts = { common: 13, uncommon: 18, rare: 20, epic: 18, legendary: 15, supreme: 10 };
   const counts = Object.fromEntries(Object.keys(expectedCounts).map((rarity) => [
     rarity,
     MOD_DEFINITIONS.filter((definition) => definition.rarity === rarity).length
   ]));
   assert.deepEqual(counts, expectedCounts);
-  assert.equal(MOD_DEFINITIONS.length, 84);
+  assert.equal(MOD_DEFINITIONS.length, 94);
   assert.equal(new Set(MOD_DEFINITIONS.map((definition) => definition.id)).size, MOD_DEFINITIONS.length);
 });
 
@@ -43,7 +43,7 @@ test('every Mod has a colored icon, ranked copy, and reachable positive drop wei
 
 test('data-driven modifiers are finite, ranked, and use safe multiplier values', () => {
   const definitionsWithModifiers = MOD_DEFINITIONS.filter((definition) => definition.modifiers?.length);
-  assert.equal(definitionsWithModifiers.length, 52);
+  assert.equal(definitionsWithModifiers.length, 62);
   for (const definition of definitionsWithModifiers) {
     for (const modifier of definition.modifiers) {
       assert.deepEqual(Object.keys(modifier.values), ['0', '1', '2', '3']);
@@ -115,7 +115,9 @@ test('a complete version-two profile migrates without losing progression or purc
     metadata: { updatedAt: '2025-01-02T00:00:00.000Z', saveRevision: 4, gameVersion: '0.0.1' }
   };
   const migrated = normalizeLocalSave(old);
-  assert.equal(migrated.version, 13);
+  assert.equal(migrated.version, 14);
+  assert.equal(migrated.progress.supremeHighestRound, 0);
+  assert.equal(migrated.progress.supremeOverdriveCompleted, false);
   assert.equal(migrated.wallet.fluxCores, 0);
   assert.equal(migrated.progress.initialDeploymentBriefingSeen, false);
   assert.equal(migrated.progress.totalCreditsSpent, 0);
@@ -576,7 +578,7 @@ test('the named Overdrive ladder starts every five rounds without skipped reward
   assert.equal(overdrive.startingRound, 5);
   assert.deepEqual(overdrive.skippedRewards, { credits: 0, coreTokens: 0, mods: 0, kills: 0, score: 0 });
 
-  const tiers = RUN_PROTOCOL_IDS.slice(1).map((id) => RUN_PROTOCOLS[id]);
+  const tiers = RUN_PROTOCOL_IDS.map((id) => RUN_PROTOCOLS[id]).filter((definition) => definition.family === 'overdrive');
   assert.equal(tiers.length, 10);
   assert.deepEqual(tiers.map((definition) => definition.startingRound), [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]);
   assert.deepEqual(tiers.map((definition) => definition.tier), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);

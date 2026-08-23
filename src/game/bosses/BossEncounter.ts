@@ -10,6 +10,8 @@ import { Boss, type BossDamageSource } from './Boss';
 export interface BossEncounterOptions {
   /** Instance-only health scaling used by variants such as N3ON Arcade Mini-Bosses. */
   healthMultiplier?: number;
+  /** Instance-only final attack multiplier (Supreme stage delta, finale tuning). */
+  damageMultiplier?: number;
   /** Compact variants report health through their owning HUD instead of the full boss banner. */
   showHealthUi?: boolean;
   /** Preserves the Options particle toggle while retaining reduced core telegraphs. */
@@ -114,7 +116,7 @@ export class BossEncounter {
   ) {
     this.archetype = archetype;
     this.random = new SeededRandom((seed ^ Math.imul(completedRound, 0x9e3779b1) ^ 0xb055cafe) >>> 0);
-    this.damageMultiplier = getBossDamageMultiplier(completedRound, modeFamily);
+    this.damageMultiplier = getBossDamageMultiplier(completedRound, modeFamily) * Math.max(0.01, options.damageMultiplier ?? 1);
     this.vfx = new BossCombatVfx(scene, options.particlesEnabled ?? true);
     this.boss = new Boss(
       scene,

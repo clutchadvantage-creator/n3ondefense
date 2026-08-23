@@ -1,5 +1,6 @@
 import type { ModRarity, ModDropSource, RunProtocolId } from './types.ts';
-import { MODE_BALANCE } from '../config/modeBalance.ts';
+import { MODE_BALANCE, type RunModeFamily } from '../config/modeBalance.ts';
+import { SUPREME_PROTOCOL_IDS, SUPREME_STAGE_DEFINITIONS, getSupremeStage, isSupremeStageUnlocked, type SupremeProgressSnapshot } from '../progression/SupremeProgression.ts';
 
 export const MOD_BALANCE = {
   maxRank: 3,
@@ -10,11 +11,12 @@ export const MOD_BALANCE = {
     uncommon: { 1: 0, 2: 0, 3: 0 },
     rare: { 1: 2, 2: 5, 3: 10 },
     epic: { 1: 15, 2: 40, 3: 90 },
-    legendary: { 1: 100, 2: 250, 3: 500 }
+    legendary: { 1: 100, 2: 250, 3: 500 },
+    supreme: { 1: 250, 2: 600, 3: 1200 }
   } satisfies Record<ModRarity, Record<1 | 2 | 3, number>>,
   conditionalDirectDamageBonusCap: 0.3,
-  duplicateCreditValueByRarity: { common: 100, uncommon: 180, rare: 320, epic: 550, legendary: 900 } satisfies Record<ModRarity, number>,
-  duplicatePlasmaValueByRarity: { common: 1, uncommon: 2, rare: 3, epic: 5, legendary: 8 } satisfies Record<ModRarity, number>,
+  duplicateCreditValueByRarity: { common: 100, uncommon: 180, rare: 320, epic: 550, legendary: 900, supreme: 2400 } satisfies Record<ModRarity, number>,
+  duplicatePlasmaValueByRarity: { common: 1, uncommon: 2, rare: 3, epic: 5, legendary: 8, supreme: 20 } satisfies Record<ModRarity, number>,
   infusionPlasmaCost: {
     'enemy-growth': 5,
     'detonation-fireworks': 7,
@@ -26,15 +28,15 @@ export const MOD_BALANCE = {
   } as const,
   detonationFireworks: { minDurationMs: 20_000, maxDurationMs: 30_000, burstIntervalMs: 520, sparksPerBurst: 12 },
   dropChance: { normalEnemy: 0.0005, eliteEnemy: 0.04, milestone: 0.12, boss: 0.62, arcade: 1 } satisfies Record<ModDropSource, number>,
-  rarityWeights: { common: 56, uncommon: 27, rare: 12, epic: 4.5, legendary: 0.5 } satisfies Record<ModRarity, number>,
+  rarityWeights: { common: 56, uncommon: 27, rare: 12, epic: 4.5, legendary: 0.5, supreme: 0.018 } satisfies Record<ModRarity, number>,
   raritySourceMultipliers: {
-    normalEnemy: { common: 1, uncommon: 0.65, rare: 0.25, epic: 0, legendary: 0 },
-    eliteEnemy: { common: 0.7, uncommon: 1, rare: 1.4, epic: 0.8, legendary: 0.2 },
-    milestone: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5 },
-    boss: { common: 0.08, uncommon: 0.18, rare: 0.8, epic: 2.2, legendary: 18 },
+    normalEnemy: { common: 1, uncommon: 0.65, rare: 0.25, epic: 0, legendary: 0, supreme: 0 },
+    eliteEnemy: { common: 0.7, uncommon: 1, rare: 1.4, epic: 0.8, legendary: 0.2, supreme: 0.18 },
+    milestone: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5, supreme: 0.55 },
+    boss: { common: 0.08, uncommon: 0.18, rare: 0.8, epic: 2.2, legendary: 18, supreme: 5.5 },
     // Arcade Mod rewards are guaranteed by the event roll but retain the
     // established milestone rarity curve; Legendary odds are not inflated.
-    arcade: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5 }
+    arcade: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5, supreme: 0.2 }
   } satisfies Record<ModDropSource, Record<ModRarity, number>>,
   rarityRoundBonusPerRound: 0.025,
   guaranteedMilestoneEveryRounds: 5,
@@ -148,7 +150,7 @@ export const MOD_BALANCE = {
 
 export interface RunProtocolDefinition {
   id: RunProtocolId;
-  family: 'normal' | 'overdrive';
+  family: RunModeFamily;
   tier: number;
   label: string;
   description: string;
@@ -158,7 +160,7 @@ export interface RunProtocolDefinition {
   modDropMultiplier: number;
 }
 
-export const RUN_PROTOCOL_IDS = [
+const BASE_RUN_PROTOCOL_IDS = [
   'normal',
   'overdrive',
   'overdrive-orion',
@@ -172,7 +174,9 @@ export const RUN_PROTOCOL_IDS = [
   'overdrive-pegasus'
 ] as const satisfies readonly RunProtocolId[];
 
-export const RUN_PROTOCOLS: Record<RunProtocolId, RunProtocolDefinition> = {
+export const RUN_PROTOCOL_IDS: readonly RunProtocolId[] = [...BASE_RUN_PROTOCOL_IDS, ...SUPREME_PROTOCOL_IDS];
+
+const BASE_RUN_PROTOCOLS = {
   normal: { id: 'normal', family: 'normal', tier: 0, label: 'NORMAL PROTOCOL', description: 'ARCADE // Round 1 start. Forgiving threats, no Overhealth or x2 boosts.', unlockHighestRound: 0, startingRound: 1, scoreMultiplier: MODE_BALANCE.normal.scoreMultiplier, modDropMultiplier: MODE_BALANCE.normal.modDropChanceMultiplier },
   overdrive: { id: 'overdrive', family: 'overdrive', tier: 1, label: 'OVERDRIVE CYGNUS', description: 'SURVIVAL // Begin at Round 5. Deadlier threats, x2 boosts, improved Mods.', unlockHighestRound: 8, startingRound: 5, scoreMultiplier: MODE_BALANCE.overdrive.scoreMultiplier, modDropMultiplier: MODE_BALANCE.overdrive.modDropChanceMultiplier },
   'overdrive-orion': { id: 'overdrive-orion', family: 'overdrive', tier: 2, label: 'OVERDRIVE ORION', description: 'SURVIVAL // Begin at Round 10. Deadlier threats, x2 boosts, improved Mods.', unlockHighestRound: 13, startingRound: 10, scoreMultiplier: MODE_BALANCE.overdrive.scoreMultiplier, modDropMultiplier: MODE_BALANCE.overdrive.modDropChanceMultiplier },
@@ -184,7 +188,22 @@ export const RUN_PROTOCOLS: Record<RunProtocolId, RunProtocolDefinition> = {
   'overdrive-andromeda': { id: 'overdrive-andromeda', family: 'overdrive', tier: 8, label: 'OVERDRIVE ANDROMEDA', description: 'SURVIVAL // Begin at Round 40. Deadlier threats, x2 boosts, improved Mods.', unlockHighestRound: 43, startingRound: 40, scoreMultiplier: MODE_BALANCE.overdrive.scoreMultiplier, modDropMultiplier: MODE_BALANCE.overdrive.modDropChanceMultiplier },
   'overdrive-perseus': { id: 'overdrive-perseus', family: 'overdrive', tier: 9, label: 'OVERDRIVE PERSEUS', description: 'SURVIVAL // Begin at Round 45. Deadlier threats, x2 boosts, improved Mods.', unlockHighestRound: 48, startingRound: 45, scoreMultiplier: MODE_BALANCE.overdrive.scoreMultiplier, modDropMultiplier: MODE_BALANCE.overdrive.modDropChanceMultiplier },
   'overdrive-pegasus': { id: 'overdrive-pegasus', family: 'overdrive', tier: 10, label: 'OVERDRIVE PEGASUS', description: 'SURVIVAL // Begin at Round 50. Deadlier threats, x2 boosts, improved Mods.', unlockHighestRound: 53, startingRound: 50, scoreMultiplier: MODE_BALANCE.overdrive.scoreMultiplier, modDropMultiplier: MODE_BALANCE.overdrive.modDropChanceMultiplier }
-};
+} satisfies Partial<Record<RunProtocolId, RunProtocolDefinition>>;
+
+export const RUN_PROTOCOLS: Record<RunProtocolId, RunProtocolDefinition> = {
+  ...BASE_RUN_PROTOCOLS,
+  ...Object.fromEntries(SUPREME_STAGE_DEFINITIONS.map((stage, index) => [stage.protocolId, {
+    id: stage.protocolId,
+    family: 'supreme' as const,
+    tier: 11 + index,
+    label: `SUPREME ${stage.constellation}`,
+    description: `ENDGAME // Begin at Round ${stage.level}. Constellation pressure, Supreme rewards, full Overdrive systems.`,
+    unlockHighestRound: stage.unlockRound,
+    startingRound: stage.level,
+    scoreMultiplier: stage.difficulty.scoreMultiplier,
+    modDropMultiplier: stage.difficulty.modDropChanceMultiplier
+  }]))
+} as Record<RunProtocolId, RunProtocolDefinition>;
 
 export const isRunProtocolId = (value: unknown): value is RunProtocolId =>
   typeof value === 'string' && Object.prototype.hasOwnProperty.call(RUN_PROTOCOLS, value);
@@ -192,11 +211,16 @@ export const isRunProtocolId = (value: unknown): value is RunProtocolId =>
 export const normalizeRunProtocolId = (value: unknown): RunProtocolId =>
   isRunProtocolId(value) ? value : 'normal';
 
-export const getUnlockedProtocolIds = (highestRound: number): RunProtocolId[] =>
-  RUN_PROTOCOL_IDS.filter((id) => highestRound >= RUN_PROTOCOLS[id].unlockHighestRound);
+export const isRunProtocolUnlocked = (id: RunProtocolId, progress: SupremeProgressSnapshot): boolean => {
+  const stage = getSupremeStage(id);
+  return stage ? isSupremeStageUnlocked(stage, progress) : progress.highestRound >= RUN_PROTOCOLS[id].unlockHighestRound;
+};
 
-export const cycleUnlockedProtocol = (current: RunProtocolId, highestRound: number, direction: 1 | -1): RunProtocolId => {
-  const unlocked = getUnlockedProtocolIds(highestRound);
+export const getUnlockedProtocolIds = (highestRound: number, supremeHighestRound = 0): RunProtocolId[] =>
+  RUN_PROTOCOL_IDS.filter((id) => isRunProtocolUnlocked(id, { highestRound, supremeHighestRound }));
+
+export const cycleUnlockedProtocol = (current: RunProtocolId, highestRound: number, direction: 1 | -1, supremeHighestRound = 0): RunProtocolId => {
+  const unlocked = getUnlockedProtocolIds(highestRound, supremeHighestRound);
   const currentIndex = Math.max(0, unlocked.indexOf(current));
   return unlocked[(currentIndex + direction + unlocked.length) % unlocked.length] ?? 'normal';
 };

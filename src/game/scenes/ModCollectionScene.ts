@@ -28,7 +28,7 @@ type FilterMode = 'all' | 'duplicates';
 const CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player', 'defense', 'bombSite', 'utility'];
 const SORTS: SortMode[] = ['acquired', 'type', 'rank', 'rarity'];
 const FILTERS: FilterMode[] = ['all', 'duplicates'];
-const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 } as const;
+const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4, supreme: 5 } as const;
 
 interface ModCollectionSceneData extends ModCollectionReturnRequest {
   selectedCardId?: string;

@@ -235,7 +235,7 @@ test('Arena integration suppresses Arcade during Teaching and preserves live com
   assert.match(arena, /'arcade-loot'/);
   assert.match(arena, /forceArcadeEvent/);
   assert.match(arena, /this\.arcadeController\?\.destroy\('replaced'\)/);
-  assert.match(arena, /private activeBossTarget\(\)/);
+  assert.match(arena, /private nearestActiveBossTarget\(x: number, y: number\)/);
 });
 
 test('Arcade metrics are exported through gameplay telemetry and feed weekly progress', () => {

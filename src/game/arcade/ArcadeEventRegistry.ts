@@ -32,7 +32,7 @@ export const ARCADE_SCHEDULING = {
   initialOpportunityMaximumMs: 52_000,
   retryAfterMissMs: 48_000,
   eventCooldownMs: 105_000,
-  opportunityChance: { normal: 0.46, overdrive: 0.54 },
+  opportunityChance: { normal: 0.46, overdrive: 0.54, supreme: 0.6 },
   recentHistorySize: 2
 } as const;
 

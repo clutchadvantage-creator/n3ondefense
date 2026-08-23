@@ -4,8 +4,9 @@ import type { ModDefinition, ModDropSource, RunProtocolId } from './types.ts';
 import { RUN_PROTOCOLS } from './modBalance.ts';
 import { ECONOMY_BALANCE, getContract } from '../economy/economyBalance.ts';
 import type { ModFocusSignalId, RunContractId } from '../economy/types.ts';
-import { MODE_BALANCE } from '../config/modeBalance.ts';
+import { getProtocolModeBalance } from '../config/modeBalance.ts';
 import type { ModRarity } from './types.ts';
+import { getSupremeStage, isSupremeProtocol } from '../progression/SupremeProgression.ts';
 
 export interface ModDropRequest {
   source: ModDropSource;
@@ -25,15 +26,19 @@ export const getModDropChance = (request: ModDropRequest): number => {
 };
 
 export const getModDefinitionWeight = (definition: ModDefinition, request: ModDropRequest): number => {
-  const mode = MODE_BALANCE[RUN_PROTOCOLS[request.protocol].family];
+  const supreme = isSupremeProtocol(request.protocol);
+  if (definition.rarity === 'supreme' && !supreme) return 0;
+  const mode = getProtocolModeBalance(request.protocol);
   const base = MOD_BALANCE.rarityWeights[definition.rarity]
     * MOD_BALANCE.raritySourceMultipliers[request.source][definition.rarity]
     * definition.dropWeight;
-  const highRarity = definition.rarity === 'rare' || definition.rarity === 'epic' || definition.rarity === 'legendary';
+  const highRarity = definition.rarity === 'rare' || definition.rarity === 'epic' || definition.rarity === 'legendary' || definition.rarity === 'supreme';
   const roundMultiplier = highRarity
     ? 1 + Math.max(0, request.round - 1) * MOD_BALANCE.rarityRoundBonusPerRound
     : 1;
-  const modeRarityMultiplier = definition.rarity === 'legendary'
+  const modeRarityMultiplier = definition.rarity === 'supreme'
+    ? getSupremeStage(request.protocol)?.supremeModWeightMultiplier ?? 0
+    : definition.rarity === 'legendary'
     ? mode.legendaryWeightMultiplier
     : definition.rarity === 'rare' || definition.rarity === 'epic'
       ? mode.highRarityWeightMultiplier

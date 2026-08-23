@@ -6,7 +6,8 @@ import { LocalSaveManager } from '../save/LocalSaveManager';
 import { addModDrop, createDefaultModLoadout, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleAllUnupgradedDuplicates, recycleDuplicateMod, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
 import { MOD_DEFINITIONS } from '../mods/definitions.ts';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
-import { RUN_PROTOCOLS } from '../mods/modBalance.ts';
+import { RUN_PROTOCOLS, isRunProtocolUnlocked } from '../mods/modBalance.ts';
+import { isSupremeProtocol } from '../progression/SupremeProgression.ts';
 import { buildRunEconomySnapshot, getNextLoadoutSlotCost, getRunSetupCost, purchaseRunSetup, spendCreditsAtomic } from '../economy/EconomyService.ts';
 import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
 import { loadGaragePreset, normalizeRunSetupSelection, saveCurrentGaragePreset } from '../garage/GarageState.ts';
@@ -208,6 +209,9 @@ export class PlayerProfileStore {
     const save = PlayerProfileStore.getActiveSave();
     save.progress.roundsCompleted += 1;
     save.progress.highestRound = Math.max(save.progress.highestRound, round);
+    if (isSupremeProtocol(protocol)) {
+      save.progress.supremeHighestRound = Math.max(save.progress.supremeHighestRound, round);
+    }
     if (isOverdriveProtocol(protocol)) {
       save.progress.overdriveWeeklyProgress.roundsCompleted += 1;
       save.progress.overdriveWeeklyProgress.highestRound = Math.max(save.progress.overdriveWeeklyProgress.highestRound, round);
@@ -218,6 +222,15 @@ export class PlayerProfileStore {
 
   static recordEnemyDestroyed(count = 1, protocol?: RunProtocolId): void {
     PlayerProfileStore.recordCombatProgress(count, 0, protocol);
+  }
+
+  static recordSupremeCompletion(): void {
+    const save = PlayerProfileStore.getActiveSave();
+    save.progress.supremeOverdriveCompleted = true;
+    save.progress.supremeHighestRound = Math.max(save.progress.supremeHighestRound, 100);
+    save.progress.highestRound = Math.max(save.progress.highestRound, 100);
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
   }
 
   static recordBombSiteDestroyed(count = 1, protocol?: RunProtocolId): void {
@@ -536,7 +549,7 @@ export class PlayerProfileStore {
   static setPreferredProtocol(protocol: RunProtocolId): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
     const definition = RUN_PROTOCOLS[protocol];
-    if (save.progress.highestRound < definition.unlockHighestRound) return { ok: false, message: `Reach Round ${definition.unlockHighestRound} to unlock ${definition.label}.` };
+    if (!isRunProtocolUnlocked(protocol, save.progress)) return { ok: false, message: `Reach Round ${definition.unlockHighestRound} in the required progression tier to unlock ${definition.label}.` };
     save.protocol.preferred = protocol;
     PlayerProfileStore.save();
     return { ok: true };

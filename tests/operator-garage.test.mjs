@@ -83,7 +83,7 @@ test('Garage Browse opens the Collection on the matching slot category', () => {
 
 test('Overdrive progression terminal keeps full constellation protocol names in the shared cyber-console treatment', () => {
   const source = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
-  const terminalStart = source.indexOf('private showOverdrive(): void');
+  const terminalStart = source.indexOf("private showOverdrive(requestedFamily?: 'overdrive' | 'supreme'): void");
   const terminalEnd = source.indexOf('private showPresets(): void', terminalStart);
   assert.ok(terminalStart >= 0 && terminalEnd > terminalStart);
 
@@ -168,7 +168,7 @@ test('version-seven profiles migrate to empty Garage presets without losing data
   delete legacy.garage;
   const migrated = normalizeLocalSave(legacy);
   assert.ok(migrated);
-  assert.equal(migrated.version, 13);
+  assert.equal(migrated.version, 14);
   assert.equal(migrated.wallet.credits, 4567);
   assert.equal(migrated.mods.plasmaChips, 33);
   assert.deepEqual(migrated.garage, createDefaultGarageState());

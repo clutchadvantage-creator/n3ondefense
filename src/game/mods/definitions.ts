@@ -1,6 +1,7 @@
 import type { ModDefinition } from './types.ts';
 import { EXPANDED_MOD_DEFINITIONS } from './expandedDefinitions.ts';
 import { BOMBSITE_MOD_DEFINITIONS } from './bombsiteDefinitions.ts';
+import { SUPREME_MOD_DEFINITIONS } from './supremeDefinitions.ts';
 
 const CORE_MOD_DEFINITIONS: readonly ModDefinition[] = [
   {
@@ -107,7 +108,8 @@ const CORE_MOD_DEFINITIONS: readonly ModDefinition[] = [
 export const MOD_DEFINITIONS: readonly ModDefinition[] = [
   ...CORE_MOD_DEFINITIONS,
   ...EXPANDED_MOD_DEFINITIONS,
-  ...BOMBSITE_MOD_DEFINITIONS
+  ...BOMBSITE_MOD_DEFINITIONS,
+  ...SUPREME_MOD_DEFINITIONS
 ];
 
 export const MOD_BY_ID = new Map(MOD_DEFINITIONS.map((definition) => [definition.id, definition]));

@@ -4,6 +4,28 @@ import type { EquippedModSnapshot, LocalModCollection, ModInfusionId, ModRank, M
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
 import { isLegendaryModId } from './ModLoadoutRules.ts';
 
+/** Engine-stability ceilings, not intended balance nerfs. They prevent future
+ * Supreme combinations from producing zero cooldowns or unbounded entities. */
+export const SUPREME_MOD_STABILITY_CAPS = {
+  legacyMinimumMultiplier: 0.05,
+  minimumMultiplier: 0.12,
+  defaultMaximumMultiplier: 8,
+  multiplier: {
+    playerMoveSpeed: 2.75,
+    weaponProjectileSpeed: 3,
+    playerPickupRadius: 5,
+    buffDuration: 5,
+    bombDuration: 4,
+    gasDamageTaken: 1
+  } satisfies Partial<Record<ModStat, number>>,
+  addition: {
+    weaponCritChance: 0.6,
+    fenceMaxActive: 8,
+    turretMaxActive: 6,
+    mineMaxActive: 8
+  } satisfies Partial<Record<ModStat, number>>
+} as const;
+
 export class ModRuntime {
   private readonly equipped = new Map<string, ModRank>();
   private readonly infusions = new Set<ModInfusionId>();
@@ -63,23 +85,32 @@ export class ModRuntime {
   has(modId: string): boolean { return this.equipped.has(modId); }
   multiplier(stat: ModStat): number {
     let result = 1;
+    let includesSupreme = false;
     for (const [modId, rank] of this.equipped) {
       const definition = MOD_BY_ID.get(modId);
+      if (definition?.rarity === 'supreme') includesSupreme = true;
       for (const modifier of definition?.modifiers ?? []) {
         if (modifier.stat === stat && modifier.mode === 'multiply') result *= modifier.values[rank];
       }
     }
-    return Math.max(0.05, result);
+    if (!includesSupreme) return Math.max(SUPREME_MOD_STABILITY_CAPS.legacyMinimumMultiplier, result);
+    const maximum = SUPREME_MOD_STABILITY_CAPS.multiplier[stat as keyof typeof SUPREME_MOD_STABILITY_CAPS.multiplier]
+      ?? SUPREME_MOD_STABILITY_CAPS.defaultMaximumMultiplier;
+    return Math.min(maximum, Math.max(SUPREME_MOD_STABILITY_CAPS.minimumMultiplier, result));
   }
   addition(stat: ModStat): number {
     let result = 0;
+    let includesSupreme = false;
     for (const [modId, rank] of this.equipped) {
       const definition = MOD_BY_ID.get(modId);
+      if (definition?.rarity === 'supreme') includesSupreme = true;
       for (const modifier of definition?.modifiers ?? []) {
         if (modifier.stat === stat && modifier.mode === 'add') result += modifier.values[rank];
       }
     }
-    return result;
+    if (!includesSupreme) return result;
+    const maximum = SUPREME_MOD_STABILITY_CAPS.addition[stat as keyof typeof SUPREME_MOD_STABILITY_CAPS.addition];
+    return maximum === undefined ? result : Math.min(maximum, result);
   }
   permanentMoveSpeedMultiplier(): number {
     return this.naniteFuelSpeedMultiplier() * this.multiplier('playerMoveSpeed');

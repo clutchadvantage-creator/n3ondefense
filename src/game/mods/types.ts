@@ -1,5 +1,5 @@
 export type ModCategory = 'weapon' | 'player' | 'defense' | 'bombSite' | 'utility';
-export type ModRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+export type ModRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'supreme';
 export type ModRank = 0 | 1 | 2 | 3;
 export type ModSlot = 'weapon' | 'player' | 'defense' | 'bombSite' | 'wildcard';
 export type RunProtocolId =
@@ -13,7 +13,18 @@ export type RunProtocolId =
   | 'overdrive-hydra'
   | 'overdrive-andromeda'
   | 'overdrive-perseus'
-  | 'overdrive-pegasus';
+  | 'overdrive-pegasus'
+  | 'supreme-leo'
+  | 'supreme-gemini'
+  | 'supreme-cassiopeia'
+  | 'supreme-aquila'
+  | 'supreme-ursa-major'
+  | 'supreme-scorpius'
+  | 'supreme-taurus'
+  | 'supreme-virgo'
+  | 'supreme-capricornus'
+  | 'supreme-delphinus'
+  | 'supreme-centaurus';
 export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone' | 'boss' | 'arcade';
 export type ModVariant = 'standard' | 'corrupted';
 export type ModInfusionId =

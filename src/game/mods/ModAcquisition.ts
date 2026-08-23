@@ -2,6 +2,7 @@ import type { ModCardInstance, ModRarity } from './types.ts';
 
 export const NORMAL_MOD_REVEAL_HOLD_MS = 2_000;
 export const LEGENDARY_MOD_REVEAL_HOLD_MS = 2_100;
+export const SUPREME_MOD_REVEAL_HOLD_MS = 2_650;
 export const LEGENDARY_MOD_REVEAL_COMPLETE_EVENT = 'mod-reveal:legendary-complete';
 export const MOD_PICKUP_REVEAL_LEAD_IN_MS = 180;
 
@@ -14,16 +15,23 @@ export interface ModAcquisitionPresentation {
   leadInMs?: number;
 }
 
-/** Legendary requests move ahead of waiting standard reveals without disturbing FIFO order within either tier. */
+/** Premium reveals are prioritized Supreme -> Legendary -> standard while
+ * retaining FIFO order inside each rarity band. Awards have already occurred. */
 export const enqueueModAcquisition = (
   queue: ModAcquisitionPresentation[],
   request: ModAcquisitionPresentation
 ): void => {
+  if (request.rarity === 'supreme') {
+    const firstNonSupreme = queue.findIndex((queued) => queued.rarity !== 'supreme');
+    if (firstNonSupreme < 0) queue.push(request);
+    else queue.splice(firstNonSupreme, 0, request);
+    return;
+  }
   if (request.rarity !== 'legendary') {
     queue.push(request);
     return;
   }
-  const firstStandard = queue.findIndex((queued) => queued.rarity !== 'legendary');
+  const firstStandard = queue.findIndex((queued) => queued.rarity !== 'supreme' && queued.rarity !== 'legendary');
   if (firstStandard < 0) queue.push(request);
   else queue.splice(firstStandard, 0, request);
 };

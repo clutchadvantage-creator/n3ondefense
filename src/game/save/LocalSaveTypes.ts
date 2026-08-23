@@ -11,7 +11,7 @@ import type { AimSettings, HudSettings } from '../config/interfaceSettings.ts';
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 13;
+export const CURRENT_SAVE_VERSION = 14;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -30,6 +30,10 @@ export interface LocalPlayerWallet {
 
 export interface LocalPlayerProgress {
   highestRound: number;
+  /** Highest round completed while a Supreme protocol was active. */
+  supremeHighestRound: number;
+  /** Explicit campaign milestone; never inferred from highestRound alone. */
+  supremeOverdriveCompleted: boolean;
   roundsCompleted: number;
   enemiesDestroyed: number;
   bombSitesDestroyed: number;
@@ -117,7 +121,7 @@ export interface LocalPlayerSaveV1 {
   wallet: Omit<LocalPlayerWallet, 'fluxCores'> & { fluxCores?: number };
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
-  progress: Omit<LocalPlayerProgress, 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'arcadeEventsCompleted' | 'goldenEnemiesKilled' | 'arcadeMiniBossesKilled' | 'neonCircuitsCompleted' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
+  progress: Omit<LocalPlayerProgress, 'supremeHighestRound' | 'supremeOverdriveCompleted' | 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'arcadeEventsCompleted' | 'goldenEnemiesKilled' | 'arcadeMiniBossesKilled' | 'neonCircuitsCompleted' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
   settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'contextualTutorials' | 'buttonJiggle'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }

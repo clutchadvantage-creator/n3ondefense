@@ -61,10 +61,11 @@ test('round-finished readability tier increases only secondary typography', () =
   const finished = readFileSync(new URL('../src/game/scenes/RoundFinishedScene.ts', import.meta.url), 'utf8');
   const failed = readFileSync(new URL('../src/game/scenes/ResultScene.ts', import.meta.url), 'utf8');
   const ui = readFileSync(new URL('../src/game/ui/DebriefUi.ts', import.meta.url), 'utf8');
-  assert.match(finished, /createDebriefShell\([^;]*true\)/);
+  assert.match(finished, /createDebriefShell\([^;]*true\s*\)/);
   assert.match(finished, /layout\.compact, false, true/);
   assert.match(finished, /createOperationReadout\([^;]*layout\.compact, true\)/);
-  assert.match(finished, /ENDLESS FLOW \/\/ NEXT ARENA READY', true/);
+  assert.match(finished, /ENDLESS FLOW \/\/ NEXT ARENA READY/);
+  assert.match(finished, /SUPREME CLEAR PERSISTED \/\/ THE CONSTELLATION ENDURES/);
   assert.doesNotMatch(failed, /enhanceSecondaryTypography|layout\.compact, true, true/);
   assert.doesNotMatch(failed, /createDebriefShell\([^;]*, true\)/);
   for (const pair of [

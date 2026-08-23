@@ -367,4 +367,7 @@ export interface RoundFinishedPayload {
   upgradeCompletionPercentage: number;
   accountProgressionTier: AccountProgressionTier;
   runCreditsEarned: number;
+  /** Present only for the official Supreme Level 100 terminal clear. */
+  supremeCompletion?: boolean;
+  terminalBossesDefeated?: number;
 }

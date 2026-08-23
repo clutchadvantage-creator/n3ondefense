@@ -92,7 +92,7 @@ export class ModAcquisitionPresenter {
     const present = (): void => {
       this.leadInTimer = null;
       if (this.destroyed || this.active !== request) return;
-      if (request.rarity === 'legendary') this.presentLegendary(request);
+      if (request.rarity === 'legendary' || request.rarity === 'supreme') this.presentLegendary(request);
       else this.presentStandard(request);
     };
     const leadInMs = Math.max(0, request.leadInMs ?? 0);

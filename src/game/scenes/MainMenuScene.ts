@@ -8,7 +8,7 @@ import { SaveSystem } from '../systems/SaveSystem';
 import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton, enableButton, setButtonJiggleTargets } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
-import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, getUnlockedProtocolIds } from '../mods/modBalance.ts';
+import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, getUnlockedProtocolIds, isRunProtocolUnlocked } from '../mods/modBalance.ts';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_FOCUS_LABELS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
@@ -109,7 +109,8 @@ export class MainMenuScene extends Phaser.Scene {
       }
     }
     const requestedProtocol = profile ? SaveSystem.getPreferredProtocol() : 'normal';
-    const protocol = profile && SaveSystem.getHighestRound() >= RUN_PROTOCOLS[requestedProtocol].unlockHighestRound
+    const supremeHighestRound = profile ? SaveSystem.getSupremeHighestRound() : 0;
+    const protocol = profile && isRunProtocolUnlocked(requestedProtocol, { highestRound: SaveSystem.getHighestRound(), supremeHighestRound })
       ? requestedProtocol
       : 'normal';
     const protocolDefinition = RUN_PROTOCOLS[protocol];
@@ -141,7 +142,7 @@ export class MainMenuScene extends Phaser.Scene {
     const briefingHeight = Math.max(300, Math.min(short ? 600 : 680, height - briefingTop - 18));
     this.createOperativeBriefing(briefingX, briefingTop, briefingWidth, briefingHeight, profile?.name ?? null);
 
-    const unlockedProtocols = profile ? getUnlockedProtocolIds(SaveSystem.getHighestRound()) : ['normal'] as const;
+    const unlockedProtocols = profile ? getUnlockedProtocolIds(SaveSystem.getHighestRound(), supremeHighestRound) : ['normal'] as const;
     const protocolY = tiny ? 128 : short ? 177 : 235;
     const protocolArrowWidth = tiny ? 42 : short ? 50 : 58;
     const protocolGap = tiny ? 7 : 10;
@@ -154,9 +155,9 @@ export class MainMenuScene extends Phaser.Scene {
 
     const selectProtocol = (direction: 1 | -1): boolean => {
       if (!profile) return true;
-      const next = cycleUnlockedProtocol(protocol, SaveSystem.getHighestRound(), direction);
+      const next = cycleUnlockedProtocol(protocol, SaveSystem.getHighestRound(), direction, supremeHighestRound);
       if (next === protocol && unlockedProtocols.length === 1) {
-        const nextLocked = RUN_PROTOCOL_IDS.find((id) => SaveSystem.getHighestRound() < RUN_PROTOCOLS[id].unlockHighestRound);
+        const nextLocked = RUN_PROTOCOL_IDS.find((id) => !isRunProtocolUnlocked(id, { highestRound: SaveSystem.getHighestRound(), supremeHighestRound }));
         if (nextLocked) onlineStatus.setText(`${RUN_PROTOCOLS[nextLocked].label} UNLOCKS AT ROUND ${RUN_PROTOCOLS[nextLocked].unlockHighestRound}`).setColor('#ffbd85');
         return false;
       }
