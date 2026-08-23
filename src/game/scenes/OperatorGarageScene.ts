@@ -13,6 +13,7 @@ import {
   formatCosmeticColorCode
 } from '../garage/GearLockerUi.ts';
 import { calculateGearLockerLayout, type GearLockerLayout } from '../garage/gearLockerLayout.ts';
+import { calculateModLibraryLayout, resolveModLibraryPage } from '../garage/modLibraryLayout.ts';
 import {
   addTerminalMount,
   createGarageEnvironment,
@@ -21,9 +22,11 @@ import {
 } from '../garage/GarageEnvironment.ts';
 import { getGarageDockModels, getModLibraryEntries, getModLibraryProgress } from '../garage/GarageState.ts';
 import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
+import { filterModDatabaseEntries, type ModDatabaseStatusFilter } from '../mods/ModDatabaseService.ts';
+import { ModDatabaseViewer } from '../mods/ModDatabaseViewer.ts';
 import { MOD_RARITY_COLORS, createModCardView } from '../mods/ModCardView.ts';
 import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, isRunProtocolUnlocked } from '../mods/modBalance.ts';
-import type { ModCardInstance, ModCategory, ModDefinition, ModRarity, RunProtocolId } from '../mods/types.ts';
+import type { ModCardInstance, ModCategory, ModRarity, RunProtocolId } from '../mods/types.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
 import { SaveSystem } from '../systems/SaveSystem.ts';
 import type { CosmeticOption } from '../types.ts';
@@ -36,13 +39,12 @@ import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.t
 import { calculateProtocolTerminalVerticalLayout } from '../garage/protocolTerminalLayout.ts';
 
 interface OperatorGarageSceneData { returnScene?: SceneKeyValue }
-type LibraryOwnershipFilter = 'all' | 'owned' | 'unowned' | 'corrupted';
 
 const LIBRARY_CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player', 'defense', 'bombSite', 'utility'];
 const LIBRARY_RARITIES: Array<'all' | ModRarity> = ['all', 'common', 'uncommon', 'rare', 'epic', 'legendary', 'supreme'];
-const LIBRARY_OWNERSHIP: LibraryOwnershipFilter[] = ['all', 'owned', 'unowned', 'corrupted'];
+const LIBRARY_OWNERSHIP: ModDatabaseStatusFilter[] = ['all', 'owned', 'discovered', 'undiscovered', 'corrupted'];
 const COSMETIC_CATEGORIES = Array.from(new Set(COSMETICS.map((item) => item.category)));
-const syntheticLibraryCard = (definition: ModDefinition): ModCardInstance => ({
+const syntheticLibraryCard = (definition: (typeof MOD_DEFINITIONS)[number]): ModCardInstance => ({
   instanceId: `library-${definition.id}`,
   modId: definition.id,
   acquiredAt: new Date(0).toISOString(),
@@ -76,6 +78,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private libraryOwnershipIndex = 0;
   private libraryPage = 0;
   private librarySelectedId = MOD_DEFINITIONS[0]?.id ?? '';
+  private libraryViewer: ModDatabaseViewer | null = null;
   private protocolTerminalFamily: 'overdrive' | 'supreme' | null = null;
   private cosmeticCategoryIndex = 0;
   private cosmeticPage = 0;
@@ -85,6 +88,9 @@ export class OperatorGarageScene extends Phaser.Scene {
   };
   private readonly handleResize = (): void => {
     this.scene.restart({ returnScene: this.returnScene });
+  };
+  private readonly handleLibraryWheel = (pointer: Phaser.Input.Pointer, _currentlyOver: Phaser.GameObjects.GameObject[], _deltaX: number, deltaY: number): void => {
+    if (this.libraryViewer?.containsDetailPoint(pointer.x, pointer.y)) this.libraryViewer.scrollBy(deltaY * 0.72);
   };
 
   constructor() { super(SceneKeys.Garage); }
@@ -672,79 +678,97 @@ export class OperatorGarageScene extends Phaser.Scene {
   private showLibrary(): void {
     const root = this.createOverlay('MOD LIBRARY // SYSTEM DATABASE');
     const { width, height } = this.scale;
+    const layout = calculateModLibraryLayout(width, height);
     const mods = SaveSystem.getModCollection();
     const progress = getModLibraryProgress(mods);
     const category = LIBRARY_CATEGORIES[this.libraryCategoryIndex];
     const rarity = LIBRARY_RARITIES[this.libraryRarityIndex];
     const ownership = LIBRARY_OWNERSHIP[this.libraryOwnershipIndex];
     const allEntries = getModLibraryEntries(mods);
-    const entries = allEntries.filter(({ definition, owned }) =>
-      (category === 'all' || definition.category === category)
-      && (rarity === 'all' || definition.rarity === rarity)
-      && (ownership === 'all' || ownership === 'owned' && owned || ownership === 'unowned' && !owned || ownership === 'corrupted' && definition.variant === 'corrupted')
-    );
-    if (!entries.some((entry) => entry.definition.id === this.librarySelectedId)) this.librarySelectedId = entries[0]?.definition.id ?? '';
-    const toolbarWidth = Math.min(170, (width * 0.64 - 58) / 3);
-    const toolbarY = 83;
-    root.add(createButton(this, 20 + toolbarWidth / 2, toolbarY, `TYPE: ${category.toUpperCase()}`, () => { this.libraryCategoryIndex = (this.libraryCategoryIndex + 1) % LIBRARY_CATEGORIES.length; this.libraryPage = 0; this.showLibrary(); }, toolbarWidth));
-    root.add(createButton(this, 28 + toolbarWidth * 1.5, toolbarY, `RARITY: ${rarity.toUpperCase()}`, () => { this.libraryRarityIndex = (this.libraryRarityIndex + 1) % LIBRARY_RARITIES.length; this.libraryPage = 0; this.showLibrary(); }, toolbarWidth));
-    root.add(createButton(this, 36 + toolbarWidth * 2.5, toolbarY, `STATUS: ${ownership.toUpperCase()}`, () => { this.libraryOwnershipIndex = (this.libraryOwnershipIndex + 1) % LIBRARY_OWNERSHIP.length; this.libraryPage = 0; this.showLibrary(); }, toolbarWidth));
-    root.add(this.add.text(46 + toolbarWidth * 3, toolbarY, `${progress.discovered} / ${progress.total} DISCOVERED`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: width < 760 ? '13px' : '17px', fontStyle: 'bold', color: '#9effc9'
-    }).setOrigin(0, 0.5));
+    const entries = filterModDatabaseEntries(allEntries, { category, rarity, status: ownership });
+    const toolbarGap = layout.compact ? 8 : 12;
+    [
+      { label: `TYPE: ${category.toUpperCase()}`, action: () => { this.libraryCategoryIndex = (this.libraryCategoryIndex + 1) % LIBRARY_CATEGORIES.length; } },
+      { label: `RARITY: ${rarity.toUpperCase()}`, action: () => { this.libraryRarityIndex = (this.libraryRarityIndex + 1) % LIBRARY_RARITIES.length; } },
+      { label: `STATUS: ${ownership.toUpperCase()}`, action: () => { this.libraryOwnershipIndex = (this.libraryOwnershipIndex + 1) % LIBRARY_OWNERSHIP.length; } }
+    ].forEach((control, index) => {
+      const x = layout.grid.x + layout.toolbarButtonWidth / 2 + index * (layout.toolbarButtonWidth + toolbarGap);
+      root.add(createModCollectionButton(this, x, layout.toolbarY, control.label, () => {
+        control.action();
+        this.libraryPage = 0;
+        this.showLibrary();
+      }, layout.toolbarButtonWidth, index === 2 ? 'utility' : 'standard', {
+        height: layout.toolbarButtonHeight,
+        fontSize: layout.compact ? 11 : 13
+      }));
+    });
 
-    const detailWidth = Phaser.Math.Clamp(width * 0.28, 190, 330);
-    const gridLeft = 22;
-    const gridRight = width - detailWidth - 28;
-    const gridWidth = gridRight - gridLeft;
-    const cardGap = 10;
-    const columns = Math.max(2, Math.floor(gridWidth / 122));
-    const cardWidth = Phaser.Math.Clamp((gridWidth - cardGap * (columns - 1)) / columns, 82, 118);
-    const cardHeight = cardWidth * 1.4;
-    const gridTop = 119;
-    const rows = Math.max(1, Math.floor((height - gridTop - 58) / (cardHeight + cardGap)));
-    const perPage = columns * rows;
-    const maxPage = Math.max(0, Math.ceil(entries.length / perPage) - 1);
-    this.libraryPage = Math.min(this.libraryPage, maxPage);
-    entries.slice(this.libraryPage * perPage, (this.libraryPage + 1) * perPage).forEach((entry, index) => {
-      const x = gridLeft + cardWidth / 2 + index % columns * (cardWidth + cardGap);
-      const y = gridTop + cardHeight / 2 + Math.floor(index / columns) * (cardHeight + cardGap);
+    root.add(createModCollectionFrame(this, layout.grid, 'DATABASE INDEX // THREE-ROW ARCHIVE', 0x55eaff));
+    const frameHeaderHeight = getModCollectionFrameHeaderHeight(layout.grid.height);
+    root.add(this.add.text(layout.grid.x + layout.grid.width - 36, layout.grid.y + frameHeaderHeight / 2 + 1, `${progress.discovered} / ${progress.total} DISCOVERED`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 13 : 16}px`, fontStyle: 'bold', color: '#9effc9'
+    }).setOrigin(1, 0.5));
+
+    const pageSlice = resolveModLibraryPage(entries, this.libraryPage, layout.perPage, this.librarySelectedId, (entry) => entry.definition.id);
+    const pageCount = pageSlice.pageCount;
+    this.libraryPage = pageSlice.page;
+    this.librarySelectedId = pageSlice.selectedId;
+    const pageEntries = pageSlice.entries;
+    const usedWidth = layout.columns * layout.cardWidth + (layout.columns - 1) * layout.cardGapX;
+    const cardStartX = layout.grid.x + (layout.grid.width - usedWidth) / 2;
+    pageEntries.forEach((entry, index) => {
+      const x = cardStartX + layout.cardWidth / 2 + index % layout.columns * (layout.cardWidth + layout.cardGapX);
+      const y = layout.gridContentTop + layout.cardHeight / 2 + Math.floor(index / layout.columns) * (layout.cardHeight + layout.cardGapY);
       const card = entry.card ?? syntheticLibraryCard(entry.definition);
-      const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: cardWidth, height: cardHeight, compact: true, selected: entry.definition.id === this.librarySelectedId });
-      view.setDepth(2002).setAlpha(entry.owned ? 1 : 0.48).on('pointerdown', () => {
+      const view = createModCardView(this, x, y, card, card.upgradeLevel, {
+        width: layout.cardWidth,
+        height: layout.cardHeight,
+        compact: true,
+        selected: entry.definition.id === this.librarySelectedId,
+        rankLabel: entry.owned ? undefined : 'R—'
+      });
+      view.setDepth(2002).setAlpha(entry.status === 'owned' ? 1 : entry.status === 'discovered' ? 0.72 : 0.48).on('pointerdown', () => {
         this.audio.playSfx('menu');
         this.librarySelectedId = entry.definition.id;
         this.showLibrary();
       });
       root.add(view);
-      if (!entry.owned) {
-        const marker = this.add.text(x, y + cardHeight * 0.35, 'NOT OWNED', { fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.max(7, cardWidth * 0.07)}px`, color: '#ff9cac', backgroundColor: '#160812' }).setOrigin(0.5).setDepth(2004);
+      if (entry.status !== 'owned') {
+        const marker = this.add.text(x, y + layout.cardHeight * 0.36, entry.status === 'discovered' ? 'DISCOVERED // NOT OWNED' : 'UNDISCOVERED', {
+          fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(layout.cardWidth * 0.064, 8, 11)}px`,
+          color: entry.status === 'discovered' ? '#ffd676' : '#ff9cac', backgroundColor: '#160812'
+        }).setOrigin(0.5).setDepth(2004).setPadding(5, 2);
         root.add(marker);
       }
     });
-    if (!entries.length) root.add(this.add.text((gridLeft + gridRight) / 2, height / 2, 'NO MODS MATCH THIS FILTER', { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: '#607d8b' }).setOrigin(0.5));
-    const previous = createButton(this, gridLeft + 52, height - 35, '◀', () => { this.libraryPage = Math.max(0, this.libraryPage - 1); this.showLibrary(); }, 82);
-    const next = createButton(this, gridRight - 52, height - 35, '▶', () => { this.libraryPage = Math.min(maxPage, this.libraryPage + 1); this.showLibrary(); }, 82);
+    if (!entries.length) root.add(this.add.text(layout.grid.x + layout.grid.width / 2, layout.grid.y + layout.grid.height / 2, 'NO MODS MATCH THIS FILTER', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 15 : 18}px`, color: '#607d8b'
+    }).setOrigin(0.5));
+    const previous = createModCollectionButton(this, layout.grid.x + 58, layout.paginationY, '◀', () => {
+      this.libraryPage = Math.max(0, this.libraryPage - 1);
+      this.showLibrary();
+    }, layout.compact ? 82 : 96, 'standard', { height: layout.compact ? 34 : 40, fontSize: layout.compact ? 13 : 16 });
+    const next = createModCollectionButton(this, layout.grid.x + layout.grid.width - 58, layout.paginationY, '▶', () => {
+      this.libraryPage = Math.min(pageCount - 1, this.libraryPage + 1);
+      this.showLibrary();
+    }, layout.compact ? 82 : 96, 'standard', { height: layout.compact ? 34 : 40, fontSize: layout.compact ? 13 : 16 });
     if (this.libraryPage === 0) disableButton(previous);
-    if (this.libraryPage === maxPage) disableButton(next);
-    root.add([previous, this.add.text((gridLeft + gridRight) / 2, height - 35, `PAGE ${this.libraryPage + 1} / ${maxPage + 1}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#add7e4' }).setOrigin(0.5), next]);
-    const selected = entries.find((entry) => entry.definition.id === this.librarySelectedId) ?? allEntries.find((entry) => entry.definition.id === this.librarySelectedId);
-    this.createLibraryDetails(root, width - detailWidth / 2 - 12, 112, detailWidth - 10, height - 132, selected?.definition, selected?.owned ?? false, selected?.card ?? null);
-  }
+    if (this.libraryPage === pageCount - 1) disableButton(next);
+    root.add([previous, this.add.text(layout.grid.x + layout.grid.width / 2, layout.paginationY, `PAGE ${this.libraryPage + 1} / ${pageCount}  //  ${layout.columns} × 3`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 14 : 17}px`, color: '#add7e4', fontStyle: 'bold'
+    }).setOrigin(0.5), next]);
 
-  private createLibraryDetails(root: Phaser.GameObjects.Container, x: number, y: number, width: number, height: number, definition?: ModDefinition, owned = false, ownedCard: ModCardInstance | null = null): void {
-    root.add(this.add.rectangle(x, y + height / 2, width, height, 0x081722, 0.94).setStrokeStyle(2, definition ? MOD_RARITY_COLORS[definition.rarity] : 0x4edff1, 0.55));
-    if (!definition) return;
-    const card = ownedCard ?? syntheticLibraryCard(definition);
-    const cardWidth = Math.min(174, width - 34, Math.max(104, (height - 150) / 1.4));
-    const cardHeight = cardWidth * 1.4;
-    const cardY = y + 12 + cardHeight / 2;
-    const view = createModCardView(this, x, cardY, card, card.upgradeLevel, { width: cardWidth, height: cardHeight, interactive: false });
-    view.setDepth(2003).setAlpha(owned ? 1 : 0.62);
-    root.add(view);
-    const copyY = cardY + cardHeight / 2 + 12;
-    root.add(this.add.text(x, copyY, `${owned ? 'OWNED' : 'UNDISCOVERED'} // ${definition.category.toUpperCase()} // ${definition.rarity.toUpperCase()}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', fontStyle: 'bold', color: owned ? '#7effb6' : '#ff9daf', align: 'center' }).setOrigin(0.5, 0).setWordWrapWidth(width - 22, true));
-    root.add(this.add.text(x, copyY + 24, definition.description, { fontFamily: 'Rajdhani, sans-serif', fontSize: width < 230 ? '12px' : '14px', color: '#c5deea', align: 'center', lineSpacing: 1 }).setOrigin(0.5, 0).setWordWrapWidth(width - 24, true).setMaxLines(5));
+    const selected = pageEntries.find((entry) => entry.definition.id === this.librarySelectedId);
+    if (selected) {
+      this.libraryViewer = new ModDatabaseViewer(this, root, layout.viewer, selected);
+      this.input.on('wheel', this.handleLibraryWheel);
+    } else {
+      root.add(this.add.rectangle(layout.viewer.x, layout.viewer.y, layout.viewer.width, layout.viewer.height, 0x06131e, 0.975)
+        .setOrigin(0, 0).setStrokeStyle(2, 0x55eaff, 0.5));
+      root.add(this.add.text(layout.viewer.x + layout.viewer.width / 2, layout.viewer.y + layout.viewer.height / 2, 'SELECT A MOD DATABASE ENTRY', {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 14 : 18}px`, color: '#6c95a3'
+      }).setOrigin(0.5));
+    }
   }
 
   private showCosmetics(): void {
@@ -1377,6 +1401,9 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private closeOverlay(): void {
+    this.input.off('wheel', this.handleLibraryWheel);
+    this.libraryViewer?.destroy();
+    this.libraryViewer = null;
     this.cosmeticPreviewColorTimer?.remove(false);
     this.cosmeticPreviewColorTimer = null;
     this.cosmeticPreviewColorTargets = [];

@@ -27,6 +27,7 @@ export interface ModCardViewOptions {
   interactive?: boolean;
   equipped?: boolean;
   duplicateCount?: number;
+  rankLabel?: string;
   motion?: HudAnimationLevel;
   presentationState?: SupremeCardPresentationState;
 }
@@ -60,16 +61,16 @@ export const createModCardView = (
   const container = scene.add.container(x, y);
   const compact = options.compact === true;
   const rarityFontSize = Math.round(compact
-    ? Phaser.Math.Clamp(width * 0.068, 7, 10)
+    ? Phaser.Math.Clamp(width * 0.068, 8, 12)
     : Phaser.Math.Clamp(width * 0.067, 12, 14));
   const nameFontSize = Math.round(compact
-    ? Phaser.Math.Clamp(width * 0.082, 8, 12)
+    ? Phaser.Math.Clamp(width * 0.082, 10, 15)
     : Phaser.Math.Clamp(width * 0.081, 15, 18));
   const statFontSize = Math.round(compact
-    ? Phaser.Math.Clamp(width * 0.074, 8, 11)
+    ? Phaser.Math.Clamp(width * 0.074, 9, 13)
     : Phaser.Math.Clamp(width * 0.072, 14, 16));
   const infusionFontSize = Math.round(compact
-    ? Phaser.Math.Clamp(width * 0.064, 7, 10)
+    ? Phaser.Math.Clamp(width * 0.064, 8, 11)
     : Phaser.Math.Clamp(width * 0.06, 11, 13));
   const shadow = scene.add.rectangle(4, 6, width, height, 0x000000, 0.45).setOrigin(0.5);
   const body = scene.add.rectangle(0, 0, width, height, corrupted ? 0x190817 : supreme ? 0x030c14 : 0x091521, 0.97)
@@ -143,6 +144,10 @@ export const createModCardView = (
     container.add(scene.add.circle(-width / 2 + 15 + dot * rankDotGap, -height / 2 + 15, rankDotRadius, dot < illuminatedDots ? rarityColor : 0x172331, dot < illuminatedDots ? 1 : 0.7)
       .setStrokeStyle(1, rarityColor, 0.9));
   }
+  const rankLabel = scene.add.text(-width / 2 + 15 + rankDotGap * 2 + rankDotRadius + 5, -height / 2 + 15, options.rankLabel ?? (compact ? `R${rank}` : `R${rank}/${definition.maxRank}`), {
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? Phaser.Math.Clamp(width * 0.06, 8, 11) : Phaser.Math.Clamp(width * 0.055, 11, 13)}px`,
+    fontStyle: 'bold', color: '#b9dce5'
+  }).setOrigin(0, 0.5).setVisible(!compact || width >= 112);
   const rarity = scene.add.text(width / 2 - 8, -height / 2 + 9, corrupted ? 'CORRUPTED' : definition.rarity.toUpperCase(), {
     fontFamily: supreme ? 'Orbitron, sans-serif' : 'Rajdhani, sans-serif', fontSize: `${rarityFontSize}px`, fontStyle: 'bold', color: corrupted ? '#ff5bd9' : Phaser.Display.Color.IntegerToColor(rarityColor).rgba,
     letterSpacing: supreme ? 1 : 0
@@ -211,7 +216,7 @@ export const createModCardView = (
       container.once('destroy', () => iconGlitchTween.remove());
     }
   }
-  container.add([rarity, iconRing, icon, name, stat, infusion]);
+  container.add([rankLabel, rarity, iconRing, icon, name, stat, infusion]);
 
   if (options.equipped) {
     const markerX = -width / 2 + 15;

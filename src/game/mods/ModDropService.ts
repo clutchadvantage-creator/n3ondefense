@@ -58,6 +58,25 @@ export const getModRarityProbability = (request: ModDropRequest, rarity: ModRari
   return totalWeight > 0 ? rarityWeight / totalWeight : 0;
 };
 
+/**
+ * Returns the selected definition's share of the exact weighted pool used by
+ * rollModDrop. Keeping this beside the roll implementation lets read-only UI
+ * surfaces explain acquisition odds without recreating balancing math.
+ */
+export const getModDefinitionProbability = (request: ModDropRequest, definitionId: string): number => {
+  let totalWeight = 0;
+  let definitionWeight = 0;
+  for (const definition of MOD_DEFINITIONS) {
+    const weight = Math.max(0, getModDefinitionWeight(definition, request));
+    totalWeight += weight;
+    if (definition.id === definitionId) definitionWeight = weight;
+  }
+  return totalWeight > 0 ? definitionWeight / totalWeight : 0;
+};
+
+export const getEffectiveModDefinitionDropChance = (request: ModDropRequest, definitionId: string): number =>
+  (request.guaranteed ? 1 : getModDropChance(request)) * getModDefinitionProbability(request, definitionId);
+
 export const getEffectiveModRarityDropChance = (request: ModDropRequest, rarity: ModRarity): number =>
   (request.guaranteed ? 1 : getModDropChance(request)) * getModRarityProbability(request, rarity);
 

@@ -1,7 +1,8 @@
 import { COSMETICS } from '../../data/cosmetics.ts';
 import { MOD_FOCUS_CATEGORIES, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import type { ModFocusSignalId, RunContractId, RunSetupSelection } from '../economy/types.ts';
-import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
+import { MOD_BY_ID } from '../mods/definitions.ts';
+import { getModDatabaseEntries } from '../mods/ModDatabaseService.ts';
 import { createDefaultModLoadout, equipMod } from '../mods/ModInventoryService.ts';
 import { isRunProtocolId, isRunProtocolUnlocked } from '../mods/modBalance.ts';
 import type { LocalModCollection, ModCardInstance, ModSlot, RunProtocolId } from '../mods/types.ts';
@@ -99,15 +100,11 @@ export const getGarageDockModels = (mods: LocalModCollection): GarageDockModel[]
   });
 };
 
-export const getModLibraryEntries = (mods: LocalModCollection) => MOD_DEFINITIONS.map((definition) => ({
-  definition,
-  owned: mods.inventory[definition.id]?.discovered === true || mods.cards.some((entry) => entry.modId === definition.id),
-  card: mods.cards.filter((entry) => entry.modId === definition.id).sort((a, b) => b.upgradeLevel - a.upgradeLevel)[0] ?? null
-}));
+export const getModLibraryEntries = (mods: LocalModCollection) => getModDatabaseEntries(mods);
 
 export const getModLibraryProgress = (mods: LocalModCollection): { discovered: number; total: number } => {
   const entries = getModLibraryEntries(mods);
-  return { discovered: entries.filter((entry) => entry.owned).length, total: entries.length };
+  return { discovered: entries.filter((entry) => entry.discovered).length, total: entries.length };
 };
 
 export const getGarageWallet = (save: LocalPlayerSave): { credits: number; coreTokens: number; plasmaChips: number; fluxCores: number } => ({

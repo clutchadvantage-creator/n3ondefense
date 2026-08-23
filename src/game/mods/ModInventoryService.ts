@@ -5,6 +5,26 @@ import { MOD_INFUSION_BY_ID } from './infusions.ts';
 import { hasLegendaryInAnotherSlot } from './ModLoadoutRules.ts';
 
 export interface ModOperationResult { ok: boolean; message: string; }
+export interface ModUpgradeCost { credits: number; coreTokens: number }
+export interface ModRecycleValue { credits: number; plasmaChips: number }
+
+export const getModUpgradeCost = (modId: string, targetRank: 1 | 2 | 3): ModUpgradeCost | null => {
+  const definition = MOD_BY_ID.get(modId);
+  if (!definition) return null;
+  return {
+    credits: MOD_BALANCE.rankCreditCosts[targetRank],
+    coreTokens: MOD_BALANCE.rankCoreTokenCostsByRarity[definition.rarity][targetRank]
+  };
+};
+
+export const getModRecycleValue = (modId: string): ModRecycleValue | null => {
+  const definition = MOD_BY_ID.get(modId);
+  if (!definition) return null;
+  return {
+    credits: MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity],
+    plasmaChips: MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity]
+  };
+};
 
 export const createDefaultModLoadout = (): ModLoadoutSlots => ({ weapon: null, player: null, defense: null, bombSite: null, wildcard: null });
 export const createDefaultModCollection = (): LocalModCollection => ({
@@ -92,7 +112,7 @@ export const sellDuplicateMod = (mods: LocalModCollection, instanceId: string): 
   const card = mods.cards.find((entry) => entry.instanceId === instanceId);
   const definition = card ? MOD_BY_ID.get(card.modId) : undefined;
   if (!card || !definition) return { ok: false, message: 'Card not found.' };
-  const credits = MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity];
+  const credits = getModRecycleValue(definition.id)?.credits ?? 0;
   removeCard(mods, card);
   return { ok: true, message: `Card sold for ${credits} credits.`, credits };
 };
@@ -101,7 +121,7 @@ export const recycleDuplicateMod = (mods: LocalModCollection, instanceId: string
   const card = mods.cards.find((entry) => entry.instanceId === instanceId);
   const definition = card ? MOD_BY_ID.get(card.modId) : undefined;
   if (!card || !definition) return { ok: false, message: 'Card not found.' };
-  const plasmaChips = MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity];
+  const plasmaChips = getModRecycleValue(definition.id)?.plasmaChips ?? 0;
   removeCard(mods, card);
   mods.plasmaChips += plasmaChips;
   return { ok: true, message: `Card recycled into ${plasmaChips} Plasma Chip${plasmaChips === 1 ? '' : 's'}.`, plasmaChips };
@@ -154,8 +174,9 @@ export const rankUpMod = (mods: LocalModCollection, modId: string, credits: numb
   if (!targetCard) return { ok: false, message: 'Card not found.' };
   if (targetCard.upgradeLevel >= 3) return { ok: false, message: 'Mod card is fully upgraded.' };
   const nextRank = (targetCard.upgradeLevel + 1) as 1 | 2 | 3;
-  const creditCost = MOD_BALANCE.rankCreditCosts[nextRank];
-  const coreTokenCost = MOD_BALANCE.rankCoreTokenCostsByRarity[definition.rarity][nextRank];
+  const upgradeCost = getModUpgradeCost(definition.id, nextRank);
+  if (!upgradeCost) return { ok: false, message: 'Mod upgrade data is unavailable.' };
+  const { credits: creditCost, coreTokens: coreTokenCost } = upgradeCost;
   if (credits < creditCost) return { ok: false, message: `Requires ${creditCost.toLocaleString()} Credits.`, cost: creditCost, coreTokenCost };
   if (coreTokens < coreTokenCost) return { ok: false, message: `Requires ${coreTokenCost.toLocaleString()} Core Tokens.`, cost: creditCost, coreTokenCost };
   targetCard.upgradeLevel = nextRank;
