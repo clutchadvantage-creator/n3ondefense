@@ -25,6 +25,22 @@ export interface ModLibraryLayout {
   perPage: number;
 }
 
+export interface ModDatabaseTypography {
+  dossierTitle: number;
+  status: number;
+  identityLabel: number;
+  identityName: number;
+  identityRowLabel: number;
+  identityRowValue: number;
+  sectionHeading: number;
+  body: number;
+  secondary: number;
+  dataLabel: number;
+  dataValue: number;
+  table: number;
+  lineSpacing: number;
+}
+
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.max(minimum, Math.min(maximum, value));
 
@@ -89,6 +105,27 @@ export const calculateModLibraryLayout = (width: number, height: number): ModLib
     cardGapX,
     cardGapY,
     perPage: columns * 3
+  };
+};
+
+/** Typography is width-aware but deliberately independent of viewport height.
+ * A shorter dossier shows fewer lines and scrolls; it never shrinks its facts. */
+export const calculateModDatabaseTypography = (viewerWidth: number): ModDatabaseTypography => {
+  const narrow = viewerWidth < 540;
+  return {
+    dossierTitle: narrow ? 14 : 16,
+    status: narrow ? 14 : 16,
+    identityLabel: narrow ? 14 : 16,
+    identityName: narrow ? 20 : 23,
+    identityRowLabel: narrow ? 13 : 15,
+    identityRowValue: narrow ? 15 : 17,
+    sectionHeading: narrow ? 16 : 18,
+    body: narrow ? 16 : 18,
+    secondary: narrow ? 14 : 16,
+    dataLabel: narrow ? 14 : 15,
+    dataValue: narrow ? 16 : 18,
+    table: narrow ? 14 : 15,
+    lineSpacing: narrow ? 4 : 5
   };
 };
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  calculateModDatabaseTypography,
   calculateModLibraryLayout,
   resolveModLibraryPage
 } from '../src/game/garage/modLibraryLayout.ts';
@@ -36,6 +37,27 @@ test('Mod Library layout always uses three rows and invests available height in 
     assert.ok(layout.viewer.x > layout.grid.x + layout.grid.width);
     assert.ok(layout.viewer.x + layout.viewer.width <= width);
   }
+});
+
+test('Technical Dossier typography remains readable and never shrinks to fit a shorter viewport', () => {
+  for (const [width, height] of [[1920, 1080], [1600, 900], [1366, 768]]) {
+    const layout = calculateModLibraryLayout(width, height);
+    const typography = calculateModDatabaseTypography(layout.viewer.width);
+    assert.ok(typography.body >= 16, `${width}x${height} body copy should remain readable`);
+    assert.ok(typography.secondary >= 14, `${width}x${height} secondary copy should remain readable`);
+    assert.ok(typography.dataValue >= 16, `${width}x${height} data values should remain readable`);
+    assert.ok(typography.table >= 14, `${width}x${height} table values should remain readable`);
+    assert.ok(typography.sectionHeading >= 16, `${width}x${height} section headings should remain prominent`);
+  }
+
+  const tallViewer = calculateModLibraryLayout(1600, 1080).viewer;
+  const shortViewer = calculateModLibraryLayout(1600, 768).viewer;
+  assert.equal(tallViewer.width, shortViewer.width);
+  assert.deepEqual(
+    calculateModDatabaseTypography(tallViewer.width),
+    calculateModDatabaseTypography(shortViewer.width),
+    'a shorter viewport scrolls instead of reducing Technical Dossier typography'
+  );
 });
 
 test('Library page resolution clamps filtered pages and never leaves a stale selection', () => {
