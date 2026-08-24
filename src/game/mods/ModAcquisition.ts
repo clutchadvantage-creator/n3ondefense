@@ -13,6 +13,7 @@ export interface ModAcquisitionPresentation {
   sourceScreenX: number;
   sourceScreenY: number;
   leadInMs?: number;
+  contextLine?: string;
 }
 
 /** Premium reveals are prioritized Supreme -> Legendary -> standard while

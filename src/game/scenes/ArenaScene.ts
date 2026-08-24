@@ -63,6 +63,7 @@ import { MOD_BY_ID } from '../mods/definitions.ts';
 import { ModAcquisitionPresenter } from '../mods/ModAcquisitionPresenter.ts';
 import { MOD_PICKUP_REVEAL_LEAD_IN_MS } from '../mods/ModAcquisition.ts';
 import { BombsiteModSystem } from '../mods/BombsiteModSystem.ts';
+import { SupremeModEffectSystem } from '../mods/SupremeModEffectSystem.ts';
 import { MOD_FOCUS_CATEGORIES, RUN_CONTRACT_IDS, getContract, getRoundCompletionCredits } from '../economy/economyBalance.ts';
 import type { AccountProgressionTier, ModFocusSignalId, RunContractId } from '../economy/types.ts';
 import { GameplayTelemetryRecorder, type PickupDropSource } from '../telemetry/GameplayTelemetryRecorder.ts';
@@ -103,6 +104,7 @@ import {
   updateGameplayModPickupVisual
 } from '../loot/GameplayPickupPresentation.ts';
 import { getSupremeStage, isSupremeProtocol, isSupremeTerminalRound } from '../progression/SupremeProgression.ts';
+import { resolveSupremeBridgeReward } from '../progression/SupremeBridgeReward.ts';
 import { SupremeConstellationFloor } from '../vfx/SupremeConstellationFloor.ts';
 import { SupremeFinaleController } from '../bosses/SupremeFinaleController.ts';
 import { SupremeFinaleOverlay } from '../bosses/SupremeFinaleOverlay.ts';
@@ -346,6 +348,7 @@ export class ArenaScene extends Phaser.Scene {
   private pathfinder!: GridPathfinder;
   private bombSites!: BombSiteManager;
   private bombsiteMods!: BombsiteModSystem;
+  private supremeModEffects: SupremeModEffectSystem | null = null;
   private laserSecurity: LaserSecuritySystem | null = null;
   private bombletHazard: BombletHazardSystem | null = null;
   private gasHazard: GasHazardSystem | null = null;
@@ -703,7 +706,7 @@ export class ArenaScene extends Phaser.Scene {
       this.projectileWidth = 8;
       this.projectileHeight = 8;
     }
-    this.modRuntime = new ModRuntime(SaveSystem.getModCollection(), session?.equippedMods);
+    this.modRuntime = new ModRuntime(SaveSystem.getModCollection(), session?.equippedMods, this.protocol);
     this.pickupPresentation = new GameplayPickupPresentation(
       this,
       () => this.modRuntime.hasInfusion('pickup-orbit')
@@ -943,6 +946,9 @@ export class ArenaScene extends Phaser.Scene {
         else this.audio.playSfx('beep');
       },
       playTotemCue: (cue) => this.audio.playSfx(cue === 'entrance' ? 'totemEntrance' : 'totemPulse')
+    });
+    this.supremeModEffects = new SupremeModEffectSystem(this, this.modRuntime, {
+      playPulseCue: () => this.audio.playSfx('totemPulse')
     });
     this.laserSecurity = new LaserSecuritySystem(
       this,
@@ -1394,6 +1400,7 @@ export class ArenaScene extends Phaser.Scene {
       if (!this.tutorialDirector?.isActive()) this.arcadeController?.update(delta);
     }
     this.bombsiteMods.update(now, delta, this.bombSites.getActiveBombSites(), this.enemies, this.player);
+    this.supremeModEffects?.update(now, this.enemies, this.bombSites.getActiveBombSites(), this.player);
     this.updateHomingMissiles(delta);
     this.updateProjectiles(delta);
     this.updateAbilities(now, dt);
@@ -1741,7 +1748,9 @@ export class ArenaScene extends Phaser.Scene {
 
     const crit = Math.random() < this.player.weapon.critChance;
     const criticalMultiplier = WEAPON_BALANCE.critMultiplier * this.modRuntime.multiplier('weaponCritDamage');
-    const damage = this.player.weapon.damage * this.player.damageMultiplier * (crit ? criticalMultiplier : 1);
+    const damage = this.player.weapon.damage * this.player.damageMultiplier
+      * this.modRuntime.supremePickupSurgeDamageMultiplier(now)
+      * (crit ? criticalMultiplier : 1);
     const ammoMode = this.temporaryAmmo.activeMode(now);
     const potentialDamage = ammoMode === 'scattershot'
       ? damage * TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier * TEMPORARY_AMMO_BALANCE.scattershot.pelletCount
@@ -4059,6 +4068,9 @@ export class ArenaScene extends Phaser.Scene {
 
   private collectPickup(type: PickupType, source: Pickup['source'], explicitAmount?: number): void {
     this.audio.playSfx(GAMEPLAY_PICKUP_SFX_BY_TYPE[type]);
+    if (this.modRuntime.triggerSupremePickupSurge(this.time.now, type)) {
+      this.supremeModEffects?.showPickupSurge(this.time.now, this.player.x, this.player.y);
+    }
     let requestedRestoration = 0;
     let appliedRestoration = 0;
     if (type === 'health') {
@@ -4093,8 +4105,8 @@ export class ArenaScene extends Phaser.Scene {
       this.player.buffs.rapidFireUntil = this.time.now + buffDurationMs;
     }
     if (type === 'ricochet') this.player.buffs.ricochetUntil = this.time.now + buffDurationMs;
-    if (type === 'grenadeRounds') this.temporaryAmmo.activate('grenade', this.time.now, this.isOverdriveProtocol());
-    if (type === 'scattershot') this.temporaryAmmo.activate('scattershot', this.time.now, this.isOverdriveProtocol());
+    if (type === 'grenadeRounds') this.temporaryAmmo.activate('grenade', this.time.now, this.isOverdriveProtocol(), this.modRuntime.multiplier('buffDuration'));
+    if (type === 'scattershot') this.temporaryAmmo.activate('scattershot', this.time.now, this.isOverdriveProtocol(), this.modRuntime.multiplier('buffDuration'));
     if (type === 'credits') {
       const credits = explicitAmount ?? this.scaleModCredits(PICKUP_BALANCE.credits);
       this.roundCredits += credits;
@@ -4869,7 +4881,7 @@ export class ArenaScene extends Phaser.Scene {
     this.modPickups.length = writeIndex;
   }
 
-  private awardResolvedMod(definition: ModDefinition, source: ModDropSource, x: number, y: number, leadInMs = 0): boolean {
+  private awardResolvedMod(definition: ModDefinition, source: ModDropSource, x: number, y: number, leadInMs = 0, contextLine?: string): boolean {
     const duplicate = Boolean(SaveSystem.getModCollection().inventory[definition.id]?.discovered);
     const result = SaveSystem.addMod(definition.id);
     if (!result.ok) return false;
@@ -4884,7 +4896,8 @@ export class ArenaScene extends Phaser.Scene {
         duplicate,
         sourceScreenX: sourcePosition.x,
         sourceScreenY: sourcePosition.y,
-        leadInMs
+        leadInMs,
+        contextLine
       });
       this.modAcquisitionPresenter?.whenIdle(() => {
         TutorialEventBus.emit('mod.revealed', { modId: definition.id, rarity: definition.rarity, duplicate });
@@ -4893,6 +4906,33 @@ export class ArenaScene extends Phaser.Scene {
       });
     }
     return true;
+  }
+
+  private tryAwardSupremeBridge(completedRound: number): void {
+    const collection = SaveSystem.getModCollection();
+    const resolution = resolveSupremeBridgeReward({
+      protocol: this.protocol,
+      completedRound,
+      seed: this.layout.seed,
+      alreadyAwarded: SaveSystem.hasRegularOverdriveSupremeBridgeAwarded(),
+      ownedModIds: Object.keys(collection.inventory)
+    });
+    if (!resolution.markSatisfied) return;
+    if (!resolution.modId) {
+      SaveSystem.markRegularOverdriveSupremeBridgeAwarded();
+      return;
+    }
+    const definition = MOD_BY_ID.get(resolution.modId);
+    if (!definition || definition.rarity !== 'supreme') return;
+    const awarded = this.awardResolvedMod(
+      definition,
+      'milestone',
+      this.player.x,
+      this.player.y,
+      0,
+      'UNLOCKED FOR SUPREME OVERDRIVE'
+    );
+    if (awarded) SaveSystem.markRegularOverdriveSupremeBridgeAwarded();
   }
 
   private modRevealScreenPosition(worldX: number, worldY: number): { x: number; y: number } {
@@ -5099,6 +5139,7 @@ export class ArenaScene extends Phaser.Scene {
     const completedSeed = this.layout.seed;
     const completedTemplate = this.layout.template;
     this.tryAwardMod('milestone', isGuaranteedMilestone(completedRound));
+    this.tryAwardSupremeBridge(completedRound);
 
     const rawRewardCredits = this.roundCredits + this.scaleModCredits(getRoundCompletionCredits(completedRound));
     const rewardMultiplier = this.currentRewardMultiplier();
@@ -7189,6 +7230,8 @@ export class ArenaScene extends Phaser.Scene {
     this.gasHazard = null;
     this.fluxCores?.destroy();
     this.fluxCores = null;
+    this.supremeModEffects?.destroy();
+    this.supremeModEffects = null;
     this.bombsiteMods?.destroy();
     for (const e of this.enemies) {
       this.destroyEnemyColliders(e);
@@ -7271,6 +7314,8 @@ export class ArenaScene extends Phaser.Scene {
     this.hidePauseMenu();
     this.hideEquippedModsViewer();
     this.bombsiteMods?.destroy();
+    this.supremeModEffects?.destroy();
+    this.supremeModEffects = null;
     this.bombSites?.destroy();
     this.laserSecurity?.destroy();
     this.laserSecurity = null;

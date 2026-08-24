@@ -103,7 +103,15 @@ export class ModDatabaseViewer {
     identityY = this.addFixedLabel(identityX, identityY, identityWidth, 'MOD IDENTITY', '#ff7bd5', typography.identityLabel);
     identityY = this.addFixedValue(identityX, identityY, identityWidth, entry.definition.name.toUpperCase(), '#f4fdff', typography.identityName);
     identityY = this.addFixedRow(identityX, identityY + 3, identityWidth, 'RARITY', entry.definition.rarity.toUpperCase(), rarityColor, typography);
-    identityY = this.addFixedRow(identityX, identityY, identityWidth, 'SLOT', CATEGORY_LABELS[entry.definition.category], 0x62f4ff, typography);
+    identityY = this.addFixedRow(
+      identityX,
+      identityY,
+      identityWidth,
+      'SLOT',
+      entry.definition.rarity === 'supreme' ? 'UNIVERSAL // ANY SLOT' : CATEGORY_LABELS[entry.definition.category],
+      0x62f4ff,
+      typography
+    );
     identityY = this.addFixedRow(identityX, identityY, identityWidth, 'RANK', entry.currentRank === null ? 'NOT OWNED' : `${entry.currentRank} / ${entry.definition.maxRank}`, 0x76ffb0, typography);
     const classification = entry.definition.variant === 'corrupted'
       ? 'CORRUPTED'
@@ -245,6 +253,16 @@ export class ModDatabaseViewer {
 
     addHeader('EFFECT OVERVIEW', '#64f2ff');
     addParagraph(this.entry.definition.description);
+    if (this.entry.definition.rarity === 'supreme') {
+      addDataRow('MODE LOCK', 'SUPREME OVERDRIVE ONLY', '#ff9ee5');
+      addDataRow('SLOT ACCESS', 'UNIVERSAL // ANY SLOT', '#86f8ff');
+      addDataRow('ACTIVE LIMIT', 'MAX 2 SUPREME MODS', '#ffe78a');
+      if (this.entry.definition.supremeEffects) {
+        for (const [index, effect] of this.entry.definition.supremeEffects.entries()) {
+          addDataRow(`SYSTEM EFFECT ${index + 1}`, effect.label, '#e8ffff');
+        }
+      }
+    }
     if (this.entry.definition.positiveEffect) {
       addDataRow('POSITIVE EFFECT', this.entry.definition.positiveEffect, '#7dffb0');
     }
@@ -312,7 +330,10 @@ export class ModDatabaseViewer {
         addParagraph(`${best.label} // ${best.protocolLabel}\nSPECIFIC CARD ${formatModDatabaseProbability(best.effectiveChance)}`, '#ffe4f6');
       }
     } else addParagraph('NO ACTIVE DROP SOURCE IN THE CURRENT PROTOCOL DATABASE.', '#ff9db2');
-    if (this.entry.acquisition.supremeExclusive) addDataRow('EXCLUSIVE SOURCE', 'SUPREME OVERDRIVE', '#f7fdff');
+    if (this.entry.acquisition.supremeExclusive) {
+      addDataRow('PRIMARY SOURCE', 'SUPREME OVERDRIVE', '#f7fdff');
+      addDataRow('BRIDGE ACCESS', 'ONE CONTROLLED REGULAR OVERDRIVE AWARD // R48-50', '#ffb7e9');
+    }
 
     addHeader('ACQUISITION DATA // BASELINE WEIGHTS', '#70f0ff');
     addParagraph('CARD = opportunity chance × this exact Mod’s share of the weighted selection pool. Reference profiles use no Signal or Contract.', '#91b6c0', smallSize);

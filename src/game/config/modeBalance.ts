@@ -56,7 +56,7 @@ export const MODE_BALANCE: Record<RunModeFamily, ModeBalanceDefinition> = {
     highRarityWeightMultiplier: 1,
     legendaryWeightMultiplier: 1,
     scoreMultiplier: 1,
-    usesUnlockedStartingRounds: false
+    usesUnlockedStartingRounds: true
   },
   overdrive: {
     enemyHealthMultiplier: 1,

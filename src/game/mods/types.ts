@@ -84,6 +84,25 @@ export type ModStat =
   | 'enemyPickupChance'
   | 'bombDuration';
 
+export type SupremeEffectFamily =
+  | 'weapon'
+  | 'survivability'
+  | 'shield'
+  | 'energy'
+  | 'pickup'
+  | 'bombsite'
+  | 'mine'
+  | 'turret'
+  | 'enemy-control'
+  | 'explosion'
+  | 'mobility'
+  | 'defense';
+
+export interface SupremeEffectDescriptor {
+  family: SupremeEffectFamily;
+  label: string;
+}
+
 export interface ModStatModifier {
   stat: ModStat;
   mode: 'multiply' | 'add';
@@ -106,6 +125,9 @@ export interface ModDefinition {
   positiveEffect?: string;
   negativeEffect?: string;
   modifiers?: readonly ModStatModifier[];
+  /** Supreme-only dossier/card metadata. Runtime authority still comes from
+   * rarity + the central protocol/loadout validators. */
+  supremeEffects?: readonly [SupremeEffectDescriptor, SupremeEffectDescriptor, SupremeEffectDescriptor];
 }
 
 export interface ModCardInstance {

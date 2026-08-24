@@ -75,6 +75,8 @@ export class SaveSystem {
   }
 
   static recordSupremeCompletion(): void { PlayerProfileStore.recordSupremeCompletion(); }
+  static hasRegularOverdriveSupremeBridgeAwarded(): boolean { return PlayerProfileStore.hasRegularOverdriveSupremeBridgeAwarded(); }
+  static markRegularOverdriveSupremeBridgeAwarded(): void { PlayerProfileStore.markRegularOverdriveSupremeBridgeAwarded(); }
 
   static recordEnemyDestroyed(count = 1, protocol?: RunProtocolId): void {
     PlayerProfileStore.recordEnemyDestroyed(count, protocol);
@@ -161,6 +163,7 @@ export class SaveSystem {
   static getPreferredProtocol(): RunProtocolId { return PlayerProfileStore.getActiveSave().protocol.preferred; }
   static setPreferredProtocol(protocol: RunProtocolId) { return PlayerProfileStore.setPreferredProtocol(protocol); }
   static getHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.highestRound; }
+  static getNormalHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.normalHighestRound; }
   static getSupremeHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.supremeHighestRound; }
   static hasCompletedSupremeOverdrive(): boolean { return PlayerProfileStore.getActiveSave().progress.supremeOverdriveCompleted; }
   static getWeeklyOperations(nowMs = Date.now()) { return PlayerProfileStore.getWeeklyOperations(nowMs); }

@@ -115,7 +115,7 @@ test('a complete version-two profile migrates without losing progression or purc
     metadata: { updatedAt: '2025-01-02T00:00:00.000Z', saveRevision: 4, gameVersion: '0.0.1' }
   };
   const migrated = normalizeLocalSave(old);
-  assert.equal(migrated.version, 14);
+  assert.equal(migrated.version, 15);
   assert.equal(migrated.progress.supremeHighestRound, 0);
   assert.equal(migrated.progress.supremeOverdriveCompleted, false);
   assert.equal(migrated.wallet.fluxCores, 0);

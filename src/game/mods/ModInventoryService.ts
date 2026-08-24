@@ -1,8 +1,8 @@
 import { MOD_BY_ID } from './definitions.ts';
 import { MOD_BALANCE } from './modBalance.ts';
-import type { LocalModCollection, ModCardInstance, ModInfusionId, ModLoadoutSlots, ModRank, ModSlot, OwnedModState } from './types.ts';
+import type { LocalModCollection, ModCardInstance, ModInfusionId, ModLoadoutSlots, ModRank, ModSlot, OwnedModState, RunProtocolId } from './types.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
-import { hasLegendaryInAnotherSlot } from './ModLoadoutRules.ts';
+import { validateModEquip } from './ModLoadoutRules.ts';
 
 export interface ModOperationResult { ok: boolean; message: string; }
 export interface ModUpgradeCost { credits: number; coreTokens: number }
@@ -185,19 +185,21 @@ export const rankUpMod = (mods: LocalModCollection, modId: string, credits: numb
   return { ok: true, message: `Card upgraded to ${nextRank}/3 for ${creditCost.toLocaleString()} Credits${tokenMessage}.`, cost: creditCost, coreTokenCost };
 };
 
-const slotAccepts = (slot: ModSlot, category: string): boolean => slot === 'wildcard' || slot === category;
-
-export const equipMod = (mods: LocalModCollection, slot: ModSlot, modId: string, instanceId?: string): ModOperationResult => {
+export const equipMod = (
+  mods: LocalModCollection,
+  slot: ModSlot,
+  modId: string,
+  instanceId?: string,
+  protocol: RunProtocolId = 'normal'
+): ModOperationResult => {
   const definition = MOD_BY_ID.get(modId);
   const owned = mods.inventory[modId];
   const loadout = mods.loadouts.find((entry) => entry.id === mods.activeLoadoutId) ?? mods.loadouts[0];
   if (!definition || !owned?.discovered) return { ok: false, message: 'That mod is locked or invalid.' };
   if (!loadout) return { ok: false, message: 'No active loadout.' };
-  if (!slotAccepts(slot, definition.category)) return { ok: false, message: `${definition.name} cannot use the ${slot} slot.` };
+  const validation = validateModEquip(loadout.slots, definition, slot, protocol);
+  if (!validation.ok) return validation;
   if (Object.entries(loadout.slots).some(([otherSlot, equipped]) => otherSlot !== slot && equipped === modId)) return { ok: false, message: 'The same mod cannot be equipped twice.' };
-  if (definition.rarity === 'legendary' && hasLegendaryInAnotherSlot(loadout.slots, slot)) {
-    return { ok: false, message: 'Only one Legendary Mod can be equipped at a time.' };
-  }
   const card = instanceId ? mods.cards.find((entry) => entry.instanceId === instanceId && entry.modId === modId) : mods.cards.find((entry) => entry.modId === modId);
   if (!card) return { ok: false, message: 'That card instance is missing.' };
   loadout.slots[slot] = modId;

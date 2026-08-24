@@ -209,6 +209,9 @@ export class PlayerProfileStore {
     const save = PlayerProfileStore.getActiveSave();
     save.progress.roundsCompleted += 1;
     save.progress.highestRound = Math.max(save.progress.highestRound, round);
+    if (!protocol || protocol === 'normal') {
+      save.progress.normalHighestRound = Math.max(save.progress.normalHighestRound, round);
+    }
     if (isSupremeProtocol(protocol)) {
       save.progress.supremeHighestRound = Math.max(save.progress.supremeHighestRound, round);
     }
@@ -229,6 +232,18 @@ export class PlayerProfileStore {
     save.progress.supremeOverdriveCompleted = true;
     save.progress.supremeHighestRound = Math.max(save.progress.supremeHighestRound, 100);
     save.progress.highestRound = Math.max(save.progress.highestRound, 100);
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
+  static hasRegularOverdriveSupremeBridgeAwarded(): boolean {
+    return PlayerProfileStore.getActiveSave().progress.regularOverdriveSupremeBridgeAwarded;
+  }
+
+  static markRegularOverdriveSupremeBridgeAwarded(): void {
+    const save = PlayerProfileStore.getActiveSave();
+    if (save.progress.regularOverdriveSupremeBridgeAwarded) return;
+    save.progress.regularOverdriveSupremeBridgeAwarded = true;
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
   }
@@ -479,7 +494,7 @@ export class PlayerProfileStore {
 
   static equipMod(slot: ModSlot, modId: string, instanceId?: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
-    const result = equipMod(save.mods, slot, modId, instanceId);
+    const result = equipMod(save.mods, slot, modId, instanceId, save.protocol.preferred);
     if (result.ok) PlayerProfileStore.save();
     return result;
   }

@@ -74,11 +74,36 @@ test('Garage uses existing Mod category validation instead of inventing equip ru
   assert.equal(equipMod(save.mods, 'weapon', definition.id, card.instanceId).ok, true);
 });
 
+test('Garage presets restore at most two universal Supreme Mods only with a Supreme protocol', () => {
+  const save = createDefaultLocalSave('garage-supreme', 'Garage Supreme');
+  save.progress.highestRound = 53;
+  save.protocol.preferred = 'supreme-leo';
+  const supremeIds = MOD_DEFINITIONS.filter((entry) => entry.rarity === 'supreme').slice(0, 3).map((entry) => entry.id);
+  for (const id of supremeIds) assert.equal(addModDrop(save.mods, id).ok, true);
+  assert.equal(equipMod(save.mods, 'weapon', supremeIds[0], undefined, 'supreme-leo').ok, true);
+  assert.equal(equipMod(save.mods, 'bombSite', supremeIds[1], undefined, 'supreme-leo').ok, true);
+  assert.equal(saveCurrentGaragePreset(save, 'config-a').ok, true);
+
+  unequipMod(save.mods, 'weapon');
+  unequipMod(save.mods, 'bombSite');
+  assert.equal(loadGaragePreset(save, 'config-a').ok, true);
+  assert.equal(new ModRuntime(save.mods, undefined, 'supreme-leo').snapshot().filter((entry) => entry.id.startsWith('supreme-')).length, 2);
+
+  const invalid = save.garage.presets.find((entry) => entry.id === 'config-b');
+  invalid.saved = true;
+  invalid.protocol = 'normal';
+  invalid.cardSlots = { ...save.garage.presets.find((entry) => entry.id === 'config-a').cardSlots };
+  const rejected = loadGaragePreset(save, 'config-b');
+  assert.equal(rejected.ok, true);
+  assert.equal(rejected.missingCards, 2);
+  assert.equal(new ModRuntime(save.mods, undefined, 'normal').snapshot().some((entry) => entry.id.startsWith('supreme-')), false);
+});
+
 test('Garage Browse opens the Collection on the matching slot category', () => {
   const source = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
   assert.match(source, /dock\.slot === 'wildcard' \? 'all' : dock\.slot/);
   assert.match(source, /definition\?\.category \?\? 'all'/);
-  assert.match(source, /this\.scene\.start\(SceneKeys\.Mods, \{ returnScene: SceneKeys\.Garage, selectedCardId, initialCategory \}\)/);
+  assert.match(source, /this\.scene\.start\(SceneKeys\.Mods, \{ returnScene: SceneKeys\.Garage, selectedCardId, initialCategory, targetSlot \}\)/);
 });
 
 test('Overdrive progression terminal keeps full constellation protocol names in the shared cyber-console treatment', () => {
@@ -168,7 +193,7 @@ test('version-seven profiles migrate to empty Garage presets without losing data
   delete legacy.garage;
   const migrated = normalizeLocalSave(legacy);
   assert.ok(migrated);
-  assert.equal(migrated.version, 14);
+  assert.equal(migrated.version, 15);
   assert.equal(migrated.wallet.credits, 4567);
   assert.equal(migrated.mods.plasmaChips, 33);
   assert.deepEqual(migrated.garage, createDefaultGarageState());

@@ -142,6 +142,13 @@ export const loadGaragePreset = (save: LocalPlayerSave, presetId: GaragePresetId
   const loadout = save.mods.loadouts.find((entry) => entry.id === save.mods.activeLoadoutId) ?? save.mods.loadouts[0];
   if (!preset?.saved || !loadout) return { ok: false, message: 'That configuration slot is empty.', missingCards: 0, ignoredProtocol: false };
 
+  let ignoredProtocol = false;
+  const targetProtocol = preset.protocol && isRunProtocolUnlocked(preset.protocol, save.progress)
+    ? preset.protocol
+    : save.protocol.preferred;
+  if (preset.protocol && targetProtocol !== preset.protocol) ignoredProtocol = true;
+  save.protocol.preferred = targetProtocol;
+
   loadout.slots = createDefaultModLoadout();
   loadout.cardSlots = createDefaultModLoadout();
   let missingCards = 0;
@@ -154,16 +161,11 @@ export const loadGaragePreset = (save: LocalPlayerSave, presetId: GaragePresetId
       missingCards += 1;
       continue;
     }
-    const result = equipMod(save.mods, slot, definition.id, card.instanceId);
+    const result = equipMod(save.mods, slot, definition.id, card.instanceId, targetProtocol);
     if (!result.ok) missingCards += 1;
   }
 
   save.garage.nextRun = normalizeRunSetupSelection({ contract: preset.contract, modFocus: preset.modFocus });
-  let ignoredProtocol = false;
-  if (preset.protocol) {
-    if (isRunProtocolUnlocked(preset.protocol, save.progress)) save.protocol.preferred = preset.protocol;
-    else ignoredProtocol = true;
-  }
   const notes = [missingCards > 0 ? `${missingCards} missing Mod${missingCards === 1 ? '' : 's'} skipped` : '', ignoredProtocol ? 'locked Protocol ignored' : ''].filter(Boolean);
   return { ok: true, message: `${preset.name} loaded${notes.length ? ` // ${notes.join(' // ')}` : ''}.`, missingCards, ignoredProtocol };
 };

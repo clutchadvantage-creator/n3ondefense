@@ -94,11 +94,12 @@ export class LegendaryModRevealScene extends Phaser.Scene {
     const titleRed = this.add.text(-5, titleY, announcement, { ...titleStyle, color: supreme ? '#ff6ee7' : '#ff315f' }).setOrigin(0.5).setAlpha(0);
     const titleCyan = this.add.text(5, titleY, announcement, { ...titleStyle, color: '#39efff' }).setOrigin(0.5).setAlpha(0);
     const title = this.add.text(0, titleY, announcement, { ...titleStyle, color: supreme ? '#efffff' : '#ff9b22' }).setOrigin(0.5).setAlpha(0);
-    const duplicate = this.add.text(0, titleY + title.height + 7, this.request.duplicate ? '+1 COPY // DUPLICATE' : '', {
+    const secondaryLine = this.request.contextLine ?? (this.request.duplicate ? '+1 COPY // DUPLICATE' : '');
+    const duplicate = this.add.text(0, titleY + title.height + 7, secondaryLine, {
       fontFamily: 'Rajdhani, sans-serif',
       fontSize: `${Phaser.Math.Clamp(width * 0.022, 16, 22)}px`,
       fontStyle: 'bold',
-      color: '#ffe099',
+      color: this.request.contextLine ? '#8fffe1' : '#ffe099',
       stroke: '#03030a',
       strokeThickness: 5
     }).setOrigin(0.5).setAlpha(0);
@@ -178,7 +179,7 @@ export class LegendaryModRevealScene extends Phaser.Scene {
     titleRed.setAlpha(0.12).setX(-2);
     titleCyan.setAlpha(0.12).setX(2);
     title.setAlpha(1);
-    duplicate.setAlpha(this.request?.duplicate ? 1 : 0);
+    duplicate.setAlpha(this.request?.duplicate || this.request?.contextLine ? 1 : 0);
     this.idleTweens.push(
       this.tweens.add({ targets: card, y: card.y - 6, duration: 720, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
       this.tweens.add({ targets: outerGlow, alpha: { from: 0.08, to: 0.34 }, scale: { from: 0.98, to: 1.05 }, duration: 620, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })

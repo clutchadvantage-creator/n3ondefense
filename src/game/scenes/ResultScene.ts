@@ -5,6 +5,7 @@ import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { RUN_PROTOCOLS, normalizeRunProtocolId } from '../mods/modBalance.ts';
+import { protocolStart } from '../mods/ModRules.ts';
 import { shouldShowInitialDeploymentBriefing } from '../progression/ProgressionMessaging.ts';
 import { SaveSystem } from '../systems/SaveSystem';
 import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
@@ -95,15 +96,21 @@ export class ResultScene extends Phaser.Scene {
           disableButton(replayButton);
           this.registry.remove('round-finished');
           const protocol = resultProtocol;
+          const deploymentStart = protocolStart(
+            protocol,
+            SaveSystem.getHighestRound(),
+            SaveSystem.getSupremeHighestRound(),
+            SaveSystem.getNormalHighestRound()
+          );
           startArenaLoad(this, {
             reason: 'replay-after-fail',
             session: {
               baseSeed: Phaser.Math.Between(1, 999_999_999),
-              round: RUN_PROTOCOLS[protocol].startingRound,
+              round: deploymentStart.startingRound,
               objectiveMode: OBJECTIVE_CONFIG.defaultMode,
               protocol,
               runStartedAt: Date.now(),
-              equippedMods: new ModRuntime(SaveSystem.getModCollection()).snapshot(),
+              equippedMods: new ModRuntime(SaveSystem.getModCollection(), undefined, protocol).snapshot(),
               modsEarned: [],
               // Paid one-run setup is consumed by the original run. Replay never
               // grants a free Contract or focused Mod signal.

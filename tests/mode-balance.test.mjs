@@ -88,9 +88,12 @@ test('pickup caps remain x1/100% in Normal and x2/200% in Overdrive', () => {
   assert.equal(MODE_BALANCE.overdrive.overchargeEnabled, true);
 });
 
-test('Normal always starts at Round 1 while unlocked Overdrive tiers keep their starts', () => {
-  assert.equal(protocolStart('normal', 999).startingRound, 1);
-  assert.equal(MODE_BALANCE.normal.usesUnlockedStartingRounds, false);
+test('Normal unlocks persistent ten-round checkpoints while Overdrive tiers keep their starts', () => {
+  assert.equal(protocolStart('normal', 9, 0, 9).startingRound, 1);
+  assert.equal(protocolStart('normal', 19, 0, 19).startingRound, 10);
+  assert.equal(protocolStart('normal', 27, 0, 27).startingRound, 20);
+  assert.equal(protocolStart('normal', 99, 0, 40).startingRound, 40, 'other mode progress cannot advance Normal');
+  assert.equal(MODE_BALANCE.normal.usesUnlockedStartingRounds, true);
   assert.equal(protocolStart('overdrive', 8).startingRound, 5);
   assert.equal(protocolStart('overdrive-orion', 13).startingRound, 10);
   assert.equal(protocolStart('overdrive-andromeda', 43).startingRound, 40);

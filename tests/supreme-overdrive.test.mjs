@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { getProtocolModeBalance } from '../src/game/config/modeBalance.ts';
-import { addModDrop, createDefaultModCollection, equipMod } from '../src/game/mods/ModInventoryService.ts';
+import { addModDrop, createDefaultModCollection, equipMod, unequipMod } from '../src/game/mods/ModInventoryService.ts';
 import { enqueueModAcquisition } from '../src/game/mods/ModAcquisition.ts';
 import { getModRarityProbability, getModDropChance } from '../src/game/mods/ModDropService.ts';
 import { ModRuntime, SUPREME_MOD_STABILITY_CAPS } from '../src/game/mods/ModRuntime.ts';
@@ -17,6 +17,7 @@ import {
   isSupremeTerminalRound
 } from '../src/game/progression/SupremeProgression.ts';
 import { calculateProtocolTerminalVerticalLayout } from '../src/game/garage/protocolTerminalLayout.ts';
+import { resolveSupremeBridgeReward } from '../src/game/progression/SupremeBridgeReward.ts';
 
 const source = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 
@@ -76,11 +77,23 @@ test('Supreme stage scaling is centralized, monotonic, and stronger than the Ove
 
 test('ten Supreme Mods are three-system endgame cards and remain exclusive to Supreme drop tables', () => {
   const definitions = MOD_DEFINITIONS.filter((definition) => definition.rarity === 'supreme');
+  const definitionsWithOneRuntimeEffect = new Set([
+    'supreme-singularity-chamber',
+    'supreme-final-protocol',
+    'supreme-crown-of-stars'
+  ]);
   assert.equal(definitions.length, 10);
   assert.equal(new Set(definitions.map((definition) => definition.id)).size, 10);
   for (const definition of definitions) {
     assert.ok(definition.id.startsWith('supreme-'));
-    assert.equal(definition.modifiers?.length, 3);
+    assert.equal(definition.supremeEffects?.length, 3);
+    assert.equal(new Set(definition.supremeEffects?.map((effect) => effect.family)).size, 3);
+    assert.equal(
+      definition.modifiers.length,
+      definitionsWithOneRuntimeEffect.has(definition.id) ? 2 : 3,
+      `${definition.id} must expose exactly three total systems`
+    );
+    assert.equal(definition.modifiers?.some((modifier) => modifier.stat === 'weaponFireRate'), false);
     assert.equal(Object.keys(definition.rankDescriptions).length, 4);
   }
   const request = { source: 'boss', round: 100, seed: 413, sequence: 0, guaranteed: true };
@@ -101,9 +114,12 @@ test('Supreme Mods use the existing inventory/loadout/runtime path with hard sta
   assert.equal(mask.ok, true);
   mods.cards.find((card) => card.modId === 'supreme-quantum-carapace').upgradeLevel = 3;
   mods.cards.find((card) => card.modId === 'gas-mask').upgradeLevel = 3;
-  assert.equal(equipMod(mods, 'player', 'supreme-quantum-carapace').ok, true);
+  assert.equal(equipMod(mods, 'player', 'supreme-quantum-carapace').ok, false, 'Normal rejects Supreme activation');
+  assert.equal(equipMod(mods, 'player', 'supreme-quantum-carapace', undefined, 'overdrive-pegasus').ok, false, 'regular Overdrive rejects Supreme activation');
+  assert.equal(equipMod(mods, 'weapon', 'supreme-quantum-carapace', undefined, 'supreme-leo').ok, true, 'Supreme is universal in Supreme Overdrive');
   assert.equal(equipMod(mods, 'wildcard', 'gas-mask').ok, true);
-  const runtime = new ModRuntime(mods);
+  assert.equal(new ModRuntime(mods).has('supreme-quantum-carapace'), false, 'Normal runtime suppresses a saved Supreme reference');
+  const runtime = new ModRuntime(mods, undefined, 'supreme-leo');
   assert.equal(runtime.has('supreme-quantum-carapace'), true);
   assert.equal(runtime.multiplier('playerMaxHealth'), 2.45);
   assert.equal(runtime.multiplier('gasDamageTaken'), SUPREME_MOD_STABILITY_CAPS.minimumMultiplier);
@@ -124,14 +140,56 @@ test('version-thirteen saves migrate Supreme progression defaults without losing
   old.version = 13;
   old.wallet.credits = 76543;
   old.progress.highestRound = 63;
+  delete old.progress.normalHighestRound;
   delete old.progress.supremeHighestRound;
   delete old.progress.supremeOverdriveCompleted;
   const migrated = normalizeLocalSave(old);
-  assert.equal(migrated.version, 14);
+  assert.equal(migrated.version, 15);
   assert.equal(migrated.wallet.credits, 76543);
   assert.equal(migrated.progress.highestRound, 63);
   assert.equal(migrated.progress.supremeHighestRound, 0);
   assert.equal(migrated.progress.supremeOverdriveCompleted, false);
+  assert.equal(migrated.progress.normalHighestRound, 63);
+});
+
+test('Supreme universal-slot access still enforces a hard two-card active limit', () => {
+  const slots = ['weapon', 'player', 'defense', 'bombSite', 'wildcard'];
+  for (const definition of MOD_DEFINITIONS.filter((entry) => entry.rarity === 'supreme')) {
+    for (const slot of slots) {
+      const universal = createDefaultModCollection();
+      assert.equal(addModDrop(universal, definition.id).ok, true);
+      assert.equal(equipMod(universal, slot, definition.id, undefined, 'supreme-leo').ok, true, `${definition.id} rejected ${slot}`);
+      assert.equal(new ModRuntime(universal, undefined, 'supreme-leo').has(definition.id), true);
+    }
+  }
+
+  const mods = createDefaultModCollection();
+  const ids = MOD_DEFINITIONS.filter((definition) => definition.rarity === 'supreme').slice(0, 3).map((definition) => definition.id);
+  for (const id of ids) assert.equal(addModDrop(mods, id).ok, true);
+  assert.equal(equipMod(mods, 'weapon', ids[0], undefined, 'supreme-leo').ok, true);
+  assert.equal(equipMod(mods, 'bombSite', ids[1], undefined, 'supreme-leo').ok, true);
+  assert.equal(equipMod(mods, 'defense', ids[2], undefined, 'supreme-leo').ok, false);
+  assert.equal(new ModRuntime(mods, undefined, 'supreme-leo').snapshot().filter((entry) => entry.id.startsWith('supreme-')).length, 2);
+  unequipMod(mods, 'weapon');
+  assert.equal(equipMod(mods, 'defense', ids[2], undefined, 'supreme-leo').ok, true, 'capacity reopens after removing one Supreme');
+});
+
+test('regular Overdrive Supreme bridge is deterministic, one-time, and forced by Round 50', () => {
+  const base = { protocol: 'overdrive-pegasus', seed: 812733, alreadyAwarded: false, ownedModIds: [] };
+  assert.equal(resolveSupremeBridgeReward({ ...base, protocol: 'normal', completedRound: 50 }).eligible, false);
+  assert.equal(resolveSupremeBridgeReward({ ...base, protocol: 'supreme-leo', completedRound: 50 }).eligible, false);
+  assert.equal(resolveSupremeBridgeReward({ ...base, completedRound: 47 }).eligible, false);
+  const forced = resolveSupremeBridgeReward({ ...base, completedRound: 50 });
+  assert.equal(forced.guaranteed, true);
+  assert.equal(forced.markSatisfied, true);
+  assert.ok(forced.modId?.startsWith('supreme-'));
+  assert.deepEqual(forced, resolveSupremeBridgeReward({ ...base, completedRound: 50 }));
+  assert.equal(resolveSupremeBridgeReward({ ...base, completedRound: 50, alreadyAwarded: true }).modId, null);
+  assert.equal(resolveSupremeBridgeReward({ ...base, completedRound: 49, ownedModIds: [forced.modId] }).markSatisfied, true);
+
+  const persisted = createDefaultLocalSave('bridge-persist', 'Bridge Persist');
+  persisted.progress.regularOverdriveSupremeBridgeAwarded = true;
+  assert.equal(normalizeLocalSave(structuredClone(persisted)).progress.regularOverdriveSupremeBridgeAwarded, true);
 });
 
 test('terminal finale owns three simultaneous real boss encounters and persists only an all-defeated clear', () => {

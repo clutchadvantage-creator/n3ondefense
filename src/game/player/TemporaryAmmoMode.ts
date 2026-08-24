@@ -54,18 +54,20 @@ export class TemporaryAmmoModeController {
   private mode: SpecialAmmoMode | null = null;
   private until = 0;
 
-  activate(mode: SpecialAmmoMode, now: number, overdrive: boolean): TemporaryAmmoActivation {
+  activate(mode: SpecialAmmoMode, now: number, overdrive: boolean, durationMultiplier = 1): TemporaryAmmoActivation {
     const safeNow = Number.isFinite(now) ? now : 0;
     const current = this.activeSpecialMode(safeNow);
     const repeated = current === mode;
     const replacedMode = current && current !== mode ? current : null;
-    const maximumUntil = safeNow + TEMPORARY_AMMO_BALANCE.overdriveMaximumDurationMs;
+    const safeDurationMultiplier = Math.max(0.1, Number.isFinite(durationMultiplier) ? durationMultiplier : 1);
+    const durationMs = TEMPORARY_AMMO_BALANCE.durationMs * safeDurationMultiplier;
+    const maximumUntil = safeNow + TEMPORARY_AMMO_BALANCE.overdriveMaximumDurationMs * safeDurationMultiplier;
 
     this.mode = mode;
     if (repeated && overdrive) {
-      this.until = Math.min(maximumUntil, this.until + TEMPORARY_AMMO_BALANCE.durationMs);
+      this.until = Math.min(maximumUntil, this.until + durationMs);
     } else {
-      this.until = safeNow + TEMPORARY_AMMO_BALANCE.durationMs;
+      this.until = safeNow + durationMs;
     }
 
     return {

@@ -4,7 +4,7 @@ import type { LocalModCollection, ModCardInstance, ModInfusionId, ModSlot, Proto
 import { normalizeRunProtocolId } from './modBalance.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
 import { ECONOMY_BALANCE } from '../economy/economyBalance.ts';
-import { isLegendaryModId } from './ModLoadoutRules.ts';
+import { countEquippedSupremeMods, isLegendaryModId, isSupremeModId, MAX_EQUIPPED_SUPREME_MODS } from './ModLoadoutRules.ts';
 
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const MOD_SLOTS: ModSlot[] = ['weapon', 'player', 'defense', 'bombSite', 'wildcard'];
@@ -60,7 +60,12 @@ export const normalizeModCollection = (mods: unknown): LocalModCollection => {
       const id = typeof rawSlots[slot] === 'string' ? rawSlots[slot] : null;
       const definition = id ? MOD_BY_ID.get(id) : undefined;
       if (!id || !definition || !inventory[id]?.discovered || equipped.has(id)) continue;
-      if (slot !== 'wildcard' && definition.category !== slot) continue;
+      // Supreme ownership/loadout references remain serialized independent of
+      // the selected mode. Activation is filtered by ModRuntime. Supreme is
+      // the sole universal-slot class and old invalid >2 states are trimmed
+      // without touching inventory ownership.
+      if (!isSupremeModId(id) && slot !== 'wildcard' && definition.category !== slot) continue;
+      if (isSupremeModId(id) && countEquippedSupremeMods(slots) >= MAX_EQUIPPED_SUPREME_MODS) continue;
       if (isLegendaryModId(id) && hasLegendary) continue;
       slots[slot] = id;
       const requestedCard = isObject(raw.cardSlots) && typeof raw.cardSlots[slot] === 'string' ? raw.cardSlots[slot] : '';

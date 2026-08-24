@@ -9,6 +9,7 @@ import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton, enableButton, setButtonJiggleTargets } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, getUnlockedProtocolIds, isRunProtocolUnlocked } from '../mods/modBalance.ts';
+import { protocolStart } from '../mods/ModRules.ts';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_FOCUS_LABELS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
@@ -114,7 +115,13 @@ export class MainMenuScene extends Phaser.Scene {
       ? requestedProtocol
       : 'normal';
     const protocolDefinition = RUN_PROTOCOLS[protocol];
-    const equippedMods = profile ? new ModRuntime(SaveSystem.getModCollection()).snapshot() : [];
+    const deploymentStart = protocolStart(
+      protocol,
+      profile ? SaveSystem.getHighestRound() : 0,
+      supremeHighestRound,
+      profile ? SaveSystem.getNormalHighestRound() : 0
+    );
+    const equippedMods = profile ? new ModRuntime(SaveSystem.getModCollection(), undefined, protocol).snapshot() : [];
     const narrow = width < 1120;
     const short = height < 900;
     const tiny = height < 680;
@@ -172,7 +179,7 @@ export class MainMenuScene extends Phaser.Scene {
     };
 
     this.createProtocolChassis(centerX, protocolY, protocolWidth + protocolArrowWidth * 2 + protocolGap * 4, protocolHeight + (tiny ? 12 : 18));
-    const protocolButton = this.createCommandButton(centerX, protocolY, `${protocolDefinition.label}\nSTART ROUND ${protocolDefinition.startingRound}`, () => selectProtocol(1), protocolWidth, protocolHeight, 'protocol', 'menu', tiny ? 13 : short ? 16 : 19);
+    const protocolButton = this.createCommandButton(centerX, protocolY, `${protocolDefinition.label}\nSTART ROUND ${deploymentStart.startingRound}`, () => selectProtocol(1), protocolWidth, protocolHeight, 'protocol', 'menu', tiny ? 13 : short ? 16 : 19);
     const previousProtocolButton = this.createCommandButton(centerX - protocolArrowOffset, protocolY, '<', () => selectProtocol(-1), protocolArrowWidth, protocolHeight, 'selector', 'menu', tiny ? 16 : 21);
     const nextProtocolButton = this.createCommandButton(centerX + protocolArrowOffset, protocolY, '>', () => selectProtocol(1), protocolArrowWidth, protocolHeight, 'selector', 'menu', tiny ? 16 : 21);
     if (profile && unlockedProtocols.length === 1) {
@@ -233,7 +240,7 @@ export class MainMenuScene extends Phaser.Scene {
           reason: 'new-run',
           session: {
             baseSeed: result.seed,
-            round: protocolDefinition.startingRound,
+            round: deploymentStart.startingRound,
             objectiveMode: OBJECTIVE_CONFIG.defaultMode,
             protocol,
             runStartedAt: Date.now(),
@@ -269,7 +276,7 @@ export class MainMenuScene extends Phaser.Scene {
         reason: 'new-run',
         session: {
           baseSeed: Phaser.Math.Between(1, 999_999_999),
-          round: protocolDefinition.startingRound,
+          round: deploymentStart.startingRound,
           objectiveMode: OBJECTIVE_CONFIG.defaultMode,
           protocol,
           runStartedAt: Date.now(),

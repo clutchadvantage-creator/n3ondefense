@@ -1,8 +1,9 @@
 import { MOD_BALANCE } from './modBalance.ts';
 import { MOD_BY_ID } from './definitions.ts';
-import type { EquippedModSnapshot, LocalModCollection, ModInfusionId, ModRank, ModStat } from './types.ts';
+import type { EquippedModSnapshot, LocalModCollection, ModInfusionId, ModRank, ModStat, RunProtocolId } from './types.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
-import { isLegendaryModId } from './ModLoadoutRules.ts';
+import { isLegendaryModId, isSupremeModId, MAX_EQUIPPED_SUPREME_MODS } from './ModLoadoutRules.ts';
+import { isSupremeProtocol } from '../progression/SupremeProgression.ts';
 
 /** Engine-stability ceilings, not intended balance nerfs. They prevent future
  * Supreme combinations from producing zero cooldowns or unbounded entities. */
@@ -34,8 +35,9 @@ export class ModRuntime {
   private previousHealthRatio = 1;
   private readonly bombShieldCooldownUntil = new Map<string, number>();
   private readonly bombShieldActiveUntil = new Map<string, number>();
+  private crownDamageSurgeUntil = 0;
 
-  constructor(mods: LocalModCollection, snapshot?: EquippedModSnapshot[]) {
+  constructor(mods: LocalModCollection, snapshot?: EquippedModSnapshot[], protocol: RunProtocolId = 'normal') {
     const loadout = mods.loadouts.find((entry) => entry.id === mods.activeLoadoutId) ?? mods.loadouts[0];
     const equippedCardFor = (modId: string) => {
       const slot = Object.entries(loadout?.slots ?? {}).find(([, equippedId]) => equippedId === modId)?.[0] as keyof typeof loadout.slots | undefined;
@@ -49,11 +51,14 @@ export class ModRuntime {
 
     if (snapshot) {
       let hasLegendary = false;
+      let supremeCount = 0;
       snapshot.forEach(({ id, rank, infusionId }) => {
         if (!MOD_BY_ID.has(id) || this.equipped.has(id)) return;
+        if (isSupremeModId(id) && (!isSupremeProtocol(protocol) || supremeCount >= MAX_EQUIPPED_SUPREME_MODS)) return;
         if (isLegendaryModId(id) && hasLegendary) return;
         this.equipped.set(id, Math.max(0, Math.min(3, Math.floor(rank))) as ModRank);
         if (isLegendaryModId(id)) hasLegendary = true;
+        if (isSupremeModId(id)) supremeCount += 1;
         // Old run snapshots contain only id/rank. Resolve those from the exact
         // currently equipped card so in-progress local sessions remain valid.
         addInfusion(id, infusionId ?? equippedCardFor(id)?.infusionId);
@@ -61,14 +66,17 @@ export class ModRuntime {
       return;
     }
     let hasLegendary = false;
+    let supremeCount = 0;
     for (const modId of Object.values(loadout?.slots ?? {})) {
       if (!modId || this.equipped.has(modId)) continue;
+      if (isSupremeModId(modId) && (!isSupremeProtocol(protocol) || supremeCount >= MAX_EQUIPPED_SUPREME_MODS)) continue;
       if (isLegendaryModId(modId) && hasLegendary) continue;
       const owned = mods.inventory[modId];
       const card = equippedCardFor(modId);
       if (owned?.discovered) {
         this.equipped.set(modId, card?.upgradeLevel ?? owned.rank);
         if (isLegendaryModId(modId)) hasLegendary = true;
+        if (isSupremeModId(modId)) supremeCount += 1;
         addInfusion(modId, card?.infusionId);
       }
     }
@@ -79,6 +87,7 @@ export class ModRuntime {
     this.previousHealthRatio = initialHealthRatio;
     this.bombShieldCooldownUntil.clear();
     this.bombShieldActiveUntil.clear();
+    this.crownDamageSurgeUntil = 0;
   }
 
   rank(modId: string): ModRank | 0 { return this.equipped.get(modId) ?? 0; }
@@ -155,6 +164,37 @@ export class ModRuntime {
       energyCostMultiplier: MOD_BALANCE.fullRackSalvo.energyCostMultiplier[rank],
       flightMs: MOD_BALANCE.fullRackSalvo.flightMs[rank]
     };
+  }
+  supremeSuppressionField(): { radius: number; slowFactor: number; refreshMs: number } | null {
+    if (!this.has('supreme-singularity-chamber')) return null;
+    const rank = this.rank('supreme-singularity-chamber');
+    return {
+      radius: [230, 252, 276, 300][rank],
+      slowFactor: [0.86, 0.82, 0.78, 0.74][rank],
+      refreshMs: 260
+    };
+  }
+  supremeBombsitePulse(): { intervalMs: number; radius: number; weaponDamageMultiplier: number; knockbackSpeed: number; staggerMs: number } | null {
+    if (!this.has('supreme-final-protocol')) return null;
+    const rank = this.rank('supreme-final-protocol');
+    return {
+      intervalMs: [7000, 6400, 5800, 5200][rank],
+      radius: [190, 205, 220, 240][rank],
+      weaponDamageMultiplier: [1.15, 1.35, 1.6, 1.9][rank],
+      knockbackSpeed: [170, 190, 215, 240][rank],
+      staggerMs: [280, 340, 410, 500][rank]
+    };
+  }
+  triggerSupremePickupSurge(now: number, pickupType: string): boolean {
+    if (!this.has('supreme-crown-of-stars') || pickupType === 'credits' || pickupType === 'coreToken'
+      || pickupType === 'plasmaChip' || pickupType === 'fluxCore') return false;
+    const rank = this.rank('supreme-crown-of-stars');
+    this.crownDamageSurgeUntil = Math.max(this.crownDamageSurgeUntil, now + [5000, 5500, 6000, 6500][rank]);
+    return true;
+  }
+  supremePickupSurgeDamageMultiplier(now: number): number {
+    if (now >= this.crownDamageSurgeUntil) return 1;
+    return [1.18, 1.22, 1.27, 1.33][this.rank('supreme-crown-of-stars')];
   }
   hasInfusion(infusionId: ModInfusionId): boolean { return this.infusions.has(infusionId); }
   snapshot(): EquippedModSnapshot[] {

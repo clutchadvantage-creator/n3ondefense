@@ -39,14 +39,16 @@ import { configureSceneUiNavigation, setSceneUiModalDepth } from '../input/UiNav
 
 type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
 type FilterMode = 'all' | 'duplicates';
-const CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player', 'defense', 'bombSite', 'utility'];
+type CollectionCategory = 'all' | ModCategory | 'supreme';
+const CATEGORIES: CollectionCategory[] = ['all', 'supreme', 'weapon', 'player', 'defense', 'bombSite', 'utility'];
 const SORTS: SortMode[] = ['acquired', 'type', 'rank', 'rarity'];
 const FILTERS: FilterMode[] = ['all', 'duplicates'];
 const RARITY_ORDER = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4, supreme: 5 } as const;
 
 interface ModCollectionSceneData extends ModCollectionReturnRequest {
   selectedCardId?: string;
-  initialCategory?: 'all' | ModCategory;
+  initialCategory?: CollectionCategory;
+  targetSlot?: ModSlot;
   currencyDeltas?: CurrencyDeltas;
 }
 
@@ -73,6 +75,7 @@ export class ModCollectionScene extends Phaser.Scene {
   private resumePausedScene = false;
   private tutorialDirector: TutorialDirector | null = null;
   private archiveRefreshPending = false;
+  private targetSlot: ModSlot | null = null;
   private readonly handleEscape = (): void => {
     if (this.bulkRecycleModal) {
       this.bulkRecycleModal.destroy();
@@ -90,6 +93,7 @@ export class ModCollectionScene extends Phaser.Scene {
     const returnRoute = resolveModCollectionReturnRoute(data, arenaCanResume);
     this.returnScene = returnRoute.returnScene;
     this.resumePausedScene = returnRoute.resumePausedScene;
+    this.targetSlot = data?.targetSlot ?? null;
     if (data?.selectedCardId) this.selectedCardId = data.selectedCardId;
     if (data?.initialCategory && CATEGORIES.includes(data.initialCategory)) {
       this.categoryIndex = CATEGORIES.indexOf(data.initialCategory);
@@ -104,10 +108,12 @@ export class ModCollectionScene extends Phaser.Scene {
     const copyCounts = getModCopyCounts(mods.cards);
     const recyclableDuplicates = getRecyclableUnupgradedDuplicates(mods);
     const recyclableDuplicateIds = new Set(recyclableDuplicates.map((card) => card.instanceId));
-    const cards = this.sortedCards(mods.cards.filter((card) =>
-      (category === 'all' || MOD_BY_ID.get(card.modId)?.category === category)
-      && (filter === 'all' || recyclableDuplicateIds.has(card.instanceId))
-    ), sort);
+    const cards = this.sortedCards(mods.cards.filter((card) => {
+      const definition = MOD_BY_ID.get(card.modId);
+      const categoryMatches = category === 'all'
+        || (category === 'supreme' ? definition?.rarity === 'supreme' : definition?.category === category);
+      return categoryMatches && (filter === 'all' || recyclableDuplicateIds.has(card.instanceId));
+    }), sort);
     const bulkPlasmaValue = recyclableDuplicates.reduce((total, card) => {
       const definition = MOD_BY_ID.get(card.modId);
       return total + (definition ? MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity] : 0);
@@ -285,10 +291,16 @@ export class ModCollectionScene extends Phaser.Scene {
       duplicateCount
     });
     const corruptedText = definition.variant === 'corrupted' ? `\n+ ${definition.positiveEffect}\n− ${definition.negativeEffect}` : '';
-    const detailCopy = this.add.text(x, detailCardTop + detailCardHeight + 18, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
+    const supremeText = definition.rarity === 'supreme'
+      ? `\nSUPREME OVERDRIVE ONLY // UNIVERSAL SLOT // MAX 2 ACTIVE\n${definition.supremeEffects?.map((effect) => effect.label).join('\n') ?? ''}`
+      : '';
+    const detailCopy = this.add.text(x, detailCardTop + detailCardHeight + 18, `${definition.rarity === 'supreme' ? 'SUPREME CLASS' : definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}${supremeText}\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${compactDetails ? 16 : 18}px`, color: '#e8f8ff', align: 'center', lineSpacing: 3
     }).setOrigin(0.5, 0).setWordWrapWidth(width - 34, true);
-    const categorySlot = definition.category === 'utility' ? null : definition.category as ModSlot;
+    const activeSlots = SaveSystem.getModCollection().loadouts.find((loadout) => loadout.id === SaveSystem.getModCollection().activeLoadoutId)?.slots;
+    const firstOpenSlot = activeSlots ? (Object.keys(activeSlots) as ModSlot[]).find((slot) => !activeSlots[slot]) : undefined;
+    const categorySlot = this.targetSlot
+      ?? (definition.rarity === 'supreme' ? firstOpenSlot ?? 'weapon' : definition.category === 'utility' ? null : definition.category as ModSlot);
     const buttonGap = compactDetails ? 38 : height < 650 ? 43 : 48;
     const buttonHeight = compactDetails ? 32 : 38;
     // Use the inspector's previously unused lower breathing room. A transient
@@ -318,7 +330,7 @@ export class ModCollectionScene extends Phaser.Scene {
       }, selectedData);
     }
     if (categorySlot) createModCollectionButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.applyWithTutorialEvent('mods.equipped', () => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40, 'standard', { height: buttonHeight, fontSize: compactDetails ? 12 : 16 });
-    createModCollectionButton(this, x, buttonY + buttonGap, 'Equip Wildcard', () => this.applyWithTutorialEvent('mods.equipped', () => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40, 'standard', { height: buttonHeight, fontSize: compactDetails ? 12 : 16 });
+    createModCollectionButton(this, x, buttonY + buttonGap, definition.rarity === 'supreme' ? 'Equip Supreme // Wildcard' : 'Equip Wildcard', () => this.applyWithTutorialEvent('mods.equipped', () => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40, 'standard', { height: buttonHeight, fontSize: compactDetails ? 12 : 16 });
     const nextUpgrade = card.upgradeLevel < 3 ? (card.upgradeLevel + 1) as 1 | 2 | 3 : null;
     const coreTokenCost = nextUpgrade ? MOD_BALANCE.rankCoreTokenCostsByRarity[definition.rarity][nextUpgrade] : 0;
     const upgradeLabel = nextUpgrade
@@ -511,7 +523,7 @@ export class ModCollectionScene extends Phaser.Scene {
   }
 
   private restartCollection(currencyDeltas?: CurrencyDeltas): void {
-    this.scene.restart({ returnScene: this.returnScene, resumePausedScene: this.resumePausedScene, currencyDeltas });
+    this.scene.restart({ returnScene: this.returnScene, resumePausedScene: this.resumePausedScene, currencyDeltas, targetSlot: this.targetSlot ?? undefined });
   }
 
   private returnToPreviousScene(): void {
@@ -539,6 +551,6 @@ export class ModCollectionScene extends Phaser.Scene {
     this.input.keyboard?.once('keydown-X', () => { const mods = SaveSystem.getModCollection(); mods.inventory = {}; mods.cards = []; mods.plasmaChips = 0; mods.loadouts[0].slots = { weapon: null, player: null, defense: null, bombSite: null, wildcard: null }; mods.loadouts[0].cardSlots = { weapon: null, player: null, defense: null, bombSite: null, wildcard: null }; SaveSystem.persist(); this.restartCollection(); });
     this.input.keyboard?.once('keydown-T', () => { MOD_DEFINITIONS.forEach((mod) => { SaveSystem.addMod(mod.id); SaveSystem.addMod(mod.id); }); this.restartCollection(); });
     this.input.keyboard?.once('keydown-M', () => { const drop = rollModDrop({ source: 'milestone', round: 20, seed: Date.now(), sequence: 0, protocol: 'normal', guaranteed: true }); if (drop) SaveSystem.addMod(drop.id); this.restartCollection(); });
-    this.input.keyboard?.once('keydown-I', () => console.info('[MOD RUNTIME]', new ModRuntime(SaveSystem.getModCollection()).snapshot(), SaveSystem.getModCollection()));
+    this.input.keyboard?.once('keydown-I', () => console.info('[MOD RUNTIME]', new ModRuntime(SaveSystem.getModCollection(), undefined, SaveSystem.getPreferredProtocol()).snapshot(), SaveSystem.getModCollection()));
   }
 }

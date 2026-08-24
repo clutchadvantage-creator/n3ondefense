@@ -26,7 +26,8 @@ import { filterModDatabaseEntries, type ModDatabaseStatusFilter } from '../mods/
 import { ModDatabaseViewer } from '../mods/ModDatabaseViewer.ts';
 import { MOD_RARITY_COLORS, createModCardView } from '../mods/ModCardView.ts';
 import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, isRunProtocolUnlocked } from '../mods/modBalance.ts';
-import type { ModCardInstance, ModCategory, ModRarity, RunProtocolId } from '../mods/types.ts';
+import type { ModCardInstance, ModCategory, ModRarity, ModSlot, RunProtocolId } from '../mods/types.ts';
+import { countEquippedSupremeMods, MAX_EQUIPPED_SUPREME_MODS } from '../mods/ModLoadoutRules.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
 import { SaveSystem } from '../systems/SaveSystem.ts';
 import type { CosmeticOption } from '../types.ts';
@@ -37,7 +38,7 @@ import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { calculateProtocolTerminalVerticalLayout } from '../garage/protocolTerminalLayout.ts';
-import { getSupremeStage } from '../progression/SupremeProgression.ts';
+import { getSupremeStage, isSupremeProtocol } from '../progression/SupremeProgression.ts';
 import {
   configureSceneUiNavigation,
   registerUiFocusable,
@@ -159,6 +160,23 @@ export class OperatorGarageScene extends Phaser.Scene {
       layout.dockActionHeight,
       layout.dockActionGap
     );
+    const activeLoadout = SaveSystem.getModCollection().loadouts.find((loadout) => loadout.id === SaveSystem.getModCollection().activeLoadoutId)
+      ?? SaveSystem.getModCollection().loadouts[0];
+    const supremeCount = activeLoadout ? countEquippedSupremeMods(activeLoadout.slots) : 0;
+    const supremeModeActive = isSupremeProtocol(SaveSystem.getPreferredProtocol());
+    this.add.text(
+      layout.dockCenters.at(-1)!.x + layout.cardWidth / 2 - 8,
+      layout.dockCenters[0].y - layout.cardHeight / 2 - layout.workbenchTopPadding + 11,
+      supremeModeActive
+        ? `SUPREME CAPACITY // ${supremeCount} / ${MAX_EQUIPPED_SUPREME_MODS}`
+        : `SUPREME MODULES OFFLINE // ${supremeCount} STORED`,
+      {
+        fontFamily: 'Rajdhani, sans-serif',
+        fontSize: `${layout.compact ? 9 : Phaser.Math.Clamp(layout.cardWidth * 0.06, 11, 14)}px`,
+        fontStyle: 'bold',
+        color: !supremeModeActive ? '#849da6' : supremeCount >= MAX_EQUIPPED_SUPREME_MODS ? '#ff8bdc' : '#b9fbff'
+      }
+    ).setOrigin(1, 0.5).setDepth(21);
     this.createStations(layout.stationCenters, layout.stationWidth, layout.stationHeight);
 
     this.tutorialDirector = new TutorialDirector({
@@ -443,6 +461,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   ): void {
     const mods = SaveSystem.getModCollection();
     const docks = getGarageDockModels(mods);
+    const supremeModeActive = isSupremeProtocol(SaveSystem.getPreferredProtocol());
     const compactCard = compact || cardWidth < 160;
     const readableScale = compact ? 1 : Phaser.Math.Clamp(cardWidth / 132, 1, 1.55);
     const slotLabelOffset = compact ? 14 : Phaser.Math.Clamp(cardWidth * 0.115, 17, 25);
@@ -465,17 +484,25 @@ export class OperatorGarageScene extends Phaser.Scene {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : Math.round(11 * readableScale)}px`, fontStyle: 'bold', color: definition ? Phaser.Display.Color.IntegerToColor(color).rgba : '#94c2cd', align: 'center'
       }).setOrigin(0.5).setDepth(27).setWordWrapWidth(cardWidth + 24, true).setMaxLines(2);
       if (dock.card) {
+        const supremeOffline = definition?.rarity === 'supreme' && !supremeModeActive;
         const view = createModCardView(this, center.x, center.y, dock.card, dock.card.upgradeLevel, {
           width: cardWidth,
           height: cardHeight,
           compact: compactCard,
-          equipped: true,
+          equipped: !supremeOffline,
           focusId: `garage:loadout:${dock.slot}`,
           focusDefaultPriority: index === 0 ? 30 : 0
         });
+        if (supremeOffline) {
+          view.setAlpha(0.52);
+          this.add.text(center.x, center.y, 'OFFLINE\nSUPREME ONLY', {
+            fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 9 : Math.round(11 * readableScale)}px`,
+            fontStyle: 'bold', color: '#ff9fe1', align: 'center', backgroundColor: '#02070add'
+          }).setOrigin(0.5).setPadding(8, 5).setDepth(27);
+        }
         view.setDepth(26).on('pointerdown', () => {
           this.audio.playSfx('menu');
-          this.openCollection(dock.card?.instanceId, definition?.category ?? 'all');
+          this.openCollection(dock.card?.instanceId, definition?.rarity === 'supreme' ? 'supreme' : definition?.category ?? 'all', dock.slot);
         });
       } else {
         const emptyHit = this.add.rectangle(center.x, center.y, cardWidth, cardHeight, 0x0a1923, 0.78).setStrokeStyle(1, 0x4bd7e9, 0.25).setInteractive({ useHandCursor: true }).setDepth(26);
@@ -488,7 +515,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         emptyHit.on('pointerout', () => emptyHit.setStrokeStyle(1, 0x4bd7e9, 0.25));
         emptyHit.on('pointerdown', () => {
           this.audio.playSfx('menu');
-          this.openCollection(undefined, dock.slot === 'wildcard' ? 'all' : dock.slot);
+          this.openCollection(undefined, dock.slot === 'wildcard' ? 'all' : dock.slot, dock.slot);
         });
         registerUiFocusable(this, emptyHit, {
           id: `garage:loadout:${dock.slot}`,
@@ -496,7 +523,7 @@ export class OperatorGarageScene extends Phaser.Scene {
           defaultPriority: index === 0 ? 30 : 0,
           activate: () => {
             this.audio.playSfx('menu');
-            this.openCollection(undefined, dock.slot === 'wildcard' ? 'all' : dock.slot);
+            this.openCollection(undefined, dock.slot === 'wildcard' ? 'all' : dock.slot, dock.slot);
           }
         });
       }
@@ -506,7 +533,7 @@ export class OperatorGarageScene extends Phaser.Scene {
           SaveSystem.unequipMod(dock.slot);
           this.status = `SUCCESS // ${dock.label.replace('SLOT ', '').replace(' // ', ' ')} CLEARED`;
           this.scene.restart({ returnScene: this.returnScene });
-        } else this.openCollection(undefined, dock.slot === 'wildcard' ? 'all' : dock.slot);
+        } else this.openCollection(undefined, dock.slot === 'wildcard' ? 'all' : dock.slot, dock.slot);
       }, cardWidth, 'menu', {
         height: actionButtonHeight,
         fontSize: compact ? 16 : Phaser.Math.Clamp(17 * readableScale, 17, 21)
@@ -1482,8 +1509,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     return result.ok;
   }
 
-  private openCollection(selectedCardId?: string, initialCategory?: 'all' | ModCategory): void {
-    this.scene.start(SceneKeys.Mods, { returnScene: SceneKeys.Garage, selectedCardId, initialCategory });
+  private openCollection(selectedCardId?: string, initialCategory?: 'all' | ModCategory | 'supreme', targetSlot?: ModSlot): void {
+    this.scene.start(SceneKeys.Mods, { returnScene: SceneKeys.Garage, selectedCardId, initialCategory, targetSlot });
   }
 
   private closeOverlay(): void {
