@@ -107,7 +107,9 @@ export const calculateModArchiveTerminalLayout = (
   };
   const diagnosticLeft = cardGridLeft + gridWidth + Math.max(8, cardGapX * 0.7);
   const diagnosticRight = frame.x + frame.width - sidePadding;
-  const diagnostics = diagnosticRight - diagnosticLeft >= 48 ? {
+  // Do not fill leftover space with unreadable 7-8px diagnostic text. The
+  // optional bay appears only when it has enough width for useful telemetry.
+  const diagnostics = diagnosticRight - diagnosticLeft >= 88 ? {
     x: diagnosticLeft,
     y: cardGridTop,
     width: diagnosticRight - diagnosticLeft,

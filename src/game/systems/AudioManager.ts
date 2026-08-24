@@ -28,12 +28,26 @@ const PRESENTATION_SFX_SOURCES = {
   mageBossMagicAttack: 'soundeffects/magebossmagicattack.mp3',
   brawlerBossChargeAttack: 'soundeffects/brawlerbosschargeattack.mp3',
   circuitGate: 'soundeffects/arenacircuitgate.mp3',
+  overloadEvent: 'soundeffects/overloadevent.mp3',
+  supplyDropEvent: 'soundeffects/supplydropevent.mp3',
+  dataThiefEntrance: 'soundeffects/datatheifentrence.mp3',
+  dataThiefFail: 'soundeffects/datatheiffail.mp3',
+  goldenEnemyEvent: 'soundeffects/goldenenemyevent.mp3',
+  goldenEnemyEventFail: 'soundeffects/goldenemyeventfail.mp3',
   bombsiteSkull: 'soundeffects/skullbombsite.mp3',
   bombsiteFlower: 'soundeffects/flowerbombsite.mp3',
   bombsiteBats: 'soundeffects/batbombsite.mp3',
   bombsiteWitch: 'soundeffects/witchlaugh.mp3'
 } as const;
 type PresentationSfxName = keyof typeof PRESENTATION_SFX_SOURCES;
+const ARCADE_EVENT_SFX_NAMES = [
+  'overloadEvent',
+  'supplyDropEvent',
+  'dataThiefEntrance',
+  'dataThiefFail',
+  'goldenEnemyEvent',
+  'goldenEnemyEventFail'
+] as const satisfies readonly PresentationSfxName[];
 const PRESENTATION_SFX_POOL_SIZES: Record<PresentationSfxName, number> = {
   gasCanImpact: 3,
   gasFizz: 2,
@@ -47,6 +61,12 @@ const PRESENTATION_SFX_POOL_SIZES: Record<PresentationSfxName, number> = {
   mageBossMagicAttack: 3,
   brawlerBossChargeAttack: 2,
   circuitGate: 2,
+  overloadEvent: 1,
+  supplyDropEvent: 1,
+  dataThiefEntrance: 1,
+  dataThiefFail: 1,
+  goldenEnemyEvent: 1,
+  goldenEnemyEventFail: 1,
   bombsiteSkull: 2,
   bombsiteFlower: 2,
   bombsiteBats: 2,
@@ -65,6 +85,12 @@ const PRESENTATION_SFX_MIN_INTERVAL_MS: Record<PresentationSfxName, number> = {
   mageBossMagicAttack: 180,
   brawlerBossChargeAttack: 400,
   circuitGate: 80,
+  overloadEvent: 750,
+  supplyDropEvent: 750,
+  dataThiefEntrance: 750,
+  dataThiefFail: 750,
+  goldenEnemyEvent: 750,
+  goldenEnemyEventFail: 750,
   bombsiteSkull: 80,
   bombsiteFlower: 80,
   bombsiteBats: 80,
@@ -140,12 +166,16 @@ export class AudioManager {
     gasCanImpact: [], gasFizz: [], totemEntrance: [], totemPulse: [], miniBossSpawn: [],
     bossArtilleryExplosion: [], sentryBossAttack: [], grenadeShotExplosion: [], mageBossLargeAttack: [],
     mageBossMagicAttack: [], brawlerBossChargeAttack: [], circuitGate: [],
+    overloadEvent: [], supplyDropEvent: [], dataThiefEntrance: [], dataThiefFail: [],
+    goldenEnemyEvent: [], goldenEnemyEventFail: [],
     bombsiteSkull: [], bombsiteFlower: [], bombsiteBats: [], bombsiteWitch: []
   };
   private readonly presentationSfxCursors: Record<PresentationSfxName, number> = {
     gasCanImpact: 0, gasFizz: 0, totemEntrance: 0, totemPulse: 0, miniBossSpawn: 0,
     bossArtilleryExplosion: 0, sentryBossAttack: 0, grenadeShotExplosion: 0, mageBossLargeAttack: 0,
     mageBossMagicAttack: 0, brawlerBossChargeAttack: 0, circuitGate: 0,
+    overloadEvent: 0, supplyDropEvent: 0, dataThiefEntrance: 0, dataThiefFail: 0,
+    goldenEnemyEvent: 0, goldenEnemyEventFail: 0,
     bombsiteSkull: 0, bombsiteFlower: 0, bombsiteBats: 0, bombsiteWitch: 0
   };
   private readonly lastPresentationSfxAt: Record<PresentationSfxName, number> = {
@@ -153,6 +183,8 @@ export class AudioManager {
     totemPulse: -Infinity, miniBossSpawn: -Infinity, bossArtilleryExplosion: -Infinity, sentryBossAttack: -Infinity,
     grenadeShotExplosion: -Infinity, mageBossLargeAttack: -Infinity,
     mageBossMagicAttack: -Infinity, brawlerBossChargeAttack: -Infinity, circuitGate: -Infinity,
+    overloadEvent: -Infinity, supplyDropEvent: -Infinity, dataThiefEntrance: -Infinity, dataThiefFail: -Infinity,
+    goldenEnemyEvent: -Infinity, goldenEnemyEventFail: -Infinity,
     bombsiteSkull: -Infinity, bombsiteFlower: -Infinity, bombsiteBats: -Infinity, bombsiteWitch: -Infinity
   };
   private runStartSfx: HTMLAudioElement | null = null;
@@ -362,6 +394,22 @@ export class AudioManager {
     }
     audio.volume = this.getSfxVolume(name);
     void audio.play().catch(() => undefined);
+  }
+
+  /** Stops only arcade-event presentation voices when an Arena is discarded. */
+  stopArcadeEventSfx(): void {
+    for (const name of ARCADE_EVENT_SFX_NAMES) {
+      for (const audio of this.presentationSfxPools[name]) {
+        audio.pause();
+        try {
+          audio.currentTime = 0;
+        } catch {
+          // Seeking is optional while a newly loaded clip has no metadata yet.
+        }
+      }
+      this.presentationSfxCursors[name] = 0;
+      this.lastPresentationSfxAt[name] = -Infinity;
+    }
   }
 
   private initPickupSfxPools(): void {
@@ -1170,6 +1218,12 @@ export class AudioManager {
       case 'mageBossMagicAttack':
       case 'brawlerBossChargeAttack':
       case 'circuitGate':
+      case 'overloadEvent':
+      case 'supplyDropEvent':
+      case 'dataThiefEntrance':
+      case 'dataThiefFail':
+      case 'goldenEnemyEvent':
+      case 'goldenEnemyEventFail':
       case 'bombsiteSkull':
       case 'bombsiteFlower':
       case 'bombsiteBats':

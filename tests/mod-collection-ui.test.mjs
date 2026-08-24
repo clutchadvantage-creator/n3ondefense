@@ -86,6 +86,21 @@ test('archive support panels use live analytics and selection-linked inspection 
   assert.match(presentation, /analytics\.categoryCounts/);
 });
 
+test('archive polish keeps telemetry bright, avoids microtext, and safely frames the selected card', () => {
+  const cards = readFileSync(new URL('../src/game/mods/ModCardView.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(presentation, /fontSize: ['`]7px/);
+  assert.doesNotMatch(presentation, /fontSize: ['`]8px/);
+  assert.match(terminalLayout, />= 88 \? \{/);
+  assert.match(presentation, /lowerPanel[\s\S]*?0x50c9d9, 0\.68/);
+  assert.match(presentation, /lowerInner[\s\S]*?0x55eaff, 0\.3/);
+  assert.match(presentation, /lowerTech\.lineStyle\(2, 0xff5bcf, 0\.95\)/);
+  assert.match(scene, /const detailCardTop = y \+ \(compactDetails \? 52 : 58\)/);
+  assert.match(scene, /detailCardTop \+ detailCardHeight \+ 18/);
+  assert.match(presentation, /localCard\.x - 14/);
+  assert.match(presentation, /localCard\.height \+ 28/);
+  assert.match(cards, /Phaser\.Math\.Clamp\(width \* 0\.076, 10, 14\)/);
+});
+
 test('collection presentation delegates to existing buttons and preserves disabled and locked feedback', () => {
   assert.match(presentation, /const button = createButton\(/);
   assert.match(scene, /disableButton\(recycleAll\)/);

@@ -1,4 +1,6 @@
 import type { Boss } from '../bosses/Boss.ts';
+import type { AudioSfxName } from '../config/audio.ts';
+import { AudioManager } from '../systems/AudioManager.ts';
 import { SeededRandom } from '../systems/SeededRandom.ts';
 import { ArcadeHudView } from './ArcadeHudView.ts';
 import {
@@ -22,6 +24,32 @@ import type {
 export interface N3ONArcadeControllerOptions {
   enabled: boolean;
 }
+
+type ArcadeEventPresentationSfx = Extract<
+  AudioSfxName,
+  | 'overloadEvent'
+  | 'supplyDropEvent'
+  | 'dataThiefEntrance'
+  | 'dataThiefFail'
+  | 'goldenEnemyEvent'
+  | 'goldenEnemyEventFail'
+>;
+
+/**
+ * Audio terminology follows the player-facing names while runtime IDs remain
+ * stable for saves, telemetry, scheduling, and event-specific VFX.
+ */
+const ARCADE_EVENT_START_SFX: Partial<Record<ArcadeEventId, ArcadeEventPresentationSfx>> = {
+  redline: 'overloadEvent',
+  'hot-package': 'supplyDropEvent',
+  'packet-snatcher': 'dataThiefEntrance',
+  'golden-hunt': 'goldenEnemyEvent'
+};
+
+const ARCADE_EVENT_FAILURE_SFX: Partial<Record<ArcadeEventId, ArcadeEventPresentationSfx>> = {
+  'packet-snatcher': 'dataThiefFail',
+  'golden-hunt': 'goldenEnemyEventFail'
+};
 
 export class N3ONArcadeController {
   private readonly random: SeededRandom;
@@ -121,6 +149,7 @@ export class N3ONArcadeController {
   destroy(reason: ArcadeStopReason = 'scene-shutdown'): void {
     if (this.destroyed) return;
     this.stop(reason);
+    AudioManager.get().stopArcadeEventSfx();
     this.destroyed = true;
     this.hud.destroy();
   }
@@ -139,6 +168,8 @@ export class N3ONArcadeController {
       name: 'arcade_event_started', eventId: definition.id, round: this.context.round,
       protocol: this.context.protocol, elapsedMs: 0
     });
+    const startSfx = ARCADE_EVENT_START_SFX[definition.id];
+    if (startSfx) AudioManager.get().playSfx(startSfx);
     this.hud.announce(definition.displayName, definition.description);
     this.hud.showObjective(event.objectiveText(this.activeElapsedMs));
     return true;
@@ -169,6 +200,8 @@ export class N3ONArcadeController {
         success: true, reason: outcome.reason
       });
     } else {
+      const failureSfx = ARCADE_EVENT_FAILURE_SFX[definition.id];
+      if (failureSfx) AudioManager.get().playSfx(failureSfx);
       this.context.emitMetric({
         name: 'arcade_event_failed', eventId: definition.id, round: this.context.round,
         protocol: this.context.protocol, elapsedMs: Math.max(0, this.activeElapsedMs - this.activeStartedAt),

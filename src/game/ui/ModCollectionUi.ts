@@ -185,13 +185,13 @@ export const createModCollectionShell = (
     shadow: { color: '#39eeff', blur: 9, fill: true }, letterSpacing: 1
   }).setOrigin(0.5, 0);
   const subtitle = scene.add.text(width / 2, layout.subtitleY, 'OPERATIVE ARCHIVE // MODULAR INVENTORY CONTROL', {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 13}px`, color: '#d28abb', fontStyle: 'bold', letterSpacing: 2
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 12 : 14}px`, color: '#e09bc9', fontStyle: 'bold', letterSpacing: 2
   }).setOrigin(0.5, 0);
   const leftStatus = scene.add.text(margin + layout.statusSideInset, layout.statusY, 'N3ON ARMORY // LOCAL VAULT', {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, color: '#73c7d4', fontStyle: 'bold', letterSpacing: 1
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 12}px`, color: '#83dce7', fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(0, 0);
   const rightStatus = scene.add.text(width - margin - layout.statusSideInset, layout.statusY, 'COLLECTION LINK // SYNCED', {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, color: '#76ffb0', fontStyle: 'bold', letterSpacing: 1
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 12}px`, color: '#83ffb8', fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(1, 0);
   shell.add([ghost, title, subtitle, leftStatus, rightStatus]);
 
@@ -206,11 +206,12 @@ export const createModCollectionShell = (
     const cell = scene.add.rectangle(x, railY - railHeight / 2, cellWidth, railHeight, 0x07141f, 0.94)
       .setOrigin(0, 0).setStrokeStyle(1, readout.color, 0.31);
     const edge = scene.add.rectangle(x + 4, railY, 3, railHeight - 12, readout.color, 0.7);
+    const tightCell = cellWidth < 132;
     const label = scene.add.text(x + 15, railY, readout.label, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 8 : 10}px`, color: '#7faebb', fontStyle: 'bold', letterSpacing: compact ? 0 : 1
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${tightCell ? 9 : compact ? 10 : 11}px`, color: '#94c8d3', fontStyle: 'bold', letterSpacing: compact ? 0 : 1
     }).setOrigin(0, 0.5);
     const value = scene.add.text(x + cellWidth - 12, railY, readout.value, {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 11 : 14}px`, color: Phaser.Display.Color.IntegerToColor(readout.color).rgba, fontStyle: 'bold'
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${tightCell ? 12 : compact ? 13 : 15}px`, color: Phaser.Display.Color.IntegerToColor(readout.color).rgba, fontStyle: 'bold'
     }).setOrigin(1, 0.5).setMaxLines(1);
     shell.add([cell, edge, label, value]);
     if (readout.delta) {
@@ -221,7 +222,7 @@ export const createModCollectionShell = (
         `${gained ? '+' : '−'}${Math.abs(readout.delta).toLocaleString()}`,
         {
           fontFamily: 'Rajdhani, sans-serif',
-          fontSize: `${compact ? 9 : 12}px`,
+          fontSize: `${compact ? 10 : 13}px`,
           color: gained ? '#69ff9c' : '#ff647d',
           fontStyle: 'bold'
         }
@@ -254,7 +255,7 @@ export const createModCollectionFrame = (
   const headerDivider = scene.add.rectangle(12, headerHeight - 3, rect.width - 24, 1, accent, 0.28).setOrigin(0, 0);
   const leftEdge = scene.add.rectangle(4, headerHeight + 8, 2, Math.max(0, rect.height - headerHeight - 16), 0xff5bcf, 0.28).setOrigin(0, 0);
   const label = scene.add.text(18, 14, title, {
-    fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(rect.width / 62, 10, 14)}px`,
+    fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(rect.width / 58, 11, 15)}px`,
     color: Phaser.Display.Color.IntegerToColor(accent).rgba, fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(0, 0).setMaxLines(1);
   const led = scene.add.circle(rect.width - 18, 21, 3, accent, 0.92);
@@ -305,8 +306,8 @@ export const createModArchiveCommandTelemetry = (
     : `DISCOVERED ${discovery}  //  EQUIPPED ${analytics.equippedCards}  //  INFUSED ${analytics.infusedCards}  //  SALVAGE ${analytics.recyclableCards} → ${analytics.salvagePlasma}◆  //  SYNC 100%`;
   const status = scene.add.text(rect.width - 48, 20, text, {
     fontFamily: 'Rajdhani, sans-serif',
-    fontSize: `${compact ? 9 : 11}px`,
-    color: '#75d3df',
+    fontSize: `${compact ? 10 : 12}px`,
+    color: '#8de5ef',
     fontStyle: 'bold',
     letterSpacing: compact ? 0 : 1
   }).setOrigin(1, 0.5).setMaxLines(1);
@@ -340,7 +341,7 @@ export const createModSelectedInspector = (
     const panel = scene.add.rectangle(16, overviewTop, rect.width - 32, overviewHeight, 0x030c14, 0.82)
       .setOrigin(0, 0).setStrokeStyle(1, 0x55eaff, 0.28);
     const title = scene.add.text(rect.width / 2, overviewTop + 25, 'ARCHIVE OVERVIEW // AWAITING SELECTION', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '12px', color: '#75eaff', fontStyle: 'bold', letterSpacing: 1
+      fontFamily: 'Orbitron, sans-serif', fontSize: '13px', color: '#86f1ff', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5);
     const rows = [
       ['DISCOVERED', `${analytics.discoveredDefinitions} / ${analytics.totalDefinitions}`],
@@ -354,10 +355,10 @@ export const createModSelectedInspector = (
       graphics.lineStyle(1, 0x2c7180, 0.3);
       graphics.lineBetween(30, rowY + 15, rect.width - 30, rowY + 15);
       root.add(scene.add.text(30, rowY, label, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', color: '#7095a4', fontStyle: 'bold'
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', color: '#87aeb9', fontStyle: 'bold'
       }).setOrigin(0, 0.5));
       root.add(scene.add.text(rect.width - 30, rowY, value, {
-        fontFamily: 'Orbitron, sans-serif', fontSize: '13px', color: '#d7faff', fontStyle: 'bold'
+        fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#e5fcff', fontStyle: 'bold'
       }).setOrigin(1, 0.5));
     });
     root.addAt([panel, graphics, title], 0);
@@ -371,12 +372,12 @@ export const createModSelectedInspector = (
     height: cardRect.height
   };
   const accent = data.rarityColor;
-  const chamberX = Math.max(12, localCard.x - 12);
-  const chamberY = Math.max(42, localCard.y - 10);
-  const chamberWidth = Math.min(rect.width - chamberX - 12, localCard.width + 24);
-  const chamberHeight = localCard.height + 20;
-  const chamber = scene.add.rectangle(chamberX, chamberY, chamberWidth, chamberHeight, 0x020910, 0.7)
-    .setOrigin(0, 0).setStrokeStyle(1, accent, 0.32);
+  const chamberX = Math.max(12, localCard.x - 14);
+  const chamberY = Math.max(44, localCard.y - 14);
+  const chamberWidth = Math.min(rect.width - chamberX - 12, localCard.width + 28);
+  const chamberHeight = localCard.height + 28;
+  const chamber = scene.add.rectangle(chamberX, chamberY, chamberWidth, chamberHeight, 0x020b13, 0.82)
+    .setOrigin(0, 0).setStrokeStyle(1, accent, 0.48);
   const scanGrid = scene.add.graphics();
   scanGrid.lineStyle(1, accent, 0.09);
   for (let y = chamberY + 12; y < chamberY + chamberHeight - 8; y += 15) {
@@ -389,7 +390,7 @@ export const createModSelectedInspector = (
 
   const sideSpace = Math.max(0, (rect.width - localCard.width) / 2 - 16);
   const sideObjects: Phaser.GameObjects.GameObject[] = [];
-  if (sideSpace >= 42) {
+  if (sideSpace >= 48) {
     const leftX = Math.max(14, localCard.x - sideSpace + 4);
     const rightX = Math.min(rect.width - 14, localCard.x + localCard.width + sideSpace - 4);
     const rows = [
@@ -403,10 +404,10 @@ export const createModSelectedInspector = (
     for (const row of rows) {
       sideObjects.push(
         scene.add.text(row.x, row.y, row.label, {
-          fontFamily: 'Rajdhani, sans-serif', fontSize: '8px', color: '#668c99', fontStyle: 'bold'
+          fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#84aeb8', fontStyle: 'bold'
         }).setOrigin(row.origin, 0.5),
-        scene.add.text(row.x, row.y + 12, row.value, {
-          fontFamily: 'Orbitron, sans-serif', fontSize: '9px', color: row.label === 'LINK' && data.equipped ? '#70ffad' : '#bdeff5', fontStyle: 'bold'
+        scene.add.text(row.x, row.y + 14, row.value, {
+          fontFamily: 'Orbitron, sans-serif', fontSize: '11px', color: row.label === 'LINK' && data.equipped ? '#70ffad' : '#d2f8fc', fontStyle: 'bold'
         }).setOrigin(row.origin, 0.5)
       );
     }
@@ -437,10 +438,10 @@ export const createModSelectedTracePanel = (
   const panel = scene.add.rectangle(0, 0, rect.width, rect.height, 0x030c14, 0.88)
     .setOrigin(0, 0).setStrokeStyle(1, data.rarityColor, 0.3);
   const label = scene.add.text(12, 8, 'SIGNAL TRACE // MODULE INSPECTION', {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: '#74bfca', fontStyle: 'bold', letterSpacing: 1
+    fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#8ddce6', fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(0, 0);
   const state = scene.add.text(rect.width - 12, 8, `${formatArchiveTimestamp(data.acquiredAt)} // ${data.infused ? 'INFUSED' : 'BASE'} // ${data.equipped ? 'LINKED' : 'STORED'}`, {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: data.equipped ? '#72ffad' : '#a4ccd3', fontStyle: 'bold'
+    fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: data.equipped ? '#72ffad' : '#bce6eb', fontStyle: 'bold'
   }).setOrigin(1, 0);
   const graph = scene.add.graphics();
   const left = 12;
@@ -512,9 +513,9 @@ export const createModArchiveTerminal = (
     const diagnosticTech = scene.add.graphics();
     diagnosticTech.lineStyle(1, 0x55eaff, 0.22);
     diagnosticTech.lineBetween(diagnosticLocal.x + 6, diagnosticLocal.y + 8, diagnosticLocal.x + diagnosticLocal.width - 6, diagnosticLocal.y + 8);
-    const roomyDiagnostics = diagnosticLocal.width >= 100;
+    const roomyDiagnostics = diagnosticLocal.width >= 112;
     const diagnosticLabel = scene.add.text(diagnosticLocal.x + diagnosticLocal.width / 2, diagnosticLocal.y + 20, roomyDiagnostics ? 'LIVE INDEX' : 'INDEX', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${diagnosticLocal.width >= 100 ? 10 : 8}px`, color: '#6fbdca', fontStyle: 'bold', letterSpacing: 1
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomyDiagnostics ? 11 : 10}px`, color: '#87d3de', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5);
     const diagnosticRows = [
       [roomyDiagnostics ? 'MATCHING' : 'MATCH', String(analytics.matchingCards)],
@@ -529,10 +530,10 @@ export const createModArchiveTerminal = (
       diagnosticTech.lineBetween(diagnosticLocal.x + 9, rowY + 13, diagnosticLocal.x + diagnosticLocal.width - 9, rowY + 13);
       diagnosticText.push(
         scene.add.text(diagnosticLocal.x + 10, rowY, label, {
-          fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomyDiagnostics ? 9 : 7}px`, color: '#617f8a', fontStyle: 'bold'
+          fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#82a8b2', fontStyle: 'bold'
         }).setOrigin(0, 0.5),
         scene.add.text(diagnosticLocal.x + diagnosticLocal.width - 10, rowY, value, {
-          fontFamily: 'Orbitron, sans-serif', fontSize: `${roomyDiagnostics ? 11 : 8}px`, color: '#bceff6', fontStyle: 'bold'
+          fontFamily: 'Orbitron, sans-serif', fontSize: `${roomyDiagnostics ? 12 : 11}px`, color: '#d4f8fc', fontStyle: 'bold'
         }).setOrigin(1, 0.5)
       );
     });
@@ -555,7 +556,7 @@ export const createModArchiveTerminal = (
       diagnosticTech.fillRect(diagnosticLocal.x + 11 + index * (chartWidth + 3), chartBottom - barHeight, chartWidth, barHeight);
     });
     const diagnosticStatus = scene.add.text(diagnosticLocal.x + diagnosticLocal.width / 2, diagnosticLocal.y + diagnosticLocal.height - 13, roomyDiagnostics ? 'ARCHIVE BUS // READY' : 'READY', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${diagnosticLocal.width >= 100 ? 9 : 7}px`, color: '#72ffaf', fontStyle: 'bold'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomyDiagnostics ? 10 : 9}px`, color: '#7dffb5', fontStyle: 'bold'
     }).setOrigin(0.5);
     const diagnosticLeds = [0.3, 0.5, 0.7].map((fraction, index) => scene.add.circle(
       diagnosticLocal.x + diagnosticLocal.width * fraction,
@@ -596,31 +597,31 @@ export const createModArchiveTerminal = (
       height: lowerConsole.height
     };
     const lowerShadow = scene.add.rectangle(lowerLocal.x + 3, lowerLocal.y + 4, lowerLocal.width, lowerLocal.height, 0x000000, 0.54).setOrigin(0, 0);
-    const lowerPanel = scene.add.rectangle(lowerLocal.x, lowerLocal.y, lowerLocal.width, lowerLocal.height, 0x06121b, 0.96)
-      .setOrigin(0, 0).setStrokeStyle(1, 0x2b8191, 0.4);
-    const lowerInner = scene.add.rectangle(lowerLocal.x + 7, lowerLocal.y + Math.min(7, lowerLocal.height * 0.2), lowerLocal.width - 14, Math.max(1, lowerLocal.height - Math.min(14, lowerLocal.height * 0.4)), 0x020910, 0.64)
-      .setOrigin(0, 0).setStrokeStyle(1, 0x55eaff, 0.13);
+    const lowerPanel = scene.add.rectangle(lowerLocal.x, lowerLocal.y, lowerLocal.width, lowerLocal.height, 0x071823, 0.98)
+      .setOrigin(0, 0).setStrokeStyle(1, 0x50c9d9, 0.68);
+    const lowerInner = scene.add.rectangle(lowerLocal.x + 7, lowerLocal.y + Math.min(7, lowerLocal.height * 0.2), lowerLocal.width - 14, Math.max(1, lowerLocal.height - Math.min(14, lowerLocal.height * 0.4)), 0x041019, 0.84)
+      .setOrigin(0, 0).setStrokeStyle(1, 0x55eaff, 0.3);
     const lowerTech = scene.add.graphics();
     const moduleObjects: Phaser.GameObjects.GameObject[] = [];
     lowerTech.lineStyle(2, 0x55eaff, 0.34);
     lowerTech.lineBetween(lowerLocal.x + 16, lowerLocal.y + 5, lowerLocal.x + lowerLocal.width - 16, lowerLocal.y + 5);
 
     if (lowerLocal.height >= 42) {
-      const moduleGap = 8;
-      const moduleInset = 8;
+      const moduleGap = 10;
+      const moduleInset = 10;
       const moduleWidth = (lowerLocal.width - moduleInset * 2 - moduleGap * 3) / 4;
-      const moduleTop = lowerLocal.y + 9;
-      const moduleHeight = lowerLocal.height - 18;
+      const moduleTop = lowerLocal.y + 11;
+      const moduleHeight = lowerLocal.height - 22;
       const titles = ['ARCHIVE CORE', 'INDEX BUFFER', 'DATA BUS', 'SYSTEM READY'];
       const moduleLeft = (index: number): number => lowerLocal.x + moduleInset + index * (moduleWidth + moduleGap);
       for (let index = 0; index < titles.length; index += 1) {
         const left = moduleLeft(index);
         moduleObjects.push(
-          scene.add.rectangle(left, moduleTop, moduleWidth, moduleHeight, index === 3 ? 0x071914 : 0x030b12, 0.88)
-            .setOrigin(0, 0).setStrokeStyle(1, index === 3 ? 0x69ffad : index === 2 ? 0xff5bcf : 0x3c9cab, 0.28),
-          scene.add.text(left + 10, moduleTop + 10, titles[index], {
-            fontFamily: 'Rajdhani, sans-serif', fontSize: `${moduleHeight >= 90 ? 11 : 9}px`,
-            color: index === 3 ? '#71ffad' : '#70b6c2', fontStyle: 'bold', letterSpacing: 1
+          scene.add.rectangle(left, moduleTop, moduleWidth, moduleHeight, index === 3 ? 0x09231b : 0x071722, 0.97)
+            .setOrigin(0, 0).setStrokeStyle(1, index === 3 ? 0x69ffad : index === 2 ? 0xff5bcf : 0x55c4d4, 0.58),
+          scene.add.text(left + 11, moduleTop + 10, titles[index], {
+            fontFamily: 'Rajdhani, sans-serif', fontSize: `${moduleHeight >= 90 ? 12 : 10}px`,
+            color: index === 3 ? '#84ffbd' : '#91e4ee', fontStyle: 'bold', letterSpacing: 1
           }).setOrigin(0, 0)
         );
       }
@@ -633,21 +634,21 @@ export const createModArchiveTerminal = (
         : 0;
       moduleObjects.push(
         scene.add.text(coreLeft + 10, graphTop, `${analytics.discoveredDefinitions} / ${analytics.totalDefinitions}`, {
-          fontFamily: 'Orbitron, sans-serif', fontSize: `${moduleHeight >= 120 ? 18 : 12}px`, color: '#d8faff', fontStyle: 'bold'
+          fontFamily: 'Orbitron, sans-serif', fontSize: `${moduleHeight >= 120 ? 19 : 14}px`, color: '#e7fcff', fontStyle: 'bold'
         }).setOrigin(0, 0),
         scene.add.text(coreLeft + moduleWidth - 10, graphTop + 2, `${analytics.totalCards} CARDS`, {
-          fontFamily: 'Rajdhani, sans-serif', fontSize: `${moduleHeight >= 90 ? 10 : 8}px`, color: '#749ba7', fontStyle: 'bold'
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${moduleHeight >= 90 ? 11 : 10}px`, color: '#93c0ca', fontStyle: 'bold'
         }).setOrigin(1, 0)
       );
       const coreBarY = Math.min(graphBottom - 8, graphTop + (moduleHeight >= 120 ? 42 : 25));
       lowerTech.fillStyle(0x102932, 0.9);
       lowerTech.fillRect(coreLeft + 10, coreBarY, moduleWidth - 20, 7);
-      lowerTech.fillStyle(0x55eaff, 0.82);
+      lowerTech.fillStyle(0x55eaff, 0.96);
       lowerTech.fillRect(coreLeft + 10, coreBarY, (moduleWidth - 20) * discoveryRatio, 7);
       if (moduleHeight >= 120) {
         moduleObjects.push(scene.add.text(coreLeft + 10, coreBarY + 17,
           `INFUSED ${analytics.infusedCards}  //  LOADOUT ${analytics.equippedCards}\nSALVAGE ${analytics.recyclableCards} → ${analytics.salvagePlasma}◆`, {
-            fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#82b4bf', fontStyle: 'bold', lineSpacing: 5
+            fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', color: '#a0d4dd', fontStyle: 'bold', lineSpacing: 5
           }).setOrigin(0, 0));
       }
 
@@ -667,20 +668,20 @@ export const createModArchiveTerminal = (
         const barHeight = value > 0 ? Math.max(2, (graphBottom - graphTop - 14) * (value / categoryMaximum)) : 0;
         const barWidth = Math.max(4, categorySlot - 7);
         const x = indexLeft + 10 + index * categorySlot + (categorySlot - barWidth) / 2;
-        lowerTech.fillStyle(categoryColors[index], 0.58);
+        lowerTech.fillStyle(categoryColors[index], 0.8);
         lowerTech.fillRect(x, graphBottom - 12 - barHeight, barWidth, barHeight);
         moduleObjects.push(scene.add.text(x + barWidth / 2, graphBottom - 5, categoryLabels[index], {
-          fontFamily: 'Rajdhani, sans-serif', fontSize: '8px', color: '#7ca7b1', fontStyle: 'bold'
+          fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#a1ccd4', fontStyle: 'bold'
         }).setOrigin(0.5));
       });
 
       const dataLeft = moduleLeft(2);
-      lowerTech.lineStyle(1, 0x55eaff, 0.1);
+      lowerTech.lineStyle(1, 0x55eaff, 0.2);
       for (let index = 0; index <= 4; index += 1) {
         const y = graphTop + ((graphBottom - graphTop) * index) / 4;
         lowerTech.lineBetween(dataLeft + 10, y, dataLeft + moduleWidth - 10, y);
       }
-      lowerTech.lineStyle(2, 0xff5bcf, 0.72);
+      lowerTech.lineStyle(2, 0xff5bcf, 0.95);
       lowerTech.beginPath();
       analytics.signalTrace.forEach((value, index) => {
         const x = dataLeft + 10 + ((moduleWidth - 20) * index) / Math.max(1, analytics.signalTrace.length - 1);
@@ -688,7 +689,7 @@ export const createModArchiveTerminal = (
         if (index === 0) lowerTech.moveTo(x, y); else lowerTech.lineTo(x, y);
       });
       lowerTech.strokePath();
-      const dataSweep = scene.add.rectangle(dataLeft + 10, graphTop, 2, Math.max(3, graphBottom - graphTop), 0x70efff, 0.14).setOrigin(0, 0);
+      const dataSweep = scene.add.rectangle(dataLeft + 10, graphTop, 2, Math.max(3, graphBottom - graphTop), 0x70efff, 0.24).setOrigin(0, 0);
       moduleObjects.push(dataSweep);
       scene.tweens.add({ targets: dataSweep, x: dataLeft + moduleWidth - 12, alpha: { from: 0.06, to: 0.28 }, duration: 2100, repeat: -1, repeatDelay: 900 });
 
@@ -704,10 +705,10 @@ export const createModArchiveTerminal = (
         moduleObjects.push(
           scene.add.circle(systemLeft + 13, y + 5, 2.2, index === 0 ? 0x69ffad : 0x55eaff, 0.85),
           scene.add.text(systemLeft + 22, y, label, {
-            fontFamily: 'Rajdhani, sans-serif', fontSize: '8px', color: '#6e929c', fontStyle: 'bold'
+            fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#90bbc4', fontStyle: 'bold'
           }).setOrigin(0, 0),
           scene.add.text(systemLeft + moduleWidth - 10, y, value, {
-            fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: index === 0 ? '#70ffad' : '#bee8ed', fontStyle: 'bold'
+            fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', color: index === 0 ? '#7dffb6' : '#d3f6fa', fontStyle: 'bold'
           }).setOrigin(1, 0)
         );
       });
@@ -722,7 +723,7 @@ export const createModArchiveTerminal = (
           lowerTech.fillStyle(index === 3 ? 0xff5bcf : 0x55eaff, 0.52 + index * 0.08);
           lowerTech.fillRect(x, rankBottom - height, Math.max(4, rankSlot - 7), height);
           moduleObjects.push(scene.add.text(x + Math.max(4, rankSlot - 7) / 2, rankBottom + 6, `R${index}`, {
-            fontFamily: 'Rajdhani, sans-serif', fontSize: '8px', color: '#7298a2', fontStyle: 'bold'
+            fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#97c1ca', fontStyle: 'bold'
           }).setOrigin(0.5, 0));
         });
       }
@@ -753,10 +754,10 @@ export const createModArchiveTerminal = (
   const headerTitle = scene.add.text(22, 16, narrowTerminal
     ? `MOD ARCHIVE TERMINAL // ${analytics.matchingCards} CARDS`
     : `MOD ARCHIVE TERMINAL // OWNED INDEX: ${analytics.matchingCards} MATCHING CARDS`, {
-    fontFamily: 'Orbitron, sans-serif', fontSize: `${frame.width < 720 ? 11 : 14}px`, color: '#71f3ff', fontStyle: 'bold', letterSpacing: 1
+    fontFamily: 'Orbitron, sans-serif', fontSize: `${frame.width < 720 ? 12 : 15}px`, color: '#82f5ff', fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(0, 0);
   const headerStatus = scene.add.text(frame.width - 22, 17, narrowTerminal ? 'ONLINE' : 'ARCHIVE ONLINE // LOCAL VAULT', {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${frame.width < 720 ? 9 : 11}px`, color: '#79ffaf', fontStyle: 'bold', letterSpacing: 1
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${frame.width < 720 ? 10 : 12}px`, color: '#83ffb6', fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(1, 0);
   const ledA = scene.add.circle(12, headerHeight / 2, 2.5, 0x69ff9c, 0.95);
   const ledB = scene.add.circle(frame.width - 12, headerHeight / 2, 2.5, 0xff5bcf, 0.9);
@@ -790,10 +791,10 @@ export const createModArchivePageReadout = (
   const panel = scene.add.rectangle(0, 0, width, height, 0x020b12, 0.98).setStrokeStyle(1, 0x55eaff, 0.5);
   const rail = scene.add.rectangle(0, -height / 2 + 3, width - 18, 2, 0xff5bcf, 0.48);
   const label = scene.add.text(0, height >= 48 ? -12 : -10, 'MOD ARCHIVE', {
-    fontFamily: 'Orbitron, sans-serif', fontSize: `${height >= 48 ? 10 : 9}px`, color: '#77bdc9', fontStyle: 'bold', letterSpacing: 2
+    fontFamily: 'Orbitron, sans-serif', fontSize: `${height >= 48 ? 11 : 10}px`, color: '#8fd8e2', fontStyle: 'bold', letterSpacing: 2
   }).setOrigin(0.5);
   const readout = scene.add.text(0, 3, `PAGE ${String(page + 1).padStart(2, '0')} / ${String(pageCount).padStart(2, '0')}`, {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${height >= 48 ? 17 : 15}px`, color: '#dcfaff', fontStyle: 'bold', letterSpacing: 1
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${height >= 48 ? 18 : 16}px`, color: '#e8fcff', fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(0.5);
   root.add([shadow, panel, rail, label, readout]);
   if (pageCount <= 10) {

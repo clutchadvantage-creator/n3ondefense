@@ -43,6 +43,38 @@ test('Arcade registry centralizes scheduling and registers all six events with p
   }
 });
 
+test('Arcade start and failure recordings use the central one-shot lifecycle and mixer', () => {
+  const controller = source('../src/game/arcade/N3ONArcadeController.ts');
+  const audio = source('../src/game/systems/AudioManager.ts');
+  const config = source('../src/game/config/audio.ts');
+  const files = {
+    overloadEvent: 'overloadevent.mp3',
+    supplyDropEvent: 'supplydropevent.mp3',
+    dataThiefEntrance: 'datatheifentrence.mp3',
+    dataThiefFail: 'datatheiffail.mp3',
+    goldenEnemyEvent: 'goldenenemyevent.mp3',
+    goldenEnemyEventFail: 'goldenemyeventfail.mp3'
+  };
+  for (const [key, filename] of Object.entries(files)) {
+    assert.ok(existsSync(new URL(`../public/assets/audio/soundeffects/${filename}`, import.meta.url)), filename);
+    assert.match(config, new RegExp(`key: '${key}'`));
+    assert.match(audio, new RegExp(`soundeffects/${filename.replace('.', '\\.')}`));
+    assert.match(audio, new RegExp(`case '${key}':`));
+  }
+  assert.match(controller, /redline: 'overloadEvent'/);
+  assert.match(controller, /'hot-package': 'supplyDropEvent'/);
+  assert.match(controller, /'packet-snatcher': 'dataThiefEntrance'/);
+  assert.match(controller, /'golden-hunt': 'goldenEnemyEvent'/);
+  assert.match(controller, /'packet-snatcher': 'dataThiefFail'/);
+  assert.match(controller, /'golden-hunt': 'goldenEnemyEventFail'/);
+  assert.match(controller, /private startDefinition[\s\S]*?ARCADE_EVENT_START_SFX\[definition\.id\][\s\S]*?playSfx\(startSfx\)/);
+  assert.match(controller, /private resolveActive[\s\S]*?ARCADE_EVENT_FAILURE_SFX\[definition\.id\][\s\S]*?playSfx\(failureSfx\)/);
+  assert.doesNotMatch(controller.match(/stop\(reason:[\s\S]*?\n  \}/)?.[0] ?? '', /playSfx/);
+  assert.match(audio, /ARCADE_EVENT_SFX_NAMES/);
+  assert.match(audio, /stopArcadeEventSfx\(\): void/);
+  assert.match(controller, /AudioManager\.get\(\)\.stopArcadeEventSfx\(\)/);
+});
+
 test('Arcade reward rolls stay side-effect free until the complete plan is physically spawned', () => {
   const spawned = [];
   const context = {

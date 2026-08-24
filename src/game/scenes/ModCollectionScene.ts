@@ -143,8 +143,8 @@ export class ModCollectionScene extends Phaser.Scene {
     });
     const narrow = width < 800;
     const returnWidth = narrow ? 120 : Phaser.Math.Clamp(width * 0.18, 160, 220);
-    const toolbarGap = narrow ? 8 : 12;
-    const toolbarStart = narrow ? 18 : 24;
+    const toolbarGap = narrow ? 10 : 16;
+    const toolbarStart = narrow ? 20 : 28;
     const toolbarAvailableWidth = width - returnWidth - toolbarStart - returnInset * 2 - 8;
     const toolbarButtonWidth = Phaser.Math.Clamp((toolbarAvailableWidth - toolbarGap * 3) / 4, narrow ? 80 : 108, 230);
     const toolbarX = (index: number): number => toolbarStart + toolbarButtonWidth / 2 + index * (toolbarButtonWidth + toolbarGap);
@@ -252,9 +252,10 @@ export class ModCollectionScene extends Phaser.Scene {
     const definition = selectedDefinition!;
     const owned = SaveSystem.getModCollection().inventory[card.modId];
     const compactDetails = height < 650;
-    const detailCardWidth = Math.min(220, width - 56, Phaser.Math.Clamp((height - (compactDetails ? 320 : 360)) / 1.4, compactDetails ? 118 : 145, 220));
+    const detailCardWidth = Math.min(210, width - 72, Phaser.Math.Clamp((height - (compactDetails ? 340 : 390)) / 1.4, compactDetails ? 118 : 145, 210));
     const detailCardHeight = detailCardWidth * 1.4;
-    const detailCardCenterY = y + 42 + detailCardHeight / 2;
+    const detailCardTop = y + (compactDetails ? 52 : 58);
+    const detailCardCenterY = detailCardTop + detailCardHeight / 2;
     const collection = SaveSystem.getModCollection();
     const selectedData: ModSelectedInspectorData = {
       rarity: definition.rarity,
@@ -271,7 +272,7 @@ export class ModCollectionScene extends Phaser.Scene {
     };
     createModSelectedInspector(this, detailRect, {
       x: x - detailCardWidth / 2,
-      y: y + 42,
+      y: detailCardTop,
       width: detailCardWidth,
       height: detailCardHeight
     }, selectedData, analytics);
@@ -284,8 +285,8 @@ export class ModCollectionScene extends Phaser.Scene {
       duplicateCount
     });
     const corruptedText = definition.variant === 'corrupted' ? `\n+ ${definition.positiveEffect}\n− ${definition.negativeEffect}` : '';
-    const detailCopy = this.add.text(x, y + 52 + detailCardHeight, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#e8f8ff', align: 'center', lineSpacing: 2
+    const detailCopy = this.add.text(x, detailCardTop + detailCardHeight + 18, `${definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compactDetails ? 16 : 18}px`, color: '#e8f8ff', align: 'center', lineSpacing: 3
     }).setOrigin(0.5, 0).setWordWrapWidth(width - 34, true);
     const categorySlot = definition.category === 'utility' ? null : definition.category as ModSlot;
     const buttonGap = compactDetails ? 38 : height < 650 ? 43 : 48;
@@ -294,11 +295,16 @@ export class ModCollectionScene extends Phaser.Scene {
     const traceHeight = height >= 760 ? 72 : 0;
     const traceTop = buttonY - traceHeight - (traceHeight > 0 ? 10 : 0);
     const availableDetailCopyHeight = Math.max(compactDetails ? 34 : 48, (traceHeight > 0 ? traceTop : buttonY) - detailCopy.y - 14);
-    for (let fontSize = 16; detailCopy.height > availableDetailCopyHeight && fontSize >= 14; fontSize -= 1) {
+    for (let fontSize = compactDetails ? 16 : 17; detailCopy.height > availableDetailCopyHeight && fontSize >= 15; fontSize -= 1) {
       detailCopy.setFontSize(fontSize);
     }
     if (detailCopy.height > availableDetailCopyHeight) {
-      detailCopy.setMaxLines(Math.max(height < 650 ? 2 : 4, Math.floor(availableDetailCopyHeight / 17)));
+      const maximumReadableLines = Phaser.Math.Clamp(
+        Math.floor((availableDetailCopyHeight + 3) / 18),
+        2,
+        compactDetails ? 3 : 5
+      );
+      detailCopy.setMaxLines(maximumReadableLines);
     }
     if (traceHeight > 0) {
       createModSelectedTracePanel(this, {

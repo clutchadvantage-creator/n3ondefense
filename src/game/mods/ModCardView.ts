@@ -66,16 +66,16 @@ export const createModCardView = (
   const container = scene.add.container(x, y);
   const compact = options.compact === true;
   const rarityFontSize = Math.round(compact
-    ? Phaser.Math.Clamp(width * 0.068, 8, 12)
+    ? Phaser.Math.Clamp(width * 0.07, 9, 13)
     : Phaser.Math.Clamp(width * 0.067, 12, 14));
   const nameFontSize = Math.round(compact
-    ? Phaser.Math.Clamp(width * 0.082, 10, 15)
+    ? Phaser.Math.Clamp(width * 0.086, 11, 16)
     : Phaser.Math.Clamp(width * 0.081, 15, 18));
   const statFontSize = Math.round(compact
-    ? Phaser.Math.Clamp(width * 0.074, 9, 13)
+    ? Phaser.Math.Clamp(width * 0.076, 10, 14)
     : Phaser.Math.Clamp(width * 0.072, 14, 16));
   const infusionFontSize = Math.round(compact
-    ? Phaser.Math.Clamp(width * 0.064, 8, 11)
+    ? Phaser.Math.Clamp(width * 0.066, 9, 12)
     : Phaser.Math.Clamp(width * 0.06, 11, 13));
   const shadow = scene.add.rectangle(4, 6, width, height, 0x000000, 0.45).setOrigin(0.5);
   const body = scene.add.rectangle(0, 0, width, height, corrupted ? 0x190817 : supreme ? 0x030c14 : 0x091521, 0.97)
@@ -150,7 +150,7 @@ export const createModCardView = (
       .setStrokeStyle(1, rarityColor, 0.9));
   }
   const rankLabel = scene.add.text(-width / 2 + 15 + rankDotGap * 2 + rankDotRadius + 5, -height / 2 + 15, options.rankLabel ?? (compact ? `R${rank}` : `R${rank}/${definition.maxRank}`), {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? Phaser.Math.Clamp(width * 0.06, 8, 11) : Phaser.Math.Clamp(width * 0.055, 11, 13)}px`,
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? Phaser.Math.Clamp(width * 0.062, 9, 12) : Phaser.Math.Clamp(width * 0.055, 11, 13)}px`,
     fontStyle: 'bold', color: '#b9dce5'
   }).setOrigin(0, 0.5).setVisible(!compact || width >= 112);
   const rarity = scene.add.text(width / 2 - 8, -height / 2 + 9, corrupted ? 'CORRUPTED' : definition.rarity.toUpperCase(), {
@@ -234,7 +234,7 @@ export const createModCardView = (
     equippedSpinner.arc(0, 0, 8, 0, Phaser.Math.PI2, false);
     equippedSpinner.strokePath();
     const equippedCore = scene.add.text(0, 0, 'E', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '8px', color: '#ffffff'
+      fontFamily: 'Orbitron, sans-serif', fontSize: compact ? '9px' : '10px', color: '#ffffff'
     }).setOrigin(0.5);
     equippedMarker.add([equippedGlow, equippedSpinner, equippedCore]);
     container.add(equippedMarker);
@@ -252,7 +252,7 @@ export const createModCardView = (
     const frontCard = scene.add.rectangle(0, 0, compact ? 11 : 14, compact ? 14 : 18, 0x152235, 1)
       .setStrokeStyle(1, markerColor, 1);
     const count = scene.add.text(0, 0, `+${options.duplicateCount}`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: compact ? '7px' : '10px', fontStyle: 'bold', color: '#fff3bd'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: compact ? '9px' : '11px', fontStyle: 'bold', color: '#fff3bd'
     }).setOrigin(0.5);
     duplicateMarker.add([backCard, frontCard, count]);
     container.add(duplicateMarker);
