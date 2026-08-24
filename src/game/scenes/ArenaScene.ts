@@ -3330,7 +3330,8 @@ export class ArenaScene extends Phaser.Scene {
         this.audio.playSfx('unavailable');
         return;
       }
-      const turret = new Turret(this, x, y, SaveSystem.getCosmeticColor('turretSkin', now), cfg.hp, cfg.damage, cfg.fireRate, cfg.range);
+      const equippedTurretSkin = getCosmeticById(SaveSystem.getEquippedCosmeticId('turretSkin'));
+      const turret = new Turret(this, x, y, SaveSystem.getCosmeticColor('turretSkin', now), cfg.hp, cfg.damage, cfg.fireRate, cfg.range, equippedTurretSkin?.turretSkinEffect, equippedTurretSkin?.accentColor);
       turret.telemetryId = `turret-${++this.turretTelemetrySequence}`;
       this.turrets.push(turret);
       GameplayTelemetryRecorder.recordTurretPlaced(turret.telemetryId, { maximumHealth: cfg.hp, damage: cfg.damage, fireRate: cfg.fireRate, range: cfg.range });
@@ -3458,6 +3459,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateAbilities(now: number, dt: number): void {
     for (const turret of this.turrets) {
+      turret.updateCosmetic(now);
       const enemyTarget = this.getNearestEnemy(turret.sprite.x, turret.sprite.y, turret.range);
       const bossTarget = this.nearestActiveBossTarget(turret.sprite.x, turret.sprite.y);
       const bossInRange = Boolean(bossTarget?.active && !bossTarget.isDefeated
@@ -3471,6 +3473,7 @@ export class ArenaScene extends Phaser.Scene {
       if (!turret.canFire(now, fieldFireRate)) continue;
 
       turret.lastShotMs = now;
+      turret.markFired(now);
       GameplayTelemetryRecorder.recordTurretShot(turret.telemetryId);
       this.projectiles.push(this.obtainProjectile({
         x: turret.sprite.x, y: turret.sprite.y, texture: 'circle', width: 6, height: 6,
@@ -6516,12 +6519,14 @@ export class ArenaScene extends Phaser.Scene {
     const turretCfg = this.getAbilityConfig('turret');
     for (let index = 0; index < 3; index += 1) {
       const angle = index / 3 * Math.PI * 2;
+      const equippedTurretSkin = getCosmeticById(SaveSystem.getEquippedCosmeticId('turretSkin'));
       const turret = new Turret(
         this,
         this.player.x + Math.cos(angle) * 72,
         this.player.y + Math.sin(angle) * 72,
         SaveSystem.getCosmeticColor('turretSkin', now),
-        turretCfg.hp, turretCfg.damage, turretCfg.fireRate, turretCfg.range
+        turretCfg.hp, turretCfg.damage, turretCfg.fireRate, turretCfg.range,
+        equippedTurretSkin?.turretSkinEffect, equippedTurretSkin?.accentColor
       );
       turret.telemetryId = `turret-${++this.turretTelemetrySequence}`;
       this.turrets.push(turret);

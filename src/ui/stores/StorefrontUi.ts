@@ -5,6 +5,7 @@ import { createUpgradeSvgIcon, directionIcon } from './UpgradeIconRegistry.ts';
 import { getCosmeticPriceTier, getCosmeticPurchaseCosts, isPremiumCosmetic, resolveOperativeFrameAppearance } from '../../data/cosmetics.ts';
 import { AudioManager } from '../../game/systems/AudioManager.ts';
 import { createPremiumOperativeFrameSvg } from './PremiumOperativeFrameSvg.ts';
+import { createPremiumTurretSkinSvg } from './PremiumTurretSkinSvg.ts';
 import './storefront.css';
 
 export type StoreMode = 'cosmetics' | 'upgrades';
@@ -606,12 +607,20 @@ export class StorefrontUi {
     visual.dataset.shape = item.visualShape ?? 'circle';
     if (item.bombExplosionEffect) visual.dataset.effect = item.bombExplosionEffect;
     if (item.dashTrailEffect) visual.dataset.trailEffect = item.dashTrailEffect;
+    if (item.turretSkinEffect) visual.dataset.turretSkin = item.turretSkinEffect;
     visual.innerHTML = '<i class="trail-a"></i><i class="trail-b"></i><b></b><span></span>';
     if (item.category === 'playerShape' && premium) {
       const detailedFrame = createPremiumOperativeFrameSvg(item.visualShape);
       if (detailedFrame) {
         visual.classList.add('premium-operative-art');
         visual.append(detailedFrame);
+      }
+    }
+    if (item.category === 'turretSkin' && item.turretSkinEffect) {
+      const detailedTurret = createPremiumTurretSkinSvg(item.turretSkinEffect);
+      if (detailedTurret) {
+        visual.classList.add('premium-turret-art');
+        visual.append(detailedTurret);
       }
     }
     return visual;

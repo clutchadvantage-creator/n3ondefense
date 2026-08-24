@@ -77,7 +77,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private cosmeticPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
   private tutorialDirector: TutorialDirector | null = null;
   private readonly tutorialTargets = new Map<string, Phaser.GameObjects.Container>();
-  private cosmeticPreviewColorTargets: Array<{ item: CosmeticOption; setColor: (color: number) => void }> = [];
+  private cosmeticPreviewColorTargets: Array<{ item: CosmeticOption; setColor: (color: number) => void; update?: (timeMs: number) => void }> = [];
   private status = '';
   private libraryCategoryIndex = 0;
   private libraryRarityIndex = 0;
@@ -1251,7 +1251,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const projectileTextureKey = getCosmeticTextureKey(SaveSystem.getEquippedCosmeticId('projectileShape'), 'projectile-pulse');
     const preview = createCosmeticPreview(this, item, x, y, { maxWidth, maxHeight, operatorTextureKey, operatorFrameId, operativeColorId, projectileTextureKey });
     const dynamicColor = item.category === 'playerShape' ? getCosmeticById(operativeColorId) : item;
-    if (dynamicColor?.colorMode === 'prism') this.cosmeticPreviewColorTargets.push({ item: dynamicColor, setColor: preview.setColor });
+    if (dynamicColor?.colorMode === 'prism' || preview.update) this.cosmeticPreviewColorTargets.push({ item: dynamicColor ?? item, setColor: preview.setColor, update: preview.update });
     return preview.container;
   }
 
@@ -1262,7 +1262,10 @@ export class OperatorGarageScene extends Phaser.Scene {
       loop: true,
       callback: () => {
         const now = this.time.now;
-        this.cosmeticPreviewColorTargets.forEach(({ item, setColor }) => setColor(getCosmeticDisplayColor(item, now)));
+        this.cosmeticPreviewColorTargets.forEach(({ item, setColor, update }) => {
+          if (item.colorMode === 'prism') setColor(getCosmeticDisplayColor(item, now));
+          update?.(now);
+        });
       }
     });
   }

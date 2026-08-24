@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { createPremiumTurretVisual, type PremiumTurretVisualHandle } from '../cosmetics/PremiumTurretVisual.ts';
+import type { TurretSkinCosmeticEffectId } from '../types.ts';
 
 export class Turret {
   readonly sprite: Phaser.GameObjects.Container;
@@ -10,6 +12,7 @@ export class Turret {
   private readonly muzzle: Phaser.GameObjects.Rectangle;
   private readonly healthTrack: Phaser.GameObjects.Rectangle;
   private readonly healthFill: Phaser.GameObjects.Rectangle;
+  private readonly premiumVisual: PremiumTurretVisualHandle | null;
   private readonly maxHp: number;
   hp: number;
   damage: number;
@@ -19,7 +22,7 @@ export class Turret {
   disabledUntil = 0;
   telemetryId = '';
 
-  constructor(scene: Phaser.Scene, x: number, y: number, color: number, hp: number, damage: number, fireRate: number, range: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, color: number, hp: number, damage: number, fireRate: number, range: number, cosmeticEffect?: TurretSkinCosmeticEffectId, accentColor = color) {
     this.glow = scene.add.circle(0, 1, 15, color, 0.12).setStrokeStyle(1, color, 0.32);
     this.base = scene.add.circle(0, 4, 10, 0x07131d, 0.98).setStrokeStyle(2, color, 0.95);
     this.housing = scene.add.rectangle(0, 0, 15, 12, 0x102838, 1).setStrokeStyle(2, color, 1);
@@ -30,6 +33,13 @@ export class Turret {
     this.healthTrack = scene.add.rectangle(0, 21, 28, 4, 0x130b12, 0.92).setStrokeStyle(1, color, 0.7);
     this.healthFill = scene.add.rectangle(-13, 21, 26, 2, 0x53ff8a, 1).setOrigin(0, 0.5);
     this.sprite = scene.add.container(x, y, [this.glow, this.base, this.head, this.healthTrack, this.healthFill]);
+    this.premiumVisual = cosmeticEffect ? createPremiumTurretVisual(scene, cosmeticEffect, color, accentColor) : null;
+    if (this.premiumVisual) {
+      this.glow.setVisible(false);
+      this.base.setVisible(false);
+      this.head.setVisible(false);
+      this.sprite.addAt(this.premiumVisual.root, 0);
+    }
     this.sprite.setSize(30, 46).setDepth(7);
     this.hp = hp;
     this.maxHp = hp;
@@ -41,6 +51,15 @@ export class Turret {
 
   aimAt(angle: number): void {
     this.head.rotation = angle + Math.PI / 2;
+    if (this.premiumVisual) this.premiumVisual.head.rotation = angle + Math.PI / 2;
+  }
+
+  updateCosmetic(now: number): void {
+    this.premiumVisual?.update(now);
+  }
+
+  markFired(now: number): void {
+    this.premiumVisual?.markFired(now);
   }
 
   takeDamage(amount: number): number {
@@ -70,6 +89,7 @@ export class Turret {
     this.barrel.setFillStyle(color, 0.92);
     this.muzzle.setStrokeStyle(2, color, 1);
     this.healthTrack.setStrokeStyle(1, color, 0.7);
+    this.premiumVisual?.setColor(color);
   }
 
   destroy(): void {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { getCosmeticDisplayColor, resolveOperativeFrameAppearance } from '../../data/cosmetics.ts';
 import type { CosmeticOption } from '../types.ts';
+import { createPremiumTurretVisual } from './PremiumTurretVisual.ts';
 
 export interface CosmeticPreviewOptions {
   maxWidth: number;
@@ -14,6 +15,7 @@ export interface CosmeticPreviewOptions {
 export interface CosmeticPreviewHandle {
   container: Phaser.GameObjects.Container;
   setColor: (color: number) => void;
+  update?: (timeMs: number) => void;
 }
 
 /**
@@ -30,6 +32,7 @@ export const createCosmeticPreview = (
 ): CosmeticPreviewHandle => {
   const container = scene.add.container(x, y);
   const colorSetters: Array<(color: number) => void> = [];
+  let previewUpdater: ((timeMs: number) => void) | undefined;
   const operativeAppearance = item.category === 'playerShape'
     ? resolveOperativeFrameAppearance(item.id, options.operativeColorId, scene.time.now)
     : item.category === 'playerColor'
@@ -296,6 +299,19 @@ export const createCosmeticPreview = (
       break;
     }
     case 'turretSkin': {
+      if (item.turretSkinEffect) {
+        const premium = createPremiumTurretVisual(
+          scene,
+          item.turretSkinEffect,
+          initialColor,
+          item.accentColor ?? initialColor,
+          Math.min(maxWidth / 52, maxHeight / 64)
+        );
+        container.add(premium.root);
+        colorSetters.push(premium.setColor);
+        previewUpdater = premium.update;
+        break;
+      }
       const unit = Math.min(maxWidth / 2.8, maxHeight / 2.5);
       addCircle(0, unit * 0.42, unit * 0.78, 0.12, 1);
       const base = addCircle(0, unit * 0.38, unit * 0.52, 0.12, 2);
@@ -321,6 +337,7 @@ export const createCosmeticPreview = (
 
   return {
     container,
-    setColor: (color: number) => colorSetters.forEach((setter) => setter(color))
+    setColor: (color: number) => colorSetters.forEach((setter) => setter(color)),
+    update: previewUpdater
   };
 };

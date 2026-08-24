@@ -291,7 +291,10 @@ export class ModCollectionScene extends Phaser.Scene {
     const categorySlot = definition.category === 'utility' ? null : definition.category as ModSlot;
     const buttonGap = compactDetails ? 38 : height < 650 ? 43 : 48;
     const buttonHeight = compactDetails ? 32 : 38;
-    const buttonY = y + height - buttonGap * 4 - (compactDetails ? 50 : 58);
+    // Use the inspector's previously unused lower breathing room. A transient
+    // status message reserves its own strip so it never collides with Infuse.
+    const buttonStackBottomInset = (compactDetails ? 42 : 48) + (this.status ? 12 : 0);
+    const buttonY = y + height - buttonGap * 4 - buttonStackBottomInset;
     const traceHeight = height >= 760 ? 72 : 0;
     const traceTop = buttonY - traceHeight - (traceHeight > 0 ? 10 : 0);
     const availableDetailCopyHeight = Math.max(compactDetails ? 34 : 48, (traceHeight > 0 ? traceTop : buttonY) - detailCopy.y - 14);

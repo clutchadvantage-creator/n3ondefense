@@ -248,6 +248,15 @@ export type CosmeticVisualShape =
 
 export type BombExplosionCosmeticEffectId = 'death-signal' | 'neon-bloom' | 'neon-bats' | 'witch-signal';
 export type DashTrailCosmeticEffectId = 'ion' | 'fire-smoke' | 'grass-clippings' | 'bubbles' | 'plasma' | 'jet-plume' | 'stars';
+export type TurretSkinCosmeticEffectId =
+  | 'void-reactor'
+  | 'arc-tesla'
+  | 'cyber-shark'
+  | 'glitch-phantom'
+  | 'hellfire-core'
+  | 'arctic-zero'
+  | 'mini-orbital'
+  | 'bomb-buddy';
 
 export interface CosmeticOption {
   id: string;
@@ -280,6 +289,8 @@ export interface CosmeticOption {
   bombExplosionEffect?: BombExplosionCosmeticEffectId;
   /** Presentation-only dash wake. Movement, dash duration, and energy are unchanged. */
   dashTrailEffect?: DashTrailCosmeticEffectId;
+  /** Presentation-only turret chassis. Turret combat values and body size are unchanged. */
+  turretSkinEffect?: TurretSkinCosmeticEffectId;
   /** Store and locker presentation copy; gameplay never reads this field. */
   description?: string;
 }
