@@ -60,14 +60,15 @@ test('Flux Core locations reserve full geometry and avoid recent deployment posi
 test('destroyed Flux Cores use bounded neon bounce debris and can drop their exact colored core orb', () => {
   const source = readFileSync(new URL('../src/game/systems/FluxCoreSystem.ts', import.meta.url), 'utf8');
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const presentation = readFileSync(new URL('../src/game/loot/GameplayPickupPresentation.ts', import.meta.url), 'utf8');
   assert.ok(FLUX_CORE_BALANCE.collectibleDropChance > 0 && FLUX_CORE_BALANCE.collectibleDropChance < 1);
   assert.ok(FLUX_CORE_BALANCE.destructionParticleCount > 0 && FLUX_CORE_BALANCE.destructionParticleCount <= 24);
   assert.match(source, /droppedCore: this\.random\.float\(0, 1\) < FLUX_CORE_BALANCE\.collectibleDropChance/);
   assert.match(source, /const bounceProgress = firstFlight/);
   assert.match(source, /this\.effectTweens/);
   assert.match(arena, /if \(event\.droppedCore\) this\.dropFluxCorePickup\(event\.x, event\.y, event\.color\)/);
-  assert.match(arena, /const glow = this\.add\.circle\(0, -1, 10, color, 0\.23\)/);
-  assert.match(arena, /const orb = this\.add\.circle\(0, -1, 5, color, 0\.95\)/);
+  assert.match(presentation, /const glow = this\.scene\.add\.circle\(0, -1, 10, color, 0\.23\)/);
+  assert.match(presentation, /const orb = this\.scene\.add\.circle\(0, -1, 5, color, 0\.95\)/);
   assert.match(arena, /SaveSystem\.addFluxCores\(rewardFluxCores\)/);
   assert.match(arena, /this\.audio\.playSfx\('bomblet'\)/);
 });

@@ -128,6 +128,7 @@ test('every gameplay pickup uses its dedicated pooled recording and never shares
   const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
   const config = readFileSync(new URL('../src/game/config/audio.ts', import.meta.url), 'utf8');
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const pickupPresentation = readFileSync(new URL('../src/game/loot/GameplayPickupPresentation.ts', import.meta.url), 'utf8');
   assert.match(audio, /PICKUP_SFX_POOL_SIZE = 4/);
   assert.match(audio, /PICKUP_SFX_MAX_CONCURRENT = 6/);
   for (const [key, filename] of Object.entries(pickupFiles)) {
@@ -135,8 +136,8 @@ test('every gameplay pickup uses its dedicated pooled recording and never shares
     assert.match(audio, new RegExp(`soundeffects/${filename.replace('.', '\\.')}`));
     assert.match(audio, new RegExp(`case '${key}':`));
   }
-  assert.match(arena, /const PICKUP_SFX_BY_TYPE = \{[\s\S]*?health: 'healthPickup'[\s\S]*?rapidFire: 'fireRatePickup'[\s\S]*?fluxCore: 'fluxCorePickup'/);
-  assert.match(arena, /this\.audio\.playSfx\(PICKUP_SFX_BY_TYPE\[type\]\)/);
+  assert.match(pickupPresentation, /GAMEPLAY_PICKUP_SFX_BY_TYPE = \{[\s\S]*?health: 'healthPickup'[\s\S]*?rapidFire: 'fireRatePickup'[\s\S]*?fluxCore: 'fluxCorePickup'/);
+  assert.match(arena, /this\.audio\.playSfx\(GAMEPLAY_PICKUP_SFX_BY_TYPE\[type\]\)/);
   assert.doesNotMatch(arena, /tryAwardMod[\s\S]{0,500}playSfx\('pickup'\)/);
   assert.match(audio, /case 'modCollection':[\s\S]*?this\.playModRevealSfx\(name\)/);
 });

@@ -138,6 +138,45 @@ export const createHeistFacility = (scene: Phaser.Scene): HeistFacilityRuntime =
     staticGraphics.strokePath();
   }
 
+  // Recessed route thresholds and structural columns create a stronger
+  // foreground/midground hierarchy. They are baked into one Graphics object,
+  // so the extra depth has no per-frame object or tween cost.
+  for (let index = 1; index < HEIST_ROUTE.length - 1; index += 1) {
+    const point = HEIST_ROUTE[index];
+    const next = HEIST_ROUTE[index + 1];
+    const horizontal = Math.abs(next.x - point.x) >= Math.abs(next.y - point.y);
+    const width = horizontal ? 88 : 156;
+    const height = horizontal ? 156 : 88;
+    staticGraphics.fillStyle(0x02070d, 0.82).fillRect(point.x - width / 2 + 7, point.y - height / 2 + 9, width, height);
+    staticGraphics.fillStyle(0x0a1a26, 0.92).fillRect(point.x - width / 2, point.y - height / 2, width, height);
+    staticGraphics.lineStyle(2, index % 3 ? 0x2b7b8c : 0x8b356f, 0.48)
+      .strokeRect(point.x - width / 2 + 5, point.y - height / 2 + 5, width - 10, height - 10);
+    for (let stripe = -2; stripe <= 2; stripe += 1) {
+      staticGraphics.fillStyle(index % 3 ? 0x42e9f7 : 0xff4fc9, 0.2 + (stripe === 0 ? 0.18 : 0));
+      if (horizontal) staticGraphics.fillRect(point.x - width / 2 + 13, point.y + stripe * 18 - 2, width - 26, 4);
+      else staticGraphics.fillRect(point.x + stripe * 18 - 2, point.y - height / 2 + 13, 4, height - 26);
+    }
+  }
+
+  const columnPoints = [
+    { x: 930, y: 1350 }, { x: 1540, y: 930 }, { x: 1760, y: 930 }, { x: 2340, y: 1350 },
+    { x: 3100, y: 1430 }, { x: 3340, y: 1280 }, { x: 3340, y: 2040 }
+  ];
+  for (const [index, point] of columnPoints.entries()) {
+    const color = index % 2 ? 0xff4fc9 : 0x42e9f7;
+    staticGraphics.fillStyle(0x000207, 0.72).fillRect(point.x - 21, point.y - 21, 54, 54);
+    staticGraphics.fillStyle(0x102634, 1).fillRect(point.x - 27, point.y - 27, 48, 48);
+    staticGraphics.fillStyle(0x07121d, 1).fillRect(point.x - 17, point.y - 17, 28, 28);
+    staticGraphics.lineStyle(2, color, 0.56).strokeRect(point.x - 23, point.y - 23, 40, 40);
+    staticGraphics.fillStyle(color, 0.58).fillRect(point.x - 8, point.y - 25, 12, 3);
+  }
+
+  // Vault floor receives its own containment plinth and inset service rails.
+  staticGraphics.fillStyle(0x02060c, 0.94).fillRect(3308, 1244, 622, 842);
+  staticGraphics.fillStyle(0x091722, 0.94).fillRect(3324, 1260, 590, 810);
+  staticGraphics.lineStyle(4, 0xff4fc9, 0.34).strokeRect(3340, 1276, 558, 778);
+  staticGraphics.lineStyle(2, 0x54efff, 0.42).strokeRect(3360, 1296, 518, 738);
+
   const routeGraphics = scene.add.graphics().setDepth(1);
   let escapeRoute = false;
   const drawRoute = (): void => {

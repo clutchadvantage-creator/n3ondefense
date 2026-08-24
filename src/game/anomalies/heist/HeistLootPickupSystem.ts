@@ -1,78 +1,86 @@
 import Phaser from 'phaser';
+import { MOD_BY_ID } from '../../mods/definitions.ts';
+import {
+  GameplayPickupPresentation,
+  createGameplayModPickupVisual,
+  updateGameplayModPickupVisual,
+  type GameplayModPickupVisual
+} from '../../loot/GameplayPickupPresentation.ts';
+import { createPhysicalLootPlan, type PhysicalLootKind } from '../../loot/PhysicalLootService.ts';
 import type { HeistContainerReward, HeistRewardService } from './HeistRewardService.ts';
 
 interface HeistLootPickup {
   reward: HeistContainerReward;
   root: Phaser.GameObjects.Container;
-  payload: Phaser.GameObjects.Container;
+  modVisual: GameplayModPickupVisual | null;
+  worldX: number;
+  worldY: number;
   vx: number;
   vy: number;
   z: number;
   vz: number;
-  phase: number;
   settled: boolean;
-  infusionOrbit: Phaser.GameObjects.Container | null;
+  collectibleAt: number;
 }
 
-const rewardStyle = (reward: HeistContainerReward): { color: number; symbol: string } => {
-  if (reward.kind === 'credits') return { color: 0xffe45b, symbol: 'C' };
-  if (reward.kind === 'coreTokens') return { color: 0x79ffaf, symbol: 'T' };
-  if (reward.kind === 'plasmaChips') return { color: 0xc47aff, symbol: 'P' };
-  if (reward.kind === 'fluxCores') return { color: 0x64f5ff, symbol: 'F' };
-  return { color: 0xff5bd7, symbol: 'M' };
+const physicalKindFor = (reward: HeistContainerReward): PhysicalLootKind => {
+  if (reward.kind === 'coreTokens') return 'core-tokens';
+  if (reward.kind === 'plasmaChips') return 'plasma-chips';
+  if (reward.kind === 'fluxCores') return 'flux-cores';
+  return reward.kind;
 };
 
-/** Visible provisional loot. Rewards are not added until the operative collects the pickup. */
+const sliceReward = (reward: HeistContainerReward, amount: number): HeistContainerReward =>
+  reward.kind === 'mod' ? { kind: 'mod', amount: 1, modId: reward.modId } : { kind: reward.kind, amount };
+
+/**
+ * Physical provisional loot. It owns only motion and collection; rendering is
+ * delegated to the same authoritative pickup and Mod presenters as Arena.
+ */
 export class HeistLootPickupSystem {
   private readonly pickups: HeistLootPickup[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly rewards: HeistRewardService,
-    private readonly showPickupOrbit = false
+    private readonly presentation: GameplayPickupPresentation
   ) {}
 
   get activeCount(): number { return this.pickups.length; }
 
   spawn(x: number, y: number, reward: HeistContainerReward, sequence: number): void {
-    const style = rewardStyle(reward);
-    const shadow = this.scene.add.ellipse(0, 5, 40, 18, 0x000000, 0.48);
-    const halo = this.scene.add.circle(0, 0, reward.kind === 'mod' ? 25 : 21, style.color, 0.12)
-      .setStrokeStyle(2, style.color, 0.72).setBlendMode(Phaser.BlendModes.ADD);
-    const ring = this.scene.add.circle(0, 0, reward.kind === 'mod' ? 16 : 13, 0x06131f, 0.98)
-      .setStrokeStyle(3, style.color, 1);
-    const core = reward.kind === 'mod'
-      ? this.scene.add.rectangle(0, 0, 16, 16, style.color, 0.92).setRotation(Math.PI / 4)
-      : this.scene.add.circle(0, 0, 8, style.color, 0.88);
-    const symbol = this.scene.add.text(0, 0, style.symbol, {
-      fontFamily: 'Orbitron, sans-serif', fontSize: reward.kind === 'mod' ? '11px' : '12px', color: '#ffffff', fontStyle: 'bold'
-    }).setOrigin(0.5);
-    const payload = this.scene.add.container(0, 0, [halo, ring, core, symbol]);
-    let infusionOrbit: Phaser.GameObjects.Container | null = null;
-    if (this.showPickupOrbit) {
-      const orbitRadius = reward.kind === 'mod' ? 31 : 27;
-      const orbitPath = this.scene.add.circle(0, 0, orbitRadius, style.color, 0.025)
-        .setStrokeStyle(1, 0xffffff, 0.38);
-      const satelliteA = this.scene.add.circle(orbitRadius, 0, 2.5, 0xffffff, 0.96)
-        .setStrokeStyle(1, style.color, 1);
-      const satelliteB = this.scene.add.circle(-orbitRadius, 0, 1.8, style.color, 0.96)
-        .setStrokeStyle(1, 0xffffff, 0.82);
-      infusionOrbit = this.scene.add.container(0, 0, [orbitPath, satelliteA, satelliteB]);
-      payload.addAt(infusionOrbit, 0);
+    const plan = createPhysicalLootPlan(
+      [{ kind: physicalKindFor(reward), amount: reward.amount }],
+      { maximumCreditBundles: 4, minimumCreditBundles: 2, seed: Math.imul(sequence + 1, 0x45d9f3b) }
+    );
+    for (const entry of plan) {
+      const itemReward = sliceReward(reward, entry.amount);
+      let root: Phaser.GameObjects.Container;
+      let modVisual: GameplayModPickupVisual | null = null;
+      if (itemReward.kind === 'mod') {
+        const definition = MOD_BY_ID.get(itemReward.modId);
+        if (!definition) continue;
+        modVisual = createGameplayModPickupVisual(this.scene, definition, x, y);
+        root = modVisual.root;
+      } else {
+        if (!entry.pickupType) continue;
+        root = this.presentation.create(entry.pickupType, x, y);
+      }
+      const speed = 88 + entry.index % 4 * 18;
+      this.pickups.push({
+        reward: itemReward,
+        root: root.setDepth(11),
+        modVisual,
+        worldX: x,
+        worldY: y,
+        vx: Math.cos(entry.angle) * speed,
+        vy: Math.sin(entry.angle) * speed,
+        z: 14,
+        vz: 190 + entry.index % 3 * 28,
+        settled: false,
+        collectibleAt: this.scene.time.now + 220
+      });
     }
-    const root = this.scene.add.container(x, y, [shadow, payload]).setDepth(11);
-    const angle = sequence * 2.39996 + (sequence % 2 ? 0.42 : -0.31);
-    const speed = 88 + sequence % 4 * 18;
-    this.pickups.push({
-      reward, root, payload,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      z: 14,
-      vz: 190 + sequence % 3 * 28,
-      phase: sequence * 1.31,
-      settled: false,
-      infusionOrbit
-    });
   }
 
   update(now: number, deltaSeconds: number, playerX: number, playerY: number, pickupRadius: number,
@@ -82,8 +90,8 @@ export class HeistLootPickupSystem {
     for (let index = this.pickups.length - 1; index >= 0; index -= 1) {
       const pickup = this.pickups[index];
       if (!pickup.settled) {
-        pickup.root.x += pickup.vx * dt;
-        pickup.root.y += pickup.vy * dt;
+        pickup.worldX += pickup.vx * dt;
+        pickup.worldY += pickup.vy * dt;
         pickup.vx *= Math.pow(0.12, dt);
         pickup.vy *= Math.pow(0.12, dt);
         pickup.vz -= 520 * dt;
@@ -94,31 +102,33 @@ export class HeistLootPickupSystem {
           else { pickup.vz = 0; pickup.settled = true; }
         }
       }
-      const bob = pickup.settled ? 7 + Math.sin(now * 0.0045 + pickup.phase) * 5 : pickup.z;
-      pickup.payload.y = -bob;
-      pickup.payload.setRotation(now * 0.0014 + pickup.phase * 0.1)
-        .setScale(1 + Math.sin(now * 0.006 + pickup.phase) * 0.07);
-      pickup.infusionOrbit?.setRotation(-now * 0.0031 - pickup.phase);
-      let dx = pickup.root.x - playerX;
-      let dy = pickup.root.y - playerY;
+      pickup.root.setPosition(pickup.worldX, pickup.worldY - pickup.z);
+      if (pickup.modVisual) updateGameplayModPickupVisual(pickup.modVisual, now, dt);
+      else this.presentation.update(pickup.root, now);
+
+      let dx = pickup.worldX - playerX;
+      let dy = pickup.worldY - playerY;
       let distanceSquared = dx * dx + dy * dy;
       if (pickup.settled && pullSpeed > 0 && distanceSquared <= attractionRadius * attractionRadius
         && distanceSquared > pickupRadius * pickupRadius) {
         const distance = Math.sqrt(Math.max(1, distanceSquared));
         const step = Math.min(distance, pullSpeed * dt);
-        pickup.root.x -= dx / distance * step;
-        pickup.root.y -= dy / distance * step;
-        dx = pickup.root.x - playerX;
-        dy = pickup.root.y - playerY;
+        pickup.worldX -= dx / distance * step;
+        pickup.worldY -= dy / distance * step;
+        pickup.root.setPosition(pickup.worldX, pickup.worldY);
+        dx = pickup.worldX - playerX;
+        dy = pickup.worldY - playerY;
         distanceSquared = dx * dx + dy * dy;
       }
-      if (!pickup.settled || distanceSquared > pickupRadius * pickupRadius) continue;
-      onCollect(pickup.reward, pickup.root.x, pickup.root.y);
+      if (!pickup.settled || now < pickup.collectibleAt || distanceSquared > pickupRadius * pickupRadius) continue;
+      // Remove before invoking accounting so a callback or frame re-entry can
+      // never credit the same physical item twice.
+      this.pickups.splice(index, 1);
+      onCollect(pickup.reward, pickup.worldX, pickup.worldY);
       this.scene.tweens.add({
         targets: pickup.root, x: playerX, y: playerY, alpha: 0, scale: 0.2,
         duration: 150, onComplete: () => pickup.root.destroy(true)
       });
-      this.pickups.splice(index, 1);
     }
   }
 

@@ -49,6 +49,10 @@ import { HEIST_BALANCE, HEIST_WORLD } from './HeistConfig.ts';
 import { createHeistFacility, type HeistFacilityRuntime } from './HeistFacility.ts';
 import { HeistRewardService } from './HeistRewardService.ts';
 import { HeistLootPickupSystem } from './HeistLootPickupSystem.ts';
+import {
+  GAMEPLAY_PICKUP_SFX_BY_TYPE,
+  GameplayPickupPresentation
+} from '../../loot/GameplayPickupPresentation.ts';
 
 type HeistPhase = 'inbound' | 'vault-opening' | 'looting' | 'egress-delay' | 'escape' | 'returning';
 type ProjectileOwner = 'player' | 'enemy' | 'turret';
@@ -92,9 +96,6 @@ interface HeistContainer {
 interface HeistPickup {
   kind: 'health' | 'energy';
   root: Phaser.GameObjects.Container;
-  infusionOrbit: Phaser.GameObjects.Container | null;
-  baseY: number;
-  phase: number;
 }
 
 const isSessionData = (value: unknown): value is HeistSessionData => {
@@ -115,6 +116,7 @@ export class HeistScene extends Phaser.Scene {
   private random!: SeededRandom;
   private rewards!: HeistRewardService;
   private lootPickups!: HeistLootPickupSystem;
+  private pickupPresentation!: GameplayPickupPresentation;
   private pendingLoot: PendingAnomalyLoot = emptyLoot();
   private phase: HeistPhase = 'inbound';
   private elapsedMs = 0;
@@ -193,7 +195,11 @@ export class HeistScene extends Phaser.Scene {
     this.mineExplosionVfx = new MineExplosionVfx(this, settings.particles);
     this.random = new SeededRandom((data.seed ^ 0x4e1a57 ^ Math.imul(data.round, 0x27d4eb2d)) >>> 0);
     this.rewards = new HeistRewardService(data.seed, data.round, data.protocol);
-    this.lootPickups = new HeistLootPickupSystem(this, this.rewards, this.modRuntime.hasInfusion('pickup-orbit'));
+    this.pickupPresentation = new GameplayPickupPresentation(
+      this,
+      () => this.modRuntime.hasInfusion('pickup-orbit')
+    );
+    this.lootPickups = new HeistLootPickupSystem(this, this.rewards, this.pickupPresentation);
     this.pendingLoot = this.rewards.createEmpty();
     this.physics.world.setBounds(0, 0, HEIST_WORLD.width, HEIST_WORLD.height);
     this.cameras.main.setBounds(0, 0, HEIST_WORLD.width, HEIST_WORLD.height);
@@ -497,27 +503,13 @@ export class HeistScene extends Phaser.Scene {
     this.hud.update(this.hudPayload);
   }
 
+
   private createSupportPickups(): void {
-    const entries = this.facility.supportPoints;
-    for (const [index, entry] of entries.entries()) {
-      const color = entry.kind === 'health' ? 0x65ff92 : 0x52ecff;
-      const halo = this.add.circle(0, 0, 25, color, 0.12).setStrokeStyle(2, color, 0.75);
-      const core = this.add.circle(0, 0, 11, color, 0.9).setBlendMode(Phaser.BlendModes.ADD);
-      const icon = this.add.text(0, 0, entry.kind === 'health' ? '+' : '⚡', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#07111d', fontStyle: 'bold'
-      }).setOrigin(0.5);
-      let infusionOrbit: Phaser.GameObjects.Container | null = null;
-      if (this.modRuntime.hasInfusion('pickup-orbit')) {
-        const orbitPath = this.add.circle(0, 0, 31, color, 0.025).setStrokeStyle(1, 0xffffff, 0.38);
-        const satelliteA = this.add.circle(31, 0, 2.5, 0xffffff, 0.96).setStrokeStyle(1, color, 1);
-        const satelliteB = this.add.circle(-31, 0, 1.8, color, 0.96).setStrokeStyle(1, 0xffffff, 0.82);
-        infusionOrbit = this.add.container(0, 0, [orbitPath, satelliteA, satelliteB]);
-      }
-      const children: Phaser.GameObjects.GameObject[] = [halo];
-      if (infusionOrbit) children.push(infusionOrbit);
-      children.push(core, icon);
-      this.pickups.push({ kind: entry.kind, root: this.add.container(entry.x, entry.y, children).setDepth(8),
-        infusionOrbit, baseY: entry.y, phase: index * 1.7 });
+    for (const entry of this.facility.supportPoints) {
+      this.pickups.push({
+        kind: entry.kind,
+        root: this.pickupPresentation.create(entry.kind, entry.x, entry.y).setDepth(8)
+      });
     }
   }
 
@@ -938,9 +930,7 @@ export class HeistScene extends Phaser.Scene {
   private updatePickups(now: number): void {
     for (let index = this.pickups.length - 1; index >= 0; index -= 1) {
       const pickup = this.pickups[index];
-      pickup.root.y = pickup.baseY + Math.sin(now * 0.003 + pickup.phase) * 7;
-      pickup.root.setScale(1 + Math.sin(now * 0.004 + pickup.phase) * 0.06);
-      pickup.infusionOrbit?.setRotation(now * 0.0031 + pickup.phase);
+      this.pickupPresentation.update(pickup.root, now);
       const dx = pickup.root.x - this.player.x;
       const dy = pickup.root.y - this.player.y;
       if (dx * dx + dy * dy > this.player.stats.pickupRadius ** 2) continue;
@@ -949,13 +939,13 @@ export class HeistScene extends Phaser.Scene {
           * getProtocolModeBalance(this.session.protocol).resourcePickupCapMultiplier;
         this.player.hp = Math.min(healthCap,
           this.player.hp + HEIST_BALANCE.supportHealthAmount * this.modRuntime.multiplier('healthPickupValue'));
-        this.coreAudio.playSfx('healthPickup');
+        this.coreAudio.playSfx(GAMEPLAY_PICKUP_SFX_BY_TYPE.health);
       } else {
         const energyCap = this.player.energyStats.max
           * getProtocolModeBalance(this.session.protocol).resourcePickupCapMultiplier;
         this.player.energy = Math.min(energyCap,
           this.player.energy + this.player.energyStats.max * HEIST_BALANCE.supportEnergyFraction * this.modRuntime.multiplier('energyPickupValue'));
-        this.coreAudio.playSfx('energyPickup');
+        this.coreAudio.playSfx(GAMEPLAY_PICKUP_SFX_BY_TYPE.energy);
       }
       pickup.root.destroy(true);
       this.pickups.splice(index, 1);
@@ -1102,10 +1092,13 @@ export class HeistScene extends Phaser.Scene {
 
   private collectLoot(reward: ReturnType<HeistRewardService['rollContainer']>, x: number, y: number): void {
     this.rewards.add(this.pendingLoot, reward);
-    this.coreAudio.playSfx(reward.kind === 'credits' ? 'creditPickup'
-      : reward.kind === 'coreTokens' ? 'coreTokenPickup'
-        : reward.kind === 'fluxCores' ? 'fluxCorePickup'
-          : reward.kind === 'mod' ? 'modPickup' : 'pickup');
+    if (reward.kind === 'mod') this.coreAudio.playSfx('modPickup');
+    else {
+      const pickupType = reward.kind === 'credits' ? 'credits'
+        : reward.kind === 'coreTokens' ? 'coreToken'
+          : reward.kind === 'fluxCores' ? 'fluxCore' : 'plasmaChip';
+      this.coreAudio.playSfx(GAMEPLAY_PICKUP_SFX_BY_TYPE[pickupType]);
+    }
     this.lootPickups.showCollectionLabel(reward, x, y);
   }
 
@@ -1351,13 +1344,11 @@ export class HeistScene extends Phaser.Scene {
         selectedAbility: this.abilityState.selectedAbility
       }
     };
-    // Resume the preserved Arena before delivering the result. Emitting into a
-    // paused scene and then stopping the current top scene caused an ordering
-    // race that could leave no visible camera for a frame (or indefinitely in
-    // some browsers). Arena owns restoration and is brought to the top first.
-    this.scene.resume(SceneKeys.Arena);
+    // Arena owns the authoritative suspension snapshot. Deliver while it is
+    // still paused so restoration is atomic; Arena resumes itself only after
+    // its round state, clock, physics and input gate have been restored.
+    this.cameras.main.setAlpha(0).setVisible(false);
     arena.events.emit('anomaly-return', result);
-    this.cameras.main.setAlpha(0);
     this.scene.stop(SceneKeys.Heist);
   }
 
@@ -1680,7 +1671,6 @@ export class HeistScene extends Phaser.Scene {
     this.mines.forEach((mine) => mine.destroy());
     if (!this.returning && this.session) {
       const arena = this.scene.get(SceneKeys.Arena);
-      this.scene.resume(SceneKeys.Arena);
       arena.events.emit('anomaly-return', {
         sessionId: this.session.sessionId, anomalyId: 'heist', success: false,
         sourcePortal: { ...this.session.sourcePortal }, loot: emptyLoot(), reason: 'scene-shutdown'

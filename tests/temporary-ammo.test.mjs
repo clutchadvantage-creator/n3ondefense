@@ -90,6 +90,7 @@ test('scattershot is a symmetric pooled seven-pellet fan with one firing cost an
 });
 
 test('special ammo pickups use dedicated audio, shared pickup visuals, HUD timers, telemetry, and round cleanup', () => {
+  const pickupPresentation = readFileSync(new URL('../src/game/loot/GameplayPickupPresentation.ts', import.meta.url), 'utf8');
   for (const [key, file] of [
     ['grenadeRoundsPickup', 'grenadeshotpickup.mp3'],
     ['scattershotPickup', 'scattershotpickup.mp3']
@@ -98,8 +99,8 @@ test('special ammo pickups use dedicated audio, shared pickup visuals, HUD timer
     assert.ok(existsSync(new URL(`../public/assets/audio/soundeffects/${file}`, import.meta.url)));
     assert.ok(audio.includes(`${key}: 'soundeffects/${file}'`));
   }
-  assert.match(arena, /grenadeRounds: 'grenadeRoundsPickup'/);
-  assert.match(arena, /scattershot: 'scattershotPickup'/);
+  assert.match(pickupPresentation, /grenadeRounds: 'grenadeRoundsPickup'/);
+  assert.match(pickupPresentation, /scattershot: 'scattershotPickup'/);
   assert.match(arena, /this\.temporaryAmmo\.activate\('grenade'/);
   assert.match(arena, /this\.temporaryAmmo\.activate\('scattershot'/);
   assert.match(arena, /'GRENADE ROUNDS' : 'SCATTERSHOT'/);

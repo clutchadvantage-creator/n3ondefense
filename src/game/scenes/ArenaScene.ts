@@ -58,7 +58,7 @@ import { MOD_BALANCE, RUN_PROTOCOLS, normalizeRunProtocolId } from '../mods/modB
 import { isGuaranteedMilestone, rollModDrop } from '../mods/ModDropService.ts';
 import type { ModDefinition, ModDropSource, ModRewardRecord, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { magneticResistanceForEnemy, splitCurrentSecondaryDamage } from '../mods/ModRules.ts';
-import { MOD_RARITY_COLORS, createModCardView } from '../mods/ModCardView.ts';
+import { createModCardView } from '../mods/ModCardView.ts';
 import { MOD_BY_ID } from '../mods/definitions.ts';
 import { ModAcquisitionPresenter } from '../mods/ModAcquisitionPresenter.ts';
 import { MOD_PICKUP_REVEAL_LEAD_IN_MS } from '../mods/ModAcquisition.ts';
@@ -95,6 +95,13 @@ import { N3ONArcadeController } from '../arcade/N3ONArcadeController.ts';
 import type { ArcadeEventId, ArcadeGrantedReward, ArcadeMetricEvent } from '../arcade/types.ts';
 import type { Boss } from '../bosses/Boss.ts';
 import { createPhysicalLootPlan, type PhysicalLootReward } from '../loot/PhysicalLootService.ts';
+import {
+  GAMEPLAY_PICKUP_COLOR_BY_TYPE,
+  GAMEPLAY_PICKUP_SFX_BY_TYPE,
+  GameplayPickupPresentation,
+  createGameplayModPickupVisual,
+  updateGameplayModPickupVisual
+} from '../loot/GameplayPickupPresentation.ts';
 import { getSupremeStage, isSupremeProtocol, isSupremeTerminalRound } from '../progression/SupremeProgression.ts';
 import { SupremeConstellationFloor } from '../vfx/SupremeConstellationFloor.ts';
 import { SupremeFinaleController } from '../bosses/SupremeFinaleController.ts';
@@ -170,17 +177,6 @@ interface Pickup {
   arcadeEventId?: ArcadeEventId;
 }
 
-interface PickupVisual {
-  glow: Phaser.GameObjects.Arc;
-  scanRing: Phaser.GameObjects.Arc;
-  orbitRig: Phaser.GameObjects.Container;
-  infusionOrbit: Phaser.GameObjects.Container | null;
-  iconRig: Phaser.GameObjects.Container;
-  leftBracket: Phaser.GameObjects.Polygon;
-  rightBracket: Phaser.GameObjects.Polygon;
-  phase: number;
-}
-
 interface PickupMotion {
   velocityX: number;
   velocityY: number;
@@ -191,22 +187,11 @@ interface ModPickup {
   definition: ModDefinition;
   source: ModDropSource;
   sprite: Phaser.GameObjects.Container;
-  glow: Phaser.GameObjects.Arc;
-  scan: Phaser.GameObjects.Graphics;
-  phase: number;
+  visual: import('../loot/GameplayPickupPresentation.ts').GameplayModPickupVisual;
   expiresAt: number;
   collectibleAt: number;
   collected: boolean;
   arcadeEventId?: ArcadeEventId;
-}
-
-interface FluxCorePickupVisual {
-  glow: Phaser.GameObjects.Arc;
-  orb: Phaser.GameObjects.Arc;
-  electricity: Phaser.GameObjects.Graphics;
-  color: number;
-  phase: number;
-  nextArcAt: number;
 }
 
 interface DeathMine {
@@ -249,6 +234,13 @@ interface BossDeathSnapshot {
   color: number;
 }
 
+interface AnomalySuspensionState {
+  roundState: RoundState;
+  physicsWasPaused: boolean;
+  physicsTimeScale: number;
+  clockWasPaused: boolean;
+}
+
 const ROUND_PHASE_LABELS: Record<RoundState, string> = {
   [RoundState.PrePlant]: 'PRE-PLANT',
   [RoundState.Planting]: 'PLANTING',
@@ -269,36 +261,6 @@ const PICKUP_SEPARATION_PUSH = 0.2;
 const PICKUP_BOUNCE_TRANSFER = 0.5;
 const PICKUP_BOUNCE_KICK = 2;
 const BOMBSITE_EXPLOSION_VISUAL_RADIUS = 520;
-const PICKUP_SFX_BY_TYPE = {
-  health: 'healthPickup',
-  energy: 'energyPickup',
-  damageBoost: 'damageBoostPickup',
-  speedBoost: 'speedPickup',
-  rapidFire: 'fireRatePickup',
-  ricochet: 'ricochetPickup',
-  grenadeRounds: 'grenadeRoundsPickup',
-  scattershot: 'scattershotPickup',
-  credits: 'creditPickup',
-  coreToken: 'coreTokenPickup',
-  plasmaChip: 'pickup',
-  fluxCore: 'fluxCorePickup'
-} as const satisfies Record<PickupType, Parameters<AudioManager['playSfx']>[0]>;
-
-const PICKUP_COLOR_BY_TYPE: Record<PickupType, number> = {
-  health: COLORS.green,
-  energy: COLORS.cyan,
-  damageBoost: COLORS.red,
-  speedBoost: COLORS.pink,
-  rapidFire: COLORS.orange,
-  ricochet: 0x6fffd2,
-  grenadeRounds: 0xff7a3d,
-  scattershot: 0x58b8ff,
-  credits: 0xf5ff58,
-  coreToken: COLORS.purple,
-  plasmaChip: 0xd06dff,
-  fluxCore: COLORS.cyan
-};
-
 export class ArenaScene extends Phaser.Scene {
   private readonly state = new GameStateMachine(RoundState.PrePlant);
   private readonly audio = AudioManager.get();
@@ -334,8 +296,7 @@ export class ArenaScene extends Phaser.Scene {
   private homingMissiles: HomingMissile[] = [];
   private pickups: Pickup[] = [];
   private modPickups: ModPickup[] = [];
-  private readonly pickupVisuals = new WeakMap<Phaser.GameObjects.Container, PickupVisual>();
-  private readonly fluxCorePickupVisuals = new WeakMap<Phaser.GameObjects.Container, FluxCorePickupVisual>();
+  private pickupPresentation!: GameplayPickupPresentation;
   private readonly pickupMotion = new WeakMap<Phaser.GameObjects.Container, PickupMotion>();
   private fences: Fence[] = [];
   private turrets: Turret[] = [];
@@ -392,6 +353,8 @@ export class ArenaScene extends Phaser.Scene {
   private arcadeController: N3ONArcadeController | null = null;
   private anomalyController: AnomalyController | null = null;
   private activeAnomalySessionId: string | null = null;
+  /** Exact live-simulation state held while a side anomaly owns the screen. */
+  private anomalySuspensionState: AnomalySuspensionState | null = null;
   private bossEncounter: BossEncounter | null = null;
   private supremeFinale: SupremeFinaleController | null = null;
   private supremeFinaleOverlay: SupremeFinaleOverlay | null = null;
@@ -622,6 +585,7 @@ export class ArenaScene extends Phaser.Scene {
   private readonly onQuitFromStore = (): void => this.quitToMenu();
   private readonly onAnomalyReturn = (result: AnomalyReturnResult): void => {
     if (!this.activeAnomalySessionId || result.sessionId !== this.activeAnomalySessionId) return;
+    const suspension = this.anomalySuspensionState;
     this.activeAnomalySessionId = null;
     this.cameras.main.resetFX().setAlpha(1).setVisible(true);
     this.scene.bringToTop();
@@ -667,6 +631,10 @@ export class ArenaScene extends Phaser.Scene {
     this.clearGameplayInput();
     const pointerRequired = this.playerInput.activeDevice !== 'gamepad' && Boolean(this.pointerLock?.supported);
     if (pointerRequired && !this.pointerLock?.locked) {
+      // Browser pointer capture can only be restored by a trusted click. Keep
+      // the exact Arena state until that click instead of deriving a new phase.
+      if (!suspension) this.anomalySuspensionState = this.captureAnomalySuspensionState();
+      else this.restoreAnomalyClock(suspension);
       this.pointerLockInitialGate = true;
       this.pauseForPointerLock('initial');
       this.pointerLock?.showResume('CLICK TO RESUME OPERATION');
@@ -674,10 +642,13 @@ export class ArenaScene extends Phaser.Scene {
       this.pointerLockInitialGate = false;
       this.pointerLock?.hidePrompt();
       this.setGameplayCursorMode();
-      this.physics.resume();
-      if (this.state.state === RoundState.Planting) this.audio.startPlantingLoop();
-      if (this.state.state === RoundState.Defusing) this.audio.startDisarmLoop();
+      if (suspension) this.restoreAnomalySimulation(suspension);
+      else this.physics.resume();
+      this.anomalySuspensionState = null;
     }
+    // HEIST delivers its result while Arena is still suspended. Resume only
+    // after player, abilities, clock, physics and input state are coherent.
+    this.scene.resume(SceneKeys.Arena);
   };
   constructor() {
     super(SceneKeys.Arena);
@@ -733,6 +704,10 @@ export class ArenaScene extends Phaser.Scene {
       this.projectileHeight = 8;
     }
     this.modRuntime = new ModRuntime(SaveSystem.getModCollection(), session?.equippedMods);
+    this.pickupPresentation = new GameplayPickupPresentation(
+      this,
+      () => this.modRuntime.hasInfusion('pickup-orbit')
+    );
     this.createCombatPools();
     this.boostVisual = new BoostVisualSystem(
       this,
@@ -3665,11 +3640,7 @@ export class ArenaScene extends Phaser.Scene {
     this.separateFloatingPickups();
     let writeIndex = 0;
     for (const p of this.pickups) {
-      const visual = this.pickupVisuals.get(p.sprite);
-      const fluxCoreVisual = this.fluxCorePickupVisuals.get(p.sprite);
-      if (visual) this.updatePickupVisual(p.sprite, visual, now);
-      else if (fluxCoreVisual) this.updateFluxCorePickupVisual(p.sprite, fluxCoreVisual, now);
-      else p.sprite.rotation += dt * 2;
+      this.pickupPresentation.update(p.sprite, now);
       if (now > p.expiresAt) {
         GameplayTelemetryRecorder.recordPickupExpired(p.type);
         if (p.arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_expired', p.arcadeEventId, p.type, p.amount ?? 1);
@@ -4087,7 +4058,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private collectPickup(type: PickupType, source: Pickup['source'], explicitAmount?: number): void {
-    this.audio.playSfx(PICKUP_SFX_BY_TYPE[type]);
+    this.audio.playSfx(GAMEPLAY_PICKUP_SFX_BY_TYPE[type]);
     let requestedRestoration = 0;
     let appliedRestoration = 0;
     if (type === 'health') {
@@ -4266,7 +4237,7 @@ export class ArenaScene extends Phaser.Scene {
         continue;
       }
       if (!entry.pickupType) continue;
-      const sprite = this.createPickupSprite(entry.pickupType, origin.x, origin.y, PICKUP_COLOR_BY_TYPE[entry.pickupType]).setDepth(14);
+      const sprite = this.createPickupSprite(entry.pickupType, origin.x, origin.y, GAMEPLAY_PICKUP_COLOR_BY_TYPE[entry.pickupType]).setDepth(14);
       this.pickupMotion.delete(sprite);
       const pickup: Pickup = {
         type: entry.pickupType,
@@ -4490,6 +4461,7 @@ export class ArenaScene extends Phaser.Scene {
   private beginAnomalyTransition(request: AnomalyEntryRequest): void {
     if (this.activeAnomalySessionId || request.anomalyId !== 'heist') return;
     this.activeAnomalySessionId = request.sessionId;
+    this.anomalySuspensionState = this.captureAnomalySuspensionState();
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
     this.audio.stopLowHealthWarning();
@@ -4554,6 +4526,31 @@ export class ArenaScene extends Phaser.Scene {
     this.scene.pause();
   }
 
+  private captureAnomalySuspensionState(): AnomalySuspensionState {
+    return {
+      roundState: this.state.state,
+      physicsWasPaused: this.physics.world.isPaused,
+      physicsTimeScale: this.physics.world.timeScale,
+      clockWasPaused: this.time.paused
+    };
+  }
+
+  private restoreAnomalyClock(suspension: AnomalySuspensionState): void {
+    this.time.paused = suspension.clockWasPaused;
+    this.physics.world.timeScale = suspension.physicsTimeScale;
+  }
+
+  private restoreAnomalySimulation(suspension: AnomalySuspensionState): void {
+    this.restoreAnomalyClock(suspension);
+    this.state.set(suspension.roundState);
+    if (suspension.physicsWasPaused) this.physics.pause();
+    else this.physics.resume();
+    if (!suspension.physicsWasPaused) {
+      if (suspension.roundState === RoundState.Planting) this.audio.startPlantingLoop();
+      if (suspension.roundState === RoundState.Defusing) this.audio.startDisarmLoop();
+    }
+  }
+
   private commitAnomalyLoot(result: AnomalyReturnResult): void {
     const loot = result.loot;
     SaveSystem.addCredits(loot.credits);
@@ -4572,20 +4569,14 @@ export class ArenaScene extends Phaser.Scene {
     for (const modId of loot.modIds) {
       const definition = MOD_BY_ID.get(modId);
       if (!definition) continue;
-      const duplicate = Boolean(SaveSystem.getModCollection().inventory[definition.id]?.discovered);
-      const awarded = SaveSystem.addMod(definition.id);
-      const card = SaveSystem.getModCollection().cards.at(-1);
-      if (awarded.ok) {
-        this.modsEarned.push({ modId: definition.id, duplicate, source: 'anomaly' });
-        GameplayTelemetryRecorder.recordModDrop(definition.id, definition.rarity, 'anomaly', duplicate);
-        if (card) {
-          const sourcePosition = this.modRevealScreenPosition(result.sourcePortal.x, result.sourcePortal.y);
-          this.time.delayedCall(80, () => this.modAcquisitionPresenter?.enqueue({
-            card: { ...card }, rarity: definition.rarity, duplicate,
-            sourceScreenX: sourcePosition.x, sourceScreenY: sourcePosition.y
-          }));
-        }
-      }
+      const awarded = this.awardResolvedMod(
+        definition,
+        'anomaly',
+        result.sourcePortal.x,
+        result.sourcePortal.y,
+        MOD_PICKUP_REVEAL_LEAD_IN_MS
+      );
+      if (!awarded) continue;
       recordAnomalyMetric({ name: 'anomaly_reward_committed', anomalyId: 'heist', round: this.currentCombatRound(),
         protocol: this.protocol, elapsedMs: 0, rewardKind: 'mod', rewardAmount: 1 });
     }
@@ -4821,31 +4812,12 @@ export class ArenaScene extends Phaser.Scene {
     y: number,
     arcadeEventId?: ArcadeEventId
   ): ModPickup {
-    const corrupted = definition.variant === 'corrupted';
-    const rarityColor = corrupted ? 0xff2ba7 : MOD_RARITY_COLORS[definition.rarity];
-    const root = this.add.container(x, y).setDepth(12);
-    const premiumPickup = definition.rarity === 'legendary' || definition.rarity === 'supreme';
-    const glow = this.add.circle(0, 0, definition.rarity === 'supreme' ? 32 : premiumPickup ? 27 : 23, rarityColor, definition.rarity === 'supreme' ? 0.26 : 0.18)
-      .setStrokeStyle(2, rarityColor, 0.62)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const outer = this.add.polygon(0, 0, [0, -17, 14, -9, 14, 9, 0, 17, -14, 9, -14, -9], 0x06101a, 0.96)
-      .setStrokeStyle(2, rarityColor, 1);
-    const chip = this.add.polygon(0, 0, [0, -9, 9, 0, 0, 9, -9, 0], definition.iconColor, 0.96)
-      .setStrokeStyle(1, 0xffffff, 0.88)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const label = this.add.text(0, 24, definition.variant === 'corrupted' ? 'CORRUPTED MOD' : `${definition.rarity.toUpperCase()} MOD`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', fontStyle: 'bold', color: Phaser.Display.Color.IntegerToColor(rarityColor).rgba,
-      stroke: '#020611', strokeThickness: 3
-    }).setOrigin(0.5);
-    const scan = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-    root.add([glow, outer, chip, scan, label]);
+    const visual = createGameplayModPickupVisual(this, definition, x, y);
     const pickup: ModPickup = {
       definition,
       source,
-      sprite: root,
-      glow,
-      scan,
-      phase: Math.abs(x * 0.019 + y * 0.031 + definition.id.length),
+      sprite: visual.root,
+      visual,
       expiresAt: source === 'boss' ? Number.POSITIVE_INFINITY : this.time.now + 28_000,
       collectibleAt: this.time.now + 120,
       collected: false,
@@ -4870,12 +4842,7 @@ export class ArenaScene extends Phaser.Scene {
         pickup.sprite.destroy();
         continue;
       }
-      const pulse = 0.5 + Math.sin(now * 0.007 + pickup.phase) * 0.5;
-      pickup.sprite.rotation += dt * (pickup.definition.rarity === 'supreme' ? 0.92 : pickup.definition.rarity === 'legendary' ? 0.75 : 0.42);
-      pickup.sprite.setScale(0.96 + pulse * 0.08);
-      pickup.glow.setAlpha(0.12 + pulse * 0.2).setScale(0.9 + pulse * 0.25);
-      pickup.scan.clear().lineStyle(1, 0xffffff, 0.38 + pulse * 0.34)
-        .lineBetween(-10, -13 + pulse * 25, 10, -13 + pulse * 25);
+      updateGameplayModPickupVisual(pickup.visual, now, dt);
       const dx = this.player.x - pickup.sprite.x;
       const dy = this.player.y - pickup.sprite.y;
       const distanceSquared = dx * dx + dy * dy;
@@ -4902,10 +4869,10 @@ export class ArenaScene extends Phaser.Scene {
     this.modPickups.length = writeIndex;
   }
 
-  private awardResolvedMod(definition: ModDefinition, source: ModDropSource, x: number, y: number, leadInMs = 0): void {
+  private awardResolvedMod(definition: ModDefinition, source: ModDropSource, x: number, y: number, leadInMs = 0): boolean {
     const duplicate = Boolean(SaveSystem.getModCollection().inventory[definition.id]?.discovered);
     const result = SaveSystem.addMod(definition.id);
-    if (!result.ok) return;
+    if (!result.ok) return false;
     const card = SaveSystem.getModCollection().cards.at(-1);
     this.modsEarned.push({ modId: definition.id, duplicate, source });
     GameplayTelemetryRecorder.recordModDrop(definition.id, definition.rarity, source, duplicate);
@@ -4925,6 +4892,7 @@ export class ArenaScene extends Phaser.Scene {
         if (definition.variant === 'corrupted') TutorialEventBus.emit('mod.corruptedRevealed', { modId: definition.id });
       });
     }
+    return true;
   }
 
   private modRevealScreenPosition(worldX: number, worldY: number): { x: number; y: number } {
@@ -4975,35 +4943,14 @@ export class ArenaScene extends Phaser.Scene {
   private dropPickup(x: number, y: number): PickupType {
     const type = selectEnemyPickup(Math.random());
 
-    const colorMap: Record<PickupType, number> = {
-      health: COLORS.green,
-      energy: COLORS.cyan,
-      damageBoost: COLORS.red,
-      speedBoost: COLORS.pink,
-      rapidFire: COLORS.orange,
-      ricochet: 0x6fffd2,
-      grenadeRounds: 0xff7a3d,
-      scattershot: 0x58b8ff,
-      credits: 0xf2ff72,
-      coreToken: COLORS.purple,
-      plasmaChip: 0xd06dff,
-      fluxCore: COLORS.cyan
-    };
-
-    const p = this.createPickupSprite(type, x, y, colorMap[type]);
+    const p = this.createPickupSprite(type, x, y, GAMEPLAY_PICKUP_COLOR_BY_TYPE[type]);
     this.pickups.push({ type, sprite: p, expiresAt: this.time.now + PICKUP_BALANCE.lifetimeMs, source: 'enemy' });
     GameplayTelemetryRecorder.recordPickupDropped(type, 'enemy');
     return type;
   }
 
   private createPickupSprite(type: PickupType, x: number, y: number, color: number): Phaser.GameObjects.Container {
-    if (type === 'fluxCore') return this.createFluxCorePickupSprite(x, y, color);
-    const container = this.add.container(x, y).setDepth(6);
-    const visualColor = type === 'credits' ? 0xf5ff58 : color;
-    const visual = this.createPickupVisualShell(container, visualColor, x, y, type);
-    this.addPickupIcon(visual.iconRig, type, visualColor);
-    this.pickupVisuals.set(container, visual);
-
+    const container = this.pickupPresentation.create(type, x, y, color);
     const motionSeed = Math.abs(x * 0.037 + y * 0.053 + type.length * 1.731);
     const driftAngle = motionSeed % (Math.PI * 2);
     const driftSpeed = PICKUP_FLOAT_DRIFT_MIN + motionSeed % PICKUP_FLOAT_DRIFT_RANGE;
@@ -5015,50 +4962,8 @@ export class ArenaScene extends Phaser.Scene {
     return container;
   }
 
-  private createFluxCorePickupSprite(x: number, y: number, color: number): Phaser.GameObjects.Container {
-    const container = this.add.container(x, y).setDepth(8);
-    // These are the same glow/orb dimensions and styling used inside the raised Flux Core.
-    const glow = this.add.circle(0, -1, 10, color, 0.23).setBlendMode(Phaser.BlendModes.ADD);
-    const orb = this.add.circle(0, -1, 5, color, 0.95)
-      .setStrokeStyle(1, 0xffffff, 0.9)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const electricity = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-    container.add([glow, orb, electricity]);
-    const phase = Math.abs(x * 0.019 + y * 0.027) % (Math.PI * 2);
-    this.fluxCorePickupVisuals.set(container, { glow, orb, electricity, color, phase, nextArcAt: 0 });
-    const driftAngle = phase % (Math.PI * 2);
-    const driftSpeed = PICKUP_FLOAT_DRIFT_MIN + phase % PICKUP_FLOAT_DRIFT_RANGE;
-    this.pickupMotion.set(container, {
-      velocityX: Math.cos(driftAngle) * driftSpeed,
-      velocityY: Math.sin(driftAngle) * driftSpeed,
-      phase
-    });
-    return container;
-  }
-
-  private updateFluxCorePickupVisual(
-    container: Phaser.GameObjects.Container,
-    visual: FluxCorePickupVisual,
-    now: number
-  ): void {
-    const pulse = 0.5 + Math.sin(now * 0.008 + visual.phase) * 0.5;
-    container.setScale(0.95 + pulse * 0.22).setAlpha(0.84 + pulse * 0.16);
-    visual.glow.setAlpha(0.16 + pulse * 0.22).setScale(0.9 + pulse * 0.35);
-    visual.orb.setFillStyle(pulse > 0.78 ? 0xffffff : visual.color, 0.96);
-    if (now < visual.nextArcAt) return;
-    visual.nextArcAt = now + 95 + Math.floor(pulse * 80);
-    visual.electricity.clear();
-    visual.electricity.lineStyle(1, pulse > 0.6 ? 0xffffff : visual.color, 0.75);
-    const angle = now * 0.01 + visual.phase;
-    visual.electricity.beginPath();
-    visual.electricity.moveTo(Math.cos(angle) * 6, Math.sin(angle) * 6 - 1);
-    visual.electricity.lineTo(Math.cos(angle + 1.8) * 10, Math.sin(angle + 1.8) * 10 - 1);
-    visual.electricity.lineTo(Math.cos(angle + 3.5) * 7, Math.sin(angle + 3.5) * 7 - 1);
-    visual.electricity.strokePath();
-  }
-
   private dropFluxCorePickup(x: number, y: number, color: number): void {
-    const sprite = this.createFluxCorePickupSprite(x, y, color);
+    const sprite = this.createPickupSprite('fluxCore', x, y, color);
     this.pickups.push({
       type: 'fluxCore',
       sprite,
@@ -5068,180 +4973,6 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.recordPickupDropped('fluxCore', 'flux-core');
   }
 
-  private createPickupVisualShell(
-    container: Phaser.GameObjects.Container,
-    color: number,
-    x: number,
-    y: number,
-    type: PickupType
-  ): PickupVisual {
-    const haloRadius = 18;
-    const phase = Math.abs(x * 0.019 + y * 0.027 + type.length * 0.83) % (Math.PI * 2);
-    const glow = this.add.circle(0, 0, haloRadius, color, 0.12)
-      .setStrokeStyle(1, color, 0.28)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const backing = this.add.polygon(0, 0, [0, -14, 12, -7, 12, 7, 0, 14, -12, 7, -12, -7], 0x071017, 0.94)
-      .setStrokeStyle(2, color, 0.92);
-    const scanRing = this.add.circle(0, 0, 15, 0x000000, 0)
-      .setStrokeStyle(1.35, color, 0.7)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const centerBloom = this.add.circle(0, 0, 10, color, 0.08).setBlendMode(Phaser.BlendModes.ADD);
-
-    const arcSegments = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-    arcSegments.lineStyle(1.6, 0xffffff, 0.64);
-    for (let index = 0; index < 4; index += 1) {
-      const start = index * Math.PI / 2 + 0.14;
-      arcSegments.beginPath();
-      arcSegments.arc(0, 0, 17, start, start + 0.46, false);
-      arcSegments.strokePath();
-    }
-
-    const orbitRig = this.add.container(0, 0);
-    const orbitPath = this.add.circle(0, 0, 20, 0x000000, 0).setStrokeStyle(1, color, 0.26);
-    const satellites: Phaser.GameObjects.GameObject[] = [0, 1, 2].map((index) => {
-      const angle = index * Math.PI * 2 / 3;
-      return this.add.polygon(
-        Math.cos(angle) * 20,
-        Math.sin(angle) * 20,
-        [0, -2.8, 2.8, 0, 0, 2.8, -2.8, 0],
-        index === 0 ? 0xffffff : color,
-        0.94
-      ).setStrokeStyle(1, color, 0.9).setBlendMode(Phaser.BlendModes.ADD);
-    });
-    orbitRig.add([orbitPath, ...satellites]);
-
-    let infusionOrbit: Phaser.GameObjects.Container | null = null;
-    if (this.modRuntime?.hasInfusion('pickup-orbit')) {
-      infusionOrbit = this.add.container(0, 0);
-      const infusionPath = this.add.circle(0, 0, 23, color, 0.035).setStrokeStyle(1, 0xffffff, 0.42);
-      const satelliteA = this.add.circle(23, 0, 2.4, 0xffffff, 0.98).setStrokeStyle(1, color, 1);
-      const satelliteB = this.add.circle(-23, 0, 1.8, color, 0.98).setStrokeStyle(1, 0xffffff, 0.86);
-      infusionOrbit.add([infusionPath, satelliteA, satelliteB]);
-    }
-
-    const iconRig = this.add.container(0, 0);
-    const leftBracket = this.add.polygon(-16.5, 0, [0, -6, 2.5, -6, 2.5, -2.5, 6, 0, 2.5, 2.5, 2.5, 6, 0, 6], color, 0.86);
-    const rightBracket = this.add.polygon(16.5, 0, [0, -6, -2.5, -6, -2.5, -2.5, -6, 0, -2.5, 2.5, -2.5, 6, 0, 6], color, 0.86);
-    container.add([glow, orbitRig]);
-    if (infusionOrbit) container.add(infusionOrbit);
-    container.add([backing, centerBloom, scanRing, arcSegments, iconRig, leftBracket, rightBracket]);
-    return { glow, scanRing, orbitRig, infusionOrbit, iconRig, leftBracket, rightBracket, phase };
-  }
-
-  private addPickupIcon(iconRig: Phaser.GameObjects.Container, type: PickupType, color: number): void {
-    if (type === 'health') {
-      const vertical = this.add.rectangle(0, 0, 4.5, 15, color, 1).setStrokeStyle(1, 0xe7ffed, 1);
-      const horizontal = this.add.rectangle(0, 0, 15, 4.5, color, 1).setStrokeStyle(1, 0xe7ffed, 1);
-      iconRig.add([vertical, horizontal]);
-      return;
-    }
-    if (type === 'energy') {
-      const bolt = this.add.polygon(0, 0, [-3.5, -11, 2, -11, -1, -3, 5.5, -3, -2, 11, 0.5, 3, -5.5, 3], color, 1)
-        .setStrokeStyle(1, 0xe8fdff, 1);
-      iconRig.add(bolt);
-      return;
-    }
-    if (type === 'damageBoost') {
-      const body = this.add.rectangle(-1, -2, 16, 6, color, 1).setStrokeStyle(1, 0xffffff, 0.92);
-      const barrel = this.add.rectangle(8.5, -2, 7, 2.5, 0xffffff, 0.94);
-      const grip = this.add.polygon(-4, 4, [0, 0, 5, 0, 2.5, 8, -1.5, 8], color, 1).setStrokeStyle(1, 0xffffff, 0.72);
-      iconRig.add([body, barrel, grip]);
-      return;
-    }
-    if (type === 'speedBoost') {
-      const flame = this.add.triangle(0, 11, -4, 0, 4, 0, 0, 7, COLORS.orange, 0.96);
-      const rocket = this.add.polygon(0, -1, [0, -11, 6, -3, 5, 7, 0, 10, -5, 7, -6, -3], color, 1)
-        .setStrokeStyle(1, 0xffffff, 0.92);
-      iconRig.add([flame, rocket]);
-      return;
-    }
-    if (type === 'rapidFire') {
-      const bolts = [-6, 0, 6].map((offset) => this.add.rectangle(offset, 0, 3.5, 17, color, 1)
-        .setRotation(0.31).setStrokeStyle(1, 0xffffff, 0.78));
-      iconRig.add(bolts);
-      return;
-    }
-    if (type === 'ricochet') {
-      const wall = this.add.rectangle(0, 0, 2.5, 20, 0xffffff, 0.82).setRotation(0.42);
-      const incoming = this.add.line(0, 0, -10, 7, -1, 1, color, 1).setLineWidth(2.5, 2.5);
-      const outgoing = this.add.line(0, 0, 1, -1, 10, -8, color, 1).setLineWidth(2.5, 2.5);
-      const spark = this.add.polygon(0, 0, [0, -4, 1.5, -1.5, 4, 0, 1.5, 1.5, 0, 4, -1.5, 1.5, -4, 0, -1.5, -1.5], 0xffffff, 0.96);
-      iconRig.add([wall, incoming, outgoing, spark]);
-      return;
-    }
-    if (type === 'grenadeRounds') {
-      const casing = this.add.circle(0, 2, 7.5, color, 0.98).setStrokeStyle(1.5, 0xffffff, 0.94);
-      const cap = this.add.rectangle(0, -6.5, 7, 4, 0x101722, 1).setStrokeStyle(1, color, 1);
-      const fuse = this.add.line(0, 0, 2, -9, 8, -10, 0xffffff, 0.95).setLineWidth(1.5, 1.5);
-      const pin = this.add.circle(8.5, -9.5, 2.5, 0x000000, 0).setStrokeStyle(1.4, color, 1);
-      const seam = this.add.line(0, 0, -6, 3, 6, 3, 0xffffff, 0.55).setLineWidth(1, 1);
-      iconRig.add([casing, cap, fuse, pin, seam]);
-      return;
-    }
-    if (type === 'scattershot') {
-      const shell = this.add.rectangle(-4, 1, 8, 18, color, 0.98).setStrokeStyle(1.4, 0xffffff, 0.92);
-      const brass = this.add.rectangle(-4, 9, 10, 3.5, 0xffd45e, 1).setStrokeStyle(1, 0xffffff, 0.7);
-      const pelletA = this.add.circle(5, -7, 2.2, 0xffffff, 0.96).setStrokeStyle(1, color, 1);
-      const pelletB = this.add.circle(9, 0, 2.2, 0xffffff, 0.96).setStrokeStyle(1, color, 1);
-      const pelletC = this.add.circle(5, 7, 2.2, 0xffffff, 0.96).setStrokeStyle(1, color, 1);
-      const fanA = this.add.line(0, 0, 0, 0, 8, -7, color, 0.72).setLineWidth(1, 1);
-      const fanB = this.add.line(0, 0, 0, 0, 10, 0, color, 0.72).setLineWidth(1, 1);
-      const fanC = this.add.line(0, 0, 0, 0, 8, 7, color, 0.72).setLineWidth(1, 1);
-      iconRig.add([fanA, fanB, fanC, shell, brass, pelletA, pelletB, pelletC]);
-      return;
-    }
-    if (type === 'credits') {
-      const glyphGlow = this.add.text(0, 0, '\u00a2', {
-        fontFamily: 'Orbitron, Rajdhani, sans-serif',
-        fontSize: '24px',
-        fontStyle: 'bold',
-        color: '#fff36a',
-        stroke: '#f5ff58',
-        strokeThickness: 4
-      }).setOrigin(0.5).setAlpha(0.32).setBlendMode(Phaser.BlendModes.ADD);
-      const glyph = this.add.text(0, -1, '\u00a2', {
-        fontFamily: 'Orbitron, Rajdhani, sans-serif',
-        fontSize: '22px',
-        fontStyle: 'bold',
-        color: '#ffffa8',
-        stroke: '#8e7300',
-        strokeThickness: 2
-      }).setOrigin(0.5).setShadow(0, 0, '#f5ff58', 6, true, true);
-      iconRig.add([glyphGlow, glyph]);
-      return;
-    }
-    if (type === 'coreToken') {
-      const token = this.add.polygon(0, 0, [0, -10, 8.5, -5, 8.5, 5, 0, 10, -8.5, 5, -8.5, -5], color, 0.96)
-        .setStrokeStyle(1.5, 0xffffff, 0.94);
-      const core = this.add.circle(0, 0, 3.5, 0xffffff, 0.96).setStrokeStyle(1, color, 1);
-      iconRig.add([token, core]);
-      return;
-    }
-    if (type === 'plasmaChip') {
-      const chip = this.add.polygon(0, 0, [-10, -6, 4, -9, 10, 0, 4, 9, -10, 6, -5, 0], color, 0.96)
-        .setStrokeStyle(1.5, 0xffffff, 0.94);
-      const channel = this.add.rectangle(1, 0, 9, 2.5, 0xffffff, 0.9).setRotation(-0.22);
-      iconRig.add([chip, channel]);
-    }
-  }
-
-  private updatePickupVisual(
-    container: Phaser.GameObjects.Container,
-    visual: PickupVisual,
-    now: number
-  ): void {
-    const pulse = 0.5 + Math.sin(now * 0.008 + visual.phase) * 0.5;
-    container.setRotation(Math.sin(now * 0.0022 + visual.phase) * 0.055).setAlpha(0.8 + pulse * 0.2);
-    visual.orbitRig.setRotation(now * 0.0034 + visual.phase);
-    visual.infusionOrbit?.setRotation(-now * 0.0045 + visual.phase * 0.7);
-    visual.scanRing.setScale(0.88 + pulse * 0.2).setAlpha(0.36 + pulse * 0.48);
-    visual.glow.setScale(0.9 + pulse * 0.22).setAlpha(0.08 + pulse * 0.15);
-    // Counter-rotate the reward icon so every pickup remains recognizable while its shell floats.
-    visual.iconRig.setRotation(-container.rotation).setScale(0.96 + pulse * 0.07).setY(Math.sin(now * 0.003 + visual.phase) * 2.2);
-    const bracketOffset = 16 + pulse * 2;
-    visual.leftBracket.setX(-bracketOffset);
-    visual.rightBracket.setX(bracketOffset);
-  }
 
   private detonateSite(site: BombSiteRuntime): void {
     if (this.detonatingSiteIds.has(site.id)) return;
@@ -7083,6 +6814,13 @@ export class ArenaScene extends Phaser.Scene {
   private restoreGameplayAfterPause(): void {
     if (this.state.state !== RoundState.Paused) return;
     this.setGameplayCursorMode();
+    if (this.anomalySuspensionState) {
+      const suspension = this.anomalySuspensionState;
+      this.anomalySuspensionState = null;
+      this.restoreAnomalySimulation(suspension);
+      this.tutorialDirector?.startEligible();
+      return;
+    }
     if (this.bossEncounter) {
       this.state.set(RoundState.Defense);
       this.physics.resume();
@@ -7413,6 +7151,7 @@ export class ArenaScene extends Phaser.Scene {
     this.anomalyController?.destroy('round-ended');
     this.anomalyController = null;
     this.activeAnomalySessionId = null;
+    this.anomalySuspensionState = null;
     this.clearRoundInfusionEffects();
     this.arenaVisuals?.destroy();
     this.arenaVisuals = null;
@@ -7498,6 +7237,7 @@ export class ArenaScene extends Phaser.Scene {
     this.anomalyController?.destroy('scene-shutdown');
     this.anomalyController = null;
     this.activeAnomalySessionId = null;
+    this.anomalySuspensionState = null;
     this.flushPendingCombatProgress();
     this.arenaVisuals = null;
     this.supremeConstellation = null;

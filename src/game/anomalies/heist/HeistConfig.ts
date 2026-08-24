@@ -57,3 +57,17 @@ export const HEIST_BALANCE = {
   playerProjectileLifeMs: 1100,
   enemyProjectileLifeMs: 1800
 } as const;
+
+/** HEIST owns its container mix; shared reward systems own item behavior. */
+export const HEIST_REWARD_TABLE = {
+  creditsWeight: 0.38,
+  coreTokensWeight: 0.20,
+  plasmaChipsWeight: 0.17,
+  fluxCoresWeight: 0.14,
+  modWeight: 0.11,
+  creditsBase: 420,
+  creditsPerRound: 38,
+  creditsVariance: 280,
+  fallbackCreditsBase: 650,
+  fallbackCreditsPerRound: 44
+} as const;

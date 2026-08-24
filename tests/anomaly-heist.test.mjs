@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ANOMALY_DEFINITIONS, ANOMALY_ENTRY_COSTS, ANOMALY_SCHEDULING } from '../src/game/anomalies/AnomalyRegistry.ts';
-import { HeistRewardService } from '../src/game/anomalies/heist/HeistRewardService.ts';
+import { HeistRewardService, isHeistModRewardEligible } from '../src/game/anomalies/heist/HeistRewardService.ts';
 import { HEIST_ROUTE, HEIST_WALL_RECTS, HEIST_WORLD } from '../src/game/anomalies/heist/HeistConfig.ts';
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -43,7 +43,8 @@ test('HEIST failure bypasses normal defeat and restores through the Arena return
   assert.match(heist, /returnToArena\(false, 'player-dead'\)/);
   assert.doesNotMatch(heist, /SceneKeys\.Results|triggerDefeat/);
   assert.match(heist, /arena\.events\.emit\('anomaly-return'/);
-  assert.match(heist, /this\.scene\.resume\(SceneKeys\.Arena\)/);
+  const transition = heist.slice(heist.indexOf('private returnToArena'), heist.indexOf('private updateHud'));
+  assert.doesNotMatch(transition, /this\.scene\.resume\(SceneKeys\.Arena\)/);
 });
 
 test('Anomaly telemetry, silent audio hooks, scene registration, and DEV controls remain explicit', () => {
@@ -113,12 +114,18 @@ test('HEIST facility and shared Arcade HUD use bounded dimensional presentation 
   assert.match(arcadeHud, /leftRail/);
 });
 
-test('Anomaly return resumes and restores Arena before removing the top HEIST scene', () => {
+test('Anomaly return restores the exact suspension snapshot before Arena resumes', () => {
   const arena = source('../src/game/scenes/ArenaScene.ts');
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
   const transition = heist.slice(heist.indexOf('private returnToArena'), heist.indexOf('private updateHud'));
-  assert.ok(transition.indexOf('this.scene.resume(SceneKeys.Arena)') < transition.indexOf("arena.events.emit('anomaly-return'"));
+  assert.doesNotMatch(transition, /this\.scene\.resume\(SceneKeys\.Arena\)/);
   assert.ok(transition.indexOf("arena.events.emit('anomaly-return'") < transition.indexOf('this.scene.stop(SceneKeys.Heist)'));
+  const arenaReturn = arena.slice(arena.indexOf('private readonly onAnomalyReturn'), arena.indexOf('constructor()'));
+  assert.ok(arenaReturn.indexOf('restoreAnomalySimulation') < arenaReturn.indexOf('this.scene.resume(SceneKeys.Arena)'));
+  assert.match(arena, /physicsWasPaused: this\.physics\.world\.isPaused/);
+  assert.match(arena, /physicsTimeScale: this\.physics\.world\.timeScale/);
+  assert.match(arena, /clockWasPaused: this\.time\.paused/);
+  assert.match(arena, /this\.state\.set\(suspension\.roundState\)/);
   assert.match(arena, /inputBridge: this\.pointerLock \?\? undefined/);
   const entry = arena.slice(arena.indexOf('private beginAnomalyTransition'), arena.indexOf('private commitAnomalyLoot'));
   assert.doesNotMatch(entry, /pointerLock\?\.destroy|pointerLock\?\.release/);
@@ -142,10 +149,29 @@ test('HEIST creates physical provisional loot and extraction never waits for eve
   assert.match(heist, /this\.lootPickups\.spawn\(/);
   assert.match(heist, /private collectLoot[\s\S]*this\.rewards\.add\(this\.pendingLoot, reward\)/);
   assert.match(lootSystem, /pickup\.settled/);
+  assert.match(lootSystem, /createPhysicalLootPlan/);
+  assert.match(lootSystem, /GameplayPickupPresentation/);
+  assert.match(lootSystem, /createGameplayModPickupVisual/);
   assert.match(lootSystem, /onCollect\(pickup\.reward/);
   assert.match(heist, /this\.openExtraction\(\);/);
   assert.doesNotMatch(heist, /this\.enemies\.length === 0\) this\.openExtraction/);
   assert.match(heist, /phase === 'escape'/);
+});
+
+test('HEIST Supreme Mod eligibility is restricted to Supreme Overdrive protocols', () => {
+  const supremeId = 'supreme-eventide-arsenal';
+  assert.equal(isHeistModRewardEligible(supremeId, 'normal'), false);
+  assert.equal(isHeistModRewardEligible(supremeId, 'overdrive-pegasus'), false);
+  assert.equal(isHeistModRewardEligible(supremeId, 'supreme-leo'), true);
+  assert.equal(isHeistModRewardEligible('split-current', 'normal'), true);
+});
+
+test('successful extraction sends Mods through Arena shared acquisition and reveal pipeline', () => {
+  const arena = source('../src/game/scenes/ArenaScene.ts');
+  const commit = arena.slice(arena.indexOf('private commitAnomalyLoot'), arena.indexOf('private findArcadeSpawnPoints'));
+  assert.match(commit, /this\.awardResolvedMod\([\s\S]*?'anomaly'/);
+  assert.doesNotMatch(commit, /SaveSystem\.addMod/);
+  assert.match(arena, /private awardResolvedMod[\s\S]*?SaveSystem\.addMod[\s\S]*?modAcquisitionPresenter\?\.enqueue/);
 });
 
 test('Portal and anomaly audio boundaries expose the complete second-pass presentation lifecycle', () => {
