@@ -5,17 +5,26 @@
  * adapter, not touching scheduling or HEIST gameplay.
  */
 export type AnomalyAudioCue =
-  | 'sphere-spawn'
-  | 'charge-feed'
-  | 'portal-open'
-  | 'portal-enter'
-  | 'heist-arrival'
-  | 'vault-open'
-  | 'vault-close'
-  | 'container-break'
-  | 'alarm'
-  | 'extraction-open'
-  | 'extraction-complete'
+  | 'anomaly-spawn'
+  | 'anomaly-charging'
+  | 'essence-release'
+  | 'essence-absorption'
+  | 'portal-rupture'
+  | 'portal-idle'
+  | 'portal-entry'
+  | 'facility-arrival'
+  | 'corridor-ambience'
+  | 'door-activation'
+  | 'door-open'
+  | 'door-close'
+  | 'loot-container-impact'
+  | 'loot-container-break'
+  | 'loot-spawn'
+  | 'ambush-trigger'
+  | 'warning-state'
+  | 'extraction-activation'
+  | 'portal-return'
+  | 'arena-reentry'
   | 'heist-failed';
 
 export interface AnomalyAudioHooks {
@@ -27,4 +36,3 @@ export const createSilentAnomalyAudioHooks = (): AnomalyAudioHooks => ({
   play: () => undefined,
   stopAll: () => undefined
 });
-

@@ -26,6 +26,7 @@ export class AnomalyController {
   private stateValue: AnomalyState = 'waiting';
   private definition: AnomalyDefinition | null = null;
   private visual: AnomalyPortalVisual | null = null;
+  private retiringVisual: AnomalyPortalVisual | null = null;
   private elapsedMs = 0;
   private nextOpportunityAt = Number.POSITIVE_INFINITY;
   private spawnedAt = 0;
@@ -78,8 +79,12 @@ export class AnomalyController {
       if (!visual) return;
       const distanceSquared = (this.context.player.x - visual.x) ** 2 + (this.context.player.y - visual.y) ** 2;
       if (distanceSquared <= ANOMALY_SCHEDULING.interactionRadius ** 2) {
-        this.hud.show('ANOMALY // HEIST', `${this.context.interactionPrompt()} ENTER // ${this.cost} FLUX CORES`, 0xff5bd8);
-        if (this.context.isInteractPressed()) this.tryEnter();
+        if (!visual.readyForInteraction) {
+          this.hud.show('DIMENSIONAL BREACH FORMING', 'STAND CLEAR // TRANSIT FIELD UNSTABLE', 0x63f7ff);
+        } else {
+          this.hud.show('ANOMALY // HEIST', `${this.context.interactionPrompt()} ENTER // ${this.cost} FLUX CORES`, 0xff5bd8);
+          if (this.context.isInteractPressed()) this.tryEnter();
+        }
       }
       return;
     }
@@ -95,8 +100,8 @@ export class AnomalyController {
       this.nextOpportunityAt = this.elapsedMs + ANOMALY_SCHEDULING.retryAfterMissMs;
       return;
     }
-    const eligible = getEligibleAnomalies(this.context.round);
-    if (!eligible.length || !this.start(eligible[Math.floor(this.random.next() * eligible.length)])) {
+    const eligible = getEligibleAnomalies(this.context.round, this.context.protocol);
+    if (!eligible.length || !this.start(this.chooseWeighted(eligible))) {
       this.nextOpportunityAt = this.elapsedMs + ANOMALY_SCHEDULING.retryAfterMissMs;
     }
   }
@@ -105,8 +110,11 @@ export class AnomalyController {
     if (this.stateValue !== 'charging' || !this.definition || !this.visual) return;
     this.charge += 1;
     this.visual.setCharge(this.charge / this.chargeTarget);
-    this.visual.emitFeed(x, y, this.options.particlesEnabled ? 3 : 1);
-    this.audio.play('charge-feed');
+    this.visual.emitFeed(x, y, this.options.particlesEnabled ? 2 : 1, () => {
+      this.audio.play('essence-absorption');
+    });
+    this.audio.play('essence-release');
+    this.audio.play('anomaly-charging');
     this.context.emitMetric({
       name: 'anomaly_charge_progress', anomalyId: this.definition.id, round: this.context.round,
       protocol: this.context.protocol, elapsedMs: this.elapsedMs - this.spawnedAt,
@@ -137,6 +145,14 @@ export class AnomalyController {
   resolveReturn(): void {
     if (this.stateValue !== 'suspended') return;
     this.context.player.setScale(1).setAlpha(1).setVisible(true).setActive(true);
+    this.audio.play('arena-reentry');
+    const visual = this.visual;
+    this.visual = null;
+    this.retiringVisual = visual;
+    visual?.playReturnCollapse(() => {
+      visual.destroy();
+      if (this.retiringVisual === visual) this.retiringVisual = null;
+    });
     this.resolve('round-ended');
   }
 
@@ -151,6 +167,8 @@ export class AnomalyController {
     this.resolve(reason);
     this.destroyed = true;
     this.audio.stopAll();
+    this.retiringVisual?.destroy();
+    this.retiringVisual = null;
     this.hud.destroy();
   }
 
@@ -163,7 +181,7 @@ export class AnomalyController {
     this.charge = 0;
     this.chargeTarget = Math.min(definition.chargeMaximum, Math.ceil(definition.chargeBase + this.context.round * definition.chargePerRound));
     this.visual = new AnomalyPortalVisual(this.context.scene, location.x, location.y, this.options.particlesEnabled);
-    this.audio.play('sphere-spawn');
+    this.audio.play('anomaly-spawn');
     this.hud.show('ANOMALOUS ENERGY DETECTED', `FEED THE SPHERE // ELIMINATE ${this.chargeTarget} HOSTILES`, 0x63f7ff, 3600);
     this.context.emitMetric({
       name: 'anomaly_spawned', anomalyId: definition.id, round: this.context.round,
@@ -178,7 +196,8 @@ export class AnomalyController {
     this.portalReadyAt = this.context.scene.time.now;
     this.cost = this.forcedCost ?? ANOMALY_ENTRY_COSTS[Math.floor(this.random.next() * ANOMALY_ENTRY_COSTS.length)];
     this.visual.transformToPortal();
-    this.audio.play('portal-open');
+    this.audio.play('portal-rupture');
+    this.audio.play('portal-idle');
     this.hud.show(this.definition.displayName, `${this.definition.description}\nENTRY COST // ${this.cost} FLUX CORES`, 0xff5bd8, 5600);
     this.context.emitMetric({
       name: 'anomaly_portal_opened', anomalyId: this.definition.id, round: this.context.round,
@@ -187,7 +206,7 @@ export class AnomalyController {
   }
 
   private tryEnter(): void {
-    if (this.stateValue !== 'portal-ready' || !this.definition || !this.visual) return;
+    if (this.stateValue !== 'portal-ready' || !this.definition || !this.visual || !this.visual.readyForInteraction) return;
     if (this.context.availableFluxCores() < this.cost || !this.context.spendFluxCores(this.cost)) {
       this.hud.show('ACCESS DENIED', `INSUFFICIENT FLUX CORES // ${this.context.availableFluxCores()} / ${this.cost}`, 0xff5f7c, 1800);
       this.context.emitMetric({ name: 'anomaly_entry_denied', anomalyId: this.definition.id, round: this.context.round,
@@ -198,7 +217,7 @@ export class AnomalyController {
     this.transitionStartedAt = this.context.scene.time.now;
     this.context.player.setVelocity(0, 0);
     this.context.player.invulnUntil = Number.POSITIVE_INFINITY;
-    this.audio.play('portal-enter');
+    this.audio.play('portal-entry');
     this.context.emitMetric({ name: 'anomaly_entry_confirmed', anomalyId: this.definition.id, round: this.context.round,
       protocol: this.context.protocol, elapsedMs: this.elapsedMs - this.spawnedAt, cost: this.cost });
     this.hud.show('ANOMALY TRANSIT LOCKED', 'ARENA STATE SUSPENDING // HEIST LINK ESTABLISHED', 0xff5bd8);
@@ -207,6 +226,7 @@ export class AnomalyController {
   private launchActive(): void {
     if (this.stateValue !== 'transitioning' || !this.definition || !this.visual) return;
     this.stateValue = 'suspended';
+    this.context.scene.cameras.main.flash(150, 205, 255, 255, false);
     this.context.player.setVisible(false).setActive(false);
     this.context.beginTransition({
       anomalyId: this.definition.id,
@@ -231,6 +251,18 @@ export class AnomalyController {
     return null;
   }
 
+  private chooseWeighted(definitions: readonly AnomalyDefinition[]): AnomalyDefinition {
+    let total = 0;
+    for (const definition of definitions) total += Math.max(0, definition.weight);
+    if (total <= 0) return definitions[0];
+    let roll = this.random.next() * total;
+    for (const definition of definitions) {
+      roll -= Math.max(0, definition.weight);
+      if (roll <= 0) return definition;
+    }
+    return definitions[definitions.length - 1];
+  }
+
   private resolve(reason: 'declined' | 'round-ended' | 'scene-shutdown'): void {
     if (this.stateValue === 'resolved' && !this.visual) return;
     this.completedThisRound = true;
@@ -244,4 +276,3 @@ export class AnomalyController {
     if (reason === 'declined') this.completedThisRound = true;
   }
 }
-

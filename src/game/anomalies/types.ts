@@ -2,6 +2,16 @@ import type Phaser from 'phaser';
 import type { Player } from '../entities/Player.ts';
 import type { EquippedModSnapshot, RunProtocolId } from '../mods/types.ts';
 import type { PlayerStats, WeaponStats, EnergyStats, RectSpec } from '../types.ts';
+import type { InputDevice } from '../input/ActionInput.ts';
+
+export interface AnomalyInputBridge {
+  readonly locked: boolean;
+  readonly supported: boolean;
+  worldPoint(camera: Phaser.Cameras.Scene2D.Camera, output?: Phaser.Math.Vector2): Phaser.Math.Vector2;
+  requestLock(): void;
+  showResume(message?: string): void;
+  hidePrompt(): void;
+}
 
 export type AnomalyId = 'heist';
 export type AnomalyState = 'waiting' | 'charging' | 'portal-ready' | 'transitioning' | 'suspended' | 'resolved';
@@ -49,6 +59,16 @@ export interface AnomalyDefinition {
   chargeBase: number;
   chargePerRound: number;
   chargeMaximum: number;
+  rarity?: 'rare' | 'very-rare' | 'endgame';
+  requiredProtocols?: RunProtocolId[];
+  supremeOnly?: boolean;
+  minimumPlayerLevel?: number;
+  layoutId?: string;
+  encounterTableId?: string;
+  rewardTableId?: string;
+  environmentTheme?: string;
+  portalVariant?: string;
+  extractionRule?: 'interact' | 'survive' | 'objective';
 }
 
 export interface AnomalyRuntimeContext {
@@ -124,6 +144,8 @@ export interface HeistSessionData {
     shieldCooldownMs: number;
     shieldEnergyCost: number;
   };
+  inputBridge?: AnomalyInputBridge;
+  initialInputDevice?: InputDevice;
   dev?: { forceMiniBoss?: boolean | null };
 }
 

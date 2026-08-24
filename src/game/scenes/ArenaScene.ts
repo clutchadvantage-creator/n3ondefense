@@ -644,6 +644,8 @@ export class ArenaScene extends Phaser.Scene {
   private readonly onAnomalyReturn = (result: AnomalyReturnResult): void => {
     if (!this.activeAnomalySessionId || result.sessionId !== this.activeAnomalySessionId) return;
     this.activeAnomalySessionId = null;
+    this.cameras.main.resetFX().setAlpha(1).setVisible(true);
+    this.scene.bringToTop();
     if (result.success) this.commitAnomalyLoot(result);
     this.anomalyController?.resolveReturn();
     const safe = this.pathfinder.findNearestWalkableWorld(result.sourcePortal.x + 118, result.sourcePortal.y, 0, 6)
@@ -655,15 +657,19 @@ export class ArenaScene extends Phaser.Scene {
       ? 'HEIST COMPLETE // HAUL COMMITTED'
       : 'HEIST FAILED // ARENA STATE RESTORED');
     this.clearGameplayInput();
-    this.pointerLock?.destroy();
-    this.pointerLock = new GameplayPointerLock(this.game, {
-      onLocked: () => this.resumeFromPointerLock(),
-      onLost: (reason) => this.pauseForPointerLock(reason)
-    });
-    this.pointerLock.setSensitivity(this.aimSettings.mouseSensitivity);
-    this.pointerLockInitialGate = true;
-    this.pauseForPointerLock('initial');
-    this.pointerLock.showResume();
+    const pointerRequired = this.playerInput.activeDevice !== 'gamepad' && Boolean(this.pointerLock?.supported);
+    if (pointerRequired && !this.pointerLock?.locked) {
+      this.pointerLockInitialGate = true;
+      this.pauseForPointerLock('initial');
+      this.pointerLock?.showResume('CLICK TO RESUME OPERATION');
+    } else {
+      this.pointerLockInitialGate = false;
+      this.pointerLock?.hidePrompt();
+      this.setGameplayCursorMode();
+      this.physics.resume();
+      if (this.state.state === RoundState.Planting) this.audio.startPlantingLoop();
+      if (this.state.state === RoundState.Defusing) this.audio.startDisarmLoop();
+    }
   };
   constructor() {
     super(SceneKeys.Arena);
@@ -782,8 +788,8 @@ export class ArenaScene extends Phaser.Scene {
     this.events.on('anomaly-return', this.onAnomalyReturn);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.pointerLock = new GameplayPointerLock(this.game, {
-      onLocked: () => this.resumeFromPointerLock(),
-      onLost: (reason) => this.pauseForPointerLock(reason)
+      onLocked: () => { if (!this.activeAnomalySessionId) this.resumeFromPointerLock(); },
+      onLost: (reason) => { if (!this.activeAnomalySessionId) this.pauseForPointerLock(reason); }
     });
     this.aimSettings = normalizeAimSettings(SaveSystem.get().settings.aim);
     this.pointerLock.setSensitivity(this.aimSettings.mouseSensitivity);
@@ -4566,9 +4572,10 @@ export class ArenaScene extends Phaser.Scene {
     this.laserSecurity?.silence();
     this.audio.stopFluxCoreLoop();
     this.clearGameplayInput();
-    this.pointerLock?.release();
-    this.pointerLock?.destroy();
-    this.pointerLock = null;
+    // Pointer lock is canvas-owned rather than scene-owned. Keep this exact
+    // instance alive through the excursion so HEIST inherits normal aiming
+    // and returning never races a destroy/recreate cycle.
+    this.pointerLock?.hidePrompt();
     const appearance = SaveSystem.getOperativeFrameAppearance(this.time.now);
     const session: HeistSessionData = {
       sessionId: request.sessionId,
@@ -4597,6 +4604,8 @@ export class ArenaScene extends Phaser.Scene {
         shieldCooldownMs: this.getShieldCooldownMs(),
         shieldEnergyCost: this.getShieldEnergyCost()
       },
+      inputBridge: this.pointerLock ?? undefined,
+      initialInputDevice: this.playerInput.activeDevice,
       dev: { forceMiniBoss: import.meta.env.DEV ? this.registry.get('heist-dev-force-miniboss') as boolean | null | undefined : undefined }
     };
     this.scene.launch(SceneKeys.Heist, session);

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ANOMALY_DEFINITIONS, ANOMALY_ENTRY_COSTS, ANOMALY_SCHEDULING } from '../src/game/anomalies/AnomalyRegistry.ts';
 import { HeistRewardService } from '../src/game/anomalies/heist/HeistRewardService.ts';
+import { HEIST_ROUTE, HEIST_WALL_RECTS, HEIST_WORLD } from '../src/game/anomalies/heist/HeistConfig.ts';
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -63,3 +64,51 @@ test('HEIST combat pool fully disables and resets retired projectile bodies', ()
   assert.match(heist, /setVelocity\(0, 0\)/);
 });
 
+test('Anomaly return resumes and restores Arena before removing the top HEIST scene', () => {
+  const arena = source('../src/game/scenes/ArenaScene.ts');
+  const heist = source('../src/game/anomalies/heist/HeistScene.ts');
+  const transition = heist.slice(heist.indexOf('private returnToArena'), heist.indexOf('private updateHud'));
+  assert.ok(transition.indexOf('this.scene.resume(SceneKeys.Arena)') < transition.indexOf("arena.events.emit('anomaly-return'"));
+  assert.ok(transition.indexOf("arena.events.emit('anomaly-return'") < transition.indexOf('this.scene.stop(SceneKeys.Heist)'));
+  assert.match(arena, /inputBridge: this\.pointerLock \?\? undefined/);
+  const entry = arena.slice(arena.indexOf('private beginAnomalyTransition'), arena.indexOf('private commitAnomalyLoot'));
+  assert.doesNotMatch(entry, /pointerLock\?\.destroy|pointerLock\?\.release/);
+  assert.match(arena, /cameras\.main\.resetFX\(\)\.setAlpha\(1\)\.setVisible\(true\)/);
+});
+
+test('HEIST facility is a multi-room route with no guide point embedded in collision geometry', () => {
+  assert.ok(HEIST_WORLD.width >= 4_000);
+  assert.ok(HEIST_WORLD.height >= 2_300);
+  assert.ok(HEIST_ROUTE.length >= 12);
+  for (const point of HEIST_ROUTE) {
+    const blocked = HEIST_WALL_RECTS.some((rect) => point.x >= rect.x && point.x <= rect.x + rect.w
+      && point.y >= rect.y && point.y <= rect.y + rect.h);
+    assert.equal(blocked, false, `route point ${point.x},${point.y} is inside a wall`);
+  }
+});
+
+test('HEIST creates physical provisional loot and extraction never waits for every hostile to die', () => {
+  const heist = source('../src/game/anomalies/heist/HeistScene.ts');
+  const lootSystem = source('../src/game/anomalies/heist/HeistLootPickupSystem.ts');
+  assert.match(heist, /this\.lootPickups\.spawn\(/);
+  assert.match(heist, /private collectLoot[\s\S]*this\.rewards\.add\(this\.pendingLoot, reward\)/);
+  assert.match(lootSystem, /pickup\.settled/);
+  assert.match(lootSystem, /onCollect\(pickup\.reward/);
+  assert.match(heist, /this\.openExtraction\(\);/);
+  assert.doesNotMatch(heist, /this\.enemies\.length === 0\) this\.openExtraction/);
+  assert.match(heist, /phase === 'escape'/);
+});
+
+test('Portal and anomaly audio boundaries expose the complete second-pass presentation lifecycle', () => {
+  const portal = source('../src/game/anomalies/AnomalyPortalVisual.ts');
+  const audio = source('../src/game/anomalies/AnomalyAudioHooks.ts');
+  for (const feature of ['portalVoid', 'portalEnergy', 'shockwave', 'activeWisps', 'absorptionPulseUntil', 'readyForInteraction']) {
+    assert.match(portal, new RegExp(feature));
+  }
+  for (const cue of [
+    'anomaly-spawn', 'anomaly-charging', 'essence-release', 'essence-absorption', 'portal-rupture',
+    'portal-idle', 'portal-entry', 'facility-arrival', 'corridor-ambience', 'door-activation',
+    'door-open', 'door-close', 'loot-container-impact', 'loot-container-break', 'loot-spawn',
+    'ambush-trigger', 'warning-state', 'extraction-activation', 'portal-return', 'arena-reentry'
+  ]) assert.match(audio, new RegExp(`'${cue}'`));
+});

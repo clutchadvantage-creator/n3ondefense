@@ -122,6 +122,14 @@ export class PlayerInput {
     this.rebuildAbilityKeys();
   }
 
+  /** Carries the last active gameplay device across a temporary scene handoff. */
+  adoptDevice(device: InputDevice): void {
+    this.device = device;
+    const now = performance.now();
+    if (device === 'gamepad') this.gamepadActivityAt = now;
+    else this.keyboardActivityAt = now;
+  }
+
   clear(): void {
     this.states.clear();
     this.pointerButtons.fill(0);

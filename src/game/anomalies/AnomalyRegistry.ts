@@ -1,4 +1,5 @@
 import type { AnomalyDefinition, AnomalyId } from './types.ts';
+import type { RunProtocolId } from '../mods/types.ts';
 
 export const ANOMALY_ENTRY_COSTS = [100, 125, 150, 175, 200, 225, 250] as const;
 
@@ -22,13 +23,21 @@ export const ANOMALY_DEFINITIONS: readonly AnomalyDefinition[] = [{
   weight: 1,
   chargeBase: 12,
   chargePerRound: 0.28,
-  chargeMaximum: 26
+  chargeMaximum: 26,
+  rarity: 'rare',
+  layoutId: 'facility-07',
+  encounterTableId: 'heist-security-response',
+  rewardTableId: 'heist-provisional-vault',
+  environmentTheme: 'abandoned-dimensional-research',
+  portalVariant: 'dimensional-breach',
+  extractionRule: 'interact'
 }] as const;
 
 export const ANOMALY_BY_ID = new Map<AnomalyId, AnomalyDefinition>(
   ANOMALY_DEFINITIONS.map((definition) => [definition.id, definition])
 );
 
-export const getEligibleAnomalies = (round: number): AnomalyDefinition[] =>
-  ANOMALY_DEFINITIONS.filter((definition) => round >= definition.minimumRound);
-
+export const getEligibleAnomalies = (round: number, protocol: RunProtocolId): AnomalyDefinition[] =>
+  ANOMALY_DEFINITIONS.filter((definition) => round >= definition.minimumRound
+    && (!definition.requiredProtocols || definition.requiredProtocols.includes(protocol))
+    && (!definition.supremeOnly || protocol.startsWith('supreme-')));
