@@ -98,6 +98,10 @@ import { SupremeConstellationFloor } from '../vfx/SupremeConstellationFloor.ts';
 import { SupremeFinaleController } from '../bosses/SupremeFinaleController.ts';
 import { SupremeFinaleOverlay } from '../bosses/SupremeFinaleOverlay.ts';
 import { SupremeVictorySequence } from '../bosses/SupremeVictorySequence.ts';
+import { AnomalyController } from '../anomalies/AnomalyController.ts';
+import { recordAnomalyMetric } from '../anomalies/AnomalyTelemetry.ts';
+import { HEIST_BALANCE } from '../anomalies/heist/HeistConfig.ts';
+import type { AnomalyEntryRequest, AnomalyId, AnomalyReturnResult, HeistSessionData } from '../anomalies/types.ts';
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Image;
@@ -406,6 +410,8 @@ export class ArenaScene extends Phaser.Scene {
   private gasHazard: GasHazardSystem | null = null;
   private fluxCores: FluxCoreSystem | null = null;
   private arcadeController: N3ONArcadeController | null = null;
+  private anomalyController: AnomalyController | null = null;
+  private activeAnomalySessionId: string | null = null;
   private bossEncounter: BossEncounter | null = null;
   private supremeFinale: SupremeFinaleController | null = null;
   private supremeFinaleOverlay: SupremeFinaleOverlay | null = null;
@@ -635,6 +641,30 @@ export class ArenaScene extends Phaser.Scene {
     if (this.state.state === RoundState.Paused) this.showPauseMenu();
   };
   private readonly onQuitFromStore = (): void => this.quitToMenu();
+  private readonly onAnomalyReturn = (result: AnomalyReturnResult): void => {
+    if (!this.activeAnomalySessionId || result.sessionId !== this.activeAnomalySessionId) return;
+    this.activeAnomalySessionId = null;
+    if (result.success) this.commitAnomalyLoot(result);
+    this.anomalyController?.resolveReturn();
+    const safe = this.pathfinder.findNearestWalkableWorld(result.sourcePortal.x + 118, result.sourcePortal.y, 0, 6)
+      ?? { x: result.sourcePortal.x, y: result.sourcePortal.y };
+    this.player.setActive(true).setVisible(true).setAlpha(1).setScale(1).setPosition(safe.x, safe.y).setVelocity(0, 0);
+    this.player.invulnUntil = this.time.now + HEIST_BALANCE.safeReturnInvulnerabilityMs;
+    this.refreshHudWallet();
+    this.showBanner(result.success
+      ? 'HEIST COMPLETE // HAUL COMMITTED'
+      : 'HEIST FAILED // ARENA STATE RESTORED');
+    this.clearGameplayInput();
+    this.pointerLock?.destroy();
+    this.pointerLock = new GameplayPointerLock(this.game, {
+      onLocked: () => this.resumeFromPointerLock(),
+      onLost: (reason) => this.pauseForPointerLock(reason)
+    });
+    this.pointerLock.setSensitivity(this.aimSettings.mouseSensitivity);
+    this.pointerLockInitialGate = true;
+    this.pauseForPointerLock('initial');
+    this.pointerLock.showResume();
+  };
   constructor() {
     super(SceneKeys.Arena);
   }
@@ -749,6 +779,7 @@ export class ArenaScene extends Phaser.Scene {
     this.events.on('return-from-mod-collection', this.onReturnFromModCollection);
     this.events.on('return-from-store', this.onReturnFromStore);
     this.events.on('quit-from-store', this.onQuitFromStore);
+    this.events.on('anomaly-return', this.onAnomalyReturn);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.pointerLock = new GameplayPointerLock(this.game, {
       onLocked: () => this.resumeFromPointerLock(),
@@ -765,6 +796,10 @@ export class ArenaScene extends Phaser.Scene {
         regenerateArena?:()=>void;
         toggleTraversalDebug?:()=>void;
         forceArcadeEvent?:(eventId:ArcadeEventId)=>boolean;
+        forceAnomaly?:(eventId?:AnomalyId)=>boolean;
+        forceAnomalyCharge?:()=>boolean;
+        setAnomalyCost?:(cost:number|null)=>void;
+        setHeistMiniBoss?:(enabled:boolean|null)=>void;
         forceSupremeStage?:(protocol:RunProtocolId)=>boolean;
         previewSupremeMod?:(modId?:string)=>boolean;
         forceSupremeFinale?:()=>void;
@@ -778,6 +813,10 @@ export class ArenaScene extends Phaser.Scene {
         this.drawTraversalDebug();
       };
       debugGlobal.forceArcadeEvent=(eventId)=>this.arcadeController?.force(eventId) ?? false;
+      debugGlobal.forceAnomaly=(eventId='heist')=>this.anomalyController?.force(eventId) ?? false;
+      debugGlobal.forceAnomalyCharge=()=>this.anomalyController?.forceCharge() ?? false;
+      debugGlobal.setAnomalyCost=(cost)=>this.anomalyController?.setForcedCost(cost);
+      debugGlobal.setHeistMiniBoss=(enabled)=>this.registry.set('heist-dev-force-miniboss',enabled);
       debugGlobal.forceSupremeStage=(protocol)=>{
         const stage=getSupremeStage(protocol);
         if(!stage)return false;
@@ -1006,6 +1045,7 @@ export class ArenaScene extends Phaser.Scene {
     this.state.set(RoundState.PrePlant);
     this.hasLiveRoundObjects = true;
     this.createArcadeController(def.round, def.seed);
+    this.createAnomalyController(def.round, def.seed);
 
     this.showBanner(`ROUND ${def.round} - ${this.layout.template.toUpperCase()}\nSeed ${def.seed}`);
   }
@@ -1255,6 +1295,13 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
+    if (!this.tutorialDirector?.isActive()) this.anomalyController?.update(delta);
+    if (this.anomalyController?.blocksArenaGameplay) {
+      this.player.setVelocity(0, 0);
+      this.updateHud(now);
+      return;
+    }
+
     this.performanceMonitor.record(delta);
     this.updatePerformanceTelemetry(now);
     this.maintainCombatPools(now);
@@ -1354,7 +1401,9 @@ export class ArenaScene extends Phaser.Scene {
     this.laserSecurity?.update(now, dt, this.player, hazardTargets, playerLaserImmune, securityLasersSuppressed);
     this.bombletHazard?.update(now, this.player, hazardTargets, laserDangerWindow);
     this.updateEnemies(now, dt);
-    if (!this.tutorialDirector?.isActive()) this.arcadeController?.update(delta);
+    if (!this.anomalyController || this.anomalyController.state === 'waiting' || this.anomalyController.state === 'resolved') {
+      if (!this.tutorialDirector?.isActive()) this.arcadeController?.update(delta);
+    }
     this.bombsiteMods.update(now, delta, this.bombSites.getActiveBombSites(), this.enemies, this.player);
     this.updateHomingMissiles(delta);
     this.updateProjectiles(delta);
@@ -4171,6 +4220,7 @@ export class ArenaScene extends Phaser.Scene {
   private killEnemy(enemy: Enemy): void {
     if (this.tutorialDirector?.awaits('combat.enemyKilled')) TutorialEventBus.emit('combat.enemyKilled', { type: enemy.stats.type });
     this.arcadeController?.handleGameplayEvent({ type: 'enemy-killed', enemy });
+    this.anomalyController?.handleEnemyKilled(enemy.x, enemy.y);
     this.audio.playSfx('enemyDeath');
     const suppressBaseLoot = Boolean(enemy.getData('n3onArcadeSuppressBaseLoot'));
     const standardCredits = suppressBaseLoot ? 0 : this.scaleModCredits(enemy.stats.valueCredits);
@@ -4438,6 +4488,156 @@ export class ArenaScene extends Phaser.Scene {
         SaveSystem.recordArcadeMetric(event);
       }
     }, { enabled: teachingComplete });
+  }
+
+  private createAnomalyController(round: number, seed: number): void {
+    this.anomalyController?.destroy('round-ended');
+    const tutorialProgress = SaveSystem.getTutorialProgress();
+    const teachingComplete = tutorialProgress.firstRunStage === 'complete' && tutorialProgress.replaySequenceId === null;
+    this.anomalyController = new AnomalyController({
+      scene: this,
+      player: this.player,
+      round,
+      seed,
+      protocol: this.protocol,
+      bounds: this.layout.generation.bounds,
+      isGameplayEligible: () => !this.bossEncounter
+        && !this.supremeFinale
+        && !this.arcadeController?.activeEventId
+        && !this.tutorialDirector?.isActive()
+        && this.state.state !== RoundState.Paused
+        && this.state.state !== RoundState.Victory
+        && this.state.state !== RoundState.Defeat,
+      isLocationValid: (x, y, clearance) => this.isAnomalyLocationValid(x, y, clearance),
+      isInteractPressed: () => this.playerInput.pressed('interact'),
+      interactionPrompt: () => this.playerInput.prompt('interact', 'E'),
+      availableFluxCores: () => this.hudWalletFluxCores + this.roundFluxCores,
+      spendFluxCores: (amount) => this.spendAnomalyEntryCost(amount),
+      beginTransition: (request) => this.beginAnomalyTransition(request),
+      emitMetric: (event) => recordAnomalyMetric(event)
+    }, {
+      enabled: teachingComplete,
+      modeFamily: this.currentModeFamily(),
+      particlesEnabled: this.particlesEnabled
+    });
+  }
+
+  private isAnomalyLocationValid(x: number, y: number, clearance: number): boolean {
+    const bounds = this.layout.generation.bounds;
+    if (x < bounds.x + clearance || y < bounds.y + clearance
+      || x > bounds.x + bounds.w - clearance || y > bounds.y + bounds.h - clearance) return false;
+    if (this.intersectsWallGeometry(x, y, clearance, clearance)) return false;
+    if (this.isNearBombSite(x, y, clearance + 72)) return false;
+    const fluxCore = this.fluxCores?.getNearestCore(x, y, clearance + 70);
+    if (fluxCore) return false;
+    const blockedBy = (entityX: number, entityY: number, extra = 0): boolean => {
+      const dx = x - entityX;
+      const dy = y - entityY;
+      const radius = clearance + extra;
+      return dx * dx + dy * dy < radius * radius;
+    };
+    if (blockedBy(this.player.x, this.player.y, 150)) return false;
+    if (this.enemies.some((enemy) => blockedBy(enemy.x, enemy.y, enemy.stats.size))) return false;
+    if (this.turrets.some((turret) => blockedBy(turret.sprite.x, turret.sprite.y, 44))) return false;
+    if (this.mines.some((mine) => blockedBy(mine.sprite.x, mine.sprite.y, mine.radius))) return false;
+    if (this.fences.some((fence) => this.distancePointToSegment(x, y, fence.x1, fence.y1, fence.x2, fence.y2) < clearance)) return false;
+    if (this.pickups.some((pickup) => blockedBy(pickup.sprite.x, pickup.sprite.y, 38))) return false;
+    if (this.modPickups.some((pickup) => blockedBy(pickup.sprite.x, pickup.sprite.y, 44))) return false;
+    return this.pathfinder.findPath(this.player.x, this.player.y, x, y, { maxIterations: 5_000 }).length > 0;
+  }
+
+  private spendAnomalyEntryCost(amount: number): boolean {
+    const cost = Math.max(0, Math.floor(amount));
+    const fromRound = Math.min(this.roundFluxCores, cost);
+    const fromWallet = cost - fromRound;
+    if (this.hudWalletFluxCores < fromWallet) return false;
+    if (fromWallet > 0 && !SaveSystem.spendFluxCores(fromWallet)) return false;
+    this.roundFluxCores -= fromRound;
+    this.refreshHudWallet();
+    return true;
+  }
+
+  private beginAnomalyTransition(request: AnomalyEntryRequest): void {
+    if (this.activeAnomalySessionId || request.anomalyId !== 'heist') return;
+    this.activeAnomalySessionId = request.sessionId;
+    this.audio.stopPlantingLoop();
+    this.audio.stopDisarmLoop();
+    this.audio.stopLowHealthWarning();
+    this.laserSecurity?.silence();
+    this.audio.stopFluxCoreLoop();
+    this.clearGameplayInput();
+    this.pointerLock?.release();
+    this.pointerLock?.destroy();
+    this.pointerLock = null;
+    const appearance = SaveSystem.getOperativeFrameAppearance(this.time.now);
+    const session: HeistSessionData = {
+      sessionId: request.sessionId,
+      anomalyId: 'heist',
+      cost: request.cost,
+      round: this.currentCombatRound(),
+      seed: this.layout.seed ^ 0x4e1a57,
+      protocol: this.protocol,
+      sourcePortal: { ...request.portal },
+      player: {
+        textureKey: appearance.textureKey,
+        tint: appearance.tint,
+        stats: { ...this.player.stats },
+        energyStats: { ...this.player.energyStats },
+        weapon: { ...this.player.weapon },
+        hp: this.player.hp,
+        energy: this.player.energy,
+        permanentSpeedMultiplier: this.player.permanentModSpeedMultiplier,
+        equippedMods: this.modRuntime.snapshot()
+      },
+      abilities: {
+        fence: { ...this.getAbilityConfig('fence') },
+        turret: { ...this.getAbilityConfig('turret') },
+        mine: { ...this.getAbilityConfig('mine') },
+        shieldDurationMs: this.getShieldDurationMs(),
+        shieldCooldownMs: this.getShieldCooldownMs(),
+        shieldEnergyCost: this.getShieldEnergyCost()
+      },
+      dev: { forceMiniBoss: import.meta.env.DEV ? this.registry.get('heist-dev-force-miniboss') as boolean | null | undefined : undefined }
+    };
+    this.scene.launch(SceneKeys.Heist, session);
+    this.scene.pause();
+  }
+
+  private commitAnomalyLoot(result: AnomalyReturnResult): void {
+    const loot = result.loot;
+    SaveSystem.addCredits(loot.credits);
+    SaveSystem.addCoreTokens(loot.coreTokens);
+    SaveSystem.addPlasmaChips(loot.plasmaChips);
+    SaveSystem.addFluxCores(loot.fluxCores);
+    const entries: Array<{ kind: 'credits' | 'coreTokens' | 'plasmaChips' | 'fluxCores'; amount: number }> = [
+      { kind: 'credits', amount: loot.credits }, { kind: 'coreTokens', amount: loot.coreTokens },
+      { kind: 'plasmaChips', amount: loot.plasmaChips }, { kind: 'fluxCores', amount: loot.fluxCores }
+    ];
+    for (const entry of entries) {
+      if (entry.amount <= 0) continue;
+      recordAnomalyMetric({ name: 'anomaly_reward_committed', anomalyId: 'heist', round: this.currentCombatRound(),
+        protocol: this.protocol, elapsedMs: 0, rewardKind: entry.kind, rewardAmount: entry.amount });
+    }
+    for (const modId of loot.modIds) {
+      const definition = MOD_BY_ID.get(modId);
+      if (!definition) continue;
+      const duplicate = Boolean(SaveSystem.getModCollection().inventory[definition.id]?.discovered);
+      const awarded = SaveSystem.addMod(definition.id);
+      const card = SaveSystem.getModCollection().cards.at(-1);
+      if (awarded.ok) {
+        this.modsEarned.push({ modId: definition.id, duplicate, source: 'anomaly' });
+        GameplayTelemetryRecorder.recordModDrop(definition.id, definition.rarity, 'anomaly', duplicate);
+        if (card) {
+          const sourcePosition = this.modRevealScreenPosition(result.sourcePortal.x, result.sourcePortal.y);
+          this.time.delayedCall(80, () => this.modAcquisitionPresenter?.enqueue({
+            card: { ...card }, rarity: definition.rarity, duplicate,
+            sourceScreenX: sourcePosition.x, sourceScreenY: sourcePosition.y
+          }));
+        }
+      }
+      recordAnomalyMetric({ name: 'anomaly_reward_committed', anomalyId: 'heist', round: this.currentCombatRound(),
+        protocol: this.protocol, elapsedMs: 0, rewardKind: 'mod', rewardAmount: 1 });
+    }
   }
 
   private findArcadeSpawnPoints(count: number, minimumPlayerDistance: number, seed: number): Array<{ x: number; y: number }> {
@@ -5207,6 +5407,7 @@ export class ArenaScene extends Phaser.Scene {
   private completeRound(): void {
     if (this.state.state === RoundState.Victory && this.pendingRoundPayload) return;
     this.arcadeController?.stop('round-ended');
+    this.anomalyController?.stop('round-ended');
     this.clearRoundInfusionEffects();
     this.audio.stopLowHealthWarning();
     this.showBanner('ALL TARGETS DESTROYED');
@@ -6127,6 +6328,7 @@ export class ArenaScene extends Phaser.Scene {
   private triggerDefeat(reason: 'playerDead' | 'bombDefused'): void {
     if (this.state.state === RoundState.Defeat) return;
     this.arcadeController?.stop(reason === 'playerDead' ? 'player-dead' : 'round-ended');
+    this.anomalyController?.stop('round-ended');
     this.clearRoundInfusionEffects();
     this.bombExplosionCosmeticVfx.reset();
     if (reason === 'playerDead') {
@@ -7096,6 +7298,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bossIntroOverlay?.resize(width, height);
     this.bossNextFightButton?.setGamePosition(width * 0.5, height - 58, 270, 46);
     this.arcadeController?.resize(width, height);
+    this.anomalyController?.resize(width);
     this.modAcquisitionPresenter?.resize(width, height);
     if (this.pauseMenu) {
       this.layoutPauseMenu(width, height);
@@ -7305,6 +7508,9 @@ export class ArenaScene extends Phaser.Scene {
   private cleanupRoundObjects(): void {
     this.arcadeController?.destroy('replaced');
     this.arcadeController = null;
+    this.anomalyController?.destroy('round-ended');
+    this.anomalyController = null;
+    this.activeAnomalySessionId = null;
     this.clearRoundInfusionEffects();
     this.arenaVisuals?.destroy();
     this.arenaVisuals = null;
@@ -7387,6 +7593,9 @@ export class ArenaScene extends Phaser.Scene {
     this.hasLiveRoundObjects = false;
     this.arcadeController?.destroy('scene-shutdown');
     this.arcadeController = null;
+    this.anomalyController?.destroy('scene-shutdown');
+    this.anomalyController = null;
+    this.activeAnomalySessionId = null;
     this.flushPendingCombatProgress();
     this.arenaVisuals = null;
     this.supremeConstellation = null;
@@ -7406,6 +7615,7 @@ export class ArenaScene extends Phaser.Scene {
     this.events.off('return-from-mod-collection', this.onReturnFromModCollection);
     this.events.off('return-from-store', this.onReturnFromStore);
     this.events.off('quit-from-store', this.onQuitFromStore);
+    this.events.off('anomaly-return', this.onAnomalyReturn);
     this.hud?.destroy();
     this.siteActionText?.destroy();
     this.bannerText?.destroy();
@@ -7458,6 +7668,10 @@ export class ArenaScene extends Phaser.Scene {
         regenerateArena?:unknown;
         toggleTraversalDebug?:unknown;
         forceArcadeEvent?:unknown;
+        forceAnomaly?:unknown;
+        forceAnomalyCharge?:unknown;
+        setAnomalyCost?:unknown;
+        setHeistMiniBoss?:unknown;
         forceSupremeStage?:unknown;
         previewSupremeMod?:unknown;
         forceSupremeFinale?:unknown;
@@ -7468,6 +7682,10 @@ export class ArenaScene extends Phaser.Scene {
       delete debugGlobal.regenerateArena;
       delete debugGlobal.toggleTraversalDebug;
       delete debugGlobal.forceArcadeEvent;
+      delete debugGlobal.forceAnomaly;
+      delete debugGlobal.forceAnomalyCharge;
+      delete debugGlobal.setAnomalyCost;
+      delete debugGlobal.setHeistMiniBoss;
       delete debugGlobal.forceSupremeStage;
       delete debugGlobal.previewSupremeMod;
       delete debugGlobal.forceSupremeFinale;

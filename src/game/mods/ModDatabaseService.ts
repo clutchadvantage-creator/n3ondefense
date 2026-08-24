@@ -112,7 +112,8 @@ const DROP_SOURCE_LABELS: Record<ModDropSource, string> = {
   eliteEnemy: 'ELITE ENEMY',
   milestone: 'MILESTONE REWARD',
   boss: 'BOSS REWARD',
-  arcade: 'N3ON ARCADE MOD REWARD'
+  arcade: 'N3ON ARCADE MOD REWARD',
+  anomaly: 'ANOMALY VAULT REWARD'
 };
 
 const DROP_SOURCES = Object.keys(DROP_SOURCE_LABELS) as ModDropSource[];

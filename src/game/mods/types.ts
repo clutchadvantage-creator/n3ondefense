@@ -25,7 +25,7 @@ export type RunProtocolId =
   | 'supreme-capricornus'
   | 'supreme-delphinus'
   | 'supreme-centaurus';
-export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone' | 'boss' | 'arcade';
+export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone' | 'boss' | 'arcade' | 'anomaly';
 export type ModVariant = 'standard' | 'corrupted';
 export type ModInfusionId =
   | 'enemy-growth'

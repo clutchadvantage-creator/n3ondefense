@@ -62,6 +62,10 @@ export class SaveSystem {
     return PlayerProfileStore.spendCoreTokens(amount);
   }
 
+  static spendFluxCores(amount: number): boolean {
+    return PlayerProfileStore.spendFluxCores(amount);
+  }
+
   static spendPlasmaChips(amount: number): boolean {
     return PlayerProfileStore.spendPlasmaChips(amount);
   }

@@ -4,6 +4,7 @@ import type { BossArchetype } from '../config/bossBalance.ts';
 import type { ModDropSource, RunProtocolId, EquippedModSnapshot } from '../mods/types.ts';
 import type { ModFocusSignalId, RunContractId } from '../economy/types.ts';
 import type { ArcadeMetricEvent } from '../arcade/types.ts';
+import type { AnomalyMetricEvent } from '../anomalies/types.ts';
 
 export type CombatDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard' | 'bomb' | 'bombSite' | 'splitCurrent' | 'unknown';
 export type PlayerDamageSource = 'enemy-contact' | 'enemy-projectile' | 'enemy-missile' | 'enemy-death-mine' | 'laser' | 'bomblet' | 'gas' | 'bombsite-reactor' | 'boss';
@@ -230,6 +231,8 @@ export interface GameplayEncounterMetrics {
   modDrops: Array<{ modId: string; rarity: string; source: ModDropSource; duplicate: boolean }>;
   /** Ordered, low-volume lifecycle/progress records from optional N3ON Arcade events. */
   arcadeEvents: ArcadeMetricEvent[];
+  /** Ordered, low-volume lifecycle/progress records from optional Anomaly runs. */
+  anomalyEvents: AnomalyMetricEvent[];
   modEffects: Record<string, Partial<Record<ModEffectMetric, number>>>;
   playerDamageBySource: Partial<Record<PlayerDamageSource, number>>;
   playerHitsBySource: Partial<Record<PlayerDamageSource, number>>;
@@ -321,6 +324,7 @@ const ensureEncounterRevision = (encounter: GameplayEncounterMetrics): GameplayE
   encounter.buffUptimeMs ??= {};
   encounter.modEffects ??= {};
   encounter.arcadeEvents ??= [];
+  encounter.anomalyEvents ??= [];
   encounter.turrets ??= emptyTurretMetrics();
   encounter.spawnPressure ??= emptySpawnPressure();
   encounter.objectives ??= emptyObjectiveMetrics();
@@ -398,7 +402,7 @@ export class GameplayTelemetryRecorder {
       energyRegenPerSecond: input.energyRegenPerSecond,
       energy: { starting: input.maximumPlayerEnergy, ending: input.maximumPlayerEnergy, timeAtZeroMs: 0, timeBelow25PercentMs: 0, regenerationRequested: 0, regenerationApplied: 0, regenerationWasted: 0, deniedActions: {}, deniedEnergyShortfall: {}, abilityDenials: {} },
       abilitiesUsed: {}, abilityEnergySpent: {}, pickupDrops: {}, pickupDropsBySource: {}, pickupDropsBySourceAndType: {}, pickupsCollected: {}, pickupsExpired: {}, pickupsActiveAtEnd: {},
-      restoration: { health: emptyRestoration(), energy: emptyRestoration() }, buffUptimeMs: {}, modDrops: [], modEffects: {}, arcadeEvents: [],
+      restoration: { health: emptyRestoration(), energy: emptyRestoration() }, buffUptimeMs: {}, modDrops: [], modEffects: {}, arcadeEvents: [], anomalyEvents: [],
       playerDamageBySource: {}, playerHitsBySource: {}, minimumPlayerHealth: input.maximumPlayerHealth, minimumPlayerEnergy: input.maximumPlayerEnergy,
       turrets: emptyTurretMetrics(), spawnPressure: emptySpawnPressure(), objectives: emptyObjectiveMetrics(),
       creditsEarned: 0, coreTokensEarned: 0, plasmaChipsEarned: 0, fluxCoresEarned: 0, boss: null,
@@ -627,6 +631,13 @@ export class GameplayTelemetryRecorder {
     const encounter = this.activeEncounter();
     if (!encounter) return;
     encounter.arcadeEvents.push({ ...event });
+    this.persistSoon();
+  }
+
+  static recordAnomalyEvent(event: AnomalyMetricEvent): void {
+    const encounter = this.activeEncounter();
+    if (!encounter) return;
+    encounter.anomalyEvents.push({ ...event });
     this.persistSoon();
   }
 

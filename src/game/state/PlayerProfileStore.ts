@@ -381,6 +381,17 @@ export class PlayerProfileStore {
     return { ok: true };
   }
 
+  static spendFluxCores(amount: number): boolean {
+    const save = PlayerProfileStore.getActiveSave();
+    if (!Number.isFinite(amount) || amount < 0) return false;
+    const spent = Math.floor(amount);
+    if (save.wallet.fluxCores < spent) return false;
+    save.wallet.fluxCores -= spent;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return true;
+  }
+
   static addMod(modId: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
     const result = addModDrop(save.mods, modId);
