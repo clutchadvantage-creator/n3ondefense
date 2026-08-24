@@ -1086,7 +1086,8 @@ export class ArenaScene extends Phaser.Scene {
       const operativeAppearance = SaveSystem.getOperativeFrameAppearance(this.time.now);
       this.player = new Player(this, this.layout.playerSpawn.x, this.layout.playerSpawn.y, operativeAppearance.textureKey, stats, energy, weapon);
       this.player.permanentModSpeedMultiplier = this.modRuntime.permanentMoveSpeedMultiplier();
-      this.player.setCosmeticTint(operativeAppearance.tint);
+      this.player.setAppearanceResolver((timeMs) => SaveSystem.getOperativeFrameAppearance(timeMs));
+      this.player.restoreOperativeAppearance(this.time.now, true);
       this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
       this.cameras.main.setZoom(0.9);
     } else {
@@ -1107,9 +1108,8 @@ export class ArenaScene extends Phaser.Scene {
       this.player.buffs.ricochetUntil = 0;
       this.player.buffs.speedBoostStacks = 0;
       this.player.buffs.rapidFireStacks = 0;
-      const operativeAppearance = SaveSystem.getOperativeFrameAppearance(this.time.now);
-      this.player.setTexture(operativeAppearance.textureKey);
-      this.player.setCosmeticTint(operativeAppearance.tint);
+      this.player.setAppearanceResolver((timeMs) => SaveSystem.getOperativeFrameAppearance(timeMs));
+      this.player.restoreOperativeAppearance(this.time.now, true);
     }
 
     this.playerWallCollider?.destroy();
@@ -1196,6 +1196,9 @@ export class ArenaScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     const now = this.time.now;
+    // Presentation cleanup must run before any pause/victory early return so a
+    // damage flash can never strand the Operative in TintFill white.
+    this.player.updatePresentation(now);
     const dt = delta / 1000;
     const inputContext = this.tutorialHardPaused
       ? 'tutorial'
@@ -1464,7 +1467,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private updatePrismCosmetics(now: number): void {
     if (this.prismPlayerColor) {
-      this.player.setCosmeticTint(SaveSystem.getOperativeFrameAppearance(now).tint);
+      this.player.restoreOperativeAppearance(now);
     }
     if (this.prismFenceStyle) {
       const color = SaveSystem.getCosmeticColor('fenceStyle', now);

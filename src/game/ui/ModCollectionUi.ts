@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { createButton, type ButtonPresentationOptions } from '../utils/ui.ts';
+import type { ModArchiveTerminalLayout, ModArchiveRect } from './ModArchiveTerminalLayout.ts';
 
 export interface CollectionFrameRect {
   x: number;
@@ -273,4 +274,159 @@ export const createModCollectionButton = (
   button.add([edge, led]);
   scene.tweens.add({ targets: led, alpha: { from: 0.24, to: 1 }, duration: 760, yoyo: true, repeat: -1 });
   return button;
+};
+
+/** Static, layered equipment housing for the collection's two-row card bay. */
+export const createModArchiveTerminal = (
+  scene: Phaser.Scene,
+  layout: ModArchiveTerminalLayout,
+  matchingCards: number
+): Phaser.GameObjects.Container => {
+  const { frame, bay, pagination } = layout;
+  const root = scene.add.container(frame.x, frame.y);
+  const cut = Math.min(18, frame.height * 0.04);
+  const points = chamferedPoints(frame.width, frame.height, cut);
+  const shadow = scene.add.polygon(frame.width / 2 + 7, frame.height / 2 + 9, points, 0x000000, 0.58);
+  const chassis = scene.add.polygon(frame.width / 2, frame.height / 2, points, 0x06101a, 0.98).setStrokeStyle(2, 0x1f6f82, 0.82);
+  const inset = scene.add.polygon(
+    frame.width / 2,
+    frame.height / 2,
+    chamferedPoints(frame.width - 12, frame.height - 12, Math.max(5, cut - 5)),
+    0x081722,
+    0.82
+  ).setStrokeStyle(1, 0x5ceeff, 0.28);
+  const headerHeight = bay.y - frame.y;
+  const header = scene.add.rectangle(8, 7, frame.width - 16, headerHeight - 7, 0x0b202d, 0.97)
+    .setOrigin(0, 0).setStrokeStyle(1, 0x59efff, 0.26);
+  const headerRail = scene.add.rectangle(20, 8, frame.width - 40, 3, 0x59efff, 0.68).setOrigin(0, 0);
+  const headerAccent = scene.add.rectangle(20, headerHeight - 4, frame.width - 40, 1, 0xff5bcf, 0.35).setOrigin(0, 0);
+
+  const bayLocal = { x: bay.x - frame.x, y: bay.y - frame.y, width: bay.width, height: bay.height };
+  const bayShadow = scene.add.rectangle(bayLocal.x + 3, bayLocal.y + 5, bayLocal.width, bayLocal.height, 0x000000, 0.7).setOrigin(0, 0);
+  const bayPanel = scene.add.rectangle(bayLocal.x, bayLocal.y, bayLocal.width, bayLocal.height, 0x020811, 0.96)
+    .setOrigin(0, 0).setStrokeStyle(2, 0x184b5c, 0.82);
+  const bayInner = scene.add.rectangle(bayLocal.x + 6, bayLocal.y + 6, bayLocal.width - 12, bayLocal.height - 12, 0x06121d, 0.52)
+    .setOrigin(0, 0).setStrokeStyle(1, 0x55eaff, 0.15);
+
+  const paginationLocal = {
+    x: pagination.x - frame.x,
+    y: pagination.y - frame.y,
+    width: pagination.width,
+    height: pagination.height
+  };
+  const pageShadow = scene.add.rectangle(paginationLocal.x + 3, paginationLocal.y + 4, paginationLocal.width, paginationLocal.height, 0x000000, 0.54).setOrigin(0, 0);
+  const pageConsole = scene.add.rectangle(paginationLocal.x, paginationLocal.y, paginationLocal.width, paginationLocal.height, 0x081721, 0.98)
+    .setOrigin(0, 0).setStrokeStyle(1, 0x4eeeff, 0.42);
+  const pageRail = scene.add.rectangle(paginationLocal.x + 14, paginationLocal.y + 4, paginationLocal.width - 28, 2, 0xff5bcf, 0.36).setOrigin(0, 0);
+
+  const tech = scene.add.graphics();
+  tech.lineStyle(1, 0x1d7182, 0.18);
+  const gridSize = 28;
+  for (let x = bayLocal.x + gridSize; x < bayLocal.x + bayLocal.width; x += gridSize) {
+    tech.lineBetween(x, bayLocal.y + 7, x, bayLocal.y + bayLocal.height - 7);
+  }
+  for (let y = bayLocal.y + 18; y < bayLocal.y + bayLocal.height; y += 18) {
+    tech.lineBetween(bayLocal.x + 7, y, bayLocal.x + bayLocal.width - 7, y);
+  }
+  tech.lineStyle(2, 0x55eaff, 0.3);
+  tech.lineBetween(8, 28, 15, 28); tech.lineBetween(15, 28, 15, 16); tech.lineBetween(15, 16, 52, 16);
+  tech.lineBetween(frame.width - 8, 28, frame.width - 15, 28); tech.lineBetween(frame.width - 15, 28, frame.width - 15, 16); tech.lineBetween(frame.width - 15, 16, frame.width - 52, 16);
+  tech.lineStyle(1, 0xff5bcf, 0.24);
+  tech.lineBetween(12, paginationLocal.y - 4, 38, paginationLocal.y - 4);
+  tech.lineBetween(frame.width - 12, paginationLocal.y - 4, frame.width - 38, paginationLocal.y - 4);
+
+  const narrowTerminal = frame.width < 720;
+  const headerTitle = scene.add.text(22, 16, narrowTerminal
+    ? `MOD ARCHIVE TERMINAL // ${matchingCards} CARDS`
+    : `MOD ARCHIVE TERMINAL // OWNED INDEX: ${matchingCards} MATCHING CARDS`, {
+    fontFamily: 'Orbitron, sans-serif', fontSize: `${frame.width < 720 ? 11 : 14}px`, color: '#71f3ff', fontStyle: 'bold', letterSpacing: 1
+  }).setOrigin(0, 0);
+  const headerStatus = scene.add.text(frame.width - 22, 17, narrowTerminal ? 'ONLINE' : 'ARCHIVE ONLINE // LOCAL VAULT', {
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${frame.width < 720 ? 9 : 11}px`, color: '#79ffaf', fontStyle: 'bold', letterSpacing: 1
+  }).setOrigin(1, 0);
+  const ledA = scene.add.circle(12, headerHeight / 2, 2.5, 0x69ff9c, 0.95);
+  const ledB = scene.add.circle(frame.width - 12, headerHeight / 2, 2.5, 0xff5bcf, 0.9);
+  const bolts = [
+    scene.add.circle(12, bayLocal.y + 11, 2, 0x7aa9b7, 0.58),
+    scene.add.circle(frame.width - 12, bayLocal.y + 11, 2, 0x7aa9b7, 0.58),
+    scene.add.circle(12, bayLocal.y + bayLocal.height - 11, 2, 0x7aa9b7, 0.58),
+    scene.add.circle(frame.width - 12, bayLocal.y + bayLocal.height - 11, 2, 0x7aa9b7, 0.58)
+  ];
+  root.add([
+    shadow, chassis, inset, header, headerRail, headerAccent,
+    bayShadow, bayPanel, bayInner, tech,
+    pageShadow, pageConsole, pageRail,
+    headerTitle, headerStatus, ledA, ledB, ...bolts
+  ]);
+  scene.tweens.add({ targets: [ledA, ledB], alpha: { from: 0.28, to: 1 }, duration: 920, yoyo: true, repeat: -1 });
+  return root;
+};
+
+export const createModArchivePageReadout = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  width: number,
+  page: number,
+  pageCount: number
+): Phaser.GameObjects.Container => {
+  const root = scene.add.container(x, y);
+  const height = 40;
+  const shadow = scene.add.rectangle(3, 4, width, height, 0x000000, 0.5).setStrokeStyle(1, 0x000000, 0.2);
+  const panel = scene.add.rectangle(0, 0, width, height, 0x020b12, 0.98).setStrokeStyle(1, 0x55eaff, 0.5);
+  const rail = scene.add.rectangle(0, -height / 2 + 3, width - 18, 2, 0xff5bcf, 0.48);
+  const label = scene.add.text(0, -9, 'MOD ARCHIVE', {
+    fontFamily: 'Orbitron, sans-serif', fontSize: '9px', color: '#77bdc9', fontStyle: 'bold', letterSpacing: 2
+  }).setOrigin(0.5);
+  const readout = scene.add.text(0, 2, `PAGE ${String(page + 1).padStart(2, '0')} / ${String(pageCount).padStart(2, '0')}`, {
+    fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#dcfaff', fontStyle: 'bold', letterSpacing: 1
+  }).setOrigin(0.5);
+  root.add([shadow, panel, rail, label, readout]);
+  if (pageCount <= 10) {
+    const gap = 8;
+    const startX = -((pageCount - 1) * gap) / 2;
+    for (let index = 0; index < pageCount; index += 1) {
+      root.add(scene.add.circle(startX + index * gap, 15, index === page ? 2.2 : 1.5, index === page ? 0x69ffb2 : 0x3b6f7c, index === page ? 0.95 : 0.55));
+    }
+  }
+  return root;
+};
+
+export const createModArchivePageButton = (
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  direction: 'previous' | 'next',
+  onClick: () => unknown,
+  width: number,
+  height: number
+): Phaser.GameObjects.Container => {
+  const label = direction === 'previous' ? '<<' : '>>';
+  const button = createModCollectionButton(scene, x, y, label, onClick, width, 'standard', {
+    height,
+    fontSize: Math.max(18, Math.floor(height * 0.52)),
+    focusShortcut: direction === 'previous' ? 'page-left' : 'page-right',
+    focusLabel: direction === 'previous' ? 'Previous archive page' : 'Next archive page'
+  });
+  const brackets = scene.add.graphics();
+  const halfW = width / 2 + 4;
+  const halfH = height / 2 + 3;
+  brackets.lineStyle(2, 0x55eaff, 0.42);
+  brackets.lineBetween(-halfW, -halfH + 9, -halfW, -halfH); brackets.lineBetween(-halfW, -halfH, -halfW + 12, -halfH);
+  brackets.lineBetween(halfW, halfH - 9, halfW, halfH); brackets.lineBetween(halfW, halfH, halfW - 12, halfH);
+  button.add(brackets);
+  return button;
+};
+
+export const playModArchiveRefresh = (scene: Phaser.Scene, bay: ModArchiveRect): void => {
+  const sweep = scene.add.rectangle(bay.x + 6, bay.y + bay.height / 2, 3, bay.height - 12, 0x75f5ff, 0.2)
+    .setOrigin(0.5).setBlendMode(Phaser.BlendModes.ADD);
+  scene.tweens.add({
+    targets: sweep,
+    x: bay.x + bay.width - 6,
+    alpha: { from: 0.22, to: 0 },
+    duration: 150,
+    ease: 'Quad.easeOut',
+    onComplete: () => sweep.destroy()
+  });
 };

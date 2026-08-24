@@ -1,9 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {
+  calculateModArchiveTerminalLayout,
+  getModArchivePageCount
+} from '../src/game/ui/ModArchiveTerminalLayout.ts';
 
 const scene = readFileSync(new URL('../src/game/scenes/ModCollectionScene.ts', import.meta.url), 'utf8');
 const presentation = readFileSync(new URL('../src/game/ui/ModCollectionUi.ts', import.meta.url), 'utf8');
+const terminalLayout = readFileSync(new URL('../src/game/ui/ModArchiveTerminalLayout.ts', import.meta.url), 'utf8');
 
 test('Mod Collection uses the shared cyber-console visual language without replacing its card renderer', () => {
   assert.match(scene, /createModCollectionShell\(this, width, height/);
@@ -20,6 +25,38 @@ test('Mod Collection uses the shared cyber-console visual language without repla
   assert.match(presentation, /MOD_COLLECTION_SPACING/);
   assert.match(presentation, /statusSideInset/);
   assert.match(presentation, /headerDivider/);
+});
+
+test('Mod Archive Terminal wraps exactly two readable card rows instead of filling the viewport', () => {
+  for (const [width, height, contentTop, detailWidth] of [
+    [1920, 1080, 230, 390],
+    [1600, 900, 210, 390],
+    [1366, 768, 208, 390],
+    [1024, 768, 190, 307]
+  ]) {
+    const layout = calculateModArchiveTerminalLayout(width, height, contentTop, detailWidth);
+    assert.equal(layout.rows, 2);
+    assert.equal(layout.perPage, layout.columns * 2);
+    assert.ok(layout.cardWidth >= 112 && layout.cardWidth <= 148);
+    if (width >= 1366) assert.equal(layout.cardWidth, 148, `${width}x${height} keeps the current full card size`);
+    assert.ok(layout.frame.y + layout.frame.height <= height - 12, `${width}x${height} terminal remains on screen`);
+    assert.ok(layout.pagination.y > layout.cardGridTop + layout.cardHeight * 2);
+    assert.ok(layout.frame.width < width - detailWidth - 20, 'terminal ends around its content instead of stretching to the detail panel');
+  }
+  assert.equal(getModArchivePageCount(63, 16), 4);
+  assert.equal(getModArchivePageCount(0, 16), 1);
+  assert.match(terminalLayout, /rows: 2/);
+});
+
+test('archive pagination is an in-terminal controller-aware physical console', () => {
+  assert.match(scene, /createModArchiveTerminal\(this, archiveLayout, cards\.length\)/);
+  assert.match(scene, /createModArchivePageButton/);
+  assert.match(scene, /onPageLeft: \(\) => turnArchivePage\(-1\)/);
+  assert.match(scene, /onPageRight: \(\) => turnArchivePage\(1\)/);
+  assert.match(presentation, /focusShortcut: direction === 'previous' \? 'page-left' : 'page-right'/);
+  assert.match(presentation, /MOD ARCHIVE/);
+  assert.match(presentation, /pageCount <= 10/);
+  assert.match(presentation, /duration: 150/);
 });
 
 test('collection presentation delegates to existing buttons and preserves disabled and locked feedback', () => {

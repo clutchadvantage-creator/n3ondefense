@@ -4,6 +4,10 @@ import { PLAYER_BALANCE, WEAPON_BALANCE } from '../config/balance';
 import { applyOperativeSpeedMultipliers } from '../mods/ModRules.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
 import { stackedPickupMultiplier } from '../player/OverdriveRules.ts';
+import {
+  OperativeAppearanceController,
+  type OperativeAppearanceResolver
+} from '../cosmetics/OperativeAppearanceController.ts';
 
 export interface BuffState {
   damageBoostUntil: number;
@@ -24,8 +28,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   invulnUntil = 0;
   lastDashMs = -9_999;
   dashUntil = 0;
-  private cosmeticTint: number | null = 0xffffff;
-  private damageFlashUntil = 0;
+  private readonly appearanceController: OperativeAppearanceController;
   permanentModSpeedMultiplier = 1;
   modSpeedBoostUntil = 0;
   modSpeedMultiplier = 1;
@@ -45,6 +48,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.weapon = weapon;
     this.hp = stats.maxHealth;
     this.energy = energyStats.max;
+    this.appearanceController = new OperativeAppearanceController({
+      isActive: () => this.active,
+      getTextureKey: () => this.texture.key,
+      setTexture: (textureKey) => { this.setTexture(textureKey); },
+      clearTint: () => { this.clearTint(); },
+      setTint: (color) => { this.setTint(color); },
+      setTintFill: (color) => { this.setTintFill(color); }
+    }, () => ({ textureKey: this.texture.key, tint: null }));
     scene.add.existing(this);
     scene.physics.add.existing(this);
     if (texture.startsWith('player-premium-')) {
@@ -120,11 +131,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.energy = Math.max(0, this.energy - amount);
   }
 
-  setCosmeticTint(color: number | null): void {
-    this.cosmeticTint = color;
-    if (this.scene.time.now < this.damageFlashUntil) return;
-    if (color === null) this.clearTint();
-    else this.setTint(color);
+  setAppearanceResolver(resolver: OperativeAppearanceResolver): void {
+    this.appearanceController.setResolver(resolver);
+  }
+
+  restoreOperativeAppearance(now = this.scene.time.now, cancelDamageFlash = false): boolean {
+    return this.appearanceController.restore(now, cancelDamageFlash);
+  }
+
+  updatePresentation(now: number): void {
+    this.appearanceController.update(now);
   }
 
   takeDamage(amount: number): boolean {
@@ -134,13 +150,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.hp = Math.max(0, this.hp - amount);
     if (this.hp < previousHp) AudioManager.get().playSfx('playerDamage');
     this.invulnUntil = now + this.stats.invulnMs;
-    this.damageFlashUntil = now + 90;
-    this.setTintFill(0xffffff);
-    this.scene.time.delayedCall(90, () => {
-      if (!this.active || this.scene.time.now < this.damageFlashUntil) return;
-      if (this.cosmeticTint === null) this.clearTint();
-      else this.setTint(this.cosmeticTint);
-    });
+    this.appearanceController.beginDamageFlash(now, 90);
     return true;
   }
 

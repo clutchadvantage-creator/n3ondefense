@@ -14,11 +14,19 @@ import { showConfirmDialog, type LocalModalHandle } from '../utils/localSaveUi.t
 import { resolveModCollectionReturnRoute, type ModCollectionReturnRequest } from '../mods/ModCollectionNavigation.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
 import {
+  createModArchivePageButton,
+  createModArchivePageReadout,
+  createModArchiveTerminal,
   createModCollectionButton,
   createModCollectionFrame,
   createModCollectionShell,
-  getModCollectionChromeLayout
+  getModCollectionChromeLayout,
+  playModArchiveRefresh
 } from '../ui/ModCollectionUi.ts';
+import {
+  calculateModArchiveTerminalLayout,
+  getModArchivePageCount
+} from '../ui/ModArchiveTerminalLayout.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
@@ -59,6 +67,7 @@ export class ModCollectionScene extends Phaser.Scene {
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
   private resumePausedScene = false;
   private tutorialDirector: TutorialDirector | null = null;
+  private archiveRefreshPending = false;
   private readonly handleEscape = (): void => {
     if (this.bulkRecycleModal) {
       this.bulkRecycleModal.destroy();
@@ -136,35 +145,47 @@ export class ModCollectionScene extends Phaser.Scene {
     createModCollectionButton(this, width - returnWidth / 2 - returnInset, toolbarButtonY, returnLabel, () => this.returnToPreviousScene(), returnWidth, 'return', { height: toolbarButtonHeight, fontSize: narrow ? 11 : 16 });
 
     const detailWidth = Math.min(390, width * 0.3);
-    const gridLeft = 34;
-    const gridRight = width - detailWidth - 46;
-    const cardWidth = Phaser.Math.Clamp((gridRight - gridLeft - 48) / 4, 112, 148);
-    const cardHeight = cardWidth * 1.4;
-    const columns = Math.max(2, Math.floor((gridRight - gridLeft) / (cardWidth + 14)));
-    const rows = Math.max(1, Math.floor((height - contentTop - 80) / (cardHeight + 14)));
-    const perPage = columns * rows;
-    const maxPage = Math.max(0, Math.ceil(cards.length / perPage) - 1);
+    const archiveLayout = calculateModArchiveTerminalLayout(width, height, contentTop, detailWidth);
+    const pageCount = getModArchivePageCount(cards.length, archiveLayout.perPage);
+    const maxPage = pageCount - 1;
     this.page = Math.min(this.page, maxPage);
-    createModCollectionFrame(this, {
-      x: 20,
-      y: contentTop,
-      width: gridRight - 4,
-      height: height - contentTop - 16
-    }, `OWNED MOD ARCHIVE // ${cards.length} MATCHING CARDS`, 0x55eaff);
-    cards.slice(this.page * perPage, (this.page + 1) * perPage).forEach((card, index) => {
-      const x = gridLeft + cardWidth / 2 + (index % columns) * (cardWidth + 14);
-      const y = contentTop + 40 + cardHeight / 2 + Math.floor(index / columns) * (cardHeight + 14);
-      const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: cardWidth, height: cardHeight, selected: card.instanceId === this.selectedCardId, compact: true, equipped: equippedCardIds.has(card.instanceId), duplicateCount: Math.max(0, (copyCounts.get(card.modId) ?? 1) - 1) });
+    createModArchiveTerminal(this, archiveLayout, cards.length);
+    cards.slice(this.page * archiveLayout.perPage, (this.page + 1) * archiveLayout.perPage).forEach((card, index) => {
+      const x = archiveLayout.cardGridLeft + archiveLayout.cardWidth / 2
+        + (index % archiveLayout.columns) * (archiveLayout.cardWidth + archiveLayout.cardGapX);
+      const y = archiveLayout.cardGridTop + archiveLayout.cardHeight / 2
+        + Math.floor(index / archiveLayout.columns) * (archiveLayout.cardHeight + archiveLayout.cardGapY);
+      const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: archiveLayout.cardWidth, height: archiveLayout.cardHeight, selected: card.instanceId === this.selectedCardId, compact: true, equipped: equippedCardIds.has(card.instanceId), duplicateCount: Math.max(0, (copyCounts.get(card.modId) ?? 1) - 1) });
       view.on('pointerdown', () => {
         AudioManager.get().playSfx('menu');
         this.selectedCardId = card.instanceId;
         this.restartCollection();
       });
     });
-    if (!cards.length) this.add.text((gridLeft + gridRight) / 2, height / 2, filter === 'duplicates' ? 'NO DUPLICATE CARDS IN THIS GROUP' : 'NO COLLECTED CARDS IN THIS GROUP', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#607a8c' }).setOrigin(0.5);
-    createModCollectionButton(this, gridLeft + 70, height - 36, '◀', () => { this.page = Math.max(0, this.page - 1); this.restartCollection(); }, 90, 'standard', { height: 34 });
-    this.add.text((gridLeft + gridRight) / 2, height - 36, `PAGE ${this.page + 1} / ${maxPage + 1}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#a8c8d9' }).setOrigin(0.5);
-    createModCollectionButton(this, gridRight - 70, height - 36, '▶', () => { this.page = Math.min(maxPage, this.page + 1); this.restartCollection(); }, 90, 'standard', { height: 34 });
+    if (!cards.length) this.add.text(
+      archiveLayout.bay.x + archiveLayout.bay.width / 2,
+      archiveLayout.bay.y + archiveLayout.bay.height / 2,
+      filter === 'duplicates' ? 'NO DUPLICATE CARDS IN THIS GROUP' : 'NO COLLECTED CARDS IN THIS GROUP',
+      { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#607a8c' }
+    ).setOrigin(0.5);
+    const turnArchivePage = (direction: -1 | 1): void => {
+      this.page = Phaser.Math.Clamp(this.page + direction, 0, maxPage);
+      this.archiveRefreshPending = true;
+      this.restartCollection();
+    };
+    configureSceneUiNavigation(this, {
+      onBack: this.handleEscape,
+      onPageLeft: () => turnArchivePage(-1),
+      onPageRight: () => turnArchivePage(1)
+    });
+    const paginationY = archiveLayout.pagination.y + archiveLayout.pagination.height / 2;
+    createModArchivePageButton(this, archiveLayout.previousButtonX, paginationY, 'previous', () => turnArchivePage(-1), archiveLayout.pageButtonWidth, archiveLayout.pageButtonHeight);
+    createModArchivePageReadout(this, archiveLayout.pageReadoutX, paginationY, archiveLayout.pageReadoutWidth, this.page, pageCount);
+    createModArchivePageButton(this, archiveLayout.nextButtonX, paginationY, 'next', () => turnArchivePage(1), archiveLayout.pageButtonWidth, archiveLayout.pageButtonHeight);
+    if (this.archiveRefreshPending) {
+      this.archiveRefreshPending = false;
+      playModArchiveRefresh(this, archiveLayout.bay);
+    }
 
     const selected = mods.cards.find((card) => card.instanceId === this.selectedCardId);
     this.createDetails(width - detailWidth / 2 - 20, contentTop, detailWidth, height - contentTop - 16, selected, selected ? equippedCardIds.has(selected.instanceId) : false, selected ? Math.max(0, (copyCounts.get(selected.modId) ?? 1) - 1) : 0);
@@ -172,7 +193,7 @@ export class ModCollectionScene extends Phaser.Scene {
       scene: 'mods',
       resolveTarget: (target) => {
         const rect = target === 'mods.archive'
-          ? { x: 20, y: contentTop, width: gridRight - 4, height: height - contentTop - 16 }
+          ? archiveLayout.frame
           : target === 'mods.details'
             ? { x: width - detailWidth - 40, y: contentTop, width: detailWidth, height: height - contentTop - 16 }
             : null;
