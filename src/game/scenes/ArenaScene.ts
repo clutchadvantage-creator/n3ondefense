@@ -110,6 +110,7 @@ import { SupremeFinaleController } from '../bosses/SupremeFinaleController.ts';
 import { SupremeFinaleOverlay } from '../bosses/SupremeFinaleOverlay.ts';
 import { SupremeVictorySequence } from '../bosses/SupremeVictorySequence.ts';
 import { AnomalyController } from '../anomalies/AnomalyController.ts';
+import { AnomalyReturnLifecycle } from '../anomalies/AnomalyReturnLifecycle.ts';
 import { recordAnomalyMetric } from '../anomalies/AnomalyTelemetry.ts';
 import { HEIST_BALANCE } from '../anomalies/heist/HeistConfig.ts';
 import type { AnomalyEntryRequest, AnomalyId, AnomalyReturnResult, HeistSessionData } from '../anomalies/types.ts';
@@ -241,6 +242,8 @@ interface AnomalySuspensionState {
   physicsWasPaused: boolean;
   physicsTimeScale: number;
   clockWasPaused: boolean;
+  clockTimeScale: number;
+  playerBodyEnabled: boolean;
 }
 
 const ROUND_PHASE_LABELS: Record<RoundState, string> = {
@@ -355,7 +358,10 @@ export class ArenaScene extends Phaser.Scene {
   private fluxCores: FluxCoreSystem | null = null;
   private arcadeController: N3ONArcadeController | null = null;
   private anomalyController: AnomalyController | null = null;
-  private activeAnomalySessionId: string | null = null;
+  private readonly anomalyReturnLifecycle = new AnomalyReturnLifecycle();
+  private pendingAnomalyReturn: AnomalyReturnResult | null = null;
+  private anomalyReturnAwaitingFirstUpdate = false;
+  private anomalyReturnAwaitingFirstPhysicsStep = false;
   /** Exact live-simulation state held while a side anomaly owns the screen. */
   private anomalySuspensionState: AnomalySuspensionState | null = null;
   private bossEncounter: BossEncounter | null = null;
@@ -587,10 +593,24 @@ export class ArenaScene extends Phaser.Scene {
   };
   private readonly onQuitFromStore = (): void => this.quitToMenu();
   private readonly onAnomalyReturn = (result: AnomalyReturnResult): void => {
-    if (!this.activeAnomalySessionId || result.sessionId !== this.activeAnomalySessionId) return;
+    if (!this.anomalyReturnLifecycle.stageReturn(result.sessionId)) {
+      this.traceAnomalyReturn('duplicate-or-stale-result-ignored', { resultSessionId: result.sessionId });
+      return;
+    }
+    this.pendingAnomalyReturn = result;
+    this.traceAnomalyReturn('return-staged');
+    // ScenePlugin operations are deferred. HEIST queues its stop before this
+    // event, so Arena RESUME will fire only after anomaly cleanup is complete.
+    this.scene.resume(SceneKeys.Arena);
+  };
+  private readonly onArenaResumed = (): void => {
+    const result = this.pendingAnomalyReturn;
+    if (!result || !this.anomalyReturnLifecycle.beginRestore(result.sessionId)) return;
+    this.pendingAnomalyReturn = null;
+    this.traceAnomalyReturn('arena-resume-fired');
     const suspension = this.anomalySuspensionState;
-    this.activeAnomalySessionId = null;
     this.cameras.main.resetFX().setAlpha(1).setVisible(true);
+    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.scene.bringToTop();
     if (result.success) this.commitAnomalyLoot(result);
     this.anomalyController?.resolveReturn();
@@ -623,10 +643,13 @@ export class ArenaScene extends Phaser.Scene {
     const safe = this.pathfinder.findNearestWalkableWorld(result.sourcePortal.x + 118, result.sourcePortal.y, 0, 6)
       ?? { x: result.sourcePortal.x, y: result.sourcePortal.y };
     this.player.setActive(true).setVisible(true).setAlpha(1).setScale(1).setPosition(safe.x, safe.y).setVelocity(0, 0);
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body | null;
+    if (playerBody) playerBody.enable = suspension?.playerBodyEnabled ?? true;
     this.player.invulnUntil = Math.max(
       result.playerState?.invulnUntil ?? 0,
       this.time.now + HEIST_BALANCE.safeReturnInvulnerabilityMs
     );
+    if (result.inputDevice) this.playerInput.adoptDevice(result.inputDevice);
     this.refreshHudWallet();
     this.showBanner(result.success
       ? 'HEIST COMPLETE // HAUL COMMITTED'
@@ -649,9 +672,13 @@ export class ArenaScene extends Phaser.Scene {
       else this.physics.resume();
       this.anomalySuspensionState = null;
     }
-    // HEIST delivers its result while Arena is still suspended. Resume only
-    // after player, abilities, clock, physics and input state are coherent.
-    this.scene.resume(SceneKeys.Arena);
+    this.anomalyReturnLifecycle.complete(result.sessionId);
+    this.anomalyReturnAwaitingFirstUpdate = true;
+    this.anomalyReturnAwaitingFirstPhysicsStep = true;
+    this.validateAnomalyReturnInvariants(pointerRequired && !this.pointerLock?.locked);
+    this.traceAnomalyReturn(pointerRequired && !this.pointerLock?.locked
+      ? 'restored-awaiting-pointer-capture'
+      : 'restored-live');
   };
   constructor() {
     super(SceneKeys.Arena);
@@ -772,10 +799,11 @@ export class ArenaScene extends Phaser.Scene {
     this.events.on('return-from-store', this.onReturnFromStore);
     this.events.on('quit-from-store', this.onQuitFromStore);
     this.events.on('anomaly-return', this.onAnomalyReturn);
+    this.events.on(Phaser.Scenes.Events.RESUME, this.onArenaResumed);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.pointerLock = new GameplayPointerLock(this.game, {
-      onLocked: () => { if (!this.activeAnomalySessionId) this.resumeFromPointerLock(); },
-      onLost: (reason) => { if (!this.activeAnomalySessionId) this.pauseForPointerLock(reason); }
+      onLocked: () => { if (!this.anomalyReturnLifecycle.blocksExternalPause) this.resumeFromPointerLock(); },
+      onLost: (reason) => { if (!this.anomalyReturnLifecycle.blocksExternalPause) this.pauseForPointerLock(reason); }
     });
     this.aimSettings = normalizeAimSettings(SaveSystem.get().settings.aim);
     this.pointerLock.setSensitivity(this.aimSettings.mouseSensitivity);
@@ -1231,6 +1259,16 @@ export class ArenaScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     const now = this.time.now;
+    if (this.anomalyReturnAwaitingFirstUpdate) {
+      this.anomalyReturnAwaitingFirstUpdate = false;
+      this.traceAnomalyReturn('first-arena-update-after-return');
+    }
+    if (this.anomalyReturnAwaitingFirstPhysicsStep && !this.physics.world.isPaused) {
+      // Arcade Physics receives the Scene UPDATE event before Scene.update(),
+      // so a running world here has completed its first post-return step.
+      this.anomalyReturnAwaitingFirstPhysicsStep = false;
+      this.traceAnomalyReturn('first-physics-step-after-return');
+    }
     // Presentation cleanup must run before any pause/victory early return so a
     // damage flash can never strand the Operative in TintFill white.
     this.player.updatePresentation(now);
@@ -4471,9 +4509,10 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private beginAnomalyTransition(request: AnomalyEntryRequest): void {
-    if (this.activeAnomalySessionId || request.anomalyId !== 'heist') return;
-    this.activeAnomalySessionId = request.sessionId;
+    if (request.anomalyId !== 'heist' || !this.anomalyReturnLifecycle.begin(request.sessionId)) return;
     this.anomalySuspensionState = this.captureAnomalySuspensionState();
+    this.pendingAnomalyReturn = null;
+    this.traceAnomalyReturn('arena-suspension-captured');
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
     this.audio.stopLowHealthWarning();
@@ -4543,12 +4582,15 @@ export class ArenaScene extends Phaser.Scene {
       roundState: this.state.state,
       physicsWasPaused: this.physics.world.isPaused,
       physicsTimeScale: this.physics.world.timeScale,
-      clockWasPaused: this.time.paused
+      clockWasPaused: this.time.paused,
+      clockTimeScale: this.time.timeScale,
+      playerBodyEnabled: (this.player.body as Phaser.Physics.Arcade.Body | null)?.enable ?? false
     };
   }
 
   private restoreAnomalyClock(suspension: AnomalySuspensionState): void {
     this.time.paused = suspension.clockWasPaused;
+    this.time.timeScale = suspension.clockTimeScale;
     this.physics.world.timeScale = suspension.physicsTimeScale;
   }
 
@@ -4561,6 +4603,66 @@ export class ArenaScene extends Phaser.Scene {
       if (suspension.roundState === RoundState.Planting) this.audio.startPlantingLoop();
       if (suspension.roundState === RoundState.Defusing) this.audio.startDisarmLoop();
     }
+  }
+
+  private validateAnomalyReturnInvariants(awaitingPointerCapture: boolean): void {
+    if (!import.meta.env.DEV) return;
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body | null;
+    const expectedPhysicsPaused = awaitingPointerCapture || Boolean(this.anomalySuspensionState?.physicsWasPaused);
+    const failures: string[] = [];
+    if (!this.scene.isActive(SceneKeys.Arena)) failures.push('arena-not-active');
+    if (this.scene.isPaused(SceneKeys.Arena)) failures.push('arena-scene-paused');
+    if (this.scene.isSleeping(SceneKeys.Arena)) failures.push('arena-scene-sleeping');
+    if (this.physics.world.isPaused !== expectedPhysicsPaused) failures.push('physics-pause-mismatch');
+    if (!Number.isFinite(this.physics.world.timeScale) || this.physics.world.timeScale <= 0) failures.push('physics-timescale-invalid');
+    if (!Number.isFinite(this.time.timeScale) || this.time.timeScale <= 0) failures.push('clock-timescale-invalid');
+    if (!this.player.active) failures.push('player-inactive');
+    if (!this.player.visible) failures.push('player-hidden');
+    if (!playerBody?.enable) failures.push('player-body-disabled');
+    if (this.anomalyReturnLifecycle.blocksExternalPause) failures.push('transition-lock-not-cleared');
+    if (awaitingPointerCapture) {
+      if (this.state.state !== RoundState.Paused) failures.push('pointer-gate-state-not-paused');
+      if (!this.pointerLockInitialGate) failures.push('pointer-gate-flag-missing');
+    } else if (this.state.state === RoundState.Paused) failures.push('arena-round-state-paused');
+    if (failures.length) {
+      // eslint-disable-next-line no-console
+      console.error('[AnomalyReturn] live-state invariant failure', failures, this.anomalyReturnDebugSnapshot());
+    }
+  }
+
+  private traceAnomalyReturn(stage: string, extra: Record<string, unknown> = {}): void {
+    if (!import.meta.env.DEV) return;
+    // eslint-disable-next-line no-console
+    console.debug('[AnomalyReturn]', stage, { ...this.anomalyReturnDebugSnapshot(), ...extra });
+  }
+
+  private anomalyReturnDebugSnapshot(): Record<string, unknown> {
+    const playerBody = this.player?.body as Phaser.Physics.Arcade.Body | null | undefined;
+    return {
+      lifecycle: this.anomalyReturnLifecycle.snapshot(),
+      pendingResult: this.pendingAnomalyReturn?.sessionId ?? null,
+      scene: {
+        active: this.scene.isActive(SceneKeys.Arena),
+        paused: this.scene.isPaused(SceneKeys.Arena),
+        sleeping: this.scene.isSleeping(SceneKeys.Arena)
+      },
+      simulation: {
+        roundState: this.state.state,
+        clockPaused: this.time?.paused,
+        clockTimeScale: this.time?.timeScale,
+        physicsPaused: this.physics?.world?.isPaused,
+        physicsTimeScale: this.physics?.world?.timeScale
+      },
+      player: {
+        active: this.player?.active,
+        visible: this.player?.visible,
+        bodyEnabled: playerBody?.enable,
+        x: this.player?.x,
+        y: this.player?.y
+      },
+      inputDevice: this.playerInput?.activeDevice,
+      pointerLocked: this.pointerLock?.locked ?? false
+    };
   }
 
   private commitAnomalyLoot(result: AnomalyReturnResult): void {
@@ -7191,7 +7293,10 @@ export class ArenaScene extends Phaser.Scene {
     this.arcadeController = null;
     this.anomalyController?.destroy('round-ended');
     this.anomalyController = null;
-    this.activeAnomalySessionId = null;
+    this.anomalyReturnLifecycle.reset();
+    this.pendingAnomalyReturn = null;
+    this.anomalyReturnAwaitingFirstUpdate = false;
+    this.anomalyReturnAwaitingFirstPhysicsStep = false;
     this.anomalySuspensionState = null;
     this.clearRoundInfusionEffects();
     this.arenaVisuals?.destroy();
@@ -7279,7 +7384,10 @@ export class ArenaScene extends Phaser.Scene {
     this.arcadeController = null;
     this.anomalyController?.destroy('scene-shutdown');
     this.anomalyController = null;
-    this.activeAnomalySessionId = null;
+    this.anomalyReturnLifecycle.reset();
+    this.pendingAnomalyReturn = null;
+    this.anomalyReturnAwaitingFirstUpdate = false;
+    this.anomalyReturnAwaitingFirstPhysicsStep = false;
     this.anomalySuspensionState = null;
     this.flushPendingCombatProgress();
     this.arenaVisuals = null;
@@ -7301,6 +7409,7 @@ export class ArenaScene extends Phaser.Scene {
     this.events.off('return-from-store', this.onReturnFromStore);
     this.events.off('quit-from-store', this.onQuitFromStore);
     this.events.off('anomaly-return', this.onAnomalyReturn);
+    this.events.off(Phaser.Scenes.Events.RESUME, this.onArenaResumed);
     this.hud?.destroy();
     this.siteActionText?.destroy();
     this.bannerText?.destroy();

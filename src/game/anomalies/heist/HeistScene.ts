@@ -1326,6 +1326,7 @@ export class HeistScene extends Phaser.Scene {
       sourcePortal: { ...this.session.sourcePortal },
       loot: success ? this.pendingLoot : emptyLoot(),
       reason,
+      inputDevice: this.inputController.activeDevice,
       playerState: {
         hp: this.player.hp,
         energy: this.player.energy,
@@ -1344,12 +1345,13 @@ export class HeistScene extends Phaser.Scene {
         selectedAbility: this.abilityState.selectedAbility
       }
     };
-    // Arena owns the authoritative suspension snapshot. Deliver while it is
-    // still paused so restoration is atomic; Arena resumes itself only after
-    // its round state, clock, physics and input gate have been restored.
+    // Phaser defers both operations until its next SceneManager update. Queue
+    // HEIST shutdown first, then let Arena stage the result and request RESUME.
+    // Arena performs restoration from its RESUME event, after this cleanup has
+    // completed, so no retiring anomaly callback can re-suspend live gameplay.
     this.cameras.main.setAlpha(0).setVisible(false);
-    arena.events.emit('anomaly-return', result);
     this.scene.stop(SceneKeys.Heist);
+    arena.events.emit('anomaly-return', result);
   }
 
   private updateHud(now: number): void {
@@ -1673,7 +1675,8 @@ export class HeistScene extends Phaser.Scene {
       const arena = this.scene.get(SceneKeys.Arena);
       arena.events.emit('anomaly-return', {
         sessionId: this.session.sessionId, anomalyId: 'heist', success: false,
-        sourcePortal: { ...this.session.sourcePortal }, loot: emptyLoot(), reason: 'scene-shutdown'
+        sourcePortal: { ...this.session.sourcePortal }, loot: emptyLoot(), reason: 'scene-shutdown',
+        inputDevice: this.inputController?.activeDevice ?? this.session.initialInputDevice
       } satisfies AnomalyReturnResult);
     }
     if (import.meta.env.DEV) {

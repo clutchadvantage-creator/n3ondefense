@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { ANOMALY_DEFINITIONS, ANOMALY_ENTRY_COSTS, ANOMALY_SCHEDULING } from '../src/game/anomalies/AnomalyRegistry.ts';
 import { HeistRewardService, isHeistModRewardEligible } from '../src/game/anomalies/heist/HeistRewardService.ts';
 import { HEIST_ROUTE, HEIST_WALL_RECTS, HEIST_WORLD } from '../src/game/anomalies/heist/HeistConfig.ts';
+import { AnomalyReturnLifecycle } from '../src/game/anomalies/AnomalyReturnLifecycle.ts';
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -114,22 +115,46 @@ test('HEIST facility and shared Arcade HUD use bounded dimensional presentation 
   assert.match(arcadeHud, /leftRail/);
 });
 
-test('Anomaly return restores the exact suspension snapshot before Arena resumes', () => {
+test('Anomaly return stops HEIST before Arena resumes and restores from the RESUME lifecycle', () => {
   const arena = source('../src/game/scenes/ArenaScene.ts');
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
   const transition = heist.slice(heist.indexOf('private returnToArena'), heist.indexOf('private updateHud'));
   assert.doesNotMatch(transition, /this\.scene\.resume\(SceneKeys\.Arena\)/);
-  assert.ok(transition.indexOf("arena.events.emit('anomaly-return'") < transition.indexOf('this.scene.stop(SceneKeys.Heist)'));
-  const arenaReturn = arena.slice(arena.indexOf('private readonly onAnomalyReturn'), arena.indexOf('constructor()'));
-  assert.ok(arenaReturn.indexOf('restoreAnomalySimulation') < arenaReturn.indexOf('this.scene.resume(SceneKeys.Arena)'));
+  assert.ok(transition.indexOf('this.scene.stop(SceneKeys.Heist)') < transition.indexOf("arena.events.emit('anomaly-return'"));
+  const stageReturn = arena.slice(arena.indexOf('private readonly onAnomalyReturn'), arena.indexOf('private readonly onArenaResumed'));
+  const restoreReturn = arena.slice(arena.indexOf('private readonly onArenaResumed'), arena.indexOf('constructor()'));
+  assert.match(stageReturn, /stageReturn\(result\.sessionId\)/);
+  assert.match(stageReturn, /this\.scene\.resume\(SceneKeys\.Arena\)/);
+  assert.doesNotMatch(stageReturn, /restoreAnomalySimulation/);
+  assert.match(restoreReturn, /beginRestore\(result\.sessionId\)/);
+  assert.match(restoreReturn, /restoreAnomalySimulation/);
+  assert.match(arena, /events\.on\(Phaser\.Scenes\.Events\.RESUME, this\.onArenaResumed\)/);
   assert.match(arena, /physicsWasPaused: this\.physics\.world\.isPaused/);
   assert.match(arena, /physicsTimeScale: this\.physics\.world\.timeScale/);
   assert.match(arena, /clockWasPaused: this\.time\.paused/);
+  assert.match(arena, /clockTimeScale: this\.time\.timeScale/);
+  assert.match(arena, /playerBodyEnabled:/);
   assert.match(arena, /this\.state\.set\(suspension\.roundState\)/);
   assert.match(arena, /inputBridge: this\.pointerLock \?\? undefined/);
+  assert.match(heist, /inputDevice: this\.inputController\.activeDevice/);
   const entry = arena.slice(arena.indexOf('private beginAnomalyTransition'), arena.indexOf('private commitAnomalyLoot'));
   assert.doesNotMatch(entry, /pointerLock\?\.destroy|pointerLock\?\.release/);
   assert.match(arena, /cameras\.main\.resetFX\(\)\.setAlpha\(1\)\.setVisible\(true\)/);
+});
+
+test('Anomaly return lifecycle is idempotent across 12 consecutive transfers', () => {
+  const lifecycle = new AnomalyReturnLifecycle();
+  for (let cycle = 0; cycle < 12; cycle += 1) {
+    const sessionId = `repeat-${cycle}`;
+    assert.equal(lifecycle.begin(sessionId), true);
+    assert.equal(lifecycle.begin(`${sessionId}-duplicate`), false);
+    assert.equal(lifecycle.stageReturn(sessionId), true);
+    assert.equal(lifecycle.stageReturn(sessionId), false);
+    assert.equal(lifecycle.beginRestore(sessionId), true);
+    assert.equal(lifecycle.beginRestore(sessionId), false);
+    assert.equal(lifecycle.complete(sessionId), true);
+    assert.deepEqual(lifecycle.snapshot(), { phase: 'idle', sessionId: null });
+  }
 });
 
 test('HEIST facility is a multi-room route with no guide point embedded in collision geometry', () => {
