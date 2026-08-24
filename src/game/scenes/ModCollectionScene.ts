@@ -2,8 +2,9 @@ import Phaser from 'phaser';
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys';
 import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
 import { MOD_BALANCE } from '../mods/modBalance.ts';
-import { createModCardView } from '../mods/ModCardView.ts';
+import { createModCardView, MOD_RARITY_COLORS } from '../mods/ModCardView.ts';
 import type { ModCardInstance, ModCategory, ModSlot } from '../mods/types.ts';
+import { buildModArchiveAnalytics, type ModArchiveAnalytics } from '../mods/ModArchiveAnalytics.ts';
 import { SaveSystem } from '../systems/SaveSystem';
 import { disableButton } from '../utils/ui';
 import { ModRuntime } from '../mods/ModRuntime.ts';
@@ -16,12 +17,16 @@ import { AudioManager } from '../systems/AudioManager.ts';
 import {
   createModArchivePageButton,
   createModArchivePageReadout,
+  createModArchiveCommandTelemetry,
   createModArchiveTerminal,
   createModCollectionButton,
   createModCollectionFrame,
   createModCollectionShell,
+  createModSelectedInspector,
+  createModSelectedTracePanel,
   getModCollectionChromeLayout,
-  playModArchiveRefresh
+  playModArchiveRefresh,
+  type ModSelectedInspectorData
 } from '../ui/ModCollectionUi.ts';
 import {
   calculateModArchiveTerminalLayout,
@@ -122,6 +127,20 @@ export class ModCollectionScene extends Phaser.Scene {
 
     const chromeLayout = getModCollectionChromeLayout(width, height);
     const { compact, toolbarTop, toolbarHeight, toolbarButtonY, toolbarButtonHeight, contentTop, returnInset } = chromeLayout;
+    const detailWidth = Math.min(390, width * 0.3);
+    const archiveLayout = calculateModArchiveTerminalLayout(width, height, contentTop, detailWidth);
+    const pageCount = getModArchivePageCount(cards.length, archiveLayout.perPage);
+    const maxPage = pageCount - 1;
+    this.page = Math.min(this.page, maxPage);
+    const analytics = buildModArchiveAnalytics({
+      collection: mods,
+      matchingCards: cards,
+      equippedCardIds,
+      recyclableCards: recyclableDuplicates,
+      selectedCardId: this.selectedCardId,
+      page: this.page,
+      pageCount
+    });
     const narrow = width < 800;
     const returnWidth = narrow ? 120 : Phaser.Math.Clamp(width * 0.18, 160, 220);
     const toolbarGap = narrow ? 8 : 12;
@@ -129,7 +148,9 @@ export class ModCollectionScene extends Phaser.Scene {
     const toolbarAvailableWidth = width - returnWidth - toolbarStart - returnInset * 2 - 8;
     const toolbarButtonWidth = Phaser.Math.Clamp((toolbarAvailableWidth - toolbarGap * 3) / 4, narrow ? 80 : 108, 230);
     const toolbarX = (index: number): number => toolbarStart + toolbarButtonWidth / 2 + index * (toolbarButtonWidth + toolbarGap);
+    const toolbarRect = { x: 20, y: toolbarTop, width: width - 40, height: toolbarHeight };
     createModCollectionFrame(this, { x: 20, y: toolbarTop, width: width - 40, height: toolbarHeight }, 'COLLECTION CONTROLS // FILTER · SORT · SALVAGE', 0x55eaff);
+    createModArchiveCommandTelemetry(this, toolbarRect, analytics);
     createModCollectionButton(this, toolbarX(0), toolbarButtonY, `Group: ${category === 'all' ? 'ALL' : category.toUpperCase()}`, () => { this.categoryIndex = (this.categoryIndex + 1) % CATEGORIES.length; this.page = 0; this.restartCollection(); }, toolbarButtonWidth, 'standard', { height: toolbarButtonHeight });
     createModCollectionButton(this, toolbarX(1), toolbarButtonY, `Sort: ${sort.toUpperCase()}`, () => { this.sortIndex = (this.sortIndex + 1) % SORTS.length; this.page = 0; this.restartCollection(); }, toolbarButtonWidth, 'standard', { height: toolbarButtonHeight });
     createModCollectionButton(this, toolbarX(2), toolbarButtonY, `Filter: ${filter.toUpperCase()}`, () => { this.filterIndex = (this.filterIndex + 1) % FILTERS.length; this.page = 0; this.restartCollection(); }, toolbarButtonWidth, 'standard', { height: toolbarButtonHeight });
@@ -144,12 +165,7 @@ export class ModCollectionScene extends Phaser.Scene {
           : 'Main Menu';
     createModCollectionButton(this, width - returnWidth / 2 - returnInset, toolbarButtonY, returnLabel, () => this.returnToPreviousScene(), returnWidth, 'return', { height: toolbarButtonHeight, fontSize: narrow ? 11 : 16 });
 
-    const detailWidth = Math.min(390, width * 0.3);
-    const archiveLayout = calculateModArchiveTerminalLayout(width, height, contentTop, detailWidth);
-    const pageCount = getModArchivePageCount(cards.length, archiveLayout.perPage);
-    const maxPage = pageCount - 1;
-    this.page = Math.min(this.page, maxPage);
-    createModArchiveTerminal(this, archiveLayout, cards.length);
+    createModArchiveTerminal(this, archiveLayout, analytics);
     cards.slice(this.page * archiveLayout.perPage, (this.page + 1) * archiveLayout.perPage).forEach((card, index) => {
       const x = archiveLayout.cardGridLeft + archiveLayout.cardWidth / 2
         + (index % archiveLayout.columns) * (archiveLayout.cardWidth + archiveLayout.cardGapX);
@@ -188,7 +204,7 @@ export class ModCollectionScene extends Phaser.Scene {
     }
 
     const selected = mods.cards.find((card) => card.instanceId === this.selectedCardId);
-    this.createDetails(width - detailWidth / 2 - 20, contentTop, detailWidth, height - contentTop - 16, selected, selected ? equippedCardIds.has(selected.instanceId) : false, selected ? Math.max(0, (copyCounts.get(selected.modId) ?? 1) - 1) : 0);
+    this.createDetails(width - detailWidth / 2 - 20, contentTop, detailWidth, height - contentTop - 16, analytics, selected, selected ? equippedCardIds.has(selected.instanceId) : false, selected ? Math.max(0, (copyCounts.get(selected.modId) ?? 1) - 1) : 0);
     this.tutorialDirector = new TutorialDirector({
       scene: 'mods',
       resolveTarget: (target) => {
@@ -225,19 +241,40 @@ export class ModCollectionScene extends Phaser.Scene {
     if (import.meta.env.DEV) this.installDevKeys();
   }
 
-  private createDetails(x: number, y: number, width: number, height: number, card?: ModCardInstance, equipped = false, duplicateCount = 0): void {
+  private createDetails(x: number, y: number, width: number, height: number, analytics: ModArchiveAnalytics, card?: ModCardInstance, equipped = false, duplicateCount = 0): void {
     const selectedDefinition = card ? MOD_BY_ID.get(card.modId) : undefined;
-    createModCollectionFrame(this, { x: x - width / 2, y, width, height }, selectedDefinition ? `SELECTED MODULE // ${selectedDefinition.name.toUpperCase()}` : 'SELECTED MODULE // NO SIGNAL', selectedDefinition?.variant === 'corrupted' ? 0xff4fc8 : 0xff65c8);
+    const detailRect = { x: x - width / 2, y, width, height };
+    createModCollectionFrame(this, detailRect, selectedDefinition ? `SELECTED MODULE // ${selectedDefinition.name.toUpperCase()}` : 'SELECTED MODULE // NO SIGNAL', selectedDefinition?.variant === 'corrupted' ? 0xff4fc8 : 0xff65c8);
     if (!card) {
-      this.add.text(x, y + 80, 'SELECT A COLLECTED CARD', { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: '#7895a8' }).setOrigin(0.5);
+      createModSelectedInspector(this, detailRect, null, null, analytics);
       return;
     }
     const definition = selectedDefinition!;
     const owned = SaveSystem.getModCollection().inventory[card.modId];
-    const compactDetails = height < 520;
+    const compactDetails = height < 650;
     const detailCardWidth = Math.min(220, width - 56, Phaser.Math.Clamp((height - (compactDetails ? 320 : 360)) / 1.4, compactDetails ? 118 : 145, 220));
     const detailCardHeight = detailCardWidth * 1.4;
     const detailCardCenterY = y + 42 + detailCardHeight / 2;
+    const collection = SaveSystem.getModCollection();
+    const selectedData: ModSelectedInspectorData = {
+      rarity: definition.rarity,
+      rarityColor: definition.variant === 'corrupted' ? 0xff36b9 : MOD_RARITY_COLORS[definition.rarity],
+      category: definition.category,
+      rank: card.upgradeLevel,
+      duplicates: duplicateCount,
+      equipped,
+      infused: Boolean(card.infusionId),
+      acquiredAt: card.acquiredAt,
+      cardIndex: Math.max(1, collection.cards.findIndex((entry) => entry.instanceId === card.instanceId) + 1),
+      totalCards: collection.cards.length,
+      signalTrace: analytics.signalTrace
+    };
+    createModSelectedInspector(this, detailRect, {
+      x: x - detailCardWidth / 2,
+      y: y + 42,
+      width: detailCardWidth,
+      height: detailCardHeight
+    }, selectedData, analytics);
     createModCardView(this, x, detailCardCenterY, card, card.upgradeLevel, {
       width: detailCardWidth,
       height: detailCardHeight,
@@ -254,12 +291,22 @@ export class ModCollectionScene extends Phaser.Scene {
     const buttonGap = compactDetails ? 38 : height < 650 ? 43 : 48;
     const buttonHeight = compactDetails ? 32 : 38;
     const buttonY = y + height - buttonGap * 4 - (compactDetails ? 50 : 58);
-    const availableDetailCopyHeight = Math.max(compactDetails ? 34 : 48, buttonY - detailCopy.y - 14);
+    const traceHeight = height >= 760 ? 72 : 0;
+    const traceTop = buttonY - traceHeight - (traceHeight > 0 ? 10 : 0);
+    const availableDetailCopyHeight = Math.max(compactDetails ? 34 : 48, (traceHeight > 0 ? traceTop : buttonY) - detailCopy.y - 14);
     for (let fontSize = 16; detailCopy.height > availableDetailCopyHeight && fontSize >= 14; fontSize -= 1) {
       detailCopy.setFontSize(fontSize);
     }
     if (detailCopy.height > availableDetailCopyHeight) {
       detailCopy.setMaxLines(Math.max(height < 650 ? 2 : 4, Math.floor(availableDetailCopyHeight / 17)));
+    }
+    if (traceHeight > 0) {
+      createModSelectedTracePanel(this, {
+        x: x - width / 2 + 18,
+        y: traceTop,
+        width: width - 36,
+        height: traceHeight
+      }, selectedData);
     }
     if (categorySlot) createModCollectionButton(this, x, buttonY, `Equip ${categorySlot}`, () => this.applyWithTutorialEvent('mods.equipped', () => SaveSystem.equipMod(categorySlot, definition.id, card.instanceId)), width - 40, 'standard', { height: buttonHeight, fontSize: compactDetails ? 12 : 16 });
     createModCollectionButton(this, x, buttonY + buttonGap, 'Equip Wildcard', () => this.applyWithTutorialEvent('mods.equipped', () => SaveSystem.equipMod('wildcard', definition.id, card.instanceId)), width - 40, 'standard', { height: buttonHeight, fontSize: compactDetails ? 12 : 16 });

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { createButton, type ButtonPresentationOptions } from '../utils/ui.ts';
+import type { ModArchiveAnalytics } from '../mods/ModArchiveAnalytics.ts';
 import type { ModArchiveTerminalLayout, ModArchiveRect } from './ModArchiveTerminalLayout.ts';
 
 export interface CollectionFrameRect {
@@ -14,6 +15,20 @@ export interface CollectionReadout {
   value: string;
   color: number;
   delta?: number;
+}
+
+export interface ModSelectedInspectorData {
+  rarity: string;
+  rarityColor: number;
+  category: string;
+  rank: number;
+  duplicates: number;
+  equipped: boolean;
+  infused: boolean;
+  acquiredAt: string;
+  cardIndex: number;
+  totalCards: number;
+  signalTrace: readonly number[];
 }
 
 export type CollectionButtonTone = 'standard' | 'utility' | 'warning' | 'return';
@@ -276,11 +291,186 @@ export const createModCollectionButton = (
   return button;
 };
 
+/** Real collection state embedded into the control-band header. */
+export const createModArchiveCommandTelemetry = (
+  scene: Phaser.Scene,
+  rect: CollectionFrameRect,
+  analytics: ModArchiveAnalytics
+): Phaser.GameObjects.Container => {
+  const root = scene.add.container(rect.x, rect.y);
+  const compact = rect.width < 1040;
+  const discovery = `${analytics.discoveredDefinitions}/${analytics.totalDefinitions}`;
+  const text = compact
+    ? `DISC ${discovery}  //  EQ ${analytics.equippedCards}  //  SALV ${analytics.salvagePlasma}◆  //  SYNC`
+    : `DISCOVERED ${discovery}  //  EQUIPPED ${analytics.equippedCards}  //  INFUSED ${analytics.infusedCards}  //  SALVAGE ${analytics.recyclableCards} → ${analytics.salvagePlasma}◆  //  SYNC 100%`;
+  const status = scene.add.text(rect.width - 48, 20, text, {
+    fontFamily: 'Rajdhani, sans-serif',
+    fontSize: `${compact ? 9 : 11}px`,
+    color: '#75d3df',
+    fontStyle: 'bold',
+    letterSpacing: compact ? 0 : 1
+  }).setOrigin(1, 0.5).setMaxLines(1);
+  const live = scene.add.circle(rect.width - 36, 20, 2.5, 0x70ffad, 0.92);
+  root.add([status, live]);
+  scene.tweens.add({ targets: live, alpha: { from: 0.25, to: 1 }, duration: 980, yoyo: true, repeat: -1 });
+  return root;
+};
+
+const formatArchiveTimestamp = (value: string): string => {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return 'TIMESTAMP UNKNOWN';
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}.${month}.${day}`;
+};
+
+/** Selection-linked scanner chamber behind the existing full Mod card. */
+export const createModSelectedInspector = (
+  scene: Phaser.Scene,
+  rect: CollectionFrameRect,
+  cardRect: CollectionFrameRect | null,
+  data: ModSelectedInspectorData | null,
+  analytics: ModArchiveAnalytics
+): Phaser.GameObjects.Container => {
+  const root = scene.add.container(rect.x, rect.y);
+  if (!data || !cardRect) {
+    const overviewTop = 58;
+    const overviewHeight = Math.min(255, rect.height - 96);
+    const panel = scene.add.rectangle(16, overviewTop, rect.width - 32, overviewHeight, 0x030c14, 0.82)
+      .setOrigin(0, 0).setStrokeStyle(1, 0x55eaff, 0.28);
+    const title = scene.add.text(rect.width / 2, overviewTop + 25, 'ARCHIVE OVERVIEW // AWAITING SELECTION', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: '12px', color: '#75eaff', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0.5);
+    const rows = [
+      ['DISCOVERED', `${analytics.discoveredDefinitions} / ${analytics.totalDefinitions}`],
+      ['CARD INDEX', analytics.totalCards.toLocaleString()],
+      ['LOADOUT LINKS', String(analytics.equippedCards)],
+      ['SALVAGE BUFFER', `${analytics.recyclableCards} // ${analytics.salvagePlasma}◆`]
+    ];
+    const graphics = scene.add.graphics();
+    rows.forEach(([label, value], index) => {
+      const rowY = overviewTop + 58 + index * 40;
+      graphics.lineStyle(1, 0x2c7180, 0.3);
+      graphics.lineBetween(30, rowY + 15, rect.width - 30, rowY + 15);
+      root.add(scene.add.text(30, rowY, label, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', color: '#7095a4', fontStyle: 'bold'
+      }).setOrigin(0, 0.5));
+      root.add(scene.add.text(rect.width - 30, rowY, value, {
+        fontFamily: 'Orbitron, sans-serif', fontSize: '13px', color: '#d7faff', fontStyle: 'bold'
+      }).setOrigin(1, 0.5));
+    });
+    root.addAt([panel, graphics, title], 0);
+    return root;
+  }
+
+  const localCard = {
+    x: cardRect.x - rect.x,
+    y: cardRect.y - rect.y,
+    width: cardRect.width,
+    height: cardRect.height
+  };
+  const accent = data.rarityColor;
+  const chamberX = Math.max(12, localCard.x - 12);
+  const chamberY = Math.max(42, localCard.y - 10);
+  const chamberWidth = Math.min(rect.width - chamberX - 12, localCard.width + 24);
+  const chamberHeight = localCard.height + 20;
+  const chamber = scene.add.rectangle(chamberX, chamberY, chamberWidth, chamberHeight, 0x020910, 0.7)
+    .setOrigin(0, 0).setStrokeStyle(1, accent, 0.32);
+  const scanGrid = scene.add.graphics();
+  scanGrid.lineStyle(1, accent, 0.09);
+  for (let y = chamberY + 12; y < chamberY + chamberHeight - 8; y += 15) {
+    scanGrid.lineBetween(chamberX + 5, y, chamberX + chamberWidth - 5, y);
+  }
+  scanGrid.lineStyle(1, 0x55eaff, 0.12);
+  for (let x = chamberX + 12; x < chamberX + chamberWidth - 8; x += 22) {
+    scanGrid.lineBetween(x, chamberY + 5, x, chamberY + chamberHeight - 5);
+  }
+
+  const sideSpace = Math.max(0, (rect.width - localCard.width) / 2 - 16);
+  const sideObjects: Phaser.GameObjects.GameObject[] = [];
+  if (sideSpace >= 42) {
+    const leftX = Math.max(14, localCard.x - sideSpace + 4);
+    const rightX = Math.min(rect.width - 14, localCard.x + localCard.width + sideSpace - 4);
+    const rows = [
+      { y: localCard.y + localCard.height * 0.24, label: 'RANK', value: `${data.rank}/3`, x: leftX, origin: 0 as const },
+      { y: localCard.y + localCard.height * 0.52, label: 'COPIES', value: String(data.duplicates + 1), x: leftX, origin: 0 as const },
+      { y: localCard.y + localCard.height * 0.80, label: 'INDEX', value: `${data.cardIndex}/${data.totalCards}`, x: leftX, origin: 0 as const },
+      { y: localCard.y + localCard.height * 0.24, label: 'CLASS', value: data.rarity.slice(0, 6).toUpperCase(), x: rightX, origin: 1 as const },
+      { y: localCard.y + localCard.height * 0.52, label: 'LINK', value: data.equipped ? 'ACTIVE' : 'STORED', x: rightX, origin: 1 as const },
+      { y: localCard.y + localCard.height * 0.80, label: 'ACQ', value: formatArchiveTimestamp(data.acquiredAt).slice(2), x: rightX, origin: 1 as const }
+    ];
+    for (const row of rows) {
+      sideObjects.push(
+        scene.add.text(row.x, row.y, row.label, {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: '8px', color: '#668c99', fontStyle: 'bold'
+        }).setOrigin(row.origin, 0.5),
+        scene.add.text(row.x, row.y + 12, row.value, {
+          fontFamily: 'Orbitron, sans-serif', fontSize: '9px', color: row.label === 'LINK' && data.equipped ? '#70ffad' : '#bdeff5', fontStyle: 'bold'
+        }).setOrigin(row.origin, 0.5)
+      );
+    }
+    const pulse = scene.add.rectangle(rightX - 2, localCard.y + 24, 2, Math.max(18, localCard.height * 0.18), accent, 0.5).setOrigin(0.5);
+    sideObjects.push(pulse);
+    scene.tweens.add({
+      targets: pulse,
+      y: localCard.y + localCard.height - 24,
+      alpha: { from: 0.18, to: 0.7 },
+      duration: 1900,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+  }
+
+  root.add([chamber, scanGrid, ...sideObjects]);
+  return root;
+};
+
+/** Optional full-height inspection trace; compact screens keep the action area. */
+export const createModSelectedTracePanel = (
+  scene: Phaser.Scene,
+  rect: CollectionFrameRect,
+  data: ModSelectedInspectorData
+): Phaser.GameObjects.Container => {
+  const root = scene.add.container(rect.x, rect.y);
+  const panel = scene.add.rectangle(0, 0, rect.width, rect.height, 0x030c14, 0.88)
+    .setOrigin(0, 0).setStrokeStyle(1, data.rarityColor, 0.3);
+  const label = scene.add.text(12, 8, 'SIGNAL TRACE // MODULE INSPECTION', {
+    fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: '#74bfca', fontStyle: 'bold', letterSpacing: 1
+  }).setOrigin(0, 0);
+  const state = scene.add.text(rect.width - 12, 8, `${formatArchiveTimestamp(data.acquiredAt)} // ${data.infused ? 'INFUSED' : 'BASE'} // ${data.equipped ? 'LINKED' : 'STORED'}`, {
+    fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: data.equipped ? '#72ffad' : '#a4ccd3', fontStyle: 'bold'
+  }).setOrigin(1, 0);
+  const graph = scene.add.graphics();
+  const left = 12;
+  const right = rect.width - 12;
+  const top = 27;
+  const bottom = rect.height - 9;
+  graph.lineStyle(1, 0x55eaff, 0.11);
+  for (let index = 0; index <= 4; index += 1) {
+    const y = top + ((bottom - top) * index) / 4;
+    graph.lineBetween(left, y, right, y);
+  }
+  graph.lineStyle(2, data.rarityColor, 0.72);
+  graph.beginPath();
+  data.signalTrace.forEach((value, index) => {
+    const px = left + ((right - left) * index) / Math.max(1, data.signalTrace.length - 1);
+    const py = bottom - (bottom - top) * value;
+    if (index === 0) graph.moveTo(px, py); else graph.lineTo(px, py);
+  });
+  graph.strokePath();
+  const sweep = scene.add.rectangle(left, top, 2, Math.max(3, bottom - top), 0x83f6ff, 0.16).setOrigin(0, 0);
+  root.add([panel, graph, label, state, sweep]);
+  scene.tweens.add({ targets: sweep, x: right - 2, alpha: { from: 0.08, to: 0.3 }, duration: 1800, repeat: -1, repeatDelay: 700 });
+  return root;
+};
+
 /** Static, layered equipment housing for the collection's two-row card bay. */
 export const createModArchiveTerminal = (
   scene: Phaser.Scene,
   layout: ModArchiveTerminalLayout,
-  matchingCards: number
+  analytics: ModArchiveAnalytics
 ): Phaser.GameObjects.Container => {
   const { frame, bay, pagination, diagnostics, lowerConsole } = layout;
   const root = scene.add.container(frame.x, frame.y);
@@ -322,16 +512,49 @@ export const createModArchiveTerminal = (
     const diagnosticTech = scene.add.graphics();
     diagnosticTech.lineStyle(1, 0x55eaff, 0.22);
     diagnosticTech.lineBetween(diagnosticLocal.x + 6, diagnosticLocal.y + 8, diagnosticLocal.x + diagnosticLocal.width - 6, diagnosticLocal.y + 8);
-    diagnosticTech.lineStyle(2, 0x2f6471, 0.42);
-    for (let y = diagnosticLocal.y + 36; y < diagnosticLocal.y + diagnosticLocal.height - 22; y += 18) {
-      diagnosticTech.lineBetween(diagnosticLocal.x + 11, y, diagnosticLocal.x + diagnosticLocal.width - 11, y);
-    }
-    diagnosticTech.lineStyle(1, 0xff5bcf, 0.28);
-    diagnosticTech.strokeRect(diagnosticLocal.x + 9, diagnosticLocal.y + diagnosticLocal.height * 0.57, diagnosticLocal.width - 18, diagnosticLocal.height * 0.25);
-    const diagnosticLabel = scene.add.text(diagnosticLocal.x + diagnosticLocal.width / 2, diagnosticLocal.y + 20, diagnosticLocal.width >= 100 ? 'INDEX BUFFER' : 'BUS', {
+    const roomyDiagnostics = diagnosticLocal.width >= 100;
+    const diagnosticLabel = scene.add.text(diagnosticLocal.x + diagnosticLocal.width / 2, diagnosticLocal.y + 20, roomyDiagnostics ? 'LIVE INDEX' : 'INDEX', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${diagnosticLocal.width >= 100 ? 10 : 8}px`, color: '#6fbdca', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5);
-    const diagnosticStatus = scene.add.text(diagnosticLocal.x + diagnosticLocal.width / 2, diagnosticLocal.y + diagnosticLocal.height - 13, diagnosticLocal.width >= 100 ? 'CARD MATRIX // READY' : 'READY', {
+    const diagnosticRows = [
+      [roomyDiagnostics ? 'MATCHING' : 'MATCH', String(analytics.matchingCards)],
+      ['PAGE', `${analytics.page + 1}/${analytics.pageCount}`],
+      [roomyDiagnostics ? 'LOADOUT' : 'LINK', String(analytics.equippedCards)],
+      [roomyDiagnostics ? 'SALVAGE' : 'SALV', String(analytics.recyclableCards)]
+    ];
+    const diagnosticText: Phaser.GameObjects.Text[] = [];
+    diagnosticRows.forEach(([label, value], index) => {
+      const rowY = diagnosticLocal.y + 48 + index * 35;
+      diagnosticTech.lineStyle(1, 0x2f6471, 0.38);
+      diagnosticTech.lineBetween(diagnosticLocal.x + 9, rowY + 13, diagnosticLocal.x + diagnosticLocal.width - 9, rowY + 13);
+      diagnosticText.push(
+        scene.add.text(diagnosticLocal.x + 10, rowY, label, {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomyDiagnostics ? 9 : 7}px`, color: '#617f8a', fontStyle: 'bold'
+        }).setOrigin(0, 0.5),
+        scene.add.text(diagnosticLocal.x + diagnosticLocal.width - 10, rowY, value, {
+          fontFamily: 'Orbitron, sans-serif', fontSize: `${roomyDiagnostics ? 11 : 8}px`, color: '#bceff6', fontStyle: 'bold'
+        }).setOrigin(1, 0.5)
+      );
+    });
+    const rarityValues = [
+      analytics.rarityCounts.common,
+      analytics.rarityCounts.uncommon,
+      analytics.rarityCounts.rare,
+      analytics.rarityCounts.epic,
+      analytics.rarityCounts.legendary,
+      analytics.rarityCounts.supreme
+    ];
+    const rarityColors = [0xf1f5ff, 0x53ff91, 0x2fb8ff, 0xc55cff, 0xff9c27, 0xff426e];
+    const rarityMaximum = Math.max(1, ...rarityValues);
+    const chartTop = diagnosticLocal.y + diagnosticLocal.height * 0.58;
+    const chartBottom = diagnosticLocal.y + diagnosticLocal.height - 34;
+    const chartWidth = Math.max(8, (diagnosticLocal.width - 22) / rarityValues.length - 3);
+    rarityValues.forEach((value, index) => {
+      const barHeight = value > 0 ? Math.max(2, (chartBottom - chartTop) * (value / rarityMaximum)) : 0;
+      diagnosticTech.fillStyle(rarityColors[index], 0.58);
+      diagnosticTech.fillRect(diagnosticLocal.x + 11 + index * (chartWidth + 3), chartBottom - barHeight, chartWidth, barHeight);
+    });
+    const diagnosticStatus = scene.add.text(diagnosticLocal.x + diagnosticLocal.width / 2, diagnosticLocal.y + diagnosticLocal.height - 13, roomyDiagnostics ? 'ARCHIVE BUS // READY' : 'READY', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${diagnosticLocal.width >= 100 ? 9 : 7}px`, color: '#72ffaf', fontStyle: 'bold'
     }).setOrigin(0.5);
     const diagnosticLeds = [0.3, 0.5, 0.7].map((fraction, index) => scene.add.circle(
@@ -341,7 +564,7 @@ export const createModArchiveTerminal = (
       index === 1 ? 0xff5bcf : 0x55eaff,
       0.78
     ));
-    hardware.push(diagnosticShadow, diagnosticPanel, diagnosticTech, diagnosticLabel, diagnosticStatus, ...diagnosticLeds);
+    hardware.push(diagnosticShadow, diagnosticPanel, diagnosticTech, diagnosticLabel, ...diagnosticText, diagnosticStatus, ...diagnosticLeds);
   }
 
   const paginationLocal = {
@@ -378,52 +601,136 @@ export const createModArchiveTerminal = (
     const lowerInner = scene.add.rectangle(lowerLocal.x + 7, lowerLocal.y + Math.min(7, lowerLocal.height * 0.2), lowerLocal.width - 14, Math.max(1, lowerLocal.height - Math.min(14, lowerLocal.height * 0.4)), 0x020910, 0.64)
       .setOrigin(0, 0).setStrokeStyle(1, 0x55eaff, 0.13);
     const lowerTech = scene.add.graphics();
-    const lowerLabels: Phaser.GameObjects.Text[] = [];
+    const moduleObjects: Phaser.GameObjects.GameObject[] = [];
     lowerTech.lineStyle(2, 0x55eaff, 0.34);
     lowerTech.lineBetween(lowerLocal.x + 16, lowerLocal.y + 5, lowerLocal.x + lowerLocal.width - 16, lowerLocal.y + 5);
-    const sectionFractions = [0.2, 0.46, 0.73];
-    lowerTech.lineStyle(1, 0x225967, 0.5);
-    for (const fraction of sectionFractions) {
-      const dividerX = lowerLocal.x + lowerLocal.width * fraction;
-      lowerTech.lineBetween(dividerX, lowerLocal.y + 12, dividerX, lowerLocal.y + lowerLocal.height - 10);
-    }
+
     if (lowerLocal.height >= 42) {
-      const labels = ['ARCHIVE CORE', 'INDEX BUFFER', 'DATA BUS', 'SYSTEM READY'];
-      const centers = [0.1, 0.33, 0.595, 0.865];
-      for (let index = 0; index < centers.length; index += 1) {
-        const centerX = lowerLocal.x + lowerLocal.width * centers[index];
-        lowerLabels.push(scene.add.text(centerX, lowerLocal.y + 17, labels[index], {
-          fontFamily: 'Rajdhani, sans-serif', fontSize: `${lowerLocal.height >= 90 ? 11 : 9}px`, color: index === 3 ? '#71ffad' : '#6ca8b5', fontStyle: 'bold', letterSpacing: 1
+      const moduleGap = 8;
+      const moduleInset = 8;
+      const moduleWidth = (lowerLocal.width - moduleInset * 2 - moduleGap * 3) / 4;
+      const moduleTop = lowerLocal.y + 9;
+      const moduleHeight = lowerLocal.height - 18;
+      const titles = ['ARCHIVE CORE', 'INDEX BUFFER', 'DATA BUS', 'SYSTEM READY'];
+      const moduleLeft = (index: number): number => lowerLocal.x + moduleInset + index * (moduleWidth + moduleGap);
+      for (let index = 0; index < titles.length; index += 1) {
+        const left = moduleLeft(index);
+        moduleObjects.push(
+          scene.add.rectangle(left, moduleTop, moduleWidth, moduleHeight, index === 3 ? 0x071914 : 0x030b12, 0.88)
+            .setOrigin(0, 0).setStrokeStyle(1, index === 3 ? 0x69ffad : index === 2 ? 0xff5bcf : 0x3c9cab, 0.28),
+          scene.add.text(left + 10, moduleTop + 10, titles[index], {
+            fontFamily: 'Rajdhani, sans-serif', fontSize: `${moduleHeight >= 90 ? 11 : 9}px`,
+            color: index === 3 ? '#71ffad' : '#70b6c2', fontStyle: 'bold', letterSpacing: 1
+          }).setOrigin(0, 0)
+        );
+      }
+
+      const graphTop = moduleTop + Math.min(40, Math.max(25, moduleHeight * 0.25));
+      const graphBottom = moduleTop + moduleHeight - 12;
+      const coreLeft = moduleLeft(0);
+      const discoveryRatio = analytics.totalDefinitions > 0
+        ? analytics.discoveredDefinitions / analytics.totalDefinitions
+        : 0;
+      moduleObjects.push(
+        scene.add.text(coreLeft + 10, graphTop, `${analytics.discoveredDefinitions} / ${analytics.totalDefinitions}`, {
+          fontFamily: 'Orbitron, sans-serif', fontSize: `${moduleHeight >= 120 ? 18 : 12}px`, color: '#d8faff', fontStyle: 'bold'
+        }).setOrigin(0, 0),
+        scene.add.text(coreLeft + moduleWidth - 10, graphTop + 2, `${analytics.totalCards} CARDS`, {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${moduleHeight >= 90 ? 10 : 8}px`, color: '#749ba7', fontStyle: 'bold'
+        }).setOrigin(1, 0)
+      );
+      const coreBarY = Math.min(graphBottom - 8, graphTop + (moduleHeight >= 120 ? 42 : 25));
+      lowerTech.fillStyle(0x102932, 0.9);
+      lowerTech.fillRect(coreLeft + 10, coreBarY, moduleWidth - 20, 7);
+      lowerTech.fillStyle(0x55eaff, 0.82);
+      lowerTech.fillRect(coreLeft + 10, coreBarY, (moduleWidth - 20) * discoveryRatio, 7);
+      if (moduleHeight >= 120) {
+        moduleObjects.push(scene.add.text(coreLeft + 10, coreBarY + 17,
+          `INFUSED ${analytics.infusedCards}  //  LOADOUT ${analytics.equippedCards}\nSALVAGE ${analytics.recyclableCards} → ${analytics.salvagePlasma}◆`, {
+            fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#82b4bf', fontStyle: 'bold', lineSpacing: 5
+          }).setOrigin(0, 0));
+      }
+
+      const categoryValues = [
+        analytics.categoryCounts.weapon,
+        analytics.categoryCounts.player,
+        analytics.categoryCounts.defense,
+        analytics.categoryCounts.bombSite,
+        analytics.categoryCounts.utility
+      ];
+      const categoryLabels = ['W', 'P', 'D', 'B', 'U'];
+      const categoryColors = [0x55eaff, 0xff67ca, 0x75ffab, 0xffb75e, 0xb875ff];
+      const categoryMaximum = Math.max(1, ...categoryValues);
+      const indexLeft = moduleLeft(1);
+      const categorySlot = (moduleWidth - 20) / categoryValues.length;
+      categoryValues.forEach((value, index) => {
+        const barHeight = value > 0 ? Math.max(2, (graphBottom - graphTop - 14) * (value / categoryMaximum)) : 0;
+        const barWidth = Math.max(4, categorySlot - 7);
+        const x = indexLeft + 10 + index * categorySlot + (categorySlot - barWidth) / 2;
+        lowerTech.fillStyle(categoryColors[index], 0.58);
+        lowerTech.fillRect(x, graphBottom - 12 - barHeight, barWidth, barHeight);
+        moduleObjects.push(scene.add.text(x + barWidth / 2, graphBottom - 5, categoryLabels[index], {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: '8px', color: '#7ca7b1', fontStyle: 'bold'
         }).setOrigin(0.5));
+      });
+
+      const dataLeft = moduleLeft(2);
+      lowerTech.lineStyle(1, 0x55eaff, 0.1);
+      for (let index = 0; index <= 4; index += 1) {
+        const y = graphTop + ((graphBottom - graphTop) * index) / 4;
+        lowerTech.lineBetween(dataLeft + 10, y, dataLeft + moduleWidth - 10, y);
       }
+      lowerTech.lineStyle(2, 0xff5bcf, 0.72);
+      lowerTech.beginPath();
+      analytics.signalTrace.forEach((value, index) => {
+        const x = dataLeft + 10 + ((moduleWidth - 20) * index) / Math.max(1, analytics.signalTrace.length - 1);
+        const y = graphBottom - (graphBottom - graphTop) * value;
+        if (index === 0) lowerTech.moveTo(x, y); else lowerTech.lineTo(x, y);
+      });
+      lowerTech.strokePath();
+      const dataSweep = scene.add.rectangle(dataLeft + 10, graphTop, 2, Math.max(3, graphBottom - graphTop), 0x70efff, 0.14).setOrigin(0, 0);
+      moduleObjects.push(dataSweep);
+      scene.tweens.add({ targets: dataSweep, x: dataLeft + moduleWidth - 12, alpha: { from: 0.06, to: 0.28 }, duration: 2100, repeat: -1, repeatDelay: 900 });
+
+      const systemLeft = moduleLeft(3);
+      const systemRows = [
+        ['ARCHIVE LINK', 'ONLINE'],
+        ['CARD MATRIX', `${analytics.matchingCards} ACTIVE`],
+        ['PAGE BUFFER', `${analytics.page + 1} / ${analytics.pageCount}`],
+        ['SALVAGE BUS', analytics.recyclableCards ? 'STANDBY' : 'CLEAR']
+      ];
+      systemRows.slice(0, moduleHeight >= 125 ? 4 : 2).forEach(([label, value], index) => {
+        const y = graphTop + index * Math.min(31, Math.max(19, (graphBottom - graphTop) / 4));
+        moduleObjects.push(
+          scene.add.circle(systemLeft + 13, y + 5, 2.2, index === 0 ? 0x69ffad : 0x55eaff, 0.85),
+          scene.add.text(systemLeft + 22, y, label, {
+            fontFamily: 'Rajdhani, sans-serif', fontSize: '8px', color: '#6e929c', fontStyle: 'bold'
+          }).setOrigin(0, 0),
+          scene.add.text(systemLeft + moduleWidth - 10, y, value, {
+            fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: index === 0 ? '#70ffad' : '#bee8ed', fontStyle: 'bold'
+          }).setOrigin(1, 0)
+        );
+      });
+      if (moduleHeight >= 170) {
+        const rankMaximum = Math.max(1, ...analytics.rankCounts);
+        const rankBottom = moduleTop + moduleHeight - 13;
+        const rankHeight = Math.min(44, moduleHeight * 0.19);
+        const rankSlot = (moduleWidth - 28) / analytics.rankCounts.length;
+        analytics.rankCounts.forEach((value, index) => {
+          const height = value > 0 ? Math.max(2, rankHeight * (value / rankMaximum)) : 0;
+          const x = systemLeft + 14 + index * rankSlot;
+          lowerTech.fillStyle(index === 3 ? 0xff5bcf : 0x55eaff, 0.52 + index * 0.08);
+          lowerTech.fillRect(x, rankBottom - height, Math.max(4, rankSlot - 7), height);
+          moduleObjects.push(scene.add.text(x + Math.max(4, rankSlot - 7) / 2, rankBottom + 6, `R${index}`, {
+            fontFamily: 'Rajdhani, sans-serif', fontSize: '8px', color: '#7298a2', fontStyle: 'bold'
+          }).setOrigin(0.5, 0));
+        });
+      }
+      const liveLed = scene.add.circle(systemLeft + moduleWidth - 12, moduleTop + 13, 2.5, 0x69ffad, 0.92);
+      moduleObjects.push(liveLed);
+      scene.tweens.add({ targets: liveLed, alpha: { from: 0.2, to: 1 }, duration: 760, yoyo: true, repeat: -1 });
     }
-    if (lowerLocal.height >= 64) {
-      lowerTech.lineStyle(2, 0x284d58, 0.62);
-      for (let index = 0; index < 9; index += 1) {
-        const y = lowerLocal.y + 38 + index * Math.min(12, Math.max(5, (lowerLocal.height - 54) / 9));
-        if (y >= lowerLocal.y + lowerLocal.height - 10) break;
-        lowerTech.lineBetween(lowerLocal.x + 22, y, lowerLocal.x + lowerLocal.width * 0.18, y);
-        lowerTech.lineBetween(lowerLocal.x + lowerLocal.width * 0.48, y, lowerLocal.x + lowerLocal.width * 0.7, y);
-      }
-      lowerTech.lineStyle(1, 0x55eaff, 0.18);
-      const busTop = lowerLocal.y + 36;
-      const busBottom = lowerLocal.y + lowerLocal.height - 14;
-      for (let x = lowerLocal.x + lowerLocal.width * 0.23; x < lowerLocal.x + lowerLocal.width * 0.44; x += 14) {
-        lowerTech.lineBetween(x, busTop, x, busBottom);
-      }
-      lowerTech.lineStyle(1, 0xff5bcf, 0.2);
-      lowerTech.strokeRect(lowerLocal.x + lowerLocal.width * 0.75, busTop, lowerLocal.width * 0.22, Math.max(12, busBottom - busTop));
-    }
-    const lowerLeds = [0.77, 0.81, 0.85, 0.89, 0.93].map((fraction, index) => scene.add.circle(
-      lowerLocal.x + lowerLocal.width * fraction,
-      lowerLocal.y + Math.min(lowerLocal.height - 8, Math.max(8, lowerLocal.height * 0.5)),
-      2.2,
-      index === 2 ? 0xff5bcf : 0x69ffad,
-      0.72
-    ));
-    // Keep the chassis behind its labels and status lamps even though all of
-    // these static pieces share the terminal's single parent container.
-    hardware.push(lowerShadow, lowerPanel, lowerInner, lowerTech, ...lowerLabels, ...lowerLeds);
+    hardware.push(lowerShadow, lowerPanel, lowerInner, lowerTech, ...moduleObjects);
   }
 
   const tech = scene.add.graphics();
@@ -444,8 +751,8 @@ export const createModArchiveTerminal = (
 
   const narrowTerminal = frame.width < 720;
   const headerTitle = scene.add.text(22, 16, narrowTerminal
-    ? `MOD ARCHIVE TERMINAL // ${matchingCards} CARDS`
-    : `MOD ARCHIVE TERMINAL // OWNED INDEX: ${matchingCards} MATCHING CARDS`, {
+    ? `MOD ARCHIVE TERMINAL // ${analytics.matchingCards} CARDS`
+    : `MOD ARCHIVE TERMINAL // OWNED INDEX: ${analytics.matchingCards} MATCHING CARDS`, {
     fontFamily: 'Orbitron, sans-serif', fontSize: `${frame.width < 720 ? 11 : 14}px`, color: '#71f3ff', fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(0, 0);
   const headerStatus = scene.add.text(frame.width - 22, 17, narrowTerminal ? 'ONLINE' : 'ARCHIVE ONLINE // LOCAL VAULT', {

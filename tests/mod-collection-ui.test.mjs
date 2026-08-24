@@ -56,7 +56,7 @@ test('Mod Archive Terminal fills the archive workstation while preserving exactl
 });
 
 test('archive pagination is an in-terminal controller-aware physical console', () => {
-  assert.match(scene, /createModArchiveTerminal\(this, archiveLayout, cards\.length\)/);
+  assert.match(scene, /createModArchiveTerminal\(this, archiveLayout, analytics\)/);
   assert.match(scene, /createModArchivePageButton/);
   assert.match(scene, /onPageLeft: \(\) => turnArchivePage\(-1\)/);
   assert.match(scene, /onPageRight: \(\) => turnArchivePage\(1\)/);
@@ -69,6 +69,21 @@ test('archive pagination is an in-terminal controller-aware physical console', (
   assert.match(presentation, /pageInner/);
   assert.match(presentation, /pageCount <= 10/);
   assert.match(presentation, /duration: 150/);
+});
+
+test('archive support panels use live analytics and selection-linked inspection data', () => {
+  assert.match(scene, /buildModArchiveAnalytics\(/);
+  assert.match(scene, /createModArchiveCommandTelemetry\(this, toolbarRect, analytics\)/);
+  assert.match(scene, /createModSelectedInspector\(this, detailRect/);
+  assert.match(scene, /createModSelectedTracePanel\(this/);
+  assert.match(presentation, /DISCOVERED/);
+  assert.match(presentation, /SALVAGE BUFFER/);
+  assert.match(presentation, /ARCHIVE CORE/);
+  assert.match(presentation, /INDEX BUFFER/);
+  assert.match(presentation, /DATA BUS/);
+  assert.match(presentation, /SIGNAL TRACE \/\/ MODULE INSPECTION/);
+  assert.match(presentation, /analytics\.rarityCounts/);
+  assert.match(presentation, /analytics\.categoryCounts/);
 });
 
 test('collection presentation delegates to existing buttons and preserves disabled and locked feedback', () => {
