@@ -27,22 +27,29 @@ test('Mod Collection uses the shared cyber-console visual language without repla
   assert.match(presentation, /headerDivider/);
 });
 
-test('Mod Archive Terminal wraps exactly two readable card rows instead of filling the viewport', () => {
+test('Mod Archive Terminal fills the archive workstation while preserving exactly two readable card rows', () => {
   for (const [width, height, contentTop, detailWidth] of [
-    [1920, 1080, 230, 390],
-    [1600, 900, 210, 390],
+    [1920, 1080, 218, 390],
+    [1600, 900, 212, 390],
     [1366, 768, 208, 390],
-    [1024, 768, 190, 307]
+    [1024, 768, 228, 307]
   ]) {
     const layout = calculateModArchiveTerminalLayout(width, height, contentTop, detailWidth);
     assert.equal(layout.rows, 2);
     assert.equal(layout.perPage, layout.columns * 2);
     assert.ok(layout.cardWidth >= 112 && layout.cardWidth <= 148);
     if (width >= 1366) assert.equal(layout.cardWidth, 148, `${width}x${height} keeps the current full card size`);
-    assert.ok(layout.frame.y + layout.frame.height <= height - 12, `${width}x${height} terminal remains on screen`);
+    assert.equal(layout.frame.y + layout.frame.height, height - 16, `${width}x${height} terminal reaches the lower workspace boundary`);
     assert.ok(layout.pagination.y > layout.cardGridTop + layout.cardHeight * 2);
-    assert.ok(layout.frame.width < width - detailWidth - 20, 'terminal ends around its content instead of stretching to the detail panel');
+    assert.equal(layout.frame.width, width - detailWidth - 70, 'terminal spans all available space beside the selected-module panel');
+    assert.equal(layout.pagination.y, layout.bay.y + layout.bay.height + 5, 'pagination stays directly below the two card rows');
+    assert.ok(layout.pageButtonWidth >= 92 && layout.pageButtonHeight >= 38, 'pagination controls remain physical and comfortably sized');
   }
+  const fullHd = calculateModArchiveTerminalLayout(1920, 1080, 218, 390);
+  assert.ok(fullHd.diagnostics?.width >= 100, 'unused horizontal room becomes a diagnostic hardware bay');
+  assert.ok(fullHd.lowerConsole.height >= 200, 'large desktop space becomes a substantial lower console assembly');
+  const laptop = calculateModArchiveTerminalLayout(1366, 768, 208, 390);
+  assert.equal(laptop.cardWidth, 148, 'short viewports collapse decoration before shrinking cards');
   assert.equal(getModArchivePageCount(63, 16), 4);
   assert.equal(getModArchivePageCount(0, 16), 1);
   assert.match(terminalLayout, /rows: 2/);
@@ -55,6 +62,11 @@ test('archive pagination is an in-terminal controller-aware physical console', (
   assert.match(scene, /onPageRight: \(\) => turnArchivePage\(1\)/);
   assert.match(presentation, /focusShortcut: direction === 'previous' \? 'page-left' : 'page-right'/);
   assert.match(presentation, /MOD ARCHIVE/);
+  assert.match(presentation, /ARCHIVE CORE/);
+  assert.match(presentation, /INDEX BUFFER/);
+  assert.match(presentation, /DATA BUS/);
+  assert.match(presentation, /SYSTEM READY/);
+  assert.match(presentation, /pageInner/);
   assert.match(presentation, /pageCount <= 10/);
   assert.match(presentation, /duration: 150/);
 });

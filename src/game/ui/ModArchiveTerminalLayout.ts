@@ -9,6 +9,8 @@ export interface ModArchiveTerminalLayout {
   frame: ModArchiveRect;
   bay: ModArchiveRect;
   pagination: ModArchiveRect;
+  diagnostics: ModArchiveRect | null;
+  lowerConsole: ModArchiveRect;
   cardWidth: number;
   cardHeight: number;
   cardGapX: number;
@@ -30,9 +32,10 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.max(minimum, Math.min(maximum, value));
 
 /**
- * Sizes the archive around two rows of the existing readable cards instead of
- * stretching a panel to the bottom of the viewport. Vertical clamping only
- * engages on short desktop windows where two full 148px cards cannot fit.
+ * Builds one persistent wall-mounted workstation around two rows of readable
+ * cards. The physical terminal fills the available archive workspace while
+ * decoration yields first on short windows so card readability remains the
+ * final thing that scales down.
  */
 export const calculateModArchiveTerminalLayout = (
   viewportWidth: number,
@@ -47,12 +50,12 @@ export const calculateModArchiveTerminalLayout = (
   const availableHeight = Math.max(360, viewportHeight - contentTop - 16);
   const headerHeight = compact ? 34 : 38;
   const sidePadding = compact ? 12 : 16;
-  const bayTopPadding = compact ? 4 : 7;
-  const bayBottomPadding = compact ? 5 : 8;
+  const bayTopPadding = 4;
+  const bayBottomPadding = 4;
   const cardGapX = compact ? 10 : 14;
   const cardGapY = compact ? 7 : 12;
-  const paginationGap = compact ? 5 : 7;
-  const paginationHeight = compact ? 40 : 50;
+  const paginationGap = 5;
+  const minimumPaginationHeight = compact ? 44 : 56;
   const frameBottomPadding = compact ? 5 : 7;
 
   // This is the same horizontal card-size rule the collection used before the
@@ -61,7 +64,7 @@ export const calculateModArchiveTerminalLayout = (
   const legacyGridRight = viewportWidth - detailWidth - 46;
   const horizontalCardWidth = clamp((legacyGridRight - legacyGridLeft - 48) / 4, 112, 148);
   const fixedVertical = headerHeight + bayTopPadding + cardGapY + bayBottomPadding
-    + paginationGap + paginationHeight + frameBottomPadding;
+    + paginationGap + minimumPaginationHeight + frameBottomPadding;
   const verticalCardWidth = (availableHeight - fixedVertical) / (2 * 1.4);
   const cardWidth = clamp(Math.min(horizontalCardWidth, verticalCardWidth), 112, 148);
   const cardHeight = cardWidth * 1.4;
@@ -70,9 +73,8 @@ export const calculateModArchiveTerminalLayout = (
   ));
   const gridWidth = columns * cardWidth + (columns - 1) * cardGapX;
   const gridHeight = cardHeight * 2 + cardGapY;
-  const frameWidth = sidePadding * 2 + gridWidth;
-  const frameHeight = headerHeight + bayTopPadding + gridHeight + bayBottomPadding
-    + paginationGap + paginationHeight + frameBottomPadding;
+  const frameWidth = availableWidth;
+  const frameHeight = availableHeight;
   const frame: ModArchiveRect = { x: archiveAreaLeft, y: contentTop, width: frameWidth, height: frameHeight };
   const cardGridLeft = frame.x + sidePadding;
   const cardGridTop = frame.y + headerHeight + bayTopPadding;
@@ -82,21 +84,46 @@ export const calculateModArchiveTerminalLayout = (
     width: frame.width - 14,
     height: bayTopPadding + gridHeight + bayBottomPadding
   };
+  const remainingAfterBay = Math.max(0, frame.height - headerHeight - bay.height - paginationGap - frameBottomPadding);
+  const preferredPaginationHeight = availableHeight >= 760 ? 82 : availableHeight >= 630 ? 72 : minimumPaginationHeight;
+  const preferredLowerHeight = availableHeight >= 760 ? 170 : availableHeight >= 630 ? 68 : 0;
+  const paginationHeight = clamp(
+    remainingAfterBay - preferredLowerHeight,
+    minimumPaginationHeight,
+    preferredPaginationHeight
+  );
   const pagination: ModArchiveRect = {
     x: frame.x + 7,
     y: bay.y + bay.height + paginationGap,
     width: frame.width - 14,
     height: paginationHeight
   };
-  const pageButtonWidth = clamp(frame.width * 0.14, compact ? 84 : 104, 138);
-  const pageButtonHeight = compact ? 34 : 42;
-  const pageInset = compact ? 12 : 18;
-  const pageReadoutWidth = clamp(frame.width * 0.32, 190, 320);
+  const lowerTop = pagination.y + pagination.height + (remainingAfterBay > paginationHeight + 12 ? 7 : 0);
+  const lowerConsole: ModArchiveRect = {
+    x: frame.x + 7,
+    y: lowerTop,
+    width: frame.width - 14,
+    height: Math.max(0, frame.y + frame.height - frameBottomPadding - lowerTop)
+  };
+  const diagnosticLeft = cardGridLeft + gridWidth + Math.max(8, cardGapX * 0.7);
+  const diagnosticRight = frame.x + frame.width - sidePadding;
+  const diagnostics = diagnosticRight - diagnosticLeft >= 48 ? {
+    x: diagnosticLeft,
+    y: cardGridTop,
+    width: diagnosticRight - diagnosticLeft,
+    height: gridHeight
+  } : null;
+  const pageButtonWidth = clamp(frame.width * 0.14, compact ? 92 : 112, 160);
+  const pageButtonHeight = compact ? 38 : 46;
+  const pageInset = compact ? 14 : 22;
+  const pageReadoutWidth = clamp(frame.width * 0.3, 210, 350);
 
   return {
     frame,
     bay,
     pagination,
+    diagnostics,
+    lowerConsole,
     cardWidth,
     cardHeight,
     cardGapX,

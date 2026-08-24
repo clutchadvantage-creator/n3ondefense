@@ -282,8 +282,9 @@ export const createModArchiveTerminal = (
   layout: ModArchiveTerminalLayout,
   matchingCards: number
 ): Phaser.GameObjects.Container => {
-  const { frame, bay, pagination } = layout;
+  const { frame, bay, pagination, diagnostics, lowerConsole } = layout;
   const root = scene.add.container(frame.x, frame.y);
+  const hardware: Phaser.GameObjects.GameObject[] = [];
   const cut = Math.min(18, frame.height * 0.04);
   const points = chamferedPoints(frame.width, frame.height, cut);
   const shadow = scene.add.polygon(frame.width / 2 + 7, frame.height / 2 + 9, points, 0x000000, 0.58);
@@ -308,6 +309,41 @@ export const createModArchiveTerminal = (
   const bayInner = scene.add.rectangle(bayLocal.x + 6, bayLocal.y + 6, bayLocal.width - 12, bayLocal.height - 12, 0x06121d, 0.52)
     .setOrigin(0, 0).setStrokeStyle(1, 0x55eaff, 0.15);
 
+  if (diagnostics) {
+    const diagnosticLocal = {
+      x: diagnostics.x - frame.x,
+      y: diagnostics.y - frame.y,
+      width: diagnostics.width,
+      height: diagnostics.height
+    };
+    const diagnosticShadow = scene.add.rectangle(diagnosticLocal.x + 3, diagnosticLocal.y + 4, diagnosticLocal.width, diagnosticLocal.height, 0x000000, 0.58).setOrigin(0, 0);
+    const diagnosticPanel = scene.add.rectangle(diagnosticLocal.x, diagnosticLocal.y, diagnosticLocal.width, diagnosticLocal.height, 0x07131d, 0.94)
+      .setOrigin(0, 0).setStrokeStyle(1, 0x3ab9cb, 0.36);
+    const diagnosticTech = scene.add.graphics();
+    diagnosticTech.lineStyle(1, 0x55eaff, 0.22);
+    diagnosticTech.lineBetween(diagnosticLocal.x + 6, diagnosticLocal.y + 8, diagnosticLocal.x + diagnosticLocal.width - 6, diagnosticLocal.y + 8);
+    diagnosticTech.lineStyle(2, 0x2f6471, 0.42);
+    for (let y = diagnosticLocal.y + 36; y < diagnosticLocal.y + diagnosticLocal.height - 22; y += 18) {
+      diagnosticTech.lineBetween(diagnosticLocal.x + 11, y, diagnosticLocal.x + diagnosticLocal.width - 11, y);
+    }
+    diagnosticTech.lineStyle(1, 0xff5bcf, 0.28);
+    diagnosticTech.strokeRect(diagnosticLocal.x + 9, diagnosticLocal.y + diagnosticLocal.height * 0.57, diagnosticLocal.width - 18, diagnosticLocal.height * 0.25);
+    const diagnosticLabel = scene.add.text(diagnosticLocal.x + diagnosticLocal.width / 2, diagnosticLocal.y + 20, diagnosticLocal.width >= 100 ? 'INDEX BUFFER' : 'BUS', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${diagnosticLocal.width >= 100 ? 10 : 8}px`, color: '#6fbdca', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0.5);
+    const diagnosticStatus = scene.add.text(diagnosticLocal.x + diagnosticLocal.width / 2, diagnosticLocal.y + diagnosticLocal.height - 13, diagnosticLocal.width >= 100 ? 'CARD MATRIX // READY' : 'READY', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${diagnosticLocal.width >= 100 ? 9 : 7}px`, color: '#72ffaf', fontStyle: 'bold'
+    }).setOrigin(0.5);
+    const diagnosticLeds = [0.3, 0.5, 0.7].map((fraction, index) => scene.add.circle(
+      diagnosticLocal.x + diagnosticLocal.width * fraction,
+      diagnosticLocal.y + diagnosticLocal.height * 0.52,
+      2.2,
+      index === 1 ? 0xff5bcf : 0x55eaff,
+      0.78
+    ));
+    hardware.push(diagnosticShadow, diagnosticPanel, diagnosticTech, diagnosticLabel, diagnosticStatus, ...diagnosticLeds);
+  }
+
   const paginationLocal = {
     x: pagination.x - frame.x,
     y: pagination.y - frame.y,
@@ -317,7 +353,78 @@ export const createModArchiveTerminal = (
   const pageShadow = scene.add.rectangle(paginationLocal.x + 3, paginationLocal.y + 4, paginationLocal.width, paginationLocal.height, 0x000000, 0.54).setOrigin(0, 0);
   const pageConsole = scene.add.rectangle(paginationLocal.x, paginationLocal.y, paginationLocal.width, paginationLocal.height, 0x081721, 0.98)
     .setOrigin(0, 0).setStrokeStyle(1, 0x4eeeff, 0.42);
-  const pageRail = scene.add.rectangle(paginationLocal.x + 14, paginationLocal.y + 4, paginationLocal.width - 28, 2, 0xff5bcf, 0.36).setOrigin(0, 0);
+  const pageInner = scene.add.rectangle(paginationLocal.x + 7, paginationLocal.y + 7, paginationLocal.width - 14, paginationLocal.height - 14, 0x030c14, 0.74)
+    .setOrigin(0, 0).setStrokeStyle(1, 0x267d8e, 0.34);
+  const pageRail = scene.add.rectangle(paginationLocal.x + 14, paginationLocal.y + 4, paginationLocal.width - 28, 2, 0xff5bcf, 0.42).setOrigin(0, 0);
+  const pageLowerRail = scene.add.rectangle(paginationLocal.x + 30, paginationLocal.y + paginationLocal.height - 5, paginationLocal.width - 60, 2, 0x55eaff, 0.22).setOrigin(0, 0);
+  const pageDeckTech = scene.add.graphics();
+  pageDeckTech.lineStyle(1, 0x55eaff, 0.25);
+  const pageSection = paginationLocal.width * 0.24;
+  pageDeckTech.lineBetween(paginationLocal.x + pageSection, paginationLocal.y + 12, paginationLocal.x + pageSection, paginationLocal.y + paginationLocal.height - 12);
+  pageDeckTech.lineBetween(paginationLocal.x + paginationLocal.width - pageSection, paginationLocal.y + 12, paginationLocal.x + paginationLocal.width - pageSection, paginationLocal.y + paginationLocal.height - 12);
+  pageDeckTech.lineStyle(1, 0xff5bcf, 0.2);
+  pageDeckTech.lineBetween(paginationLocal.x + pageSection + 10, paginationLocal.y + 10, paginationLocal.x + paginationLocal.width - pageSection - 10, paginationLocal.y + 10);
+
+  if (lowerConsole.height > 2) {
+    const lowerLocal = {
+      x: lowerConsole.x - frame.x,
+      y: lowerConsole.y - frame.y,
+      width: lowerConsole.width,
+      height: lowerConsole.height
+    };
+    const lowerShadow = scene.add.rectangle(lowerLocal.x + 3, lowerLocal.y + 4, lowerLocal.width, lowerLocal.height, 0x000000, 0.54).setOrigin(0, 0);
+    const lowerPanel = scene.add.rectangle(lowerLocal.x, lowerLocal.y, lowerLocal.width, lowerLocal.height, 0x06121b, 0.96)
+      .setOrigin(0, 0).setStrokeStyle(1, 0x2b8191, 0.4);
+    const lowerInner = scene.add.rectangle(lowerLocal.x + 7, lowerLocal.y + Math.min(7, lowerLocal.height * 0.2), lowerLocal.width - 14, Math.max(1, lowerLocal.height - Math.min(14, lowerLocal.height * 0.4)), 0x020910, 0.64)
+      .setOrigin(0, 0).setStrokeStyle(1, 0x55eaff, 0.13);
+    const lowerTech = scene.add.graphics();
+    const lowerLabels: Phaser.GameObjects.Text[] = [];
+    lowerTech.lineStyle(2, 0x55eaff, 0.34);
+    lowerTech.lineBetween(lowerLocal.x + 16, lowerLocal.y + 5, lowerLocal.x + lowerLocal.width - 16, lowerLocal.y + 5);
+    const sectionFractions = [0.2, 0.46, 0.73];
+    lowerTech.lineStyle(1, 0x225967, 0.5);
+    for (const fraction of sectionFractions) {
+      const dividerX = lowerLocal.x + lowerLocal.width * fraction;
+      lowerTech.lineBetween(dividerX, lowerLocal.y + 12, dividerX, lowerLocal.y + lowerLocal.height - 10);
+    }
+    if (lowerLocal.height >= 42) {
+      const labels = ['ARCHIVE CORE', 'INDEX BUFFER', 'DATA BUS', 'SYSTEM READY'];
+      const centers = [0.1, 0.33, 0.595, 0.865];
+      for (let index = 0; index < centers.length; index += 1) {
+        const centerX = lowerLocal.x + lowerLocal.width * centers[index];
+        lowerLabels.push(scene.add.text(centerX, lowerLocal.y + 17, labels[index], {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${lowerLocal.height >= 90 ? 11 : 9}px`, color: index === 3 ? '#71ffad' : '#6ca8b5', fontStyle: 'bold', letterSpacing: 1
+        }).setOrigin(0.5));
+      }
+    }
+    if (lowerLocal.height >= 64) {
+      lowerTech.lineStyle(2, 0x284d58, 0.62);
+      for (let index = 0; index < 9; index += 1) {
+        const y = lowerLocal.y + 38 + index * Math.min(12, Math.max(5, (lowerLocal.height - 54) / 9));
+        if (y >= lowerLocal.y + lowerLocal.height - 10) break;
+        lowerTech.lineBetween(lowerLocal.x + 22, y, lowerLocal.x + lowerLocal.width * 0.18, y);
+        lowerTech.lineBetween(lowerLocal.x + lowerLocal.width * 0.48, y, lowerLocal.x + lowerLocal.width * 0.7, y);
+      }
+      lowerTech.lineStyle(1, 0x55eaff, 0.18);
+      const busTop = lowerLocal.y + 36;
+      const busBottom = lowerLocal.y + lowerLocal.height - 14;
+      for (let x = lowerLocal.x + lowerLocal.width * 0.23; x < lowerLocal.x + lowerLocal.width * 0.44; x += 14) {
+        lowerTech.lineBetween(x, busTop, x, busBottom);
+      }
+      lowerTech.lineStyle(1, 0xff5bcf, 0.2);
+      lowerTech.strokeRect(lowerLocal.x + lowerLocal.width * 0.75, busTop, lowerLocal.width * 0.22, Math.max(12, busBottom - busTop));
+    }
+    const lowerLeds = [0.77, 0.81, 0.85, 0.89, 0.93].map((fraction, index) => scene.add.circle(
+      lowerLocal.x + lowerLocal.width * fraction,
+      lowerLocal.y + Math.min(lowerLocal.height - 8, Math.max(8, lowerLocal.height * 0.5)),
+      2.2,
+      index === 2 ? 0xff5bcf : 0x69ffad,
+      0.72
+    ));
+    // Keep the chassis behind its labels and status lamps even though all of
+    // these static pieces share the terminal's single parent container.
+    hardware.push(lowerShadow, lowerPanel, lowerInner, lowerTech, ...lowerLabels, ...lowerLeds);
+  }
 
   const tech = scene.add.graphics();
   tech.lineStyle(1, 0x1d7182, 0.18);
@@ -354,8 +461,8 @@ export const createModArchiveTerminal = (
   ];
   root.add([
     shadow, chassis, inset, header, headerRail, headerAccent,
-    bayShadow, bayPanel, bayInner, tech,
-    pageShadow, pageConsole, pageRail,
+    bayShadow, bayPanel, bayInner, tech, ...hardware,
+    pageShadow, pageConsole, pageInner, pageRail, pageLowerRail, pageDeckTech,
     headerTitle, headerStatus, ledA, ledB, ...bolts
   ]);
   scene.tweens.add({ targets: [ledA, ledB], alpha: { from: 0.28, to: 1 }, duration: 920, yoyo: true, repeat: -1 });
@@ -371,22 +478,22 @@ export const createModArchivePageReadout = (
   pageCount: number
 ): Phaser.GameObjects.Container => {
   const root = scene.add.container(x, y);
-  const height = 40;
+  const height = width >= 260 ? 48 : 42;
   const shadow = scene.add.rectangle(3, 4, width, height, 0x000000, 0.5).setStrokeStyle(1, 0x000000, 0.2);
   const panel = scene.add.rectangle(0, 0, width, height, 0x020b12, 0.98).setStrokeStyle(1, 0x55eaff, 0.5);
   const rail = scene.add.rectangle(0, -height / 2 + 3, width - 18, 2, 0xff5bcf, 0.48);
-  const label = scene.add.text(0, -9, 'MOD ARCHIVE', {
-    fontFamily: 'Orbitron, sans-serif', fontSize: '9px', color: '#77bdc9', fontStyle: 'bold', letterSpacing: 2
+  const label = scene.add.text(0, height >= 48 ? -12 : -10, 'MOD ARCHIVE', {
+    fontFamily: 'Orbitron, sans-serif', fontSize: `${height >= 48 ? 10 : 9}px`, color: '#77bdc9', fontStyle: 'bold', letterSpacing: 2
   }).setOrigin(0.5);
-  const readout = scene.add.text(0, 2, `PAGE ${String(page + 1).padStart(2, '0')} / ${String(pageCount).padStart(2, '0')}`, {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#dcfaff', fontStyle: 'bold', letterSpacing: 1
+  const readout = scene.add.text(0, 3, `PAGE ${String(page + 1).padStart(2, '0')} / ${String(pageCount).padStart(2, '0')}`, {
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${height >= 48 ? 17 : 15}px`, color: '#dcfaff', fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(0.5);
   root.add([shadow, panel, rail, label, readout]);
   if (pageCount <= 10) {
     const gap = 8;
     const startX = -((pageCount - 1) * gap) / 2;
     for (let index = 0; index < pageCount; index += 1) {
-      root.add(scene.add.circle(startX + index * gap, 15, index === page ? 2.2 : 1.5, index === page ? 0x69ffb2 : 0x3b6f7c, index === page ? 0.95 : 0.55));
+      root.add(scene.add.circle(startX + index * gap, height / 2 - 6, index === page ? 2.2 : 1.5, index === page ? 0x69ffb2 : 0x3b6f7c, index === page ? 0.95 : 0.55));
     }
   }
   return root;
