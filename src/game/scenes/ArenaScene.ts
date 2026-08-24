@@ -1623,6 +1623,7 @@ export class ArenaScene extends Phaser.Scene {
         this.player.spendEnergy(PLAYER_BALANCE.dashEnergyCost);
         GameplayTelemetryRecorder.recordAbilityUse('dash', PLAYER_BALANCE.dashEnergyCost);
         this.player.dashTowardPoint(aim.x, aim.y, now);
+        if (this.tutorialDirector?.awaits('combat.ability.dash')) TutorialEventBus.emit('combat.ability.dash');
         if (this.sound.get('sfx-boost')) {
           this.sound.play('sfx-boost', { volume: this.audio.getSfxVolume() });
         } else {
@@ -2313,6 +2314,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.player.spendEnergy(energyCost);
     GameplayTelemetryRecorder.recordAbilityUse('shield', energyCost);
+    if (this.tutorialDirector?.awaits('combat.ability.shield')) TutorialEventBus.emit('combat.ability.shield');
 
     this.shieldActiveUntil = now + durationMs;
     this.shieldCooldownUntil = now + cooldownMs;

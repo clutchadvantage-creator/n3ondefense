@@ -1,7 +1,4 @@
-import { compactBindingLabel, INTERACT_BINDING, PRIMARY_FIRE_BINDING } from '../config/controls.ts';
 import type { TutorialSequenceDefinition } from './TutorialTypes.ts';
-
-const key = (binding: Parameters<typeof compactBindingLabel>[0]): string => compactBindingLabel(binding);
 
 export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
   {
@@ -22,19 +19,21 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     steps: [
       { id: 'welcome', eyebrow: 'N3ON PROTOCOL // LIVE TRAINING', title: 'WELCOME, OPERATIVE', body: 'This training runs inside a real deployment. Read each instruction, acknowledge information screens, then perform the requested combat actions yourself.', mode: 'hard-pause', completion: { type: 'manual' } },
       { id: 'identify-player', target: 'world.player', title: 'YOUR OPERATIVE', body: 'The highlighted unit is your operative. Keep it moving to avoid attacks and protect it while defending each planted charge.', mode: 'hard-pause', spotlight: 'circle', completion: { type: 'manual' } },
-      { id: 'move', target: 'world.player', title: 'MOVE YOUR OPERATIVE', body: 'Use W A S D to move through the arena. This step advances after the operative actually changes position.', inputDemo: ['W', 'A', 'S', 'D'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.playerMoved' } },
-      { id: 'aim', target: 'world.player', title: 'AIM AT THREATS', body: 'Move the mouse to rotate your operative toward the reticle. Aim independently while continuing to move.', inputDemo: ['MOUSE'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.aimChanged' } },
-      { id: 'fire', target: 'world.player', title: 'FIRE YOUR WEAPON', body: `Press ${key(PRIMARY_FIRE_BINDING)} to fire toward the reticle. Every shot consumes Energy, so watch the cyan Energy bar.`, inputDemo: ['LMB'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.weaponFired' } }
+      { id: 'move', target: 'world.player', title: 'MOVE YOUR OPERATIVE', body: 'Use {MOVE} to move through the arena. This step advances after the operative actually changes position.', inputDemo: ['{MOVE}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.playerMoved' } },
+      { id: 'aim', target: 'world.player', title: 'AIM AT THREATS', body: 'Use {AIM} to rotate your operative toward the reticle. Aim independently while continuing to move.', inputDemo: ['{AIM}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.aimChanged' } },
+      { id: 'fire', target: 'world.player', title: 'FIRE YOUR WEAPON', body: 'Press {FIRE} to fire toward the reticle. Every shot consumes Energy, so watch the cyan Energy bar.', inputDemo: ['{FIRE}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.weaponFired' } }
     ]
   },
   {
     id: 'onboarding.defense', scene: 'arena', title: 'BOMBSITE DEFENSE', autoStart: true, firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.basic-controls', skippable: true,
     steps: [
-      { id: 'bombsite', target: 'world.bombsite', title: 'ARM THE CHARGE', body: `Move into the available bombsite and hold ${key(INTERACT_BINDING)}. Once planted, defend it until detonation.`, inputDemo: ['E'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'objective.bombArmed' } },
+      { id: 'bombsite', target: 'world.bombsite', title: 'ARM THE CHARGE', body: 'Move into the available bombsite and hold {INTERACT}. Once planted, defend it until detonation.', inputDemo: ['{INTERACT}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'objective.bombArmed' } },
       { id: 'enemy', target: 'world.enemy', title: 'HOSTILE CONTACT', body: 'Damage a hostile. Defusers must be interrupted before they disarm the active charge.', mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.enemyDamaged' } },
       { id: 'mine', target: 'hud.mine', title: 'DEPLOY A MINE', body: 'The highlighted HUD module shows your Mine rack and readiness. Aim at a valid location and press {MINE} to deploy area defense.', inputDemo: ['{MINE}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.mine' } },
       { id: 'fence', target: 'hud.fence', title: 'BUILD A FENCE', body: 'Press {FENCE} to place an electric fence. Fire through it to split projectiles.', illustration: 'OPERATIVE  >  SHOT  >  FENCE  >  SPLIT SHOTS', inputDemo: ['{FENCE}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.fence' } },
-      { id: 'turret', target: 'hud.turret', title: 'DEPLOY A TURRET', body: 'Press {TURRET} near a bombsite to help stop defuse attempts.', inputDemo: ['{TURRET}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.turret' } }
+      { id: 'turret', target: 'hud.turret', title: 'DEPLOY A TURRET', body: 'Press {TURRET} near a bombsite to help stop defuse attempts.', inputDemo: ['{TURRET}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.turret' } },
+      { id: 'dash', target: 'hud.abilities', title: 'DASH THROUGH DANGER', body: 'Press {DASH} to surge toward your aim direction. Dashing costs Energy and then enters cooldown.', inputDemo: ['{DASH}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.dash' } },
+      { id: 'shield', target: 'hud.shield', title: 'RAISE YOUR SHIELD', body: 'Press {SHIELD} to form a temporary energy barrier. The shield costs Energy and cannot reactivate until its cooldown completes.', inputDemo: ['{SHIELD}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.shield' } }
     ]
   },
   {

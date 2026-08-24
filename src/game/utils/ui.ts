@@ -3,6 +3,7 @@ import { COLORS } from '../config/constants';
 import { AudioManager } from '../systems/AudioManager';
 import type { AudioSfxName } from '../config/audio';
 import { readButtonJiggleIntensity } from '../../ui/buttonJiggle';
+import { registerUiFocusable } from '../input/UiNavigationController.ts';
 
 export type ButtonJiggleTarget = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform;
 
@@ -73,6 +74,10 @@ export interface ButtonPresentationOptions {
   height?: number;
   fontSize?: number;
   horizontalPadding?: number;
+  focusModalDepth?: number;
+  focusDefaultPriority?: number;
+  focusShortcut?: 'page-left' | 'page-right' | 'tab-left' | 'tab-right';
+  focusLabel?: string;
 }
 
 export const createButton = (
@@ -109,13 +114,30 @@ export const createButton = (
     playButtonJiggle(scene, state.jiggleTargets);
   });
   hit.on('pointerout', () => bg.setStrokeStyle(2, COLORS.cyan, 0.9));
-  hit.on('pointerdown', () => {
+  const activate = (): unknown => {
     if (!state.enabled) {
       AudioManager.get().playSfx('itemLocked');
-      return;
+      return false;
     }
     const accepted = onClick();
     AudioManager.get().playSfx(accepted === false ? 'itemLocked' : buttonSound);
+    return accepted;
+  };
+  hit.on('pointerdown', activate);
+
+  const normalizedLabel = (presentation.focusLabel ?? text).replace(/\s+/g, ' ').trim();
+  // Unicode escapes keep this source encoding-independent while still
+  // recognizing the authored triangular pagination glyphs.
+  const isPrevious = /^(?:<|\u25c0|previous|prev)/i.test(normalizedLabel);
+  const isNext = /^(?:>|\u25b6|next)/i.test(normalizedLabel);
+  registerUiFocusable(scene, button, {
+    label: normalizedLabel,
+    activate,
+    disabled: () => !state.enabled,
+    modalDepth: presentation.focusModalDepth,
+    defaultPriority: presentation.focusDefaultPriority ?? (/^(?:deploy|start|continue|resume|ready|engage|next fight)/i.test(normalizedLabel) ? 30 : 0),
+    destructive: /delete|quit|restart|reset progress/i.test(normalizedLabel),
+    shortcut: presentation.focusShortcut ?? (isPrevious ? 'page-left' : isNext ? 'page-right' : undefined)
   });
 
   return button;

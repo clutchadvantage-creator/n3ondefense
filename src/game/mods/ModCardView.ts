@@ -4,6 +4,7 @@ import type { ModCardInstance, ModRank } from './types.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
 import type { HudAnimationLevel } from '../config/interfaceSettings.ts';
+import { registerUiFocusable } from '../input/UiNavigationController.ts';
 import { PlayerProfileStore } from '../state/PlayerProfileStore.ts';
 import {
   SupremeModCardEffects,
@@ -30,6 +31,10 @@ export interface ModCardViewOptions {
   rankLabel?: string;
   motion?: HudAnimationLevel;
   presentationState?: SupremeCardPresentationState;
+  focusId?: string;
+  focusModalDepth?: number;
+  focusDefaultPriority?: number;
+  focusLocked?: boolean;
 }
 
 const resolveCardMotion = (requested?: HudAnimationLevel): HudAnimationLevel => {
@@ -321,6 +326,14 @@ export const createModCardView = (
       drawBand(coreHalfWidth, 0.13);
     };
     container.setSize(width, height).setInteractive({ useHandCursor: true });
+    registerUiFocusable(scene, container, {
+      id: options.focusId,
+      label: definition.name,
+      activate: () => container.emit('pointerdown'),
+      modalDepth: options.focusModalDepth,
+      defaultPriority: options.focusDefaultPriority ?? (options.selected ? 12 : 0),
+      locked: () => options.focusLocked === true
+    });
     container.on('pointerover', () => {
       AudioManager.get().playSfx('menuHover');
       supremeEffects?.setHovered(true);

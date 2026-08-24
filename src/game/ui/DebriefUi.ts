@@ -252,7 +252,8 @@ const createDebriefActionButton = (
   const button = createButton(scene, x, y, action.label, action.onClick, width, 'menu', {
     height,
     fontSize: compact ? (action.label.length > 22 ? 13 : 15) : (action.label.length > 22 ? 15 : 18),
-    horizontalPadding: 28
+    horizontalPadding: 28,
+    focusDefaultPriority: action.primary ? 50 : 0
   }).setDepth(32);
   const edge = scene.add.rectangle(x, y - height / 2 + 2, width - 20, 2, accent, action.primary ? 0.62 : 0.3).setDepth(33);
   const led = scene.add.circle(x - width / 2 + 12, y, 2.5, accent, 0.9).setDepth(33);

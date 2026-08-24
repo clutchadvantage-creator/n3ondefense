@@ -145,3 +145,42 @@ body {
 @keyframes tutorial-mouse-demo { 50% { transform: translateX(5px); background: rgba(105,245,255,.22); } }
 @media (max-height: 650px) { .tutorial-callout { padding: 12px 17px 10px; } .tutorial-body { font-size: 15px; } .tutorial-title { font-size: 20px; } }
 @media (prefers-reduced-motion: reduce) { .tutorial-focus,.tutorial-key,.tutorial-mouse { animation: none; } .tutorial-shade,.tutorial-focus { transition: none; } }
+/* Controller focus is external to authored selected/equipped/rarity styling. */
+#game-ui-root .controller-navigation-active .controller-focus {
+  position: relative;
+  outline: 2px solid rgba(105, 244, 255, 0.98) !important;
+  outline-offset: 5px;
+  box-shadow: 0 0 0 1px rgba(255, 82, 203, 0.72), 0 0 18px rgba(74, 235, 255, 0.62) !important;
+  z-index: 3;
+}
+
+#game-ui-root .controller-navigation-active .controller-focus::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  pointer-events: none;
+  border: 1px solid rgba(255, 90, 207, 0.56);
+  clip-path: polygon(0 0, 18px 0, 18px 2px, 2px 2px, 2px 18px, 0 18px, 0 0, 100% 0, 100% 18px, calc(100% - 2px) 18px, calc(100% - 2px) 2px, calc(100% - 18px) 2px, calc(100% - 18px) 0, 100% 0, 100% 100%, calc(100% - 18px) 100%, calc(100% - 18px) calc(100% - 2px), calc(100% - 2px) calc(100% - 2px), calc(100% - 2px) calc(100% - 18px), 100% calc(100% - 18px), 100% 100%, 0 100%, 0 calc(100% - 18px), 2px calc(100% - 18px), 2px calc(100% - 2px), 18px calc(100% - 2px), 18px 100%, 0 100%);
+  animation: controller-focus-pulse 1.05s ease-in-out infinite alternate;
+}
+
+@keyframes controller-focus-pulse {
+  from { opacity: 0.52; transform: scale(0.995); }
+  to { opacity: 1; transform: scale(1.012); }
+}
+
+#controller-ui-hints {
+  position: fixed;
+  z-index: 2147483000;
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  color: #bffaff;
+  background: rgba(2, 9, 15, 0.88);
+  border: 1px solid rgba(78, 231, 250, 0.58);
+  font: 700 12px/1.25 'Rajdhani', sans-serif;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  pointer-events: none;
+}

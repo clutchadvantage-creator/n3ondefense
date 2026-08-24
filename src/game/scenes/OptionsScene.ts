@@ -28,6 +28,7 @@ import { drawHudAbilityIcon, drawHudResourceIcon } from '../systems/Hud';
 import { TUTORIAL_REPLAY_GROUPS } from '../tutorial/TutorialRegistry.ts';
 import { requestTutorialReplay, resetTutorialSequence, skipTutorialSequence } from '../tutorial/TutorialProgress.ts';
 import { DEFAULT_CONTROLLER_SETTINGS, normalizeControllerSettings } from '../config/controllerSettings.ts';
+import { configureSceneUiNavigation, registerUiFocusable } from '../input/UiNavigationController.ts';
 
 type OptionsTabId = 'audio' | 'gameplay' | 'interface' | 'profile' | 'system';
 
@@ -126,6 +127,12 @@ export class OptionsScene extends Phaser.Scene {
     this.returnScene = data?.returnScene ?? SceneKeys.MainMenu;
     this.resumeGameplayOnEsc = data?.resumeGameplay === true;
     this.resetTransientUiState();
+    configureSceneUiNavigation(this, {
+      onBack: () => this.handleEscReturn(),
+      onTabLeft: () => this.cycleOptionsTab(-1),
+      onTabRight: () => this.cycleOptionsTab(1),
+      onScroll: (amount) => this.scrollActiveTab(amount)
+    });
 
     const { width, height } = this.scale;
     const centerX = width * 0.5;
@@ -226,13 +233,27 @@ export class OptionsScene extends Phaser.Scene {
         if (this.activeTab !== definition.id) background.setStrokeStyle(2, 0x5cecff, 0.9);
       });
       background.on('pointerout', () => this.refreshTabVisuals());
-      background.on('pointerdown', () => {
+      const activate = (): void => {
         if (this.activeTab === definition.id) return;
         AudioManager.get().playSfx('menu');
         this.selectTab(definition.id);
+      };
+      background.on('pointerdown', activate);
+      registerUiFocusable(this, background, {
+        id: `options:tab:${definition.id}`,
+        label: `${definition.label} TAB`,
+        activate,
+        group: 'options-tabs',
+        defaultPriority: definition.id === 'audio' ? 20 : 0
       });
       this.tabVisuals.set(definition.id, { background, label });
     });
+  }
+
+  private cycleOptionsTab(direction: -1 | 1): void {
+    const index = OPTIONS_TABS.findIndex((tab) => tab.id === this.activeTab);
+    const next = OPTIONS_TABS[(index + direction + OPTIONS_TABS.length) % OPTIONS_TABS.length];
+    this.selectTab(next.id);
   }
 
   private createAudioTab(container: Phaser.GameObjects.Container, save: ReturnType<typeof SaveSystem.get>): void {
@@ -861,6 +882,21 @@ export class OptionsScene extends Phaser.Scene {
       SaveSystem.persist();
       status.setText('Default ability bindings restored.').setColor('#8fffc4');
     });
+    registerUiFocusable(this, reset, {
+      id: 'options:gameplay:reset-ability-bindings',
+      label: 'RESET DEFAULT ABILITY BINDINGS',
+      destructive: true,
+      activate: () => {
+        this.cancelBindingCapture?.();
+        Object.assign(bindings, DEFAULT_ABILITY_BINDINGS);
+        for (const { action } of ABILITY_ACTIONS) valueLabels.get(action)?.setText(bindingLabel(bindings[action]));
+        SaveSystem.setSettings({ abilityBindings: { ...bindings } });
+        SaveSystem.persist();
+        status.setText('Default ability bindings restored.').setColor('#8fffc4');
+        AudioManager.get().playSfx('menu');
+      },
+      scroll: (amount) => this.scrollActiveTab(amount)
+    });
     container.add(reset);
     this.registerScrollTarget('gameplay', reset, resetY, 18);
     return topY + panelHeight;
@@ -1030,8 +1066,10 @@ export class OptionsScene extends Phaser.Scene {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#ffeeb8'
     }).setOrigin(0.5);
     const hit = this.add.rectangle(trackX, y, trackWidth + 24, 34, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+    let currentValue = Phaser.Math.Clamp(initial, minimum, maximum);
     const setValue = (rawValue: number): void => {
       const value = Phaser.Math.Clamp(rawValue, minimum, maximum);
+      currentValue = value;
       const ratio = (value - minimum) / Math.max(0.0001, maximum - minimum);
       fill.width = trackWidth * ratio;
       knob.x = minX + trackWidth * ratio;
@@ -1047,6 +1085,17 @@ export class OptionsScene extends Phaser.Scene {
     hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => updateFromPointer(pointer.worldX));
     hit.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (pointer.isDown) updateFromPointer(pointer.worldX);
+    });
+    registerUiFocusable(this, hit, {
+      id: `options:${tab}:slider:${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      label,
+      adjust: (direction) => {
+        const increment = (maximum - minimum) / 20;
+        const value = Phaser.Math.Clamp(currentValue + direction * increment, minimum, maximum);
+        setValue(value);
+        onChange(value);
+      },
+      scroll: (amount) => this.scrollActiveTab(amount)
     });
     setValue(initial);
     container.add([labelText, track, fill, knob, valueText, hit]);
@@ -1100,6 +1149,13 @@ export class OptionsScene extends Phaser.Scene {
     });
     previous.on('pointerdown', () => step(-1));
     next.on('pointerdown', () => step(1));
+    registerUiFocusable(this, back, {
+      id: `options:${tab}:selector:${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      label,
+      activate: () => step(1),
+      adjust: (direction) => step(direction),
+      scroll: (amount) => this.scrollActiveTab(amount)
+    });
     setValue(initial);
     container.add([back, valueText, previous, next, previousText, nextText]);
     this.registerScrollTarget(tab, previous, y, 16);
@@ -1139,6 +1195,16 @@ export class OptionsScene extends Phaser.Scene {
         AudioManager.get().playSfx('menu');
         setValue(id);
         onChange(id);
+      });
+      registerUiFocusable(this, ring, {
+        id: `options:${tab}:reticle-color:${id}`,
+        label: `RETICLE COLOR ${id}`,
+        activate: () => {
+          if (current === id) return;
+          setValue(id);
+          onChange(id);
+        },
+        scroll: (amount) => this.scrollActiveTab(amount)
       });
       rings.set(id, ring);
       container.add(ring);
@@ -1256,19 +1322,32 @@ export class OptionsScene extends Phaser.Scene {
     }).setOrigin(0.5);
     const hit = this.add.rectangle(trackX, y, trackWidth + 24, 34, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
 
-    const updateFromPointer = (worldX: number): void => {
-      const clampedX = Phaser.Math.Clamp(worldX, minX, maxX);
-      const value = Phaser.Math.Clamp((clampedX - minX) / trackWidth, 0, 1);
+    let currentValue = Phaser.Math.Clamp(initial, 0, 1);
+    const applyValue = (rawValue: number): void => {
+      const value = Phaser.Math.Clamp(rawValue, 0, 1);
+      currentValue = value;
       fill.width = trackWidth * value;
-      knob.x = clampedX;
+      knob.x = minX + trackWidth * value;
       valueText.setText(`${Math.round(value * 100)}%`);
       onChange(value);
       AudioManager.get().refreshMix();
+    };
+    const updateFromPointer = (worldX: number): void => {
+      const clampedX = Phaser.Math.Clamp(worldX, minX, maxX);
+      const value = Phaser.Math.Clamp((clampedX - minX) / trackWidth, 0, 1);
+      applyValue(value);
     };
     hit.on('pointerover', () => AudioManager.get().playSfx('menuHover'));
     hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => updateFromPointer(pointer.worldX));
     hit.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (pointer.isDown) updateFromPointer(pointer.worldX);
+    });
+    registerUiFocusable(this, hit, {
+      id: `options:audio:slider:${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      label,
+      defaultPriority: label === 'MASTER VOLUME' ? 30 : 0,
+      adjust: (direction) => applyValue(currentValue + direction * 0.05),
+      scroll: (amount) => this.scrollActiveTab(amount)
     });
     container.add([labelText, track, fill, knob, valueText, hit]);
     this.registerScrollTarget('audio', hit, y, 17);

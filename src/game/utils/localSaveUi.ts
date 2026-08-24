@@ -112,11 +112,11 @@ export const showConfirmDialog = (
     root.destroy(true);
     onClose?.();
     onConfirm();
-  }, confirmPosition.width);
+  }, confirmPosition.width, 'menu', { focusModalDepth: 50, focusDefaultPriority: 0 });
   const cancel = createButton(scene, cancelPosition.x, cancelPosition.y, cancelLabel, () => {
     root.destroy(true);
     onClose?.();
-  }, cancelPosition.width);
+  }, cancelPosition.width, 'menu', { focusModalDepth: 50, focusDefaultPriority: 100 });
   confirm.setDepth(4001).setScrollFactor(0);
   cancel.setDepth(4001).setScrollFactor(0);
   root.add([confirm, cancel]);
@@ -141,7 +141,10 @@ export const showInfoModal = (
       root.destroy(true);
       onClose?.();
       action.onClick();
-    }, position.width);
+    }, position.width, 'menu', {
+      focusModalDepth: 50,
+      focusDefaultPriority: /close|cancel|acknowledged/i.test(action.label) ? 100 : index === 0 ? 20 : 0
+    });
     button.setDepth(4001).setScrollFactor(0);
     buttons.push(button);
   });

@@ -19,6 +19,7 @@ import {
 } from '../ui/DebriefUi.ts';
 import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton } from '../utils/ui';
+import { setSceneUiModalDepth } from '../input/UiNavigationController.ts';
 
 const displayId = (value: string | null | undefined): string => value
   ? value.replace(/([A-Z])/g, ' $1').replace(/-/g, ' ').trim().toUpperCase()
@@ -37,6 +38,7 @@ export class ResultScene extends Phaser.Scene {
   }
 
   create(): void {
+    setSceneUiModalDepth(this, 0);
     const result = this.registry.get('result') as ArenaReward | undefined;
     const resultProtocol = normalizeRunProtocolId(result?.protocol);
     const { width, height } = this.scale;
@@ -146,6 +148,7 @@ export class ResultScene extends Phaser.Scene {
   }
 
   private showInitialDeploymentBriefing(): void {
+    setSceneUiModalDepth(this, 50);
     const { width, height } = this.scale;
     const modalWidth = Math.min(640, width - 32);
     const modalHeight = Math.min(330, height - 32);
@@ -180,8 +183,13 @@ export class ResultScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-ESC', dismiss);
       this.tweens.killTweensOf([header, ...glitchBars]);
       overlay.destroy(true);
+      setSceneUiModalDepth(this, 0);
     };
-    const continueButton = createButton(this, width / 2, modalTop + modalHeight - 36, 'CONTINUE', dismiss, Math.min(240, modalWidth - 64));
+    const continueButton = createButton(this, width / 2, modalTop + modalHeight - 36, 'CONTINUE', dismiss, Math.min(240, modalWidth - 64), 'menu', {
+      focusModalDepth: 50,
+      focusDefaultPriority: 100,
+      focusLabel: 'CLOSE INITIAL DEPLOYMENT BRIEFING'
+    });
     overlay.add([shade, panel, accent, header, divider, lead, body, ...glitchBars, continueButton]);
     this.input.keyboard?.once('keydown-ESC', dismiss);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.keyboard?.off('keydown-ESC', dismiss));

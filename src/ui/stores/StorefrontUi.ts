@@ -158,7 +158,11 @@ export class StorefrontUi {
     for (const mode of ['upgrades', 'cosmetics'] as const) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = this.options.mode === mode ? 'active' : '';
+      button.className = `store-mode-tab${this.options.mode === mode ? ' active' : ''}`;
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-selected', this.options.mode === mode ? 'true' : 'false');
+      button.dataset.controllerTabGroup = 'store-mode';
+      button.dataset.controllerFocusId = `store-mode-${mode}`;
       button.textContent = mode === 'upgrades' ? 'UPGRADES' : 'COSMETICS';
       button.addEventListener('click', () => {
         if (this.options.mode === mode) return;
@@ -247,7 +251,11 @@ export class StorefrontUi {
       }
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = category === this.selectedCategory ? 'active' : '';
+      button.className = `store-category-tab${category === this.selectedCategory ? ' active' : ''}`;
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-selected', category === this.selectedCategory ? 'true' : 'false');
+      button.dataset.controllerTabGroup = 'store-category';
+      button.dataset.controllerFocusId = `store-category-${category}`;
       const label = this.options.mode === 'cosmetics'
         ? COSMETIC_LABELS[category as CosmeticOption['category']]
         : UPGRADE_LABELS[category as UpgradeDefinition['category']];

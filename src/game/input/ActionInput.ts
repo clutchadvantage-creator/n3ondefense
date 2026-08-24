@@ -132,6 +132,8 @@ export interface GamepadPollResult {
   freshActivity: boolean;
   move: MutableStick;
   aim: MutableStick;
+  /** Raw UI scroll intent uses a fixed threshold, independent of aim settings. */
+  uiScrollY: number;
   held: (action: InputAction) => boolean;
 }
 
@@ -142,6 +144,9 @@ export class StandardGamepadReader {
   private readonly move = { x: 0, y: 0, magnitude: 0 };
   private readonly aim = { x: 0, y: 0, magnitude: 0 };
   private readonly heldActions = new Uint8Array(INPUT_ACTIONS.length);
+  private uiNavigateX: -1 | 0 | 1 = 0;
+  private uiNavigateY: -1 | 0 | 1 = 0;
+  private uiScrollY = 0;
   private connected = false;
   private supported = false;
   private id = '';
@@ -161,6 +166,7 @@ export class StandardGamepadReader {
       freshActivity: false,
       move: this.move,
       aim: this.aim,
+      uiScrollY: 0,
       held: (action) => this.heldActions[ACTION_INDEX[action]] === 1
     };
   }
@@ -187,8 +193,10 @@ export class StandardGamepadReader {
     this.activeIndex = pad.index;
     this.connected = true;
     this.supported = pad.mapping === 'standard';
-    this.id = pad.id;
-    this.family = classifyGamepad(pad.id);
+    if (this.id !== pad.id) {
+      this.id = pad.id;
+      this.family = classifyGamepad(pad.id);
+    }
     this.freshActivity = freshIndex === pad.index;
     this.heldActions.fill(0);
     if (!this.supported) {
@@ -218,10 +226,17 @@ export class StandardGamepadReader {
     set('pause', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.start));
     set('confirm', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.south));
     set('cancel', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.east));
-    set('navigateUp', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.dpadUp) || this.move.y < -0.72);
-    set('navigateDown', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.dpadDown) || this.move.y > 0.72);
-    set('navigateLeft', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.dpadLeft) || this.move.x < -0.72);
-    set('navigateRight', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.dpadRight) || this.move.x > 0.72);
+    // Menu navigation deliberately does not inherit gameplay dead-zone or aim
+    // sensitivity settings. Hysteresis rejects drift without making Options
+    // capable of configuring its own navigation into an unusable state.
+    this.uiNavigateX = this.digitalAxis(pad.axes[0] ?? 0, this.uiNavigateX);
+    this.uiNavigateY = this.digitalAxis(pad.axes[1] ?? 0, this.uiNavigateY);
+    const rawScroll = pad.axes[3] ?? 0;
+    this.uiScrollY = Math.abs(rawScroll) >= 0.28 ? rawScroll : 0;
+    set('navigateUp', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.dpadUp) || this.uiNavigateY < 0);
+    set('navigateDown', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.dpadDown) || this.uiNavigateY > 0);
+    set('navigateLeft', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.dpadLeft) || this.uiNavigateX < 0);
+    set('navigateRight', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.dpadRight) || this.uiNavigateX > 0);
     set('pageLeft', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.leftTrigger, 0.55));
     set('pageRight', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.rightTrigger, 0.55));
     set('tabLeft', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.leftBumper));
@@ -275,6 +290,9 @@ export class StandardGamepadReader {
     this.move.x = this.move.y = this.move.magnitude = 0;
     this.aim.x = this.aim.y = this.aim.magnitude = 0;
     this.heldActions.fill(0);
+    this.uiNavigateX = 0;
+    this.uiNavigateY = 0;
+    this.uiScrollY = 0;
     this.priorInputs.clear();
   }
 
@@ -286,7 +304,16 @@ export class StandardGamepadReader {
     this.result.family = this.family;
     this.result.meaningful = this.meaningful;
     this.result.freshActivity = this.freshActivity;
+    this.result.uiScrollY = this.uiScrollY;
     return this.result;
+  }
+
+  private digitalAxis(value: number, prior: -1 | 0 | 1): -1 | 0 | 1 {
+    if (prior === 0) return value <= -0.72 ? -1 : value >= 0.72 ? 1 : 0;
+    if (Math.abs(value) <= 0.46) return 0;
+    if (prior < 0 && value >= 0.72) return 1;
+    if (prior > 0 && value <= -0.72) return -1;
+    return prior;
   }
 }
 

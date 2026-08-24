@@ -6,11 +6,18 @@ import { TutorialOverlay } from './TutorialOverlay.ts';
 import type { TutorialEvent, TutorialHost, TutorialSequenceDefinition } from './TutorialTypes.ts';
 import { compactBindingLabel } from '../config/controls.ts';
 import { resolveTutorialAdvancePolicy, type TutorialAdvancePolicy } from './TutorialStepRules.ts';
+import {
+  getUiInputPresentation,
+  subscribeUiInputPresentation
+} from '../input/UiNavigationController.ts';
+import { resolveActionPrompt } from '../input/ActionInput.ts';
+import type { TutorialStepDefinition } from './TutorialTypes.ts';
 
 /** One director per visible scene. Awarding/game state remains independent of this presentation queue. */
 export class TutorialDirector {
   private readonly overlay: TutorialOverlay;
   private readonly unsubscribe: () => void;
+  private readonly presentationUnsubscribe: () => void;
   private active: TutorialSequenceDefinition | null = null;
   private readonly pending: TutorialSequenceDefinition[] = [];
   private stepIndex = 0;
@@ -42,6 +49,11 @@ export class TutorialDirector {
   constructor(private readonly host: TutorialHost) {
     this.overlay = new TutorialOverlay(() => this.skip(), host.scene === 'arena');
     this.unsubscribe = TutorialEventBus.subscribe((event) => this.onEvent(event));
+    this.presentationUnsubscribe = subscribeUiInputPresentation(() => {
+      if (!this.active) return;
+      const copy = this.resolvePresentedCopy(this.active.steps[this.stepIndex]);
+      this.overlay.updatePromptText(copy.body, copy.inputDemo);
+    });
     window.addEventListener('keydown', this.keyHandler, { capture: true });
   }
 
@@ -104,6 +116,7 @@ export class TutorialDirector {
     this.clearTransitionTimer();
     this.host.setMode('live');
     this.unsubscribe();
+    this.presentationUnsubscribe();
     window.removeEventListener('keydown', this.keyHandler, { capture: true });
     this.overlay.destroy();
   }
@@ -155,16 +168,7 @@ export class TutorialDirector {
     const eventActionAvailable = sourceStep.completion.type !== 'event'
       || this.host.isEventActionAvailable?.(sourceStep.completion.event) !== false;
     this.advancePolicy = resolveTutorialAdvancePolicy(sourceStep.completion, eventActionAvailable);
-    const bindings = SaveSystem.get().settings.abilityBindings;
-    const replacements: Record<string, string> = {
-      '{FENCE}': compactBindingLabel(bindings.fence),
-      '{TURRET}': compactBindingLabel(bindings.turret),
-      '{MINE}': compactBindingLabel(bindings.mine),
-      '{DASH}': compactBindingLabel(bindings.dash),
-      '{SHIELD}': compactBindingLabel(bindings.shield)
-    };
-    const replaceBindings = (value: string): string => Object.entries(replacements)
-      .reduce((copy, [token, label]) => copy.replaceAll(token, label), value);
+    const presented = this.resolvePresentedCopy(sourceStep);
     const actionUnavailable = this.advancePolicy.type === 'manual'
       && this.advancePolicy.reason === 'action-unavailable';
     const step = {
@@ -172,10 +176,10 @@ export class TutorialDirector {
       // A normally action-gated live step can fall back to Continue when the
       // action is unavailable. Give that fallback a usable cursor and pause.
       mode: actionUnavailable && sourceStep.mode === 'live' ? 'hard-pause' as const : sourceStep.mode,
-      body: `${replaceBindings(sourceStep.body)}${actionUnavailable
+      body: `${presented.body}${actionUnavailable
         ? ' This action is not currently available; continue when ready.'
         : ''}`,
-      inputDemo: sourceStep.inputDemo?.map(replaceBindings)
+      inputDemo: presented.inputDemo
     };
     this.host.setMode(step.mode);
     this.overlay.show(
@@ -193,6 +197,30 @@ export class TutorialDirector {
     if (this.advancePolicy.type === 'auto') {
       this.timer = window.setTimeout(() => this.advance(), this.advancePolicy.delayMs);
     }
+  }
+
+  private resolvePresentedCopy(step: TutorialStepDefinition): { body: string; inputDemo?: string[] } {
+    const { device, family } = getUiInputPresentation();
+    const bindings = SaveSystem.get().settings.abilityBindings;
+    const prompt = (action: Parameters<typeof resolveActionPrompt>[0], keyboard: string): string =>
+      resolveActionPrompt(action, device, family, keyboard);
+    const replacements: Record<string, string> = {
+      '{MOVE}': device === 'gamepad' ? 'LEFT STICK' : 'W / A / S / D',
+      '{AIM}': device === 'gamepad' ? 'RIGHT STICK' : 'MOUSE',
+      '{FIRE}': prompt('fire', 'LMB'),
+      '{INTERACT}': prompt('interact', 'E'),
+      '{FENCE}': prompt('fence', compactBindingLabel(bindings.fence)),
+      '{TURRET}': prompt('turret', compactBindingLabel(bindings.turret)),
+      '{MINE}': prompt('mine', compactBindingLabel(bindings.mine)),
+      '{DASH}': prompt('dash', compactBindingLabel(bindings.dash)),
+      '{SHIELD}': prompt('shield', compactBindingLabel(bindings.shield))
+    };
+    const replace = (value: string): string => Object.entries(replacements)
+      .reduce((copy, [token, label]) => copy.replaceAll(token, label), value);
+    return {
+      body: replace(step.body),
+      inputDemo: step.inputDemo?.map(replace)
+    };
   }
 
   private advance(): void {

@@ -4,6 +4,7 @@ import { SPLASH_SESSION_KEY } from '../config/gameplay';
 import { GAME_VERSION } from '../config/version';
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
+import { registerUiFocusable } from '../input/UiNavigationController.ts';
 
 interface SplashSceneData {
   replay?: boolean;
@@ -168,6 +169,16 @@ export class SplashScene extends Phaser.Scene {
         this.scene.start(returnScene);
       });
     };
+
+    // Splash has no conventional button, but it is still a logical controller
+    // confirmation target. The slogan is used only as a focus anchor; no fake
+    // pointer or physical button index enters the scene.
+    if (this.sloganText) registerUiFocusable(this, this.sloganText, {
+      id: 'splash:continue',
+      label: 'PRESS ANY BUTTON',
+      activate: skip,
+      defaultPriority: 100
+    });
 
     this.input.keyboard?.once('keydown', skip);
     this.input.once('pointerdown', (_pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {

@@ -52,6 +52,8 @@ export class TutorialOverlay {
       onSkip();
     });
     this.continueButton.type = 'button';
+    this.continueButton.dataset.controllerFocusId = 'tutorial-continue';
+    this.skip.dataset.controllerFocusId = 'tutorial-skip';
     this.continueButton.textContent = 'CONTINUE';
     this.continueButton.addEventListener('click', (event) => {
       // Consume the complete click before advancing or navigating. At common
@@ -85,20 +87,18 @@ export class TutorialOverlay {
     this.manualHandler = onManual;
     this.eyebrow.textContent = step.eyebrow ?? 'N3ON PROTOCOL // GUIDANCE';
     this.title.textContent = step.title;
-    this.body.textContent = step.body;
+    this.updatePromptText(step.body, step.inputDemo);
     this.illustration.textContent = step.illustration ?? '';
     this.illustration.hidden = !step.illustration;
     this.targetPadding = step.targetPadding ?? 12;
     this.progress.textContent = `${String(index + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}`;
-    this.keys.replaceChildren(...(step.inputDemo ?? []).map((label) => {
-      const chip = make('span', label === 'MOUSE' ? 'tutorial-mouse' : 'tutorial-key');
-      chip.textContent = label;
-      return chip;
-    }));
-    this.keys.hidden = !step.inputDemo?.length;
     this.continueButton.hidden = manualAdvanceLabel === null;
     this.continueButton.textContent = manualAdvanceLabel ?? 'CONTINUE';
     this.skip.hidden = !skippable;
+    // Live, action-gated steps must leave controller gameplay actions alone.
+    // The skip button becomes controller-focusable again on acknowledgement
+    // steps where the tutorial owns the modal input context.
+    this.skip.dataset.controllerIgnore = manualAdvanceLabel === null ? 'true' : 'false';
     this.focus.classList.toggle('tutorial-focus-circle', step.spotlight === 'circle');
     cancelAnimationFrame(this.frame);
     const follow = (): void => {
@@ -112,6 +112,16 @@ export class TutorialOverlay {
     this.root.classList.remove('tutorial-confirm');
     void this.root.offsetWidth;
     this.root.classList.add('tutorial-confirm');
+  }
+
+  updatePromptText(body: string, inputDemo?: readonly string[]): void {
+    this.body.textContent = body;
+    this.keys.replaceChildren(...(inputDemo ?? []).map((label) => {
+      const chip = make('span', label === 'MOUSE' ? 'tutorial-mouse' : 'tutorial-key');
+      chip.textContent = label;
+      return chip;
+    }));
+    this.keys.hidden = !inputDemo?.length;
   }
 
   hide(): void {

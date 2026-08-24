@@ -22,6 +22,7 @@ import {
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
+import { configureSceneUiNavigation, setSceneUiModalDepth } from '../input/UiNavigationController.ts';
 
 type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
 type FilterMode = 'all' | 'duplicates';
@@ -69,6 +70,8 @@ export class ModCollectionScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Mods); }
 
   create(data?: ModCollectionSceneData): void {
+    setSceneUiModalDepth(this, 0);
+    configureSceneUiNavigation(this, { onBack: this.handleEscape });
     const arenaCanResume = this.scene.isPaused(SceneKeys.Arena) && this.registry.has('arena-session');
     const returnRoute = resolveModCollectionReturnRoute(data, arenaCanResume);
     this.returnScene = returnRoute.returnScene;
@@ -285,6 +288,7 @@ export class ModCollectionScene extends Phaser.Scene {
   private showInfusionModal(card: ModCardInstance, preservePage = false): void {
     if (!preservePage) this.infusionPage = 0;
     this.hideInfusionModal();
+    setSceneUiModalDepth(this, 30);
     const { width, height } = this.scale;
     const root = this.add.container(0, 0).setDepth(6000);
     const blocker = this.add.rectangle(width / 2, height / 2, width, height, 0x02050b, 0.88).setInteractive();
@@ -378,6 +382,7 @@ export class ModCollectionScene extends Phaser.Scene {
   private hideInfusionModal(): void {
     this.infusionModal?.destroy(true);
     this.infusionModal = null;
+    setSceneUiModalDepth(this, 0);
   }
 
   private sortedCards(cards: ModCardInstance[], sort: SortMode): ModCardInstance[] {

@@ -38,6 +38,11 @@ import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { calculateProtocolTerminalVerticalLayout } from '../garage/protocolTerminalLayout.ts';
 import { getSupremeStage } from '../progression/SupremeProgression.ts';
+import {
+  configureSceneUiNavigation,
+  registerUiFocusable,
+  setSceneUiModalDepth
+} from '../input/UiNavigationController.ts';
 
 interface OperatorGarageSceneData { returnScene?: SceneKeyValue }
 
@@ -104,6 +109,11 @@ export class OperatorGarageScene extends Phaser.Scene {
       return;
     }
     this.returnScene = data?.returnScene ?? SceneKeys.MainMenu;
+    setSceneUiModalDepth(this, 0);
+    configureSceneUiNavigation(this, {
+      onBack: this.handleEscape,
+      onScroll: (amount) => this.libraryViewer?.scrollBy(amount)
+    });
     this.audio.startMusicLoop();
     const { width, height } = this.scale;
     const layout = calculateGarageLayout(width, height);
@@ -274,6 +284,13 @@ export class OperatorGarageScene extends Phaser.Scene {
       hit.on('pointerdown', () => {
         row.action();
         this.audio.playSfx('menu');
+      });
+      registerUiFocusable(this, hit, {
+        label: `${row.label} ${row.value}`,
+        activate: () => {
+          row.action();
+          this.audio.playSfx('menu');
+        }
       });
       root.add([hit, label, value]);
     });
@@ -448,7 +465,14 @@ export class OperatorGarageScene extends Phaser.Scene {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : Math.round(11 * readableScale)}px`, fontStyle: 'bold', color: definition ? Phaser.Display.Color.IntegerToColor(color).rgba : '#94c2cd', align: 'center'
       }).setOrigin(0.5).setDepth(27).setWordWrapWidth(cardWidth + 24, true).setMaxLines(2);
       if (dock.card) {
-        const view = createModCardView(this, center.x, center.y, dock.card, dock.card.upgradeLevel, { width: cardWidth, height: cardHeight, compact: compactCard, equipped: true });
+        const view = createModCardView(this, center.x, center.y, dock.card, dock.card.upgradeLevel, {
+          width: cardWidth,
+          height: cardHeight,
+          compact: compactCard,
+          equipped: true,
+          focusId: `garage:loadout:${dock.slot}`,
+          focusDefaultPriority: index === 0 ? 30 : 0
+        });
         view.setDepth(26).on('pointerdown', () => {
           this.audio.playSfx('menu');
           this.openCollection(dock.card?.instanceId, definition?.category ?? 'all');
@@ -465,6 +489,15 @@ export class OperatorGarageScene extends Phaser.Scene {
         emptyHit.on('pointerdown', () => {
           this.audio.playSfx('menu');
           this.openCollection(undefined, dock.slot === 'wildcard' ? 'all' : dock.slot);
+        });
+        registerUiFocusable(this, emptyHit, {
+          id: `garage:loadout:${dock.slot}`,
+          label: `${dock.label} awaiting module`,
+          defaultPriority: index === 0 ? 30 : 0,
+          activate: () => {
+            this.audio.playSfx('menu');
+            this.openCollection(undefined, dock.slot === 'wildcard' ? 'all' : dock.slot);
+          }
         });
       }
       const actionY = center.y + cardHeight / 2 + actionButtonGap + actionButtonHeight / 2;
@@ -510,6 +543,7 @@ export class OperatorGarageScene extends Phaser.Scene {
 
   private createOverlay(title: string): Phaser.GameObjects.Container {
     this.closeOverlay();
+    setSceneUiModalDepth(this, 30);
     const { width, height } = this.scale;
     const root = this.add.container(0, 0).setDepth(2000);
     const blocker = this.add.rectangle(width / 2, height / 2, width, height, 0x01040a, 0.94).setInteractive();
@@ -762,6 +796,20 @@ export class OperatorGarageScene extends Phaser.Scene {
     const selected = pageEntries.find((entry) => entry.definition.id === this.librarySelectedId);
     if (selected) {
       this.libraryViewer = new ModDatabaseViewer(this, root, layout.viewer, selected);
+      const dossierFocus = this.add.rectangle(
+        layout.viewer.x + layout.viewer.width / 2,
+        layout.viewer.y + layout.viewer.height / 2,
+        layout.viewer.width,
+        layout.viewer.height,
+        0xffffff,
+        0.001
+      );
+      registerUiFocusable(this, dossierFocus, {
+        label: 'Selected Mod Technical Dossier',
+        scroll: (amount) => this.libraryViewer?.scrollBy(amount),
+        defaultPriority: -10
+      });
+      root.add(dossierFocus);
       this.input.on('wheel', this.handleLibraryWheel);
     } else {
       root.add(this.add.rectangle(layout.viewer.x, layout.viewer.y, layout.viewer.width, layout.viewer.height, 0x06131e, 0.975)
@@ -776,6 +824,18 @@ export class OperatorGarageScene extends Phaser.Scene {
     const { width } = this.scale;
     const layout = calculateGearLockerLayout(this.scale.width, this.scale.height, COSMETIC_CATEGORIES.length);
     const root = this.createGearLockerOverlay(layout);
+    configureSceneUiNavigation(this, {
+      onTabLeft: () => {
+        this.cosmeticCategoryIndex = (this.cosmeticCategoryIndex - 1 + COSMETIC_CATEGORIES.length) % COSMETIC_CATEGORIES.length;
+        this.cosmeticPage = 0;
+        this.showCosmetics();
+      },
+      onTabRight: () => {
+        this.cosmeticCategoryIndex = (this.cosmeticCategoryIndex + 1) % COSMETIC_CATEGORIES.length;
+        this.cosmeticPage = 0;
+        this.showCosmetics();
+      }
+    });
     const save = SaveSystem.get();
     const category = COSMETIC_CATEGORIES[this.cosmeticCategoryIndex];
     const owned = COSMETICS.filter((item) => item.category === category && save.unlockedCosmetics.includes(item.id));
@@ -855,6 +915,7 @@ export class OperatorGarageScene extends Phaser.Scene {
 
   private createGearLockerOverlay(layout: GearLockerLayout): Phaser.GameObjects.Container {
     this.closeOverlay();
+    setSceneUiModalDepth(this, 30);
     const { width, height } = this.scale;
     const root = this.add.container(0, 0).setDepth(2000);
     const blocker = this.add.rectangle(width / 2, height / 2, width, height, 0x01050a, 0.995).setInteractive();
@@ -1054,6 +1115,17 @@ export class OperatorGarageScene extends Phaser.Scene {
       this.status = `SUCCESS // ${item.label.toUpperCase()} EQUIPPED`;
       this.showCosmetics();
     });
+    registerUiFocusable(this, root, {
+      label: `${item.label} ${equipped ? 'equipped' : 'owned cosmetic'}`,
+      defaultPriority: equipped ? 40 : 0,
+      activate: () => {
+        SaveSystem.equipCosmetic(item.category, item.id);
+        if (item.category === 'playerShape' || item.category === 'playerColor') this.refreshOperatorPreview();
+        this.audio.playSfx('menu');
+        this.status = `SUCCESS // ${item.label.toUpperCase()} EQUIPPED`;
+        this.showCosmetics();
+      }
+    });
     root.add(hit);
     return root;
   }
@@ -1202,6 +1274,10 @@ export class OperatorGarageScene extends Phaser.Scene {
     const root = this.createOverlay(this.protocolTerminalFamily === 'supreme'
       ? 'SUPREME OVERDRIVE // CONSTELLATION TERMINAL'
       : 'OVERDRIVE PROGRESSION TERMINAL');
+    configureSceneUiNavigation(this, {
+      onTabLeft: () => this.showOverdrive('overdrive'),
+      onTabRight: () => this.showOverdrive('supreme')
+    });
     const { width, height } = this.scale;
     const highest = SaveSystem.getHighestRound();
     const supremeHighest = SaveSystem.getSupremeHighestRound();
@@ -1342,6 +1418,11 @@ export class OperatorGarageScene extends Phaser.Scene {
         this.audio.playSfx(result.ok ? 'menu' : 'itemLocked');
         this.showOverdrive(definition.family === 'supreme' ? 'supreme' : 'overdrive');
       });
+      registerUiFocusable(this, hitZone, {
+        label: `${definition.label} ${unlocked ? selected ? 'active' : 'unlocked' : 'locked'}`,
+        locked: () => !unlocked,
+        defaultPriority: selected ? 60 : unlocked ? 10 : 0
+      });
       root.add([shadow, chassis, inner, topRail, sideEdge, tierBadge, tierText, tierName, stateText, detail, progressTrack, progressFill, led, hitZone]);
       this.overlayAnimatedTargets.push(led);
       this.tweens.add({ targets: led, alpha: { from: selected ? 0.35 : 0.2, to: 1 }, duration: 720 + index * 45, yoyo: true, repeat: -1 });
@@ -1413,6 +1494,13 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.overlayAnimatedTargets.length = 0;
     this.overlay?.destroy(true);
     this.overlay = null;
+    setSceneUiModalDepth(this, 0);
+    configureSceneUiNavigation(this, {
+      onTabLeft: undefined,
+      onTabRight: undefined,
+      onPageLeft: undefined,
+      onPageRight: undefined
+    });
   }
 
   private returnToPrevious(): void {

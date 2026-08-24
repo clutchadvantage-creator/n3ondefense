@@ -3,6 +3,7 @@ import { COLORS } from '../config/constants.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
 import { playButtonJiggle } from '../utils/ui.ts';
 import { PAUSE_MENU_BASE_HEIGHT, PAUSE_MENU_BASE_WIDTH, calculatePauseMenuLayout } from './PauseMenuLayout.ts';
+import { registerUiFocusable } from '../input/UiNavigationController.ts';
 
 export type PauseMenuActionTone = 'primary' | 'standard' | 'utility' | 'warning';
 
@@ -99,9 +100,18 @@ const createActionControl = (
     label.setColor('#d6f7ff');
     edge.setAlpha(tone === 'primary' ? 0.72 : 0.38);
   });
-  root.on('pointerdown', () => {
+  const activate = (): unknown => {
     const accepted = action.onClick();
     AudioManager.get().playSfx(accepted === false ? 'itemLocked' : 'menu');
+    return accepted;
+  };
+  root.on('pointerdown', activate);
+  registerUiFocusable(scene, root, {
+    label: action.label,
+    activate,
+    modalDepth: 20,
+    defaultPriority: tone === 'primary' ? 40 : 0,
+    destructive: tone === 'warning'
   });
 
   scene.tweens.add({ targets: led, alpha: { from: 0.24, to: 1 }, duration: 760, yoyo: true, repeat: -1 });

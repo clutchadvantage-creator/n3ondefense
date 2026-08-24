@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import './style.css';
 import { createGameConfig } from './game/config/gameConfig';
 import { installMenuAudio } from './ui/installMenuAudio';
+import { installUiNavigation } from './game/input/UiNavigationController.ts';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -17,4 +18,5 @@ app.innerHTML = `
 `;
 
 installMenuAudio();
+installUiNavigation(document.querySelector<HTMLElement>('#game-ui-root')!);
 new Phaser.Game(createGameConfig('phaser-game'));
