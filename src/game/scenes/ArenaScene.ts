@@ -10,6 +10,7 @@ import { SceneKeys } from '../flow/SceneKeys';
 import { Mine, STAR_DEATH_MINE_VISUAL_THEME } from '../abilities/Mine';
 import { MineChargeRack } from '../abilities/MineChargeRack.ts';
 import { getMineRackEnergyCost, getMineRackPatternOffsets } from '../abilities/MineRackSalvo';
+import { resolveAbilityRuntimeConfig, resolveShieldRuntime, type AbilityRuntimeConfig } from '../gameplay/AbilityRuntimeRules.ts';
 import { Turret } from '../abilities/Turret';
 import { Fence } from '../abilities/Fence';
 import { MAX_DISTINCT_FENCE_SPLITS, resolveFenceSplitStage } from '../abilities/FenceSplitRules.ts';
@@ -73,6 +74,7 @@ import { UniformSpatialGrid } from '../performance/UniformSpatialGrid.ts';
 import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
 import { MineExplosionVfx } from '../vfx/MineExplosionVfx.ts';
 import { BombExplosionCosmeticVfx } from '../cosmetics/BombExplosionCosmeticVfx.ts';
+import { OperativeShieldEffect } from '../vfx/OperativeShieldEffect.ts';
 import { BOMB_EXPLOSION_COSMETIC_DEFINITIONS } from '../cosmetics/BombExplosionCosmeticDefinitions.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
@@ -233,31 +235,9 @@ interface PatrolPoint {
   y: number;
 }
 
-interface AbilityRuntimeConfig {
-  energyCost: number;
-  cooldownMs: number;
-  maxActive: number;
-  damage: number;
-  hp: number;
-  durationMs: number;
-  range: number;
-  fireRate: number;
-  armMs: number;
-  radius: number;
-}
-
 interface TurretTargetDecision {
   turret: Turret | null;
   reconsiderAt: number;
-}
-
-interface OperativeShieldVisual {
-  root: Phaser.GameObjects.Container;
-  shell: Phaser.GameObjects.Arc;
-  innerField: Phaser.GameObjects.Arc;
-  orbitArcs: Phaser.GameObjects.Graphics;
-  crackleA: Phaser.GameObjects.Graphics;
-  crackleB: Phaser.GameObjects.Graphics;
 }
 
 type BossFlowPhase = 'none' | 'intro' | 'combat' | 'destruction' | 'loot-collection' | 'transitioning';
@@ -518,8 +498,7 @@ export class ArenaScene extends Phaser.Scene {
   private readonly mineChargeRack = new MineChargeRack();
   private shieldCooldownUntil = 0;
   private shieldActiveUntil = 0;
-  private shieldVisual: OperativeShieldVisual | null = null;
-  private readonly shieldTweens: Phaser.Tweens.Tween[] = [];
+  private shieldVisual: OperativeShieldEffect | null = null;
   private readonly hudBuffs: string[] = [];
   private readonly hudRadarContacts: HudRadarContact[] = [];
   private readonly hudRadarContactPool: HudRadarContact[] = [];
@@ -648,10 +627,39 @@ export class ArenaScene extends Phaser.Scene {
     this.scene.bringToTop();
     if (result.success) this.commitAnomalyLoot(result);
     this.anomalyController?.resolveReturn();
+    if (result.playerState) {
+      const state = result.playerState;
+      // A failed excursion ejects the operative at critical health instead of
+      // converting an anomaly failure into a delayed Arena death frame.
+      this.player.hp = result.success
+        ? Math.max(0, state.hp)
+        : Math.max(1, state.hp);
+      this.player.energy = Phaser.Math.Clamp(state.energy, 0, Math.max(this.player.energyStats.max, state.energy));
+      this.player.heat = Phaser.Math.Clamp(state.heat, 0, this.player.weapon.maxHeat);
+      this.player.lastDashMs = state.lastDashMs;
+      this.player.dashUntil = state.dashUntil;
+      this.player.modSpeedBoostUntil = state.modSpeedBoostUntil;
+      this.player.modSpeedMultiplier = state.modSpeedMultiplier;
+      this.player.buffs = state.buffs;
+    }
+    if (result.abilityState) {
+      this.abilityCooldownUntil = { ...result.abilityState.cooldownUntil };
+      this.shieldActiveUntil = result.abilityState.shieldActiveUntil;
+      this.shieldCooldownUntil = result.abilityState.shieldCooldownUntil;
+      this.selectedAbility = result.abilityState.selectedAbility;
+      if (this.time.now < this.shieldActiveUntil) {
+        if (!this.shieldVisual) this.createShieldVisual();
+      } else {
+        this.destroyShieldOrb();
+      }
+    }
     const safe = this.pathfinder.findNearestWalkableWorld(result.sourcePortal.x + 118, result.sourcePortal.y, 0, 6)
       ?? { x: result.sourcePortal.x, y: result.sourcePortal.y };
     this.player.setActive(true).setVisible(true).setAlpha(1).setScale(1).setPosition(safe.x, safe.y).setVelocity(0, 0);
-    this.player.invulnUntil = this.time.now + HEIST_BALANCE.safeReturnInvulnerabilityMs;
+    this.player.invulnUntil = Math.max(
+      result.playerState?.invulnUntil ?? 0,
+      this.time.now + HEIST_BALANCE.safeReturnInvulnerabilityMs
+    );
     this.refreshHudWallet();
     this.showBanner(result.success
       ? 'HEIST COMPLETE // HAUL COMMITTED'
@@ -2391,100 +2399,16 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
-    shield.root.setPosition(this.player.x, this.player.y);
-    shield.orbitArcs.setRotation(now * 0.0011);
-    shield.crackleA.setRotation(-now * 0.0018);
-    shield.crackleB.setRotation(now * 0.0023);
-    shield.crackleA.setAlpha(0.42 + Math.sin(now * 0.031) * 0.24);
-    shield.crackleB.setAlpha(0.36 + Math.sin(now * 0.043 + 1.7) * 0.2);
+    shield.update(this.player, now);
     this.player.invulnUntil = Math.max(this.player.invulnUntil, this.shieldActiveUntil);
   }
 
   private createShieldVisual(): void {
-    const root = this.add.container(this.player.x, this.player.y).setDepth(12).setAlpha(0).setScale(0.18);
-    const rearGlow = this.add.ellipse(0, 5, 84, 69, COLORS.purple, 0.035)
-      .setStrokeStyle(1, COLORS.purple, 0.24)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const innerField = this.add.circle(0, 0, 36, COLORS.cyan, 0.065)
-      .setStrokeStyle(1, 0xffffff, 0.16)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const shell = this.add.circle(0, 0, 41, COLORS.cyan, 0.045)
-      .setStrokeStyle(3, COLORS.cyan, 0.78)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const lensGlow = this.add.ellipse(-11, -13, 34, 15, 0xffffff, 0.095)
-      .setRotation(-0.45)
-      .setBlendMode(Phaser.BlendModes.ADD);
-
-    const orbitArcs = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-    orbitArcs.lineStyle(2, 0xffffff, 0.72);
-    for (let index = 0; index < 6; index += 1) {
-      const start = index * Math.PI / 3 + 0.08;
-      orbitArcs.beginPath();
-      orbitArcs.arc(0, 0, 42, start, start + 0.48, false);
-      orbitArcs.strokePath();
-    }
-    orbitArcs.lineStyle(1, COLORS.purple, 0.48);
-    for (let index = 0; index < 3; index += 1) {
-      const start = index * Math.PI * 2 / 3 + 0.35;
-      orbitArcs.beginPath();
-      orbitArcs.arc(0, 0, 45, start, start + 0.7, false);
-      orbitArcs.strokePath();
-    }
-
-    const drawCrackle = (graphics: Phaser.GameObjects.Graphics, offset: number, color: number): void => {
-      graphics.setBlendMode(Phaser.BlendModes.ADD).lineStyle(2, color, 0.9);
-      for (let index = 0; index < 7; index += 1) {
-        const angle = offset + index * Math.PI * 2 / 7;
-        const tangentX = -Math.sin(angle);
-        const tangentY = Math.cos(angle);
-        const innerX = Math.cos(angle) * 36;
-        const innerY = Math.sin(angle) * 36;
-        const outerX = Math.cos(angle) * 45;
-        const outerY = Math.sin(angle) * 45;
-        graphics.beginPath();
-        graphics.moveTo(innerX, innerY);
-        graphics.lineTo(
-          Math.cos(angle) * 40 + tangentX * (index % 2 === 0 ? 5 : -5),
-          Math.sin(angle) * 40 + tangentY * (index % 2 === 0 ? 5 : -5)
-        );
-        graphics.lineTo(outerX, outerY);
-        graphics.strokePath();
-      }
-    };
-    const crackleA = this.add.graphics();
-    const crackleB = this.add.graphics();
-    drawCrackle(crackleA, 0.12, 0xffffff);
-    drawCrackle(crackleB, 0.48, COLORS.cyan);
-
-    root.add([rearGlow, innerField, shell, lensGlow, orbitArcs, crackleA, crackleB]);
-    this.shieldVisual = { root, shell, innerField, orbitArcs, crackleA, crackleB };
-    this.shieldTweens.push(
-      this.tweens.add({ targets: root, alpha: 1, scaleX: 1, scaleY: 1, duration: 260, ease: 'Back.Out' }),
-      this.tweens.add({
-        targets: shell,
-        scaleX: { from: 0.97, to: 1.04 },
-        scaleY: { from: 0.97, to: 1.04 },
-        alpha: { from: 0.58, to: 0.94 },
-        duration: 310,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      }),
-      this.tweens.add({
-        targets: innerField,
-        alpha: { from: 0.42, to: 0.75 },
-        duration: 430,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      })
-    );
+    this.shieldVisual = new OperativeShieldEffect(this, this.player);
   }
 
   private destroyShieldOrb(): void {
-    for (const tween of this.shieldTweens) tween.remove();
-    this.shieldTweens.length = 0;
-    this.shieldVisual?.root.destroy(true);
+    this.shieldVisual?.destroy();
     this.shieldVisual = null;
   }
 
@@ -4593,6 +4517,13 @@ export class ArenaScene extends Phaser.Scene {
         weapon: { ...this.player.weapon },
         hp: this.player.hp,
         energy: this.player.energy,
+        heat: this.player.heat,
+        invulnUntil: this.player.invulnUntil,
+        lastDashMs: this.player.lastDashMs,
+        dashUntil: this.player.dashUntil,
+        modSpeedBoostUntil: this.player.modSpeedBoostUntil,
+        modSpeedMultiplier: this.player.modSpeedMultiplier,
+        buffs: this.player.buffs,
         permanentSpeedMultiplier: this.player.permanentModSpeedMultiplier,
         equippedMods: this.modRuntime.snapshot()
       },
@@ -4603,6 +4534,17 @@ export class ArenaScene extends Phaser.Scene {
         shieldDurationMs: this.getShieldDurationMs(),
         shieldCooldownMs: this.getShieldCooldownMs(),
         shieldEnergyCost: this.getShieldEnergyCost()
+      },
+      sharedRuntime: {
+        modRuntime: this.modRuntime,
+        temporaryAmmo: this.temporaryAmmo,
+        mineChargeRack: this.mineChargeRack
+      },
+      abilityState: {
+        cooldownUntil: { ...this.abilityCooldownUntil },
+        shieldActiveUntil: this.shieldActiveUntil,
+        shieldCooldownUntil: this.shieldCooldownUntil,
+        selectedAbility: this.selectedAbility
       },
       inputBridge: this.pointerLock ?? undefined,
       initialInputDevice: this.playerInput.activeDevice,
@@ -6882,68 +6824,19 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getAbilityConfig(type: AbilityType): AbilityRuntimeConfig {
-    const up = this.runUpgrades;
-    if (type === 'fence') {
-      const upgradedDamage = ABILITY_BALANCE.fence.damage + getUpgradeLevel(up, 'fence.damage') * 4;
-      const upgradedHealth = ABILITY_BALANCE.fence.hp + getUpgradeLevel(up, 'fence.health') * 16;
-      return {
-        energyCost: ABILITY_BALANCE.fence.energyCost * this.modRuntime.multiplier('fenceEnergyCost'),
-        cooldownMs: ABILITY_BALANCE.fence.cooldownMs * this.modRuntime.multiplier('fenceCooldown'),
-        maxActive: ABILITY_BALANCE.fence.maxActive + getUpgradeLevel(up, 'fence.max') + Math.floor(this.modRuntime.addition('fenceMaxActive')),
-        damage: upgradedDamage * this.modRuntime.fenceDamageMultiplier() * this.modRuntime.multiplier('fenceDamage'),
-        hp: upgradedHealth * this.modRuntime.fenceHealthMultiplier() * this.modRuntime.multiplier('fenceHealth'),
-        durationMs: (ABILITY_BALANCE.fence.durationMs + getUpgradeLevel(up, 'fence.duration') * 1200) * this.modRuntime.multiplier('fenceDuration'),
-        range: 0,
-        fireRate: 0,
-        armMs: 0,
-        radius: 0
-      };
-    }
-    if (type === 'turret') {
-      return {
-        energyCost: ABILITY_BALANCE.turret.energyCost * this.modRuntime.multiplier('turretEnergyCost'),
-        cooldownMs: ABILITY_BALANCE.turret.cooldownMs * this.modRuntime.multiplier('turretCooldown'),
-        maxActive: ABILITY_BALANCE.turret.maxActive + getUpgradeLevel(up, 'turret.max') + Math.floor(this.modRuntime.addition('turretMaxActive')),
-        damage: (ABILITY_BALANCE.turret.damage + getUpgradeLevel(up, 'turret.damage') * 2) * this.modRuntime.multiplier('turretDamage'),
-        hp: (ABILITY_BALANCE.turret.hp + getUpgradeLevel(up, 'turret.health') * 20) * this.modRuntime.multiplier('turretHealth'),
-        durationMs: 0,
-        range: (ABILITY_BALANCE.turret.range + getUpgradeLevel(up, 'turret.range') * 12) * this.modRuntime.multiplier('turretRange'),
-        fireRate: (ABILITY_BALANCE.turret.fireRate + getUpgradeLevel(up, 'turret.fireRate') * 0.25) * this.modRuntime.multiplier('turretFireRate'),
-        armMs: 0,
-        radius: 0
-      };
-    }
-
-    const upgradedMineDamage = ABILITY_BALANCE.mine.damage + getUpgradeLevel(up, 'mine.damage') * 7;
-    const upgradedMineArmMs = Math.max(400, ABILITY_BALANCE.mine.armMs - getUpgradeLevel(up, 'mine.arm') * 70);
-    return {
-      energyCost: ABILITY_BALANCE.mine.energyCost * this.modRuntime.multiplier('mineEnergyCost'),
-      cooldownMs: ABILITY_BALANCE.mine.cooldownMs * this.modRuntime.multiplier('mineCooldown'),
-      maxActive: ABILITY_BALANCE.mine.maxActive + getUpgradeLevel(up, 'mine.max') + Math.floor(this.modRuntime.addition('mineMaxActive')),
-      damage: upgradedMineDamage * this.modRuntime.mineDamageMultiplier() * this.modRuntime.multiplier('mineDamage'),
-      hp: 0,
-      durationMs: 0,
-      range: 0,
-      fireRate: 0,
-      armMs: Math.max(100, upgradedMineArmMs * this.modRuntime.mineArmTimeMultiplier() * this.modRuntime.multiplier('mineArmTime')),
-      radius: (ABILITY_BALANCE.mine.radius + getUpgradeLevel(up, 'mine.radius') * 7) * this.modRuntime.multiplier('mineRadius')
-    };
+    return resolveAbilityRuntimeConfig(type, this.runUpgrades, this.modRuntime);
   }
 
   private getShieldDurationMs(): number {
-    const upgraded = Math.min(
-      ABILITY_BALANCE.shield.maximumDurationMs,
-      ABILITY_BALANCE.shield.durationMs + getUpgradeEffect(this.runUpgrades, 'player.shieldDuration')
-    );
-    return upgraded * this.modRuntime.multiplier('shieldDuration');
+    return resolveShieldRuntime(this.runUpgrades, this.modRuntime).durationMs;
   }
 
   private getShieldCooldownMs(): number {
-    return ABILITY_BALANCE.shield.cooldownMs * this.modRuntime.multiplier('shieldCooldown');
+    return resolveShieldRuntime(this.runUpgrades, this.modRuntime).cooldownMs;
   }
 
   private getShieldEnergyCost(): number {
-    return ABILITY_BALANCE.shield.energyCost * this.modRuntime.multiplier('shieldEnergyCost');
+    return resolveShieldRuntime(this.runUpgrades, this.modRuntime).energyCost;
   }
 
   private getBombDefenseDurationMs(): number {

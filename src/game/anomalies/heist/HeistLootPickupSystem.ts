@@ -11,6 +11,7 @@ interface HeistLootPickup {
   vz: number;
   phase: number;
   settled: boolean;
+  infusionOrbit: Phaser.GameObjects.Container | null;
 }
 
 const rewardStyle = (reward: HeistContainerReward): { color: number; symbol: string } => {
@@ -25,7 +26,11 @@ const rewardStyle = (reward: HeistContainerReward): { color: number; symbol: str
 export class HeistLootPickupSystem {
   private readonly pickups: HeistLootPickup[] = [];
 
-  constructor(private readonly scene: Phaser.Scene, private readonly rewards: HeistRewardService) {}
+  constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly rewards: HeistRewardService,
+    private readonly showPickupOrbit = false
+  ) {}
 
   get activeCount(): number { return this.pickups.length; }
 
@@ -43,6 +48,18 @@ export class HeistLootPickupSystem {
       fontFamily: 'Orbitron, sans-serif', fontSize: reward.kind === 'mod' ? '11px' : '12px', color: '#ffffff', fontStyle: 'bold'
     }).setOrigin(0.5);
     const payload = this.scene.add.container(0, 0, [halo, ring, core, symbol]);
+    let infusionOrbit: Phaser.GameObjects.Container | null = null;
+    if (this.showPickupOrbit) {
+      const orbitRadius = reward.kind === 'mod' ? 31 : 27;
+      const orbitPath = this.scene.add.circle(0, 0, orbitRadius, style.color, 0.025)
+        .setStrokeStyle(1, 0xffffff, 0.38);
+      const satelliteA = this.scene.add.circle(orbitRadius, 0, 2.5, 0xffffff, 0.96)
+        .setStrokeStyle(1, style.color, 1);
+      const satelliteB = this.scene.add.circle(-orbitRadius, 0, 1.8, style.color, 0.96)
+        .setStrokeStyle(1, 0xffffff, 0.82);
+      infusionOrbit = this.scene.add.container(0, 0, [orbitPath, satelliteA, satelliteB]);
+      payload.addAt(infusionOrbit, 0);
+    }
     const root = this.scene.add.container(x, y, [shadow, payload]).setDepth(11);
     const angle = sequence * 2.39996 + (sequence % 2 ? 0.42 : -0.31);
     const speed = 88 + sequence % 4 * 18;
@@ -53,11 +70,13 @@ export class HeistLootPickupSystem {
       z: 14,
       vz: 190 + sequence % 3 * 28,
       phase: sequence * 1.31,
-      settled: false
+      settled: false,
+      infusionOrbit
     });
   }
 
   update(now: number, deltaSeconds: number, playerX: number, playerY: number, pickupRadius: number,
+    attractionRadius: number, pullSpeed: number,
     onCollect: (reward: HeistContainerReward, x: number, y: number) => void): void {
     const dt = Math.min(0.05, Math.max(0, deltaSeconds));
     for (let index = this.pickups.length - 1; index >= 0; index -= 1) {
@@ -79,9 +98,21 @@ export class HeistLootPickupSystem {
       pickup.payload.y = -bob;
       pickup.payload.setRotation(now * 0.0014 + pickup.phase * 0.1)
         .setScale(1 + Math.sin(now * 0.006 + pickup.phase) * 0.07);
-      const dx = pickup.root.x - playerX;
-      const dy = pickup.root.y - playerY;
-      if (!pickup.settled || dx * dx + dy * dy > pickupRadius * pickupRadius) continue;
+      pickup.infusionOrbit?.setRotation(-now * 0.0031 - pickup.phase);
+      let dx = pickup.root.x - playerX;
+      let dy = pickup.root.y - playerY;
+      let distanceSquared = dx * dx + dy * dy;
+      if (pickup.settled && pullSpeed > 0 && distanceSquared <= attractionRadius * attractionRadius
+        && distanceSquared > pickupRadius * pickupRadius) {
+        const distance = Math.sqrt(Math.max(1, distanceSquared));
+        const step = Math.min(distance, pullSpeed * dt);
+        pickup.root.x -= dx / distance * step;
+        pickup.root.y -= dy / distance * step;
+        dx = pickup.root.x - playerX;
+        dy = pickup.root.y - playerY;
+        distanceSquared = dx * dx + dy * dy;
+      }
+      if (!pickup.settled || distanceSquared > pickupRadius * pickupRadius) continue;
       onCollect(pickup.reward, pickup.root.x, pickup.root.y);
       this.scene.tweens.add({
         targets: pickup.root, x: playerX, y: playerY, alpha: 0, scale: 0.2,

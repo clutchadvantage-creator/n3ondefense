@@ -216,7 +216,6 @@ export class AnomalyController {
     this.stateValue = 'transitioning';
     this.transitionStartedAt = this.context.scene.time.now;
     this.context.player.setVelocity(0, 0);
-    this.context.player.invulnUntil = Number.POSITIVE_INFINITY;
     this.audio.play('portal-entry');
     this.context.emitMetric({ name: 'anomaly_entry_confirmed', anomalyId: this.definition.id, round: this.context.round,
       protocol: this.context.protocol, elapsedMs: this.elapsedMs - this.spawnedAt, cost: this.cost });

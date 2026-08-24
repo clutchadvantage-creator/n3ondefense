@@ -38,15 +38,53 @@ const AMBUSH_POINTS = [
 ] as const;
 
 const drawWallPanel = (graphics: Phaser.GameObjects.Graphics, rect: RectSpec): void => {
-  graphics.fillStyle(0x07101a, 1).fillRect(rect.x, rect.y, rect.w, rect.h);
-  graphics.lineStyle(3, 0x173c4f, 0.8).strokeRect(rect.x + 3, rect.y + 3, rect.w - 6, rect.h - 6);
-  graphics.lineStyle(1, 0xff46c8, 0.22).strokeRect(rect.x + 11, rect.y + 11, rect.w - 22, rect.h - 22);
   const horizontal = rect.w >= rect.h;
   const length = horizontal ? rect.w : rect.h;
-  for (let offset = 46; offset < length - 24; offset += 86) {
-    graphics.lineStyle(2, 0x25536a, 0.34);
-    if (horizontal) graphics.lineBetween(rect.x + offset, rect.y + 8, rect.x + offset, rect.y + rect.h - 8);
-    else graphics.lineBetween(rect.x + 8, rect.y + offset, rect.x + rect.w - 8, rect.y + offset);
+  const depth = Math.min(12, Math.max(6, (horizontal ? rect.h : rect.w) * 0.16));
+
+  // Drawn once at facility creation: dimensional shadow, side face and top cap
+  // add readable wall volume without introducing any per-frame render work.
+  graphics.fillStyle(0x000207, 0.78).fillRect(rect.x + 9, rect.y + 11, rect.w, rect.h);
+  graphics.fillStyle(0x030913, 1).fillPoints([
+    new Phaser.Geom.Point(rect.x + rect.w - depth, rect.y + depth),
+    new Phaser.Geom.Point(rect.x + rect.w, rect.y),
+    new Phaser.Geom.Point(rect.x + rect.w, rect.y + rect.h),
+    new Phaser.Geom.Point(rect.x + rect.w - depth, rect.y + rect.h - depth)
+  ], true);
+  graphics.fillStyle(0x07101a, 1).fillRect(rect.x, rect.y, rect.w - depth, rect.h - depth);
+  graphics.fillStyle(0x102a38, 1).fillPoints([
+    new Phaser.Geom.Point(rect.x, rect.y),
+    new Phaser.Geom.Point(rect.x + depth, rect.y + depth),
+    new Phaser.Geom.Point(rect.x + rect.w - depth, rect.y + depth),
+    new Phaser.Geom.Point(rect.x + rect.w, rect.y)
+  ], true);
+  graphics.lineStyle(3, 0x256276, 0.84).strokeRect(rect.x + 3, rect.y + 3, rect.w - depth - 6, rect.h - depth - 6);
+  graphics.lineStyle(1, 0xff46c8, 0.27).strokeRect(rect.x + 11, rect.y + 11,
+    Math.max(2, rect.w - depth - 22), Math.max(2, rect.h - depth - 22));
+
+  for (let offset = 46, panelIndex = 0; offset < length - depth - 24; offset += 86, panelIndex += 1) {
+    const cyanPanel = panelIndex % 3 !== 1;
+    const seamColor = cyanPanel ? 0x25536a : 0x6a295e;
+    graphics.lineStyle(2, seamColor, 0.42);
+    if (horizontal) {
+      graphics.lineBetween(rect.x + offset, rect.y + 8, rect.x + offset, rect.y + rect.h - depth - 8);
+      graphics.fillStyle(cyanPanel ? 0x43edfa : 0xff4dcb, 0.58)
+        .fillRect(rect.x + offset - 9, rect.y + 8, 18, 3);
+      if (panelIndex % 2 === 0 && rect.h > 54) {
+        graphics.fillStyle(0x020810, 0.88).fillRect(rect.x + offset - 18, rect.y + 20, 36, 13);
+        graphics.lineStyle(1, cyanPanel ? 0x43edfa : 0xff4dcb, 0.34)
+          .strokeRect(rect.x + offset - 18, rect.y + 20, 36, 13);
+      }
+    } else {
+      graphics.lineBetween(rect.x + 8, rect.y + offset, rect.x + rect.w - depth - 8, rect.y + offset);
+      graphics.fillStyle(cyanPanel ? 0x43edfa : 0xff4dcb, 0.58)
+        .fillRect(rect.x + 8, rect.y + offset - 9, 3, 18);
+      if (panelIndex % 2 === 0 && rect.w > 54) {
+        graphics.fillStyle(0x020810, 0.88).fillRect(rect.x + 20, rect.y + offset - 18, 13, 36);
+        graphics.lineStyle(1, cyanPanel ? 0x43edfa : 0xff4dcb, 0.34)
+          .strokeRect(rect.x + 20, rect.y + offset - 18, 13, 36);
+      }
+    }
   }
 };
 

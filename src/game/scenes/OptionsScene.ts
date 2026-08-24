@@ -40,6 +40,7 @@ interface OptionsTabDefinition {
 interface OptionsSceneData {
   returnScene?: SceneKeyValue;
   resumeGameplay?: boolean;
+  resumePausedScene?: boolean;
 }
 
 interface OptionsViewport {
@@ -89,6 +90,7 @@ const OPTIONS_TABS: readonly OptionsTabDefinition[] = [
 export class OptionsScene extends Phaser.Scene {
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
   private resumeGameplayOnEsc = false;
+  private resumePausedSceneOnEsc = false;
   private settingsPersistTimer: Phaser.Time.TimerEvent | null = null;
   private feedbackReportUi: FeedbackReportHandle | null = null;
   private cancelBindingCapture: (() => void) | null = null;
@@ -126,6 +128,7 @@ export class OptionsScene extends Phaser.Scene {
   create(data?: OptionsSceneData): void {
     this.returnScene = data?.returnScene ?? SceneKeys.MainMenu;
     this.resumeGameplayOnEsc = data?.resumeGameplay === true;
+    this.resumePausedSceneOnEsc = data?.resumePausedScene === true;
     this.resetTransientUiState();
     configureSceneUiNavigation(this, {
       onBack: () => this.handleEscReturn(),
@@ -1032,6 +1035,11 @@ export class OptionsScene extends Phaser.Scene {
     if (this.returnScene === SceneKeys.Arena) {
       this.scene.resume(SceneKeys.Arena);
       if (this.resumeGameplayOnEsc) this.scene.get(SceneKeys.Arena).events.emit('resume-from-options');
+      this.scene.stop();
+      return;
+    }
+    if (this.resumePausedSceneOnEsc && this.scene.isPaused(this.returnScene)) {
+      this.scene.resume(this.returnScene);
       this.scene.stop();
       return;
     }

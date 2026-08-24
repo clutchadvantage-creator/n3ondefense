@@ -75,21 +75,25 @@ test('shield deactivation audio follows the final runtime shield expiry', () => 
   assert.ok(existsSync(new URL('../public/assets/audio/soundeffects/shielddown.mp3', import.meta.url)));
   const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const rules = readFileSync(new URL('../src/game/gameplay/AbilityRuntimeRules.ts', import.meta.url), 'utf8');
   assert.match(audio, /audioAssetUrl\('soundeffects\/shielddown\.mp3'\)/);
   assert.match(audio, /case 'shieldOff':[\s\S]*?this\.playShieldOffSfx\(\)/);
   assert.match(arena, /this\.shieldActiveUntil = now \+ durationMs/);
-  assert.match(arena, /getShieldDurationMs\(\)[\s\S]*?getUpgradeEffect\(this\.runUpgrades, 'player\.shieldDuration'\)[\s\S]*?this\.modRuntime\.multiplier\('shieldDuration'\)/);
+  assert.match(arena, /getShieldDurationMs\(\)[\s\S]*?resolveShieldRuntime\(this\.runUpgrades, this\.modRuntime\)\.durationMs/);
+  assert.match(rules, /getUpgradeEffect\(upgrades, 'player\.shieldDuration'\)[\s\S]*?mods\.multiplier\('shieldDuration'\)/);
   assert.match(arena, /if \(now >= this\.shieldActiveUntil\) \{[\s\S]*?playSfx\('shieldOff'\)[\s\S]*?destroyShieldOrb\(\)/);
 });
 
 test('operative shield is a reusable layered energy field with bounded crackle geometry', () => {
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
-  assert.match(arena, /interface OperativeShieldVisual/);
-  assert.match(arena, /rearGlow[\s\S]*?innerField[\s\S]*?shell[\s\S]*?lensGlow[\s\S]*?orbitArcs[\s\S]*?crackleA[\s\S]*?crackleB/);
+  const shield = readFileSync(new URL('../src/game/vfx/OperativeShieldEffect.ts', import.meta.url), 'utf8');
+  assert.match(shield, /export class OperativeShieldEffect/);
+  assert.match(shield, /rearGlow[\s\S]*?innerField[\s\S]*?shell[\s\S]*?lensGlow[\s\S]*?orbitArcs[\s\S]*?crackleA[\s\S]*?crackleB/);
   assert.match(arena, /if \(!this\.shieldVisual\) this\.createShieldVisual\(\)/);
-  assert.match(arena, /for \(let index = 0; index < 7; index \+= 1\)/);
-  assert.match(arena, /shield\.root\.setPosition\(this\.player\.x, this\.player\.y\)/);
-  assert.match(arena, /this\.shieldVisual\?\.root\.destroy\(true\)/);
+  assert.match(arena, /new OperativeShieldEffect\(this, this\.player\)/);
+  assert.match(shield, /for \(let index = 0; index < 7; index \+= 1\)/);
+  assert.match(shield, /this\.root\.setPosition\(source\.x, source\.y\)/);
+  assert.match(shield, /this\.root\.destroy\(true\)/);
   assert.doesNotMatch(arena, /private shieldOrb: Phaser\.GameObjects\.Arc/);
 });
 

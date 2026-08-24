@@ -29,7 +29,10 @@ test('Arena suspension is the authoritative preservation boundary and only commi
   const arena = source('../src/game/scenes/ArenaScene.ts');
   assert.match(arena, /this\.scene\.launch\(SceneKeys\.Heist, session\);\s*this\.scene\.pause\(\)/);
   assert.match(arena, /if \(result\.success\) this\.commitAnomalyLoot\(result\)/);
-  assert.match(arena, /this\.player\.invulnUntil = this\.time\.now \+ HEIST_BALANCE\.safeReturnInvulnerabilityMs/);
+  assert.match(arena, /this\.player\.invulnUntil = Math\.max\([\s\S]*?HEIST_BALANCE\.safeReturnInvulnerabilityMs/);
+  assert.match(arena, /sharedRuntime:\s*\{[\s\S]*?modRuntime: this\.modRuntime,[\s\S]*?temporaryAmmo: this\.temporaryAmmo,[\s\S]*?mineChargeRack: this\.mineChargeRack/);
+  assert.match(arena, /player:\s*\{[\s\S]*?hp: this\.player\.hp,[\s\S]*?energy: this\.player\.energy,[\s\S]*?buffs: this\.player\.buffs/);
+  assert.doesNotMatch(arena, /beginAnomalyTransition[\s\S]{0,5000}invulnUntil\s*=\s*Number\.POSITIVE_INFINITY/);
   assert.match(arena, /spendAnomalyEntryCost/);
   assert.match(arena, /SaveSystem\.spendFluxCores/);
 });
@@ -58,10 +61,56 @@ test('Anomaly telemetry, silent audio hooks, scene registration, and DEV control
 
 test('HEIST combat pool fully disables and resets retired projectile bodies', () => {
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
+  assert.match(heist, /new ReusableObjectPool<HeistProjectile, HeistProjectileSpawn>/);
   assert.match(heist, /projectile\.crossedFences\.clear\(\)/);
-  assert.match(heist, /projectile\.sprite\.body\.enable = true/);
-  assert.match(heist, /projectile\.sprite\.body\.enable = false/);
-  assert.match(heist, /setVelocity\(0, 0\)/);
+  assert.match(heist, /body\.enable = true/);
+  assert.match(heist, /body\.stop\(\); body\.enable = false/);
+  assert.match(heist, /setPosition\(-10_000, -10_000\)/);
+  assert.match(heist, /body\.reset\(state\.previousX, state\.previousY\)/);
+});
+
+test('HEIST uses the shared combat runtime instead of a parallel simplified loadout', () => {
+  const heist = source('../src/game/anomalies/heist/HeistScene.ts');
+  const rules = source('../src/game/gameplay/AbilityRuntimeRules.ts');
+  for (const runtime of ['new Player', 'new Hud', 'new Fence', 'new Turret', 'new Mine', 'new OperativeShieldEffect']) {
+    assert.match(heist, new RegExp(runtime.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  assert.match(heist, /this\.session\.sharedRuntime\.modRuntime/);
+  assert.match(heist, /this\.session\.sharedRuntime\.temporaryAmmo/);
+  assert.match(heist, /this\.session\.sharedRuntime\.mineChargeRack/);
+  assert.match(rules, /resolveAbilityRuntimeConfig/);
+  assert.match(rules, /resolveShieldRuntime/);
+  assert.match(heist, /findTurretHit[\s\S]*?turret\.takeDamage\(projectile\.damage\)/);
+  assert.match(heist, /findFenceHit[\s\S]*?fence\.hp -= projectile\.damage/);
+  assert.match(heist, /applyEnemyHealthMode/);
+  assert.match(heist, /applyEnemyDamageMode/);
+  assert.match(heist, /resourcePickupCapMultiplier/);
+  assert.match(heist, /this\.player\.hp = Math\.max\(0, source\.hp\)/);
+  assert.match(heist, /this\.player\.energy = Math\.max\(0, source\.energy\)/);
+  assert.match(heist, /this\.time\.now < this\.abilityState\.shieldActiveUntil/);
+  assert.match(heist, /hasInfusion\('pickup-orbit'\)/);
+});
+
+test('HEIST vault collision follows the real door body and world geometry in both directions', () => {
+  const heist = source('../src/game/anomalies/heist/HeistScene.ts');
+  const facility = source('../src/game/anomalies/heist/HeistFacility.ts');
+  assert.match(heist, /HEIST_WORLD\.height - 74/);
+  assert.match(heist, /this\.facility\.vaultDoor\.body\?\.enable/);
+  assert.doesNotMatch(heist, /y > 948/);
+  assert.match(facility, /door\.body\.enable = false/);
+  assert.match(facility, /door\.body\.enable = true/);
+});
+
+test('HEIST facility and shared Arcade HUD use bounded dimensional presentation layers', () => {
+  const facility = source('../src/game/anomalies/heist/HeistFacility.ts');
+  const heist = source('../src/game/anomalies/heist/HeistScene.ts');
+  const arcadeHud = source('../src/game/arcade/ArcadeHudView.ts');
+  assert.match(facility, /top cap/i);
+  assert.match(facility, /warning strips/i);
+  assert.match(heist, /lockHousing/);
+  assert.match(heist, /sparkArc/);
+  assert.match(arcadeHud, /objectiveChassis/);
+  assert.match(arcadeHud, /leftRail/);
 });
 
 test('Anomaly return resumes and restores Arena before removing the top HEIST scene', () => {

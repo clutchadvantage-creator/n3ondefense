@@ -1,6 +1,10 @@
 import type Phaser from 'phaser';
 import type { Player } from '../entities/Player.ts';
+import type { BuffState } from '../entities/Player.ts';
 import type { EquippedModSnapshot, RunProtocolId } from '../mods/types.ts';
+import type { ModRuntime } from '../mods/ModRuntime.ts';
+import type { TemporaryAmmoModeController } from '../player/TemporaryAmmoMode.ts';
+import type { MineChargeRack } from '../abilities/MineChargeRack.ts';
 import type { PlayerStats, WeaponStats, EnergyStats, RectSpec } from '../types.ts';
 import type { InputDevice } from '../input/ActionInput.ts';
 
@@ -9,6 +13,7 @@ export interface AnomalyInputBridge {
   readonly supported: boolean;
   worldPoint(camera: Phaser.Cameras.Scene2D.Camera, output?: Phaser.Math.Vector2): Phaser.Math.Vector2;
   requestLock(): void;
+  release?(): void;
   showResume(message?: string): void;
   hidePrompt(): void;
 }
@@ -117,6 +122,36 @@ export interface HeistAbilityConfig {
   radius: number;
 }
 
+/**
+ * Live, in-memory services owned by the current Arena run. The Arena is paused
+ * while HEIST uses them, so the anomaly advances the same Mod, ammo, and mine
+ * rack state instead of constructing a parallel progression ruleset.
+ */
+export interface SharedGameplayRuntime {
+  modRuntime: ModRuntime;
+  temporaryAmmo: TemporaryAmmoModeController;
+  mineChargeRack: MineChargeRack;
+}
+
+export interface SharedAbilityState {
+  cooldownUntil: { fence: number; turret: number };
+  shieldActiveUntil: number;
+  shieldCooldownUntil: number;
+  selectedAbility: 'fence' | 'turret' | 'mine';
+}
+
+export interface AnomalyPlayerState {
+  hp: number;
+  energy: number;
+  heat: number;
+  invulnUntil: number;
+  lastDashMs: number;
+  dashUntil: number;
+  modSpeedBoostUntil: number;
+  modSpeedMultiplier: number;
+  buffs: BuffState;
+}
+
 export interface HeistSessionData {
   sessionId: string;
   anomalyId: 'heist';
@@ -133,6 +168,13 @@ export interface HeistSessionData {
     weapon: WeaponStats;
     hp: number;
     energy: number;
+    heat: number;
+    invulnUntil: number;
+    lastDashMs: number;
+    dashUntil: number;
+    modSpeedBoostUntil: number;
+    modSpeedMultiplier: number;
+    buffs: BuffState;
     permanentSpeedMultiplier: number;
     equippedMods: EquippedModSnapshot[];
   };
@@ -144,6 +186,8 @@ export interface HeistSessionData {
     shieldCooldownMs: number;
     shieldEnergyCost: number;
   };
+  sharedRuntime: SharedGameplayRuntime;
+  abilityState: SharedAbilityState;
   inputBridge?: AnomalyInputBridge;
   initialInputDevice?: InputDevice;
   dev?: { forceMiniBoss?: boolean | null };
@@ -156,4 +200,6 @@ export interface AnomalyReturnResult {
   sourcePortal: { x: number; y: number };
   loot: PendingAnomalyLoot;
   reason: 'extracted' | 'player-dead' | 'scene-shutdown';
+  playerState?: AnomalyPlayerState;
+  abilityState?: SharedAbilityState;
 }
