@@ -121,8 +121,6 @@ export class HeistScene extends Phaser.Scene {
   private phase: HeistPhase = 'inbound';
   private elapsedMs = 0;
   private phaseStartedAt = 0;
-  private playerWallCollider: Phaser.Physics.Arcade.Collider | null = null;
-  private playerDoorCollider: Phaser.Physics.Arcade.Collider | null = null;
   private enemies: Enemy[] = [];
   private projectiles: HeistProjectile[] = [];
   private projectilePool!: ReusableObjectPool<HeistProjectile, HeistProjectileSpawn>;
@@ -155,6 +153,8 @@ export class HeistScene extends Phaser.Scene {
   private miniBossEncountered = false;
   private miniBossKilled = false;
   private returning = false;
+  private returnResultDelivered = false;
+  private pendingFadeReturn: { success: boolean; reason: 'extracted' | 'player-dead' } | null = null;
   private inputCapturePaused = false;
   private manuallyPaused = false;
   private pauseMenu: PauseMenuView | null = null;
@@ -176,10 +176,11 @@ export class HeistScene extends Phaser.Scene {
 
   create(data?: unknown): void {
     if (!isSessionData(data)) {
-      this.scene.resume(SceneKeys.Arena);
+      this.scene.wake(SceneKeys.Arena);
       this.scene.stop();
       return;
     }
+    this.resetSessionState();
     this.session = data;
     const settings = SaveSystem.get().settings;
     this.aimSettings = normalizeAimSettings(settings.aim);
@@ -227,6 +228,7 @@ export class HeistScene extends Phaser.Scene {
       const debug = globalThis as typeof globalThis & {
         forceHeistAmbush?: () => void;
         forceHeistExtraction?: () => void;
+        forceHeistReturn?: (success?: boolean) => boolean;
       };
       debug.forceHeistAmbush = () => {
         for (const container of this.containers) container.opened = true;
@@ -237,8 +239,59 @@ export class HeistScene extends Phaser.Scene {
       debug.forceHeistExtraction = () => {
         this.startAmbush();
       };
+      debug.forceHeistReturn = (success = true) => {
+        if (this.returning) return false;
+        this.returning = true;
+        this.phase = 'returning';
+        this.returnToArena(success, success ? 'extracted' : 'player-dead');
+        return true;
+      };
     }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
+    if (import.meta.env.DEV && data.dev?.instantReturn) {
+      this.events.once(Phaser.Scenes.Events.POST_UPDATE, this.onDevInstantReturn, this);
+    }
+  }
+
+  private readonly onDevInstantReturn = (): void => {
+    if (this.returning) return;
+    this.returning = true;
+    this.phase = 'returning';
+    this.returnToArena(true, 'extracted');
+  };
+
+  private resetSessionState(): void {
+    this.pendingLoot = emptyLoot();
+    this.phase = 'inbound';
+    this.elapsedMs = 0;
+    this.phaseStartedAt = 0;
+    this.enemies.length = 0;
+    this.projectiles.length = 0;
+    this.containers.length = 0;
+    this.pickups.length = 0;
+    this.fences.length = 0;
+    this.turrets.length = 0;
+    this.mines.length = 0;
+    this.extractionPortal = null;
+    this.hudBuffs.length = 0;
+    this.hudRadarContacts.length = 0;
+    this.shieldVisual = null;
+    this.nextPlayerShotAt = 0;
+    this.damageDealt = 0;
+    this.damageTaken = 0;
+    this.containersOpened = 0;
+    this.miniBossEncountered = false;
+    this.miniBossKilled = false;
+    this.returning = false;
+    this.returnResultDelivered = false;
+    this.pendingFadeReturn = null;
+    this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.onDevInstantReturn, this);
+    this.inputCapturePaused = false;
+    this.manuallyPaused = false;
+    this.pauseMenu = null;
+    this.pendingMineSalvo = false;
+    this.mineSalvoInput.cancel();
+    this.nextHoloAfterimageAt = 0;
   }
 
   private resolveProjectileCosmetics(): void {
@@ -387,8 +440,8 @@ export class HeistScene extends Phaser.Scene {
     this.player.setAppearanceResolver((timeMs) => SaveSystem.getOperativeFrameAppearance(timeMs));
     this.player.restoreOperativeAppearance(this.time.now, true);
     if (source.tint !== null) this.player.setTint(source.tint);
-    this.playerWallCollider = this.physics.add.collider(this.player, this.facility.walls);
-    this.playerDoorCollider = this.physics.add.collider(this.player, this.facility.vaultDoor);
+    this.physics.add.collider(this.player, this.facility.walls);
+    this.physics.add.collider(this.player, this.facility.vaultDoor);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setZoom(0.92);
   }
@@ -1301,8 +1354,7 @@ export class HeistScene extends Phaser.Scene {
     this.audio.play('portal-return');
     this.emitMetric('anomaly_completed', this.finalMetricFields('extracted'));
     this.cameras.main.flash(160, 180, 255, 255, false);
-    this.cameras.main.fadeOut(HEIST_BALANCE.transitionDurationMs, 100, 225, 255);
-    this.time.delayedCall(HEIST_BALANCE.transitionDurationMs + 20, () => this.returnToArena(true, 'extracted'));
+    this.beginReturnFade(true, 'extracted', HEIST_BALANCE.transitionDurationMs);
   }
 
   private failHeist(): void {
@@ -1313,11 +1365,35 @@ export class HeistScene extends Phaser.Scene {
     this.emitMetric('anomaly_failed', this.finalMetricFields('player-dead'));
     this.announce('HEIST FAILED', 'PROVISIONAL HAUL LOST // ARENA LINK RESTORING');
     this.physics.pause();
-    this.time.delayedCall(720, () => this.cameras.main.fadeOut(500, 100, 225, 255));
-    this.time.delayedCall(1250, () => this.returnToArena(false, 'player-dead'));
+    this.time.delayedCall(720, () => this.beginReturnFade(false, 'player-dead', 500));
   }
 
+  private beginReturnFade(
+    success: boolean,
+    reason: 'extracted' | 'player-dead',
+    durationMs: number
+  ): void {
+    this.pendingFadeReturn = { success, reason };
+    this.cameras.main.once(
+      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+      this.onReturnFadeComplete,
+      this
+    );
+    this.cameras.main.fadeOut(durationMs, 100, 225, 255);
+  }
+
+  private readonly onReturnFadeComplete = (): void => {
+    const pending = this.pendingFadeReturn;
+    this.pendingFadeReturn = null;
+    if (pending) this.returnToArena(pending.success, pending.reason);
+  };
+
   private returnToArena(success: boolean, reason: 'extracted' | 'player-dead' | 'scene-shutdown'): void {
+    if (this.returnResultDelivered) return;
+    this.returnResultDelivered = true;
+    this.inputController.clear();
+    this.input.enabled = false;
+    this.physics.pause();
     const arena = this.scene.get(SceneKeys.Arena);
     const result: AnomalyReturnResult = {
       sessionId: this.session.sessionId,
@@ -1326,7 +1402,9 @@ export class HeistScene extends Phaser.Scene {
       sourcePortal: { ...this.session.sourcePortal },
       loot: success ? this.pendingLoot : emptyLoot(),
       reason,
-      inputDevice: this.inputController.activeDevice,
+      // The automated DEV soak uses a gamepad return so browser pointer-lock
+      // policy cannot turn a successful lifecycle test into a click gate.
+      inputDevice: this.session.dev?.instantReturn ? 'gamepad' : this.inputController.activeDevice,
       playerState: {
         hp: this.player.hp,
         energy: this.player.energy,
@@ -1635,51 +1713,52 @@ export class HeistScene extends Phaser.Scene {
   }
 
   private cleanup(): void {
-    this.audio.stopAll();
-    this.coreAudio.setLowHealthWarning(false);
-    this.inputController?.destroy();
-    this.pauseMenu?.destroy();
+    const finalInputDevice = this.inputController?.activeDevice ?? this.session?.initialInputDevice;
+    this.pendingFadeReturn = null;
+    this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.onDevInstantReturn, this);
+    // Phaser's CameraManager, DisplayList, Clock, TweenManager and Arcade
+    // Physics shutdown listeners run before this user callback. Do not destroy
+    // their objects a second time here: a teardown exception would abort the
+    // SceneManager queue before the sleeping Arena can be woken.
+    const safely = (label: string, action: () => void): void => {
+      try { action(); }
+      catch (error) {
+        // Never let non-authoritative cleanup strand the following Arena wake
+        // operation in Phaser's SceneManager queue.
+        if (import.meta.env.DEV) console.error(`[HEIST shutdown] ${label} cleanup failed`, error);
+      }
+    };
+    safely('anomaly-audio', () => this.audio.stopAll());
+    safely('low-health-audio', () => this.coreAudio.setLowHealthWarning(false));
+    safely('input-controller', () => this.inputController?.destroy());
     this.pauseMenu = null;
-    this.playerWallCollider?.destroy();
-    this.playerDoorCollider?.destroy();
-    this.facility?.destroy();
-    this.lootPickups?.destroy();
-    this.extractionPortal?.destroy();
     this.extractionPortal = null;
-    this.crosshair?.destroy();
-    this.hud?.destroy();
-    this.shieldVisual?.destroy();
     this.shieldVisual = null;
-    this.boostVisual?.destroy();
-    this.mineExplosionVfx?.destroy();
-    this.projectileTrails?.destroy();
-    this.scale.off('resize', this.handleResize, this);
-    this.projectilePool?.destroy((projectile) => projectile.sprite.destroy());
-    this.fxCirclePool?.destroy((circle) => circle.destroy());
+    safely('resize-listener', () => this.scale.off('resize', this.handleResize, this));
     this.projectiles.length = 0;
-    this.enemies.forEach((enemy) => enemy.destroy());
     this.enemies.length = 0;
-    this.containers.forEach((container) => {
-      for (const child of container.root.list) this.tweens.killTweensOf(child);
-      this.tweens.killTweensOf(container.root);
-      container.root.destroy(true);
-    });
-    this.pickups.forEach((pickup) => pickup.root.destroy(true));
-    this.fences.forEach((fence) => fence.destroy());
-    this.turrets.forEach((turret) => turret.destroy());
-    this.mines.forEach((mine) => mine.destroy());
+    this.containers.length = 0;
+    this.pickups.length = 0;
+    this.fences.length = 0;
+    this.turrets.length = 0;
+    this.mines.length = 0;
     if (!this.returning && this.session) {
       const arena = this.scene.get(SceneKeys.Arena);
       arena.events.emit('anomaly-return', {
         sessionId: this.session.sessionId, anomalyId: 'heist', success: false,
         sourcePortal: { ...this.session.sourcePortal }, loot: emptyLoot(), reason: 'scene-shutdown',
-        inputDevice: this.inputController?.activeDevice ?? this.session.initialInputDevice
+        inputDevice: finalInputDevice
       } satisfies AnomalyReturnResult);
     }
     if (import.meta.env.DEV) {
-      const debug = globalThis as typeof globalThis & { forceHeistAmbush?: unknown; forceHeistExtraction?: unknown };
+      const debug = globalThis as typeof globalThis & {
+        forceHeistAmbush?: unknown;
+        forceHeistExtraction?: unknown;
+        forceHeistReturn?: unknown;
+      };
       delete debug.forceHeistAmbush;
       delete debug.forceHeistExtraction;
+      delete debug.forceHeistReturn;
     }
   }
 }

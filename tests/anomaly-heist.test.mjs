@@ -28,7 +28,7 @@ test('HEIST rewards accumulate in an isolated pending container without mutating
 
 test('Arena suspension is the authoritative preservation boundary and only commits successful extraction', () => {
   const arena = source('../src/game/scenes/ArenaScene.ts');
-  assert.match(arena, /this\.scene\.launch\(SceneKeys\.Heist, session\);\s*this\.scene\.pause\(\)/);
+  assert.match(arena, /this\.scene\.launch\(SceneKeys\.Heist, session\);[\s\S]{0,400}this\.scene\.sleep\(\)/);
   assert.match(arena, /if \(result\.success\) this\.commitAnomalyLoot\(result\)/);
   assert.match(arena, /this\.player\.invulnUntil = Math\.max\([\s\S]*?HEIST_BALANCE\.safeReturnInvulnerabilityMs/);
   assert.match(arena, /sharedRuntime:\s*\{[\s\S]*?modRuntime: this\.modRuntime,[\s\S]*?temporaryAmmo: this\.temporaryAmmo,[\s\S]*?mineChargeRack: this\.mineChargeRack/);
@@ -41,9 +41,10 @@ test('Arena suspension is the authoritative preservation boundary and only commi
 test('HEIST failure bypasses normal defeat and restores through the Arena return event', () => {
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
   assert.match(heist, /private failHeist\(\)/);
-  assert.match(heist, /returnToArena\(false, 'player-dead'\)/);
+  assert.match(heist, /beginReturnFade\(false, 'player-dead', 500\)/);
   assert.doesNotMatch(heist, /SceneKeys\.Results|triggerDefeat/);
   assert.match(heist, /arena\.events\.emit\('anomaly-return'/);
+  assert.match(heist, /Phaser\.Cameras\.Scene2D\.Events\.FADE_OUT_COMPLETE/);
   const transition = heist.slice(heist.indexOf('private returnToArena'), heist.indexOf('private updateHud'));
   assert.doesNotMatch(transition, /this\.scene\.resume\(SceneKeys\.Arena\)/);
 });
@@ -115,34 +116,61 @@ test('HEIST facility and shared Arcade HUD use bounded dimensional presentation 
   assert.match(arcadeHud, /leftRail/);
 });
 
-test('Arena owns ordered HEIST stop, Arena resume, and RESUME-bound restoration', () => {
+test('Arena owns ordered HEIST stop, Arena wake, and WAKE-bound restoration', () => {
   const arena = source('../src/game/scenes/ArenaScene.ts');
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
   const transition = heist.slice(heist.indexOf('private returnToArena'), heist.indexOf('private updateHud'));
-  assert.doesNotMatch(transition, /this\.scene\.resume\(SceneKeys\.Arena\)/);
+  assert.doesNotMatch(transition, /this\.scene\.(?:resume|wake)\(SceneKeys\.Arena\)/);
   assert.doesNotMatch(transition, /this\.scene\.stop\(SceneKeys\.Heist\)/);
   assert.match(transition, /arena\.events\.emit\('anomaly-return'/);
-  const stageReturn = arena.slice(arena.indexOf('private readonly onAnomalyReturn'), arena.indexOf('private readonly onArenaResumed'));
-  const restoreReturn = arena.slice(arena.indexOf('private readonly onArenaResumed'), arena.indexOf('constructor()'));
+  const stageReturn = arena.slice(arena.indexOf('private readonly onAnomalyReturn'), arena.indexOf('private readonly onArenaWoken'));
+  const restoreReturn = arena.slice(arena.indexOf('private readonly onArenaWoken'), arena.indexOf('constructor()'));
   assert.match(stageReturn, /stageReturn\(result\.sessionId\)/);
-  assert.ok(stageReturn.indexOf('this.scene.stop(SceneKeys.Heist)') < stageReturn.indexOf('this.scene.resume(SceneKeys.Arena)'));
-  assert.match(stageReturn, /this\.scene\.resume\(SceneKeys\.Arena\)/);
+  assert.ok(stageReturn.indexOf('this.scene.stop(SceneKeys.Heist)') < stageReturn.indexOf('this.scene.wake(SceneKeys.Arena)'));
+  assert.match(stageReturn, /this\.scene\.wake\(SceneKeys\.Arena\)/);
   assert.doesNotMatch(stageReturn, /this\.scene\.(?:start|restart)\(SceneKeys\.Arena/);
   assert.doesNotMatch(stageReturn, /restoreAnomalySimulation/);
   assert.match(restoreReturn, /beginRestore\(result\.sessionId\)/);
   assert.match(restoreReturn, /restoreAnomalySimulation/);
-  assert.match(arena, /events\.on\(Phaser\.Scenes\.Events\.RESUME, this\.onArenaResumed\)/);
+  assert.match(arena, /events\.on\(Phaser\.Scenes\.Events\.WAKE, this\.onArenaWoken\)/);
+  assert.match(arena, /this\.scene\.sleep\(\)/);
+  assert.match(arena, /restoreArenaCamera\(suspension\)/);
   assert.match(arena, /physicsWasPaused: this\.physics\.world\.isPaused/);
   assert.match(arena, /physicsTimeScale: this\.physics\.world\.timeScale/);
   assert.match(arena, /clockWasPaused: this\.time\.paused/);
   assert.match(arena, /clockTimeScale: this\.time\.timeScale/);
   assert.match(arena, /playerBodyEnabled:/);
   assert.match(arena, /this\.state\.set\(suspension\.roundState\)/);
-  assert.match(arena, /inputBridge: this\.pointerLock \?\? undefined/);
-  assert.match(heist, /inputDevice: this\.inputController\.activeDevice/);
+  assert.match(arena, /inputBridge: this\.devAnomalyReturnSoak \? undefined : this\.pointerLock \?\? undefined/);
+  assert.match(heist, /inputDevice: this\.session\.dev\?\.instantReturn \? 'gamepad' : this\.inputController\.activeDevice/);
   const entry = arena.slice(arena.indexOf('private beginAnomalyTransition'), arena.indexOf('private commitAnomalyLoot'));
   assert.doesNotMatch(entry, /pointerLock\?\.destroy|pointerLock\?\.release/);
-  assert.match(arena, /cameras\.main\.resetFX\(\)\.setAlpha\(1\)\.setVisible\(true\)/);
+  assert.match(arena, /camera\.resetFX\(\)/);
+  assert.match(arena, /camera\.setVisible\(true\)/);
+});
+
+test('HEIST shutdown leaves Phaser-owned objects to Phaser and resets reusable scene state', () => {
+  const heist = source('../src/game/anomalies/heist/HeistScene.ts');
+  const reset = heist.slice(heist.indexOf('private resetSessionState'), heist.indexOf('private resolveProjectileCosmetics'));
+  const cleanup = heist.slice(heist.indexOf('private cleanup()'), heist.lastIndexOf('\n}'));
+  assert.match(reset, /this\.returning = false/);
+  assert.match(reset, /this\.returnResultDelivered = false/);
+  assert.match(reset, /this\.containers\.length = 0/);
+  assert.match(cleanup, /Do not destroy[\s\S]*a second time/);
+  assert.doesNotMatch(cleanup, /this\.facility\?\.destroy|this\.hud\?\.destroy|this\.projectilePool\?\.destroy/);
+});
+
+test('DEV anomaly return soak uses scene lifecycle events for repeated full handoffs', () => {
+  const arena = source('../src/game/scenes/ArenaScene.ts');
+  const heist = source('../src/game/anomalies/heist/HeistScene.ts');
+  assert.match(arena, /n3onAnomalyReturnSoak=\(cycles=10\)/);
+  assert.match(arena, /private continueDevAnomalyReturnSoak\(\)/);
+  assert.match(arena, /this\.continueDevAnomalyReturnSoak\(\)/);
+  assert.match(heist, /Phaser\.Scenes\.Events\.POST_UPDATE, this\.onDevInstantReturn/);
+  assert.doesNotMatch(arena.slice(
+    arena.indexOf('private startDevAnomalyReturnSoak'),
+    arena.indexOf('private validateAnomalyReturnInvariants')
+  ), /setTimeout|delayedCall/);
 });
 
 test('Anomaly return lifecycle is idempotent across 12 consecutive transfers', () => {
@@ -150,6 +178,7 @@ test('Anomaly return lifecycle is idempotent across 12 consecutive transfers', (
   for (let cycle = 0; cycle < 12; cycle += 1) {
     const sessionId = `repeat-${cycle}`;
     assert.equal(lifecycle.begin(sessionId), true);
+    assert.deepEqual(lifecycle.snapshot(), { phase: 'arena-sleeping', sessionId });
     assert.equal(lifecycle.begin(`${sessionId}-duplicate`), false);
     assert.equal(lifecycle.stageReturn(sessionId), true);
     assert.equal(lifecycle.stageReturn(sessionId), false);

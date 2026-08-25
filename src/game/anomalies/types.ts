@@ -123,7 +123,7 @@ export interface HeistAbilityConfig {
 }
 
 /**
- * Live, in-memory services owned by the current Arena run. The Arena is paused
+ * Live, in-memory services owned by the current Arena run. The Arena is asleep
  * while HEIST uses them, so the anomaly advances the same Mod, ammo, and mine
  * rack state instead of constructing a parallel progression ruleset.
  */
@@ -190,7 +190,7 @@ export interface HeistSessionData {
   abilityState: SharedAbilityState;
   inputBridge?: AnomalyInputBridge;
   initialInputDevice?: InputDevice;
-  dev?: { forceMiniBoss?: boolean | null };
+  dev?: { forceMiniBoss?: boolean | null; instantReturn?: boolean };
 }
 
 export interface AnomalyReturnResult {

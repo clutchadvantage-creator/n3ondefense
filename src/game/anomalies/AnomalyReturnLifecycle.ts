@@ -1,4 +1,4 @@
-export type AnomalyReturnPhase = 'idle' | 'arena-suspended' | 'return-staged' | 'restoring';
+export type AnomalyReturnPhase = 'idle' | 'arena-sleeping' | 'return-staged' | 'restoring';
 
 export interface AnomalyReturnLifecycleSnapshot {
   phase: AnomalyReturnPhase;
@@ -24,12 +24,12 @@ export class AnomalyReturnLifecycle {
   begin(sessionId: string): boolean {
     if (!sessionId || this.phaseValue !== 'idle') return false;
     this.sessionIdValue = sessionId;
-    this.phaseValue = 'arena-suspended';
+    this.phaseValue = 'arena-sleeping';
     return true;
   }
 
   stageReturn(sessionId: string): boolean {
-    if (!this.matches(sessionId, 'arena-suspended')) return false;
+    if (!this.matches(sessionId, 'arena-sleeping')) return false;
     this.phaseValue = 'return-staged';
     return true;
   }
