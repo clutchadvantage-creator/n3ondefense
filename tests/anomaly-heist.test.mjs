@@ -115,16 +115,19 @@ test('HEIST facility and shared Arcade HUD use bounded dimensional presentation 
   assert.match(arcadeHud, /leftRail/);
 });
 
-test('Anomaly return stops HEIST before Arena resumes and restores from the RESUME lifecycle', () => {
+test('Arena owns ordered HEIST stop, Arena resume, and RESUME-bound restoration', () => {
   const arena = source('../src/game/scenes/ArenaScene.ts');
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
   const transition = heist.slice(heist.indexOf('private returnToArena'), heist.indexOf('private updateHud'));
   assert.doesNotMatch(transition, /this\.scene\.resume\(SceneKeys\.Arena\)/);
-  assert.ok(transition.indexOf('this.scene.stop(SceneKeys.Heist)') < transition.indexOf("arena.events.emit('anomaly-return'"));
+  assert.doesNotMatch(transition, /this\.scene\.stop\(SceneKeys\.Heist\)/);
+  assert.match(transition, /arena\.events\.emit\('anomaly-return'/);
   const stageReturn = arena.slice(arena.indexOf('private readonly onAnomalyReturn'), arena.indexOf('private readonly onArenaResumed'));
   const restoreReturn = arena.slice(arena.indexOf('private readonly onArenaResumed'), arena.indexOf('constructor()'));
   assert.match(stageReturn, /stageReturn\(result\.sessionId\)/);
+  assert.ok(stageReturn.indexOf('this.scene.stop(SceneKeys.Heist)') < stageReturn.indexOf('this.scene.resume(SceneKeys.Arena)'));
   assert.match(stageReturn, /this\.scene\.resume\(SceneKeys\.Arena\)/);
+  assert.doesNotMatch(stageReturn, /this\.scene\.(?:start|restart)\(SceneKeys\.Arena/);
   assert.doesNotMatch(stageReturn, /restoreAnomalySimulation/);
   assert.match(restoreReturn, /beginRestore\(result\.sessionId\)/);
   assert.match(restoreReturn, /restoreAnomalySimulation/);

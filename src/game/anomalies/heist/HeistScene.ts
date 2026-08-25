@@ -1345,12 +1345,9 @@ export class HeistScene extends Phaser.Scene {
         selectedAbility: this.abilityState.selectedAbility
       }
     };
-    // Phaser defers both operations until its next SceneManager update. Queue
-    // HEIST shutdown first, then let Arena stage the result and request RESUME.
-    // Arena performs restoration from its RESUME event, after this cleanup has
-    // completed, so no retiring anomaly callback can re-suspend live gameplay.
+    // Transfer plain result data only. Arena's shared return lifecycle owns the
+    // ordered HEIST stop -> Arena resume operation for every future anomaly.
     this.cameras.main.setAlpha(0).setVisible(false);
-    this.scene.stop(SceneKeys.Heist);
     arena.events.emit('anomaly-return', result);
   }
 

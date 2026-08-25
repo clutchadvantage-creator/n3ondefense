@@ -599,8 +599,9 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.pendingAnomalyReturn = result;
     this.traceAnomalyReturn('return-staged');
-    // ScenePlugin operations are deferred. HEIST queues its stop before this
-    // event, so Arena RESUME will fire only after anomaly cleanup is complete.
+    // One owner and one deferred queue: retire the anomaly first, then resume
+    // this same preserved Arena instance. Restoration runs from RESUME below.
+    this.scene.stop(SceneKeys.Heist);
     this.scene.resume(SceneKeys.Arena);
   };
   private readonly onArenaResumed = (): void => {
@@ -611,7 +612,6 @@ export class ArenaScene extends Phaser.Scene {
     const suspension = this.anomalySuspensionState;
     this.cameras.main.resetFX().setAlpha(1).setVisible(true);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-    this.scene.bringToTop();
     if (result.success) this.commitAnomalyLoot(result);
     this.anomalyController?.resolveReturn();
     if (result.playerState) {
@@ -1259,6 +1259,9 @@ export class ArenaScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     const now = this.time.now;
+    // Presentation cleanup must run before any pause/victory early return so a
+    // damage flash can never strand the Operative in TintFill white.
+    this.player.updatePresentation(now);
     if (this.anomalyReturnAwaitingFirstUpdate) {
       this.anomalyReturnAwaitingFirstUpdate = false;
       this.traceAnomalyReturn('first-arena-update-after-return');
@@ -1269,9 +1272,6 @@ export class ArenaScene extends Phaser.Scene {
       this.anomalyReturnAwaitingFirstPhysicsStep = false;
       this.traceAnomalyReturn('first-physics-step-after-return');
     }
-    // Presentation cleanup must run before any pause/victory early return so a
-    // damage flash can never strand the Operative in TintFill white.
-    this.player.updatePresentation(now);
     const dt = delta / 1000;
     const inputContext = this.tutorialHardPaused
       ? 'tutorial'
