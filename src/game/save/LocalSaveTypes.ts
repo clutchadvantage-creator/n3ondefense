@@ -12,7 +12,7 @@ import type { ControllerSettings } from '../config/controllerSettings.ts';
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 15;
+export const CURRENT_SAVE_VERSION = 16;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -37,8 +37,12 @@ export interface LocalPlayerProgress {
   supremeHighestRound: number;
   /** Explicit campaign milestone; never inferred from highestRound alone. */
   supremeOverdriveCompleted: boolean;
+  /** Round 50 was successfully completed in the regular Overdrive family. */
+  regularOverdriveCompleted: boolean;
   /** One-time regular-Overdrive R48-50 introduction to the Supreme tier. */
   regularOverdriveSupremeBridgeAwarded: boolean;
+  /** The one-time first-Supreme rules briefing has been presented. */
+  firstSupremeTutorialSeen: boolean;
   roundsCompleted: number;
   enemiesDestroyed: number;
   bombSitesDestroyed: number;
@@ -127,7 +131,7 @@ export interface LocalPlayerSaveV1 {
   wallet: Omit<LocalPlayerWallet, 'fluxCores'> & { fluxCores?: number };
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
-  progress: Omit<LocalPlayerProgress, 'normalHighestRound' | 'supremeHighestRound' | 'supremeOverdriveCompleted' | 'regularOverdriveSupremeBridgeAwarded' | 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'arcadeEventsCompleted' | 'goldenEnemiesKilled' | 'arcadeMiniBossesKilled' | 'neonCircuitsCompleted' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
+  progress: Omit<LocalPlayerProgress, 'normalHighestRound' | 'supremeHighestRound' | 'supremeOverdriveCompleted' | 'regularOverdriveCompleted' | 'regularOverdriveSupremeBridgeAwarded' | 'firstSupremeTutorialSeen' | 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'arcadeEventsCompleted' | 'goldenEnemiesKilled' | 'arcadeMiniBossesKilled' | 'neonCircuitsCompleted' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
   settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'controller' | 'contextualTutorials' | 'buttonJiggle'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }

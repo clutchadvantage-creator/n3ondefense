@@ -370,6 +370,8 @@ export interface RoundFinishedPayload {
   fluxCoresGained: number;
   bossDefeated: string | null;
   protocol: RunProtocolId;
+  /** Protocol that Continue deploys; differs at the Overdrive R50 boundary. */
+  nextProtocol?: RunProtocolId;
   equippedMods: EquippedModSnapshot[];
   modsEarned: ModRewardRecord[];
   runStartedAt: number;
@@ -382,4 +384,6 @@ export interface RoundFinishedPayload {
   /** Present only for the official Supreme Level 100 terminal clear. */
   supremeCompletion?: boolean;
   terminalBossesDefeated?: number;
+  /** This debrief follows the one-time regular Overdrive completion milestone. */
+  supremeOverdriveUnlocked?: boolean;
 }

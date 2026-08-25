@@ -111,7 +111,8 @@ export class MainMenuScene extends Phaser.Scene {
     }
     const requestedProtocol = profile ? SaveSystem.getPreferredProtocol() : 'normal';
     const supremeHighestRound = profile ? SaveSystem.getSupremeHighestRound() : 0;
-    const protocol = profile && isRunProtocolUnlocked(requestedProtocol, { highestRound: SaveSystem.getHighestRound(), supremeHighestRound })
+    const regularOverdriveCompleted = profile ? SaveSystem.hasCompletedRegularOverdrive() : false;
+    const protocol = profile && isRunProtocolUnlocked(requestedProtocol, { highestRound: SaveSystem.getHighestRound(), supremeHighestRound, regularOverdriveCompleted })
       ? requestedProtocol
       : 'normal';
     const protocolDefinition = RUN_PROTOCOLS[protocol];
@@ -119,7 +120,8 @@ export class MainMenuScene extends Phaser.Scene {
       protocol,
       profile ? SaveSystem.getHighestRound() : 0,
       supremeHighestRound,
-      profile ? SaveSystem.getNormalHighestRound() : 0
+      profile ? SaveSystem.getNormalHighestRound() : 0,
+      regularOverdriveCompleted
     );
     const equippedMods = profile ? new ModRuntime(SaveSystem.getModCollection(), undefined, protocol).snapshot() : [];
     const narrow = width < 1120;
@@ -149,7 +151,7 @@ export class MainMenuScene extends Phaser.Scene {
     const briefingHeight = Math.max(300, Math.min(short ? 600 : 680, height - briefingTop - 18));
     this.createOperativeBriefing(briefingX, briefingTop, briefingWidth, briefingHeight, profile?.name ?? null);
 
-    const unlockedProtocols = profile ? getUnlockedProtocolIds(SaveSystem.getHighestRound(), supremeHighestRound) : ['normal'] as const;
+    const unlockedProtocols = profile ? getUnlockedProtocolIds(SaveSystem.getHighestRound(), supremeHighestRound, regularOverdriveCompleted) : ['normal'] as const;
     const protocolY = tiny ? 128 : short ? 177 : 235;
     const protocolArrowWidth = tiny ? 42 : short ? 50 : 58;
     const protocolGap = tiny ? 7 : 10;
@@ -162,9 +164,9 @@ export class MainMenuScene extends Phaser.Scene {
 
     const selectProtocol = (direction: 1 | -1): boolean => {
       if (!profile) return true;
-      const next = cycleUnlockedProtocol(protocol, SaveSystem.getHighestRound(), direction, supremeHighestRound);
+      const next = cycleUnlockedProtocol(protocol, SaveSystem.getHighestRound(), direction, supremeHighestRound, regularOverdriveCompleted);
       if (next === protocol && unlockedProtocols.length === 1) {
-        const nextLocked = RUN_PROTOCOL_IDS.find((id) => !isRunProtocolUnlocked(id, { highestRound: SaveSystem.getHighestRound(), supremeHighestRound }));
+        const nextLocked = RUN_PROTOCOL_IDS.find((id) => !isRunProtocolUnlocked(id, { highestRound: SaveSystem.getHighestRound(), supremeHighestRound, regularOverdriveCompleted }));
         if (nextLocked) onlineStatus.setText(`${RUN_PROTOCOLS[nextLocked].label} UNLOCKS AT ROUND ${RUN_PROTOCOLS[nextLocked].unlockHighestRound}`).setColor('#ffbd85');
         return false;
       }

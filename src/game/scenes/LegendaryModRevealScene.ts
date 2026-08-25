@@ -9,6 +9,7 @@ import {
   calculateModRevealCardWidth,
   type ModAcquisitionPresentation
 } from '../mods/ModAcquisition.ts';
+import { createButton, disableButton } from '../utils/ui.ts';
 
 export interface LegendaryModRevealData {
   ownerSceneKey: string;
@@ -26,6 +27,7 @@ export class LegendaryModRevealScene extends Phaser.Scene {
   private card: Phaser.GameObjects.Container | null = null;
   private titleObjects: Phaser.GameObjects.Text[] = [];
   private idleTweens: Phaser.Tweens.Tween[] = [];
+  private continueButton: Phaser.GameObjects.Container | null = null;
   private finished = false;
 
   constructor() {
@@ -184,11 +186,35 @@ export class LegendaryModRevealScene extends Phaser.Scene {
       this.tweens.add({ targets: card, y: card.y - 6, duration: 720, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
       this.tweens.add({ targets: outerGlow, alpha: { from: 0.08, to: 0.34 }, scale: { from: 0.98, to: 1.05 }, duration: 620, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
     );
-    this.time.delayedCall(this.request?.rarity === 'supreme' ? SUPREME_MOD_REVEAL_HOLD_MS : LEGENDARY_MOD_REVEAL_HOLD_MS, () => this.dismissPresentation());
+    const supreme = this.request?.rarity === 'supreme';
+    this.time.delayedCall(supreme ? SUPREME_MOD_REVEAL_HOLD_MS : LEGENDARY_MOD_REVEAL_HOLD_MS, () => {
+      if (supreme) this.showSupremeContinue();
+      else this.dismissPresentation();
+    });
+  }
+
+  private showSupremeContinue(): void {
+    if (this.finished || this.continueButton) return;
+    this.continueButton = createButton(
+      this,
+      this.scale.width * 0.5,
+      this.scale.height - 52,
+      'CONTINUE',
+      () => {
+        if (this.continueButton) disableButton(this.continueButton);
+        this.dismissPresentation();
+      },
+      280,
+      'menu',
+      { height: 48, fontSize: 19, focusDefaultPriority: 100 }
+    ).setDepth(2100).setAlpha(0);
+    this.tweens.add({ targets: this.continueButton, alpha: 1, y: '-=8', duration: 260, ease: 'Back.easeOut' });
   }
 
   private dismissPresentation(): void {
     if (!this.root || !this.card || !this.backdrop) return;
+    this.continueButton?.destroy(true);
+    this.continueButton = null;
     this.idleTweens.forEach((tween) => tween.remove());
     this.idleTweens = [];
     const card = this.card;
@@ -222,6 +248,7 @@ export class LegendaryModRevealScene extends Phaser.Scene {
       this.root.first.setSize(size.width, size.height);
     }
     if (this.scanlines) this.drawScanlines(this.scanlines, size.width, size.height);
+    this.continueButton?.setPosition(size.width * 0.5, size.height - 60);
   };
 
   private finish(): void {
@@ -236,6 +263,8 @@ export class LegendaryModRevealScene extends Phaser.Scene {
     this.scale.off('resize', this.handleResize, this);
     this.idleTweens.forEach((tween) => tween.remove());
     this.idleTweens = [];
+    this.continueButton?.destroy(true);
+    this.continueButton = null;
     if (!this.finished && this.token) {
       this.finished = true;
       if (this.scene.isPaused(this.ownerSceneKey)) this.scene.resume(this.ownerSceneKey);

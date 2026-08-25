@@ -159,7 +159,9 @@ const normalizeProgress = (progress: unknown): LocalPlayerProgress => {
     normalHighestRound: toInteger(candidate.normalHighestRound ?? candidate.highestRound),
     supremeHighestRound: toInteger(candidate.supremeHighestRound),
     supremeOverdriveCompleted: toBoolean(candidate.supremeOverdriveCompleted, false),
+    regularOverdriveCompleted: toBoolean(candidate.regularOverdriveCompleted, false),
     regularOverdriveSupremeBridgeAwarded: toBoolean(candidate.regularOverdriveSupremeBridgeAwarded, false),
+    firstSupremeTutorialSeen: toBoolean(candidate.firstSupremeTutorialSeen, false),
     roundsCompleted: toInteger(candidate.roundsCompleted),
     enemiesDestroyed: toInteger(candidate.enemiesDestroyed),
     bombSitesDestroyed: toInteger(candidate.bombSitesDestroyed),
@@ -294,7 +296,9 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       normalHighestRound: toInteger(v1.progress?.highestRound),
       supremeHighestRound: 0,
       supremeOverdriveCompleted: false,
+      regularOverdriveCompleted: false,
       regularOverdriveSupremeBridgeAwarded: false,
+      firstSupremeTutorialSeen: false,
       roundsCompleted: toInteger(v1.progress?.roundsCompleted),
       enemiesDestroyed: toInteger(v1.progress?.enemiesDestroyed),
       bombSitesDestroyed: toInteger(v1.progress?.bombSitesDestroyed),
@@ -326,7 +330,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === 12 || version === 13 || version === 14 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === 12 || version === 13 || version === 14 || version === 15 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;
@@ -372,6 +376,19 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
     && current.progress.highestRound >= 48
     && Object.keys(current.mods.inventory).some((id) => id.startsWith('supreme-'))) {
     current.progress.regularOverdriveSupremeBridgeAwarded = true;
+  }
+  if (current.progress && version < 16) {
+    const ownsSupreme = Object.keys(current.mods.inventory).some((id) => id.startsWith('supreme-'));
+    // Preserve access that could already be earned under the previous global
+    // Round-53 gate, while preferring evidence from the real bridge path.
+    current.progress.regularOverdriveCompleted = current.progress.regularOverdriveCompleted
+      || current.progress.supremeHighestRound >= 51
+      || current.progress.supremeOverdriveCompleted
+      || current.progress.highestRound >= 53
+      || (current.progress.regularOverdriveSupremeBridgeAwarded && current.progress.highestRound >= 50);
+    // Existing Supreme owners predate this briefing and must not be forced
+    // through a retroactive first-acquisition ceremony.
+    current.progress.firstSupremeTutorialSeen = current.progress.firstSupremeTutorialSeen || ownsSupreme;
   }
   return current as LocalPlayerSave;
 };

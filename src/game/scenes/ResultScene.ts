@@ -100,7 +100,8 @@ export class ResultScene extends Phaser.Scene {
             protocol,
             SaveSystem.getHighestRound(),
             SaveSystem.getSupremeHighestRound(),
-            SaveSystem.getNormalHighestRound()
+            SaveSystem.getNormalHighestRound(),
+            SaveSystem.hasCompletedRegularOverdrive()
           );
           startArenaLoad(this, {
             reason: 'replay-after-fail',

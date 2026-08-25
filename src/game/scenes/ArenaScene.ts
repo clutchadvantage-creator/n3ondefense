@@ -106,6 +106,10 @@ import {
 } from '../loot/GameplayPickupPresentation.ts';
 import { getSupremeStage, isSupremeProtocol, isSupremeTerminalRound } from '../progression/SupremeProgression.ts';
 import { resolveSupremeBridgeReward } from '../progression/SupremeBridgeReward.ts';
+import {
+  isRegularOverdriveTerminalCompletion,
+  resolveSupremePostRoundPlan
+} from '../progression/SupremeRoundTransition.ts';
 import { SupremeConstellationFloor } from '../vfx/SupremeConstellationFloor.ts';
 import { SupremeFinaleController } from '../bosses/SupremeFinaleController.ts';
 import { SupremeFinaleOverlay } from '../bosses/SupremeFinaleOverlay.ts';
@@ -134,6 +138,11 @@ interface Projectile {
   ricochetsRemaining?: number;
   ammoMode?: TemporaryAmmoMode;
   nextTrailAt: number;
+}
+
+interface SupremeBridgeAwardOutcome {
+  firstSupremeAwarded: boolean;
+  modId: string | null;
 }
 
 interface ProjectileSpawn extends Omit<Projectile, 'sprite' | 'crossedFences' | 'nextTrailAt'> {
@@ -5233,7 +5242,7 @@ export class ArenaScene extends Phaser.Scene {
     return true;
   }
 
-  private tryAwardSupremeBridge(completedRound: number): void {
+  private tryAwardSupremeBridge(completedRound: number): SupremeBridgeAwardOutcome {
     const collection = SaveSystem.getModCollection();
     const resolution = resolveSupremeBridgeReward({
       protocol: this.protocol,
@@ -5242,13 +5251,13 @@ export class ArenaScene extends Phaser.Scene {
       alreadyAwarded: SaveSystem.hasRegularOverdriveSupremeBridgeAwarded(),
       ownedModIds: Object.keys(collection.inventory)
     });
-    if (!resolution.markSatisfied) return;
+    if (!resolution.markSatisfied) return { firstSupremeAwarded: false, modId: null };
     if (!resolution.modId) {
       SaveSystem.markRegularOverdriveSupremeBridgeAwarded();
-      return;
+      return { firstSupremeAwarded: false, modId: null };
     }
     const definition = MOD_BY_ID.get(resolution.modId);
-    if (!definition || definition.rarity !== 'supreme') return;
+    if (!definition || definition.rarity !== 'supreme') return { firstSupremeAwarded: false, modId: null };
     const awarded = this.awardResolvedMod(
       definition,
       'milestone',
@@ -5258,6 +5267,7 @@ export class ArenaScene extends Phaser.Scene {
       'UNLOCKED FOR SUPREME OVERDRIVE'
     );
     if (awarded) SaveSystem.markRegularOverdriveSupremeBridgeAwarded();
+    return { firstSupremeAwarded: awarded, modId: awarded ? definition.id : null };
   }
 
   private modRevealScreenPosition(worldX: number, worldY: number): { x: number; y: number } {
@@ -5464,7 +5474,14 @@ export class ArenaScene extends Phaser.Scene {
     const completedSeed = this.layout.seed;
     const completedTemplate = this.layout.template;
     this.tryAwardMod('milestone', isGuaranteedMilestone(completedRound));
-    this.tryAwardSupremeBridge(completedRound);
+    // Round 50 is also a boss round. Its bridge reward and campaign unlock
+    // must wait for the boss victory endpoint; awarding here lets a reveal
+    // compete with beginBossFight and can grant the bridge before a failed boss.
+    const deferSupremeBridge = isBossRound(completedRound)
+      && isRegularOverdriveTerminalCompletion(this.protocol, completedRound);
+    const supremeBridge = deferSupremeBridge
+      ? { firstSupremeAwarded: false, modId: null }
+      : this.tryAwardSupremeBridge(completedRound);
 
     const rawRewardCredits = this.roundCredits + this.scaleModCredits(getRoundCompletionCredits(completedRound));
     const rewardMultiplier = this.currentRewardMultiplier();
@@ -5516,6 +5533,7 @@ export class ArenaScene extends Phaser.Scene {
         fluxCoresGained: rewardFluxCores,
         bossDefeated: null,
         protocol: this.protocol,
+        nextProtocol: this.protocol,
         equippedMods: this.modRuntime.snapshot(),
         modsEarned: [...this.modsEarned],
         runStartedAt: this.runStartedAt,
@@ -5535,9 +5553,48 @@ export class ArenaScene extends Phaser.Scene {
         this.beginBossFight(payload, false);
         return;
       }
-      this.registry.set('round-finished', payload);
-      this.scene.start(SceneKeys.RoundFinished);
+      this.presentCompletedRound(payload, supremeBridge);
     });
+  }
+
+  /** Single authoritative post-round handoff. Reward ownership and the unlock
+   * flag are already durable before either presentation scene is entered. */
+  private presentCompletedRound(
+    payload: RoundFinishedPayload,
+    bridge: SupremeBridgeAwardOutcome
+  ): void {
+    const regularOverdriveCompleted = SaveSystem.hasCompletedRegularOverdrive();
+    const plan = resolveSupremePostRoundPlan({
+      protocol: payload.protocol,
+      completedRound: payload.completedRound,
+      firstSupremeAwarded: bridge.firstSupremeAwarded,
+      firstSupremeTutorialSeen: SaveSystem.hasSeenFirstSupremeTutorial(),
+      regularOverdriveCompleted
+    });
+
+    if (plan.newlyUnlocksSupremeOverdrive) {
+      SaveSystem.recordRegularOverdriveCompletion();
+    }
+    if (plan.completesRegularOverdrive) {
+      // The live run crosses the boundary now. Persisting the real Supreme
+      // protocol also makes its universal slots available in the between-round
+      // Mod Collection without force-equipping the newly awarded card.
+      SaveSystem.setPreferredProtocol(plan.nextProtocol);
+    }
+
+    const finalizedPayload: RoundFinishedPayload = {
+      ...payload,
+      nextProtocol: plan.nextProtocol,
+      supremeOverdriveUnlocked: plan.newlyUnlocksSupremeOverdrive
+    };
+    this.pendingRoundPayload = finalizedPayload;
+    this.registry.set('round-finished', finalizedPayload);
+    if (plan.milestone) {
+      this.registry.set('supreme-milestone', { kind: plan.milestone });
+      this.scene.start(SceneKeys.SupremeMilestone, { kind: plan.milestone });
+      return;
+    }
+    this.scene.start(SceneKeys.RoundFinished);
   }
 
   private beginBossFight(payload: RoundFinishedPayload, terminalEncounter = false): void {

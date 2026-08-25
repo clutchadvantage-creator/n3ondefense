@@ -222,11 +222,11 @@ export const isRunProtocolUnlocked = (id: RunProtocolId, progress: SupremeProgre
   return stage ? isSupremeStageUnlocked(stage, progress) : progress.highestRound >= RUN_PROTOCOLS[id].unlockHighestRound;
 };
 
-export const getUnlockedProtocolIds = (highestRound: number, supremeHighestRound = 0): RunProtocolId[] =>
-  RUN_PROTOCOL_IDS.filter((id) => isRunProtocolUnlocked(id, { highestRound, supremeHighestRound }));
+export const getUnlockedProtocolIds = (highestRound: number, supremeHighestRound = 0, regularOverdriveCompleted = false): RunProtocolId[] =>
+  RUN_PROTOCOL_IDS.filter((id) => isRunProtocolUnlocked(id, { highestRound, supremeHighestRound, regularOverdriveCompleted }));
 
-export const cycleUnlockedProtocol = (current: RunProtocolId, highestRound: number, direction: 1 | -1, supremeHighestRound = 0): RunProtocolId => {
-  const unlocked = getUnlockedProtocolIds(highestRound, supremeHighestRound);
+export const cycleUnlockedProtocol = (current: RunProtocolId, highestRound: number, direction: 1 | -1, supremeHighestRound = 0, regularOverdriveCompleted = false): RunProtocolId => {
+  const unlocked = getUnlockedProtocolIds(highestRound, supremeHighestRound, regularOverdriveCompleted);
   const currentIndex = Math.max(0, unlocked.indexOf(current));
   return unlocked[(currentIndex + direction + unlocked.length) % unlocked.length] ?? 'normal';
 };

@@ -170,5 +170,5 @@ export const loadGaragePreset = (save: LocalPlayerSave, presetId: GaragePresetId
   return { ok: true, message: `${preset.name} loaded${notes.length ? ` // ${notes.join(' // ')}` : ''}.`, missingCards, ignoredProtocol };
 };
 
-export const isGarageProtocolUnlocked = (protocol: RunProtocolId, highestRound: number, supremeHighestRound = 0): boolean =>
-  isRunProtocolUnlocked(protocol, { highestRound, supremeHighestRound });
+export const isGarageProtocolUnlocked = (protocol: RunProtocolId, highestRound: number, supremeHighestRound = 0, regularOverdriveCompleted = false): boolean =>
+  isRunProtocolUnlocked(protocol, { highestRound, supremeHighestRound, regularOverdriveCompleted });

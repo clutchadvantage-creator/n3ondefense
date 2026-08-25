@@ -275,7 +275,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const contentScale = roomy ? Phaser.Math.Clamp(rect.width / 400, 1, 1.36) : 1;
     const highestRound = SaveSystem.getHighestRound();
     const requested = SaveSystem.getPreferredProtocol();
-    const protocol = isRunProtocolUnlocked(requested, { highestRound, supremeHighestRound: SaveSystem.getSupremeHighestRound() }) ? requested : 'normal';
+    const protocol = isRunProtocolUnlocked(requested, { highestRound, supremeHighestRound: SaveSystem.getSupremeHighestRound(), regularOverdriveCompleted: SaveSystem.hasCompletedRegularOverdrive() }) ? requested : 'normal';
     const setup = SaveSystem.getNextRunSetupSelection();
     const rows = [
       { label: 'PROTOCOL', value: RUN_PROTOCOLS[protocol].label, action: () => this.cycleProtocol(protocol) },
@@ -1372,7 +1372,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const firstCenterY = cardsTop + Math.max(0, (availableHeight - usedHeight) / 2) + cardHeight / 2;
     protocols.forEach((id, index) => {
       const definition = RUN_PROTOCOLS[id];
-      const unlocked = isRunProtocolUnlocked(id, { highestRound: highest, supremeHighestRound: supremeHighest });
+      const unlocked = isRunProtocolUnlocked(id, { highestRound: highest, supremeHighestRound: supremeHighest, regularOverdriveCompleted: SaveSystem.hasCompletedRegularOverdrive() });
       const selected = current === id;
       const column = index % columns;
       const row = Math.floor(index / columns);
@@ -1421,7 +1421,9 @@ export class OperatorGarageScene extends Phaser.Scene {
       const progressWidth = Math.max(24, progressRight - progressLeft);
       const progressY = y + cardHeight / 2 - (narrow ? 7 : 11);
       const supremeStage = getSupremeStage(id);
-      const progressValue = supremeStage?.unlockSource === 'supreme' ? supremeHighest : highest;
+      const progressValue = supremeStage?.unlockSource === 'supreme'
+        ? supremeHighest
+        : SaveSystem.hasCompletedRegularOverdrive() ? definition.unlockHighestRound : 0;
       const progressRatio = unlocked ? 1 : Phaser.Math.Clamp(progressValue / definition.unlockHighestRound, 0, 1);
       const progressTrack = this.add.rectangle(progressLeft, progressY, progressWidth, narrow ? 2 : 4, 0x02070c, 1)
         .setOrigin(0, 0.5).setStrokeStyle(1, accent, 0.22);
@@ -1502,7 +1504,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private cycleProtocol(current: RunProtocolId): boolean {
-    const next = cycleUnlockedProtocol(current, SaveSystem.getHighestRound(), 1, SaveSystem.getSupremeHighestRound());
+    const next = cycleUnlockedProtocol(current, SaveSystem.getHighestRound(), 1, SaveSystem.getSupremeHighestRound(), SaveSystem.hasCompletedRegularOverdrive());
     const result = SaveSystem.setPreferredProtocol(next);
     this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? RUN_PROTOCOLS[next].label}`;
     this.scene.restart({ returnScene: this.returnScene });

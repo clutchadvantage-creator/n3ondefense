@@ -474,7 +474,7 @@ export class BootScene extends Phaser.Scene {
       graphics.fillStyle(recess, 1).fillCircle(24, 24, 2);
     });
 
-    const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, heistModule, legendaryRevealModule, upgradeModule, cosmeticModule, modModule, garageModule, resultModule, optionsModule, roundFinishedModule, loadingModule] = await Promise.all([
+    const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, heistModule, legendaryRevealModule, supremeMilestoneModule, upgradeModule, cosmeticModule, modModule, garageModule, resultModule, optionsModule, roundFinishedModule, loadingModule] = await Promise.all([
       import('./SplashScene'),
       import('./LeaderboardsScene'),
       import('./OnlineLeaderboardsScene'),
@@ -483,6 +483,7 @@ export class BootScene extends Phaser.Scene {
       import('./ArenaScene'),
       import('../anomalies/heist/HeistScene'),
       import('./LegendaryModRevealScene'),
+      import('./SupremeMilestoneScene'),
       import('./UpgradeStoreScene'),
       import('./CosmeticsStoreScene'),
       import('./ModCollectionScene'),
@@ -501,6 +502,7 @@ export class BootScene extends Phaser.Scene {
     this.scene.add(SceneKeys.Arena, arenaModule.ArenaScene, false);
     this.scene.add(SceneKeys.Heist, heistModule.HeistScene, false);
     this.scene.add(SceneKeys.LegendaryModReveal, legendaryRevealModule.LegendaryModRevealScene, false);
+    this.scene.add(SceneKeys.SupremeMilestone, supremeMilestoneModule.SupremeMilestoneScene, false);
     this.scene.add(SceneKeys.Upgrades, upgradeModule.UpgradeStoreScene, false);
     this.scene.add(SceneKeys.Cosmetics, cosmeticModule.CosmeticsStoreScene, false);
     this.scene.add(SceneKeys.Mods, modModule.ModCollectionScene, false);

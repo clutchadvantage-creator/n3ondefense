@@ -248,6 +248,30 @@ export class PlayerProfileStore {
     PlayerProfileStore.save();
   }
 
+  static hasCompletedRegularOverdrive(): boolean {
+    return PlayerProfileStore.getActiveSave().progress.regularOverdriveCompleted;
+  }
+
+  static recordRegularOverdriveCompletion(): void {
+    const save = PlayerProfileStore.getActiveSave();
+    if (save.progress.regularOverdriveCompleted) return;
+    save.progress.regularOverdriveCompleted = true;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
+  static hasSeenFirstSupremeTutorial(): boolean {
+    return PlayerProfileStore.getActiveSave().progress.firstSupremeTutorialSeen;
+  }
+
+  static markFirstSupremeTutorialSeen(): void {
+    const save = PlayerProfileStore.getActiveSave();
+    if (save.progress.firstSupremeTutorialSeen) return;
+    save.progress.firstSupremeTutorialSeen = true;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+  }
+
   static recordBombSiteDestroyed(count = 1, protocol?: RunProtocolId): void {
     PlayerProfileStore.recordCombatProgress(0, count, protocol);
   }

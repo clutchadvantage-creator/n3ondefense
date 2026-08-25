@@ -18,8 +18,8 @@ export interface SupremeStageDefinition {
   level: number;
   constellation: string;
   constellationKey: string;
-  /** First tier uses global progression; later tiers require Supreme progress. */
-  unlockSource: 'global' | 'supreme';
+  /** First tier requires the regular Overdrive clear; later tiers use Supreme progress. */
+  unlockSource: 'regular-overdrive' | 'supreme';
   unlockRound: number;
   difficulty: ModeBalanceDefinition;
   rewardMultiplier: number;
@@ -71,7 +71,7 @@ const makeDifficulty = (index: number): ModeBalanceDefinition => ({
 });
 
 const stageData = [
-  ['supreme-leo', 51, 'LEO', 53],
+  ['supreme-leo', 51, 'LEO', 50],
   ['supreme-gemini', 55, 'GEMINI', 58],
   ['supreme-cassiopeia', 60, 'CASSIOPEIA', 68],
   ['supreme-aquila', 65, 'AQUILA', 78],
@@ -105,6 +105,7 @@ export const SUPREME_PROTOCOL_IDS = SUPREME_STAGE_DEFINITIONS.map((stage) => sta
 export interface SupremeProgressSnapshot {
   highestRound: number;
   supremeHighestRound: number;
+  regularOverdriveCompleted?: boolean;
   supremeOverdriveCompleted?: boolean;
 }
 
@@ -115,8 +116,8 @@ export const getSupremeStage = (protocol: RunProtocolId | string | undefined): S
   isSupremeProtocol(protocol) ? SUPREME_STAGE_BY_PROTOCOL.get(protocol) ?? null : null;
 
 export const isSupremeStageUnlocked = (stage: SupremeStageDefinition, progress: SupremeProgressSnapshot): boolean =>
-  stage.unlockSource === 'global'
-    ? progress.highestRound >= stage.unlockRound
+  stage.unlockSource === 'regular-overdrive'
+    ? progress.regularOverdriveCompleted === true
     : progress.supremeHighestRound >= stage.unlockRound;
 
 export const isSupremeTerminalRound = (protocol: RunProtocolId, completedRound: number): boolean =>

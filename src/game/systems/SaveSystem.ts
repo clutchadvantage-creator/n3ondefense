@@ -77,6 +77,10 @@ export class SaveSystem {
   static recordSupremeCompletion(): void { PlayerProfileStore.recordSupremeCompletion(); }
   static hasRegularOverdriveSupremeBridgeAwarded(): boolean { return PlayerProfileStore.hasRegularOverdriveSupremeBridgeAwarded(); }
   static markRegularOverdriveSupremeBridgeAwarded(): void { PlayerProfileStore.markRegularOverdriveSupremeBridgeAwarded(); }
+  static hasCompletedRegularOverdrive(): boolean { return PlayerProfileStore.hasCompletedRegularOverdrive(); }
+  static recordRegularOverdriveCompletion(): void { PlayerProfileStore.recordRegularOverdriveCompletion(); }
+  static hasSeenFirstSupremeTutorial(): boolean { return PlayerProfileStore.hasSeenFirstSupremeTutorial(); }
+  static markFirstSupremeTutorialSeen(): void { PlayerProfileStore.markFirstSupremeTutorialSeen(); }
 
   static recordEnemyDestroyed(count = 1, protocol?: RunProtocolId): void {
     PlayerProfileStore.recordEnemyDestroyed(count, protocol);
