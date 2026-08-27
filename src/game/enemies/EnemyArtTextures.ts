@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ENEMY_ROBOT_FRAMES } from './EnemyRobotFrames.ts';
 import type { EnemyType } from '../types.ts';
+import { drawBakedShadow, drawLayeredPanel, drawMechanicalRivets } from '../rendering/LayeredArtPrimitives.ts';
 
 const SIZE = 72;
 const OUTLINE = 0x05080e;
@@ -13,6 +14,23 @@ const LIGHT = 0xffffff;
 
 type Point = Phaser.Types.Math.Vector2Like;
 
+export interface EnemyArtPalette {
+  primary: number;
+  secondary: number;
+  accent: number;
+  sensor: number;
+}
+
+/** Authored palettes preserve role recognition without flattening the chassis to one tint. */
+export const ENEMY_ART_PALETTES: Record<EnemyType, EnemyArtPalette> = {
+  grunt: { primary: 0xff416d, secondary: 0x792b85, accent: 0xffa04f, sensor: 0x70f6ff },
+  shooter: { primary: 0xff8a36, secondary: 0xb33167, accent: 0xffdf5a, sensor: 0x67efff },
+  defuser: { primary: 0x45e7ff, secondary: 0x2874c8, accent: 0x75ffb2, sensor: 0xfff06a },
+  tank: { primary: 0x9b55ed, secondary: 0x4943a8, accent: 0xff6a92, sensor: 0x69f5ff },
+  disruptor: { primary: 0x4ef08a, secondary: 0x139d90, accent: 0xc4ff4d, sensor: 0xffe268 },
+  star: { primary: 0xffc83d, secondary: 0xff6b6b, accent: 0xfff38a, sensor: 0x70efff }
+};
+
 const polygon = (
   graphics: Phaser.GameObjects.Graphics,
   points: Point[],
@@ -21,13 +39,11 @@ const polygon = (
   lineWidth = 2,
   alpha = 1
 ): void => {
-  graphics.fillStyle(fill, alpha).fillPoints(points, true);
-  graphics.lineStyle(lineWidth, line, 1).strokePoints(points, true);
+  drawLayeredPanel(graphics, points, fill, line, lineWidth, alpha);
 };
 
 const rivets = (graphics: Phaser.GameObjects.Graphics, points: Point[]): void => {
-  graphics.fillStyle(TOP, 0.95);
-  for (const point of points) graphics.fillCircle(point.x ?? 0, point.y ?? 0, 1.35);
+  drawMechanicalRivets(graphics, points, TOP, DEEP, 1.35);
 };
 
 const lens = (graphics: Phaser.GameObjects.Graphics, x: number, y: number, radius: number): void => {
@@ -41,8 +57,33 @@ const start = (graphics: Phaser.GameObjects.Graphics): void => {
   graphics.clear();
   graphics.fillStyle(0x000000, 0).fillRect(0, 0, SIZE, SIZE);
   // Baked shadow keeps depth inexpensive: one sprite remains one draw object.
-  graphics.fillStyle(0x000000, 0.38).fillEllipse(38, 59, 48, 15);
-  graphics.fillStyle(0x000000, 0.18).fillEllipse(38, 58, 38, 10);
+  drawBakedShadow(graphics, 38, 59, 48, 15, 0.38);
+};
+
+const applyColorPass = (g: Phaser.GameObjects.Graphics, type: EnemyType): void => {
+  const palette = ENEMY_ART_PALETTES[type];
+  if (type === 'grunt') {
+    polygon(g, [{ x: 20, y: 23 }, { x: 35, y: 15 }, { x: 47, y: 22 }, { x: 35, y: 28 }], palette.primary, OUTLINE, 1.1, 0.92);
+    polygon(g, [{ x: 23, y: 42 }, { x: 46, y: 42 }, { x: 41, y: 53 }, { x: 29, y: 53 }], palette.secondary, OUTLINE, 1.1, 0.9);
+  } else if (type === 'shooter') {
+    polygon(g, [{ x: 18, y: 32 }, { x: 31, y: 20 }, { x: 47, y: 25 }, { x: 35, y: 32 }], palette.primary, OUTLINE, 1.1, 0.92);
+    polygon(g, [{ x: 43, y: 11 }, { x: 51, y: 13 }, { x: 54, y: 31 }, { x: 45, y: 29 }], palette.secondary, OUTLINE, 1.1, 0.92);
+  } else if (type === 'defuser') {
+    polygon(g, [{ x: 22, y: 18 }, { x: 48, y: 18 }, { x: 54, y: 27 }, { x: 35, y: 31 }, { x: 17, y: 27 }], palette.primary, OUTLINE, 1.1, 0.9);
+    g.fillStyle(palette.secondary, 0.9).fillRoundedRect(23, 31, 24, 13, 3);
+  } else if (type === 'tank') {
+    polygon(g, [{ x: 22, y: 13 }, { x: 44, y: 11 }, { x: 52, y: 20 }, { x: 34, y: 25 }, { x: 20, y: 20 }], palette.primary, OUTLINE, 1.2, 0.93);
+    polygon(g, [{ x: 24, y: 45 }, { x: 47, y: 45 }, { x: 43, y: 57 }, { x: 29, y: 58 }], palette.secondary, OUTLINE, 1.1, 0.92);
+  } else if (type === 'disruptor') {
+    g.fillStyle(palette.primary, 0.88).fillCircle(35, 35, 18);
+    g.lineStyle(4, palette.secondary, 0.92).strokeCircle(35, 35, 14);
+  } else {
+    polygon(g, [{ x: 35, y: 16 }, { x: 53, y: 34 }, { x: 35, y: 30 }, { x: 17, y: 34 }], palette.primary, OUTLINE, 1.1, 0.94);
+    polygon(g, [{ x: 35, y: 30 }, { x: 53, y: 34 }, { x: 35, y: 53 }], palette.secondary, OUTLINE, 1.1, 0.9);
+  }
+  g.fillStyle(DEEP, 0.96).fillCircle(35, type === 'grunt' ? 48 : type === 'shooter' ? 38 : type === 'defuser' ? 38 : type === 'tank' ? 51 : type === 'star' ? 34 : 36, 5.2);
+  g.lineStyle(1.5, palette.accent, 0.95).strokeCircle(35, type === 'grunt' ? 48 : type === 'shooter' ? 38 : type === 'defuser' ? 38 : type === 'tank' ? 51 : type === 'star' ? 34 : 36, 4.2);
+  g.fillStyle(palette.sensor, 1).fillCircle(35, type === 'grunt' ? 48 : type === 'shooter' ? 38 : type === 'defuser' ? 38 : type === 'tank' ? 51 : type === 'star' ? 34 : 36, 2.1);
 };
 
 const finish = (graphics: Phaser.GameObjects.Graphics, type: EnemyType): void => {
@@ -174,6 +215,7 @@ export const createDetailedEnemyRobotTextures = (graphics: Phaser.GameObjects.Gr
   (Object.keys(drawers) as EnemyType[]).forEach((type) => {
     start(graphics);
     drawers[type](graphics);
+    applyColorPass(graphics, type);
     finish(graphics, type);
   });
 };

@@ -25,6 +25,8 @@ export const LASER_PATTERN_NAMES = [
 ] as const;
 const LASER_COLORS = [0x39eeff, 0xff4ed3, 0x53ff8a, 0xffa340, 0xae6bff, 0xff5e75] as const;
 const MAX_LASER_SEGMENTS = 12;
+/** Collision remains 60 Hz; presentation redraw is capped to prevent beam-path churn. */
+export const LASER_VISUAL_FRAME_INTERVAL_MS = 33;
 
 export class LaserSecuritySystem {
   private readonly graphics: Phaser.GameObjects.Graphics;
@@ -34,6 +36,8 @@ export class LaserSecuritySystem {
   private patternIndex = 0;
   private lastCycle = -1;
   private audioActive = false;
+  private lastVisualDrawAt = Number.NEGATIVE_INFINITY;
+  private presentationVisible = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -64,7 +68,7 @@ export class LaserSecuritySystem {
   ): void {
     if (suppressed) {
       this.setAudioActive(false);
-      this.graphics.clear();
+      this.clearPresentation();
       this.warningText.setAlpha(0);
       return;
     }
@@ -76,7 +80,7 @@ export class LaserSecuritySystem {
     const elapsed = now - this.createdAt - config.initialDelayMs;
     if (elapsed < 0) {
       this.setAudioActive(false);
-      this.graphics.clear();
+      this.clearPresentation();
       return;
     }
 
@@ -90,7 +94,7 @@ export class LaserSecuritySystem {
 
     if (cycleTime >= config.telegraphMs + config.activeMs) {
       this.setAudioActive(false);
-      this.graphics.clear();
+      this.clearPresentation();
       this.warningText.setAlpha(0);
       return;
     }
@@ -100,7 +104,10 @@ export class LaserSecuritySystem {
       ? 0
       : Phaser.Math.Clamp((cycleTime - config.telegraphMs) / config.activeMs, 0, 1);
     const segmentCount = this.buildSegments(this.patternIndex, progress);
-    this.draw(segmentCount, now, telegraphing);
+    if (now - this.lastVisualDrawAt >= LASER_VISUAL_FRAME_INTERVAL_MS) {
+      this.lastVisualDrawAt = now;
+      this.draw(segmentCount, now, telegraphing);
+    }
 
     if (telegraphing) {
       this.setAudioActive(false);
@@ -325,6 +332,7 @@ export class LaserSecuritySystem {
 
   private draw(segmentCount: number, now: number, telegraphing: boolean): void {
     this.graphics.clear();
+    this.presentationVisible = true;
     const colorShift = Math.floor(now / 420);
     for (let index = 0; index < segmentCount; index += 1) {
       const segment = this.segments[index];
@@ -342,27 +350,30 @@ export class LaserSecuritySystem {
         continue;
       }
 
-      this.graphics.lineStyle(18, color, 0.1);
+      // Shape-first beam: bounded glow, dark containment rail, colored energy,
+      // then a stable white core. Collision geometry remains fully independent.
+      this.graphics.lineStyle(16, color, 0.1);
       this.graphics.lineBetween(segment.x1, segment.y1, segment.x2, segment.y2);
-      this.graphics.lineStyle(7, color, 0.72);
+      this.graphics.lineStyle(9, 0x02060d, 0.82);
       this.graphics.lineBetween(segment.x1, segment.y1, segment.x2, segment.y2);
-
-      const dx = segment.x2 - segment.x1;
-      const dy = segment.y2 - segment.y1;
-      const length = Math.max(1, Math.hypot(dx, dy));
-      const nx = -dy / length;
-      const ny = dx / length;
+      this.graphics.lineStyle(6, color, 0.82);
+      this.graphics.lineBetween(segment.x1, segment.y1, segment.x2, segment.y2);
       this.graphics.lineStyle(2, 0xffffff, 0.92);
-      this.graphics.beginPath();
-      this.graphics.moveTo(segment.x1, segment.y1);
-      for (let step = 1; step < 18; step += 1) {
-        const p = step / 18;
-        const jitter = Math.sin(now * 0.045 + step * 2.7 + index * 5) * 7 + Math.sin(now * 0.017 + step) * 4;
-        this.graphics.lineTo(segment.x1 + dx * p + nx * jitter, segment.y1 + dy * p + ny * jitter);
-      }
-      this.graphics.lineTo(segment.x2, segment.y2);
-      this.graphics.strokePath();
+      this.graphics.lineBetween(segment.x1, segment.y1, segment.x2, segment.y2);
+      const nodeProgress = (Math.sin(now * 0.009 + index * 1.7) + 1) * 0.5;
+      const nodeX = segment.x1 + (segment.x2 - segment.x1) * nodeProgress;
+      const nodeY = segment.y1 + (segment.y2 - segment.y1) * nodeProgress;
+      this.graphics.fillStyle(0xffffff, 0.82).fillCircle(nodeX, nodeY, 3);
+      this.graphics.fillStyle(color, 0.86).fillCircle(segment.x1, segment.y1, 4).fillCircle(segment.x2, segment.y2, 4);
     }
+  }
+
+  /** Avoids issuing redundant Graphics clears throughout inactive/suppressed windows. */
+  private clearPresentation(): void {
+    if (!this.presentationVisible) return;
+    this.graphics.clear();
+    this.presentationVisible = false;
+    this.lastVisualDrawAt = Number.NEGATIVE_INFINITY;
   }
 
   private touchesAnySegment(x: number, y: number, radius: number, segmentCount: number): boolean {

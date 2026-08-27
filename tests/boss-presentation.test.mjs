@@ -22,9 +22,14 @@ test('all boss archetypes use cached layered 2.5D chassis art with bounded anima
   assert.match(bossArt, /drawArtillery/);
   assert.match(bossArt, /drawStormMage/);
   assert.match(bossArt, /drawVoidBrawler/);
+  assert.match(bossArt, /BOSS_ART_PALETTES/);
+  assert.match(bossArt, /primary: 0xff7a32, secondary: 0xb52e5f/);
+  assert.match(bossArt, /primary: 0xa64dff, secondary: 0x3d58cf/);
+  assert.match(bossArt, /primary: 0xff3f87, secondary: 0x7f39d8/);
   assert.match(bossArt, /Cached 2\.5D boss art/);
   assert.equal((bossArt.match(/generateTexture\(/g) ?? []).length, 1);
   assert.match(bossEntity, /Animated hardware sits above the cached chassis art/);
+  assert.match(bossEntity, /\.clearTint\(\)\.setDepth\(9\)/);
   assert.doesNotMatch(bossArt, /tweens\.add|delayedCall|physics\.add/);
 });
 

@@ -15,6 +15,7 @@
     "telemetry:report": "node --experimental-strip-types scripts/analyze-gameplay-telemetry.ts",
     "performance:benchmark": "node --experimental-strip-types scripts/benchmark-combat-hotpaths.ts",
     "performance:soak": "node --experimental-strip-types scripts/benchmark-long-session.ts",
+    "performance:world": "node --experimental-strip-types scripts/benchmark-world-presentation.ts",
     "preview": "vite preview"
   },
   "devDependencies": {

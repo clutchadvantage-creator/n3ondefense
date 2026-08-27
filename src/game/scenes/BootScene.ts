@@ -227,23 +227,34 @@ export class BootScene extends Phaser.Scene {
       draw(g);
       g.generateTexture(key, width, height);
     };
-    createProjectileTexture('projectile-pulse', 16, 16, (graphics) => graphics.fillCircle(8, 8, 6));
+    createProjectileTexture('projectile-pulse', 16, 16, (graphics) => {
+      graphics.fillStyle(0x202a36, 1).fillCircle(9, 9, 7);
+      graphics.fillStyle(0xa9bac8, 1).fillCircle(8, 8, 6);
+      graphics.lineStyle(1.5, 0xffffff, 0.9).strokeCircle(8, 8, 5);
+      graphics.fillStyle(0xffffff, 0.95).fillCircle(6, 6, 2);
+    });
     createProjectileTexture('projectile-missile', 24, 12, (graphics) => {
-      graphics.fillPoints([{ x: 2, y: 3 }, { x: 15, y: 3 }, { x: 23, y: 6 }, { x: 15, y: 9 }, { x: 2, y: 9 }, { x: 6, y: 6 }], true);
+      graphics.fillStyle(0x27313c, 1).fillPoints([{ x: 2, y: 4 }, { x: 15, y: 4 }, { x: 23, y: 7 }, { x: 15, y: 11 }, { x: 2, y: 10 }, { x: 6, y: 7 }], true);
+      graphics.fillStyle(0xb8c5d0, 1).fillPoints([{ x: 2, y: 2 }, { x: 15, y: 2 }, { x: 23, y: 6 }, { x: 15, y: 8 }, { x: 2, y: 8 }, { x: 6, y: 5 }], true);
+      graphics.fillStyle(0xffffff, 0.86).fillRect(7, 3, 9, 2);
+      graphics.fillStyle(0x4b5966, 1).fillRect(2, 3, 3, 5);
     });
     createProjectileTexture('projectile-lightning', 24, 16, (graphics) => {
-      graphics.fillPoints([{ x: 1, y: 10 }, { x: 9, y: 2 }, { x: 8, y: 7 }, { x: 22, y: 5 }, { x: 13, y: 14 }, { x: 15, y: 9 }], true);
+      graphics.fillStyle(0x34404c, 1).fillPoints([{ x: 2, y: 12 }, { x: 10, y: 3 }, { x: 9, y: 8 }, { x: 23, y: 6 }, { x: 14, y: 15 }, { x: 16, y: 10 }], true);
+      graphics.fillStyle(0xffffff, 1).fillPoints([{ x: 1, y: 9 }, { x: 9, y: 1 }, { x: 8, y: 6 }, { x: 22, y: 4 }, { x: 13, y: 13 }, { x: 15, y: 8 }], true);
     });
     createProjectileTexture('projectile-orb', 16, 16, (graphics) => {
-      graphics.fillCircle(8, 8, 6);
-      graphics.fillStyle(0xffffff, 0.45);
-      graphics.fillCircle(6, 6, 2);
+      graphics.fillStyle(0x26313d, 1).fillCircle(9, 9, 7);
+      graphics.fillStyle(0x8d9daa, 1).fillCircle(8, 8, 6);
+      graphics.lineStyle(1.5, 0xffffff, 0.9).strokeCircle(8, 8, 5);
+      graphics.fillStyle(0xffffff, 0.85).fillCircle(6, 6, 2);
     });
     createProjectileTexture('projectile-boss-cannon', 30, 10, (graphics) => {
-      graphics.fillRoundedRect(2, 2, 23, 6, 3);
-      graphics.fillTriangle(24, 1, 30, 5, 24, 9);
-      graphics.fillStyle(0xffffff, 0.58);
-      graphics.fillRect(5, 3, 15, 2);
+      graphics.fillStyle(0x25303d, 1).fillRoundedRect(2, 3, 23, 7, 3);
+      graphics.fillStyle(0x9aaab8, 1).fillRoundedRect(2, 1, 23, 6, 3);
+      graphics.fillStyle(0xdce7ee, 1).fillTriangle(24, 1, 30, 5, 24, 9);
+      graphics.fillStyle(0xffffff, 0.8).fillRect(5, 2, 15, 2);
+      graphics.fillStyle(0x43505c, 1).fillRect(9, 6, 4, 3).fillRect(18, 6, 4, 3);
     });
     createProjectileTexture('projectile-boss-arcane', 28, 28, (graphics) => {
       graphics.lineStyle(3, 0xffffff, 0.94).strokeCircle(14, 14, 10);
@@ -252,17 +263,19 @@ export class BootScene extends Phaser.Scene {
       graphics.fillStyle(0xffffff, 0.45).fillCircle(12, 12, 2);
     });
     createProjectileTexture('ammo-grenade-round', 22, 14, (graphics) => {
-      graphics.fillCircle(9, 7, 5.5);
-      graphics.fillRect(13, 5, 5, 4);
+      graphics.fillStyle(0x26323e, 1).fillCircle(10, 8, 6);
+      graphics.fillStyle(0xa9b7c2, 1).fillCircle(9, 7, 5.5);
+      graphics.lineStyle(1.3, 0xffffff, 0.78).strokeCircle(9, 7, 4.2);
+      graphics.fillStyle(0x586672, 1).fillRect(13, 5, 5, 4);
       graphics.fillTriangle(17, 3, 21, 5, 17, 6);
       graphics.fillTriangle(17, 8, 21, 9, 17, 11);
-      graphics.fillStyle(0xffffff, 0.5);
+      graphics.fillStyle(0xffffff, 0.75);
       graphics.fillCircle(7, 5, 1.5);
     });
     createProjectileTexture('ammo-scatter-pellet', 12, 6, (graphics) => {
-      graphics.fillRoundedRect(1, 1, 10, 4, 2);
-      graphics.fillStyle(0xffffff, 0.58);
-      graphics.fillRect(7, 1, 2, 4);
+      graphics.fillStyle(0x2a3540, 1).fillRoundedRect(1, 2, 10, 4, 2);
+      graphics.fillStyle(0xc6d1d9, 1).fillRoundedRect(1, 0, 10, 4, 2);
+      graphics.fillStyle(0xffffff, 0.72).fillRect(7, 1, 2, 3);
     });
     createProjectileTexture('projectile-sword', 30, 14, (graphics) => {
       graphics.fillPoints([

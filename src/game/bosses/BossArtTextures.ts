@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BOSS_ARCHETYPES, type BossArchetype } from '../config/bossBalance.ts';
+import { drawBakedShadow, drawLayeredPanel, drawMechanicalRivets } from '../rendering/LayeredArtPrimitives.ts';
 
 const SIZE = 144;
 const OUTLINE = 0x04070d;
@@ -11,6 +12,19 @@ const TOP = 0xfbfdff;
 const LIGHT = 0xffffff;
 type Point = Phaser.Types.Math.Vector2Like;
 
+interface BossArtPalette {
+  primary: number;
+  secondary: number;
+  accent: number;
+  energy: number;
+}
+
+export const BOSS_ART_PALETTES: Record<BossArchetype, BossArtPalette> = {
+  artillery: { primary: 0xff7a32, secondary: 0xb52e5f, accent: 0xffd34f, energy: 0x62efff },
+  'storm-mage': { primary: 0xa64dff, secondary: 0x3d58cf, accent: 0xff55c8, energy: 0x70f5ff },
+  'void-brawler': { primary: 0xff3f87, secondary: 0x7f39d8, accent: 0xff8e42, energy: 0x58edff }
+};
+
 const polygon = (
   g: Phaser.GameObjects.Graphics,
   points: Point[],
@@ -18,15 +32,13 @@ const polygon = (
   lineWidth = 3,
   alpha = 1
 ): void => {
-  g.fillStyle(fill, alpha).fillPoints(points, true);
-  g.lineStyle(lineWidth, OUTLINE, 1).strokePoints(points, true);
+  drawLayeredPanel(g, points, fill, OUTLINE, lineWidth, alpha);
 };
 
 const start = (g: Phaser.GameObjects.Graphics): void => {
   g.clear();
   g.fillStyle(0x000000, 0).fillRect(0, 0, SIZE, SIZE);
-  g.fillStyle(0x000000, 0.42).fillEllipse(77, 119, 104, 26);
-  g.fillStyle(0x000000, 0.18).fillEllipse(77, 116, 82, 17);
+  drawBakedShadow(g, 77, 119, 104, 26, 0.42);
 };
 
 const finish = (g: Phaser.GameObjects.Graphics, archetype: BossArchetype): void => {
@@ -34,12 +46,30 @@ const finish = (g: Phaser.GameObjects.Graphics, archetype: BossArchetype): void 
 };
 
 const rivets = (g: Phaser.GameObjects.Graphics, points: Point[], radius = 2): void => {
-  g.fillStyle(LIGHT, 0.95);
-  for (const point of points) {
-    g.fillCircle(point.x ?? 0, point.y ?? 0, radius);
-    g.fillStyle(DEEP, 0.8).fillCircle((point.x ?? 0) + 0.5, (point.y ?? 0) + 0.5, radius * 0.38);
-    g.fillStyle(LIGHT, 0.95);
+  drawMechanicalRivets(g, points, LIGHT, DEEP, radius);
+};
+
+const applyColorPass = (g: Phaser.GameObjects.Graphics, archetype: BossArchetype): void => {
+  const palette = BOSS_ART_PALETTES[archetype];
+  if (archetype === 'artillery') {
+    polygon(g, [{ x: 38, y: 36 }, { x: 67, y: 20 }, { x: 101, y: 33 }, { x: 72, y: 51 }], palette.primary, 2, 0.94);
+    polygon(g, [{ x: 34, y: 76 }, { x: 70, y: 89 }, { x: 103, y: 75 }, { x: 99, y: 106 }, { x: 71, y: 122 }, { x: 39, y: 106 }], palette.secondary, 2, 0.88);
+    g.fillStyle(palette.accent, 0.95).fillRect(48, 37, 7, 33).fillRect(81, 37, 7, 33);
+  } else if (archetype === 'storm-mage') {
+    polygon(g, [{ x: 32, y: 37 }, { x: 68, y: 14 }, { x: 101, y: 41 }, { x: 67, y: 59 }], palette.primary, 2, 0.94);
+    polygon(g, [{ x: 31, y: 76 }, { x: 65, y: 91 }, { x: 96, y: 76 }, { x: 93, y: 101 }, { x: 65, y: 119 }, { x: 34, y: 100 }], palette.secondary, 2, 0.88);
+    g.lineStyle(4, palette.accent, 0.9).beginPath().moveTo(40, 93).lineTo(64, 105).lineTo(90, 92).strokePath();
+  } else {
+    polygon(g, [{ x: 44, y: 28 }, { x: 69, y: 15 }, { x: 94, y: 29 }, { x: 69, y: 49 }], palette.primary, 2, 0.95);
+    polygon(g, [{ x: 37, y: 75 }, { x: 69, y: 91 }, { x: 102, y: 75 }, { x: 89, y: 111 }, { x: 69, y: 126 }, { x: 45, y: 109 }], palette.secondary, 2, 0.9);
+    g.fillStyle(palette.accent, 0.88).fillRoundedRect(12, 62, 23, 18, 5).fillRoundedRect(104, 62, 23, 18, 5);
   }
+  const coreX = archetype === 'artillery' ? 68 : archetype === 'storm-mage' ? 67 : 69;
+  const coreY = archetype === 'artillery' ? 62 : archetype === 'storm-mage' ? 56 : 63;
+  g.fillStyle(DEEP, 1).fillCircle(coreX, coreY, 13);
+  g.lineStyle(3, palette.accent, 0.95).strokeCircle(coreX, coreY, 11);
+  g.fillStyle(palette.energy, 1).fillCircle(coreX, coreY, 6);
+  g.fillStyle(0xffffff, 0.75).fillCircle(coreX - 3, coreY - 3, 2);
 };
 
 const core = (g: Phaser.GameObjects.Graphics, x: number, y: number, radius: number): void => {
@@ -152,6 +182,7 @@ export const createDetailedBossTextures = (graphics: Phaser.GameObjects.Graphics
   (Object.keys(drawers) as BossArchetype[]).forEach((archetype) => {
     start(graphics);
     drawers[archetype](graphics);
+    applyColorPass(graphics, archetype);
     finish(graphics, archetype);
   });
 };

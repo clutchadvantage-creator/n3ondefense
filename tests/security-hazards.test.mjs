@@ -35,7 +35,10 @@ test('expanded lasers use fixed reusable segment storage and include escape-rout
   assert.match(source, /'BREACH SWEEP'/);
   assert.match(source, /'REVERSAL CASCADE'/);
   assert.match(source, /MAX_LASER_SEGMENTS = 12/);
-  assert.match(source, /if \(suppressed\) \{[\s\S]*?this\.graphics\.clear\(\)/);
+  assert.match(source, /if \(suppressed\) \{[\s\S]*?this\.clearPresentation\(\)/);
+  assert.match(source, /LASER_VISUAL_FRAME_INTERVAL_MS = 33/);
+  assert.match(source, /Shape-first beam: bounded glow/);
+  assert.doesNotMatch(source, /for \(let step = 1; step < 18/);
   assert.doesNotMatch(source, /new Phaser\.GameObjects.*Laser/);
 });
 
@@ -49,6 +52,9 @@ test('gas phases remain occasional, suppress lasers, permit bomblets, and carve 
   assert.match(gas, /Uint8Array/);
   assert.match(gas, /gasLayer\.erase\(this\.tunnelBrush\)/);
   assert.match(gas, /GAS_SKULL_TEXTURE/);
+  assert.match(gas, /GAS_CANISTER_TEXTURE/);
+  assert.match(gas, /hazard-gas-canister-v3/);
+  assert.match(gas, /this\.scene\.add\.image\(point\.x, point\.y - config\.fallHeight, GAS_CANISTER_TEXTURE\)/);
   assert.match(gas, /updateGasAnimation\(now, dissipateProgress\)/);
   assert.match(gas, /Batched toxic pockets per cloud; no sprites, tweens, physics, or allocations/);
   assert.match(gas, /this\.drawGasBubbles\(target, index, now, time\)/);
@@ -57,6 +63,9 @@ test('gas phases remain occasional, suppress lasers, permit bomblets, and carve 
   assert.match(gas, /this\.eraseGasAt\(x, y, radius, false\)/);
   assert.match(gas, /if \(removeHazard\) this\.density\[densityIndex\] = 0/);
   assert.match(gas, /if \(playerEnteredGas && now >= this\.nextGasDamageAt\)/);
+  assert.match(gas, /One bounded graphics batch replaces per-impact circles and five tweens/);
+  const release = gas.slice(gas.indexOf('private releaseGas'), gas.indexOf('private stampDensity'));
+  assert.doesNotMatch(release, /scene\.add\.circle|scene\.tweens\.add/);
   assert.match(gas, /return this\.active \|\| now < this\.recoveryUntil/);
   assert.match(arena, /securityLasersSuppressed = gasSuppressesLasers \|\| fluxSuppressesLasers/);
   assert.match(arena, /isDangerWindow\(now, securityLasersSuppressed\)/);

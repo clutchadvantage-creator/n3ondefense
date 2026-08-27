@@ -11,17 +11,20 @@ test('every enemy role owns a distinct robot chassis while retaining its establi
   for (const type of types) assert.equal(ENEMY_ROBOT_FRAMES[type].textureKey, `enemy-${type}`);
 });
 
-test('robot frames are generated once in Boot and runtime combat colors remain authoritative tints', () => {
+test('robot frames are generated once in Boot with authored multi-color palettes and visual-only scale', () => {
   const bootSource = readFileSync(new URL('../src/game/scenes/BootScene.ts', import.meta.url), 'utf8');
   const enemySource = readFileSync(new URL('../src/game/enemies/Enemy.ts', import.meta.url), 'utf8');
   const artSource = readFileSync(new URL('../src/game/enemies/EnemyArtTextures.ts', import.meta.url), 'utf8');
   for (const type of Object.keys(ENEMY_ROBOT_FRAMES)) {
     assert.match(bootSource, new RegExp(`createEnemyRobot\\('${type}'`));
   }
-  assert.match(enemySource, /this\.setTint\(stats\.color\)/);
+  assert.match(enemySource, /restoreVisualPalette\(\)/);
+  assert.match(enemySource, /this\.clearTint\(\)/);
   assert.match(enemySource, /this\.body\?\.setSize\(stats\.size \* bodyScale/);
+  assert.match(enemySource, /ENEMY_VISUAL_SCALE = 1\.9/);
   assert.match(enemySource, /ENEMY_VISUAL_SIZE_BONUS = 2/);
-  assert.match(enemySource, /setDisplaySize\(stats\.size \+ ENEMY_VISUAL_SIZE_BONUS/);
+  assert.match(enemySource, /const visualSize = stats\.size \* ENEMY_VISUAL_SCALE \+ ENEMY_VISUAL_SIZE_BONUS/);
+  assert.match(enemySource, /setDisplaySize\(visualSize, visualSize\)/);
   assert.match(bootSource, /createDetailedEnemyRobotTextures\(g\)/);
   assert.match(artSource, /const SIZE = 72/);
   assert.match(artSource, /Baked shadow keeps depth inexpensive/);
@@ -31,6 +34,10 @@ test('robot frames are generated once in Boot and runtime combat colors remain a
   assert.match(artSource, /drawTank/);
   assert.match(artSource, /drawDisruptor/);
   assert.match(artSource, /drawStar/);
+  assert.match(artSource, /ENEMY_ART_PALETTES/);
+  for (const type of Object.keys(ENEMY_ROBOT_FRAMES)) {
+    assert.match(artSource, new RegExp(`${type}: \\{ primary: 0x[0-9a-f]+, secondary: 0x[0-9a-f]+, accent: 0x[0-9a-f]+, sensor: 0x[0-9a-f]+ \\}`));
+  }
   assert.equal((artSource.match(/generateTexture\(/g) ?? []).length, 1, 'shared cache path generates each registered chassis');
   assert.doesNotMatch(enemySource, /scene\.add\.graphics|scene\.add\.container/);
 });

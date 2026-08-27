@@ -3,6 +3,7 @@ import type { EnemyType } from '../types';
 import { ENEMY_BALANCE } from '../config/balance';
 import { GameplayTelemetryRecorder, type CombatDamageSource } from '../telemetry/GameplayTelemetryRecorder.ts';
 
+export const ENEMY_VISUAL_SCALE = 1.9;
 export const ENEMY_VISUAL_SIZE_BONUS = 2;
 
 export interface EnemyStats {
@@ -32,6 +33,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   readonly damageTakenBySource: Partial<Record<CombatDamageSource, number>> = {};
   private damageFlashUntil = 0;
   private damageFlashActive = false;
+  private visualTintOverride: number | null = null;
 
   get hazardRadius(): number {
     return this.stats.size * 0.45;
@@ -49,8 +51,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     // Give every robot chassis slightly more visual presence without changing
     // its authoritative collision body, hazard radius, stats, or balance.
-    this.setDisplaySize(stats.size + ENEMY_VISUAL_SIZE_BONUS, stats.size + ENEMY_VISUAL_SIZE_BONUS);
-    this.setTint(stats.color);
+    const visualSize = stats.size * ENEMY_VISUAL_SCALE + ENEMY_VISUAL_SIZE_BONUS;
+    this.setDisplaySize(visualSize, visualSize);
+    this.visualTintOverride = stats.color === ENEMY_BALANCE[stats.type].color ? null : stats.color;
+    this.restoreVisualPalette();
     this.setDepth(7);
   }
 
@@ -74,7 +78,19 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   updateDamageFlash(now: number): void {
     if (!this.damageFlashActive || now < this.damageFlashUntil) return;
     this.damageFlashActive = false;
-    if (this.active) this.setTint(this.stats.color);
+    if (this.active) this.restoreVisualPalette();
+  }
+
+  /** Used by special encounters without permanently destroying the authored palette. */
+  setVisualTintOverride(color: number | null): this {
+    this.visualTintOverride = color;
+    this.restoreVisualPalette();
+    return this;
+  }
+
+  restoreVisualPalette(): void {
+    if (this.visualTintOverride === null) this.clearTint();
+    else this.setTint(this.visualTintOverride);
   }
 
   isDead(): boolean {

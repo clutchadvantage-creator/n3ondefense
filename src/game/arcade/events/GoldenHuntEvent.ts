@@ -53,8 +53,9 @@ export class GoldenHuntEvent implements ArcadeEvent {
         return false;
       }
       enemy.setData('n3onArcadeEvent', this.id);
-      enemy.setTint(GOLD);
-      const aura = this.context.scene.add.circle(enemy.x, enemy.y, enemy.hazardRadius + 11, GOLD, 0.08)
+      enemy.setVisualTintOverride(GOLD);
+      const visualRadius = Math.max(enemy.hazardRadius + 11, enemy.displayWidth * 0.48 + 5);
+      const aura = this.context.scene.add.circle(enemy.x, enemy.y, visualRadius, GOLD, 0.08)
         .setStrokeStyle(2, GOLD_LIGHT, 0.9)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(6.8);
@@ -75,12 +76,12 @@ export class GoldenHuntEvent implements ArcadeEvent {
     this.sparkles.clear();
     for (const enemy of this.targets) {
       if (!enemy.active || enemy.isDead()) continue;
-      enemy.setTint(GOLD);
+      enemy.setVisualTintOverride(GOLD);
       const visual = this.visuals.get(enemy);
       if (!visual) continue;
       const pulse = 0.5 + Math.sin(activeElapsedMs * 0.008 + visual.phase) * 0.5;
       visual.aura.setPosition(enemy.x, enemy.y).setScale(0.94 + pulse * 0.15).setAlpha(0.1 + pulse * 0.16);
-      visual.marker.setPosition(enemy.x, enemy.y - enemy.hazardRadius - 18 - pulse * 3).setAlpha(0.75 + pulse * 0.25);
+      visual.marker.setPosition(enemy.x, enemy.y - enemy.displayHeight * 0.5 - 11 - pulse * 3).setAlpha(0.75 + pulse * 0.25);
       if (this.context.particlesEnabled) {
         for (let spark = 0; spark < 2; spark += 1) {
           const angle = visual.phase + activeElapsedMs * 0.0018 + spark * Math.PI;
@@ -126,6 +127,7 @@ export class GoldenHuntEvent implements ArcadeEvent {
     for (const enemy of this.targets) {
       this.destroyVisual(enemy);
       enemy.setData('n3onArcadeEvent', null);
+      enemy.setVisualTintOverride(null);
       if (reason !== 'success') this.context.removeEnemy(enemy);
     }
     this.targets.clear();

@@ -5,10 +5,12 @@ import type { Player } from '../entities/Player';
 import type { RectSpec } from '../types';
 import { AIR_DROP_PATTERN_NAMES, createAirDropPattern } from './AirDropPatterns';
 import { SeededRandom } from './SeededRandom';
+import { drawBakedShadow, drawLayeredPanel, drawMechanicalRivets } from '../rendering/LayeredArtPrimitives.ts';
 
 const GAS_CLOUD_TEXTURE = 'hazard-gas-cloud-brush-v2';
 const GAS_SKULL_TEXTURE = 'hazard-gas-skull-brush';
 const GAS_TUNNEL_TEXTURE = 'hazard-gas-tunnel-brush';
+const GAS_CANISTER_TEXTURE = 'hazard-gas-canister-v3';
 const GAS_COLOR = 0x55ff36;
 
 interface GasCanisterTarget {
@@ -19,7 +21,7 @@ interface GasCanisterTarget {
   showSkull: boolean;
   wispPhase: number;
   marker: Phaser.GameObjects.Arc;
-  canister: Phaser.GameObjects.Container;
+  canister: Phaser.GameObjects.Image;
 }
 
 interface GasIgnitionState {
@@ -31,6 +33,13 @@ interface GasIgnitionState {
   lastEraseRadius: number;
   primaryColor: number;
   secondaryColor: number;
+}
+
+interface GasImpactBurstState {
+  active: boolean;
+  x: number;
+  y: number;
+  startedAt: number;
 }
 
 const MAX_CONCURRENT_GAS_IGNITIONS = 6;
@@ -47,9 +56,10 @@ export class GasHazardSystem {
   private readonly skullBrush: Phaser.GameObjects.Image;
   private readonly tunnelBrush: Phaser.GameObjects.Image;
   private readonly wispGraphics: Phaser.GameObjects.Graphics;
+  private readonly impactGraphics: Phaser.GameObjects.Graphics;
   private readonly ignitionGraphics: Phaser.GameObjects.Graphics;
   private readonly ignitionStates: GasIgnitionState[];
-  private readonly effects = new Set<Phaser.GameObjects.GameObject>();
+  private readonly impactStates: GasImpactBurstState[];
   private readonly densityColumns = Math.ceil(WORLD_WIDTH / GAS_HAZARD_BALANCE.densityCellSize);
   private readonly densityRows = Math.ceil(WORLD_HEIGHT / GAS_HAZARD_BALANCE.densityCellSize);
   /** Persistent logical footprint: tunneling never removes gas exposure. */
@@ -90,7 +100,11 @@ export class GasHazardSystem {
     this.skullBrush = scene.make.image({ x: 0, y: 0, key: GAS_SKULL_TEXTURE, add: false }).setOrigin(0.5);
     this.tunnelBrush = scene.make.image({ x: 0, y: 0, key: GAS_TUNNEL_TEXTURE, add: false }).setOrigin(0.5);
     this.wispGraphics = scene.add.graphics().setDepth(8).setBlendMode(Phaser.BlendModes.ADD);
+    this.impactGraphics = scene.add.graphics().setDepth(8).setBlendMode(Phaser.BlendModes.ADD);
     this.ignitionGraphics = scene.add.graphics().setDepth(10).setBlendMode(Phaser.BlendModes.ADD);
+    this.impactStates = Array.from({ length: GAS_HAZARD_BALANCE.maximumCanisters }, () => ({
+      active: false, x: 0, y: 0, startedAt: 0
+    }));
     this.ignitionStates = Array.from({ length: MAX_CONCURRENT_GAS_IGNITIONS }, (): GasIgnitionState => ({
       active: false,
       x: 0,
@@ -160,6 +174,7 @@ export class GasHazardSystem {
     const config = GAS_HAZARD_BALANCE;
     if (this.round < config.unlockRound) return;
     this.updateIgnitionBurns(now);
+    this.updateImpactBursts(now);
 
     if (!this.active) {
       this.gasLayer.setVisible(false);
@@ -236,14 +251,11 @@ export class GasHazardSystem {
   destroy(): void {
     this.clearCanisters();
     this.resetIgnitionBurns();
-    for (const effect of this.effects) {
-      this.scene.tweens.killTweensOf(effect);
-      effect.destroy();
-    }
-    this.effects.clear();
+    this.resetImpactBursts();
     this.warningText.destroy();
     this.gasLayer.destroy();
     this.wispGraphics.destroy();
+    this.impactGraphics.destroy();
     this.ignitionGraphics.destroy();
     this.cloudBrush.destroy();
     this.skullBrush.destroy();
@@ -312,6 +324,39 @@ export class GasHazardSystem {
       graphics.generateTexture(GAS_TUNNEL_TEXTURE, size, size);
       graphics.destroy();
     }
+    if (!this.scene.textures.exists(GAS_CANISTER_TEXTURE)) {
+      const graphics = this.scene.make.graphics({ x: 0, y: 0 });
+      graphics.fillStyle(0x000000, 0).fillRect(0, 0, 52, 78);
+      drawBakedShadow(graphics, 29, 70, 38, 10, 0.34);
+      drawLayeredPanel(graphics, [
+        { x: 12, y: 16 }, { x: 36, y: 12 }, { x: 43, y: 20 }, { x: 43, y: 62 },
+        { x: 34, y: 68 }, { x: 12, y: 64 }
+      ], 0x163323, 0x041008, 2.2);
+      drawLayeredPanel(graphics, [
+        { x: 12, y: 16 }, { x: 34, y: 13 }, { x: 36, y: 63 }, { x: 12, y: 64 }
+      ], 0x335342, 0x07150c, 1.3);
+      drawLayeredPanel(graphics, [
+        { x: 34, y: 13 }, { x: 43, y: 20 }, { x: 43, y: 62 }, { x: 36, y: 63 }
+      ], 0x0a2015, 0x07150c, 1.3);
+      graphics.fillStyle(0x64756a, 1).fillEllipse(27, 15, 31, 10);
+      graphics.lineStyle(2, 0xc2d0c7, 0.8).strokeEllipse(27, 15, 31, 10);
+      graphics.fillStyle(0x233b2e, 1).fillEllipse(27, 63, 31, 9);
+      for (const y of [24, 55]) {
+        graphics.fillStyle(0x718479, 0.95).fillRect(10, y, 33, 5);
+        graphics.lineStyle(1, 0xc7d5cc, 0.75).strokeRect(10, y, 33, 5);
+      }
+      graphics.fillStyle(0x111b17, 1).fillRoundedRect(17, 31, 20, 18, 4);
+      graphics.lineStyle(2, GAS_COLOR, 0.92).strokeRoundedRect(17, 31, 20, 18, 4);
+      graphics.fillStyle(0x48e832, 0.72).fillEllipse(27, 40, 13, 11);
+      graphics.fillStyle(0xd9ff9d, 0.8).fillEllipse(24, 37, 4, 3);
+      graphics.fillStyle(0xb7c7bc, 1).fillRect(22, 5, 10, 8);
+      graphics.fillStyle(0x24322b, 1).fillRect(19, 2, 16, 5);
+      graphics.lineStyle(1.3, 0xe4eee8, 0.85).strokeRect(19, 2, 16, 5);
+      graphics.lineStyle(1, GAS_COLOR, 0.58).lineBetween(14, 30, 14, 52).lineBetween(39, 30, 39, 52);
+      drawMechanicalRivets(graphics, [{ x: 14, y: 20 }, { x: 39, y: 21 }, { x: 14, y: 59 }, { x: 39, y: 58 }], 0xd9e4dd, 0x08100b, 1.25);
+      graphics.generateTexture(GAS_CANISTER_TEXTURE, 52, 78);
+      graphics.destroy();
+    }
   }
 
   private startPhase(now: number): void {
@@ -334,6 +379,7 @@ export class GasHazardSystem {
     this.density.fill(0);
     this.tunnelMask.fill(0);
     this.resetIgnitionBurns();
+    this.resetImpactBursts();
     this.gasLayer.clear().setAlpha(0.9).setVisible(false);
     this.wispGraphics.clear().setAlpha(1);
     this.lastTunnelX = Number.NaN;
@@ -345,11 +391,7 @@ export class GasHazardSystem {
       const marker = this.scene.add.circle(point.x, point.y, 31, GAS_COLOR, 0.06)
         .setStrokeStyle(3, GAS_COLOR, 0.9)
         .setDepth(6);
-      const shell = this.scene.add.rectangle(0, 0, 18, 34, 0x0b2410, 1).setStrokeStyle(3, GAS_COLOR, 0.95);
-      const capTop = this.scene.add.rectangle(0, -19, 12, 5, 0xc8ff82, 0.95);
-      const capBottom = this.scene.add.rectangle(0, 19, 12, 5, 0x45d82d, 0.95);
-      const core = this.scene.add.circle(0, 0, 5, GAS_COLOR, 0.9).setStrokeStyle(2, 0xeaffbd, 0.9);
-      const canister = this.scene.add.container(point.x, point.y - config.fallHeight, [shell, capTop, capBottom, core])
+      const canister = this.scene.add.image(point.x, point.y - config.fallHeight, GAS_CANISTER_TEXTURE)
         .setDepth(9)
         .setAlpha(0);
       return {
@@ -382,33 +424,49 @@ export class GasHazardSystem {
     this.stampDensity(target.x, target.y, GAS_HAZARD_BALANCE.cloudRadius);
     if (this.releasedCanisterCount === this.canisters.length) this.onGasReleased?.();
 
-    const ring = this.scene.add.circle(target.x, target.y, 12, GAS_COLOR, 0.1)
-      .setStrokeStyle(4, 0xb6ff70, 0.92)
-      .setDepth(8)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    this.effects.add(ring);
-    this.scene.tweens.add({
-      targets: ring,
-      radius: GAS_HAZARD_BALANCE.cloudRadius * 0.78,
-      alpha: 0,
-      duration: 620,
-      onComplete: () => { this.effects.delete(ring); ring.destroy(); }
-    });
-    if (!this.particlesEnabled) return;
-    for (let index = 0; index < 4; index += 1) {
-      const angle = index * Math.PI * 0.5 + 0.4;
-      const puff = this.scene.add.circle(target.x, target.y, 8, GAS_COLOR, 0.38).setDepth(8);
-      this.effects.add(puff);
-      this.scene.tweens.add({
-        targets: puff,
-        x: target.x + Math.cos(angle) * 95,
-        y: target.y + Math.sin(angle) * 95,
-        radius: 32,
-        alpha: 0,
-        duration: 700,
-        onComplete: () => { this.effects.delete(puff); puff.destroy(); }
-      });
+    this.startImpactBurst(target.x, target.y);
+  }
+
+  private startImpactBurst(x: number, y: number): void {
+    let state = this.impactStates[0];
+    for (const candidate of this.impactStates) {
+      if (!candidate.active) { state = candidate; break; }
+      if (candidate.startedAt < state.startedAt) state = candidate;
     }
+    state.active = true;
+    state.x = x;
+    state.y = y;
+    state.startedAt = this.scene.time.now;
+  }
+
+  /** One bounded graphics batch replaces per-impact circles and five tweens. */
+  private updateImpactBursts(now: number): void {
+    this.impactGraphics.clear();
+    for (let stateIndex = 0; stateIndex < this.impactStates.length; stateIndex += 1) {
+      const state = this.impactStates[stateIndex];
+      if (!state.active) continue;
+      const progress = Phaser.Math.Clamp((now - state.startedAt) / 700, 0, 1);
+      if (progress >= 1) { state.active = false; continue; }
+      const eased = 1 - (1 - progress) ** 3;
+      const fade = (1 - progress) ** 1.35;
+      const ringRadius = 12 + GAS_HAZARD_BALANCE.cloudRadius * 0.72 * eased;
+      this.impactGraphics.lineStyle(8, GAS_COLOR, 0.1 * fade).strokeCircle(state.x, state.y, ringRadius);
+      this.impactGraphics.lineStyle(3, 0xcaff83, 0.86 * fade).strokeCircle(state.x, state.y, ringRadius);
+      if (!this.particlesEnabled) continue;
+      for (let puff = 0; puff < 4; puff += 1) {
+        const angle = puff * Math.PI * 0.5 + 0.4 + stateIndex * 0.11;
+        const travel = 95 * eased;
+        const radius = 8 + 24 * eased;
+        const x = state.x + Math.cos(angle) * travel;
+        const y = state.y + Math.sin(angle) * travel;
+        this.impactGraphics.fillStyle(puff % 2 === 0 ? GAS_COLOR : 0xb7ff64, 0.3 * fade).fillCircle(x, y, radius);
+      }
+    }
+  }
+
+  private resetImpactBursts(): void {
+    for (const state of this.impactStates) state.active = false;
+    this.impactGraphics.clear();
   }
 
   private stampDensity(x: number, y: number, radius: number): void {
@@ -704,6 +762,7 @@ export class GasHazardSystem {
     this.density.fill(0);
     this.tunnelMask.fill(0);
     this.resetIgnitionBurns();
+    this.resetImpactBursts();
     this.warningText.setAlpha(0);
     this.recoveryUntil = now + config.laserRecoveryDelayMs;
     const cooldown = Math.max(

@@ -41,7 +41,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setDisplaySize(archetype === 'artillery' ? 112 : 102, archetype === 'artillery' ? 96 : 102)
-      .setTint(definition.color).setDepth(9);
+      .clearTint().setDepth(9);
     this.body?.setCircle(36, Math.max(0, (this.displayWidth - 72) * 0.5), Math.max(0, (this.displayHeight - 72) * 0.5));
     this.setCollideWorldBounds(true);
 
@@ -146,7 +146,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.onDamaged(applied, source);
     this.setTintFill(0xffffff);
     this.scene.time.delayedCall(55, () => {
-      if (this.active) this.setTint(BOSS_ARCHETYPES[this.archetype].color);
+      if (this.active) this.clearTint();
     });
     if (this.hp <= 0) {
       this.defeated = true;

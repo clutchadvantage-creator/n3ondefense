@@ -1216,7 +1216,7 @@ export class HeistScene extends Phaser.Scene {
     enemy.hp -= applied;
     this.damageDealt += applied;
     enemy.setTintFill(0xffffff);
-    this.time.delayedCall(50, () => { if (enemy.active) enemy.setTint(enemy.stats.color); });
+    this.time.delayedCall(50, () => { if (enemy.active) enemy.restoreVisualPalette(); });
     if (enemy.hp <= 0) this.triggerSplitCurrent(enemy, applied);
   }
 
