@@ -7,6 +7,8 @@ import type { EnemyType } from '../types';
 import { createPremiumOperativeFrameTextures } from '../cosmetics/PremiumOperativeFrameTextures.ts';
 import { COSMETICS } from '../../data/cosmetics.ts';
 import { createPremiumOperativeFrameSvgDataUri } from '../../ui/stores/PremiumOperativeFrameSvg.ts';
+import { createDetailedEnemyRobotTextures } from '../enemies/EnemyArtTextures.ts';
+import { createDetailedBossTextures } from '../bosses/BossArtTextures.ts';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -299,7 +301,14 @@ export class BootScene extends Phaser.Scene {
       graphics.fillPoints([{ x: 10, y: 8 }, { x: 4, y: 4 }, { x: 6, y: 8 }, { x: 4, y: 12 }], true);
     });
 
+    // Combatant art is cached once at boot. The legacy builders below retain
+    // their keys as a safe fallback, but skip generation when detailed art is
+    // already registered.
+    createDetailedBossTextures(g);
+    createDetailedEnemyRobotTextures(g);
+
     const createBossTexture = (key: string, draw: (graphics: Phaser.GameObjects.Graphics) => void): void => {
+      if (this.textures.exists(key)) return;
       g.clear();
       g.fillStyle(0xffffff, 1);
       g.lineStyle(4, 0x080b14, 1);
@@ -346,6 +355,7 @@ export class BootScene extends Phaser.Scene {
     });
 
     const createEnemyRobot = (type: EnemyType, draw: (graphics: Phaser.GameObjects.Graphics) => void): void => {
+      if (this.textures.exists(ENEMY_ROBOT_FRAMES[type].textureKey)) return;
       g.clear();
       g.fillStyle(0x04070d, 0);
       g.fillRect(0, 0, 48, 48);

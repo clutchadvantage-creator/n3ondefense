@@ -90,7 +90,7 @@ export const SUPREME_STAGE_DEFINITIONS: readonly SupremeStageDefinition[] = Obje
     level,
     constellation,
     constellationKey: protocolId.slice('supreme-'.length),
-    unlockSource: index === 0 ? 'global' as const : 'supreme' as const,
+    unlockSource: index === 0 ? 'regular-overdrive' as const : 'supreme' as const,
     unlockRound,
     difficulty: makeDifficulty(index),
     rewardMultiplier: 1.35 + index * 0.075,

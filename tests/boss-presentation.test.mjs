@@ -12,6 +12,21 @@ const miniBoss = source('../src/game/arcade/events/MiniBossEvent.ts');
 const audio = source('../src/game/systems/AudioManager.ts');
 const totem = source('../src/game/vfx/BombsiteTotemVfx.ts');
 const bombsiteMods = source('../src/game/mods/BombsiteModSystem.ts');
+const bossArt = source('../src/game/bosses/BossArtTextures.ts');
+const bossEntity = source('../src/game/bosses/Boss.ts');
+
+test('all boss archetypes use cached layered 2.5D chassis art with bounded animated hardware', () => {
+  const boot = source('../src/game/scenes/BootScene.ts');
+  assert.match(boot, /createDetailedBossTextures\(g\)/);
+  assert.match(bossArt, /const SIZE = 144/);
+  assert.match(bossArt, /drawArtillery/);
+  assert.match(bossArt, /drawStormMage/);
+  assert.match(bossArt, /drawVoidBrawler/);
+  assert.match(bossArt, /Cached 2\.5D boss art/);
+  assert.equal((bossArt.match(/generateTexture\(/g) ?? []).length, 1);
+  assert.match(bossEntity, /Animated hardware sits above the cached chassis art/);
+  assert.doesNotMatch(bossArt, /tweens\.add|delayedCall|physics\.add/);
+});
 
 test('boss presentation uses one bounded, reusable two-layer renderer', () => {
   assert.match(bossVfx, /const MAX_ACTIVE_FULL = 28/);

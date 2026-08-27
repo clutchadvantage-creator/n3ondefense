@@ -3,6 +3,8 @@ import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
 import { RUN_PROTOCOLS, normalizeRunProtocolId } from '../mods/modBalance.ts';
+import { ModRuntime } from '../mods/ModRuntime.ts';
+import { SaveSystem } from '../systems/SaveSystem.ts';
 import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
 import type { ArenaSessionState, RoundFinishedPayload } from '../types';
 import { calculateDebriefLayout, splitDebriefPrimary } from '../ui/DebriefLayout.ts';
@@ -65,11 +67,17 @@ export class RoundFinishedScene extends Phaser.Scene {
     createOperationReadout(this, sections.operation, operationFields, layout.compact, true);
 
     createDebriefHighlight(this, sections.highlight, {
-      eyebrow: supremeCompletion ? 'SUPREME PROTOCOL // OFFICIAL COMPLETION' : 'NEXT DEPLOYMENT // ARENA PREVIEW',
+      eyebrow: supremeCompletion
+        ? 'SUPREME PROTOCOL // OFFICIAL COMPLETION'
+        : payload?.supremeOverdriveUnlocked
+          ? 'SUPREME OVERDRIVE // PROTOCOL UNLOCKED'
+          : 'NEXT DEPLOYMENT // ARENA PREVIEW',
       primary: supremeCompletion ? 'LEVEL 100 CLEARED' : `ROUND ${payload?.nextRound ?? '-'}`,
       details: supremeCompletion
         ? ['ALL THREE COMMAND BOSSES ELIMINATED', 'COMPLETION FLAG SAVED TO OPERATIVE PROFILE']
-        : [`LAYOUT ${displayId(payload?.nextTemplate)}`, `SEED ${payload?.nextSeed ?? '-'}`],
+        : payload?.supremeOverdriveUnlocked
+          ? ['OVERDRIVE LEO // LEVEL 51', 'SUPREME MODS MAY NOW BE EQUIPPED']
+          : [`LAYOUT ${displayId(payload?.nextTemplate)}`, `SEED ${payload?.nextSeed ?? '-'}`],
       tone: 'complete'
     }, layout.compact, true);
 
@@ -91,13 +99,17 @@ export class RoundFinishedScene extends Phaser.Scene {
             startArenaLoad(this, { reason: 'continue-next-round', message: 'Building next arena...' });
             return;
           }
+          const nextProtocol = payload.nextProtocol ?? payload.protocol;
+          const equippedMods = nextProtocol === payload.protocol
+            ? payload.equippedMods
+            : new ModRuntime(SaveSystem.getModCollection(), undefined, nextProtocol).snapshot();
           const session: ArenaSessionState = {
             baseSeed: payload.baseSeed,
             round: payload.nextRound,
             objectiveMode: payload.objectiveMode,
-            protocol: payload.protocol,
+            protocol: nextProtocol,
             runStartedAt: payload.runStartedAt,
-            equippedMods: payload.equippedMods,
+            equippedMods,
             modsEarned: payload.modsEarned,
             modFocus: payload.modFocus,
             contract: payload.contract,

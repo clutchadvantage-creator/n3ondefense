@@ -45,7 +45,10 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.body?.setCircle(36, Math.max(0, (this.displayWidth - 72) * 0.5), Math.max(0, (this.displayHeight - 72) * 0.5));
     this.setCollideWorldBounds(true);
 
-    this.visualRoot = scene.add.container(x, y).setDepth(8.8);
+    // Animated hardware sits above the cached chassis art. The chassis itself
+    // carries the expensive detail; this rig is deliberately small and only
+    // animates the pieces that communicate attacks.
+    this.visualRoot = scene.add.container(x, y).setDepth(9.1);
     this.aura = scene.add.circle(0, 0, archetype === 'artillery' ? 58 : 52, definition.color, 0.08)
       .setStrokeStyle(2, definition.color, 0.38).setBlendMode(Phaser.BlendModes.ADD);
     this.core = scene.add.circle(0, 0, archetype === 'void-brawler' ? 13 : 10, definition.color, 0.72)
@@ -57,35 +60,52 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   private createArchetypeRig(color: number): void {
     if (this.archetype === 'artillery') {
       for (const side of [-1, 1]) {
+        const mountShadow = this.scene.add.rectangle(side * 47 + 3, 4, 31, 15, 0x02050a, 0.82)
+          .setStrokeStyle(1, 0x02050a, 0.9);
         const mount = this.scene.add.rectangle(side * 45, 0, 29, 13, 0x071018, 0.98)
           .setStrokeStyle(2, color, 0.92);
+        const mountFacet = this.scene.add.polygon(side * 45, -4, [-14, -4, 10, -4, 14, 0, -10, 0], 0xffffff, 0.2)
+          .setStrokeStyle(1, 0xffffff, 0.48);
+        const barrelShadow = this.scene.add.rectangle(side * 59 + 2, 3, 28, 7, 0x02050a, 0.9);
         const barrel = this.scene.add.rectangle(side * 58, 0, 26, 5, color, 0.82)
           .setStrokeStyle(1, 0xffffff, 0.7);
-        this.visualRoot.add([mount, barrel]);
+        const muzzle = this.scene.add.circle(side * 72, 0, 3, 0x071018, 1)
+          .setStrokeStyle(1, 0xffffff, 0.82);
+        this.visualRoot.add([mountShadow, barrelShadow, mount, mountFacet, barrel, muzzle]);
         this.animatedParts.push(mount, barrel);
       }
       const chassisRing = this.scene.add.circle(0, 0, 43, 0x000000, 0).setStrokeStyle(4, color, 0.72);
+      const innerRing = this.scene.add.circle(-2, -2, 36, 0x000000, 0).setStrokeStyle(1, 0xffffff, 0.42);
       this.visualRoot.add(chassisRing);
+      this.visualRoot.add(innerRing);
       this.animatedParts.push(chassisRing);
       return;
     }
     if (this.archetype === 'storm-mage') {
       for (let index = 0; index < 3; index += 1) {
+        const satelliteShadow = this.scene.add.polygon(3, 4, [0, -9, 7, 0, 0, 9, -7, 0], 0x02050a, 0.72);
         const satellite = this.scene.add.polygon(0, 0, [0, -8, 6, 0, 0, 8, -6, 0], color, 0.85)
           .setStrokeStyle(1, 0xffffff, 0.82).setBlendMode(Phaser.BlendModes.ADD);
-        this.visualRoot.add(satellite);
-        this.animatedParts.push(satellite);
+        const satelliteCore = this.scene.add.circle(0, 0, 2.2, 0xffffff, 0.9).setBlendMode(Phaser.BlendModes.ADD);
+        const satelliteRig = this.scene.add.container(0, 0, [satelliteShadow, satellite, satelliteCore]);
+        this.visualRoot.add(satelliteRig);
+        this.animatedParts.push(satelliteRig);
       }
       return;
     }
     for (const side of [-1, 1]) {
+      const fistShadow = this.scene.add.polygon(side * 42 + 3, 8, [-10, -10, 8, -13, 15, 0, 7, 14, -11, 10, -16, 0], 0x02050a, 0.82);
       const fist = this.scene.add.polygon(side * 42, 4, [-10, -10, 8, -13, 15, 0, 7, 14, -11, 10, -16, 0], color, 0.9)
         .setStrokeStyle(2, 0xffffff, 0.72);
-      this.visualRoot.add(fist);
-      this.animatedParts.push(fist);
+      const knuckles = this.scene.add.rectangle(side * 43, -1, 18, 3, 0xffffff, 0.45);
+      const fistRig = this.scene.add.container(0, 0, [fistShadow, fist, knuckles]);
+      this.visualRoot.add(fistRig);
+      this.animatedParts.push(fistRig);
     }
     const phaseRing = this.scene.add.circle(0, 0, 45, 0x000000, 0).setStrokeStyle(3, color, 0.74);
-    this.visualRoot.add(phaseRing);
+    const armorChevron = this.scene.add.polygon(0, 17, [-18, -5, 0, 5, 18, -5, 0, 11], 0x071018, 0.8)
+      .setStrokeStyle(1, 0xffffff, 0.48);
+    this.visualRoot.add([phaseRing, armorChevron]);
     this.animatedParts.push(phaseRing);
   }
 

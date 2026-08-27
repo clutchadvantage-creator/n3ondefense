@@ -6418,9 +6418,11 @@ export class ArenaScene extends Phaser.Scene {
       runCreditsEarned: this.runCreditsEarned
     };
     this.pendingRoundPayload = payload;
+    const supremeBridge = isRegularOverdriveTerminalCompletion(payload.protocol, payload.completedRound)
+      ? this.tryAwardSupremeBridge(payload.completedRound)
+      : { firstSupremeAwarded: false, modId: null };
     this.transitionAfterModReveals(350, () => {
-      this.registry.set('round-finished', payload);
-      this.scene.start(SceneKeys.RoundFinished);
+      this.presentCompletedRound(payload, supremeBridge);
     });
   }
 

@@ -14,6 +14,7 @@ test('every enemy role owns a distinct robot chassis while retaining its establi
 test('robot frames are generated once in Boot and runtime combat colors remain authoritative tints', () => {
   const bootSource = readFileSync(new URL('../src/game/scenes/BootScene.ts', import.meta.url), 'utf8');
   const enemySource = readFileSync(new URL('../src/game/enemies/Enemy.ts', import.meta.url), 'utf8');
+  const artSource = readFileSync(new URL('../src/game/enemies/EnemyArtTextures.ts', import.meta.url), 'utf8');
   for (const type of Object.keys(ENEMY_ROBOT_FRAMES)) {
     assert.match(bootSource, new RegExp(`createEnemyRobot\\('${type}'`));
   }
@@ -21,6 +22,17 @@ test('robot frames are generated once in Boot and runtime combat colors remain a
   assert.match(enemySource, /this\.body\?\.setSize\(stats\.size \* bodyScale/);
   assert.match(enemySource, /ENEMY_VISUAL_SIZE_BONUS = 2/);
   assert.match(enemySource, /setDisplaySize\(stats\.size \+ ENEMY_VISUAL_SIZE_BONUS/);
+  assert.match(bootSource, /createDetailedEnemyRobotTextures\(g\)/);
+  assert.match(artSource, /const SIZE = 72/);
+  assert.match(artSource, /Baked shadow keeps depth inexpensive/);
+  assert.match(artSource, /drawGrunt/);
+  assert.match(artSource, /drawShooter/);
+  assert.match(artSource, /drawDefuser/);
+  assert.match(artSource, /drawTank/);
+  assert.match(artSource, /drawDisruptor/);
+  assert.match(artSource, /drawStar/);
+  assert.equal((artSource.match(/generateTexture\(/g) ?? []).length, 1, 'shared cache path generates each registered chassis');
+  assert.doesNotMatch(enemySource, /scene\.add\.graphics|scene\.add\.container/);
 });
 
 test('pathfinding resolves padded start and goal cells instead of falling back through walls', () => {

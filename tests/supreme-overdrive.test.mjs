@@ -18,6 +18,7 @@ import {
 } from '../src/game/progression/SupremeProgression.ts';
 import { calculateProtocolTerminalVerticalLayout } from '../src/game/garage/protocolTerminalLayout.ts';
 import { resolveSupremeBridgeReward } from '../src/game/progression/SupremeBridgeReward.ts';
+import { resolveSupremePostRoundPlan } from '../src/game/progression/SupremeRoundTransition.ts';
 
 const source = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 
@@ -42,12 +43,12 @@ test('Supreme progression starts after Overdrive Round 50 and runs through the R
   assert.equal(isSupremeTerminalRound('supreme-centaurus', 99), false);
 });
 
-test('Supreme unlocks use global clearance once, then persistent Supreme round progression', () => {
+test('Supreme unlocks require a successful regular Overdrive clear, then persistent Supreme round progression', () => {
   const [leo, gemini, cassiopeia, aquila] = SUPREME_STAGE_DEFINITIONS;
-  assert.equal(leo.unlockSource, 'global');
+  assert.equal(leo.unlockSource, 'regular-overdrive');
   assert.equal(gemini.unlockSource, 'supreme');
-  assert.equal(isSupremeStageUnlocked(leo, { highestRound: 52, supremeHighestRound: 100 }), false);
-  assert.equal(isSupremeStageUnlocked(leo, { highestRound: 53, supremeHighestRound: 0 }), true);
+  assert.equal(isSupremeStageUnlocked(leo, { highestRound: 200, supremeHighestRound: 100 }), false);
+  assert.equal(isSupremeStageUnlocked(leo, { highestRound: 50, supremeHighestRound: 0, regularOverdriveCompleted: true }), true);
   assert.equal(isSupremeStageUnlocked(gemini, { highestRound: 200, supremeHighestRound: 57 }), false);
   assert.equal(isSupremeStageUnlocked(gemini, { highestRound: 58, supremeHighestRound: 58 }), true);
   assert.equal(isSupremeStageUnlocked(cassiopeia, { highestRound: 200, supremeHighestRound: 68 }), true);
@@ -55,7 +56,24 @@ test('Supreme unlocks use global clearance once, then persistent Supreme round p
   assert.equal(isRunProtocolUnlocked('supreme-aquila', { highestRound: 200, supremeHighestRound: 78 }), true);
   assert.equal(protocolStart('supreme-gemini', 200, 57).protocol, 'normal');
   assert.equal(protocolStart('supreme-gemini', 200, 58).startingRound, 55);
-  assert.equal(cycleUnlockedProtocol('overdrive-pegasus', 53, 1, 0), 'supreme-leo');
+  assert.equal(cycleUnlockedProtocol('overdrive-pegasus', 53, 1, 0, true), 'supreme-leo');
+});
+
+test('Round 50 completion advances to Supreme 51 only after the successful completion decision', () => {
+  const base = {
+    protocol: 'overdrive-pegasus', completedRound: 50,
+    firstSupremeAwarded: false, firstSupremeTutorialSeen: false,
+    regularOverdriveCompleted: false
+  };
+  assert.deepEqual(resolveSupremePostRoundPlan(base), {
+    completesRegularOverdrive: true,
+    newlyUnlocksSupremeOverdrive: true,
+    nextProtocol: 'supreme-leo',
+    milestone: 'overdrive-unlocked'
+  });
+  assert.equal(resolveSupremePostRoundPlan({ ...base, firstSupremeAwarded: true }).milestone, 'overdrive-unlocked-first-supreme');
+  assert.equal(resolveSupremePostRoundPlan({ ...base, completedRound: 49 }).nextProtocol, 'overdrive-pegasus');
+  assert.equal(resolveSupremePostRoundPlan({ ...base, protocol: 'normal' }).completesRegularOverdrive, false);
 });
 
 test('Supreme stage scaling is centralized, monotonic, and stronger than the Overdrive baseline', () => {
@@ -144,7 +162,7 @@ test('version-thirteen saves migrate Supreme progression defaults without losing
   delete old.progress.supremeHighestRound;
   delete old.progress.supremeOverdriveCompleted;
   const migrated = normalizeLocalSave(old);
-  assert.equal(migrated.version, 15);
+  assert.equal(migrated.version, 16);
   assert.equal(migrated.wallet.credits, 76543);
   assert.equal(migrated.progress.highestRound, 63);
   assert.equal(migrated.progress.supremeHighestRound, 0);
