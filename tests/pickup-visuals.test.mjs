@@ -34,7 +34,7 @@ test('Ricochet Rounds use a distinct pickup, preserve projectile speed, and have
       + PICKUP_BALANCE.speedBoostShare + PICKUP_BALANCE.rapidFireShare + PICKUP_BALANCE.ricochetShare
       + PICKUP_BALANCE.grenadeRoundsShare + PICKUP_BALANCE.scattershotShare
       + PICKUP_BALANCE.creditsShare + PICKUP_BALANCE.coreTokenShare,
-    1.08
+    1.064
   );
   assert.match(arena, /const ricochetsRemaining = now < this\.player\.buffs\.ricochetUntil \? RICOCHET_MAX_WALL_BOUNCES : 0/);
   assert.match(arena, /if \(p\.from === 'player' && \(p\.ricochetsRemaining \?\? 0\) > 0/);

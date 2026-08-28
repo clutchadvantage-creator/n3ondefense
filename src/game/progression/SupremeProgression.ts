@@ -94,7 +94,9 @@ export const SUPREME_STAGE_DEFINITIONS: readonly SupremeStageDefinition[] = Obje
     unlockRound,
     difficulty: makeDifficulty(index),
     rewardMultiplier: 1.35 + index * 0.075,
-    supremeModWeightMultiplier: 0.22 + index * 0.178,
+    // Native endgame rarity: Epic-like at entry, then gradually more
+    // attainable without becoming a guaranteed reward.
+    supremeModWeightMultiplier: 0.82 + index * 0.038,
     terminalEncounter: level === 100
   })
 ));

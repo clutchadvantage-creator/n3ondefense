@@ -91,8 +91,12 @@ import {
   SCATTERSHOT_ANGLE_OFFSETS,
   TEMPORARY_AMMO_BALANCE,
   TemporaryAmmoModeController,
+  grenadeArcHeight,
+  grenadeBounceCountForSequence,
+  grenadeFireIntervalMs,
   type TemporaryAmmoMode
 } from '../player/TemporaryAmmoMode.ts';
+import { TurretWeaponSyncController } from '../player/TemporaryOffensiveEffects.ts';
 import { N3ONArcadeController } from '../arcade/N3ONArcadeController.ts';
 import type { ArcadeEventId, ArcadeGrantedReward, ArcadeMetricEvent } from '../arcade/types.ts';
 import type { Boss } from '../bosses/Boss.ts';
@@ -138,6 +142,13 @@ interface Projectile {
   ricochetsRemaining?: number;
   ammoMode?: TemporaryAmmoMode;
   nextTrailAt: number;
+  grenadeShadow?: Phaser.GameObjects.Arc;
+  grenadeBouncesRemaining?: number;
+  grenadeTotalBounces?: number;
+  grenadeBounceStartedAt?: number;
+  grenadeNextBounceAt?: number;
+  grenadeArcHeightMax?: number;
+  grenadeFuseAt?: number;
 }
 
 interface SupremeBridgeAwardOutcome {
@@ -321,6 +332,8 @@ export class ArenaScene extends Phaser.Scene {
   private mineExplosionVfx!: MineExplosionVfx;
   private bombExplosionCosmeticVfx!: BombExplosionCosmeticVfx;
   private readonly temporaryAmmo = new TemporaryAmmoModeController();
+  private readonly turretWeaponSync = new TurretWeaponSyncController();
+  private grenadeProjectileSequence = 0;
   private readonly hazardDamageTargets: HazardDamageTarget[] = [];
   private homingMissiles: HomingMissile[] = [];
   private pickups: Pickup[] = [];
@@ -550,6 +563,8 @@ export class ArenaScene extends Phaser.Scene {
   private grenadeSplashDamage = 0;
   private grenadeSplashCritical = false;
   private grenadeSplashExcludedEnemy: Enemy | null = null;
+  private grenadeSplashOwner: 'weapon' | 'turret' = 'weapon';
+  private grenadeSplashTurretId = '';
   private specialAmmoHitX = 0;
   private specialAmmoHitY = 0;
   private specialAmmoHitDistanceSquared = Number.POSITIVE_INFINITY;
@@ -560,12 +575,18 @@ export class ArenaScene extends Phaser.Scene {
     const dy = enemy.y - this.grenadeSplashY;
     if (dx * dx + dy * dy > this.grenadeSplashRadiusSquared) return;
     const wasAlive = !enemy.isDead();
-    const applied = enemy.takeDamage(this.grenadeSplashDamage, 'weapon');
+    const applied = enemy.takeDamage(this.grenadeSplashDamage, this.grenadeSplashOwner);
     const overkill = Math.max(0, this.grenadeSplashDamage - applied);
-    GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, this.grenadeSplashCritical);
+    if (this.grenadeSplashOwner === 'turret') {
+      GameplayTelemetryRecorder.recordTurretHit(this.grenadeSplashTurretId, applied, overkill);
+    } else {
+      GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, this.grenadeSplashCritical);
+    }
     enemy.defuseProgressMs = 0;
     enemy.defuseInterruptedUntil = this.time.now + 800;
-    if (wasAlive && enemy.isDead()) this.triggerSplitCurrent(enemy, this.grenadeSplashDamage);
+    if (wasAlive && enemy.isDead() && this.grenadeSplashOwner === 'weapon') {
+      this.triggerSplitCurrent(enemy, this.grenadeSplashDamage);
+    }
   };
   private readonly findSpecialAmmoHitNeighbor = (enemy: Enemy): void => {
     if (!enemy.active || enemy.isDead()) return;
@@ -973,6 +994,8 @@ export class ArenaScene extends Phaser.Scene {
   private createRoundFromDefinition(def: ReturnType<RoundManager['currentDefinition']>): void {
     this.prepareForRoundCreation();
     this.temporaryAmmo.reset();
+    this.turretWeaponSync.reset();
+    this.grenadeProjectileSequence = 0;
     this.pendingRoundPayload = null;
     this.bossRound = 0;
     this.bossPickupRandom = null;
@@ -1624,7 +1647,7 @@ export class ArenaScene extends Phaser.Scene {
         body.setVelocity(state.velocityX, state.velocityY);
       }
       sprite.setActive(true).setVisible(true).setPosition(state.x, state.y);
-      sprite.setTexture(state.texture).setScale(1).setDisplaySize(state.width, state.height);
+      sprite.setTexture(state.texture).setOrigin(0.5).setScale(1).setDisplaySize(state.width, state.height);
       sprite.clearTint().setTint(state.tint).setAlpha(1).setRotation(state.rotation).setDepth(state.depth);
 
       projectile.damage = state.damage;
@@ -1644,6 +1667,20 @@ export class ArenaScene extends Phaser.Scene {
       projectile.ricochetsRemaining = state.ricochetsRemaining ?? 0;
       projectile.ammoMode = state.ammoMode ?? 'normal';
       projectile.nextTrailAt = this.time.now + Math.abs(Math.floor(state.x + state.y)) % 30;
+      projectile.grenadeBouncesRemaining = state.grenadeBouncesRemaining ?? 0;
+      projectile.grenadeTotalBounces = state.grenadeTotalBounces ?? 0;
+      projectile.grenadeBounceStartedAt = state.grenadeBounceStartedAt ?? 0;
+      projectile.grenadeNextBounceAt = state.grenadeNextBounceAt ?? 0;
+      projectile.grenadeArcHeightMax = state.grenadeArcHeightMax ?? 0;
+      projectile.grenadeFuseAt = state.grenadeFuseAt ?? 0;
+      if (projectile.ammoMode === 'grenade') {
+        projectile.grenadeShadow ??= this.add.circle(state.x, state.y + 3, 7, 0x02050a, 0.42)
+          .setStrokeStyle(1, state.tint, 0.28).setDepth(state.depth - 1);
+        projectile.grenadeShadow.setActive(true).setVisible(true).setPosition(state.x, state.y + 3)
+          .setScale(1).setAlpha(0.42).setDepth(state.depth - 1).setStrokeStyle(1, state.tint, 0.28);
+      } else {
+        projectile.grenadeShadow?.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
+      }
     };
 
     this.projectilePool = new ReusableObjectPool<Projectile, ProjectileSpawn>(
@@ -1677,6 +1714,14 @@ export class ArenaScene extends Phaser.Scene {
         projectile.bossAttack = undefined;
         projectile.ricochetsRemaining = 0;
         projectile.ammoMode = 'normal';
+        projectile.grenadeBouncesRemaining = 0;
+        projectile.grenadeTotalBounces = 0;
+        projectile.grenadeBounceStartedAt = 0;
+        projectile.grenadeNextBounceAt = 0;
+        projectile.grenadeArcHeightMax = 0;
+        projectile.grenadeFuseAt = 0;
+        projectile.sprite.setOrigin(0.5);
+        projectile.grenadeShadow?.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
       }
     );
 
@@ -1708,6 +1753,12 @@ export class ArenaScene extends Phaser.Scene {
 
   private retireProjectile(projectile: Projectile): void {
     this.projectilePool.release(projectile);
+  }
+
+  private destroyPooledProjectile(projectile: Projectile): void {
+    projectile.grenadeShadow?.destroy();
+    projectile.grenadeShadow = undefined;
+    projectile.sprite.destroy();
   }
 
   private obtainFxCircle(state: FxCircleSpawn): Phaser.GameObjects.Arc {
@@ -1817,8 +1868,13 @@ export class ArenaScene extends Phaser.Scene {
     if (!this.playerInput.held('fire')) return;
     if (this.player.heat >= this.player.weapon.maxHeat) return;
 
+    const ammoMode = this.temporaryAmmo.activeMode(now);
     const fieldFireRate = this.bombsiteMods?.playerFireRateMultiplier(this.player.x, this.player.y) ?? 1;
-    const cadence = 1000 / (this.player.fireRate * fieldFireRate);
+    // Grenades use permanent weapon progression only. Rapid Fire and temporary
+    // field cadence multipliers intentionally do not enter this calculation.
+    const cadence = ammoMode === 'grenade'
+      ? grenadeFireIntervalMs(this.player.weapon.fireRate)
+      : 1000 / (this.player.fireRate * fieldFireRate);
     if (now - this.lastPlayerShotMs < cadence) return;
     const corruptedShotCost = this.modRuntime.has('fractured-current') ? MOD_BALANCE.fracturedCurrent.extraShotEnergyCost : 0;
     const shotEnergyCost = (WEAPON_BALANCE.energyCostPerShot + corruptedShotCost) * this.modRuntime.multiplier('weaponEnergyCost');
@@ -1841,7 +1897,6 @@ export class ArenaScene extends Phaser.Scene {
     const damage = this.player.weapon.damage * this.player.damageMultiplier
       * this.modRuntime.supremePickupSurgeDamageMultiplier(now)
       * (crit ? criticalMultiplier : 1);
-    const ammoMode = this.temporaryAmmo.activeMode(now);
     const potentialDamage = ammoMode === 'scattershot'
       ? damage * TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier * TEMPORARY_AMMO_BALANCE.scattershot.pelletCount
       : damage;
@@ -1908,6 +1963,8 @@ export class ArenaScene extends Phaser.Scene {
       ? TEMPORARY_AMMO_BALANCE.grenade.projectileLifetimeMs
       : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.projectileLifetimeMs : 950;
     const speed = baseSpeed * speedMultiplier;
+    const bounceCount = grenade ? grenadeBounceCountForSequence(this.grenadeProjectileSequence++) : 0;
+    const now = this.time.now;
     this.projectiles.push(this.obtainProjectile({
       x,
       y,
@@ -1929,7 +1986,13 @@ export class ArenaScene extends Phaser.Scene {
       telemetryOwner: 'weapon',
       critical,
       ricochetsRemaining,
-      ammoMode: mode
+      ammoMode: mode,
+      grenadeBouncesRemaining: bounceCount,
+      grenadeTotalBounces: bounceCount,
+      grenadeBounceStartedAt: grenade ? now : 0,
+      grenadeNextBounceAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.firstBounceDelayMs : 0,
+      grenadeArcHeightMax: grenade ? TEMPORARY_AMMO_BALANCE.grenade.initialArcHeight : 0,
+      grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0
     }));
   }
 
@@ -2880,6 +2943,89 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  private spawnGrenadeBounceImpact(projectile: Projectile): void {
+    const pulse = this.obtainFxCircle({
+      x: projectile.sprite.x,
+      y: projectile.sprite.y,
+      radius: 4,
+      color: projectile.sprite.tintTopLeft,
+      alpha: 0.55,
+      depth: 8,
+      strokeWidth: 1,
+      strokeColor: 0xffffff,
+      strokeAlpha: 0.65
+    });
+    this.tweens.add({
+      targets: pulse,
+      radius: 13,
+      alpha: 0,
+      duration: 120,
+      onComplete: () => this.retireFxCircle(pulse)
+    });
+  }
+
+  /** Consumes one of the fixed 2-3 grenade bounces. Returns true when the
+   * final bounce should detonate. No timers or per-bounce objects are kept. */
+  private consumeGrenadeBounce(projectile: Projectile, now: number): boolean {
+    this.spawnGrenadeBounceImpact(projectile);
+    projectile.grenadeBouncesRemaining = Math.max(0, (projectile.grenadeBouncesRemaining ?? 0) - 1);
+    if ((projectile.grenadeBouncesRemaining ?? 0) <= 0) return true;
+    const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
+    if (body) body.setVelocity(
+      body.velocity.x * TEMPORARY_AMMO_BALANCE.grenade.velocityRetentionPerBounce,
+      body.velocity.y * TEMPORARY_AMMO_BALANCE.grenade.velocityRetentionPerBounce
+    );
+    const bounceIndex = Math.max(1, (projectile.grenadeTotalBounces ?? 1) - (projectile.grenadeBouncesRemaining ?? 0));
+    projectile.grenadeBounceStartedAt = now;
+    projectile.grenadeNextBounceAt = now + TEMPORARY_AMMO_BALANCE.grenade.firstBounceDelayMs
+      * TEMPORARY_AMMO_BALANCE.grenade.bounceDelayScale ** bounceIndex;
+    projectile.grenadeArcHeightMax = TEMPORARY_AMMO_BALANCE.grenade.initialArcHeight
+      * TEMPORARY_AMMO_BALANCE.grenade.arcHeightScalePerBounce ** bounceIndex;
+    return false;
+  }
+
+  private updateGrenadeFlight(projectile: Projectile, now: number, delta: number): boolean {
+    if (now >= (projectile.grenadeFuseAt ?? 0)) return true;
+    if (now >= (projectile.grenadeNextBounceAt ?? Number.POSITIVE_INFINITY)
+      && this.consumeGrenadeBounce(projectile, now)) return true;
+    const height = grenadeArcHeight(
+      now,
+      projectile.grenadeBounceStartedAt ?? now,
+      projectile.grenadeNextBounceAt ?? now + 1,
+      projectile.grenadeArcHeightMax ?? 0
+    );
+    projectile.sprite.setOrigin(0.5, 0.5 + height / Math.max(1, projectile.sprite.displayHeight));
+    projectile.sprite.rotation += TEMPORARY_AMMO_BALANCE.grenade.spinRadiansPerSecond * delta / 1000;
+    projectile.grenadeShadow?.setPosition(projectile.sprite.x, projectile.sprite.y + 3)
+      .setScale(Math.max(0.38, 1 - height / 75))
+      .setAlpha(Math.max(0.16, 0.42 - height / 145));
+    return false;
+  }
+
+  /** 0 = blocked/no reflection, 1 = continue, 2 = final bounce/detonate. */
+  private bounceGrenadeFromWall(projectile: Projectile, now: number): 0 | 1 | 2 {
+    const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
+    if (!body) return 0;
+    const previousX = projectile.previousX ?? projectile.sprite.x;
+    const previousY = projectile.previousY ?? projectile.sprite.y;
+    const reflected = reflectRicochetVelocity(
+      body.velocity.x,
+      body.velocity.y,
+      this.hitWall(projectile.sprite.x, previousY),
+      this.hitWall(previousX, projectile.sprite.y)
+    );
+    const speed = Math.hypot(reflected.x, reflected.y);
+    if (speed <= 0.01) return 0;
+    const safeX = previousX + reflected.x / speed * 5;
+    const safeY = previousY + reflected.y / speed * 5;
+    body.reset(safeX, safeY);
+    body.setVelocity(reflected.x, reflected.y);
+    projectile.previousX = safeX;
+    projectile.previousY = safeY;
+    projectile.sprite.setRotation(Math.atan2(reflected.y, reflected.x));
+    return this.consumeGrenadeBounce(projectile, now) ? 2 : 1;
+  }
+
   private updateProjectiles(delta: number): void {
     this.pendingSplitProjectiles.length = 0;
     const prismaticRounds = this.modRuntime.hasInfusion('prismatic-rounds');
@@ -2892,12 +3038,33 @@ export class ArenaScene extends Phaser.Scene {
       const p = this.projectiles[readIndex];
       p.lifeMs -= delta;
       if (p.lifeMs <= 0 || !p.sprite.body) {
-        if (p.lifeMs <= 0 && p.telemetryOwner) GameplayTelemetryRecorder.recordProjectileMiss(p.telemetryOwner, 'expired');
+        if (p.lifeMs <= 0 && p.ammoMode === 'grenade' && (p.from === 'player' || p.from === 'turret')) {
+          this.detonateGrenadeRound(p, p.sprite.x, p.sprite.y, null);
+        } else if (p.lifeMs <= 0 && p.telemetryOwner) {
+          GameplayTelemetryRecorder.recordProjectileMiss(p.telemetryOwner, 'expired');
+        }
+        this.retireProjectile(p);
+        continue;
+      }
+
+      if (p.ammoMode === 'grenade' && (p.from === 'player' || p.from === 'turret')
+        && this.updateGrenadeFlight(p, now, delta)) {
+        this.detonateGrenadeRound(p, p.sprite.x, p.sprite.y, null);
         this.retireProjectile(p);
         continue;
       }
 
       if (this.hitWall(p.sprite.x, p.sprite.y)) {
+        if (p.ammoMode === 'grenade' && (p.from === 'player' || p.from === 'turret')) {
+          const bounce = this.bounceGrenadeFromWall(p, now);
+          if (bounce === 1) {
+            this.projectiles[writeIndex++] = p;
+            continue;
+          }
+          this.detonateGrenadeRound(p, p.sprite.x, p.sprite.y, null);
+          this.retireProjectile(p);
+          continue;
+        }
         if (p.bossAttack === 'artillery-rocket') {
           this.explodeBossRocket(p);
           continue;
@@ -2970,14 +3137,14 @@ export class ArenaScene extends Phaser.Scene {
       const fluxSource = p.from === 'player'
         ? 'weapon'
         : p.from === 'turret' ? 'turret' : 'enemy-projectile';
-      if (this.fluxCores?.damagePoint(p.sprite.x, p.sprite.y, 7, p.damage, fluxSource)) {
+      if (p.ammoMode !== 'grenade' && this.fluxCores?.damagePoint(p.sprite.x, p.sprite.y, 7, p.damage, fluxSource)) {
         this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.sprite.tintTopLeft);
         this.retireProjectile(p);
         continue;
       }
 
       if (p.from === 'player' || p.from === 'turret') {
-        if (p.from === 'player') {
+        if (p.from === 'player' && p.ammoMode !== 'grenade') {
           let hitMissile: HomingMissile | null = null;
           for (const missile of this.homingMissiles) {
             if (missile.detonated || !missile.sprite.active) continue;
@@ -3007,7 +3174,7 @@ export class ArenaScene extends Phaser.Scene {
           }
         }
 
-        const boss = this.nearestActiveBossTarget(p.sprite.x, p.sprite.y);
+        const boss = p.ammoMode === 'grenade' ? null : this.nearestActiveBossTarget(p.sprite.x, p.sprite.y);
         if (boss?.active && !boss.isDefeated
           && (boss.x - p.sprite.x) ** 2 + (boss.y - p.sprite.y) ** 2 < (boss.hazardRadius + 8) ** 2) {
           const applied = boss.takeDamage(p.damage, p.from === 'player' ? 'weapon' : 'turret');
@@ -3026,7 +3193,8 @@ export class ArenaScene extends Phaser.Scene {
           }
           continue;
         }
-        const hitEnemy = p.from === 'player' && p.ammoMode !== 'normal'
+        const hitEnemy = p.ammoMode === 'grenade' ? null
+          : p.ammoMode === 'scattershot'
           ? this.findSpecialAmmoHitEnemy(p.sprite.x, p.sprite.y)
           : this.findProjectileHitEnemy(p.sprite.x, p.sprite.y);
         if (hitEnemy) {
@@ -3216,7 +3384,13 @@ export class ArenaScene extends Phaser.Scene {
         critical: projectile.critical,
         turretId: projectile.turretId,
         ricochetsRemaining: projectile.ricochetsRemaining,
-        ammoMode: projectile.ammoMode
+        ammoMode: projectile.ammoMode,
+        grenadeBouncesRemaining: projectile.grenadeBouncesRemaining,
+        grenadeTotalBounces: projectile.grenadeTotalBounces,
+        grenadeBounceStartedAt: projectile.grenadeBounceStartedAt,
+        grenadeNextBounceAt: projectile.grenadeNextBounceAt,
+        grenadeArcHeightMax: projectile.grenadeArcHeightMax,
+        grenadeFuseAt: projectile.grenadeFuseAt
       }));
     }
     const pulse = this.obtainFxCircle({
@@ -3276,11 +3450,11 @@ export class ArenaScene extends Phaser.Scene {
     color: number,
     directlyHitEnemy: Enemy | null = null
   ): void {
-    if (projectile.from === 'player' && projectile.ammoMode === 'grenade') {
+    if ((projectile.from === 'player' || projectile.from === 'turret') && projectile.ammoMode === 'grenade') {
       this.detonateGrenadeRound(projectile, x, y, directlyHitEnemy);
       return;
     }
-    if (projectile.from === 'player' && projectile.ammoMode === 'scattershot') {
+    if ((projectile.from === 'player' || projectile.from === 'turret') && projectile.ammoMode === 'scattershot') {
       const pulse = this.obtainFxCircle({
         x,
         y,
@@ -3326,14 +3500,57 @@ export class ArenaScene extends Phaser.Scene {
       false
     );
 
+    // The old direct-plus-splash balance is preserved at the grenade's final
+    // landing point: one primary target receives the round damage and nearby
+    // targets receive the restrained splash fraction.
+    const source = projectile.from === 'turret' ? 'turret' : 'weapon';
+    const primaryEnemy = directlyHitEnemy ?? this.findSpecialAmmoHitEnemy(x, y);
+    if (primaryEnemy && !primaryEnemy.isDead()) {
+      const markedForTurret = this.defuseAssignees.has(primaryEnemy)
+        || this.time.now < (this.defuserMarkedUntil.get(primaryEnemy) ?? 0);
+      const conditionalBonus = source === 'turret'
+        && this.modRuntime.rank('priority-targeting') === 3
+        && markedForTurret
+        ? this.modRuntime.conditionalDamageBonus([MOD_BALANCE.priorityTargeting.rank3TurretDamageBonus])
+        : 0;
+      const finalDamage = projectile.damage * (1 + conditionalBonus);
+      const wasAlive = !primaryEnemy.isDead();
+      const applied = primaryEnemy.takeDamage(finalDamage, source);
+      if (source === 'weapon' && applied > 0 && this.tutorialDirector?.awaits('combat.enemyDamaged')) {
+        TutorialEventBus.emit('combat.enemyDamaged', { type: primaryEnemy.stats.type, damage: applied });
+      }
+      const overkill = Math.max(0, finalDamage - applied);
+      if (source === 'turret') GameplayTelemetryRecorder.recordTurretHit(projectile.turretId ?? '', applied, overkill);
+      else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, projectile.critical);
+      primaryEnemy.defuseProgressMs = 0;
+      primaryEnemy.defuseInterruptedUntil = this.time.now + 800;
+      if (wasAlive && primaryEnemy.isDead() && projectile.from === 'player' && projectile.splitCurrentEligible) {
+        this.triggerSplitCurrent(primaryEnemy, finalDamage);
+      }
+    }
+
+    const boss = this.nearestActiveBossTarget(x, y);
+    if (boss?.active && !boss.isDefeated
+      && (boss.x - x) ** 2 + (boss.y - y) ** 2 <= (radius + boss.hazardRadius) ** 2) {
+      const applied = boss.takeDamage(projectile.damage, source);
+      const overkill = Math.max(0, projectile.damage - applied);
+      if (source === 'turret') GameplayTelemetryRecorder.recordTurretHit(projectile.turretId ?? '', applied, overkill);
+      else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, projectile.critical);
+    }
+    this.fluxCores?.damagePoint(x, y, radius, projectile.damage, source);
+
     this.grenadeSplashX = x;
     this.grenadeSplashY = y;
     this.grenadeSplashRadiusSquared = radius * radius;
     this.grenadeSplashDamage = projectile.damage * TEMPORARY_AMMO_BALANCE.grenade.splashDamageMultiplier;
     this.grenadeSplashCritical = projectile.critical ?? false;
-    this.grenadeSplashExcludedEnemy = directlyHitEnemy;
+    this.grenadeSplashExcludedEnemy = primaryEnemy;
+    this.grenadeSplashOwner = source;
+    this.grenadeSplashTurretId = projectile.turretId ?? '';
     this.enemySeparationGrid.forEachNearby(x, y, radius, this.applyGrenadeSplashNeighbor);
     this.grenadeSplashExcludedEnemy = null;
+    this.grenadeSplashOwner = 'weapon';
+    this.grenadeSplashTurretId = '';
   }
 
   private playMineExplosion(x: number, y: number, radius: number, mine: Mine): void {
@@ -3510,9 +3727,67 @@ export class ArenaScene extends Phaser.Scene {
     return true;
   }
 
+  private spawnTurretAmmoVolley(
+    turret: Turret,
+    mode: TemporaryAmmoMode,
+    angle: number,
+    damage: number,
+    now: number
+  ): void {
+    const scattershot = mode === 'scattershot';
+    const grenade = mode === 'grenade';
+    const count = scattershot ? SCATTERSHOT_ANGLE_OFFSETS.length : 1;
+    const projectileColor = SaveSystem.getCosmeticColor('projectileColor', now);
+    const trailColor = SaveSystem.getCosmeticColor('trailColor', now);
+    for (let index = 0; index < count; index += 1) {
+      const projectileAngle = angle + (scattershot ? SCATTERSHOT_ANGLE_OFFSETS[index] : 0);
+      const speed = 560 * (grenade
+        ? TEMPORARY_AMMO_BALANCE.grenade.projectileSpeedMultiplier
+        : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.projectileSpeedMultiplier : 1);
+      const bounceCount = grenade ? grenadeBounceCountForSequence(this.grenadeProjectileSequence++) : 0;
+      this.projectiles.push(this.obtainProjectile({
+        x: turret.sprite.x,
+        y: turret.sprite.y,
+        texture: grenade ? 'ammo-grenade-round' : scattershot ? 'ammo-scatter-pellet' : 'circle',
+        width: grenade ? TEMPORARY_AMMO_BALANCE.grenade.width : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.width : 6,
+        height: grenade ? TEMPORARY_AMMO_BALANCE.grenade.height : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.height : 6,
+        tint: projectileColor,
+        rotation: projectileAngle,
+        velocityX: Math.cos(projectileAngle) * speed,
+        velocityY: Math.sin(projectileAngle) * speed,
+        depth: grenade || scattershot ? 8 : 0,
+        damage: damage * (scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier : 1),
+        from: 'turret',
+        lifeMs: grenade ? TEMPORARY_AMMO_BALANCE.grenade.projectileLifetimeMs
+          : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.projectileLifetimeMs : 1150,
+        trailColor,
+        telemetryOwner: 'turret',
+        turretId: turret.telemetryId,
+        ammoMode: mode,
+        previousX: turret.sprite.x,
+        previousY: turret.sprite.y,
+        grenadeBouncesRemaining: bounceCount,
+        grenadeTotalBounces: bounceCount,
+        grenadeBounceStartedAt: grenade ? now : 0,
+        grenadeNextBounceAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.firstBounceDelayMs : 0,
+        grenadeArcHeightMax: grenade ? TEMPORARY_AMMO_BALANCE.grenade.initialArcHeight : 0,
+        grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0
+      }));
+      GameplayTelemetryRecorder.recordTurretShot(turret.telemetryId);
+    }
+  }
+
   private updateAbilities(now: number, dt: number): void {
     for (const turret of this.turrets) {
       turret.updateCosmetic(now);
+      const playerAmmoMode = this.temporaryAmmo.activeSpecialMode(now);
+      const turretAmmoMode = this.turretWeaponSync.activeAmmoMode(
+        now, playerAmmoMode, this.modRuntime.turretWeaponSyncEnabled()
+      );
+      const turretDamageBoosted = this.turretWeaponSync.damageBoostActive(
+        now, this.player.buffs.damageBoostUntil, this.modRuntime.turretWeaponSyncEnabled()
+      );
+      turret.setWeaponSyncActive(Boolean(turretAmmoMode || turretDamageBoosted));
       const enemyTarget = this.getNearestEnemy(turret.sprite.x, turret.sprite.y, turret.range);
       const bossTarget = this.nearestActiveBossTarget(turret.sprite.x, turret.sprite.y);
       const bossInRange = Boolean(bossTarget?.active && !bossTarget.isDefeated
@@ -3523,18 +3798,20 @@ export class ArenaScene extends Phaser.Scene {
       const angle = Phaser.Math.Angle.Between(turret.sprite.x, turret.sprite.y, target.x, target.y);
       turret.aimAt(angle);
       const fieldFireRate = this.bombsiteMods.turretFireRateMultiplier(turret.sprite.x, turret.sprite.y);
-      if (!turret.canFire(now, fieldFireRate)) continue;
+      const canFire = turretAmmoMode === 'grenade'
+        ? turret.canFireAtInterval(now, TEMPORARY_AMMO_BALANCE.grenade.turretFireIntervalMs)
+        : turret.canFire(now, fieldFireRate);
+      if (!canFire) continue;
 
       turret.lastShotMs = now;
       turret.markFired(now);
-      GameplayTelemetryRecorder.recordTurretShot(turret.telemetryId);
-      this.projectiles.push(this.obtainProjectile({
-        x: turret.sprite.x, y: turret.sprite.y, texture: 'circle', width: 6, height: 6,
-        tint: SaveSystem.getCosmeticColor('projectileColor', now), rotation: angle,
-        velocityX: Math.cos(angle) * 560, velocityY: Math.sin(angle) * 560, depth: 0,
-        damage: turret.damage, from: 'turret', lifeMs: 1150,
-        trailColor: SaveSystem.getCosmeticColor('trailColor', now), telemetryOwner: 'turret', turretId: turret.telemetryId
-      }));
+      this.spawnTurretAmmoVolley(
+        turret,
+        turretAmmoMode ?? 'normal',
+        angle,
+        turret.damage * (turretDamageBoosted ? WEAPON_BALANCE.damageBoostMultiplier : 1),
+        now
+      );
     }
 
     for (const mine of this.mines) {
@@ -4179,7 +4456,12 @@ export class ArenaScene extends Phaser.Scene {
       appliedRestoration = this.player.energy - before;
     }
     const buffDurationMs = WEAPON_BALANCE.buffDurationMs * this.modRuntime.multiplier('buffDuration');
-    if (type === 'damageBoost') this.player.buffs.damageBoostUntil = this.time.now + buffDurationMs;
+    if (type === 'damageBoost') {
+      this.player.buffs.damageBoostUntil = this.time.now + buffDurationMs;
+      this.turretWeaponSync.inherit(
+        'damageBoost', this.time.now, this.player.buffs.damageBoostUntil, this.modRuntime.turretWeaponSyncEnabled()
+      );
+    }
     if (type === 'speedBoost') {
       const wasActive = this.time.now < this.player.buffs.speedBoostUntil;
       this.player.buffs.speedBoostStacks = nextPickupBuffStack(
@@ -4195,8 +4477,18 @@ export class ArenaScene extends Phaser.Scene {
       this.player.buffs.rapidFireUntil = this.time.now + buffDurationMs;
     }
     if (type === 'ricochet') this.player.buffs.ricochetUntil = this.time.now + buffDurationMs;
-    if (type === 'grenadeRounds') this.temporaryAmmo.activate('grenade', this.time.now, this.isOverdriveProtocol(), this.modRuntime.multiplier('buffDuration'));
-    if (type === 'scattershot') this.temporaryAmmo.activate('scattershot', this.time.now, this.isOverdriveProtocol(), this.modRuntime.multiplier('buffDuration'));
+    if (type === 'grenadeRounds') {
+      const activation = this.temporaryAmmo.activate('grenade', this.time.now, this.isOverdriveProtocol(), this.modRuntime.multiplier('buffDuration'));
+      this.turretWeaponSync.inherit(
+        'grenadeRounds', this.time.now, activation.activeUntil, this.modRuntime.turretWeaponSyncEnabled()
+      );
+    }
+    if (type === 'scattershot') {
+      const activation = this.temporaryAmmo.activate('scattershot', this.time.now, this.isOverdriveProtocol(), this.modRuntime.multiplier('buffDuration'));
+      this.turretWeaponSync.inherit(
+        'scattershot', this.time.now, activation.activeUntil, this.modRuntime.turretWeaponSyncEnabled()
+      );
+    }
     if (type === 'credits') {
       const credits = explicitAmount ?? this.scaleModCredits(PICKUP_BALANCE.credits);
       this.roundCredits += credits;
@@ -4613,6 +4905,7 @@ export class ArenaScene extends Phaser.Scene {
       sharedRuntime: {
         modRuntime: this.modRuntime,
         temporaryAmmo: this.temporaryAmmo,
+        turretWeaponSync: this.turretWeaponSync,
         mineChargeRack: this.mineChargeRack
       },
       abilityState: {
@@ -6931,7 +7224,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const projectiles = this.projectilePool.stats();
     if (projectiles.active < 512 && projectiles.available > 1536) {
-      this.projectilePool.trimAvailable(1024, (projectile) => projectile.sprite.destroy(), 128);
+      this.projectilePool.trimAvailable(1024, (projectile) => this.destroyPooledProjectile(projectile), 128);
     }
 
     const fx = this.fxCirclePool.stats();
@@ -7562,6 +7855,8 @@ export class ArenaScene extends Phaser.Scene {
     this.arcadePopSequence = 0;
     this.physicalLootSequence = 0;
     this.temporaryAmmo.reset();
+    this.turretWeaponSync.reset();
+    this.grenadeProjectileSequence = 0;
     this.enemyNavigationSequence = 0;
     this.navState = new WeakMap<Enemy, NavState>();
     this.patrolTargets = new WeakMap<Enemy, PatrolPoint>();
@@ -7739,7 +8034,7 @@ export class ArenaScene extends Phaser.Scene {
     this.boostVisual?.destroy();
     this.mineExplosionVfx?.destroy();
     this.bombExplosionCosmeticVfx?.destroy();
-    this.projectilePool?.destroy((projectile) => projectile.sprite.destroy());
+    this.projectilePool?.destroy((projectile) => this.destroyPooledProjectile(projectile));
     this.fxCirclePool?.destroy((circle) => circle.destroy());
     this.projectileTrails?.destroy();
     this.projectileTrails = null;

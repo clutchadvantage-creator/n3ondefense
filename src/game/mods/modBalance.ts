@@ -28,18 +28,18 @@ export const MOD_BALANCE = {
   } as const,
   detonationFireworks: { minDurationMs: 20_000, maxDurationMs: 30_000, burstIntervalMs: 520, sparksPerBurst: 12 },
   dropChance: { normalEnemy: 0.0005, eliteEnemy: 0.04, milestone: 0.12, boss: 0.62, arcade: 1, anomaly: 1 } satisfies Record<ModDropSource, number>,
-  rarityWeights: { common: 56, uncommon: 27, rare: 12, epic: 4.5, legendary: 0.5, supreme: 0.018 } satisfies Record<ModRarity, number>,
+  rarityWeights: { common: 56, uncommon: 27, rare: 12, epic: 4.5, legendary: 0.5, supreme: 4.5 } satisfies Record<ModRarity, number>,
   raritySourceMultipliers: {
-    normalEnemy: { common: 1, uncommon: 0.65, rare: 0.25, epic: 0, legendary: 0, supreme: 0 },
-    eliteEnemy: { common: 0.7, uncommon: 1, rare: 1.4, epic: 0.8, legendary: 0.2, supreme: 0.18 },
-    milestone: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5, supreme: 0.55 },
-    boss: { common: 0.08, uncommon: 0.18, rare: 0.8, epic: 2.2, legendary: 18, supreme: 5.5 },
+    normalEnemy: { common: 1, uncommon: 0.65, rare: 0.25, epic: 0, legendary: 0, supreme: 0.08 },
+    eliteEnemy: { common: 0.7, uncommon: 1, rare: 1.4, epic: 0.8, legendary: 0.2, supreme: 0.7 },
+    milestone: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5, supreme: 1.35 },
+    boss: { common: 0.08, uncommon: 0.18, rare: 0.8, epic: 2.2, legendary: 18, supreme: 2.4 },
     // Arcade Mod rewards are guaranteed by the event roll but retain the
     // established milestone rarity curve; Legendary odds are not inflated.
-    arcade: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5, supreme: 0.2 },
+    arcade: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5, supreme: 1.1 },
     // Anomaly vault rewards use the established optional-event curve. The
     // guaranteed roll affects acquisition frequency, not rarity inflation.
-    anomaly: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5, supreme: 0.2 }
+    anomaly: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5, supreme: 1.45 }
   } satisfies Record<ModDropSource, Record<ModRarity, number>>,
   rarityRoundBonusPerRound: 0.025,
   guaranteedMilestoneEveryRounds: 5,

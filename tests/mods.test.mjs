@@ -7,6 +7,7 @@ import { applyOperativeSpeedMultipliers, magneticResistanceForEnemy, prioritizeT
 import { rollModDrop } from '../src/game/mods/ModDropService.ts';
 import { normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import { MOD_BY_ID, MOD_DEFINITIONS } from '../src/game/mods/definitions.ts';
+import { LOWER_IS_BETTER_MOD_STATS } from '../src/game/mods/types.ts';
 import { MOD_INFUSIONS } from '../src/game/mods/infusions.ts';
 import { MOD_BALANCE, RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol } from '../src/game/mods/modBalance.ts';
 import { advanceKillSwitch, countdownStagesCrossed, defuseCrossesThreshold, isInsideBombsiteField, segmentIntersectsBombsiteField } from '../src/game/mods/BombsiteModRules.ts';
@@ -358,6 +359,31 @@ test('Critical Mass preserves the existing bomb-duration pipeline while centrali
   const runtime = equippedRuntimeAtRank('critical-mass-charge', 3);
   assert.equal(runtime.multiplier('bombDuration'), 0.75);
   assert.ok(MOD_BALANCE.bombsite.criticalMass.spawnCadenceMultiplier[3] < 1);
+});
+
+test('beneficial Bomb Time cards consistently shorten the dangerous countdown', () => {
+  assert.equal(LOWER_IS_BETTER_MOD_STATS.has('bombDuration'), true);
+  const chronometer = MOD_BY_ID.get('bomb-chronometer');
+  assert.ok(chronometer);
+  const duration = chronometer.modifiers.find((modifier) => modifier.stat === 'bombDuration');
+  assert.deepEqual(duration?.values, { 0: 0.95, 1: 0.92, 2: 0.88, 3: 0.83 });
+  assert.match(chronometer.description, /shortens/i);
+  assert.match(chronometer.rankDescriptions[3], /-17%/);
+  for (const value of Object.values(duration?.values ?? {})) assert.ok(value < 1);
+});
+
+test('Sentry Dominion exposes one semantic Weapon Sync and preserves its core turret identity', () => {
+  const dominion = MOD_BY_ID.get('sentry-dominion');
+  assert.ok(dominion);
+  assert.equal(dominion.rarity, 'legendary');
+  assert.equal(dominion.category, 'defense');
+  assert.ok(dominion.tags.includes('weapon-sync'));
+  assert.match(dominion.description, /temporary offensive effects/i);
+  assert.deepEqual(dominion.modifiers.map((modifier) => modifier.stat), [
+    'turretDamage', 'turretFireRate', 'turretMaxActive'
+  ]);
+  assert.equal(equippedRuntimeAtRank('sentry-dominion', 0).turretWeaponSyncEnabled(), true);
+  assert.equal(new ModRuntime(createDefaultModCollection()).turretWeaponSyncEnabled(), false);
 });
 
 test('Nanite Fuel stacks after purchased speed and with temporary speed effects', () => {

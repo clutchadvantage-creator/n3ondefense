@@ -84,6 +84,27 @@ export type ModStat =
   | 'enemyPickupChance'
   | 'bombDuration';
 
+/** Multiplier stats whose smaller value is the beneficial direction. Keeping
+ * this semantic beside ModStat prevents future card/dossier formatting from
+ * assuming that a larger multiplier is always a buff. Values above 1 remain
+ * valid when explicitly used as a corrupted penalty. */
+export const LOWER_IS_BETTER_MOD_STATS: ReadonlySet<ModStat> = new Set<ModStat>([
+  'weaponHeatPerShot',
+  'weaponEnergyCost',
+  'playerDashCooldown',
+  'gasDamageTaken',
+  'fenceCooldown',
+  'fenceEnergyCost',
+  'turretCooldown',
+  'turretEnergyCost',
+  'mineArmTime',
+  'mineCooldown',
+  'mineEnergyCost',
+  'shieldCooldown',
+  'shieldEnergyCost',
+  'bombDuration'
+]);
+
 export type SupremeEffectFamily =
   | 'weapon'
   | 'survivability'

@@ -98,8 +98,9 @@ export const PICKUP_BALANCE = {
   speedBoostShare: 0.13,
   rapidFireShare: 0.13,
   ricochetShare: 0.06,
-  grenadeRoundsShare: 0.04,
-  scattershotShare: 0.04,
+  // Equal 20% relative reductions from the previous 0.04 weights.
+  grenadeRoundsShare: 0.032,
+  scattershotShare: 0.032,
   creditsShare: 0.25,
   coreTokenShare: 0.03,
   lifetimeMs: 14_000,

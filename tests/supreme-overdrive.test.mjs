@@ -124,6 +124,40 @@ test('ten Supreme Mods are three-system endgame cards and remain exclusive to Su
   assert.ok(getModDropChance({ ...request, protocol: 'supreme-centaurus', guaranteed: false }) > getModDropChance({ ...request, protocol: 'overdrive', guaranteed: false }));
 });
 
+test('Supreme Mods are a native Epic-like Supreme ecosystem across every intended reward source', () => {
+  const sources = ['normalEnemy', 'eliteEnemy', 'milestone', 'boss', 'arcade', 'anomaly'];
+  for (const sourceName of sources) {
+    const request = {
+      source: sourceName,
+      round: sourceName === 'milestone' ? 55 : 51,
+      seed: 991,
+      sequence: 0,
+      protocol: 'supreme-leo',
+      guaranteed: sourceName === 'milestone' || sourceName === 'arcade' || sourceName === 'anomaly'
+    };
+    const supreme = getModRarityProbability(request, 'supreme');
+    assert.ok(supreme > 0, `${sourceName} cannot award a Supreme Mod`);
+    if (sourceName !== 'normalEnemy') {
+      const epic = getModRarityProbability(request, 'epic');
+      assert.ok(supreme >= epic * 0.65, `${sourceName} Supreme rate fell well below Epic`);
+      assert.ok(supreme <= epic * 1.25, `${sourceName} Supreme rate exceeded the intended Epic-like band`);
+    }
+    assert.equal(getModRarityProbability({ ...request, protocol: 'normal' }, 'supreme'), 0);
+    assert.equal(getModRarityProbability({ ...request, protocol: 'overdrive-pegasus' }, 'supreme'), 0);
+  }
+});
+
+test('Supreme Bomb Time effects accelerate detonation at every rank', () => {
+  for (const id of ['supreme-eventide-arsenal', 'supreme-triune-bastion']) {
+    const definition = MOD_DEFINITIONS.find((entry) => entry.id === id);
+    const duration = definition?.modifiers.find((modifier) => modifier.stat === 'bombDuration');
+    assert.ok(duration, `${id} is missing bombDuration`);
+    for (const value of Object.values(duration.values)) assert.ok(value < 1, `${id} lengthens the countdown`);
+    assert.match(definition.description, /accelerated/i);
+    assert.doesNotMatch(Object.values(definition.rankDescriptions).join(' '), /detonation(?: time)? \+/i);
+  }
+});
+
 test('Supreme Mods use the existing inventory/loadout/runtime path with hard stability ceilings', () => {
   const mods = createDefaultModCollection();
   const carapace = addModDrop(mods, 'supreme-quantum-carapace');

@@ -33,6 +33,9 @@ import { splitCurrentSecondaryDamage } from '../../mods/ModRules.ts';
 import {
   SCATTERSHOT_ANGLE_OFFSETS,
   TEMPORARY_AMMO_BALANCE,
+  grenadeArcHeight,
+  grenadeBounceCountForSequence,
+  grenadeFireIntervalMs,
   type TemporaryAmmoMode
 } from '../../player/TemporaryAmmoMode.ts';
 import { RICOCHET_MAX_WALL_BOUNCES, reflectRicochetVelocity } from '../../player/RicochetRules.ts';
@@ -70,6 +73,13 @@ interface HeistProjectile {
   previousY: number;
   nextTrailAt: number;
   crossedFences: Set<Fence>;
+  grenadeShadow?: Phaser.GameObjects.Arc;
+  grenadeBouncesRemaining?: number;
+  grenadeTotalBounces?: number;
+  grenadeBounceStartedAt?: number;
+  grenadeNextBounceAt?: number;
+  grenadeArcHeightMax?: number;
+  grenadeFuseAt?: number;
 }
 
 interface HeistProjectileSpawn extends Omit<HeistProjectile, 'sprite' | 'crossedFences' | 'nextTrailAt'> {
@@ -166,11 +176,13 @@ export class HeistScene extends Phaser.Scene {
   private readonly mineSalvoInput = new MineSalvoInput();
   private pendingMineSalvo = false;
   private nextHoloAfterimageAt = 0;
+  private grenadeProjectileSequence = 0;
 
   constructor() { super(SceneKeys.Heist); }
 
   private get modRuntime() { return this.session.sharedRuntime.modRuntime; }
   private get temporaryAmmo() { return this.session.sharedRuntime.temporaryAmmo; }
+  private get turretWeaponSync() { return this.session.sharedRuntime.turretWeaponSync; }
   private get mineChargeRack() { return this.session.sharedRuntime.mineChargeRack; }
   private get abilityState() { return this.session.abilityState; }
 
@@ -277,6 +289,7 @@ export class HeistScene extends Phaser.Scene {
     this.hudRadarContacts.length = 0;
     this.shieldVisual = null;
     this.nextPlayerShotAt = 0;
+    this.grenadeProjectileSequence = 0;
     this.damageDealt = 0;
     this.damageTaken = 0;
     this.containersOpened = 0;
@@ -323,7 +336,7 @@ export class HeistScene extends Phaser.Scene {
         body.setVelocity(state.velocityX, state.velocityY);
       }
       projectile.sprite.setActive(true).setVisible(true).setPosition(state.previousX, state.previousY)
-        .setTexture(state.texture).setDisplaySize(state.width, state.height).clearTint().setTint(state.tint)
+        .setTexture(state.texture).setOrigin(0.5).setDisplaySize(state.width, state.height).clearTint().setTint(state.tint)
         .setAlpha(1).setRotation(state.rotation).setDepth(9);
       projectile.owner = state.owner;
       projectile.damage = state.damage;
@@ -335,8 +348,20 @@ export class HeistScene extends Phaser.Scene {
       projectile.previousX = state.previousX;
       projectile.previousY = state.previousY;
       projectile.nextTrailAt = this.time.now;
+      projectile.grenadeBouncesRemaining = state.grenadeBouncesRemaining ?? 0;
+      projectile.grenadeTotalBounces = state.grenadeTotalBounces ?? 0;
+      projectile.grenadeBounceStartedAt = state.grenadeBounceStartedAt ?? 0;
+      projectile.grenadeNextBounceAt = state.grenadeNextBounceAt ?? 0;
+      projectile.grenadeArcHeightMax = state.grenadeArcHeightMax ?? 0;
+      projectile.grenadeFuseAt = state.grenadeFuseAt ?? 0;
       projectile.crossedFences.clear();
       if (state.crossedFences) for (const fence of state.crossedFences) projectile.crossedFences.add(fence);
+      if (projectile.ammoMode === 'grenade') {
+        projectile.grenadeShadow ??= this.add.circle(state.previousX, state.previousY + 3, 7, 0x02050a, 0.42)
+          .setStrokeStyle(1, state.tint, 0.28).setDepth(8);
+        projectile.grenadeShadow.setActive(true).setVisible(true).setPosition(state.previousX, state.previousY + 3)
+          .setScale(1).setAlpha(0.42).setStrokeStyle(1, state.tint, 0.28);
+      } else projectile.grenadeShadow?.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
     };
     this.projectilePool = new ReusableObjectPool<HeistProjectile, HeistProjectileSpawn>(
       (state) => {
@@ -363,6 +388,14 @@ export class HeistScene extends Phaser.Scene {
         if (body) { body.stop(); body.enable = false; }
         projectile.sprite.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
         projectile.crossedFences.clear();
+        projectile.sprite.setOrigin(0.5);
+        projectile.grenadeBouncesRemaining = 0;
+        projectile.grenadeTotalBounces = 0;
+        projectile.grenadeBounceStartedAt = 0;
+        projectile.grenadeNextBounceAt = 0;
+        projectile.grenadeArcHeightMax = 0;
+        projectile.grenadeFuseAt = 0;
+        projectile.grenadeShadow?.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
       }
     );
     const configureCircle = (circle: Phaser.GameObjects.Arc, state: BoostFxCircleSpawn): void => {
@@ -616,7 +649,10 @@ export class HeistScene extends Phaser.Scene {
 
   private updatePlayerCombat(now: number): void {
     if (!this.inputController.held('fire') || this.player.heat >= this.player.weapon.maxHeat) return;
-    const cadence = 1000 / this.player.fireRate;
+    const ammoMode = this.temporaryAmmo.activeMode(now);
+    const cadence = ammoMode === 'grenade'
+      ? grenadeFireIntervalMs(this.player.weapon.fireRate)
+      : 1000 / this.player.fireRate;
     if (now < this.nextPlayerShotAt) return;
     const corruptedCost = this.modRuntime.has('fractured-current') ? MOD_BALANCE.fracturedCurrent.extraShotEnergyCost : 0;
     const cost = (WEAPON_BALANCE.energyCostPerShot + corruptedCost) * this.modRuntime.multiplier('weaponEnergyCost');
@@ -629,7 +665,6 @@ export class HeistScene extends Phaser.Scene {
     const critical = this.random.next() < this.player.weapon.critChance;
     const criticalMultiplier = WEAPON_BALANCE.critMultiplier * this.modRuntime.multiplier('weaponCritDamage');
     const damage = this.player.weapon.damage * this.player.damageMultiplier * (critical ? criticalMultiplier : 1);
-    const ammoMode = this.temporaryAmmo.activeMode(now);
     const projectileColor = SaveSystem.getCosmeticColor('projectileColor', now);
     const trailColor = SaveSystem.getCosmeticColor('trailColor', now);
     const ricochets = now < this.player.buffs.ricochetUntil ? RICOCHET_MAX_WALL_BOUNCES : 0;
@@ -773,6 +808,8 @@ export class HeistScene extends Phaser.Scene {
     const speedMultiplier = grenade ? TEMPORARY_AMMO_BALANCE.grenade.projectileSpeedMultiplier
       : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.projectileSpeedMultiplier : 1;
     const speed = this.player.weapon.projectileSpeed * speedMultiplier;
+    const bounceCount = grenade ? grenadeBounceCountForSequence(this.grenadeProjectileSequence++) : 0;
+    const now = this.time.now;
     const projectile = this.projectilePool.obtain({
       owner: 'player', texture: grenade ? 'ammo-grenade-round' : scatter ? 'ammo-scatter-pellet' : this.projectileTextureKey,
       width: grenade ? TEMPORARY_AMMO_BALANCE.grenade.width : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.width : this.projectileWidth,
@@ -781,9 +818,71 @@ export class HeistScene extends Phaser.Scene {
       damage: damage * (scatter ? TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier : 1),
       lifeMs: grenade ? TEMPORARY_AMMO_BALANCE.grenade.projectileLifetimeMs
         : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.projectileLifetimeMs : 950,
-      trailColor, critical, ricochetsRemaining, ammoMode: mode, previousX: x, previousY: y
+      trailColor, critical, ricochetsRemaining, ammoMode: mode, previousX: x, previousY: y,
+      grenadeBouncesRemaining: bounceCount,
+      grenadeTotalBounces: bounceCount,
+      grenadeBounceStartedAt: grenade ? now : 0,
+      grenadeNextBounceAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.firstBounceDelayMs : 0,
+      grenadeArcHeightMax: grenade ? TEMPORARY_AMMO_BALANCE.grenade.initialArcHeight : 0,
+      grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0
     });
     this.projectiles.push(projectile);
+  }
+
+  private consumeGrenadeBounce(projectile: HeistProjectile, now: number): boolean {
+    const pulse = this.fxCirclePool.obtain({
+      x: projectile.sprite.x, y: projectile.sprite.y, radius: 4,
+      color: projectile.sprite.tintTopLeft, alpha: 0.55, depth: 10,
+      strokeWidth: 1, strokeColor: 0xffffff, strokeAlpha: 0.65
+    });
+    this.tweens.add({ targets: pulse, radius: 13, alpha: 0, duration: 120,
+      onComplete: () => this.fxCirclePool.release(pulse) });
+    projectile.grenadeBouncesRemaining = Math.max(0, (projectile.grenadeBouncesRemaining ?? 0) - 1);
+    if ((projectile.grenadeBouncesRemaining ?? 0) <= 0) return true;
+    const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
+    if (body) body.setVelocity(
+      body.velocity.x * TEMPORARY_AMMO_BALANCE.grenade.velocityRetentionPerBounce,
+      body.velocity.y * TEMPORARY_AMMO_BALANCE.grenade.velocityRetentionPerBounce
+    );
+    const bounceIndex = Math.max(1, (projectile.grenadeTotalBounces ?? 1) - (projectile.grenadeBouncesRemaining ?? 0));
+    projectile.grenadeBounceStartedAt = now;
+    projectile.grenadeNextBounceAt = now + TEMPORARY_AMMO_BALANCE.grenade.firstBounceDelayMs
+      * TEMPORARY_AMMO_BALANCE.grenade.bounceDelayScale ** bounceIndex;
+    projectile.grenadeArcHeightMax = TEMPORARY_AMMO_BALANCE.grenade.initialArcHeight
+      * TEMPORARY_AMMO_BALANCE.grenade.arcHeightScalePerBounce ** bounceIndex;
+    return false;
+  }
+
+  private updateGrenadeFlight(projectile: HeistProjectile, now: number, delta: number): boolean {
+    if (now >= (projectile.grenadeFuseAt ?? 0)) return true;
+    if (now >= (projectile.grenadeNextBounceAt ?? Number.POSITIVE_INFINITY)
+      && this.consumeGrenadeBounce(projectile, now)) return true;
+    const height = grenadeArcHeight(
+      now,
+      projectile.grenadeBounceStartedAt ?? now,
+      projectile.grenadeNextBounceAt ?? now + 1,
+      projectile.grenadeArcHeightMax ?? 0
+    );
+    projectile.sprite.setOrigin(0.5, 0.5 + height / Math.max(1, projectile.sprite.displayHeight));
+    projectile.sprite.rotation += TEMPORARY_AMMO_BALANCE.grenade.spinRadiansPerSecond * delta / 1000;
+    projectile.grenadeShadow?.setPosition(projectile.sprite.x, projectile.sprite.y + 3)
+      .setScale(Math.max(0.38, 1 - height / 75))
+      .setAlpha(Math.max(0.16, 0.42 - height / 145));
+    return false;
+  }
+
+  /** 0 = blocked, 1 = continue, 2 = detonate. */
+  private bounceGrenadeFromWall(projectile: HeistProjectile, now: number): 0 | 1 | 2 {
+    const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
+    if (!body) return 0;
+    const vertical = this.pointBlocked(projectile.sprite.x, projectile.previousY);
+    const horizontal = this.pointBlocked(projectile.previousX, projectile.sprite.y);
+    const reflected = reflectRicochetVelocity(body.velocity.x, body.velocity.y, vertical, horizontal);
+    if (Math.hypot(reflected.x, reflected.y) <= 0.01) return 0;
+    body.reset(projectile.previousX, projectile.previousY);
+    body.setVelocity(reflected.x, reflected.y);
+    projectile.sprite.setRotation(Math.atan2(reflected.y, reflected.x));
+    return this.consumeGrenadeBounce(projectile, now) ? 2 : 1;
   }
 
   private updateProjectiles(now: number, delta: number): void {
@@ -792,6 +891,13 @@ export class HeistScene extends Phaser.Scene {
       const projectile = this.projectiles[index];
       projectile.lifeMs -= delta;
       if (projectile.lifeMs <= 0) {
+        if (projectile.ammoMode === 'grenade' && projectile.owner !== 'enemy') this.detonateGrenade(projectile);
+        this.retireProjectile(projectile, index);
+        continue;
+      }
+      if (projectile.ammoMode === 'grenade' && projectile.owner !== 'enemy'
+        && this.updateGrenadeFlight(projectile, now, delta)) {
+        this.detonateGrenade(projectile);
         this.retireProjectile(projectile, index);
         continue;
       }
@@ -809,6 +915,13 @@ export class HeistScene extends Phaser.Scene {
         projectile.nextTrailAt = now + 34;
       }
       if (this.pointBlocked(projectile.sprite.x, projectile.sprite.y)) {
+        if (projectile.ammoMode === 'grenade' && projectile.owner !== 'enemy') {
+          const bounce = this.bounceGrenadeFromWall(projectile, now);
+          if (bounce === 1) continue;
+          this.detonateGrenade(projectile);
+          this.retireProjectile(projectile, index);
+          continue;
+        }
         if (projectile.owner === 'player' && projectile.ricochetsRemaining > 0) {
           const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
           if (body) {
@@ -827,13 +940,13 @@ export class HeistScene extends Phaser.Scene {
         continue;
       }
       if (projectile.owner === 'player' || projectile.owner === 'turret') {
-        const container = this.findContainerHit(projectile.sprite.x, projectile.sprite.y);
+        const container = projectile.ammoMode === 'grenade' ? null : this.findContainerHit(projectile.sprite.x, projectile.sprite.y);
         if (container) {
           this.damageContainer(container, projectile.damage);
           this.retireProjectile(projectile, index);
           continue;
         }
-        const enemy = this.findEnemyHit(projectile.sprite.x, projectile.sprite.y);
+        const enemy = projectile.ammoMode === 'grenade' ? null : this.findEnemyHit(projectile.sprite.x, projectile.sprite.y);
         if (enemy) {
           this.damageEnemy(enemy, projectile.damage);
           if (projectile.ammoMode === 'grenade') this.detonateGrenade(projectile, enemy);
@@ -874,8 +987,12 @@ export class HeistScene extends Phaser.Scene {
     this.mineExplosionVfx.emit(projectile.sprite.x, projectile.sprite.y, radius,
       [0xffffff, 0xffa340, 0xff4e27, 0xff174f], this.time.now);
     this.coreAudio.playSfx('grenadeShotExplosion');
+    const primary = directHit ?? this.findEnemyHit(projectile.sprite.x, projectile.sprite.y);
+    if (primary) this.damageEnemy(primary, projectile.damage);
+    const container = this.findContainerHit(projectile.sprite.x, projectile.sprite.y);
+    if (container) this.damageContainer(container, projectile.damage);
     for (const enemy of this.enemies) {
-      if (enemy === directHit) continue;
+      if (enemy === primary) continue;
       const dx = enemy.x - projectile.sprite.x; const dy = enemy.y - projectile.sprite.y;
       if (dx * dx + dy * dy <= radius * radius) this.damageEnemy(enemy, damage);
     }
@@ -962,20 +1079,79 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
+  private spawnTurretAmmoVolley(turret: Turret, mode: TemporaryAmmoMode, angle: number, damage: number, now: number): void {
+    const scatter = mode === 'scattershot';
+    const grenade = mode === 'grenade';
+    const count = scatter ? SCATTERSHOT_ANGLE_OFFSETS.length : 1;
+    // Preserve the established turret skin projectile in normal mode; synced
+    // temporary ammunition adopts the Operative projectile/trail treatment.
+    const color = mode === 'normal'
+      ? SaveSystem.getCosmeticColor('turretSkin', now)
+      : SaveSystem.getCosmeticColor('projectileColor', now);
+    const trailColor = mode === 'normal' ? color : SaveSystem.getCosmeticColor('trailColor', now);
+    for (let index = 0; index < count; index += 1) {
+      const projectileAngle = angle + (scatter ? SCATTERSHOT_ANGLE_OFFSETS[index] : 0);
+      const speed = 560 * (grenade ? TEMPORARY_AMMO_BALANCE.grenade.projectileSpeedMultiplier
+        : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.projectileSpeedMultiplier : 1);
+      const bounceCount = grenade ? grenadeBounceCountForSequence(this.grenadeProjectileSequence++) : 0;
+      this.projectiles.push(this.projectilePool.obtain({
+        owner: 'turret',
+        texture: grenade ? 'ammo-grenade-round' : scatter ? 'ammo-scatter-pellet' : this.projectileTextureKey,
+        width: grenade ? TEMPORARY_AMMO_BALANCE.grenade.width : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.width : this.projectileWidth,
+        height: grenade ? TEMPORARY_AMMO_BALANCE.grenade.height : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.height : this.projectileHeight,
+        tint: color,
+        rotation: projectileAngle,
+        velocityX: Math.cos(projectileAngle) * speed,
+        velocityY: Math.sin(projectileAngle) * speed,
+        damage: damage * (scatter ? TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier : 1),
+        lifeMs: grenade ? TEMPORARY_AMMO_BALANCE.grenade.projectileLifetimeMs
+          : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.projectileLifetimeMs : 950,
+        trailColor,
+        critical: false,
+        ricochetsRemaining: 0,
+        ammoMode: mode,
+        previousX: turret.sprite.x,
+        previousY: turret.sprite.y,
+        grenadeBouncesRemaining: bounceCount,
+        grenadeTotalBounces: bounceCount,
+        grenadeBounceStartedAt: grenade ? now : 0,
+        grenadeNextBounceAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.firstBounceDelayMs : 0,
+        grenadeArcHeightMax: grenade ? TEMPORARY_AMMO_BALANCE.grenade.initialArcHeight : 0,
+        grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0
+      }));
+    }
+  }
+
   private updateTurrets(now: number): void {
     for (let index = this.turrets.length - 1; index >= 0; index -= 1) {
       const turret = this.turrets[index];
       if (turret.hp <= 0) { turret.destroy(); this.turrets.splice(index, 1); continue; }
       turret.updateCosmetic(now);
+      const playerAmmoMode = this.temporaryAmmo.activeSpecialMode(now);
+      const turretAmmoMode = this.turretWeaponSync.activeAmmoMode(
+        now, playerAmmoMode, this.modRuntime.turretWeaponSyncEnabled()
+      );
+      const damageBoosted = this.turretWeaponSync.damageBoostActive(
+        now, this.player.buffs.damageBoostUntil, this.modRuntime.turretWeaponSyncEnabled()
+      );
+      turret.setWeaponSyncActive(Boolean(turretAmmoMode || damageBoosted));
       const target = this.nearestEnemy(turret.sprite.x, turret.sprite.y, turret.range);
       if (!target) continue;
       const angle = Phaser.Math.Angle.Between(turret.sprite.x, turret.sprite.y, target.x, target.y);
       turret.aimAt(angle);
-      if (turret.canFire(now)) {
+      const canFire = turretAmmoMode === 'grenade'
+        ? turret.canFireAtInterval(now, TEMPORARY_AMMO_BALANCE.grenade.turretFireIntervalMs)
+        : turret.canFire(now);
+      if (canFire) {
         turret.lastShotMs = now;
         turret.markFired(now);
-        this.spawnProjectile('turret', turret.sprite.x, turret.sprite.y, angle, 560, turret.damage,
-          SaveSystem.getCosmeticColor('turretSkin', now), 950);
+        this.spawnTurretAmmoVolley(
+          turret,
+          turretAmmoMode ?? 'normal',
+          angle,
+          turret.damage * (damageBoosted ? WEAPON_BALANCE.damageBoostMultiplier : 1),
+          now
+        );
       }
     }
   }
@@ -1328,7 +1504,13 @@ export class HeistScene extends Phaser.Scene {
           ammoMode: projectile.ammoMode,
           previousX: x,
           previousY: y,
-          crossedFences
+          crossedFences,
+          grenadeBouncesRemaining: projectile.grenadeBouncesRemaining,
+          grenadeTotalBounces: projectile.grenadeTotalBounces,
+          grenadeBounceStartedAt: projectile.grenadeBounceStartedAt,
+          grenadeNextBounceAt: projectile.grenadeNextBounceAt,
+          grenadeArcHeightMax: projectile.grenadeArcHeightMax,
+          grenadeFuseAt: projectile.grenadeFuseAt
         }));
       }
       return;

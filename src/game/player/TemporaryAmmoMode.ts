@@ -5,12 +5,29 @@ export const TEMPORARY_AMMO_BALANCE = {
   durationMs: 45_000,
   overdriveMaximumDurationMs: 90_000,
   grenade: {
-    projectileSpeedMultiplier: 0.9,
-    projectileLifetimeMs: 1_050,
+    /** Dedicated cadence intentionally reads permanent weapon.fireRate rather
+     * than Player.fireRate, so Rapid Fire and field cadence buffs cannot turn
+     * grenades into automatic artillery. */
+    baseFireIntervalMs: 520,
+    minimumFireIntervalMs: 420,
+    maximumFireIntervalMs: 650,
+    referencePermanentFireRate: 9,
+    turretFireIntervalMs: 820,
+    projectileSpeedMultiplier: 0.62,
+    projectileLifetimeMs: 2_400,
     splashRadius: 32,
     splashDamageMultiplier: 0.35,
     width: 14,
-    height: 9
+    height: 9,
+    minimumBounces: 2,
+    maximumBounces: 3,
+    firstBounceDelayMs: 470,
+    bounceDelayScale: 0.78,
+    velocityRetentionPerBounce: 0.76,
+    initialArcHeight: 38,
+    arcHeightScalePerBounce: 0.7,
+    spinRadiansPerSecond: 8.5,
+    fuseMs: 2_150
   },
   scattershot: {
     pelletCount: 7,
@@ -22,6 +39,36 @@ export const TEMPORARY_AMMO_BALANCE = {
     height: 4
   }
 } as const;
+
+export const grenadeBounceCountForSequence = (sequence: number): number => {
+  const span = TEMPORARY_AMMO_BALANCE.grenade.maximumBounces
+    - TEMPORARY_AMMO_BALANCE.grenade.minimumBounces + 1;
+  return TEMPORARY_AMMO_BALANCE.grenade.minimumBounces
+    + Math.abs(Math.floor(Number.isFinite(sequence) ? sequence : 0)) % span;
+};
+
+/** Permanent weapon progression still helps, but the hard lower bound keeps
+ * the temporary launcher deliberate. Temporary Rapid Fire is never an input. */
+export const grenadeFireIntervalMs = (permanentFireRate: number): number => {
+  const safeRate = Math.max(0.1, Number.isFinite(permanentFireRate) ? permanentFireRate : 1);
+  const scaled = TEMPORARY_AMMO_BALANCE.grenade.baseFireIntervalMs
+    * TEMPORARY_AMMO_BALANCE.grenade.referencePermanentFireRate / safeRate;
+  return Math.max(
+    TEMPORARY_AMMO_BALANCE.grenade.minimumFireIntervalMs,
+    Math.min(TEMPORARY_AMMO_BALANCE.grenade.maximumFireIntervalMs, scaled)
+  );
+};
+
+export const grenadeArcHeight = (
+  now: number,
+  bounceStartedAt: number,
+  nextBounceAt: number,
+  maximumHeight: number
+): number => {
+  const duration = Math.max(1, nextBounceAt - bounceStartedAt);
+  const progress = Math.max(0, Math.min(1, (now - bounceStartedAt) / duration));
+  return Math.sin(progress * Math.PI) * Math.max(0, maximumHeight);
+};
 
 const SCATTERSHOT_HALF_SPREAD = TEMPORARY_AMMO_BALANCE.scattershot.spreadRadians * 0.5;
 const SCATTERSHOT_STEP = TEMPORARY_AMMO_BALANCE.scattershot.spreadRadians

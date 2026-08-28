@@ -12,15 +12,15 @@ const effects = (
 export const SUPREME_MOD_DEFINITIONS: readonly ModDefinition[] = [
   {
     id: 'supreme-eventide-arsenal', name: 'Eventide Arsenal', icon: '\u2726', iconColor: 0xf2ffff, category: 'weapon', rarity: 'supreme', maxRank: 3, dropWeight: 1,
-    description: 'A dusk-star weapons lattice links destructive fire, longer charge defense, and rapid shield recovery.',
-    rankDescriptions: { 0: 'Weapon damage +70%; bomb time +25%; shield cooldown -22%.', 1: 'Damage +90%; bomb time +32%; shield cooldown -28%.', 2: 'Damage +115%; bomb time +40%; shield cooldown -34%.', 3: 'Damage +145%; bomb time +50%; shield cooldown -40%.' },
+    description: 'A dusk-star weapons lattice links destructive fire, accelerated charge detonation, and rapid shield recovery.',
+    rankDescriptions: { 0: 'Weapon damage +70%; detonation time -25%; shield cooldown -22%.', 1: 'Damage +90%; detonation -32%; shield cooldown -28%.', 2: 'Damage +115%; detonation -40%; shield cooldown -34%.', 3: 'Damage +145%; detonation -50%; shield cooldown -40%.' },
     tags: ['supreme', 'weapon', 'bombsite', 'shield'],
     supremeEffects: effects(
       { family: 'weapon', label: 'EVENTIDE FIRE // +70-145% weapon damage' },
-      { family: 'bombsite', label: 'DUSK HOLD // +25-50% bomb defense time' },
+      { family: 'bombsite', label: 'DUSK IGNITION // 25-50% faster detonation' },
       { family: 'shield', label: 'ECLIPSE CYCLE // shield cooldown -22-40%' }
     ),
-    modifiers: [multiply('weaponDamage', ranks(1.7, 1.9, 2.15, 2.45)), multiply('bombDuration', ranks(1.25, 1.32, 1.4, 1.5)), multiply('shieldCooldown', ranks(.78, .72, .66, .6))]
+    modifiers: [multiply('weaponDamage', ranks(1.7, 1.9, 2.15, 2.45)), multiply('bombDuration', ranks(.75, .68, .6, .5)), multiply('shieldCooldown', ranks(.78, .72, .66, .6))]
   },
   {
     id: 'supreme-singularity-chamber', name: 'Singularity Chamber', icon: '\u2299', iconColor: 0xbdfcff, category: 'weapon', rarity: 'supreme', maxRank: 3, dropWeight: .92,
@@ -60,15 +60,15 @@ export const SUPREME_MOD_DEFINITIONS: readonly ModDefinition[] = [
   },
   {
     id: 'supreme-triune-bastion', name: 'Triune Bastion', icon: '\u25ec', iconColor: 0xc9ffff, category: 'defense', rarity: 'supreme', maxRank: 3, dropWeight: 1,
-    description: 'One defense intelligence binds lethal fences, longer bomb defense, and persistent personal shielding.',
-    rankDescriptions: { 0: 'Fence damage +75%; bomb time +30%; shield duration +40%.', 1: 'Fence +100%; bomb +38%; shield +52%.', 2: 'Fence +130%; bomb +48%; shield +66%.', 3: 'Fence +165%; bomb +60%; shield +82%.' },
+    description: 'One defense intelligence binds lethal fences, accelerated bomb detonation, and persistent personal shielding.',
+    rankDescriptions: { 0: 'Fence damage +75%; detonation time -30%; shield duration +40%.', 1: 'Fence +100%; detonation -38%; shield +52%.', 2: 'Fence +130%; detonation -48%; shield +66%.', 3: 'Fence +165%; detonation -60%; shield +82%.' },
     tags: ['supreme', 'defense', 'bombsite', 'shield'],
     supremeEffects: effects(
       { family: 'defense', label: 'BASTION GRID // +75-165% fence damage' },
-      { family: 'bombsite', label: 'TRIUNE HOLD // +30-60% bomb defense time' },
+      { family: 'bombsite', label: 'TRIUNE IGNITION // 30-60% faster detonation' },
       { family: 'shield', label: 'THIRD AEGIS // +40-82% shield duration' }
     ),
-    modifiers: [multiply('fenceDamage', ranks(1.75, 2, 2.3, 2.65)), multiply('bombDuration', ranks(1.3, 1.38, 1.48, 1.6)), multiply('shieldDuration', ranks(1.4, 1.52, 1.66, 1.82))]
+    modifiers: [multiply('fenceDamage', ranks(1.75, 2, 2.3, 2.65)), multiply('bombDuration', ranks(.7, .62, .52, .4)), multiply('shieldDuration', ranks(1.4, 1.52, 1.66, 1.82))]
   },
   {
     id: 'supreme-immortal-emplacements', name: 'Immortal Emplacements', icon: '\u26ca', iconColor: 0xafffff, category: 'defense', rarity: 'supreme', maxRank: 3, dropWeight: .9,

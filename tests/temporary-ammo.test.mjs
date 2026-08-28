@@ -7,8 +7,16 @@ import { SFX_DEFINITIONS } from '../src/game/config/audio.ts';
 import {
   SCATTERSHOT_ANGLE_OFFSETS,
   TEMPORARY_AMMO_BALANCE,
-  TemporaryAmmoModeController
+  TemporaryAmmoModeController,
+  grenadeArcHeight,
+  grenadeBounceCountForSequence,
+  grenadeFireIntervalMs
 } from '../src/game/player/TemporaryAmmoMode.ts';
+import {
+  TEMPORARY_OFFENSIVE_EFFECTS,
+  TURRET_WEAPON_SYNC_DURATION_SCALE,
+  TurretWeaponSyncController
+} from '../src/game/player/TemporaryOffensiveEffects.ts';
 import {
   ENEMY_PICKUP_TOTAL_WEIGHT,
   ENEMY_PICKUP_WEIGHTS,
@@ -44,11 +52,13 @@ test('temporary ammo modes refresh in Normal, extend only duration in Overdrive,
 });
 
 test('ammo pickup weights are normalized by one shared enemy table and stay uncommon without being ultra-rare', () => {
-  assert.equal(ENEMY_PICKUP_TOTAL_WEIGHT, 1.08);
+  assert.equal(ENEMY_PICKUP_TOTAL_WEIGHT, 1.064);
   const grenade = ENEMY_PICKUP_WEIGHTS.find((entry) => entry.type === 'grenadeRounds');
   const scattershot = ENEMY_PICKUP_WEIGHTS.find((entry) => entry.type === 'scattershot');
   assert.equal(grenade?.weight, PICKUP_BALANCE.grenadeRoundsShare);
   assert.equal(scattershot?.weight, PICKUP_BALANCE.scattershotShare);
+  assert.equal(grenade?.weight, 0.032);
+  assert.equal(scattershot?.weight, 0.032);
   assert.ok((grenade?.weight ?? 0) < PICKUP_BALANCE.ricochetShare);
   assert.ok((grenade?.weight ?? 0) > 0.02);
   const selected = new Set(Array.from({ length: 10_000 }, (_, index) => selectEnemyPickup(index / 10_000)));
@@ -63,12 +73,55 @@ test('grenade rounds use restrained direct-plus-splash behavior and the shared a
   const baseSplashDamage = WEAPON_BALANCE.damage * TEMPORARY_AMMO_BALANCE.grenade.splashDamageMultiplier;
   assert.ok(baseSplashDamage < BOMBLET_HAZARD_BALANCE.enemyDamageBase);
   assert.ok(baseSplashDamage < ABILITY_BALANCE.mine.damage);
-  assert.match(arena, /this\.grenadeSplashExcludedEnemy = directlyHitEnemy/);
+  assert.match(arena, /this\.grenadeSplashExcludedEnemy = primaryEnemy/);
   assert.match(arena, /enemy === this\.grenadeSplashExcludedEnemy/);
   assert.match(arena, /this\.enemySeparationGrid\.forEachNearby\(x, y, radius, this\.applyGrenadeSplashNeighbor\)/);
   assert.match(arena, /this\.mineExplosionVfx\.emitColors\(/);
   assert.match(arena, /'ammo-grenade-round'/);
   assert.match(arena, /primaryColor,\s*this\.time\.now,\s*false\s*\);/);
+});
+
+test('grenade rounds use a bounded permanent-progression cadence and deterministic two-to-three bounce arcs', () => {
+  assert.equal(grenadeFireIntervalMs(9), TEMPORARY_AMMO_BALANCE.grenade.baseFireIntervalMs);
+  assert.equal(grenadeFireIntervalMs(99), TEMPORARY_AMMO_BALANCE.grenade.minimumFireIntervalMs);
+  assert.equal(grenadeFireIntervalMs(0), TEMPORARY_AMMO_BALANCE.grenade.maximumFireIntervalMs);
+  assert.deepEqual(Array.from({ length: 6 }, (_, index) => grenadeBounceCountForSequence(index)), [2, 3, 2, 3, 2, 3]);
+  assert.equal(grenadeArcHeight(0, 0, 100, 40), 0);
+  assert.ok(Math.abs(grenadeArcHeight(50, 0, 100, 40) - 40) < 0.000_001);
+  assert.ok(Math.abs(grenadeArcHeight(100, 0, 100, 40)) < 0.000_001);
+  assert.ok(TEMPORARY_AMMO_BALANCE.grenade.fuseMs < TEMPORARY_AMMO_BALANCE.grenade.projectileLifetimeMs);
+  const shooting = arena.slice(arena.indexOf('private updatePlayerShooting'), arena.indexOf('private updatePlanting'));
+  assert.match(shooting, /grenadeFireIntervalMs\(this\.player\.weapon\.fireRate\)/);
+  assert.match(arena, /this\.consumeGrenadeBounce\(projectile, now\)/);
+  assert.match(arena, /this\.bounceGrenadeFromWall\(p, now\)/);
+});
+
+test('Legendary Weapon Sync shares only registered offensive effects for eighty percent of player duration', () => {
+  assert.equal(TURRET_WEAPON_SYNC_DURATION_SCALE, 0.8);
+  assert.deepEqual(Object.keys(TEMPORARY_OFFENSIVE_EFFECTS).sort(), ['damageBoost', 'grenadeRounds', 'scattershot']);
+  for (const effect of Object.values(TEMPORARY_OFFENSIVE_EFFECTS)) {
+    assert.equal(effect.affectsPlayerWeapon, true);
+    assert.equal(effect.turretShareEligible, true);
+    assert.equal(effect.turretDurationScale, 0.8);
+  }
+
+  const sync = new TurretWeaponSyncController();
+  assert.equal(sync.inherit('grenadeRounds', 1_000, 41_000, true), 33_000);
+  assert.equal(sync.activeAmmoMode(32_999, 'grenade', true), 'grenade');
+  assert.equal(sync.activeAmmoMode(33_000, 'grenade', true), null);
+  assert.equal(sync.inherit('scattershot', 5_000, 45_000, false), 0);
+  assert.equal(sync.activeAmmoMode(5_001, 'scattershot', false), null);
+
+  assert.equal(sync.inherit('damageBoost', 10_000, 50_000, true), 42_000);
+  assert.equal(sync.damageBoostActive(41_999, 50_000, true), true);
+  assert.equal(sync.damageBoostActive(42_000, 50_000, true), false);
+  sync.reset();
+  assert.equal(sync.activeAmmoUntil(10_000), 0);
+  assert.equal(sync.activeDamageUntil(10_000), 0);
+
+  assert.match(arena, /this\.modRuntime\.turretWeaponSyncEnabled\(\)/);
+  assert.match(arena, /TEMPORARY_AMMO_BALANCE\.grenade\.turretFireIntervalMs/);
+  assert.match(arena, /this\.turretWeaponSync\.reset\(\)/);
 });
 
 test('scattershot is a symmetric pooled seven-pellet fan with one firing cost and bounded aggregate damage', () => {

@@ -221,9 +221,9 @@ export const EXPANDED_MOD_DEFINITIONS: readonly ModDefinition[] = [
   {
     id: 'bomb-chronometer', name: 'Bomb Chronometer', icon: '◴', iconColor: 0xff8bdc,
     category: 'bombSite', rarity: 'rare', maxRank: 3, dropWeight: 0.56,
-    description: 'Precision charge timing extends the defensive window before detonation.',
-    rankDescriptions: { 0: 'Bomb defense time +5%.', 1: 'Bomb defense time +8%.', 2: 'Bomb defense time +12%.', 3: 'Bomb defense time +17%.' },
-    tags: ['bomb-site', 'duration'], modifiers: [multiply('bombDuration', 1.05, 1.08, 1.12, 1.17)]
+    description: 'Precision charge timing shortens the dangerous defense window before detonation.',
+    rankDescriptions: { 0: 'Bomb detonation time -5%.', 1: 'Bomb detonation time -8%.', 2: 'Bomb detonation time -12%.', 3: 'Bomb detonation time -17%.' },
+    tags: ['bomb-site', 'faster-detonation'], modifiers: [multiply('bombDuration', 0.95, 0.92, 0.88, 0.83)]
   },
   {
     id: 'glass-cannon', name: 'Glass Cannon', icon: '◆', iconColor: 0xff36ca,
@@ -349,10 +349,15 @@ export const EXPANDED_MOD_DEFINITIONS: readonly ModDefinition[] = [
   {
     id: 'sentry-dominion', name: 'Sentry Dominion', icon: '♛', iconColor: 0xffbd46,
     category: 'defense', rarity: 'legendary', maxRank: 3, dropWeight: 0.048,
-    description: 'Dominion firmware transforms turrets into long-range autonomous artillery.',
-    rankDescriptions: { 0: 'Turret output +15%; +1 turret.', 1: 'Output +22%; +1 turret.', 2: 'Output +31%; +1 turret.', 3: 'Output +43%; +2 turrets.' },
-    tags: ['turret', 'damage', 'fire-rate', 'capacity'],
-    modifiers: [multiply('turretDamage', 1.15, 1.22, 1.31, 1.43), multiply('turretFireRate', 1.15, 1.22, 1.31, 1.43), multiply('turretRange', 1.15, 1.22, 1.31, 1.43), add('turretMaxActive', 1, 1, 1, 2)]
+    description: 'Dominion firmware links turret weapons to compatible temporary offensive effects active on the Operative.',
+    rankDescriptions: {
+      0: 'Turret output +15%; +1 turret; Weapon Sync.',
+      1: 'Output +22%; +1 turret; Weapon Sync.',
+      2: 'Output +31%; +1 turret; Weapon Sync.',
+      3: 'Output +43%; +2 turrets; Weapon Sync.'
+    },
+    tags: ['turret', 'damage', 'fire-rate', 'capacity', 'weapon-sync', 'temporary-offense'],
+    modifiers: [multiply('turretDamage', 1.15, 1.22, 1.31, 1.43), multiply('turretFireRate', 1.15, 1.22, 1.31, 1.43), add('turretMaxActive', 1, 1, 1, 2)]
   },
   {
     id: 'event-horizon-mines', name: 'Event Horizon Mines', icon: '◉', iconColor: 0xff7448,

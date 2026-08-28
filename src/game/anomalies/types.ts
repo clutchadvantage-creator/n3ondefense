@@ -4,6 +4,7 @@ import type { BuffState } from '../entities/Player.ts';
 import type { EquippedModSnapshot, RunProtocolId } from '../mods/types.ts';
 import type { ModRuntime } from '../mods/ModRuntime.ts';
 import type { TemporaryAmmoModeController } from '../player/TemporaryAmmoMode.ts';
+import type { TurretWeaponSyncController } from '../player/TemporaryOffensiveEffects.ts';
 import type { MineChargeRack } from '../abilities/MineChargeRack.ts';
 import type { PlayerStats, WeaponStats, EnergyStats, RectSpec } from '../types.ts';
 import type { InputDevice } from '../input/ActionInput.ts';
@@ -130,6 +131,7 @@ export interface HeistAbilityConfig {
 export interface SharedGameplayRuntime {
   modRuntime: ModRuntime;
   temporaryAmmo: TemporaryAmmoModeController;
+  turretWeaponSync: TurretWeaponSyncController;
   mineChargeRack: MineChargeRack;
 }
 

@@ -143,6 +143,9 @@ export class ModRuntime {
       damageShare: MOD_BALANCE.jailbrokeTurrets.streamDamageShare[rank]
     };
   }
+  /** Legendary Sentry Dominion's semantic runtime effect. Temporary state is
+   * encounter-owned and is never persisted on a turret or card. */
+  turretWeaponSyncEnabled(): boolean { return this.has('sentry-dominion'); }
   fenceDamageMultiplier(): number {
     return this.has('conductive-fencing') ? MOD_BALANCE.conductiveFencing.damageMultiplier[this.rank('conductive-fencing')] : 1;
   }

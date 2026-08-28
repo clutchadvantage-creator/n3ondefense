@@ -14,6 +14,7 @@ export class Turret {
   private readonly healthFill: Phaser.GameObjects.Rectangle;
   private readonly premiumVisual: PremiumTurretVisualHandle | null;
   private readonly maxHp: number;
+  private color: number;
   hp: number;
   damage: number;
   range: number;
@@ -42,6 +43,7 @@ export class Turret {
     }
     this.sprite.setSize(30, 46).setDepth(7);
     this.hp = hp;
+    this.color = color;
     this.maxHp = hp;
     this.damage = damage;
     this.fireRate = fireRate;
@@ -82,7 +84,18 @@ export class Turret {
     return now >= this.disabledUntil && now - this.lastShotMs >= 1000 / (this.fireRate * Math.max(0.05, fireRateMultiplier));
   }
 
+  canFireAtInterval(now: number, intervalMs: number): boolean {
+    return now >= this.disabledUntil && now - this.lastShotMs >= Math.max(1, intervalMs);
+  }
+
+  setWeaponSyncActive(active: boolean, color = 0xffa43d): void {
+    if (this.premiumVisual) return;
+    this.glow.setFillStyle(active ? color : this.color, active ? 0.24 : 0.12)
+      .setStrokeStyle(active ? 2 : 1, active ? color : this.color, active ? 0.82 : 0.32);
+  }
+
   setColor(color: number): void {
+    this.color = color;
     this.glow.setFillStyle(color, 0.12).setStrokeStyle(1, color, 0.32);
     this.base.setStrokeStyle(2, color, 0.95);
     this.housing.setStrokeStyle(2, color, 1);
