@@ -94,6 +94,10 @@ import {
   grenadeArcHeight,
   grenadeBounceCountForSequence,
   grenadeFireIntervalMs,
+  grenadeProximityCheckDue,
+  grenadeProximityFuseContains,
+  initialGrenadeProximityCheckAt,
+  nextGrenadeProximityCheckAt,
   type TemporaryAmmoMode
 } from '../player/TemporaryAmmoMode.ts';
 import { TurretWeaponSyncController } from '../player/TemporaryOffensiveEffects.ts';
@@ -149,6 +153,8 @@ interface Projectile {
   grenadeNextBounceAt?: number;
   grenadeArcHeightMax?: number;
   grenadeFuseAt?: number;
+  grenadeArmedAt?: number;
+  grenadeNextProximityCheckAt?: number;
 }
 
 interface SupremeBridgeAwardOutcome {
@@ -569,6 +575,10 @@ export class ArenaScene extends Phaser.Scene {
   private specialAmmoHitY = 0;
   private specialAmmoHitDistanceSquared = Number.POSITIVE_INFINITY;
   private specialAmmoHitCandidate: Enemy | null = null;
+  private grenadeFuseQueryX = 0;
+  private grenadeFuseQueryY = 0;
+  private grenadeFuseQueryCandidate: Enemy | null = null;
+  private grenadeFuseQueryCandidateDistanceSquared = Number.POSITIVE_INFINITY;
   private readonly applyGrenadeSplashNeighbor = (enemy: Enemy): void => {
     if (enemy === this.grenadeSplashExcludedEnemy || !enemy.active || enemy.isDead()) return;
     const dx = enemy.x - this.grenadeSplashX;
@@ -597,6 +607,16 @@ export class ArenaScene extends Phaser.Scene {
     if (distanceSquared >= radius * radius || distanceSquared >= this.specialAmmoHitDistanceSquared) return;
     this.specialAmmoHitDistanceSquared = distanceSquared;
     this.specialAmmoHitCandidate = enemy;
+  };
+  private readonly findGrenadeFuseNeighbor = (enemy: Enemy): void => {
+    if (!enemy.active || enemy.isDead()) return;
+    const dx = enemy.x - this.grenadeFuseQueryX;
+    const dy = enemy.y - this.grenadeFuseQueryY;
+    const distanceSquared = dx * dx + dy * dy;
+    if (!grenadeProximityFuseContains(dx, dy)
+      || distanceSquared >= this.grenadeFuseQueryCandidateDistanceSquared) return;
+    this.grenadeFuseQueryCandidateDistanceSquared = distanceSquared;
+    this.grenadeFuseQueryCandidate = enemy;
   };
   private separationSubject: Enemy | null = null;
   private readonly applySeparationNeighbor = (neighbor: Enemy): void => {
@@ -1673,6 +1693,8 @@ export class ArenaScene extends Phaser.Scene {
       projectile.grenadeNextBounceAt = state.grenadeNextBounceAt ?? 0;
       projectile.grenadeArcHeightMax = state.grenadeArcHeightMax ?? 0;
       projectile.grenadeFuseAt = state.grenadeFuseAt ?? 0;
+      projectile.grenadeArmedAt = state.grenadeArmedAt ?? 0;
+      projectile.grenadeNextProximityCheckAt = state.grenadeNextProximityCheckAt ?? 0;
       if (projectile.ammoMode === 'grenade') {
         projectile.grenadeShadow ??= this.add.circle(state.x, state.y + 3, 7, 0x02050a, 0.42)
           .setStrokeStyle(1, state.tint, 0.28).setDepth(state.depth - 1);
@@ -1720,6 +1742,8 @@ export class ArenaScene extends Phaser.Scene {
         projectile.grenadeNextBounceAt = 0;
         projectile.grenadeArcHeightMax = 0;
         projectile.grenadeFuseAt = 0;
+        projectile.grenadeArmedAt = 0;
+        projectile.grenadeNextProximityCheckAt = 0;
         projectile.sprite.setOrigin(0.5);
         projectile.grenadeShadow?.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
       }
@@ -1963,7 +1987,8 @@ export class ArenaScene extends Phaser.Scene {
       ? TEMPORARY_AMMO_BALANCE.grenade.projectileLifetimeMs
       : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.projectileLifetimeMs : 950;
     const speed = baseSpeed * speedMultiplier;
-    const bounceCount = grenade ? grenadeBounceCountForSequence(this.grenadeProjectileSequence++) : 0;
+    const grenadeSequence = grenade ? this.grenadeProjectileSequence++ : 0;
+    const bounceCount = grenade ? grenadeBounceCountForSequence(grenadeSequence) : 0;
     const now = this.time.now;
     this.projectiles.push(this.obtainProjectile({
       x,
@@ -1992,7 +2017,9 @@ export class ArenaScene extends Phaser.Scene {
       grenadeBounceStartedAt: grenade ? now : 0,
       grenadeNextBounceAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.firstBounceDelayMs : 0,
       grenadeArcHeightMax: grenade ? TEMPORARY_AMMO_BALANCE.grenade.initialArcHeight : 0,
-      grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0
+      grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0,
+      grenadeArmedAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.proximityArmingDelayMs : 0,
+      grenadeNextProximityCheckAt: grenade ? initialGrenadeProximityCheckAt(now, grenadeSequence) : 0
     }));
   }
 
@@ -3002,6 +3029,53 @@ export class ArenaScene extends Phaser.Scene {
     return false;
   }
 
+  /** Direct body contact is checked every frame. The larger forgiving fuse is
+   * armed after muzzle clearance and sampled at a fixed rate against the
+   * arena's existing enemy spatial grid. */
+  private detonateGrenadeForNearbyTarget(projectile: Projectile, now: number): boolean {
+    const x = projectile.sprite.x;
+    const y = projectile.sprite.y;
+    const directEnemy = this.findSpecialAmmoHitEnemy(x, y);
+    if (directEnemy) {
+      this.detonateGrenadeRound(projectile, x, y, directEnemy);
+      return true;
+    }
+    const directBoss = this.findGrenadeBossContact(x, y, 5);
+    if (directBoss) {
+      this.detonateGrenadeRound(projectile, x, y, null, directBoss);
+      return true;
+    }
+    if (!grenadeProximityCheckDue(
+      now,
+      projectile.grenadeArmedAt ?? Number.POSITIVE_INFINITY,
+      projectile.grenadeNextProximityCheckAt ?? Number.POSITIVE_INFINITY
+    )) return false;
+
+    projectile.grenadeNextProximityCheckAt = nextGrenadeProximityCheckAt(now);
+    const nearbyEnemy = this.findGrenadeProximityEnemy(x, y);
+    if (nearbyEnemy) {
+      this.detonateGrenadeRound(projectile, x, y, nearbyEnemy);
+      return true;
+    }
+    const nearbyBoss = this.findGrenadeBossContact(
+      x,
+      y,
+      TEMPORARY_AMMO_BALANCE.grenade.proximityFuseRadius
+    );
+    if (!nearbyBoss) return false;
+    this.detonateGrenadeRound(projectile, x, y, null, nearbyBoss);
+    return true;
+  }
+
+  private findGrenadeBossContact(x: number, y: number, clearance: number): Boss | null {
+    const boss = this.nearestActiveBossTarget(x, y);
+    if (!boss?.active || boss.isDefeated) return null;
+    const dx = boss.x - x;
+    const dy = boss.y - y;
+    const triggerRadius = boss.hazardRadius + clearance;
+    return dx * dx + dy * dy <= triggerRadius * triggerRadius ? boss : null;
+  }
+
   /** 0 = blocked/no reflection, 1 = continue, 2 = final bounce/detonate. */
   private bounceGrenadeFromWall(projectile: Projectile, now: number): 0 | 1 | 2 {
     const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
@@ -3047,11 +3121,16 @@ export class ArenaScene extends Phaser.Scene {
         continue;
       }
 
-      if (p.ammoMode === 'grenade' && (p.from === 'player' || p.from === 'turret')
-        && this.updateGrenadeFlight(p, now, delta)) {
-        this.detonateGrenadeRound(p, p.sprite.x, p.sprite.y, null);
-        this.retireProjectile(p);
-        continue;
+      if (p.ammoMode === 'grenade' && (p.from === 'player' || p.from === 'turret')) {
+        if (this.detonateGrenadeForNearbyTarget(p, now)) {
+          this.retireProjectile(p);
+          continue;
+        }
+        if (this.updateGrenadeFlight(p, now, delta)) {
+          this.detonateGrenadeRound(p, p.sprite.x, p.sprite.y, null);
+          this.retireProjectile(p);
+          continue;
+        }
       }
 
       if (this.hitWall(p.sprite.x, p.sprite.y)) {
@@ -3390,7 +3469,9 @@ export class ArenaScene extends Phaser.Scene {
         grenadeBounceStartedAt: projectile.grenadeBounceStartedAt,
         grenadeNextBounceAt: projectile.grenadeNextBounceAt,
         grenadeArcHeightMax: projectile.grenadeArcHeightMax,
-        grenadeFuseAt: projectile.grenadeFuseAt
+        grenadeFuseAt: projectile.grenadeFuseAt,
+        grenadeArmedAt: projectile.grenadeArmedAt,
+        grenadeNextProximityCheckAt: projectile.grenadeNextProximityCheckAt
       }));
     }
     const pulse = this.obtainFxCircle({
@@ -3482,7 +3563,8 @@ export class ArenaScene extends Phaser.Scene {
     projectile: Projectile,
     x: number,
     y: number,
-    directlyHitEnemy: Enemy | null
+    directlyHitEnemy: Enemy | null,
+    directlyHitBoss: Boss | null = null
   ): void {
     const radius = TEMPORARY_AMMO_BALANCE.grenade.splashRadius;
     this.audio.playSfx('grenadeShotExplosion');
@@ -3529,9 +3611,10 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
-    const boss = this.nearestActiveBossTarget(x, y);
+    const boss = directlyHitBoss ?? this.nearestActiveBossTarget(x, y);
     if (boss?.active && !boss.isDefeated
-      && (boss.x - x) ** 2 + (boss.y - y) ** 2 <= (radius + boss.hazardRadius) ** 2) {
+      && (directlyHitBoss === boss
+        || (boss.x - x) ** 2 + (boss.y - y) ** 2 <= (radius + boss.hazardRadius) ** 2)) {
       const applied = boss.takeDamage(projectile.damage, source);
       const overkill = Math.max(0, projectile.damage - applied);
       if (source === 'turret') GameplayTelemetryRecorder.recordTurretHit(projectile.turretId ?? '', applied, overkill);
@@ -3744,7 +3827,8 @@ export class ArenaScene extends Phaser.Scene {
       const speed = 560 * (grenade
         ? TEMPORARY_AMMO_BALANCE.grenade.projectileSpeedMultiplier
         : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.projectileSpeedMultiplier : 1);
-      const bounceCount = grenade ? grenadeBounceCountForSequence(this.grenadeProjectileSequence++) : 0;
+      const grenadeSequence = grenade ? this.grenadeProjectileSequence++ : 0;
+      const bounceCount = grenade ? grenadeBounceCountForSequence(grenadeSequence) : 0;
       this.projectiles.push(this.obtainProjectile({
         x: turret.sprite.x,
         y: turret.sprite.y,
@@ -3771,7 +3855,9 @@ export class ArenaScene extends Phaser.Scene {
         grenadeBounceStartedAt: grenade ? now : 0,
         grenadeNextBounceAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.firstBounceDelayMs : 0,
         grenadeArcHeightMax: grenade ? TEMPORARY_AMMO_BALANCE.grenade.initialArcHeight : 0,
-        grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0
+        grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0,
+        grenadeArmedAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.proximityArmingDelayMs : 0,
+        grenadeNextProximityCheckAt: grenade ? initialGrenadeProximityCheckAt(now, grenadeSequence) : 0
       }));
       GameplayTelemetryRecorder.recordTurretShot(turret.telemetryId);
     }
@@ -7357,6 +7443,16 @@ export class ArenaScene extends Phaser.Scene {
     this.specialAmmoHitCandidate = null;
     this.enemySeparationGrid.forEachNearby(x, y, SPECIAL_AMMO_HIT_QUERY_RADIUS, this.findSpecialAmmoHitNeighbor);
     return this.specialAmmoHitCandidate;
+  }
+
+  private findGrenadeProximityEnemy(x: number, y: number): Enemy | null {
+    const radius = TEMPORARY_AMMO_BALANCE.grenade.proximityFuseRadius;
+    this.grenadeFuseQueryX = x;
+    this.grenadeFuseQueryY = y;
+    this.grenadeFuseQueryCandidate = null;
+    this.grenadeFuseQueryCandidateDistanceSquared = Number.POSITIVE_INFINITY;
+    this.enemySeparationGrid.forEachNearby(x, y, radius, this.findGrenadeFuseNeighbor);
+    return this.grenadeFuseQueryCandidate;
   }
 
   private getNearestEnemy(x: number, y: number, range: number): Enemy | null {

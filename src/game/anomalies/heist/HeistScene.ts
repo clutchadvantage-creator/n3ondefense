@@ -23,6 +23,7 @@ import { Hud, type HudPayload, type HudRadarContact } from '../../systems/Hud.ts
 import { BoostVisualSystem, type BoostFxCircleSpawn } from '../../systems/BoostVisualSystem.ts';
 import { SeededRandom } from '../../systems/SeededRandom.ts';
 import { ReusableObjectPool } from '../../performance/ReusableObjectPool.ts';
+import { UniformSpatialGrid } from '../../performance/UniformSpatialGrid.ts';
 import { ProjectileTrailBatch } from '../../performance/ProjectileTrailBatch.ts';
 import { MineExplosionVfx } from '../../vfx/MineExplosionVfx.ts';
 import { OperativeShieldEffect } from '../../vfx/OperativeShieldEffect.ts';
@@ -36,6 +37,10 @@ import {
   grenadeArcHeight,
   grenadeBounceCountForSequence,
   grenadeFireIntervalMs,
+  grenadeProximityCheckDue,
+  grenadeProximityFuseContains,
+  initialGrenadeProximityCheckAt,
+  nextGrenadeProximityCheckAt,
   type TemporaryAmmoMode
 } from '../../player/TemporaryAmmoMode.ts';
 import { RICOCHET_MAX_WALL_BOUNCES, reflectRicochetVelocity } from '../../player/RicochetRules.ts';
@@ -80,6 +85,8 @@ interface HeistProjectile {
   grenadeNextBounceAt?: number;
   grenadeArcHeightMax?: number;
   grenadeFuseAt?: number;
+  grenadeArmedAt?: number;
+  grenadeNextProximityCheckAt?: number;
 }
 
 interface HeistProjectileSpawn extends Omit<HeistProjectile, 'sprite' | 'crossedFences' | 'nextTrailAt'> {
@@ -177,6 +184,38 @@ export class HeistScene extends Phaser.Scene {
   private pendingMineSalvo = false;
   private nextHoloAfterimageAt = 0;
   private grenadeProjectileSequence = 0;
+  private readonly enemySpatialGrid = new UniformSpatialGrid<Enemy>(64);
+  private grenadeFuseQueryX = 0;
+  private grenadeFuseQueryY = 0;
+  private grenadeFuseQueryProximity = false;
+  private grenadeFuseQueryCandidate: Enemy | null = null;
+  private grenadeFuseQueryCandidateDistanceSquared = Number.POSITIVE_INFINITY;
+  private grenadeSplashX = 0;
+  private grenadeSplashY = 0;
+  private grenadeSplashRadiusSquared = 0;
+  private grenadeSplashDamage = 0;
+  private grenadeSplashExcludedEnemy: Enemy | null = null;
+  private readonly findGrenadeFuseNeighbor = (enemy: Enemy): void => {
+    if (!enemy.active || enemy.hp <= 0) return;
+    const dx = enemy.x - this.grenadeFuseQueryX;
+    const dy = enemy.y - this.grenadeFuseQueryY;
+    const distanceSquared = dx * dx + dy * dy;
+    const directHitRadius = enemy.stats.size * 0.55 + 6;
+    const withinTrigger = this.grenadeFuseQueryProximity
+      ? grenadeProximityFuseContains(dx, dy)
+      : distanceSquared <= directHitRadius * directHitRadius;
+    if (!withinTrigger
+      || distanceSquared >= this.grenadeFuseQueryCandidateDistanceSquared) return;
+    this.grenadeFuseQueryCandidateDistanceSquared = distanceSquared;
+    this.grenadeFuseQueryCandidate = enemy;
+  };
+  private readonly applyGrenadeSplashNeighbor = (enemy: Enemy): void => {
+    if (enemy === this.grenadeSplashExcludedEnemy || !enemy.active || enemy.hp <= 0) return;
+    const dx = enemy.x - this.grenadeSplashX;
+    const dy = enemy.y - this.grenadeSplashY;
+    if (dx * dx + dy * dy > this.grenadeSplashRadiusSquared) return;
+    this.damageEnemy(enemy, this.grenadeSplashDamage);
+  };
 
   constructor() { super(SceneKeys.Heist); }
 
@@ -290,6 +329,7 @@ export class HeistScene extends Phaser.Scene {
     this.shieldVisual = null;
     this.nextPlayerShotAt = 0;
     this.grenadeProjectileSequence = 0;
+    this.enemySpatialGrid.clear();
     this.damageDealt = 0;
     this.damageTaken = 0;
     this.containersOpened = 0;
@@ -354,6 +394,8 @@ export class HeistScene extends Phaser.Scene {
       projectile.grenadeNextBounceAt = state.grenadeNextBounceAt ?? 0;
       projectile.grenadeArcHeightMax = state.grenadeArcHeightMax ?? 0;
       projectile.grenadeFuseAt = state.grenadeFuseAt ?? 0;
+      projectile.grenadeArmedAt = state.grenadeArmedAt ?? 0;
+      projectile.grenadeNextProximityCheckAt = state.grenadeNextProximityCheckAt ?? 0;
       projectile.crossedFences.clear();
       if (state.crossedFences) for (const fence of state.crossedFences) projectile.crossedFences.add(fence);
       if (projectile.ammoMode === 'grenade') {
@@ -395,6 +437,8 @@ export class HeistScene extends Phaser.Scene {
         projectile.grenadeNextBounceAt = 0;
         projectile.grenadeArcHeightMax = 0;
         projectile.grenadeFuseAt = 0;
+        projectile.grenadeArmedAt = 0;
+        projectile.grenadeNextProximityCheckAt = 0;
         projectile.grenadeShadow?.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
       }
     );
@@ -438,6 +482,7 @@ export class HeistScene extends Phaser.Scene {
     this.updatePlayerMovement(now);
     this.updatePlayerCombat(now);
     this.updateAbilities(now);
+    this.enemySpatialGrid.rebuild(this.enemies);
     this.updateProjectiles(now, delta);
     this.updateEnemies(now, dt);
     this.updateMines(now);
@@ -808,7 +853,8 @@ export class HeistScene extends Phaser.Scene {
     const speedMultiplier = grenade ? TEMPORARY_AMMO_BALANCE.grenade.projectileSpeedMultiplier
       : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.projectileSpeedMultiplier : 1;
     const speed = this.player.weapon.projectileSpeed * speedMultiplier;
-    const bounceCount = grenade ? grenadeBounceCountForSequence(this.grenadeProjectileSequence++) : 0;
+    const grenadeSequence = grenade ? this.grenadeProjectileSequence++ : 0;
+    const bounceCount = grenade ? grenadeBounceCountForSequence(grenadeSequence) : 0;
     const now = this.time.now;
     const projectile = this.projectilePool.obtain({
       owner: 'player', texture: grenade ? 'ammo-grenade-round' : scatter ? 'ammo-scatter-pellet' : this.projectileTextureKey,
@@ -824,7 +870,9 @@ export class HeistScene extends Phaser.Scene {
       grenadeBounceStartedAt: grenade ? now : 0,
       grenadeNextBounceAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.firstBounceDelayMs : 0,
       grenadeArcHeightMax: grenade ? TEMPORARY_AMMO_BALANCE.grenade.initialArcHeight : 0,
-      grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0
+      grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0,
+      grenadeArmedAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.proximityArmingDelayMs : 0,
+      grenadeNextProximityCheckAt: grenade ? initialGrenadeProximityCheckAt(now, grenadeSequence) : 0
     });
     this.projectiles.push(projectile);
   }
@@ -871,6 +919,40 @@ export class HeistScene extends Phaser.Scene {
     return false;
   }
 
+  private findGrenadeEnemy(x: number, y: number, proximity: boolean): Enemy | null {
+    this.grenadeFuseQueryX = x;
+    this.grenadeFuseQueryY = y;
+    this.grenadeFuseQueryProximity = proximity;
+    this.grenadeFuseQueryCandidate = null;
+    this.grenadeFuseQueryCandidateDistanceSquared = Number.POSITIVE_INFINITY;
+    this.enemySpatialGrid.forEachNearby(
+      x,
+      y,
+      TEMPORARY_AMMO_BALANCE.grenade.proximityFuseRadius,
+      this.findGrenadeFuseNeighbor
+    );
+    return this.grenadeFuseQueryCandidate;
+  }
+
+  private detonateGrenadeForNearbyTarget(projectile: HeistProjectile, now: number): boolean {
+    const directEnemy = this.findGrenadeEnemy(projectile.sprite.x, projectile.sprite.y, false);
+    if (directEnemy) {
+      this.detonateGrenade(projectile, directEnemy);
+      return true;
+    }
+    if (!grenadeProximityCheckDue(
+      now,
+      projectile.grenadeArmedAt ?? Number.POSITIVE_INFINITY,
+      projectile.grenadeNextProximityCheckAt ?? Number.POSITIVE_INFINITY
+    )) return false;
+
+    projectile.grenadeNextProximityCheckAt = nextGrenadeProximityCheckAt(now);
+    const nearbyEnemy = this.findGrenadeEnemy(projectile.sprite.x, projectile.sprite.y, true);
+    if (!nearbyEnemy) return false;
+    this.detonateGrenade(projectile, nearbyEnemy);
+    return true;
+  }
+
   /** 0 = blocked, 1 = continue, 2 = detonate. */
   private bounceGrenadeFromWall(projectile: HeistProjectile, now: number): 0 | 1 | 2 {
     const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
@@ -895,11 +977,16 @@ export class HeistScene extends Phaser.Scene {
         this.retireProjectile(projectile, index);
         continue;
       }
-      if (projectile.ammoMode === 'grenade' && projectile.owner !== 'enemy'
-        && this.updateGrenadeFlight(projectile, now, delta)) {
-        this.detonateGrenade(projectile);
-        this.retireProjectile(projectile, index);
-        continue;
+      if (projectile.ammoMode === 'grenade' && projectile.owner !== 'enemy') {
+        if (this.detonateGrenadeForNearbyTarget(projectile, now)) {
+          this.retireProjectile(projectile, index);
+          continue;
+        }
+        if (this.updateGrenadeFlight(projectile, now, delta)) {
+          this.detonateGrenade(projectile);
+          this.retireProjectile(projectile, index);
+          continue;
+        }
       }
       if (now >= projectile.nextTrailAt) {
         if (this.modRuntime.hasInfusion('prismatic-rounds') && projectile.owner === 'player') {
@@ -991,11 +1078,18 @@ export class HeistScene extends Phaser.Scene {
     if (primary) this.damageEnemy(primary, projectile.damage);
     const container = this.findContainerHit(projectile.sprite.x, projectile.sprite.y);
     if (container) this.damageContainer(container, projectile.damage);
-    for (const enemy of this.enemies) {
-      if (enemy === primary) continue;
-      const dx = enemy.x - projectile.sprite.x; const dy = enemy.y - projectile.sprite.y;
-      if (dx * dx + dy * dy <= radius * radius) this.damageEnemy(enemy, damage);
-    }
+    this.grenadeSplashX = projectile.sprite.x;
+    this.grenadeSplashY = projectile.sprite.y;
+    this.grenadeSplashRadiusSquared = radius * radius;
+    this.grenadeSplashDamage = damage;
+    this.grenadeSplashExcludedEnemy = primary;
+    this.enemySpatialGrid.forEachNearby(
+      projectile.sprite.x,
+      projectile.sprite.y,
+      radius,
+      this.applyGrenadeSplashNeighbor
+    );
+    this.grenadeSplashExcludedEnemy = null;
   }
 
   private updateEnemies(now: number, dt: number): void {
@@ -1093,7 +1187,8 @@ export class HeistScene extends Phaser.Scene {
       const projectileAngle = angle + (scatter ? SCATTERSHOT_ANGLE_OFFSETS[index] : 0);
       const speed = 560 * (grenade ? TEMPORARY_AMMO_BALANCE.grenade.projectileSpeedMultiplier
         : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.projectileSpeedMultiplier : 1);
-      const bounceCount = grenade ? grenadeBounceCountForSequence(this.grenadeProjectileSequence++) : 0;
+      const grenadeSequence = grenade ? this.grenadeProjectileSequence++ : 0;
+      const bounceCount = grenade ? grenadeBounceCountForSequence(grenadeSequence) : 0;
       this.projectiles.push(this.projectilePool.obtain({
         owner: 'turret',
         texture: grenade ? 'ammo-grenade-round' : scatter ? 'ammo-scatter-pellet' : this.projectileTextureKey,
@@ -1117,7 +1212,9 @@ export class HeistScene extends Phaser.Scene {
         grenadeBounceStartedAt: grenade ? now : 0,
         grenadeNextBounceAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.firstBounceDelayMs : 0,
         grenadeArcHeightMax: grenade ? TEMPORARY_AMMO_BALANCE.grenade.initialArcHeight : 0,
-        grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0
+        grenadeFuseAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.fuseMs : 0,
+        grenadeArmedAt: grenade ? now + TEMPORARY_AMMO_BALANCE.grenade.proximityArmingDelayMs : 0,
+        grenadeNextProximityCheckAt: grenade ? initialGrenadeProximityCheckAt(now, grenadeSequence) : 0
       }));
     }
   }
@@ -1510,7 +1607,9 @@ export class HeistScene extends Phaser.Scene {
           grenadeBounceStartedAt: projectile.grenadeBounceStartedAt,
           grenadeNextBounceAt: projectile.grenadeNextBounceAt,
           grenadeArcHeightMax: projectile.grenadeArcHeightMax,
-          grenadeFuseAt: projectile.grenadeFuseAt
+          grenadeFuseAt: projectile.grenadeFuseAt,
+          grenadeArmedAt: projectile.grenadeArmedAt,
+          grenadeNextProximityCheckAt: projectile.grenadeNextProximityCheckAt
         }));
       }
       return;
@@ -1919,6 +2018,7 @@ export class HeistScene extends Phaser.Scene {
     safely('resize-listener', () => this.scale.off('resize', this.handleResize, this));
     this.projectiles.length = 0;
     this.enemies.length = 0;
+    this.enemySpatialGrid.clear();
     this.containers.length = 0;
     this.pickups.length = 0;
     this.fences.length = 0;

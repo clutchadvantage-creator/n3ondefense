@@ -27,7 +27,17 @@ export const TEMPORARY_AMMO_BALANCE = {
     initialArcHeight: 38,
     arcHeightScalePerBounce: 0.7,
     spinRadiansPerSecond: 8.5,
-    fuseMs: 2_150
+    fuseMs: 2_150,
+    /** Smart fuse radius measured from the grenade center. This stays inside
+     * the requested short 40-70 world-unit band without turning each round
+     * into a screen-wide trigger. */
+    proximityFuseRadius: 56,
+    /** Direct body contacts remain live immediately; only the forgiving
+     * proximity field waits for this short muzzle-clearance window. */
+    proximityArmingDelayMs: 150,
+    /** Proximity checks are intentionally fixed-rate so a synchronized wall
+     * of Weapon Sync turret grenades does not add a query every render frame. */
+    proximityCheckIntervalMs: 50
   },
   scattershot: {
     pelletCount: 7,
@@ -68,6 +78,28 @@ export const grenadeArcHeight = (
   const duration = Math.max(1, nextBounceAt - bounceStartedAt);
   const progress = Math.max(0, Math.min(1, (now - bounceStartedAt) / duration));
   return Math.sin(progress * Math.PI) * Math.max(0, maximumHeight);
+};
+
+export const grenadeProximityCheckDue = (
+  now: number,
+  armedAt: number,
+  nextCheckAt: number
+): boolean => now >= armedAt && now >= nextCheckAt;
+
+export const grenadeProximityFuseContains = (deltaX: number, deltaY: number): boolean => {
+  const radius = TEMPORARY_AMMO_BALANCE.grenade.proximityFuseRadius;
+  return deltaX * deltaX + deltaY * deltaY <= radius * radius;
+};
+
+export const nextGrenadeProximityCheckAt = (now: number): number =>
+  now + TEMPORARY_AMMO_BALANCE.grenade.proximityCheckIntervalMs;
+
+/** Spreads same-frame player/turret volleys across one short query interval.
+ * Direct collision is still evaluated every frame during this phase. */
+export const initialGrenadeProximityCheckAt = (now: number, sequence: number): number => {
+  const safeSequence = Math.abs(Math.floor(Number.isFinite(sequence) ? sequence : 0));
+  return now + TEMPORARY_AMMO_BALANCE.grenade.proximityArmingDelayMs
+    + safeSequence % TEMPORARY_AMMO_BALANCE.grenade.proximityCheckIntervalMs;
 };
 
 const SCATTERSHOT_HALF_SPREAD = TEMPORARY_AMMO_BALANCE.scattershot.spreadRadians * 0.5;

@@ -10,7 +10,11 @@ import {
   TemporaryAmmoModeController,
   grenadeArcHeight,
   grenadeBounceCountForSequence,
-  grenadeFireIntervalMs
+  grenadeFireIntervalMs,
+  grenadeProximityCheckDue,
+  grenadeProximityFuseContains,
+  initialGrenadeProximityCheckAt,
+  nextGrenadeProximityCheckAt
 } from '../src/game/player/TemporaryAmmoMode.ts';
 import {
   TEMPORARY_OFFENSIVE_EFFECTS,
@@ -24,6 +28,7 @@ import {
 } from '../src/game/player/PickupDropTable.ts';
 
 const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+const heist = readFileSync(new URL('../src/game/anomalies/heist/HeistScene.ts', import.meta.url), 'utf8');
 const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
 
 test('temporary ammo modes refresh in Normal, extend only duration in Overdrive, replace each other, and expire', () => {
@@ -94,6 +99,45 @@ test('grenade rounds use a bounded permanent-progression cadence and determinist
   assert.match(shooting, /grenadeFireIntervalMs\(this\.player\.weapon\.fireRate\)/);
   assert.match(arena, /this\.consumeGrenadeBounce\(projectile, now\)/);
   assert.match(arena, /this\.bounceGrenadeFromWall\(p, now\)/);
+});
+
+test('grenade smart fuses use a short shared arming window and fixed-rate spatial queries', () => {
+  const grenade = TEMPORARY_AMMO_BALANCE.grenade;
+  assert.ok(grenade.proximityFuseRadius >= 40 && grenade.proximityFuseRadius <= 70);
+  assert.ok(grenade.proximityArmingDelayMs >= 100 && grenade.proximityArmingDelayMs <= 200);
+  assert.ok(grenade.proximityCheckIntervalMs > 0 && grenade.proximityCheckIntervalMs <= 60);
+  assert.equal(grenadeProximityCheckDue(1_149, 1_150, 1_150), false);
+  assert.equal(grenadeProximityCheckDue(1_150, 1_150, 1_150), true);
+  assert.equal(grenadeProximityFuseContains(grenade.proximityFuseRadius, 0), true);
+  assert.equal(grenadeProximityFuseContains(grenade.proximityFuseRadius + 0.01, 0), false);
+  assert.equal(grenadeProximityFuseContains(40, 30), true);
+  assert.equal(nextGrenadeProximityCheckAt(1_150), 1_150 + grenade.proximityCheckIntervalMs);
+  assert.equal(initialGrenadeProximityCheckAt(1_000, 0), 1_000 + grenade.proximityArmingDelayMs);
+  assert.equal(initialGrenadeProximityCheckAt(1_000, 49),
+    1_000 + grenade.proximityArmingDelayMs + grenade.proximityCheckIntervalMs - 1);
+  assert.equal(initialGrenadeProximityCheckAt(1_000, 50), 1_000 + grenade.proximityArmingDelayMs);
+
+  const arenaContact = arena.slice(
+    arena.indexOf('private detonateGrenadeForNearbyTarget'),
+    arena.indexOf('private findGrenadeBossContact')
+  );
+  assert.ok(arenaContact.indexOf('findSpecialAmmoHitEnemy') < arenaContact.indexOf('grenadeProximityCheckDue'));
+  assert.match(arenaContact, /this\.detonateGrenadeRound\(projectile, x, y, directEnemy\)/);
+  assert.match(arena, /enemySeparationGrid\.forEachNearby\(x, y, radius, this\.findGrenadeFuseNeighbor\)/);
+  assert.match(arena, /grenadeArmedAt = 0/);
+  assert.match(arena, /grenadeNextProximityCheckAt = 0/);
+
+  const heistContact = heist.slice(
+    heist.indexOf('private detonateGrenadeForNearbyTarget'),
+    heist.indexOf('/** 0 = blocked')
+  );
+  assert.ok(heistContact.indexOf('findGrenadeEnemy(projectile.sprite.x, projectile.sprite.y, false)')
+    < heistContact.indexOf('grenadeProximityCheckDue'));
+  assert.match(heist, /this\.enemySpatialGrid\.rebuild\(this\.enemies\)/);
+  assert.match(heist, /this\.enemySpatialGrid\.forEachNearby\(/);
+  assert.match(heist, /this\.applyGrenadeSplashNeighbor/);
+  assert.match(heist, /grenadeArmedAt = 0/);
+  assert.match(heist, /grenadeNextProximityCheckAt = 0/);
 });
 
 test('Legendary Weapon Sync shares only registered offensive effects for eighty percent of player duration', () => {
