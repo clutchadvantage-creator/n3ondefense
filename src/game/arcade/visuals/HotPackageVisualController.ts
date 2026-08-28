@@ -4,6 +4,7 @@ import {
   clamp01,
   drawCornerBrackets,
   drawDirectionalChevron,
+  drawLayeredArcadeSocket,
   drawSegmentedRing,
   easeInCubic,
   seededUnit
@@ -134,6 +135,7 @@ export class HotPackageVisualController {
 
   private drawFloorBase(): void {
     const color = this.options.color;
+    drawLayeredArcadeSocket(this.floorStatic, this.options.radius, color, 0xff5bcf);
     this.floorStatic.fillStyle(color, 0.025).fillCircle(0, 0, this.options.radius);
     this.floorStatic.lineStyle(1, color, 0.16).strokeCircle(0, 0, this.options.radius);
     this.floorStatic.lineStyle(1, 0x55efff, 0.12);

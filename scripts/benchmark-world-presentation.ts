@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks';
+import { createEnvironmentDecalPlan } from '../src/game/rendering/EnvironmentDecalLibrary.ts';
 
 const FIVE_MINUTE_FRAMES = 60 * 60 * 5;
 const SEGMENTS = 12;
@@ -54,6 +55,19 @@ for (let phase = 0; phase < simulatedPhases; phase += 1) {
 }
 const batchedGasMs = performance.now() - batchedGasStart;
 
+const environmentSurfaces = Array.from({ length: 96 }, (_, index) => ({
+  x: 90 + index * 31,
+  y: 120 + (index % 11) * 84,
+  w: index % 2 ? 168 : 34,
+  h: index % 2 ? 34 : 168
+}));
+const environmentPlanStart = performance.now();
+let environmentDecals = 0;
+for (let seed = 1; seed <= 1_000; seed += 1) {
+  environmentDecals += createEnvironmentDecalPlan(seed % 2 ? 'arena' : 'heist', seed, environmentSurfaces, seed % 2 ? 9 : 12).decals.length;
+}
+const environmentPlanMs = performance.now() - environmentPlanStart;
+
 if (!Number.isFinite(sink)) throw new Error('World-presentation benchmark produced an invalid result.');
 
 console.log('N3ONDefense five-minute world-presentation benchmark');
@@ -65,3 +79,5 @@ console.log(`Gas impact simulation: ${simulatedPhases.toLocaleString()} phases`)
 console.log(`Legacy temporary objects: ${gasObjectChurn.toLocaleString()}, ${legacyGasMs.toFixed(2)}ms`);
 console.log(`Fixed impact states: ${states.length}, ${batchedGasMs.toFixed(2)}ms`);
 console.log(`Modeled gas bookkeeping speedup: ${(legacyGasMs / batchedGasMs).toFixed(2)}x`);
+console.log(`Environment setup: 1,000 deterministic plans / ${environmentDecals.toLocaleString()} bounded decals in ${environmentPlanMs.toFixed(2)}ms`);
+console.log('Runtime environment animation: 1 shared arena pulse + 1 HEIST ambient Graphics batch');

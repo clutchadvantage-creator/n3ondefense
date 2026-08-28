@@ -4,6 +4,7 @@ import {
   clamp01,
   drawCornerBrackets,
   drawDirectionalChevron,
+  drawLayeredArcadeSocket,
   drawSegmentedRing,
   seededUnit
 } from './ArcadeVisualPrimitives.ts';
@@ -96,6 +97,7 @@ export class RedlineVisualController {
 
   private drawBase(): void {
     const radius = this.options.radius;
+    drawLayeredArcadeSocket(this.base, radius, 0x48efff, 0xff4cbe);
     this.base.fillStyle(0x48efff, 0.025).fillCircle(0, 0, radius);
     this.base.lineStyle(1, 0x48efff, 0.2).strokeCircle(0, 0, radius);
     this.base.lineStyle(1, 0xaa65ff, 0.15).strokeCircle(0, 0, radius - 22);

@@ -1,5 +1,15 @@
 import Phaser from 'phaser';
 import type { RectSpec } from '../../types.ts';
+import {
+  drawBeveledTechPlate,
+  drawHazardStripes,
+  drawPanelBolts,
+  drawVentSlats
+} from '../../rendering/LayeredArtPrimitives.ts';
+import {
+  createEnvironmentDecalPlan,
+  createEnvironmentDecalText
+} from '../../rendering/EnvironmentDecalLibrary.ts';
 import { HEIST_BALANCE, HEIST_ROUTE, HEIST_WALL_RECTS, HEIST_WORLD } from './HeistConfig.ts';
 
 export interface HeistFacilityRuntime {
@@ -11,6 +21,13 @@ export interface HeistFacilityRuntime {
   containerPoints: readonly { x: number; y: number }[];
   supportPoints: readonly { kind: 'health' | 'energy'; x: number; y: number }[];
   ambushPoints: readonly { x: number; y: number }[];
+  diagnostics: {
+    identity: 'heist-interior';
+    staticGraphicsBatches: 1;
+    liveAmbientBatches: 1;
+    independentAnimationLoops: 1;
+    decalCount: number;
+  };
   setVaultDoorOpen(open: boolean): void;
   setEscapeRoute(active: boolean): void;
   update(now: number, playerX: number, playerY: number): void;
@@ -44,23 +61,13 @@ const drawWallPanel = (graphics: Phaser.GameObjects.Graphics, rect: RectSpec): v
 
   // Drawn once at facility creation: dimensional shadow, side face and top cap
   // add readable wall volume without introducing any per-frame render work.
-  graphics.fillStyle(0x000207, 0.78).fillRect(rect.x + 9, rect.y + 11, rect.w, rect.h);
-  graphics.fillStyle(0x030913, 1).fillPoints([
-    new Phaser.Geom.Point(rect.x + rect.w - depth, rect.y + depth),
-    new Phaser.Geom.Point(rect.x + rect.w, rect.y),
-    new Phaser.Geom.Point(rect.x + rect.w, rect.y + rect.h),
-    new Phaser.Geom.Point(rect.x + rect.w - depth, rect.y + rect.h - depth)
-  ], true);
-  graphics.fillStyle(0x07101a, 1).fillRect(rect.x, rect.y, rect.w - depth, rect.h - depth);
-  graphics.fillStyle(0x102a38, 1).fillPoints([
-    new Phaser.Geom.Point(rect.x, rect.y),
-    new Phaser.Geom.Point(rect.x + depth, rect.y + depth),
-    new Phaser.Geom.Point(rect.x + rect.w - depth, rect.y + depth),
-    new Phaser.Geom.Point(rect.x + rect.w, rect.y)
-  ], true);
-  graphics.lineStyle(3, 0x256276, 0.84).strokeRect(rect.x + 3, rect.y + 3, rect.w - depth - 6, rect.h - depth - 6);
-  graphics.lineStyle(1, 0xff46c8, 0.27).strokeRect(rect.x + 11, rect.y + 11,
+  drawBeveledTechPlate(graphics, rect.x, rect.y, rect.w, rect.h, {
+    face: 0x07101a, inset: 0x0b1d29, edge: 0x2f8494,
+    side: 0x030913, highlight: 0xa6f7ff, depth
+  });
+  graphics.lineStyle(1, 0xff46c8, 0.26).strokeRect(rect.x + 11, rect.y + 11,
     Math.max(2, rect.w - depth - 22), Math.max(2, rect.h - depth - 22));
+  if (rect.w > 42 && rect.h > 30) drawPanelBolts(graphics, rect.x + 2, rect.y + 2, rect.w - depth - 4, rect.h - depth - 4, 0x7897a5, 7);
 
   for (let offset = 46, panelIndex = 0; offset < length - depth - 24; offset += 86, panelIndex += 1) {
     const cyanPanel = panelIndex % 3 !== 1;
@@ -86,6 +93,12 @@ const drawWallPanel = (graphics: Phaser.GameObjects.Graphics, rect: RectSpec): v
       }
     }
   }
+
+  if (horizontal && rect.w > 150 && rect.h > 38) {
+    drawVentSlats(graphics, rect.x + rect.w * 0.67, rect.y + 10, Math.min(72, rect.w * 0.2), Math.max(14, rect.h - depth - 20), true, 0x43edfa);
+  } else if (!horizontal && rect.h > 150 && rect.w > 38) {
+    drawVentSlats(graphics, rect.x + 10, rect.y + rect.h * 0.67, Math.max(14, rect.w - depth - 20), Math.min(72, rect.h * 0.2), false, 0xff4dcb);
+  }
 };
 
 export const createHeistFacility = (scene: Phaser.Scene): HeistFacilityRuntime => {
@@ -93,12 +106,32 @@ export const createHeistFacility = (scene: Phaser.Scene): HeistFacilityRuntime =
   staticGraphics.fillStyle(0x01040a, 1).fillRect(0, 0, HEIST_WORLD.width, HEIST_WORLD.height);
   staticGraphics.fillStyle(0x06111c, 1).fillRect(90, 90, HEIST_WORLD.width - 180, HEIST_WORLD.height - 180);
 
-  // Large floor plates and restrained grid detail keep the floor readable.
-  for (let x = 110; x < HEIST_WORLD.width - 90; x += 180) {
-    for (let y = 110; y < HEIST_WORLD.height - 90; y += 180) {
-      const alternate = ((x / 180 + y / 180) | 0) % 3 === 0;
-      staticGraphics.fillStyle(alternate ? 0x081827 : 0x07131f, 0.74).fillRect(x, y, 166, 166);
-      staticGraphics.lineStyle(1, alternate ? 0x1b4053 : 0x142f40, 0.34).strokeRect(x, y, 166, 166);
+  // Larger layered floor plates reduce total command count while making seams,
+  // bevels, glassy insets and maintenance fasteners much more pronounced.
+  const floorPanelStep = 240;
+  for (let x = 110, column = 0; x < HEIST_WORLD.width - 90; x += floorPanelStep, column += 1) {
+    for (let y = 110, row = 0; y < HEIST_WORLD.height - 90; y += floorPanelStep, row += 1) {
+      const width = Math.min(226, HEIST_WORLD.width - 100 - x);
+      const height = Math.min(226, HEIST_WORLD.height - 100 - y);
+      const alternate = (column + row) % 3 === 0;
+      drawBeveledTechPlate(staticGraphics, x, y, width, height, {
+        face: alternate ? 0x0a1c2a : 0x081622,
+        inset: alternate ? 0x071522 : 0x06111b,
+        edge: alternate ? 0x24566b : 0x183b50,
+        side: 0x010409,
+        highlight: alternate ? 0x68b8c4 : 0x416a78,
+        depth: 6,
+        alpha: 0.9
+      });
+      if ((column + row * 2) % 3 === 0) drawPanelBolts(staticGraphics, x + 3, y + 3, width - 12, height - 12, 0x557483, 10);
+      if ((column * 3 + row) % 7 === 0 && width > 100 && height > 90) {
+        drawVentSlats(staticGraphics, x + width - 73, y + 18, 48, 28, true, alternate ? 0x43edfa : 0xff4dcb);
+      }
+      if ((column + row) % 8 === 0) {
+        staticGraphics.lineStyle(1, 0x7795a0, 0.11)
+          .lineBetween(x + 42, y + height * 0.72, x + 94, y + height * 0.66)
+          .lineBetween(x + 58, y + height * 0.77, x + 111, y + height * 0.7);
+      }
     }
   }
 
@@ -113,18 +146,24 @@ export const createHeistFacility = (scene: Phaser.Scene): HeistFacilityRuntime =
     { x: 2620, y: 2080, text: 'CONTAINMENT SERVICE // B' },
     { x: 3450, y: 220, text: 'VAULT STORAGE // RESTRICTED' }
   ];
-  const textObjects = roomLabels.map((entry) => scene.add.text(entry.x, entry.y, entry.text, {
+  const textObjects: Phaser.GameObjects.Text[] = roomLabels.map((entry) => scene.add.text(entry.x, entry.y, entry.text, {
     fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#4f91a7', letterSpacing: 2
   }).setDepth(2));
+
+  const decalPlan = createEnvironmentDecalPlan('heist', 0x48333135, wallRects, 12);
+  for (const decal of decalPlan.decals) textObjects.push(createEnvironmentDecalText(scene, decal).setDepth(2));
 
   for (let index = 0; index < 18; index += 1) {
     const point = HEIST_ROUTE[Math.min(HEIST_ROUTE.length - 1, Math.floor(index / 1.5))];
     const side = index % 2 ? -1 : 1;
     const x = point.x + side * (72 + index % 3 * 16);
     const y = point.y + (index % 4 - 1.5) * 42;
-    staticGraphics.fillStyle(0x0b1e2a, 0.94).fillRect(x - 28, y - 18, 56, 36);
-    staticGraphics.lineStyle(2, index % 3 ? 0x39dfee : 0xff42bf, 0.48).strokeRect(x - 28, y - 18, 56, 36);
+    const accent = index % 3 ? 0x39dfee : 0xff42bf;
+    drawBeveledTechPlate(staticGraphics, x - 32, y - 23, 64, 46, {
+      face: 0x0b1e2a, inset: 0x07131d, edge: accent, side: 0x02060b, highlight: 0xbefcff, depth: 5
+    });
     staticGraphics.fillStyle(index % 3 ? 0x42e9f7 : 0xff4fc9, 0.52).fillRect(x - 20, y - 8, 38, 4);
+    staticGraphics.fillStyle(0x7292a0, 0.74).fillCircle(x - 22, y + 13, 1.5).fillCircle(x + 18, y + 13, 1.5);
   }
 
   for (let index = 0; index < 7; index += 1) {
@@ -176,6 +215,42 @@ export const createHeistFacility = (scene: Phaser.Scene): HeistFacilityRuntime =
   staticGraphics.fillStyle(0x091722, 0.94).fillRect(3324, 1260, 590, 810);
   staticGraphics.lineStyle(4, 0xff4fc9, 0.34).strokeRect(3340, 1276, 558, 778);
   staticGraphics.lineStyle(2, 0x54efff, 0.42).strokeRect(3360, 1296, 518, 738);
+  drawHazardStripes(staticGraphics, 3344, 1282, 550, 10, 0xffc857, 0.52, 11);
+  drawHazardStripes(staticGraphics, 3344, 2038, 550, 10, 0xff4f77, 0.46, 11);
+
+  // Research machinery hugs room edges and remains non-colliding set dressing.
+  // It shares the static Graphics batch with the facility instead of creating
+  // dozens of machinery sprites or independent status animations.
+  const machineryStations = [
+    { x: 1660, y: 304, w: 116, h: 62, accent: 0x43edfa },
+    { x: 1905, y: 304, w: 116, h: 62, accent: 0xff4dcb },
+    { x: 2150, y: 304, w: 116, h: 62, accent: 0x43edfa },
+    { x: 2470, y: 2070, w: 132, h: 58, accent: 0xff4dcb },
+    { x: 2760, y: 2070, w: 132, h: 58, accent: 0x43edfa }
+  ];
+  for (const [stationIndex, station] of machineryStations.entries()) {
+    drawBeveledTechPlate(staticGraphics, station.x, station.y, station.w, station.h, {
+      face: 0x0c202d, inset: 0x04101a, edge: station.accent,
+      side: 0x01040a, highlight: 0xb9faff, depth: 6
+    });
+    drawVentSlats(staticGraphics, station.x + 14, station.y + 17, 38, 24, true, station.accent);
+    staticGraphics.fillStyle(station.accent, 0.62).fillRoundedRect(station.x + 68, station.y + 18, 30, 7, 2);
+    staticGraphics.fillStyle(stationIndex % 2 ? 0xffc857 : 0x72ff9b, 0.72)
+      .fillCircle(station.x + 74, station.y + 37, 2.5)
+      .fillCircle(station.x + 86, station.y + 37, 2.5);
+  }
+
+  const conduitRuns = [
+    { y: 420, color: 0x43edfa }, { y: 452, color: 0xff4dcb },
+    { y: 1946, color: 0xffc857 }
+  ];
+  for (const run of conduitRuns) {
+    staticGraphics.lineStyle(8, 0x010409, 0.9).lineBetween(1460, run.y + 4, 3050, run.y + 4);
+    staticGraphics.lineStyle(3, run.color, 0.26).lineBetween(1460, run.y, 3050, run.y);
+    for (let clampX = 1500; clampX < 3020; clampX += 170) {
+      staticGraphics.fillStyle(0x405663, 0.84).fillRect(clampX, run.y - 5, 8, 10);
+    }
+  }
 
   const routeGraphics = scene.add.graphics().setDepth(1);
   let escapeRoute = false;
@@ -242,6 +317,13 @@ export const createHeistFacility = (scene: Phaser.Scene): HeistFacilityRuntime =
     containerPoints: CONTAINER_POINTS,
     supportPoints: SUPPORT_POINTS,
     ambushPoints: AMBUSH_POINTS,
+    diagnostics: {
+      identity: 'heist-interior',
+      staticGraphicsBatches: 1,
+      liveAmbientBatches: 1,
+      independentAnimationLoops: 1,
+      decalCount: decalPlan.decals.length
+    },
     setVaultDoorOpen(nextOpen: boolean): void {
       if (open === nextOpen) return;
       open = nextOpen;

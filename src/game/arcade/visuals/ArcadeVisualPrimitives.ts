@@ -80,3 +80,30 @@ export const seededUnit = (index: number, salt: number): number => {
   const value = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43_758.5453;
   return value - Math.floor(value);
 };
+
+/** Static, non-colliding event socket that visually seats Arcade machinery in
+ * the environment instead of leaving it floating over a plain circle. */
+export const drawLayeredArcadeSocket = (
+  graphics: Phaser.GameObjects.Graphics,
+  radius: number,
+  accent: number,
+  secondary = 0xff4fcf
+): void => {
+  graphics.fillStyle(0x000000, 0.42).fillEllipse(7, 10, radius * 2.1, radius * 0.76);
+  graphics.fillStyle(0x02060b, 0.94).fillCircle(0, 5, radius + 7);
+  graphics.fillStyle(0x08141f, 0.92).fillCircle(0, 0, radius + 2);
+  graphics.lineStyle(2, accent, 0.35).strokeCircle(0, 0, radius + 2);
+  const segments = 12;
+  for (let index = 0; index < segments; index += 1) {
+    const start = index / segments * ARCADE_TAU + 0.035;
+    const end = (index + 1) / segments * ARCADE_TAU - 0.035;
+    graphics.lineStyle(index % 2 ? 3 : 2, index % 2 ? accent : secondary, index % 2 ? 0.26 : 0.2);
+    graphics.beginPath();
+    graphics.arc(0, 0, radius - 8, start, end, false);
+    graphics.strokePath();
+    graphics.fillStyle(0x88a9b7, 0.66).fillCircle(Math.cos(start) * (radius - 3), Math.sin(start) * (radius - 3), 1.4);
+  }
+  graphics.lineStyle(1, 0xc9fbff, 0.16).beginPath();
+  graphics.arc(0, 0, radius - 15, Math.PI * 1.08, Math.PI * 1.86, false);
+  graphics.strokePath();
+};

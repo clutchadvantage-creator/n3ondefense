@@ -3,6 +3,16 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants.ts';
 import type { ArenaLayout, GeneratedObstacle, RectSpec } from '../types.ts';
 import { SeededRandom } from '../systems/SeededRandom.ts';
 import {
+  drawBeveledTechPlate,
+  drawHazardStripes,
+  drawPanelBolts,
+  drawVentSlats
+} from '../rendering/LayeredArtPrimitives.ts';
+import {
+  createEnvironmentDecalPlan,
+  createEnvironmentDecalText
+} from '../rendering/EnvironmentDecalLibrary.ts';
+import {
   NEON_CITY_VISUAL_THEME,
   createArenaDressingPlan,
   type ArenaDressingPlan
@@ -40,6 +50,8 @@ export interface ArenaVisualDiagnostics {
   independentAnimationLoops: 1;
   venueScreenCount: number;
   venueBannerCount: number;
+  environmentDecalCount: number;
+  ambientBatchCount: number;
   bakeTimeMs: number;
 }
 
@@ -49,25 +61,29 @@ export class ArenaVisualRenderer {
   readonly diagnostics: ArenaVisualDiagnostics;
   private readonly roots: Phaser.GameObjects.GameObject[] = [];
   private readonly tweens: Phaser.Tweens.Tween[] = [];
+  private readonly ambientPulseTargets: Phaser.GameObjects.GameObject[] = [];
 
   constructor(private readonly scene: Phaser.Scene, private readonly layout: ArenaLayout) {
     this.plan = createArenaDressingPlan(layout);
     const bakeTimeMs = this.drawBackdropAndBeachStadium();
-    this.diagnostics = {
-      staticLayer: 'cached-render-texture',
-      staticSourceObjectsAfterBake: 0,
-      liveAnimatedObjects: this.plan.animatedVenueLightCount,
-      independentAnimationLoops: 1,
-      venueScreenCount: this.plan.venueScreenCount,
-      venueBannerCount: this.plan.venueBannerCount,
-      bakeTimeMs
-    };
-    this.drawFloor();
     this.drawArchetypeMotif();
     this.drawContainmentPerimeter();
     this.drawWalls();
     this.drawObstacles();
     this.drawDistrictDressing();
+    const ambientBatchCount = this.createAmbientEnvironmentBatches();
+    this.beginAmbientPulse();
+    this.diagnostics = {
+      staticLayer: 'cached-render-texture',
+      staticSourceObjectsAfterBake: 0,
+      liveAnimatedObjects: this.ambientPulseTargets.length,
+      independentAnimationLoops: 1,
+      venueScreenCount: this.plan.venueScreenCount,
+      venueBannerCount: this.plan.venueBannerCount,
+      environmentDecalCount: this.plan.environmentDecalCount,
+      ambientBatchCount,
+      bakeTimeMs
+    };
   }
 
   destroy(): void {
@@ -93,6 +109,7 @@ export class ArenaVisualRenderer {
     graphics.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.drawCoastalApron(graphics, bounds, random);
     this.drawStadiumStructure(graphics, bounds, random);
+    this.drawFloorSurface(graphics);
     this.drawPalmTrees(graphics, bounds, random);
     this.drawVenueBanners(graphics, bounds, random);
     const screens = this.drawVenueScreens(graphics, bounds, random);
@@ -131,12 +148,51 @@ export class ArenaVisualRenderer {
     const leftBeachWidth = Math.max(6, Math.min(66, leftShore * 0.45));
     const rightBeachWidth = Math.max(6, Math.min(66, (WORLD_WIDTH - rightShore) * 0.45));
 
-    graphics.fillStyle(0x6f4a55, 0.94);
+    const leftWaterWidth = Math.max(0, leftShore - leftBeachWidth);
+    const rightWaterX = rightShore + rightBeachWidth;
+    const rightWaterWidth = Math.max(0, WORLD_WIDTH - rightWaterX);
+    // Layered depth bands and irregular highlights are baked into the stadium
+    // texture. They provide richer water without a per-wave update loop.
+    graphics.fillStyle(0x061d3c, 0.96).fillRect(0, 0, leftWaterWidth, WORLD_HEIGHT);
+    graphics.fillRect(rightWaterX, 0, rightWaterWidth, WORLD_HEIGHT);
+    graphics.fillStyle(0x0a3151, 0.5).fillRect(Math.max(0, leftWaterWidth * 0.42), 0, leftWaterWidth * 0.58, WORLD_HEIGHT);
+    graphics.fillRect(rightWaterX, 0, rightWaterWidth * 0.58, WORLD_HEIGHT);
+    graphics.fillStyle(0x16708c, 0.14).fillRect(Math.max(0, leftWaterWidth - 20), 0, 20, WORLD_HEIGHT);
+    graphics.fillRect(rightWaterX, 0, Math.min(20, rightWaterWidth), WORLD_HEIGHT);
+    for (let y = 12, wave = 0; y < WORLD_HEIGHT; y += 31, wave += 1) {
+      const drift = (wave % 4) * 4;
+      graphics.lineStyle(wave % 3 === 0 ? 2 : 1, wave % 2 ? 0x69e5f1 : 0x239db7, wave % 3 === 0 ? 0.18 : 0.1);
+      if (leftWaterWidth > 22) {
+        graphics.beginPath();
+        graphics.moveTo(Math.max(3, leftWaterWidth - 48 - drift), y);
+        graphics.lineTo(Math.max(6, leftWaterWidth - 28), y - 4);
+        graphics.lineTo(Math.max(9, leftWaterWidth - 9), y + 1);
+        graphics.strokePath();
+      }
+      if (rightWaterWidth > 22) {
+        graphics.beginPath();
+        graphics.moveTo(rightWaterX + 9, y + 1);
+        graphics.lineTo(rightWaterX + 28, y - 4);
+        graphics.lineTo(Math.min(WORLD_WIDTH - 3, rightWaterX + 48 + drift), y);
+        graphics.strokePath();
+      }
+    }
+
+    graphics.fillStyle(0x5d3d4b, 0.98);
     graphics.fillRect(Math.max(0, leftShore - leftBeachWidth), 0, leftBeachWidth, WORLD_HEIGHT);
     graphics.fillRect(rightShore, 0, rightBeachWidth, WORLD_HEIGHT);
-    graphics.fillStyle(0xd6a56f, 0.34);
+    graphics.fillStyle(0xd6a56f, 0.42);
     graphics.fillRect(Math.max(0, leftShore - leftBeachWidth * 0.72), 0, leftBeachWidth * 0.72, WORLD_HEIGHT);
     graphics.fillRect(rightShore + rightBeachWidth * 0.28, 0, rightBeachWidth * 0.72, WORLD_HEIGHT);
+    graphics.fillStyle(0xf1c883, 0.18);
+    graphics.fillRect(Math.max(0, leftShore - leftBeachWidth * 0.42), 0, leftBeachWidth * 0.34, WORLD_HEIGHT);
+    graphics.fillRect(rightShore + rightBeachWidth * 0.58, 0, rightBeachWidth * 0.34, WORLD_HEIGHT);
+    for (let y = 21; y < WORLD_HEIGHT; y += 43) {
+      const pebbleOffset = random.int(-5, 5);
+      graphics.fillStyle(y % 2 ? 0x2c2435 : 0xc18a68, 0.2);
+      graphics.fillEllipse(Math.max(2, leftShore - leftBeachWidth * 0.46 + pebbleOffset), y, 4, 2);
+      graphics.fillEllipse(Math.min(WORLD_WIDTH - 2, rightShore + rightBeachWidth * 0.48 - pebbleOffset), y + 12, 4, 2);
+    }
 
     // Boardwalk tiles make the shore/venue transition read as a promenade.
     const tileHeight = 42;
@@ -572,8 +628,8 @@ export class ArenaVisualRenderer {
 
   private drawVenueScreens(graphics: Phaser.GameObjects.Graphics, bounds: RectSpec, random: SeededRandom): VenueScreenSpec[] {
     const screens: VenueScreenSpec[] = [];
-    const screenWidth = Math.max(116, Math.min(172, bounds.w * 0.105));
-    const screenHeight = Math.max(28, Math.min(44, bounds.y * 0.34));
+    const screenWidth = Math.max(138, Math.min(198, bounds.w * 0.118));
+    const screenHeight = Math.max(34, Math.min(52, bounds.y * 0.4));
     const topCount = Math.ceil(this.plan.venueScreenCount / 2);
     const bottomCount = Math.floor(this.plan.venueScreenCount / 2);
     const fractionsFor = (count: number): readonly number[] => count >= 4 ? [0.12, 0.36, 0.64, 0.88] : [0.16, 0.5, 0.84];
@@ -593,18 +649,21 @@ export class ArenaVisualRenderer {
 
       // Cheap baked neon: a translucent outer plate, solid emissive core, and
       // one crisp frame. There are no filters, shadows, masks, or live updates.
-      graphics.fillStyle(advertisement.accent, 0.13);
-      graphics.fillRoundedRect(x - 4, y - 4, screenWidth + 8, screenHeight + 8, 5);
-      graphics.fillStyle(0x02060d, 1);
-      graphics.fillRoundedRect(x, y, screenWidth, screenHeight, 4);
-      graphics.fillStyle(0x071725, 1);
-      graphics.fillRoundedRect(x + 4, y + 4, screenWidth - 8, screenHeight - 8, 3);
-      graphics.lineStyle(2, advertisement.accent, 0.92);
-      graphics.strokeRoundedRect(x + 1, y + 1, screenWidth - 2, screenHeight - 2, 4);
+      graphics.fillStyle(advertisement.accent, 0.12).fillRoundedRect(x - 8, y - 7, screenWidth + 16, screenHeight + 14, 7);
+      drawBeveledTechPlate(graphics, x - 4, y - 4, screenWidth + 8, screenHeight + 8, {
+        face: 0x101b29, inset: 0x020811, edge: advertisement.accent,
+        side: 0x010309, highlight: 0xc8fbff, depth: 5
+      });
+      graphics.fillStyle(0x071725, 1).fillRoundedRect(x + 5, y + 5, screenWidth - 15, screenHeight - 15, 3);
+      graphics.lineStyle(1, advertisement.accent, 0.48).strokeRoundedRect(x + 6, y + 6, screenWidth - 17, screenHeight - 17, 3);
+      for (let scanY = y + 10; scanY < y + screenHeight - 9; scanY += 6) {
+        graphics.fillStyle(advertisement.accent, 0.035).fillRect(x + 9, scanY, screenWidth - 23, 1);
+      }
+      drawPanelBolts(graphics, x - 2, y - 2, screenWidth + 2, screenHeight + 2, 0x87aab9, 6);
       graphics.fillStyle(0x27394d, 1);
-      graphics.fillRoundedRect(x + 15, top ? y + screenHeight : y - 5, 7, 6, 2);
-      graphics.fillRoundedRect(x + screenWidth - 22, top ? y + screenHeight : y - 5, 7, 6, 2);
-      this.drawAdProductGlyph(graphics, advertisement.product, x + 22, y + screenHeight * 0.5, advertisement.accent);
+      graphics.fillRoundedRect(x + 15, top ? y + screenHeight + 2 : y - 8, 9, 8, 2);
+      graphics.fillRoundedRect(x + screenWidth - 25, top ? y + screenHeight + 2 : y - 8, 9, 8, 2);
+      this.drawAdProductGlyph(graphics, advertisement.product, x + 25, y + screenHeight * 0.5, advertisement.accent);
     }
     return screens;
   }
@@ -682,12 +741,12 @@ export class ArenaVisualRenderer {
     }
     for (const screen of screens) {
       labels.push(this.scene.make.text({
-        x: screen.x + 39,
-        y: screen.y + 7,
+        x: screen.x + 45,
+        y: screen.y + 8,
         text: screen.brand,
         style: {
           fontFamily: 'Orbitron, sans-serif',
-          fontSize: '9px',
+          fontSize: '10px',
           color: colorCss(screen.accent),
           fontStyle: 'bold',
           stroke: '#010308',
@@ -695,12 +754,12 @@ export class ArenaVisualRenderer {
         }
       }, false));
       labels.push(this.scene.make.text({
-        x: screen.x + 39,
-        y: screen.y + screen.height - 12,
+        x: screen.x + 45,
+        y: screen.y + screen.height - 15,
         text: screen.slogan,
         style: {
           fontFamily: 'Rajdhani, sans-serif',
-          fontSize: '7px',
+          fontSize: '8px',
           color: '#d9fbff',
           stroke: '#010308',
           strokeThickness: 2
@@ -728,22 +787,12 @@ export class ArenaVisualRenderer {
       index % 2 ? this.layout.theme.primary : this.layout.theme.secondary,
       0.58
     ).setStrokeStyle(1, 0xffffff, 0.32).setDepth(-2.6)));
-    if (beacons.length === 0) return;
-    this.tweens.push(this.scene.tweens.add({
-      targets: beacons,
-      alpha: { from: 0.28, to: 0.86 },
-      scale: { from: 0.82, to: 1.28 },
-      duration: 1350,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    }));
+    this.ambientPulseTargets.push(...beacons);
   }
 
-  private drawFloor(): void {
+  private drawFloorSurface(graphics: Phaser.GameObjects.Graphics): void {
     const { palette } = NEON_CITY_VISUAL_THEME;
     const bounds = this.layout.generation.bounds;
-    const graphics = this.keep(this.scene.add.graphics().setDepth(-2));
     graphics.fillStyle(palette.floor, 1);
     graphics.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
 
@@ -755,16 +804,35 @@ export class ArenaVisualRenderer {
       for (let x = bounds.x; x < bounds.x + bounds.w; x += panelW) {
         const w = Math.min(panelW, bounds.x + bounds.w - x);
         const h = Math.min(panelH, bounds.y + bounds.h - y);
-        graphics.fillStyle((row + column) % 3 === 0 ? palette.floorPanel : palette.floor, 0.72);
-        graphics.fillRect(x + 2, y + 2, Math.max(0, w - 4), Math.max(0, h - 4));
-        graphics.lineStyle(1, palette.floorSeam, 0.42);
-        graphics.strokeRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+        const alternate = (row + column) % 3 === 0;
+        const edge = (row + column) % 5 === 0 ? this.layout.theme.secondary : palette.floorSeam;
+        drawBeveledTechPlate(graphics, x + 2, y + 2, Math.max(8, w - 4), Math.max(8, h - 4), {
+          face: alternate ? 0x0c1926 : palette.floorPanel,
+          inset: alternate ? 0x09131f : palette.floor,
+          edge,
+          side: 0x02060c,
+          highlight: alternate ? 0x7bd4df : 0x477184,
+          depth: 5,
+          alpha: 0.86
+        });
+        if (w > 50 && h > 42) drawPanelBolts(graphics, x + 4, y + 4, w - 12, h - 12, 0x527384, 8);
+        if ((row * 7 + column * 11 + this.layout.seed) % 13 === 0 && w > 92 && h > 62) {
+          drawVentSlats(graphics, x + w * 0.62, y + h * 0.25, Math.min(44, w * 0.24), Math.min(28, h * 0.3), true, edge);
+        }
         if ((row + column) % this.plan.circuitStride === 0) {
           const accent = (row + column) % 2 ? this.layout.theme.primary : this.layout.theme.secondary;
-          graphics.lineStyle(1, accent, 0.13);
-          graphics.lineBetween(x + 18, y + h * 0.5, x + Math.min(w - 12, 70), y + h * 0.5);
-          graphics.fillStyle(accent, 0.22);
-          graphics.fillCircle(x + 14, y + h * 0.5, 2);
+          graphics.lineStyle(3, 0x01050a, 0.7);
+          graphics.lineBetween(x + 18, y + h * 0.5 + 2, x + Math.min(w - 12, 82), y + h * 0.5 + 2);
+          graphics.lineStyle(1.5, accent, 0.28);
+          graphics.lineBetween(x + 18, y + h * 0.5, x + Math.min(w - 12, 82), y + h * 0.5);
+          graphics.fillStyle(accent, 0.42).fillCircle(x + 14, y + h * 0.5, 2.5);
+          graphics.fillStyle(0xd8ffff, 0.5).fillCircle(x + 14, y + h * 0.5 - 0.5, 0.9);
+        }
+        if ((row + column * 3) % 11 === 0) {
+          // Baked scuffs keep the glossy plate treatment from reading sterile.
+          graphics.lineStyle(1, 0x76909c, 0.12);
+          graphics.lineBetween(x + w * 0.23, y + h * 0.72, x + w * 0.43, y + h * 0.66);
+          graphics.lineBetween(x + w * 0.31, y + h * 0.76, x + w * 0.49, y + h * 0.71);
         }
         column += 1;
       }
@@ -781,6 +849,18 @@ export class ArenaVisualRenderer {
       graphics.fillStyle(accent, 0.24);
       graphics.fillCircle(deco.x + 3, deco.y + deco.h * 0.5, 2);
     }
+
+    // Recessed maintenance channels visually divide the combat deck without
+    // becoming blockers or creating any additional runtime object.
+    const channelInset = 34;
+    graphics.lineStyle(5, 0x010409, 0.76).strokeRoundedRect(
+      bounds.x + channelInset, bounds.y + channelInset,
+      bounds.w - channelInset * 2, bounds.h - channelInset * 2, 10
+    );
+    graphics.lineStyle(1.5, this.layout.theme.primary, 0.22).strokeRoundedRect(
+      bounds.x + channelInset + 2, bounds.y + channelInset + 2,
+      bounds.w - channelInset * 2 - 4, bounds.h - channelInset * 2 - 4, 9
+    );
   }
 
   private drawArchetypeMotif(): void {
@@ -913,16 +993,15 @@ export class ArenaVisualRenderer {
   private drawWallModule(g: Phaser.GameObjects.Graphics, wall: RectSpec, index: number): void {
     const horizontal = wall.w >= wall.h;
     const accent = index % 3 === 0 ? this.layout.theme.secondary : this.layout.theme.primary;
-    g.fillStyle(NEON_CITY_VISUAL_THEME.palette.shadow, 0.82);
-    g.fillRect(wall.x + 7, wall.y + 8, wall.w, wall.h);
-    g.fillStyle(NEON_CITY_VISUAL_THEME.palette.wall, 1);
-    g.fillRect(wall.x, wall.y, wall.w, wall.h);
-    g.fillStyle(NEON_CITY_VISUAL_THEME.palette.wallInset, 0.96);
-    g.fillRect(wall.x + 5, wall.y + 5, Math.max(1, wall.w - 10), Math.max(1, wall.h - 10));
-    g.lineStyle(2, accent, 0.75);
-    g.strokeRect(wall.x + 1, wall.y + 1, Math.max(1, wall.w - 2), Math.max(1, wall.h - 2));
-    g.lineStyle(1, 0x8bdbe5, 0.18);
-    g.strokeRect(wall.x + 6, wall.y + 6, Math.max(1, wall.w - 12), Math.max(1, wall.h - 12));
+    drawBeveledTechPlate(g, wall.x, wall.y, wall.w, wall.h, {
+      face: NEON_CITY_VISUAL_THEME.palette.wall,
+      inset: NEON_CITY_VISUAL_THEME.palette.wallInset,
+      edge: accent,
+      side: 0x02050b,
+      highlight: 0x9beef5,
+      depth: Math.min(9, Math.min(wall.w, wall.h) * 0.16)
+    });
+    if (wall.w > 44 && wall.h > 28) drawPanelBolts(g, wall.x + 2, wall.y + 2, wall.w - 9, wall.h - 9, 0x6b8795, 7);
 
     const stride = this.plan.wallPanelStride;
     g.lineStyle(1, accent, 0.24 + this.plan.profile.wallDensity * 0.12);
@@ -937,9 +1016,21 @@ export class ArenaVisualRenderer {
     }
 
     if ((index * 17 + this.layout.seed) % 7 === 0) {
-      g.fillStyle(NEON_CITY_VISUAL_THEME.palette.warning, 0.38);
-      if (horizontal) g.fillRect(wall.x + 12, wall.y + wall.h - 5, Math.min(54, wall.w - 24), 2);
-      else g.fillRect(wall.x + wall.w - 5, wall.y + 12, 2, Math.min(54, wall.h - 24));
+      if (horizontal && wall.w > 48) {
+        drawHazardStripes(g, wall.x + 12, wall.y + wall.h - 8, Math.min(68, wall.w - 24), 5, NEON_CITY_VISUAL_THEME.palette.warning, 0.42, 7);
+      } else if (!horizontal && wall.h > 48) {
+        // Vertical surfaces use compact warning lamps to avoid rotating a
+        // dense stripe mask over narrow collision geometry.
+        g.fillStyle(NEON_CITY_VISUAL_THEME.palette.warning, 0.58);
+        g.fillRoundedRect(wall.x + wall.w - 7, wall.y + 12, 3, Math.min(62, wall.h - 24), 1);
+      }
+    }
+    if ((index + this.layout.seed) % 9 === 0) {
+      if (horizontal && wall.w > 130 && wall.h > 34) {
+        drawVentSlats(g, wall.x + wall.w * 0.62, wall.y + 9, Math.min(58, wall.w * 0.22), Math.max(12, wall.h - 22), true, accent);
+      } else if (!horizontal && wall.h > 130 && wall.w > 34) {
+        drawVentSlats(g, wall.x + 9, wall.y + wall.h * 0.62, Math.max(12, wall.w - 22), Math.min(58, wall.h * 0.22), false, accent);
+      }
     }
   }
 
@@ -948,16 +1039,8 @@ export class ArenaVisualRenderer {
     const node = this.keep(this.scene.add.circle(centerX(wall), centerY(wall), 4, color, 0.56)
       .setStrokeStyle(1, 0xffffff, 0.42)
       .setDepth(2.2));
-    const tween = this.scene.tweens.add({
-      targets: node,
-      alpha: { from: 0.32, to: 0.9 },
-      scale: { from: 0.8, to: 1.25 },
-      duration: 1100 + (index % 5) * 170,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    });
-    this.tweens.push(tween);
+    node.setData('pulsePhase', index % 5);
+    this.ambientPulseTargets.push(node);
   }
 
   private drawObstacles(): void {
@@ -1020,7 +1103,9 @@ export class ArenaVisualRenderer {
   private drawDistrictDressing(): void {
     const bounds = this.layout.generation.bounds;
     const random = new SeededRandom(this.plan.landmarkSeed);
-    const labelRoot = this.keep(this.scene.add.container(0, 0).setDepth(1.6));
+    // Structural labels and decals sit just above the baked wall faces so faded
+    // paint remains visible, but stay well below actors, hazards, and pickups.
+    const labelRoot = this.keep(this.scene.add.container(0, 0).setDepth(2.25));
     const title = this.scene.add.text(bounds.x + 56, bounds.y + 52, `N3ON // ${this.plan.districtLabel}`, {
       fontFamily: 'Orbitron, sans-serif',
       fontSize: '16px',
@@ -1051,5 +1136,70 @@ export class ArenaVisualRenderer {
       }).setOrigin(0.5).setAlpha(0.72).setRotation(horizontal ? 0 : Math.PI * 0.5);
       labelRoot.add(sign);
     }
+
+    const decalPlan = createEnvironmentDecalPlan(
+      'arena', this.plan.decalSeed, this.layout.walls, this.plan.environmentDecalCount
+    );
+    for (const decal of decalPlan.decals) labelRoot.add(createEnvironmentDecalText(this.scene, decal));
+  }
+
+  /**
+   * Three Graphics batches cover all live environment ambience. Their alpha is
+   * driven by the same tween as wall and venue indicators, so environmental
+   * polish remains one bounded animation loop regardless of arena complexity.
+   */
+  private createAmbientEnvironmentBatches(): number {
+    const bounds = this.layout.generation.bounds;
+    const batches: Phaser.GameObjects.Graphics[] = [];
+
+    const water = this.keep(this.scene.add.graphics().setDepth(-3.8).setBlendMode(Phaser.BlendModes.ADD));
+    for (let index = 0; index < 12; index += 1) {
+      const y = 26 + index * Math.max(34, (WORLD_HEIGHT - 52) / 12);
+      water.lineStyle(index % 3 === 0 ? 2 : 1, index % 2 ? 0x53dcea : 0x278eae, 0.16);
+      const leftEnd = Math.max(8, bounds.x * 0.24);
+      const rightStart = Math.min(WORLD_WIDTH - 8, bounds.x + bounds.w + (WORLD_WIDTH - bounds.x - bounds.w) * 0.76);
+      water.beginPath();
+      water.moveTo(4, y);
+      water.lineTo(leftEnd * 0.55, y - 4);
+      water.lineTo(leftEnd, y + 1);
+      water.strokePath();
+      water.beginPath();
+      water.moveTo(rightStart, y + 1);
+      water.lineTo((rightStart + WORLD_WIDTH) * 0.5, y - 4);
+      water.lineTo(WORLD_WIDTH - 4, y);
+      water.strokePath();
+    }
+    batches.push(water);
+
+    const venue = this.keep(this.scene.add.graphics().setDepth(-2.55).setBlendMode(Phaser.BlendModes.ADD));
+    for (let index = 0; index < 10; index += 1) {
+      const x = bounds.x + 36 + index * Math.max(46, (bounds.w - 72) / 10);
+      const color = index % 2 ? this.layout.theme.primary : this.layout.theme.secondary;
+      venue.fillStyle(color, 0.16).fillRoundedRect(x, bounds.y - 7, 24, 2, 1);
+      venue.fillRoundedRect(x, bounds.y + bounds.h + 5, 24, 2, 1);
+    }
+    batches.push(venue);
+
+    const deck = this.keep(this.scene.add.graphics().setDepth(-0.8).setBlendMode(Phaser.BlendModes.ADD));
+    for (const site of this.layout.bombSites) {
+      deck.lineStyle(2, this.layout.theme.secondary, 0.13);
+      deck.strokeCircle(site.x, site.y, 116);
+    }
+    batches.push(deck);
+
+    this.ambientPulseTargets.push(...batches);
+    return batches.length;
+  }
+
+  private beginAmbientPulse(): void {
+    if (this.ambientPulseTargets.length === 0) return;
+    this.tweens.push(this.scene.tweens.add({
+      targets: this.ambientPulseTargets,
+      alpha: { from: 0.3, to: 0.86 },
+      duration: 1450,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    }));
   }
 }

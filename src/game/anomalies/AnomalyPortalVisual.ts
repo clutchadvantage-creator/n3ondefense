@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { drawMechanicalRivets } from '../rendering/LayeredArtPrimitives.ts';
 
 interface EssenceWisp {
   root: Phaser.GameObjects.Container;
@@ -14,6 +15,7 @@ interface EssenceWisp {
 /** Allocation-bounded shared presentation for charging anomalies and portals. */
 export class AnomalyPortalVisual {
   readonly root: Phaser.GameObjects.Container;
+  private readonly anchor: Phaser.GameObjects.Graphics;
   private readonly floorGlow: Phaser.GameObjects.Ellipse;
   private readonly outerShell: Phaser.GameObjects.Arc;
   private readonly innerShell: Phaser.GameObjects.Arc;
@@ -33,6 +35,18 @@ export class AnomalyPortalVisual {
   private destroyed = false;
 
   constructor(private readonly scene: Phaser.Scene, readonly x: number, readonly y: number, private readonly particlesEnabled: boolean) {
+    this.anchor = scene.add.graphics();
+    const anchorPoints = Array.from({ length: 8 }, (_, index) => {
+      const angle = -Math.PI / 8 + index * Math.PI / 4;
+      return { x: Math.cos(angle) * 67, y: 14 + Math.sin(angle) * 31 };
+    });
+    this.anchor.fillStyle(0x000000, 0.5).fillEllipse(7, 23, 148, 48);
+    this.anchor.fillStyle(0x02060c, 0.98).fillPoints(anchorPoints.map((point) => ({ x: point.x + 5, y: point.y + 7 })), true);
+    this.anchor.fillStyle(0x0a1723, 0.96).fillPoints(anchorPoints, true);
+    this.anchor.lineStyle(2, 0x4deeff, 0.42).strokePoints(anchorPoints, true);
+    this.anchor.fillStyle(0x03101b, 0.94).fillEllipse(0, 12, 108, 31);
+    this.anchor.lineStyle(2, 0xff59d6, 0.36).strokeEllipse(0, 12, 108, 31);
+    drawMechanicalRivets(this.anchor, anchorPoints.map((point) => ({ x: point.x * 0.86, y: 14 + (point.y - 14) * 0.78 })), 0x9dc5cf, 0x010207, 1.4);
     this.floorGlow = scene.add.ellipse(0, 12, 118, 48, 0x4deeff, 0.1)
       .setStrokeStyle(2, 0x66f7ff, 0.24).setBlendMode(Phaser.BlendModes.ADD);
     this.outerShell = scene.add.circle(0, 0, 48, 0x60efff, 0.055)
@@ -50,7 +64,7 @@ export class AnomalyPortalVisual {
     this.shockwave = scene.add.circle(0, 0, 18, 0xffffff, 0)
       .setStrokeStyle(5, 0xc8ffff, 1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
     this.root = scene.add.container(x, y, [
-      this.floorGlow, this.portalShadow, this.portalVoid, this.portalEnergy,
+      this.anchor, this.floorGlow, this.portalShadow, this.portalVoid, this.portalEnergy,
       this.outerShell, this.innerShell, this.core, this.energyLines, this.shockwave
     ]).setDepth(24);
 

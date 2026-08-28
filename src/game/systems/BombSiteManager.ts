@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { ArenaTheme, BombSiteRuntime, ObjectiveMode } from '../types';
 import { BombSiteState } from '../types';
+import { drawMechanicalRivets } from '../rendering/LayeredArtPrimitives.ts';
 
 interface ArmedSiteEffect {
   electricity: Phaser.GameObjects.Graphics;
@@ -129,8 +130,11 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
       effect.leftTip.setPosition(-58, 5 - mastHeight).setAlpha(destroyed ? 0 : 0.35 + proximity * 0.65);
       effect.rightTip.setPosition(58, 5 - mastHeight).setAlpha(destroyed ? 0 : 0.35 + proximity * 0.65);
       effect.rotor.rotation = now * 0.00055 * activitySpeed + effect.phase;
+      effect.rotor.setScale(1 + Math.sin(now * 0.0028 + effect.phase) * 0.025 + (charged ? 0.045 : 0));
       effect.sweep.rotation = -now * 0.00028 * activitySpeed + effect.phase;
+      effect.sweep.setAlpha(destroyed ? 0.08 : (locked ? 0.34 : 0.62) + (charged ? 0.2 : 0));
       effect.bomb.rotation = Math.sin(now * 0.0018 + effect.phase) * 0.08;
+      effect.bomb.setY(charged ? -3 + Math.sin(now * 0.0042 + effect.phase) * 2.2 : 0);
       effect.coreLight.setRadius(5 + Math.sin(now * 0.0034 + effect.phase) * 1.2 + proximity * 1.4);
       effect.coreLight.setAlpha(destroyed ? 0.08 : 0.48 + proximity * 0.45);
       effect.statusRing.rotation = now * 0.00022 * activitySpeed + effect.phase;
@@ -327,22 +331,50 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
       const angle = -Math.PI / 8 + pointIndex * Math.PI / 4;
       return { x: Math.cos(angle) * 91, y: Math.sin(angle) * 91 };
     });
-    platform.fillStyle(0x030810, 0.82);
+    const undersidePoints = basePoints.map((point) => ({ x: point.x + 7, y: point.y + 10 }));
+    const insetPoints = basePoints.map((point) => ({ x: point.x * 0.86, y: point.y * 0.86 - 2 }));
+    platform.fillStyle(0x000000, 0.46).fillEllipse(8, 13, 205, 76);
+    platform.fillStyle(0x01040a, 0.98).fillPoints(undersidePoints, true);
+    platform.lineStyle(2, 0x142d3b, 0.78).strokePoints(undersidePoints, true);
+    platform.fillStyle(0x0b1722, 1);
     platform.fillPoints(basePoints, true);
-    platform.lineStyle(2, color, 0.46);
+    platform.lineStyle(3, color, 0.58);
     platform.strokePoints(basePoints, true);
-    platform.lineStyle(1, 0x8deef7, 0.22);
+    platform.fillStyle(0x06101a, 1).fillPoints(insetPoints, true);
+    platform.lineStyle(1, 0xc5fbff, 0.24).strokePoints(insetPoints, true);
+    platform.lineStyle(1, 0x8deef7, 0.3);
     platform.strokeCircle(0, 0, 72);
     platform.strokeCircle(0, 0, 53);
-    platform.lineStyle(2, color, 0.34);
+    platform.lineStyle(2, color, 0.42);
     for (let segment = 0; segment < 8; segment += 1) {
       const angle = segment * Math.PI / 4;
       platform.lineBetween(Math.cos(angle) * 58, Math.sin(angle) * 58, Math.cos(angle) * 84, Math.sin(angle) * 84);
+      const next = angle + Math.PI / 4;
+      const innerRadius = 62;
+      const outerRadius = 83;
+      platform.fillStyle(segment % 2 ? 0x102331 : 0x0d1c28, 0.94).fillPoints([
+        { x: Math.cos(angle + 0.08) * innerRadius, y: Math.sin(angle + 0.08) * innerRadius },
+        { x: Math.cos(next - 0.08) * innerRadius, y: Math.sin(next - 0.08) * innerRadius },
+        { x: Math.cos(next - 0.08) * outerRadius, y: Math.sin(next - 0.08) * outerRadius },
+        { x: Math.cos(angle + 0.08) * outerRadius, y: Math.sin(angle + 0.08) * outerRadius }
+      ], true);
+      platform.lineStyle(1, segment % 2 ? color : 0x6b8c9a, segment % 2 ? 0.36 : 0.24);
+      platform.lineBetween(Math.cos(angle + 0.08) * innerRadius, Math.sin(angle + 0.08) * innerRadius,
+        Math.cos(angle + 0.08) * outerRadius, Math.sin(angle + 0.08) * outerRadius);
     }
-    platform.fillStyle(0x07131d, 0.95);
+    drawMechanicalRivets(platform, Array.from({ length: 8 }, (_, rivetIndex) => {
+      const angle = rivetIndex * Math.PI / 4;
+      return { x: Math.cos(angle) * 76, y: Math.sin(angle) * 76 };
+    }), 0xa6c6d2, 0x010308, 1.6);
+    platform.fillStyle(0x02070d, 1).fillCircle(0, 2, 37);
+    platform.lineStyle(3, 0x172d3b, 0.92).strokeCircle(0, 2, 37);
+    platform.fillStyle(0x07131d, 0.98);
     platform.fillCircle(0, 0, 26);
     platform.lineStyle(2, color, 0.58);
     platform.strokeCircle(0, 0, 26);
+    platform.lineStyle(1, 0xd8ffff, 0.28).beginPath();
+    platform.arc(0, 0, 87, Math.PI * 1.08, Math.PI * 1.84, false);
+    platform.strokePath();
 
     const halo = this.scene.add.circle(0, 0, 60, color, 0.04).setStrokeStyle(1, color, 0.28);
     const statusRing = this.scene.add.circle(0, 0, 45, color, 0.018).setStrokeStyle(2, color, 0.46);
