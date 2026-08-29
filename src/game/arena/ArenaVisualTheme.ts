@@ -82,7 +82,9 @@ export const NEON_CITY_VISUAL_THEME: ArenaVisualTheme = {
   maximumPalmTrees: 10,
   maximumVenueBanners: 14,
   maximumVenueScreens: 8,
-  maximumSpectatorLights: 156,
+  // Spectators are baked into the single stadium render texture, so this can
+  // sell a busy event venue without increasing live-object or update counts.
+  maximumSpectatorLights: 320,
   maximumAnimatedVenueLights: 6,
   maximumEnvironmentDecals: 9,
   maximumAmbientBatches: 3
@@ -149,7 +151,7 @@ export function createArenaDressingPlan(layout: Pick<ArenaLayout, 'seed' | 'temp
     palmTreeCount: random.int(8, NEON_CITY_VISUAL_THEME.maximumPalmTrees),
     venueBannerCount: random.int(10, NEON_CITY_VISUAL_THEME.maximumVenueBanners),
     venueScreenCount: random.int(6, NEON_CITY_VISUAL_THEME.maximumVenueScreens),
-    spectatorLightCount: random.int(124, NEON_CITY_VISUAL_THEME.maximumSpectatorLights),
+    spectatorLightCount: random.int(260, NEON_CITY_VISUAL_THEME.maximumSpectatorLights),
     animatedVenueLightCount: NEON_CITY_VISUAL_THEME.maximumAnimatedVenueLights,
     environmentDecalCount: random.int(6, NEON_CITY_VISUAL_THEME.maximumEnvironmentDecals)
   };

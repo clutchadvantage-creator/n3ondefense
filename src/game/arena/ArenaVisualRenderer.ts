@@ -10,7 +10,7 @@ import {
 } from '../rendering/LayeredArtPrimitives.ts';
 import {
   createEnvironmentDecalPlan,
-  createEnvironmentDecalText
+  createEnvironmentGraffitiArt
 } from '../rendering/EnvironmentDecalLibrary.ts';
 import {
   NEON_CITY_VISUAL_THEME,
@@ -178,29 +178,42 @@ export class ArenaVisualRenderer {
       }
     }
 
-    graphics.fillStyle(0x5d3d4b, 0.98);
+    // Organic sand occupies most of the shore band. Pale granular variation
+    // replaces the old mauve strip that read as more promenade decking.
+    graphics.fillStyle(0xd8b77d, 0.98);
     graphics.fillRect(Math.max(0, leftShore - leftBeachWidth), 0, leftBeachWidth, WORLD_HEIGHT);
     graphics.fillRect(rightShore, 0, rightBeachWidth, WORLD_HEIGHT);
-    graphics.fillStyle(0xd6a56f, 0.42);
-    graphics.fillRect(Math.max(0, leftShore - leftBeachWidth * 0.72), 0, leftBeachWidth * 0.72, WORLD_HEIGHT);
-    graphics.fillRect(rightShore + rightBeachWidth * 0.28, 0, rightBeachWidth * 0.72, WORLD_HEIGHT);
-    graphics.fillStyle(0xf1c883, 0.18);
-    graphics.fillRect(Math.max(0, leftShore - leftBeachWidth * 0.42), 0, leftBeachWidth * 0.34, WORLD_HEIGHT);
-    graphics.fillRect(rightShore + rightBeachWidth * 0.58, 0, rightBeachWidth * 0.34, WORLD_HEIGHT);
-    for (let y = 21; y < WORLD_HEIGHT; y += 43) {
-      const pebbleOffset = random.int(-5, 5);
-      graphics.fillStyle(y % 2 ? 0x2c2435 : 0xc18a68, 0.2);
-      graphics.fillEllipse(Math.max(2, leftShore - leftBeachWidth * 0.46 + pebbleOffset), y, 4, 2);
-      graphics.fillEllipse(Math.min(WORLD_WIDTH - 2, rightShore + rightBeachWidth * 0.48 - pebbleOffset), y + 12, 4, 2);
+    graphics.fillStyle(0xf2d49a, 0.32);
+    graphics.fillRect(Math.max(0, leftShore - leftBeachWidth * 0.82), 0, leftBeachWidth * 0.58, WORLD_HEIGHT);
+    graphics.fillRect(rightShore + rightBeachWidth * 0.24, 0, rightBeachWidth * 0.58, WORLD_HEIGHT);
+    for (let y = 9; y < WORLD_HEIGHT; y += 19) {
+      for (let grain = 0; grain < 3; grain += 1) {
+        const leftX = leftShore - random.float(leftBeachWidth * 0.24, leftBeachWidth * 0.94);
+        const rightX = rightShore + random.float(rightBeachWidth * 0.06, rightBeachWidth * 0.76);
+        const grainColor = random.pick([0xffe5ad, 0xe5c28a, 0xc99c69, 0xfff0c3]);
+        graphics.fillStyle(grainColor, random.float(0.22, 0.48));
+        graphics.fillCircle(Math.max(1, leftX), y + random.int(-7, 7), random.float(0.55, 1.35));
+        graphics.fillCircle(Math.min(WORLD_WIDTH - 1, rightX), y + random.int(-7, 7), random.float(0.55, 1.35));
+      }
     }
 
-    // Boardwalk tiles make the shore/venue transition read as a promenade.
+    // A narrow, deliberately manufactured promenade remains next to the venue
+    // while leaving most of the shore visibly granular and organic.
+    const leftPromenadeWidth = Math.max(5, Math.min(16, leftBeachWidth * 0.24));
+    const rightPromenadeWidth = Math.max(5, Math.min(16, rightBeachWidth * 0.24));
+    const leftPromenadeX = leftShore - leftPromenadeWidth;
+    const rightPromenadeX = rightShore;
+    graphics.fillStyle(0x21192b, 0.98);
+    graphics.fillRect(leftPromenadeX, 0, leftPromenadeWidth, WORLD_HEIGHT);
+    graphics.fillRect(rightPromenadeX, 0, rightPromenadeWidth, WORLD_HEIGHT);
     const tileHeight = 42;
     for (let y = 0, tile = 0; y < WORLD_HEIGHT; y += tileHeight, tile += 1) {
-      const inset = tile % 2 === 0 ? 2 : 7;
-      graphics.fillStyle(tile % 2 === 0 ? 0x412c42 : 0x34253b, 0.72);
-      graphics.fillRoundedRect(Math.max(0, leftShore - leftBeachWidth + inset), y + 3, Math.max(3, leftBeachWidth - inset - 3), tileHeight - 7, 3);
-      graphics.fillRoundedRect(rightShore + 3, y + 3, Math.max(3, rightBeachWidth - inset - 3), tileHeight - 7, 3);
+      graphics.fillStyle(tile % 2 === 0 ? 0x49334d : 0x34253c, 0.92);
+      graphics.fillRoundedRect(leftPromenadeX + 2, y + 2, Math.max(2, leftPromenadeWidth - 4), tileHeight - 5, 2);
+      graphics.fillRoundedRect(rightPromenadeX + 2, y + 2, Math.max(2, rightPromenadeWidth - 4), tileHeight - 5, 2);
+      graphics.lineStyle(1, tile % 2 ? this.layout.theme.primary : this.layout.theme.secondary, 0.22);
+      graphics.lineBetween(leftPromenadeX + 2, y + tileHeight - 2, leftShore - 2, y + tileHeight - 2);
+      graphics.lineBetween(rightPromenadeX + 2, y + tileHeight - 2, rightPromenadeX + rightPromenadeWidth - 2, y + tileHeight - 2);
     }
 
     // Small foam patches suggest moving surf without any repeated long lines.
@@ -341,10 +354,13 @@ export class ArenaVisualRenderer {
         graphics.fillStyle(tierAccent, 0.84);
         graphics.fillRoundedRect(x + innerInset + 6, rowInnerY - 0.75, Math.max(3, w - innerInset * 2 - 12), 1.5, 1);
         const seatY = (rowOuterY + rowInnerY) * 0.5;
-        for (let seatX = x + 15; seatX < x + w - 12 && seatBudget.remaining > 0; seatX += 16) {
+        for (let seatX = x + 12; seatX < x + w - 9 && seatBudget.remaining > 0; seatX += 11) {
           const color = random.pick([0x45efff, 0xff4fcf, 0xffc857, 0x8affbd]);
-          graphics.fillStyle(color, random.float(0.42, 0.82));
-          graphics.fillRoundedRect(seatX, seatY - 2, 8, 4, 1);
+          const alpha = random.float(0.5, 0.9);
+          // Two tiny baked shapes read as a spectator head and shoulders rather
+          // than an isolated seat light, at zero live-object cost.
+          graphics.fillStyle(color, alpha).fillCircle(seatX + 2.5, seatY - 2.5, 1.6);
+          graphics.fillStyle(color, alpha * 0.72).fillRoundedRect(seatX, seatY, 5, 3, 1);
           seatBudget.remaining -= 1;
         }
       }
@@ -427,9 +443,11 @@ export class ArenaVisualRenderer {
         graphics.fillStyle(tierAccent, 0.82);
         graphics.fillRoundedRect(rowInnerX - 0.75, y + innerInset + 6, 1.5, Math.max(3, h - innerInset * 2 - 12), 1);
         const seatX = (rowOuterX + rowInnerX) * 0.5;
-        for (let seatY = y + 15; seatY < y + h - 12 && seatBudget.remaining > 0; seatY += 16) {
-          graphics.fillStyle(random.pick([0x45efff, 0xff4fcf, 0xffc857, 0x8affbd]), random.float(0.4, 0.78));
-          graphics.fillRoundedRect(seatX - 2, seatY, 4, 8, 1);
+        for (let seatY = y + 12; seatY < y + h - 9 && seatBudget.remaining > 0; seatY += 11) {
+          const color = random.pick([0x45efff, 0xff4fcf, 0xffc857, 0x8affbd]);
+          const alpha = random.float(0.48, 0.86);
+          graphics.fillStyle(color, alpha).fillCircle(seatX - 2.5, seatY + 2.5, 1.6);
+          graphics.fillStyle(color, alpha * 0.72).fillRoundedRect(seatX, seatY, 3, 5, 1);
           seatBudget.remaining -= 1;
         }
       }
@@ -993,24 +1011,51 @@ export class ArenaVisualRenderer {
   private drawWallModule(g: Phaser.GameObjects.Graphics, wall: RectSpec, index: number): void {
     const horizontal = wall.w >= wall.h;
     const accent = index % 3 === 0 ? this.layout.theme.secondary : this.layout.theme.primary;
+    const wallDepth = Math.max(6, Math.min(12, Math.min(wall.w, wall.h) * 0.3));
+    // A grounded plinth and offset lower plane give even thin topology pieces
+    // an unmistakably solid footprint before the detailed face is drawn.
+    g.fillStyle(0x000000, 0.52).fillRoundedRect(wall.x + 5, wall.y + 7, wall.w, wall.h, 5);
+    g.fillStyle(0x02060d, 1).fillRoundedRect(wall.x + 2, wall.y + 3, wall.w - 2, wall.h - 2, 4);
     drawBeveledTechPlate(g, wall.x, wall.y, wall.w, wall.h, {
       face: NEON_CITY_VISUAL_THEME.palette.wall,
       inset: NEON_CITY_VISUAL_THEME.palette.wallInset,
       edge: accent,
       side: 0x02050b,
       highlight: 0x9beef5,
-      depth: Math.min(9, Math.min(wall.w, wall.h) * 0.16)
+      depth: wallDepth
     });
+    // Visible top/side planes stay inside the collision footprint, preserving
+    // truthful route boundaries while making the barricade feel constructed.
+    g.fillStyle(0x243447, 0.86);
+    if (horizontal) {
+      g.fillPoints([
+        { x: wall.x + 4, y: wall.y + 3 }, { x: wall.x + wall.w - wallDepth - 3, y: wall.y + 3 },
+        { x: wall.x + wall.w - wallDepth - 8, y: wall.y + 8 }, { x: wall.x + 9, y: wall.y + 8 }
+      ], true);
+      g.fillStyle(0x01040a, 0.94).fillRoundedRect(wall.x + 7, wall.y + wall.h - 7, wall.w - wallDepth - 12, 4, 1);
+      g.fillStyle(accent, 0.62).fillRoundedRect(wall.x + 10, wall.y + wall.h - 6, wall.w - wallDepth - 18, 1.5, 1);
+    } else {
+      g.fillPoints([
+        { x: wall.x + 3, y: wall.y + 4 }, { x: wall.x + 8, y: wall.y + 9 },
+        { x: wall.x + 8, y: wall.y + wall.h - wallDepth - 8 }, { x: wall.x + 3, y: wall.y + wall.h - wallDepth - 3 }
+      ], true);
+      g.fillStyle(0x01040a, 0.94).fillRoundedRect(wall.x + wall.w - 7, wall.y + 7, 4, wall.h - wallDepth - 12, 1);
+      g.fillStyle(accent, 0.62).fillRoundedRect(wall.x + wall.w - 6, wall.y + 10, 1.5, wall.h - wallDepth - 18, 1);
+    }
     if (wall.w > 44 && wall.h > 28) drawPanelBolts(g, wall.x + 2, wall.y + 2, wall.w - 9, wall.h - 9, 0x6b8795, 7);
 
     const stride = this.plan.wallPanelStride;
-    g.lineStyle(1, accent, 0.24 + this.plan.profile.wallDensity * 0.12);
+    g.lineStyle(3, 0x01040a, 0.72);
     if (horizontal) {
       const railY = wall.y + Math.min(wall.h - 4, Math.max(4, wall.h * 0.28));
+      g.lineBetween(wall.x + 8, railY, wall.x + wall.w - wallDepth - 8, railY);
+      g.lineStyle(1.4, accent, 0.42 + this.plan.profile.wallDensity * 0.14);
       g.lineBetween(wall.x + 8, railY, wall.x + wall.w - 8, railY);
       for (let x = wall.x + stride; x < wall.x + wall.w - 8; x += stride) g.lineBetween(x, wall.y + 5, x, wall.y + wall.h - 5);
     } else {
       const railX = wall.x + Math.min(wall.w - 4, Math.max(4, wall.w * 0.28));
+      g.lineBetween(railX, wall.y + 8, railX, wall.y + wall.h - wallDepth - 8);
+      g.lineStyle(1.4, accent, 0.42 + this.plan.profile.wallDensity * 0.14);
       g.lineBetween(railX, wall.y + 8, railX, wall.y + wall.h - 8);
       for (let y = wall.y + stride; y < wall.y + wall.h - 8; y += stride) g.lineBetween(wall.x + 5, y, wall.x + wall.w - 5, y);
     }
@@ -1057,20 +1102,54 @@ export class ArenaVisualRenderer {
     const ry = obstacle.h * 0.5;
     const radius = Math.min(rx, ry);
     const accent = index % 2 === 0 ? this.layout.theme.primary : this.layout.theme.secondary;
-    g.fillStyle(NEON_CITY_VISUAL_THEME.palette.shadow, 0.82);
-    this.traceObstacle(g, obstacle, x + 6, y + 7, rx, ry, true, false);
-    g.fillStyle(NEON_CITY_VISUAL_THEME.palette.wall, 0.98);
-    g.lineStyle(2, accent, 0.9);
+    const compact = Math.max(obstacle.w, obstacle.h) <= 60 || Math.min(obstacle.w, obstacle.h) <= 30;
+    const warning = NEON_CITY_VISUAL_THEME.palette.warning;
+    const faceAccent = compact ? warning : accent;
+    const rectangular = ['square', 'rectangle', 'crate', 'machinery', 'broken-wall', 'small-barricade', 'central-structure'].includes(obstacle.kind);
+
+    // Wide contact shadow, dark extruded footprint, then a bright solid face:
+    // these three reads make even a 26px blocker obvious at dash speed.
+    g.fillStyle(0x000000, 0.56).fillEllipse(x + 5, y + ry + 7, obstacle.w * 1.16, Math.max(9, obstacle.h * 0.34));
+    g.fillStyle(0x02050b, 0.98);
+    this.traceObstacle(g, obstacle, x + 7, y + 8, rx, ry, true, false);
+    g.fillStyle(compact ? 0x5a4311 : 0x162535, 1);
+    g.lineStyle(compact ? 3 : 2.5, faceAccent, compact ? 1 : 0.94);
     this.traceObstacle(g, obstacle, x, y, rx, ry, true, true);
-    g.lineStyle(1, 0xa9f8ff, 0.22);
+
+    // Bright top cap and bottom anchoring band add readable 2.5D volume.
+    g.fillStyle(compact ? 0xffcc55 : 0x33495b, compact ? 0.44 : 0.72);
+    g.fillPoints([
+      { x: x - rx * 0.72, y: y - ry * 0.72 }, { x: x + rx * 0.66, y: y - ry * 0.72 },
+      { x: x + rx * 0.46, y: y - ry * 0.38 }, { x: x - rx * 0.54, y: y - ry * 0.38 }
+    ], true);
+    g.lineStyle(3, 0x01040a, 0.9).lineBetween(x - rx * 0.62, y + ry * 0.62, x + rx * 0.62, y + ry * 0.62);
+    g.lineStyle(1.5, faceAccent, 0.86).lineBetween(x - rx * 0.55, y + ry * 0.54, x + rx * 0.55, y + ry * 0.54);
+
+    if (compact && rectangular && obstacle.w >= 24 && obstacle.h >= 18) {
+      const bandHeight = Math.max(6, Math.min(12, obstacle.h * 0.28));
+      drawHazardStripes(g, x - rx + 4, y - bandHeight * 0.5, Math.max(8, obstacle.w - 8), bandHeight, warning, 0.86, 5);
+    }
+
+    g.lineStyle(1.5, 0xd8fbff, compact ? 0.58 : 0.34);
     if (obstacle.kind === 'circle' || obstacle.kind === 'energy-column') {
-      g.strokeCircle(x, y, Math.max(3, radius - 7));
-      g.fillStyle(accent, obstacle.kind === 'energy-column' ? 0.18 : 0.08);
-      g.fillCircle(x, y, Math.max(3, radius * 0.38));
+      g.strokeCircle(x, y, Math.max(3, radius - 6));
+      g.fillStyle(faceAccent, obstacle.kind === 'energy-column' || compact ? 0.62 : 0.3);
+      g.fillCircle(x, y, Math.max(4, radius * 0.42));
+      g.fillStyle(0x071018, 0.88).fillCircle(x, y, Math.max(2, radius * 0.2));
+      for (let spoke = 0; spoke < 6; spoke += 1) {
+        const angle = spoke * Math.PI / 3;
+        g.lineStyle(2, spoke % 2 ? warning : accent, 0.76);
+        g.lineBetween(x + Math.cos(angle) * radius * 0.5, y + Math.sin(angle) * radius * 0.5,
+          x + Math.cos(angle) * radius * 0.82, y + Math.sin(angle) * radius * 0.82);
+      }
     } else {
       g.strokeRect(x - rx + 7, y - ry + 7, Math.max(1, obstacle.w - 14), Math.max(1, obstacle.h - 14));
-      g.lineBetween(x - rx + 10, y, x + rx - 10, y);
+      if (!rectangular) {
+        g.fillStyle(warning, compact ? 0.82 : 0.5);
+        g.fillPoints([{ x, y: y - 6 }, { x: x + 6, y }, { x, y: y + 6 }, { x: x - 6, y }], true);
+      }
     }
+    if (obstacle.w >= 32 && obstacle.h >= 26) drawPanelBolts(g, x - rx + 2, y - ry + 2, obstacle.w - 4, obstacle.h - 4, 0xe7faff, 6);
   }
 
   private traceObstacle(g: Phaser.GameObjects.Graphics, obstacle: GeneratedObstacle, x: number, y: number, rx: number, ry: number, fill: boolean, stroke: boolean): void {
@@ -1102,9 +1181,8 @@ export class ArenaVisualRenderer {
 
   private drawDistrictDressing(): void {
     const bounds = this.layout.generation.bounds;
-    const random = new SeededRandom(this.plan.landmarkSeed);
-    // Structural labels and decals sit just above the baked wall faces so faded
-    // paint remains visible, but stay well below actors, hazards, and pickups.
+    // Structural wayfinding stays clean and machine-authored. Street art is
+    // rendered separately below so it cannot be mistaken for another UI label.
     const labelRoot = this.keep(this.scene.add.container(0, 0).setDepth(2.25));
     const title = this.scene.add.text(bounds.x + 56, bounds.y + 52, `N3ON // ${this.plan.districtLabel}`, {
       fontFamily: 'Orbitron, sans-serif',
@@ -1122,25 +1200,10 @@ export class ArenaVisualRenderer {
     }).setAlpha(0.62);
     labelRoot.add([title, sector]);
 
-    const wallSigns = this.plan.signWallIndices.slice(0, NEON_CITY_VISUAL_THEME.maximumSigns);
-    for (let index = 0; index < wallSigns.length; index += 1) {
-      const wall = this.layout.walls[wallSigns[index]];
-      if (!wall || Math.min(wall.w, wall.h) < 22 || Math.max(wall.w, wall.h) < 90) continue;
-      const horizontal = wall.w >= wall.h;
-      const sign = this.scene.add.text(centerX(wall), centerY(wall), random.pick(['N3ON', 'GRID', 'LINK', 'VOID', `S-${(this.layout.seed + index) % 99}`]), {
-        fontFamily: 'Orbitron, sans-serif',
-        fontSize: '9px',
-        color: colorCss(index % 2 ? this.layout.theme.primary : this.layout.theme.secondary),
-        backgroundColor: '#030810',
-        padding: { x: 5, y: 2 }
-      }).setOrigin(0.5).setAlpha(0.72).setRotation(horizontal ? 0 : Math.PI * 0.5);
-      labelRoot.add(sign);
-    }
-
     const decalPlan = createEnvironmentDecalPlan(
       'arena', this.plan.decalSeed, this.layout.walls, this.plan.environmentDecalCount
     );
-    for (const decal of decalPlan.decals) labelRoot.add(createEnvironmentDecalText(this.scene, decal));
+    for (const decal of decalPlan.decals) labelRoot.add(createEnvironmentGraffitiArt(this.scene, decal));
   }
 
   /**

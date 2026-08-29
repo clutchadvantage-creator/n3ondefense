@@ -73,6 +73,7 @@ import { FramePerformanceMonitor } from '../performance/FramePerformanceMonitor.
 import { shouldReplaceTurretTarget } from '../performance/Targeting.ts';
 import { ProjectileTrailBatch } from '../performance/ProjectileTrailBatch.ts';
 import { UniformSpatialGrid } from '../performance/UniformSpatialGrid.ts';
+import { resolveSweptCircleMotion } from '../physics/SweptCircleCollision.ts';
 import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
 import { MineExplosionVfx } from '../vfx/MineExplosionVfx.ts';
 import { BombExplosionCosmeticVfx } from '../cosmetics/BombExplosionCosmeticVfx.ts';
@@ -1442,6 +1443,7 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.recordEnergyRegeneration(requestedRegeneration, this.player.energy - energyBeforeRegeneration);
     this.refreshAimWorldPoint();
     this.updatePrismCosmetics(now);
+    this.resolvePlayerDashWallCollision(now, delta);
     this.updatePlayerMovement(now);
     this.updatePlayerShooting(now);
 
@@ -1867,6 +1869,42 @@ export class ArenaScene extends Phaser.Scene {
     }
     if (this.playerInput.pressed('shield')) this.activateShield(now);
     this.updateHoloAfterimage(now);
+  }
+
+  /**
+   * Arcade Physics resolves ordinary movement through the existing collider.
+   * During a high-speed dash, however, a thin wall can be crossed completely
+   * between discrete physics samples. Sweep the real 12px gameplay body from
+   * its previous physics center to its current center and retain tangential
+   * velocity so diagonal impacts slide instead of making boost feel sticky.
+   */
+  private resolvePlayerDashWallCollision(now: number, deltaMs: number): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body | null;
+    if (!body || this.wallRects.length === 0 || now - Math.max(0, deltaMs) >= this.player.dashUntil) return;
+    const startX = body.prev.x + body.halfWidth;
+    const startY = body.prev.y + body.halfHeight;
+    const endX = body.center.x;
+    const endY = body.center.y;
+    const dx = endX - startX;
+    const dy = endY - startY;
+    if (dx * dx + dy * dy < 1) return;
+
+    const radius = body.isCircle ? body.radius : Math.max(body.halfWidth, body.halfHeight);
+    const resolved = resolveSweptCircleMotion(startX, startY, endX, endY, radius, this.wallRects);
+    if (!resolved.hit) return;
+
+    const bodyOffsetX = body.center.x - this.player.x;
+    const bodyOffsetY = body.center.y - this.player.y;
+    this.player.setPosition(resolved.x - bodyOffsetX, resolved.y - bodyOffsetY);
+    body.updateFromGameObject();
+    body.prev.copy(body.position);
+    body.prevFrame.copy(body.position);
+
+    let velocityX = body.velocity.x;
+    let velocityY = body.velocity.y;
+    if (resolved.normalX !== 0 && velocityX * resolved.normalX < 0) velocityX = 0;
+    if (resolved.normalY !== 0 && velocityY * resolved.normalY < 0) velocityY = 0;
+    body.setVelocity(velocityX, velocityY);
   }
 
   private updateHoloAfterimage(now: number): void {
