@@ -11,6 +11,11 @@ import { ModRuntime } from '../mods/ModRuntime.ts';
 import { rollModDrop } from '../mods/ModDropService.ts';
 import { getInfusionOperationCost, getInfusionRemovalCost, MOD_INFUSIONS } from '../mods/infusions.ts';
 import { getModCopyCounts, getRecyclableUnupgradedDuplicates } from '../mods/ModInventoryService.ts';
+import {
+  buildModOperationStatus,
+  MOD_OPERATION_STATUS_DURATION_MS,
+  type ModOperationStatusTone
+} from '../mods/ModOperationStatus.ts';
 import { showConfirmDialog, type LocalModalHandle } from '../utils/localSaveUi.ts';
 import { resolveModCollectionReturnRoute, type ModCollectionReturnRequest } from '../mods/ModCollectionNavigation.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
@@ -21,6 +26,7 @@ import {
   createModArchiveTerminal,
   createModCollectionButton,
   createModCollectionFrame,
+  createModOperationStatusConsole,
   createModCollectionShell,
   createModSelectedInspector,
   createModSelectedTracePanel,
@@ -68,6 +74,9 @@ export class ModCollectionScene extends Phaser.Scene {
   private filterIndex = 0;
   private page = 0;
   private status = '';
+  private statusTone: ModOperationStatusTone = 'info';
+  private statusExpiresAt = 0;
+  private statusTimer: Phaser.Time.TimerEvent | null = null;
   private infusionModal: Phaser.GameObjects.Container | null = null;
   private bulkRecycleModal: LocalModalHandle | null = null;
   private infusionConfirmModal: LocalModalHandle | null = null;
@@ -92,6 +101,8 @@ export class ModCollectionScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Mods); }
 
   create(data?: ModCollectionSceneData): void {
+    if (this.status && Date.now() >= this.statusExpiresAt) this.clearOperationStatus();
+    this.statusTimer = null;
     setSceneUiModalDepth(this, 0);
     configureSceneUiNavigation(this, { onBack: this.handleEscape });
     const arenaCanResume = this.scene.isPaused(SceneKeys.Arena) && this.registry.has('arena-session');
@@ -155,9 +166,13 @@ export class ModCollectionScene extends Phaser.Scene {
     const narrow = width < 800;
     const returnWidth = narrow ? 120 : Phaser.Math.Clamp(width * 0.18, 160, 220);
     const toolbarGap = narrow ? 10 : 16;
+    const statusGap = narrow ? 8 : 14;
     const toolbarStart = narrow ? 20 : 28;
-    const toolbarAvailableWidth = width - returnWidth - toolbarStart - returnInset * 2 - 8;
-    const toolbarButtonWidth = Phaser.Math.Clamp((toolbarAvailableWidth - toolbarGap * 3) / 4, narrow ? 80 : 108, 230);
+    const statusReserve = narrow
+      ? Phaser.Math.Clamp(width * 0.27, 170, 270)
+      : Phaser.Math.Clamp(width * 0.31, 280, 620);
+    const toolbarAvailableWidth = width - returnWidth - statusReserve - toolbarStart - returnInset * 2 - statusGap - 8;
+    const toolbarButtonWidth = Phaser.Math.Clamp((toolbarAvailableWidth - toolbarGap * 3) / 4, narrow ? 64 : 90, 230);
     const toolbarX = (index: number): number => toolbarStart + toolbarButtonWidth / 2 + index * (toolbarButtonWidth + toolbarGap);
     const toolbarRect = { x: 20, y: toolbarTop, width: width - 40, height: toolbarHeight };
     createModCollectionFrame(this, { x: 20, y: toolbarTop, width: width - 40, height: toolbarHeight }, 'COLLECTION CONTROLS // FILTER · SORT · SALVAGE', 0x55eaff);
@@ -174,7 +189,24 @@ export class ModCollectionScene extends Phaser.Scene {
         : this.returnScene === SceneKeys.Garage
           ? 'Back To Garage'
           : 'Main Menu';
-    createModCollectionButton(this, width - returnWidth / 2 - returnInset, toolbarButtonY, returnLabel, () => this.returnToPreviousScene(), returnWidth, 'return', { height: toolbarButtonHeight, fontSize: narrow ? 11 : 16 });
+    const returnX = width - returnWidth / 2 - returnInset;
+    createModCollectionButton(this, returnX, toolbarButtonY, returnLabel, () => this.returnToPreviousScene(), returnWidth, 'return', { height: toolbarButtonHeight, fontSize: narrow ? 11 : 16 });
+    const controlsRight = toolbarStart + toolbarButtonWidth * 4 + toolbarGap * 3;
+    const statusLeft = controlsRight + statusGap;
+    const statusRight = returnX - returnWidth / 2 - statusGap;
+    const statusConsole = createModOperationStatusConsole(this, {
+      x: statusLeft,
+      y: toolbarTop + (compact ? 22 : 26),
+      width: Math.max(80, statusRight - statusLeft),
+      height: toolbarHeight - (compact ? 25 : 29)
+    }, this.status || 'AWAITING MODULE COMMAND', this.status ? this.statusTone : 'info');
+    if (this.status) {
+      const remaining = Math.max(0, this.statusExpiresAt - Date.now());
+      this.statusTimer = this.time.delayedCall(remaining, () => {
+        this.clearOperationStatus();
+        if (statusConsole.root.active) statusConsole.setStatus('AWAITING MODULE COMMAND', 'info');
+      });
+    }
 
     createModArchiveTerminal(this, archiveLayout, analytics);
     cards.slice(this.page * archiveLayout.perPage, (this.page + 1) * archiveLayout.perPage).forEach((card, index) => {
@@ -252,6 +284,8 @@ export class ModCollectionScene extends Phaser.Scene {
       this.bulkRecycleModal = null;
       this.tutorialDirector?.destroy();
       this.tutorialDirector = null;
+      this.statusTimer?.remove(false);
+      this.statusTimer = null;
     });
     if (import.meta.env.DEV) this.installDevKeys();
   }
@@ -312,9 +346,9 @@ export class ModCollectionScene extends Phaser.Scene {
       ?? (definition.rarity === 'supreme' ? firstOpenSlot ?? 'weapon' : definition.category === 'utility' ? null : definition.category as ModSlot);
     const buttonGap = compactDetails ? 38 : height < 650 ? 43 : 48;
     const buttonHeight = compactDetails ? 32 : 38;
-    // Use the inspector's previously unused lower breathing room. A transient
-    // status message reserves its own strip so it never collides with Infuse.
-    const buttonStackBottomInset = (compactDetails ? 42 : 48) + (this.status ? 12 : 0);
+    // The status feed now lives in the collection toolbar, leaving this lower
+    // action bay dedicated to the selected module controls.
+    const buttonStackBottomInset = compactDetails ? 28 : 34;
     const buttonY = y + height - buttonGap * 4 - buttonStackBottomInset;
     const traceHeight = height >= 760 ? 72 : 0;
     const traceTop = buttonY - traceHeight - (traceHeight > 0 ? 10 : 0);
@@ -345,10 +379,11 @@ export class ModCollectionScene extends Phaser.Scene {
     const upgradeLabel = nextUpgrade
       ? `Upgrade — ${MOD_BALANCE.rankCreditCosts[nextUpgrade].toLocaleString()} Credits${coreTokenCost > 0 ? `\n+ ${coreTokenCost.toLocaleString()} Core Tokens` : ''}`
       : 'Upgrade Card — MAX LEVEL';
-    const upgradeButton = createModCollectionButton(this, x, buttonY + buttonGap * 2, upgradeLabel, () => {
-      return nextUpgrade ? this.apply(() => SaveSystem.rankUpMod(definition.id, card.instanceId)) : false;
+    createModCollectionButton(this, x, buttonY + buttonGap * 2, upgradeLabel, () => {
+      return nextUpgrade
+        ? this.apply(() => SaveSystem.rankUpMod(definition.id, card.instanceId))
+        : this.finishOperation({ ok: false, message: 'Mod card is already at maximum level.' });
     }, width - 40, 'utility', { height: buttonHeight, fontSize: compactDetails ? 11 : 14 });
-    if (!nextUpgrade) disableButton(upgradeButton);
     const sell = MOD_BALANCE.duplicateCreditValueByRarity[definition.rarity];
     const chips = MOD_BALANCE.duplicatePlasmaValueByRarity[definition.rarity];
     const actionRowWidth = width - 40;
@@ -360,10 +395,6 @@ export class ModCollectionScene extends Phaser.Scene {
     createModCollectionButton(this, actionLeft + actionButtonWidth * 1.5 + actionGap, actionY, `Recycle +${chips}◆`, () => this.apply(() => SaveSystem.recycleDuplicateMod(card.instanceId)), actionButtonWidth, 'warning', { height: buttonHeight, fontSize: compactDetails ? 9 : 12 });
     createModCollectionButton(this, actionLeft + actionButtonWidth * 2.5 + actionGap * 2, actionY, 'Delete', () => this.apply(() => SaveSystem.deleteModCard(card.instanceId)), actionButtonWidth, 'warning', { height: buttonHeight, fontSize: compactDetails ? 10 : 13 });
     createModCollectionButton(this, x, buttonY + buttonGap * 4, card.infusionId ? 'Change Infusion' : 'Infuse Card', () => this.showInfusionModal(card), width - 40, 'utility', { height: buttonHeight, fontSize: compactDetails ? 12 : 16 });
-    const statusText = this.add.text(x, y + height - 4, this.status, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: this.status.startsWith('Blocked') ? '#ff9bad' : '#9dffbf', align: 'center', lineSpacing: -2
-    }).setOrigin(0.5, 1).setWordWrapWidth(width - 32, true).setMaxLines(2);
-    if (this.status) this.time.delayedCall(2200, () => { this.status = ''; if (statusText.active) statusText.setText(''); });
   }
 
   private confirmBulkRecycle(cardCount: number, plasmaChips: number): void {
@@ -456,7 +487,8 @@ export class ModCollectionScene extends Phaser.Scene {
         ? 'INSTALLED'
         : `${replacing ? 'RECONFIGURE' : 'INSTALL'} // ${operationCost} PLASMA CHIPS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', fontStyle: 'bold', color: installed ? '#70ffad' : affordable ? '#ffd98a' : '#ff91a4' }).setOrigin(0, 0.5));
       const install = createModCollectionButton(this, installX, rowY, installed ? 'Installed' : affordable ? replacing ? 'Swap' : 'Install' : 'Not Enough Chips', () => {
-        if (installed || !affordable) return false;
+        if (installed) return false;
+        if (!affordable) return this.finishOperation({ ok: false, message: `Requires ${operationCost} Plasma Chips.` });
         this.confirmInfusionOperation(
           replacing ? 'RECONFIGURE COSMETIC INFUSION' : 'INSTALL COSMETIC INFUSION',
           `${replacing ? 'Replace the current infusion with' : 'Install'} ${infusion.name.toUpperCase()}?\n\nExact charge: ${operationCost} Plasma Chips.\nBalance after transaction: ${(SaveSystem.getModCollection().plasmaChips - operationCost).toLocaleString()} Plasma Chips.`,
@@ -465,7 +497,7 @@ export class ModCollectionScene extends Phaser.Scene {
         );
         return true;
       }, installWidth, installed ? 'return' : affordable ? 'utility' : 'warning');
-      if (installed || !affordable) disableButton(install);
+      if (installed) disableButton(install);
       root.add(install);
     });
 
@@ -493,7 +525,7 @@ export class ModCollectionScene extends Phaser.Scene {
       const bottomGap = 14;
       const removeButton = createModCollectionButton(this, width / 2 - bottomWidth / 2 - bottomGap / 2, closeY,
         canRemove ? `Remove // ${removalCost} Chips` : `Need ${removalCost} Chips`, () => {
-          if (!canRemove) return false;
+          if (!canRemove) return this.finishOperation({ ok: false, message: `Requires ${removalCost} Plasma Chips.` });
           this.confirmInfusionOperation(
             'REMOVE COSMETIC INFUSION',
             `Remove the installed infusion from this Mod card?\n\nExact charge: ${removalCost} Plasma Chips.\nBalance after transaction: ${(SaveSystem.getModCollection().plasmaChips - removalCost).toLocaleString()} Plasma Chips.`,
@@ -502,7 +534,6 @@ export class ModCollectionScene extends Phaser.Scene {
           );
           return true;
         }, bottomWidth, canRemove ? 'warning' : 'return');
-      if (!canRemove) disableButton(removeButton);
       root.add([
         removeButton,
         createModCollectionButton(this, width / 2 + bottomWidth / 2 + bottomGap / 2, closeY, 'Close', () => this.hideInfusionModal(), bottomWidth, 'return')
@@ -573,9 +604,18 @@ export class ModCollectionScene extends Phaser.Scene {
   }
 
   private finishOperation(result: { ok: boolean; message?: string }, currencyDeltas: CurrencyDeltas = {}): boolean {
-    this.status = `${result.ok ? 'Success' : 'Blocked'}: ${result.message ?? ''}`;
+    const presentation = buildModOperationStatus(result, this.captureCurrencySnapshot());
+    this.status = presentation.message;
+    this.statusTone = presentation.tone;
+    this.statusExpiresAt = Date.now() + MOD_OPERATION_STATUS_DURATION_MS;
     this.restartCollection(result.ok ? currencyDeltas : undefined);
     return result.ok;
+  }
+
+  private clearOperationStatus(): void {
+    this.status = '';
+    this.statusTone = 'info';
+    this.statusExpiresAt = 0;
   }
 
   private restartCollection(currencyDeltas?: CurrencyDeltas): void {

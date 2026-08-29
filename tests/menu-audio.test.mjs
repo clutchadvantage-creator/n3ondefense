@@ -164,5 +164,6 @@ test('locked Overdrive tiers and failed Mod economy operations use locked feedba
   const mods = readFileSync(new URL('../src/game/scenes/ModCollectionScene.ts', import.meta.url), 'utf8');
   assert.match(garage, /if \(!unlocked\) \{[\s\S]*?playSfx\('itemLocked'\)/);
   assert.match(mods, /private apply\([\s\S]*?return result\.ok/);
-  assert.match(mods, /return nextUpgrade \? this\.apply/);
+  assert.match(mods, /SaveSystem\.rankUpMod/);
+  assert.match(mods, /already at maximum level/);
 });

@@ -63,6 +63,7 @@ test('store, Gear Locker, and arena resolve the same data-driven turret art', ()
 
 test('Mod inspector action stack uses lower space while preserving a status strip', () => {
   assert.match(collection, /buttonStackBottomInset/);
-  assert.match(collection, /\+ \(this\.status \? 12 : 0\)/);
+  assert.match(collection, /const buttonStackBottomInset = compactDetails \? 28 : 34/);
+  assert.doesNotMatch(collection, /\+ \(this\.status \? 12 : 0\)/);
   assert.match(collection, /buttonY = y \+ height - buttonGap \* 4 - buttonStackBottomInset/);
 });

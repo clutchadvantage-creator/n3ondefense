@@ -104,9 +104,20 @@ test('archive polish keeps telemetry bright, avoids microtext, and safely frames
 test('collection presentation delegates to existing buttons and preserves disabled and locked feedback', () => {
   assert.match(presentation, /const button = createButton\(/);
   assert.match(scene, /disableButton\(recycleAll\)/);
-  assert.match(scene, /disableButton\(upgradeButton\)/);
   assert.match(scene, /disableButton\(install\)/);
+  assert.match(scene, /already at maximum level/);
   assert.match(scene, /private apply\([\s\S]*?return result\.ok/);
+});
+
+test('selected-module operations use one readable toolbar status console instead of footer microtext', () => {
+  assert.match(scene, /createModOperationStatusConsole\(this/);
+  assert.match(scene, /MOD_OPERATION_STATUS_DURATION_MS/);
+  assert.match(scene, /AWAITING MODULE COMMAND/);
+  assert.match(scene, /const buttonStackBottomInset = compactDetails \? 28 : 34/);
+  assert.doesNotMatch(scene, /const statusText = this\.add\.text\(x, y \+ height - 4/);
+  assert.match(presentation, /MODULE STATUS/);
+  assert.match(presentation, /setMaxLines\(2\)/);
+  assert.doesNotMatch(presentation, /registerUiFocusable[\s\S]*createModOperationStatusConsole/);
 });
 
 test('filters, pagination, inventory actions, infusions, and return routing remain connected', () => {

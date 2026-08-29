@@ -76,6 +76,7 @@ test('permanent upgrade analytics handle new, partial and fully maxed profiles',
   assert.equal(maxed.completionPercentage, 100);
   assert.equal(maxed.remainingCredits, 0);
   assert.equal(maxed.nextUpgrade, null);
+  assert.equal(maxed.costCurve.length, 0);
 });
 
 test('Mod and infusion analytics use owned card ranks and authoritative costs', () => {
@@ -129,6 +130,9 @@ test('Economy Console exposes real tabs, matrix, analytics, and no decorative fa
   assert.match(garage, /SaveSystem\.getEconomyAnalytics/);
   assert.match(garage, /onTabLeft/);
   assert.match(garage, /onTabRight/);
+  assert.match(garage, /100% COMPLETE/);
+  assert.match(garage, /NO PERMANENT UPGRADE COST REMAINS/);
+  assert.match(garage, /MARKET WIRE/);
   assert.doesNotMatch(garage, /FIXED RATE TRACE/);
   assert.doesNotMatch(garage, /Math\.sin\(pointIndex/);
   assert.match(analytics, /COSMETICS/);

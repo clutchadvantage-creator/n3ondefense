@@ -39,13 +39,13 @@ export const createEconomyPanel = (
   const rail = scene.add.rectangle(18, 5, rect.width - 43, 3, accent, 0.82).setOrigin(0);
   const sideRail = scene.add.rectangle(5, 16, 3, Math.max(10, rect.height - 34), accent, 0.32).setOrigin(0);
   const titleText = scene.add.text(20, 14, title, {
-    fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${rect.width < 300 ? 11 : 13}px`, color: Phaser.Display.Color.IntegerToColor(accent).rgba,
+    fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${rect.width < 300 ? 12 : rect.width < 460 ? 14 : 15}px`, color: Phaser.Display.Color.IntegerToColor(accent).rgba,
     fontStyle: 'bold', letterSpacing: 0.5
   });
   const led = scene.add.circle(rect.width - 22, 22, 3, accent, 0.92);
   panel.add([shadow, rear, face, recess, headerGlass, rail, sideRail, titleText, led]);
   if (subtitle) panel.add(scene.add.text(rect.width - 35, 16, subtitle, {
-    fontFamily: ECONOMY_FONT, fontSize: '10px', color: '#789baa', fontStyle: 'bold'
+    fontFamily: ECONOMY_FONT, fontSize: `${rect.width < 360 ? 11 : 13}px`, color: '#9ac0cc', fontStyle: 'bold'
   }).setOrigin(1, 0));
   root.add(panel);
   return panel;
@@ -64,11 +64,11 @@ export const addMetric = (
 ): void => {
   const originX = align === 'left' ? 0 : align === 'right' ? 1 : 0.5;
   panel.add(scene.add.text(x, y, label, {
-    fontFamily: ECONOMY_FONT, fontSize: '11px', color: '#789baa', fontStyle: 'bold', letterSpacing: 0.5,
+    fontFamily: ECONOMY_FONT, fontSize: '14px', color: '#9abec9', fontStyle: 'bold', letterSpacing: 0.5,
     align, fixedWidth: align === 'center' ? width : undefined
   }).setOrigin(originX, 0));
-  panel.add(scene.add.text(x, y + 15, value, {
-    fontFamily: ECONOMY_DISPLAY_FONT, fontSize: '17px', color: Phaser.Display.Color.IntegerToColor(color).rgba,
+  panel.add(scene.add.text(x, y + 19, value, {
+    fontFamily: ECONOMY_DISPLAY_FONT, fontSize: '21px', color: Phaser.Display.Color.IntegerToColor(color).rgba,
     fontStyle: 'bold', align, fixedWidth: align === 'center' ? width : undefined
   }).setOrigin(originX, 0));
 };
@@ -85,10 +85,10 @@ export const drawProgressBar = (
   color = 0x62efff
 ): void => {
   const ratio = Phaser.Math.Clamp(value / 100, 0, 1);
-  panel.add(scene.add.text(x, y, label, { fontFamily: ECONOMY_FONT, fontSize: '12px', color: '#c6dce5', fontStyle: 'bold' }));
-  panel.add(scene.add.text(x + width, y, detail, { fontFamily: ECONOMY_FONT, fontSize: '12px', color: '#8fb2bf', fontStyle: 'bold' }).setOrigin(1, 0));
-  panel.add(scene.add.rectangle(x, y + 20, width, 9, 0x18323e, 0.85).setOrigin(0).setStrokeStyle(1, color, 0.35));
-  panel.add(scene.add.rectangle(x + 2, y + 22, Math.max(1, (width - 4) * ratio), 5, color, 0.9).setOrigin(0));
+  panel.add(scene.add.text(x, y, label, { fontFamily: ECONOMY_FONT, fontSize: '14px', color: '#d4e9f0', fontStyle: 'bold' }));
+  panel.add(scene.add.text(x + width, y, detail, { fontFamily: ECONOMY_FONT, fontSize: '14px', color: '#a9c9d3', fontStyle: 'bold' }).setOrigin(1, 0));
+  panel.add(scene.add.rectangle(x, y + 23, width, 10, 0x18323e, 0.85).setOrigin(0).setStrokeStyle(1, color, 0.35));
+  panel.add(scene.add.rectangle(x + 2, y + 25, Math.max(1, (width - 4) * ratio), 6, color, 0.9).setOrigin(0));
 };
 
 export const drawHorizontalBars = (
@@ -100,27 +100,27 @@ export const drawHorizontalBars = (
 ): void => {
   const rows = [...points].sort((a, b) => b.value - a.value).slice(0, options.maxRows ?? 7);
   const max = Math.max(1, ...rows.map((point) => point.value));
-  const labelWidth = Math.min(145, rect.width * 0.36);
+  const labelWidth = Math.min(174, rect.width * 0.41);
   const barLeft = rect.x + labelWidth;
   const barWidth = Math.max(40, rect.width - labelWidth - 65);
   const rowHeight = rect.height / Math.max(1, rows.length);
   rows.forEach((point, index) => {
     const y = rect.y + index * rowHeight + 3;
     panel.add(scene.add.text(rect.x, y, point.label, {
-      fontFamily: ECONOMY_FONT, fontSize: `${rowHeight < 27 ? 10 : 12}px`, color: '#bdd2dc', fontStyle: 'bold'
+      fontFamily: ECONOMY_FONT, fontSize: `${rowHeight < 31 ? 12 : 14}px`, color: '#d0e5ec', fontStyle: 'bold'
     }).setWordWrapWidth(labelWidth - 7, false).setMaxLines(1));
     const barHeight = point.detail ? Math.max(6, Math.min(11, rowHeight - 23)) : Math.max(7, rowHeight - 12);
     panel.add(scene.add.rectangle(barLeft, y + 4, barWidth, barHeight, 0x19333e, 0.7).setOrigin(0));
     panel.add(scene.add.rectangle(barLeft, y + 4, Math.max(1, barWidth * point.value / max), barHeight, point.color, 0.82).setOrigin(0));
     panel.add(scene.add.text(rect.x + rect.width, y, `${formatEconomyNumber(point.value)}${options.suffix ?? ''}`, {
-      fontFamily: ECONOMY_FONT, fontSize: `${rowHeight < 27 ? 10 : 12}px`, color: '#e6faff', fontStyle: 'bold'
+      fontFamily: ECONOMY_FONT, fontSize: `${rowHeight < 31 ? 12 : 14}px`, color: '#effcff', fontStyle: 'bold'
     }).setOrigin(1, 0));
     if (point.detail) panel.add(scene.add.text(rect.x, y + 17, point.detail, {
-      fontFamily: ECONOMY_FONT, fontSize: '9px', color: '#718f9b', fontStyle: 'bold'
+      fontFamily: ECONOMY_FONT, fontSize: '13px', color: '#94b1bc', fontStyle: 'bold'
     }).setMaxLines(1));
   });
   if (options.normalizeLabel) panel.add(scene.add.text(rect.x, rect.y + rect.height + 2, options.normalizeLabel, {
-    fontFamily: ECONOMY_FONT, fontSize: '9px', color: '#648695', fontStyle: 'bold'
+    fontFamily: ECONOMY_FONT, fontSize: '13px', color: '#8caab5', fontStyle: 'bold'
   }));
 };
 
@@ -141,10 +141,10 @@ export const drawLineChart = (
   const values = data.map((point) => point.value);
   const maximum = Math.max(1, ...values);
   const minimum = Math.min(0, ...values);
-  const graphLeft = rect.x + 52;
+  const graphLeft = rect.x + 67;
   const graphTop = rect.y + 12;
-  const graphWidth = Math.max(40, rect.width - 61);
-  const graphHeight = Math.max(24, rect.height - 36);
+  const graphWidth = Math.max(40, rect.width - 78);
+  const graphHeight = Math.max(24, rect.height - 44);
   const graphics = scene.add.graphics();
   graphics.lineStyle(1, 0x537887, 0.25);
   for (let i = 0; i <= 4; i += 1) {
@@ -163,15 +163,15 @@ export const drawLineChart = (
   }
   panel.add(graphics);
   for (let i = 0; i <= 4; i += 1) {
-    panel.add(scene.add.text(rect.x + 47, graphTop + graphHeight * i / 4, formatEconomyNumber(maximum * (1 - i / 4)), {
-      fontFamily: ECONOMY_FONT, fontSize: '9px', color: '#7f9eaa'
+    panel.add(scene.add.text(rect.x + 61, graphTop + graphHeight * i / 4, formatEconomyNumber(maximum * (1 - i / 4)), {
+      fontFamily: ECONOMY_FONT, fontSize: '13px', color: '#9ebac4', fontStyle: 'bold'
     }).setOrigin(1, 0.5));
   }
   const first = points[0]?.label ?? 'NO DATA';
   const last = points.at(-1)?.label ?? 'NO DATA';
-  panel.add(scene.add.text(graphLeft, graphTop + graphHeight + 5, first, { fontFamily: ECONOMY_FONT, fontSize: '9px', color: '#7797a4' }).setMaxLines(1));
-  panel.add(scene.add.text(graphLeft + graphWidth, graphTop + graphHeight + 5, last, { fontFamily: ECONOMY_FONT, fontSize: '9px', color: '#7797a4' }).setOrigin(1, 0).setMaxLines(1));
-  panel.add(scene.add.text(rect.x, rect.y, unit, { fontFamily: ECONOMY_FONT, fontSize: '9px', color: '#658795', fontStyle: 'bold' }));
+  panel.add(scene.add.text(graphLeft, graphTop + graphHeight + 6, first, { fontFamily: ECONOMY_FONT, fontSize: '13px', color: '#9ab5c0', fontStyle: 'bold' }).setMaxLines(1));
+  panel.add(scene.add.text(graphLeft + graphWidth, graphTop + graphHeight + 6, last, { fontFamily: ECONOMY_FONT, fontSize: '13px', color: '#9ab5c0', fontStyle: 'bold' }).setOrigin(1, 0).setMaxLines(1));
+  panel.add(scene.add.text(rect.x, rect.y, unit, { fontFamily: ECONOMY_FONT, fontSize: '13px', color: '#8eacb7', fontStyle: 'bold' }));
 };
 
 export const drawDonut = (
@@ -199,9 +199,9 @@ export const drawDonut = (
   });
   panel.add(graphics);
   panel.add(scene.add.text(centerX, centerY - 9, centerLabel, {
-    fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${Math.max(10, radius * 0.19)}px`, color: '#e9fcff', fontStyle: 'bold', align: 'center'
+    fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${Math.max(15, radius * 0.22)}px`, color: '#e9fcff', fontStyle: 'bold', align: 'center'
   }).setOrigin(0.5));
-  panel.add(scene.add.text(centerX, centerY + 10, 'CR EQ', { fontFamily: ECONOMY_FONT, fontSize: '10px', color: '#7598a6', fontStyle: 'bold' }).setOrigin(0.5));
+  panel.add(scene.add.text(centerX, centerY + 13, 'CR EQ', { fontFamily: ECONOMY_FONT, fontSize: '13px', color: '#9cb9c4', fontStyle: 'bold' }).setOrigin(0.5));
 };
 
 export const drawVerticalBars = (
@@ -219,7 +219,7 @@ export const drawVerticalBars = (
     const thresholdY = rect.y + rect.height - threshold / maximum * rect.height;
     panel.add(scene.add.rectangle(rect.x, thresholdY, rect.width, 1, 0xffffff, 0.62).setOrigin(0));
     panel.add(scene.add.text(rect.x + rect.width, thresholdY - 12, `BAL ${threshold.toLocaleString()} PC`, {
-      fontFamily: ECONOMY_FONT, fontSize: '9px', color: '#dcecff', fontStyle: 'bold'
+      fontFamily: ECONOMY_FONT, fontSize: '13px', color: '#e5f3ff', fontStyle: 'bold'
     }).setOrigin(1, 0));
   }
   data.forEach((point, index) => {
@@ -227,10 +227,12 @@ export const drawVerticalBars = (
     const barHeight = Math.max(2, rect.height * point.value / maximum);
     panel.add(scene.add.rectangle(x, rect.y + rect.height, barWidth, barHeight, point.color, 0.86).setOrigin(0, 1));
     panel.add(scene.add.text(x + barWidth / 2, rect.y + rect.height - barHeight - 15, point.value.toLocaleString(), {
-      fontFamily: ECONOMY_FONT, fontSize: '9px', color: '#e8faff', fontStyle: 'bold'
+      fontFamily: ECONOMY_FONT, fontSize: '13px', color: '#effcff', fontStyle: 'bold'
     }).setOrigin(0.5, 0));
-    panel.add(scene.add.text(x + barWidth / 2, rect.y + rect.height + 3, point.label.slice(0, 10).toUpperCase(), {
-      fontFamily: ECONOMY_FONT, fontSize: '8px', color: '#819da8', fontStyle: 'bold'
+    const words = point.label.toUpperCase().split(/\s+/);
+    const displayLabel = words.length > 1 ? `${words[0]}\n${words.slice(1).join(' ')}` : words[0];
+    panel.add(scene.add.text(x + barWidth / 2, rect.y + rect.height + 4, displayLabel, {
+      fontFamily: ECONOMY_FONT, fontSize: '11px', color: '#9cb7c1', fontStyle: 'bold', align: 'center', lineSpacing: -2
     }).setOrigin(0.5, 0));
   });
 };

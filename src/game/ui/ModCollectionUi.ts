@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { createButton, type ButtonPresentationOptions } from '../utils/ui.ts';
 import type { ModArchiveAnalytics } from '../mods/ModArchiveAnalytics.ts';
+import type { ModOperationStatusTone } from '../mods/ModOperationStatus.ts';
 import type { ModArchiveTerminalLayout, ModArchiveRect } from './ModArchiveTerminalLayout.ts';
 
 export interface CollectionFrameRect {
@@ -29,6 +30,11 @@ export interface ModSelectedInspectorData {
   cardIndex: number;
   totalCards: number;
   signalTrace: readonly number[];
+}
+
+export interface ModOperationStatusHandle {
+  root: Phaser.GameObjects.Container;
+  setStatus: (message: string, tone: ModOperationStatusTone) => void;
 }
 
 export type CollectionButtonTone = 'standard' | 'utility' | 'warning' | 'return';
@@ -262,6 +268,56 @@ export const createModCollectionFrame = (
   root.add([shadow, frame, header, rail, headerDivider, leftEdge, label, led]);
   scene.tweens.add({ targets: led, alpha: { from: 0.24, to: 1 }, duration: 780, yoyo: true, repeat: -1 });
   return root;
+};
+
+const MOD_STATUS_COLORS: Record<ModOperationStatusTone, { accent: number; text: string; fill: number }> = {
+  success: { accent: 0x70ffad, text: '#a9ffd0', fill: 0x0a2922 },
+  warning: { accent: 0xffbd63, text: '#ffd59a', fill: 0x2b2112 },
+  error: { accent: 0xff5b8d, text: '#ffacc2', fill: 0x30131f },
+  info: { accent: 0x55eaff, text: '#bdeff5', fill: 0x0a202a }
+};
+
+/**
+ * One shared, informational operation feed for selected-card actions. It has no
+ * input object and therefore never enters pointer or controller focus order.
+ */
+export const createModOperationStatusConsole = (
+  scene: Phaser.Scene,
+  rect: CollectionFrameRect,
+  initialMessage: string,
+  initialTone: ModOperationStatusTone
+): ModOperationStatusHandle => {
+  const root = scene.add.container(rect.x, rect.y);
+  const compact = rect.width < 300;
+  const colors = MOD_STATUS_COLORS[initialTone];
+  const shadow = scene.add.rectangle(4, 4, rect.width, rect.height, 0x000000, 0.45).setOrigin(0);
+  const panel = scene.add.rectangle(0, 0, rect.width, rect.height, colors.fill, 0.96)
+    .setOrigin(0).setStrokeStyle(1, colors.accent, 0.72);
+  const rail = scene.add.rectangle(6, 5, 3, rect.height - 10, colors.accent, 0.82).setOrigin(0);
+  const scanline = scene.add.rectangle(13, 6, rect.width - 24, 2, colors.accent, 0.38).setOrigin(0);
+  const label = scene.add.text(17, 5, `MODULE STATUS // ${initialTone.toUpperCase()}`, {
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, color: '#86b7c2', fontStyle: 'bold', letterSpacing: compact ? 0 : 1
+  }).setOrigin(0);
+  const message = scene.add.text(17, compact ? 17 : 18, initialMessage, {
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 13 : rect.width < 470 ? 15 : 17}px`,
+    color: colors.text, fontStyle: 'bold', lineSpacing: -2
+  }).setOrigin(0).setWordWrapWidth(Math.max(60, rect.width - 31), true).setMaxLines(2);
+  const led = scene.add.circle(rect.width - 13, 11, 2.5, colors.accent, 0.92);
+  root.add([shadow, panel, rail, scanline, label, message, led]);
+  scene.tweens.add({ targets: led, alpha: { from: 0.25, to: 1 }, duration: 820, yoyo: true, repeat: -1 });
+
+  return {
+    root,
+    setStatus: (nextMessage, nextTone) => {
+      const nextColors = MOD_STATUS_COLORS[nextTone];
+      panel.setFillStyle(nextColors.fill, 0.96).setStrokeStyle(1, nextColors.accent, 0.72);
+      rail.setFillStyle(nextColors.accent, 0.82);
+      scanline.setFillStyle(nextColors.accent, 0.38);
+      led.setFillStyle(nextColors.accent, 0.92);
+      label.setText(`MODULE STATUS // ${nextTone.toUpperCase()}`);
+      message.setColor(nextColors.text).setText(nextMessage);
+    }
+  };
 };
 
 export const createModCollectionButton = (
