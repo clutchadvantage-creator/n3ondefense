@@ -22,6 +22,8 @@ test('environment graffiti plans are deterministic, bounded, and identity-specif
   assert.equal(new Set(arenaA.decals.map((decal) => decal.surfaceIndex)).size, arenaA.decals.length);
   assert.equal(arenaA.identity, 'arena');
   assert.equal(heist.identity, 'heist');
+  assert.ok(arenaA.decals.every((decal) => decal.fontSize >= 10));
+  assert.ok(arenaA.decals.some((decal) => decal.fontSize >= 16), 'wider wall faces should support larger readable graffiti');
   assert.notDeepEqual(arenaA.decals.map((decal) => decal.text), heist.decals.map((decal) => decal.text));
 });
 

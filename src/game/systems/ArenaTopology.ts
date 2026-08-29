@@ -20,9 +20,12 @@ export interface ArenaTopologyDraft {
 
 type Generator = (random: SeededRandom, bounds: RectSpec) => ArenaTopologyDraft;
 const point = (bounds: RectSpec, nx: number, ny: number): PointSpec => ({ x: bounds.x + bounds.w * nx, y: bounds.y + bounds.h * ny });
-const wall = (bounds: RectSpec, nx: number, ny: number, nw: number, nh: number): RectSpec => ({ x: bounds.x + bounds.w * nx, y: bounds.y + bounds.h * ny, w: bounds.w * nw, h: bounds.h * nh });
-const hWall = (b: RectSpec, x: number, y: number, w: number, t = 0.018): RectSpec => wall(b, x, y, w, t);
-const vWall = (b: RectSpec, x: number, y: number, h: number, t = 0.014): RectSpec => wall(b, x, y, t, h);
+const hWall = (b: RectSpec, x: number, y: number, w: number, t: number = CONFIG.interiorHorizontalThicknessRatio): RectSpec => ({
+  x: b.x + b.w * x, y: b.y + b.h * y, w: b.w * w, h: Math.max(CONFIG.minimumInteriorWallThickness, b.h * t)
+});
+const vWall = (b: RectSpec, x: number, y: number, h: number, t: number = CONFIG.interiorVerticalThicknessRatio): RectSpec => ({
+  x: b.x + b.w * x, y: b.y + b.h * y, w: Math.max(CONFIG.minimumInteriorWallThickness, b.w * t), h: b.h * h
+});
 const border = (b: RectSpec): RectSpec[] => {
   const t = CONFIG.boundaryThickness;
   return [
@@ -35,12 +38,12 @@ const ringWalls = (b: RectSpec, x: number, y: number, w: number, h: number, gapR
   b.y+b.h*y,
   b.w*w,
   b.h*h,
-  Math.max(20,b.h*.018),
+  Math.max(CONFIG.minimumInteriorWallThickness,b.h*CONFIG.interiorRingThicknessRatio),
   gapRatio,
   CONFIG.minimumCorridorWidth
 );
 const steppedDiagonal = (b: RectSpec, x: number, y: number, length: number, rising: boolean): RectSpec[] =>
-  ArenaStructureGrammar.diagonalWall(b.x+b.w*x,b.y+b.h*y,b.w*length,b.h*.022,rising);
+  ArenaStructureGrammar.diagonalWall(b.x+b.w*x,b.y+b.h*y,b.w*length,b.h*.026,rising);
 const base = (archetype: ArenaTemplate, bounds: RectSpec, walls: RectSpec[], objectives: PointSpec[], players: PointSpec[], enemies: PointSpec[], major: number, chokes: number, regions: number, bias: ArenaTopologyDraft['orientationBias']): ArenaTopologyDraft => ({
   archetype, bounds, walls: [...border(bounds), ...walls], objectiveCandidates: objectives, playerCandidates: players, enemySpawns: enemies, majorStructureCount: major, chokePointCount: chokes, connectedRegionCount: regions, orientationBias: bias
 });
@@ -78,8 +81,8 @@ const split: Generator = (r, b) => {
   const axis=.49+r.float(-.055,.055);
   const firstLength=r.float(.25,.32),middleStart=r.float(.4,.45),middleLength=r.float(.17,.23),lastStart=r.float(.74,.79);
   const walls: RectSpec[] = vertical
-    ? [vWall(b,axis,.02,firstLength,.026),vWall(b,axis,middleStart,middleLength,.026),vWall(b,axis,lastStart,.98-lastStart,.026)]
-    : [hWall(b,.02,axis,firstLength,.026),hWall(b,middleStart,axis,middleLength,.026),hWall(b,lastStart,axis,.98-lastStart,.026)];
+    ? [vWall(b,axis,.02,firstLength,.03),vWall(b,axis,middleStart,middleLength,.03),vWall(b,axis,lastStart,.98-lastStart,.03)]
+    : [hWall(b,.02,axis,firstLength,.03),hWall(b,middleStart,axis,middleLength,.03),hWall(b,lastStart,axis,.98-lastStart,.03)];
   const objectives = vertical ? [point(b,.23,.3),point(b,.76,.68),point(b,.23,.75),point(b,.76,.28),point(b,.72,.86)] : [point(b,.25,.23),point(b,.72,.76),point(b,.75,.24),point(b,.23,.73),point(b,.88,.86)];
   const players = vertical ? [point(b,.2,.5)] : [point(b,.5,.2)];
   return base('split', b, walls, objectives, players, [point(b,.07,.1),point(b,.93,.12),point(b,.91,.88),point(b,.08,.9)], 1, 2, 2, vertical ? {horizontal:.05,vertical:.9,diagonal:.05}:{horizontal:.9,vertical:.05,diagonal:.05});
@@ -94,7 +97,7 @@ const canyon: Generator = (r, b) => {
   const heights=(flip?[.27,.18,.24,.12,.18,.12]:[.12,.18,.12,.24,.18,.27]).map((height)=>height+r.float(-.025,.025));
   const walls:RectSpec[]=[];
   const routes:PointSpec[]=[];
-  heights.forEach((upperY,index)=>{const x=.04+index*.155;walls.push(hWall(b,x,upperY,.14,.022),hWall(b,x,upperY+.3,.14,.022));routes.push(point(b,x+.07,upperY+.16));});
+  heights.forEach((upperY,index)=>{const x=.04+index*.155;walls.push(hWall(b,x,upperY,.14,.026),hWall(b,x,upperY+.3,.14,.026));routes.push(point(b,x+.07,upperY+.16));});
   return base('canyon', b, walls, [routes[0],routes[1],routes[3],routes[4],routes[5]], [routes[0]], [routes[5],point(b,.08,.08),point(b,.92,.92)], 2, 5, 1, {horizontal:.25,vertical:.05,diagonal:.7});
 };
 const maze: Generator = (r, b) => {

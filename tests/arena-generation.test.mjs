@@ -44,6 +44,15 @@ test('every arena archetype is deterministic and exposes a distinct macro topolo
   assert.ok(silhouettes.size >= 8);
 });
 
+test('generated interior walls provide a wider readable face without changing boundary walls', () => {
+  for (const archetype of ARENA_ARCHETYPES) {
+    const draft = generateArenaTopology(archetype, 811_337);
+    const interiorWalls = draft.walls.slice(4);
+    assert.ok(interiorWalls.length > 0);
+    assert.ok(interiorWalls.every((wall) => Math.min(wall.w, wall.h) >= ARENA_GENERATION_CONFIG.minimumInteriorWallThickness - 0.001), archetype);
+  }
+});
+
 test('representative topology objectives and enemy entrances remain connected', () => {
   for (const archetype of ARENA_ARCHETYPES) {
     let valid = false;

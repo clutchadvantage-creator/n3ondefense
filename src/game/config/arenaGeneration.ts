@@ -26,6 +26,13 @@ export const ARENA_GENERATION_CONFIG = {
   minHeight: 1040,
   maxHeight: 1540,
   boundaryThickness: 30,
+  // Interior structures need a readable top face for panel art/graffiti. These
+  // ratios deliberately remain far below passage-width rules; every generated
+  // candidate still passes the normal traversal validation after construction.
+  interiorHorizontalThicknessRatio: 0.024,
+  interiorVerticalThicknessRatio: 0.018,
+  interiorRingThicknessRatio: 0.022,
+  minimumInteriorWallThickness: 26,
   navigationCellSize: NAVIGATION_CELL_SIZE,
   enemyNavigationPadding: ENEMY_NAVIGATION_PADDING,
   fingerprintGridSize: 16,

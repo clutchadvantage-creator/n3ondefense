@@ -51,10 +51,10 @@ const point = (bounds: RectSpec, x: number, y: number): PointSpec => ({
 const openVariant = (bounds: RectSpec): VariantGeometry => ({
   archetype: 'open-field',
   walls: [
-    rect(bounds, 0.31, 0.27, 0.09, 0.018), rect(bounds, 0.31, 0.27, 0.012, 0.09),
-    rect(bounds, 0.61, 0.28, 0.09, 0.018), rect(bounds, 0.688, 0.28, 0.012, 0.09),
-    rect(bounds, 0.3, 0.69, 0.09, 0.018), rect(bounds, 0.3, 0.618, 0.012, 0.09),
-    rect(bounds, 0.62, 0.68, 0.09, 0.018), rect(bounds, 0.698, 0.61, 0.012, 0.09)
+    rect(bounds, 0.31, 0.27, 0.09, CONFIG.interiorHorizontalThicknessRatio), rect(bounds, 0.31, 0.27, CONFIG.interiorVerticalThicknessRatio, 0.09),
+    rect(bounds, 0.61, 0.28, 0.09, CONFIG.interiorHorizontalThicknessRatio), rect(bounds, 0.688, 0.28, CONFIG.interiorVerticalThicknessRatio, 0.09),
+    rect(bounds, 0.3, 0.69, 0.09, CONFIG.interiorHorizontalThicknessRatio), rect(bounds, 0.3, 0.618, CONFIG.interiorVerticalThicknessRatio, 0.09),
+    rect(bounds, 0.62, 0.68, 0.09, CONFIG.interiorHorizontalThicknessRatio), rect(bounds, 0.698, 0.61, CONFIG.interiorVerticalThicknessRatio, 0.09)
   ],
   major: 4,
   chokes: 0,
@@ -65,8 +65,8 @@ const openVariant = (bounds: RectSpec): VariantGeometry => ({
 const splitVariant = (bounds: RectSpec, vertical: boolean): VariantGeometry => ({
   archetype: 'split',
   walls: vertical
-    ? [rect(bounds, 0.493, 0.055, 0.014, 0.3), rect(bounds, 0.493, 0.645, 0.014, 0.3)]
-    : [rect(bounds, 0.055, 0.493, 0.3, 0.018), rect(bounds, 0.645, 0.493, 0.3, 0.018)],
+    ? [rect(bounds, 0.493, 0.055, CONFIG.interiorVerticalThicknessRatio, 0.3), rect(bounds, 0.493, 0.645, CONFIG.interiorVerticalThicknessRatio, 0.3)]
+    : [rect(bounds, 0.055, 0.493, 0.3, CONFIG.interiorHorizontalThicknessRatio), rect(bounds, 0.645, 0.493, 0.3, CONFIG.interiorHorizontalThicknessRatio)],
   major: 2,
   chokes: 2,
   regions: 2,
@@ -78,10 +78,10 @@ const splitVariant = (bounds: RectSpec, vertical: boolean): VariantGeometry => (
 const crossroadsVariant = (bounds: RectSpec): VariantGeometry => ({
   archetype: 'crossroads',
   walls: [
-    rect(bounds, 0.06, 0.33, 0.17, 0.018), rect(bounds, 0.77, 0.33, 0.17, 0.018),
-    rect(bounds, 0.06, 0.67, 0.17, 0.018), rect(bounds, 0.77, 0.67, 0.17, 0.018),
-    rect(bounds, 0.33, 0.05, 0.014, 0.14), rect(bounds, 0.33, 0.81, 0.014, 0.14),
-    rect(bounds, 0.656, 0.05, 0.014, 0.14), rect(bounds, 0.656, 0.81, 0.014, 0.14)
+    rect(bounds, 0.06, 0.33, 0.17, CONFIG.interiorHorizontalThicknessRatio), rect(bounds, 0.77, 0.33, 0.17, CONFIG.interiorHorizontalThicknessRatio),
+    rect(bounds, 0.06, 0.67, 0.17, CONFIG.interiorHorizontalThicknessRatio), rect(bounds, 0.77, 0.67, 0.17, CONFIG.interiorHorizontalThicknessRatio),
+    rect(bounds, 0.33, 0.05, CONFIG.interiorVerticalThicknessRatio, 0.14), rect(bounds, 0.33, 0.81, CONFIG.interiorVerticalThicknessRatio, 0.14),
+    rect(bounds, 0.656, 0.05, CONFIG.interiorVerticalThicknessRatio, 0.14), rect(bounds, 0.656, 0.81, CONFIG.interiorVerticalThicknessRatio, 0.14)
   ],
   major: 4,
   chokes: 4,
@@ -90,10 +90,10 @@ const crossroadsVariant = (bounds: RectSpec): VariantGeometry => ({
 });
 
 const chamberRing = (bounds: RectSpec, x: number, y: number): RectSpec[] => [
-  rect(bounds, x, y, 0.065, 0.018), rect(bounds, x + 0.155, y, 0.065, 0.018),
-  rect(bounds, x, y + 0.25, 0.22, 0.018),
-  rect(bounds, x, y, 0.012, 0.085), rect(bounds, x, y + 0.165, 0.012, 0.103),
-  rect(bounds, x + 0.208, y, 0.012, 0.085), rect(bounds, x + 0.208, y + 0.165, 0.012, 0.103)
+  rect(bounds, x, y, 0.065, CONFIG.interiorHorizontalThicknessRatio), rect(bounds, x + 0.155, y, 0.065, CONFIG.interiorHorizontalThicknessRatio),
+  rect(bounds, x, y + 0.25, 0.22, CONFIG.interiorHorizontalThicknessRatio),
+  rect(bounds, x, y, CONFIG.interiorVerticalThicknessRatio, 0.085), rect(bounds, x, y + 0.165, CONFIG.interiorVerticalThicknessRatio, 0.103),
+  rect(bounds, x + 0.208, y, CONFIG.interiorVerticalThicknessRatio, 0.085), rect(bounds, x + 0.208, y + 0.165, CONFIG.interiorVerticalThicknessRatio, 0.103)
 ];
 
 const chambersVariant = (bounds: RectSpec): VariantGeometry => ({

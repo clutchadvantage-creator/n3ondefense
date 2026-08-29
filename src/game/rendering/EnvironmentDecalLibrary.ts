@@ -52,7 +52,7 @@ export const createEnvironmentDecalPlan = (
 ): EnvironmentDecalPlan => {
   const random = new SeededRandom((seed ^ (identity === 'arena' ? 0x4e334f4e : 0x48333135)) >>> 0);
   const candidates = random.shuffle(surfaces.map((surface, index) => ({ surface, index })))
-    .filter(({ surface }) => Math.max(surface.w, surface.h) >= 100 && Math.min(surface.w, surface.h) >= 18);
+    .filter(({ surface }) => Math.max(surface.w, surface.h) >= 100 && Math.min(surface.w, surface.h) >= 24);
   const tags = identity === 'arena' ? ARENA_TAGS : HEIST_TAGS;
   const decals: EnvironmentDecalSpec[] = [];
   const limit = Math.min(Math.max(0, maximumDecals), candidates.length);
@@ -64,7 +64,8 @@ export const createEnvironmentDecalPlan = (
       : decalIndex % 4 === 0 ? 'warning' : decalIndex % 3 === 0 ? 'stencil' : 'paint';
     const text = random.pick(tags);
     const longSide = Math.max(surface.w, surface.h);
-    const fontSize = Math.max(8, Math.min(15, Math.floor(longSide / Math.max(10, text.length * 0.82))));
+    const shortSide = Math.min(surface.w, surface.h);
+    const fontSize = Math.max(10, Math.min(20, Math.floor(shortSide * 0.56), Math.floor(longSide / Math.max(9, text.length * 0.74))));
     decals.push({
       x: surface.x + surface.w * 0.5,
       y: surface.y + surface.h * 0.5,
@@ -111,8 +112,8 @@ export const createEnvironmentGraffitiArt = (
   scene: Phaser.Scene,
   spec: EnvironmentDecalSpec
 ): Phaser.GameObjects.Container => {
-  const width = Math.max(54, Math.min(154, spec.text.length * spec.fontSize * 0.62 + 34));
-  const height = Math.max(25, spec.fontSize * 2.35);
+  const width = Math.max(70, Math.min(210, spec.text.length * spec.fontSize * 0.66 + 42));
+  const height = Math.max(27, spec.fontSize * 1.72);
   const root = scene.make.container({ x: spec.x, y: spec.y }, false)
     .setRotation(spec.rotation)
     .setAlpha(Math.min(0.88, spec.alpha + 0.16));
@@ -136,12 +137,13 @@ export const createEnvironmentGraffitiArt = (
   paint.strokePath();
 
   const iconX = -width * 0.42;
-  paint.lineStyle(2.4, spec.color, 0.9);
+  const motifScale = Math.min(1.34, Math.max(0.8, spec.fontSize / 15));
+  paint.lineStyle(2.4 * motifScale, spec.color, 0.9);
   if (spec.motif === 'warning-eye') {
     paint.strokePoints([
-      { x: iconX - 10, y: 0 }, { x: iconX, y: -7 }, { x: iconX + 10, y: 0 }, { x: iconX, y: 7 }
+      { x: iconX - 10 * motifScale, y: 0 }, { x: iconX, y: -7 * motifScale }, { x: iconX + 10 * motifScale, y: 0 }, { x: iconX, y: 7 * motifScale }
     ], true);
-    paint.fillStyle(spec.color, 0.82).fillCircle(iconX, 0, 3);
+    paint.fillStyle(spec.color, 0.82).fillCircle(iconX, 0, 3 * motifScale);
   } else if (spec.motif === 'glitch-face') {
     paint.strokeCircle(iconX, 0, 10);
     paint.lineBetween(iconX - 6, -3, iconX - 2, -1);
