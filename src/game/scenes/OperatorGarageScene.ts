@@ -11,6 +11,7 @@ import {
   quoteCurrencyExchange,
   type ExchangeCurrency
 } from '../economy/CurrencyExchange.ts';
+import { getExchangeRoundTrip, type EconomyAnalyticsSnapshot } from '../economy/EconomyAnalytics.ts';
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys.ts';
 import { calculateGarageLayout, type GarageRect } from '../garage/garageLayout.ts';
 import {
@@ -45,6 +46,19 @@ import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { calculateProtocolTerminalVerticalLayout } from '../garage/protocolTerminalLayout.ts';
+import {
+  ECONOMY_DISPLAY_FONT,
+  ECONOMY_FONT,
+  addMetric,
+  createEconomyPanel,
+  drawDonut,
+  drawHorizontalBars,
+  drawLineChart,
+  drawProgressBar,
+  drawVerticalBars,
+  formatEconomyNumber,
+  type EconomyConsoleRect
+} from '../garage/EconomyConsoleUi.ts';
 import { getSupremeStage, isSupremeProtocol } from '../progression/SupremeProgression.ts';
 import {
   configureSceneUiNavigation,
@@ -79,6 +93,7 @@ const EXCHANGE_CURRENCY_LABELS: Record<ExchangeCurrency, string> = {
 const EXCHANGE_CURRENCY_COLORS: Record<ExchangeCurrency, number> = {
   credits: 0x7fffe5, coreTokens: 0xffd37b, plasmaChips: 0xdb8fff, fluxCores: 0x76ff9e
 };
+const ECONOMY_TABS = ['MARKET', 'PROGRESSION', 'COMMERCE', 'MOD ECONOMY'] as const;
 
 export class OperatorGarageScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
@@ -111,6 +126,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private exchangeAmount = 200;
   private exchangeConfirmLockedUntil = 0;
   private exchangeConfirmationArmed = true;
+  private economyConsoleTabIndex = 0;
   private readonly handleEscape = (): void => {
     if (this.overlay) this.closeOverlay();
     else this.returnToPrevious();
@@ -1554,197 +1570,361 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private showCurrencyExchange(): void {
-    const root = this.createOverlay('CURRENCY EXCHANGE // MARKET NODE');
+    const root = this.createOverlay('ECONOMY CONSOLE // MARKET NODE');
     const { width, height } = this.scale;
-    const compact = width < 820 || height < 620;
-    const wallet = SaveSystem.get();
-    const balances = {
-      credits: wallet.credits,
-      coreTokens: wallet.coreTokens,
-      plasmaChips: SaveSystem.getModCollection().plasmaChips,
-      fluxCores: wallet.fluxCores
-    };
+    const compact = width < 1180 || height < 760;
+    const analytics = SaveSystem.getEconomyAnalytics();
     if (this.exchangeSource === this.exchangeTarget) {
       this.exchangeTarget = EXCHANGE_CURRENCIES.find((currency) => currency !== this.exchangeSource) ?? 'coreTokens';
     }
-    const selectedRate = getCurrencyExchangeRate(this.exchangeSource, this.exchangeTarget)!;
-    if (this.exchangeAmount <= 0 || this.exchangeAmount % selectedRate.sourceUnits !== 0) {
-      this.exchangeAmount = selectedRate.sourceUnits;
-    }
-    const quote = quoteCurrencyExchange(balances, this.exchangeSource, this.exchangeTarget, this.exchangeAmount);
-    const panelMargin = compact ? 20 : Phaser.Math.Clamp(width * 0.045, 42, 92);
-    const panelWidth = width - panelMargin * 2;
-    const addFrame = (x: number, y: number, frameWidth: number, frameHeight: number, color: number, alpha = 0.82): Phaser.GameObjects.Container => {
-      const frameRoot = this.add.container(x, y);
-      const shadow = this.add.polygon(6, 7, createConsoleChamferPoints(frameWidth, frameHeight, 13), 0x000000, 0.58).setOrigin(0);
-      const chassis = this.add.polygon(0, 0, createConsoleChamferPoints(frameWidth, frameHeight, 13), 0x07131e, alpha).setOrigin(0).setStrokeStyle(2, color, 0.65);
-      const inner = this.add.rectangle(9, 9, frameWidth - 18, frameHeight - 18, color, 0.025).setOrigin(0).setStrokeStyle(1, color, 0.2);
-      const topLine = this.add.rectangle(18, 5, frameWidth - 36, 3, color, 0.48).setOrigin(0);
-      frameRoot.add([shadow, chassis, inner, topLine]);
-      root.add(frameRoot);
-      return frameRoot;
-    };
+    this.createEconomyConsoleHeader(root, analytics, compact);
+    const bodyTop = compact ? 222 : 270;
+    const bodyBottom = height - (compact ? 34 : 42);
+    const body: EconomyConsoleRect = { x: compact ? 14 : 24, y: bodyTop, width: width - (compact ? 28 : 48), height: Math.max(300, bodyBottom - bodyTop) };
+    const tab = ECONOMY_TABS[this.economyConsoleTabIndex];
+    if (tab === 'MARKET') this.renderEconomyMarket(root, analytics, body, compact);
+    else if (tab === 'PROGRESSION') this.renderEconomyProgression(root, analytics, body, compact);
+    else if (tab === 'COMMERCE') this.renderEconomyCommerce(root, analytics, body, compact);
+    else this.renderEconomyMods(root, analytics, body, compact);
+    this.createEconomyTicker(root, analytics, height);
+    configureSceneUiNavigation(this, {
+      onBack: this.handleEscape,
+      onTabLeft: () => this.switchEconomyConsoleTab(-1),
+      onTabRight: () => this.switchEconomyConsoleTab(1)
+    });
+  }
 
-    const walletTop = compact ? 88 : 94;
-    const walletHeight = compact ? 68 : 92;
-    const walletFrame = addFrame(panelMargin, walletTop, panelWidth, walletHeight, 0xff5bcf, 0.9);
-    const tileWidth = panelWidth / 4;
-    EXCHANGE_CURRENCIES.forEach((currency, index) => {
-      const color = EXCHANGE_CURRENCY_COLORS[currency];
-      const x = tileWidth * (index + 0.5);
-      if (index > 0) walletFrame.add(this.add.rectangle(tileWidth * index, walletHeight / 2 + 4, 1, walletHeight - 30, 0x568091, 0.3));
-      walletFrame.add(this.add.text(x, compact ? 18 : 21, EXCHANGE_CURRENCY_LABELS[currency], {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 14}px`, fontStyle: 'bold', color: '#91bcca'
-      }).setOrigin(0.5));
-      walletFrame.add(this.add.text(x, compact ? 43 : 56, balances[currency].toLocaleString(), {
-        fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 14 : 23}px`, fontStyle: 'bold', color: Phaser.Display.Color.IntegerToColor(color).rgba
-      }).setOrigin(0.5));
+  private switchEconomyConsoleTab(direction: number): void {
+    this.economyConsoleTabIndex = (this.economyConsoleTabIndex + direction + ECONOMY_TABS.length) % ECONOMY_TABS.length;
+    this.exchangeConfirmationArmed = true;
+    this.status = '';
+    this.showCurrencyExchange();
+  }
+
+  private createEconomyConsoleHeader(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, compact: boolean): void {
+    const { width } = this.scale;
+    root.add(this.add.text(width / 2, compact ? 52 : 59, `OPERATIVE PORTFOLIO   //   ${CURRENCY_EXCHANGE_RATES.length} EXCHANGE PAIRS ACTIVE   //   WALLET VERIFIED`, {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 13}px`, color: '#8cb5c3', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0.5, 0));
+    const tabY = compact ? 82 : 91;
+    const tabGap = compact ? 5 : 10;
+    const tabWidth = Math.min(compact ? 180 : 230, (width - 60 - tabGap * 3) / 4);
+    ECONOMY_TABS.forEach((label, index) => {
+      const x = width / 2 + (index - 1.5) * (tabWidth + tabGap);
+      const selected = index === this.economyConsoleTabIndex;
+      root.add(this.add.rectangle(x, tabY, tabWidth + 3, compact ? 34 : 40, selected ? 0x12323c : 0x07131d, 0.96)
+        .setStrokeStyle(selected ? 2 : 1, selected ? 0x62efff : 0x385e6d, selected ? 0.95 : 0.5));
+      root.add(createButton(this, x, tabY, label, () => {
+        this.economyConsoleTabIndex = index;
+        this.exchangeConfirmationArmed = true;
+        this.status = '';
+        this.showCurrencyExchange();
+      }, tabWidth, 'menu', { height: compact ? 32 : 38, fontSize: compact ? 11 : 14, focusModalDepth: 30, focusDefaultPriority: selected ? 35 : 0 }));
     });
 
-    const selectionY = compact ? (height < 530 ? 190 : 205) : Phaser.Math.Clamp(height * 0.285, 220, 308);
-    const columnX = [width * 0.29, width * 0.71];
-    const selectorWidth = compact ? Math.min(190, width * 0.31) : Phaser.Math.Clamp(width * 0.27, 245, 410);
-    const cycleCurrency = (role: 'source' | 'target', direction: number): void => {
+    const walletTop = compact ? 106 : 119;
+    const walletHeight = compact ? 106 : 132;
+    const margin = compact ? 14 : 24;
+    const gap = compact ? 6 : 10;
+    const cardWidth = (width - margin * 2 - gap * 3) / 4;
+    analytics.portfolio.forEach((entry, index) => {
+      const x = margin + index * (cardWidth + gap);
+      const card = createEconomyPanel(this, root, { x, y: walletTop, width: cardWidth, height: walletHeight }, entry.label, entry.color, `${entry.percentage.toFixed(1)}% PORTFOLIO`);
+      addMetric(this, card, 18, compact ? 45 : 49, 'CURRENT BALANCE', entry.balance.toLocaleString(), entry.color);
+      const liquidationY = compact ? 77 : 84;
+      card.add(this.add.text(cardWidth - 16, liquidationY, `${formatEconomyNumber(entry.creditEquivalent)} CR`, {
+        fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 11 : 15}px`, color: '#dff9ff', fontStyle: 'bold'
+      }).setOrigin(1, 0));
+      card.add(this.add.text(cardWidth - 16, liquidationY + (compact ? 16 : 20), compact ? 'LIQUIDATION' : `LIQUIDATION // ${entry.purpose}`, {
+        fontFamily: ECONOMY_FONT, fontSize: `${compact ? 8 : 10}px`, color: '#7799a7', fontStyle: 'bold'
+      }).setOrigin(1, 0));
+    });
+  }
+
+  private renderEconomyMarket(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, body: EconomyConsoleRect, compact: boolean): void {
+    const gap = compact ? 8 : 12;
+    const transactionWidth = body.width * (compact ? 0.39 : 0.4);
+    const portfolioWidth = body.width * (compact ? 0.27 : 0.27);
+    const transactionRect = { x: body.x, y: body.y, width: transactionWidth, height: body.height };
+    const portfolioRect = { x: body.x + transactionWidth + gap, y: body.y, width: portfolioWidth - gap, height: body.height };
+    const matrixRect = { x: portfolioRect.x + portfolioRect.width + gap, y: body.y, width: body.x + body.width - (portfolioRect.x + portfolioRect.width + gap), height: body.height };
+    this.renderExchangeTransaction(root, analytics, transactionRect, compact);
+    this.renderPortfolioAnalytics(root, analytics, portfolioRect, compact);
+    this.renderExchangeMatrix(root, analytics, matrixRect, compact);
+  }
+
+  private renderExchangeTransaction(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, rect: EconomyConsoleRect, compact: boolean): void {
+    const panel = createEconomyPanel(this, root, rect, 'SECURE EXCHANGE EXECUTION', 0x62efff, 'ATOMIC LEDGER');
+    const short = rect.height < 440;
+    const rate = getCurrencyExchangeRate(this.exchangeSource, this.exchangeTarget)!;
+    if (this.exchangeAmount <= 0 || this.exchangeAmount % rate.sourceUnits !== 0) this.exchangeAmount = rate.sourceUnits;
+    const quote = quoteCurrencyExchange(analytics.wallet, this.exchangeSource, this.exchangeTarget, this.exchangeAmount);
+    const cycleCurrency = (role: 'source' | 'target'): void => {
       const current = role === 'source' ? this.exchangeSource : this.exchangeTarget;
       let index = EXCHANGE_CURRENCIES.indexOf(current);
-      do index = (index + direction + EXCHANGE_CURRENCIES.length) % EXCHANGE_CURRENCIES.length;
+      do index = (index + 1) % EXCHANGE_CURRENCIES.length;
       while (EXCHANGE_CURRENCIES[index] === (role === 'source' ? this.exchangeTarget : this.exchangeSource));
       if (role === 'source') this.exchangeSource = EXCHANGE_CURRENCIES[index];
       else this.exchangeTarget = EXCHANGE_CURRENCIES[index];
       this.exchangeAmount = getCurrencyExchangeRate(this.exchangeSource, this.exchangeTarget)?.sourceUnits ?? 1;
-      this.exchangeConfirmationArmed = true;
-      this.status = '';
-      this.showCurrencyExchange();
+      this.exchangeConfirmationArmed = true; this.status = ''; this.showCurrencyExchange();
     };
-    const sourceColor = EXCHANGE_CURRENCY_COLORS[this.exchangeSource];
-    const targetColor = EXCHANGE_CURRENCY_COLORS[this.exchangeTarget];
-    for (const [index, role] of (['source', 'target'] as const).entries()) {
+    const innerWidth = rect.width - 34;
+    const halfWidth = (innerWidth - 74) / 2;
+    const accountY = rect.y + 88;
+    (['source', 'target'] as const).forEach((role, index) => {
       const currency = role === 'source' ? this.exchangeSource : this.exchangeTarget;
-      const color = role === 'source' ? sourceColor : targetColor;
-      const frameWidth = selectorWidth + (compact ? 28 : 54);
-      const frameHeight = compact ? 72 : 90;
-      const frame = addFrame(columnX[index] - frameWidth / 2, selectionY - frameHeight / 2, frameWidth, frameHeight, color, 0.94);
-      frame.add(this.add.text(frameWidth / 2, 17, role === 'source' ? 'SOURCE ACCOUNT' : 'TARGET ACCOUNT', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, fontStyle: 'bold', color: '#91bcca', letterSpacing: 1
+      const x = rect.x + 17 + halfWidth / 2 + index * (halfWidth + 74);
+      root.add(this.add.text(x, rect.y + 54, role === 'source' ? 'SOURCE ACCOUNT' : 'TARGET ACCOUNT', {
+        fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#89aeba', fontStyle: 'bold'
       }).setOrigin(0.5));
-      root.add(createButton(this, columnX[index], selectionY + (compact ? 11 : 15), EXCHANGE_CURRENCY_LABELS[currency], () => {
-        cycleCurrency(role, 1);
-      }, selectorWidth, 'menu', { height: compact ? 38 : 48, fontSize: compact ? 14 : 18, focusModalDepth: 30 }));
-      frame.add(this.add.text(frameWidth / 2, frameHeight - 7, 'SELECT / CYCLE', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 8 : 10}px`, color: '#688b99'
-      }).setOrigin(0.5, 1));
-    }
-    root.add(createButton(this, width / 2, selectionY + (compact ? 8 : 12), 'SWAP', () => {
+      root.add(createButton(this, x, accountY, EXCHANGE_CURRENCY_LABELS[currency], () => cycleCurrency(role), halfWidth, 'menu', {
+        height: compact ? 34 : 42, fontSize: compact ? 11 : 14, focusModalDepth: 30
+      }));
+      root.add(this.add.text(x, accountY + (compact ? 24 : 29), `BAL ${analytics.wallet[currency].toLocaleString()}`, {
+        fontFamily: ECONOMY_FONT, fontSize: `${compact ? 9 : 11}px`, color: Phaser.Display.Color.IntegerToColor(EXCHANGE_CURRENCY_COLORS[currency]).rgba, fontStyle: 'bold'
+      }).setOrigin(0.5));
+    });
+    root.add(createButton(this, rect.x + rect.width / 2, accountY, 'SWAP', () => {
       [this.exchangeSource, this.exchangeTarget] = [this.exchangeTarget, this.exchangeSource];
       this.exchangeAmount = getCurrencyExchangeRate(this.exchangeSource, this.exchangeTarget)?.sourceUnits ?? 1;
-      this.exchangeConfirmationArmed = true;
-      this.status = '';
-      this.showCurrencyExchange();
-    }, compact ? 66 : 84, 'menu', { height: compact ? 36 : 42, fontSize: compact ? 11 : 14, focusModalDepth: 30 }));
+      this.exchangeConfirmationArmed = true; this.status = ''; this.showCurrencyExchange();
+    }, compact ? 56 : 66, 'menu', { height: compact ? 32 : 38, fontSize: compact ? 9 : 11, focusModalDepth: 30 }));
+    const routePulse = this.add.circle(rect.x + 17 + halfWidth, accountY + (compact ? 34 : 42), 3, 0x7ffff2, 0.86);
+    root.add(routePulse);
+    this.overlayAnimatedTargets.push(routePulse);
+    this.tweens.add({ targets: routePulse, x: rect.x + rect.width - 17 - halfWidth, alpha: { from: 0.25, to: 1 }, duration: 1250, repeat: -1, ease: 'Sine.easeInOut' });
 
-    const amountY = selectionY + (compact ? 61 : 91);
-    const previewY = amountY + (compact ? 51 : 70);
-    const controlsY = previewY + (compact ? 55 : 71);
-    const confirmY = Math.min(height - (compact ? 43 : 54), controlsY + (compact ? 65 : 80));
-    root.add(this.add.text(width / 2, amountY - (compact ? 20 : 25), 'SOURCE AMOUNT', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 14}px`, fontStyle: 'bold', color: '#82adbc', letterSpacing: 1
-    }).setOrigin(0.5));
-    root.add(this.add.text(width / 2, amountY + (compact ? 6 : 8), this.exchangeAmount.toLocaleString(), {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 22 : 34}px`, fontStyle: 'bold', color: Phaser.Display.Color.IntegerToColor(sourceColor).rgba
-    }).setOrigin(0.5));
-
-    const previewWidth = Math.min(panelWidth, compact ? 570 : 860);
-    const previewFrame = addFrame(width / 2 - previewWidth / 2, previewY - (compact ? 25 : 32), previewWidth, compact ? 50 : 64, quote.ok ? 0x64f4ff : 0xff6f8c, 0.92);
-    previewFrame.add(this.add.text(previewWidth / 2, compact ? 15 : 18,
-      quote.ok
-        ? `${quote.spent.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeSource]}  >>  ${quote.received.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeTarget]}`
-        : quote.message.toUpperCase(), {
-        fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 12 : 18}px`, fontStyle: 'bold', color: quote.ok ? '#e8fdff' : '#ff9bac', align: 'center'
-      }).setOrigin(0.5, 0));
-    previewFrame.add(this.add.text(previewWidth / 2, compact ? 35 : 43,
-      `MARKET RATE // ${selectedRate.sourceUnits.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeSource]} = ${selectedRate.targetUnits.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeTarget]}`, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 12}px`, fontStyle: 'bold', color: '#89b8c8'
-      }).setOrigin(0.5, 0));
-
-    const maxSpend = getMaximumExchangeSpend(balances, this.exchangeSource, this.exchangeTarget);
-    const amountActions: Array<{ label: string; amount: () => number }> = [
-      { label: '- STEP', amount: () => Math.max(selectedRate.sourceUnits, this.exchangeAmount - selectedRate.sourceUnits) },
-      { label: '+ STEP', amount: () => this.exchangeAmount + selectedRate.sourceUnits },
-      { label: 'x5', amount: () => selectedRate.sourceUnits * 5 },
-      { label: 'x10', amount: () => selectedRate.sourceUnits * 10 },
-      { label: 'MAX', amount: () => maxSpend || selectedRate.sourceUnits }
+    const amountY = rect.y + (compact ? 142 : 159);
+    root.add(this.add.text(rect.x + rect.width / 2, amountY, 'SOURCE AMOUNT', { fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#7fa3b1', fontStyle: 'bold' }).setOrigin(0.5));
+    root.add(this.add.text(rect.x + rect.width / 2, amountY + 17, this.exchangeAmount.toLocaleString(), {
+      fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 21 : 29}px`, color: Phaser.Display.Color.IntegerToColor(EXCHANGE_CURRENCY_COLORS[this.exchangeSource]).rgba, fontStyle: 'bold'
+    }).setOrigin(0.5, 0));
+    const maxSpend = getMaximumExchangeSpend(analytics.wallet, this.exchangeSource, this.exchangeTarget);
+    const actions: Array<{ label: string; amount: () => number }> = [
+      { label: '-STEP', amount: () => Math.max(rate.sourceUnits, this.exchangeAmount - rate.sourceUnits) },
+      { label: '+STEP', amount: () => this.exchangeAmount + rate.sourceUnits },
+      { label: 'x5', amount: () => rate.sourceUnits * 5 }, { label: 'x10', amount: () => rate.sourceUnits * 10 },
+      { label: 'MAX', amount: () => maxSpend || rate.sourceUnits }
     ];
-    const controlWidth = compact ? Phaser.Math.Clamp((width - 72) / 5, 64, 88) : 100;
-    const controlGap = compact ? 7 : 12;
-    const totalControlWidth = controlWidth * amountActions.length + controlGap * (amountActions.length - 1);
-    amountActions.forEach((action, index) => {
-      root.add(createButton(this, width / 2 - totalControlWidth / 2 + controlWidth / 2 + index * (controlWidth + controlGap), controlsY, action.label, () => {
-        this.exchangeAmount = action.amount();
-        this.exchangeConfirmationArmed = true;
-        this.status = '';
-        this.showCurrencyExchange();
-      }, controlWidth, 'menu', { height: compact ? 36 : 42, fontSize: compact ? 12 : 14, focusModalDepth: 30 }));
-    });
+    const actionGap = 5;
+    const actionWidth = (rect.width - 34 - actionGap * 4) / 5;
+    actions.forEach((action, index) => root.add(createButton(this, rect.x + 17 + actionWidth / 2 + index * (actionWidth + actionGap), amountY + (compact ? 65 : 78), action.label, () => {
+      this.exchangeAmount = action.amount(); this.exchangeConfirmationArmed = true; this.status = ''; this.showCurrencyExchange();
+    }, actionWidth, 'menu', { height: compact ? 30 : 36, fontSize: compact ? 9 : 11, focusModalDepth: 30 })));
 
-    const confirm = createButton(this, width / 2, confirmY, quote.ok
-      ? this.exchangeConfirmationArmed ? 'CONFIRM SECURE EXCHANGE' : 'ADJUST TO EXCHANGE AGAIN'
-      : 'EXCHANGE UNAVAILABLE', () => {
+    const previewTop = amountY + (compact ? 91 : 113);
+    panel.add(this.add.rectangle(17, previewTop - rect.y, rect.width - 34, short ? 52 : compact ? 98 : 121, quote.ok ? 0x113039 : 0x37131e, 0.88).setOrigin(0).setStrokeStyle(1, quote.ok ? 0x62efff : 0xff6f89, 0.52));
+    const spent = quote.ok ? quote.spent : 0; const received = quote.ok ? quote.received : 0;
+    const sourceAfter = analytics.wallet[this.exchangeSource] - spent;
+    const targetAfter = analytics.wallet[this.exchangeTarget] + received;
+    root.add(this.add.text(rect.x + rect.width / 2, previewTop + 10, quote.ok
+      ? `${spent.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeSource]}  >>  ${received.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeTarget]}`
+      : quote.message.toUpperCase(), { fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 11 : 14}px`, color: quote.ok ? '#efffff' : '#ff9bae', fontStyle: 'bold', align: 'center' }).setOrigin(0.5));
+    if (!short) {
+      root.add(this.add.text(rect.x + 27, previewTop + (compact ? 40 : 49), `SOURCE POST-TRADE\n${analytics.wallet[this.exchangeSource].toLocaleString()}  ->  ${sourceAfter.toLocaleString()}\n-${spent.toLocaleString()}`, {
+        fontFamily: ECONOMY_FONT, fontSize: `${compact ? 9 : 12}px`, color: '#ff91a5', fontStyle: 'bold', lineSpacing: 2
+      }));
+      root.add(this.add.text(rect.x + rect.width - 27, previewTop + (compact ? 40 : 49), `TARGET POST-TRADE\n${analytics.wallet[this.exchangeTarget].toLocaleString()}  ->  ${targetAfter.toLocaleString()}\n+${received.toLocaleString()}`, {
+        fontFamily: ECONOMY_FONT, fontSize: `${compact ? 9 : 12}px`, color: '#73ffad', fontStyle: 'bold', align: 'right', lineSpacing: 2
+      }).setOrigin(1, 0));
+    }
+    const confirmY = Math.min(rect.y + rect.height - (compact ? 42 : 49), previewTop + (short ? 75 : compact ? 129 : 158));
+    const confirm = createButton(this, rect.x + rect.width / 2, confirmY, quote.ok
+      ? this.exchangeConfirmationArmed ? 'CONFIRM SECURE EXCHANGE' : 'ADJUST TO EXCHANGE AGAIN' : 'EXCHANGE UNAVAILABLE', () => {
       if (!this.exchangeConfirmationArmed || this.time.now < this.exchangeConfirmLockedUntil) return false;
-      this.exchangeConfirmLockedUntil = this.time.now + 450;
-      this.exchangeConfirmationArmed = false;
+      this.exchangeConfirmLockedUntil = this.time.now + 450; this.exchangeConfirmationArmed = false;
       const result = SaveSystem.exchangeCurrency(this.exchangeSource, this.exchangeTarget, this.exchangeAmount);
       this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message}`;
       if (result.ok) this.refreshWalletTerminalState();
-      this.showCurrencyExchange();
-      return result.ok;
-    }, compact ? Math.min(310, width - 80) : 360, 'menu', { height: compact ? 42 : 50, fontSize: compact ? 14 : 18, focusModalDepth: 30, focusDefaultPriority: 40 });
+      this.showCurrencyExchange(); return result.ok;
+    }, Math.min(rect.width - 42, compact ? 280 : 340), 'menu', { height: compact ? 38 : 46, fontSize: compact ? 12 : 15, focusModalDepth: 30, focusDefaultPriority: 50 });
     if (!quote.ok || !this.exchangeConfirmationArmed) disableButton(confirm);
     root.add(confirm);
+    root.add(this.add.text(rect.x + rect.width / 2, rect.y + rect.height - 18, this.status || `FIXED RATE // ${rate.sourceUnits.toLocaleString()}:${rate.targetUnits.toLocaleString()} // LOSSY ROUTING`, {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 9 : 11}px`, color: this.status.startsWith('BLOCKED') ? '#ff91a4' : this.status ? '#76ffad' : '#668c9b', fontStyle: 'bold'
+    }).setOrigin(0.5));
+  }
 
-    const footerY = Math.min(height - 13, confirmY + (compact ? 31 : 38));
-    root.add(this.add.text(width / 2, footerY, this.status || `LOSSY MARKET ROUTING // ${CURRENCY_EXCHANGE_RATES.length} SECURE PAIRS ONLINE`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, fontStyle: 'bold', color: this.status.startsWith('BLOCKED') ? '#ff91a4' : this.status ? '#76ffad' : '#688e9d', align: 'center'
-    }).setOrigin(0.5).setWordWrapWidth(width - 50, true).setMaxLines(1));
-
-    // Desktop space becomes a believable market-data bay. The trend is a
-    // deterministic presentation graph (rates themselves remain fixed), so it
-    // costs no per-frame calculation and never implies a fluctuating quote.
-    const chartTop = footerY + 17;
-    const chartHeight = height - chartTop - 22;
-    if (!compact && chartHeight >= 82) {
-      const chartGap = 18;
-      const chartWidth = (panelWidth - chartGap) / 2;
-      for (let chartIndex = 0; chartIndex < 2; chartIndex += 1) {
-        const chartLeft = panelMargin + chartIndex * (chartWidth + chartGap);
-        addFrame(chartLeft, chartTop, chartWidth, chartHeight, chartIndex === 0 ? sourceColor : targetColor, 0.76);
-        root.add(this.add.text(chartLeft + 17, chartTop + 13, chartIndex === 0 ? 'MARKET DEPTH // FIXED RATE TRACE' : 'LIQUIDITY ROUTE // SECURE LEDGER', {
-          fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#7fa9b8', letterSpacing: 1
-        }));
-        const graph = this.add.graphics();
-        const graphLeft = chartLeft + 18;
-        const graphTop = chartTop + 37;
-        const graphWidth = chartWidth - 36;
-        const graphHeight = chartHeight - 53;
-        graph.lineStyle(1, 0x477182, 0.2);
-        for (let gridIndex = 1; gridIndex < 5; gridIndex += 1) {
-          graph.lineBetween(graphLeft, graphTop + graphHeight * gridIndex / 5, graphLeft + graphWidth, graphTop + graphHeight * gridIndex / 5);
-          graph.lineBetween(graphLeft + graphWidth * gridIndex / 5, graphTop, graphLeft + graphWidth * gridIndex / 5, graphTop + graphHeight);
-        }
-        const graphColor = chartIndex === 0 ? sourceColor : targetColor;
-        graph.lineStyle(2, graphColor, 0.84);
-        const points = Array.from({ length: 11 }, (_, pointIndex) => {
-          const normalized = pointIndex / 10;
-          const wave = Math.sin(pointIndex * 1.37 + chartIndex * 0.8) * 0.15 + Math.cos(pointIndex * 0.61) * 0.08;
-          return new Phaser.Math.Vector2(graphLeft + graphWidth * normalized, graphTop + graphHeight * (0.56 - normalized * 0.18 + wave));
-        });
-        graph.strokePoints(points, false);
-        root.add(graph);
-        const scan = this.add.rectangle(graphLeft, graphTop, 2, graphHeight, graphColor, 0.34).setOrigin(0);
-        root.add(scan);
-        this.overlayAnimatedTargets.push(scan);
-        this.tweens.add({ targets: scan, x: graphLeft + graphWidth, alpha: { from: 0.18, to: 0.6 }, duration: 2600 + chartIndex * 500, repeat: -1, yoyo: true, ease: 'Sine.easeInOut' });
-      }
+  private renderPortfolioAnalytics(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, rect: EconomyConsoleRect, compact: boolean): void {
+    const split = Math.max(230, rect.height * 0.54);
+    const donutPanel = createEconomyPanel(this, root, { ...rect, height: split }, 'PORTFOLIO VALUE DISTRIBUTION', 0xff65c8, 'CR-EQUIVALENT');
+    const radius = Phaser.Math.Clamp(Math.min(rect.width * 0.24, split * 0.22), 45, 78);
+    drawDonut(this, donutPanel, rect.width / 2, 66 + radius, radius, analytics.portfolio.map((entry) => ({ label: entry.label, percentage: entry.percentage, color: entry.color })), formatEconomyNumber(analytics.totalPortfolioCreditEquivalent));
+    const legendY = 77 + radius * 2;
+    analytics.portfolio.forEach((entry, index) => {
+      const y = legendY + index * (compact ? 20 : 23);
+      donutPanel.add(this.add.rectangle(18, y + 4, 9, 9, entry.color, 0.95).setOrigin(0));
+      donutPanel.add(this.add.text(34, y, `${entry.label}  ${entry.percentage.toFixed(1)}%`, { fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#c9dee7', fontStyle: 'bold' }));
+      donutPanel.add(this.add.text(rect.width - 18, y, `${formatEconomyNumber(entry.creditEquivalent)} CR`, { fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#e8faff', fontStyle: 'bold' }).setOrigin(1, 0));
+    });
+    const spreadRect = { x: rect.x, y: rect.y + split + 10, width: rect.width, height: rect.height - split - 10 };
+    const spreadPanel = createEconomyPanel(this, root, spreadRect, 'LIQUIDITY SPREAD', 0xffcc62, 'ROUND TRIP');
+    const spread = getExchangeRoundTrip(this.exchangeSource, this.exchangeTarget);
+    if (spread) {
+      addMetric(this, spreadPanel, 18, 52, 'ROUND-TRIP RETENTION', `${spread.retentionPercentage.toFixed(1)}%`, 0x72ff9b);
+      addMetric(this, spreadPanel, spreadRect.width - 18, 52, 'MARKET SPREAD', `${spread.spreadPercentage.toFixed(1)}%`, 0xff7f98, 'right');
+      spreadPanel.add(this.add.text(18, 96, `${EXCHANGE_CURRENCY_LABELS[this.exchangeSource]} -> ${EXCHANGE_CURRENCY_LABELS[this.exchangeTarget]}\n${spread.forward.sourceUnits.toLocaleString()} : ${spread.forward.targetUnits.toLocaleString()}`, {
+        fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#bad3dc', fontStyle: 'bold', lineSpacing: 3
+      }));
+      spreadPanel.add(this.add.text(spreadRect.width - 18, 96, `${EXCHANGE_CURRENCY_LABELS[this.exchangeTarget]} -> ${EXCHANGE_CURRENCY_LABELS[this.exchangeSource]}\n${spread.reverse.sourceUnits.toLocaleString()} : ${spread.reverse.targetUnits.toLocaleString()}`, {
+        fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#bad3dc', fontStyle: 'bold', align: 'right', lineSpacing: 3
+      }).setOrigin(1, 0));
     }
+  }
+
+  private renderExchangeMatrix(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, rect: EconomyConsoleRect, compact: boolean): void {
+    const matrixHeight = Math.min(rect.height * 0.58, compact ? 330 : 390);
+    const panel = createEconomyPanel(this, root, { ...rect, height: matrixHeight }, 'FULL EXCHANGE RATE MATRIX', 0x72ff9b, 'FIXED ROUTES');
+    const labels = ['CR', 'CT', 'PC', 'FC'];
+    const left = 18; const top = 66; const rowLabelWidth = compact ? 55 : 72;
+    const cellWidth = (rect.width - left * 2 - rowLabelWidth) / 4;
+    const rowHeight = (matrixHeight - top - 18) / 4;
+    labels.forEach((label, index) => panel.add(this.add.text(left + rowLabelWidth + cellWidth * (index + 0.5), 49, label, {
+      fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 10 : 12}px`, color: Phaser.Display.Color.IntegerToColor(EXCHANGE_CURRENCY_COLORS[EXCHANGE_CURRENCIES[index]]).rgba, fontStyle: 'bold'
+    }).setOrigin(0.5)));
+    EXCHANGE_CURRENCIES.forEach((source, row) => {
+      panel.add(this.add.text(left, top + row * rowHeight + rowHeight / 2, labels[row], {
+        fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 10 : 12}px`, color: Phaser.Display.Color.IntegerToColor(EXCHANGE_CURRENCY_COLORS[source]).rgba, fontStyle: 'bold'
+      }).setOrigin(0, 0.5));
+      EXCHANGE_CURRENCIES.forEach((target, column) => {
+        const x = left + rowLabelWidth + column * cellWidth; const y = top + row * rowHeight;
+        const selected = source === this.exchangeSource && target === this.exchangeTarget;
+        const cell = this.add.rectangle(x, y, cellWidth - 3, rowHeight - 3, selected ? 0x245c61 : 0x0c222b, selected ? 0.92 : 0.58).setOrigin(0).setStrokeStyle(selected ? 2 : 1, selected ? 0x7ffff2 : 0x355865, selected ? 1 : 0.4);
+        panel.add(cell);
+        if (selected) {
+          this.overlayAnimatedTargets.push(cell);
+          this.tweens.add({ targets: cell, alpha: { from: 0.65, to: 1 }, duration: 900, repeat: -1, yoyo: true, ease: 'Sine.easeInOut' });
+        }
+        const rate = source === target ? null : getCurrencyExchangeRate(source, target);
+        panel.add(this.add.text(x + (cellWidth - 3) / 2, y + (rowHeight - 3) / 2, rate ? `${formatEconomyNumber(rate.sourceUnits)}:${formatEconomyNumber(rate.targetUnits)}` : '—', {
+          fontFamily: ECONOMY_FONT, fontSize: `${compact ? 9 : 11}px`, color: selected ? '#ffffff' : '#bad4dd', fontStyle: 'bold'
+        }).setOrigin(0.5));
+      });
+    });
+    const powerRect = { x: rect.x, y: rect.y + matrixHeight + 10, width: rect.width, height: rect.height - matrixHeight - 10 };
+    const power = createEconomyPanel(this, root, powerRect, 'CURRENT PURCHASING POWER', 0xff65c8, 'LIVE WALLET');
+    const values = [
+      ['PERMANENT UPGRADES', analytics.purchasingPower.permanentUpgradeActions], ['COSMETICS', analytics.purchasingPower.cosmetics],
+      ['MOD UPGRADES', analytics.purchasingPower.modUpgradeActions], ['INFUSION OPTIONS', analytics.purchasingPower.initialInfusionOptions]
+    ] as const;
+    values.forEach(([label, value], index) => addMetric(this, power, index % 2 ? powerRect.width - 18 : 18, 50 + Math.floor(index / 2) * 55, label, value.toLocaleString(), index % 2 ? 0xff65c8 : 0x62efff, index % 2 ? 'right' : 'left'));
+    power.add(this.add.text(18, Math.min(powerRect.height - 28, 164), `ANOMALY CAPACITY // ${analytics.purchasingPower.anomalyEntriesAtMinimum} @ ${analytics.purchasingPower.anomalyMinimumCost} FC   |   ${analytics.purchasingPower.anomalyEntriesAtMaximum} @ ${analytics.purchasingPower.anomalyMaximumCost} FC`, {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 9 : 11}px`, color: '#78ffac', fontStyle: 'bold'
+    }));
+  }
+
+  private getEconomyColumns(body: EconomyConsoleRect, compact: boolean): EconomyConsoleRect[] {
+    const gap = compact ? 8 : 12;
+    const width = (body.width - gap * 2) / 3;
+    return [0, 1, 2].map((index) => ({ x: body.x + index * (width + gap), y: body.y, width, height: body.height }));
+  }
+
+  private renderEconomyProgression(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, body: EconomyConsoleRect, compact: boolean): void {
+    const [summaryRect, costsRect, futureRect] = this.getEconomyColumns(body, compact);
+    const summary = createEconomyPanel(this, root, summaryRect, 'PERMANENT UPGRADE ECONOMY', 0x62efff, 'AUTHORITATIVE');
+    addMetric(this, summary, 18, 52, 'UPGRADE COMPLETION', `${analytics.upgrades.currentLevels} / ${analytics.upgrades.maximumLevels}`, 0x62efff);
+    addMetric(this, summary, summaryRect.width - 18, 52, 'REMAINING CREDIT COST', `${formatEconomyNumber(analytics.upgrades.remainingCredits)} CR`, 0xffcc62, 'right');
+    addMetric(this, summary, 18, 103, 'AFFORDABLE ACTIONS', analytics.upgrades.affordableActions.toLocaleString(), 0x72ff9b);
+    summary.add(this.add.text(18, 150, analytics.upgrades.nextUpgrade ? `NEXT // ${analytics.upgrades.nextUpgrade.label} L${analytics.upgrades.nextUpgrade.level} // ${analytics.upgrades.nextUpgrade.cost.toLocaleString()} CR` : 'NEXT // ALL PERMANENT UPGRADES MAXED', {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#d9f3fa', fontStyle: 'bold'
+    }).setWordWrapWidth(summaryRect.width - 36, true));
+    summary.add(this.add.text(18, 180, analytics.upgrades.mostExpensiveRemaining ? `HIGHEST REMAINING // ${analytics.upgrades.mostExpensiveRemaining.label} L${analytics.upgrades.mostExpensiveRemaining.level} // ${analytics.upgrades.mostExpensiveRemaining.cost.toLocaleString()} CR` : 'HIGHEST REMAINING // NONE', {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 9 : 11}px`, color: '#90afba', fontStyle: 'bold'
+    }).setWordWrapWidth(summaryRect.width - 36, true));
+    analytics.upgrades.categories.forEach((category, index) => drawProgressBar(this, summary, 18, 225 + index * (compact ? 48 : 54), summaryRect.width - 36, category.label.toUpperCase(), category.completionPercentage, `${category.currentLevels}/${category.maximumLevels}`, index % 2 ? 0xff65c8 : 0x62efff));
+
+    const costs = createEconomyPanel(this, root, costsRect, 'WHERE FUTURE CREDITS GO', 0xff65c8, 'REMAINING COST');
+    drawHorizontalBars(this, costs, { x: 18, y: 54, width: costsRect.width - 36, height: Math.min(245, costsRect.height * 0.42) }, analytics.upgrades.categories.map((category, index) => ({ label: category.label.toUpperCase(), value: category.remainingCredits, color: index % 2 ? 0xff65c8 : 0x62efff })), { suffix: ' CR' });
+    costs.add(this.add.text(18, Math.min(330, costsRect.height * 0.5), 'PERMANENT UPGRADE COST CURVE', { fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#80f4ff', fontStyle: 'bold' }));
+    drawLineChart(this, costs, { x: 18, y: Math.min(352, costsRect.height * 0.54), width: costsRect.width - 36, height: Math.max(110, costsRect.height - Math.min(352, costsRect.height * 0.54) - 18) }, analytics.upgrades.costCurve, 0x62efff, 'CREDITS');
+
+    const future = createEconomyPanel(this, root, futureRect, 'FINITE PROGRESSION VALUE REMAINING', 0xffcc62, 'CR-EQUIVALENT');
+    const finiteTotal = analytics.finiteProgression.reduce((sum, point) => sum + point.value, 0);
+    drawDonut(this, future, futureRect.width / 2, 140, Phaser.Math.Clamp(futureRect.width * 0.2, 48, 82), analytics.finiteProgression.map((point) => ({ label: point.label, percentage: finiteTotal ? point.value / finiteTotal * 100 : 0, color: point.color })), formatEconomyNumber(finiteTotal));
+    drawHorizontalBars(this, future, { x: 18, y: 245, width: futureRect.width - 36, height: 150 }, analytics.finiteProgression, { normalizeLabel: 'FINITE CATALOG / OWNED PROGRESSION ONLY' });
+    future.add(this.add.text(18, 430, `MOD CARDS // ${analytics.mods.cardCount}\nMAX RANK // ${analytics.mods.maxRankCards}\nUPGRADEABLE // ${analytics.mods.upgradeableCards}\nAFFORDABLE NOW // ${analytics.mods.affordableUpgradeActions}`, {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 11 : 13}px`, color: '#c7e0e8', fontStyle: 'bold', lineSpacing: 7
+    }));
+  }
+
+  private renderEconomyCommerce(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, body: EconomyConsoleRect, compact: boolean): void {
+    const [catalogRect, categoriesRect, curveRect] = this.getEconomyColumns(body, compact);
+    const catalog = createEconomyPanel(this, root, catalogRect, 'STORE ECONOMY // CATALOG', 0xff65c8, 'INFORMATION ONLY');
+    addMetric(this, catalog, 18, 52, 'OWNERSHIP COMPLETION', `${analytics.store.owned} / ${analytics.store.total}`, 0xff65c8);
+    addMetric(this, catalog, catalogRect.width - 18, 52, 'COMPLETION', `${analytics.store.completionPercentage.toFixed(1)}%`, 0x62efff, 'right');
+    addMetric(this, catalog, 18, 108, 'AFFORDABLE NOW', analytics.store.affordableNow.toLocaleString(), 0x72ff9b);
+    catalog.add(this.add.text(18, 164, `REMAINING CATALOG VALUE\n${analytics.store.remainingCatalogCost.credits.toLocaleString()} CR\n${analytics.store.remainingCatalogCost.coreTokens.toLocaleString()} CT\n${analytics.store.remainingCatalogCost.plasmaChips.toLocaleString()} PC\n${formatEconomyNumber(analytics.store.remainingCatalogCost.creditEquivalent)} CR-EQUIVALENT`, {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 11 : 14}px`, color: '#d4e8ef', fontStyle: 'bold', lineSpacing: 6
+    }));
+    catalog.add(this.add.text(18, 285, `AFFORDABLE BY PRIMARY CURRENCY\nCREDITS  ${analytics.store.affordableByPrimaryCurrency.credits}\nCORE TOKENS  ${analytics.store.affordableByPrimaryCurrency.coreTokens}\nPLASMA CHIPS  ${analytics.store.affordableByPrimaryCurrency.plasmaChips}`, {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 11 : 13}px`, color: '#9bc1cd', fontStyle: 'bold', lineSpacing: 6
+    }));
+    catalog.add(this.add.text(18, 390, `CHEAPEST UNOWNED\n${analytics.store.cheapestUnowned ? `${analytics.store.cheapestUnowned.label}\n${analytics.store.cheapestUnowned.price}` : 'CATALOG COMPLETE'}\n\nMOST EXPENSIVE AFFORDABLE\n${analytics.store.mostExpensiveAffordable ? `${analytics.store.mostExpensiveAffordable.label}\n${analytics.store.mostExpensiveAffordable.price}` : 'NONE CURRENTLY'}`, {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#d6f0f7', fontStyle: 'bold', lineSpacing: 4
+    }).setWordWrapWidth(catalogRect.width - 36, true));
+
+    const categories = createEconomyPanel(this, root, categoriesRect, 'COSMETIC MARKET VALUATION', 0x62efff, 'CR-EQUIVALENT');
+    drawHorizontalBars(this, categories, { x: 18, y: 55, width: categoriesRect.width - 36, height: categoriesRect.height - 78 }, analytics.store.categories.map((category, index) => ({
+      label: `${category.label.toUpperCase()} ${category.owned}/${category.count}`, value: category.averageCreditEquivalent,
+      detail: `MIN ${formatEconomyNumber(category.minimumCreditEquivalent)} / AVG ${formatEconomyNumber(category.averageCreditEquivalent)} / MAX ${formatEconomyNumber(category.maximumCreditEquivalent)} // AFF ${category.affordable}`,
+      color: index % 3 === 0 ? 0x62efff : index % 3 === 1 ? 0xff65c8 : 0xffcc62
+    })), { maxRows: 9, normalizeLabel: 'BAR = AVERAGE CATEGORY VALUE // OWNED / TOTAL' });
+
+    const curve = createEconomyPanel(this, root, curveRect, 'COSMETIC PRICE DISTRIBUTION', 0xffcc62, 'ORDERED CATALOG');
+    drawLineChart(this, curve, { x: 18, y: 58, width: curveRect.width - 36, height: Math.min(300, curveRect.height * 0.47) }, analytics.store.priceCurve, 0xff65c8, 'CR-EQUIVALENT');
+    curve.add(this.add.text(18, Math.min(390, curveRect.height * 0.58), `PURCHASING POWER\n${analytics.purchasingPower.cosmetics} COSMETICS AFFORDABLE\n${analytics.purchasingPower.permanentUpgradeActions} PERMANENT UPGRADES\n${analytics.purchasingPower.modUpgradeActions} MOD UPGRADES`, {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 11 : 14}px`, color: '#d8edf4', fontStyle: 'bold', lineSpacing: 8
+    }));
+    curve.add(this.add.text(18, Math.min(520, curveRect.height - 100), 'TRANSACTION ROUTING', { fontFamily: ECONOMY_DISPLAY_FONT, fontSize: '11px', color: '#70f4ff', fontStyle: 'bold' }));
+    curve.add(this.add.text(18, Math.min(544, curveRect.height - 75), 'COSMETIC PURCHASES REMAIN IN THE COSMETIC STORE.\nTHIS CONSOLE IS A READ-ONLY CATALOG ANALYSIS.', {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#7f9eaa', fontStyle: 'bold', lineSpacing: 4
+    }).setWordWrapWidth(curveRect.width - 36, true));
+  }
+
+  private renderEconomyMods(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, body: EconomyConsoleRect, compact: boolean): void {
+    const [modsRect, infusionRect, intelRect] = this.getEconomyColumns(body, compact);
+    const mods = createEconomyPanel(this, root, modsRect, 'MOD PROGRESSION ECONOMY', 0x62efff, 'OWNED CARDS ONLY');
+    addMetric(this, mods, 18, 52, 'OWNED DEFINITIONS', analytics.mods.ownedDefinitions.toLocaleString(), 0x62efff);
+    addMetric(this, mods, modsRect.width - 18, 52, 'CARD INSTANCES', analytics.mods.cardCount.toLocaleString(), 0xff65c8, 'right');
+    addMetric(this, mods, 18, 105, 'MAX-RANK CARDS', analytics.mods.maxRankCards.toLocaleString(), 0xffcc62);
+    addMetric(this, mods, modsRect.width - 18, 105, 'UPGRADEABLE', analytics.mods.upgradeableCards.toLocaleString(), 0x72ff9b, 'right');
+    mods.add(this.add.text(18, 158, `TOTAL REMAINING\n${analytics.mods.remainingCredits.toLocaleString()} CR + ${analytics.mods.remainingCoreTokens.toLocaleString()} CT\n${formatEconomyNumber(analytics.mods.remainingCreditEquivalent)} CR-EQUIVALENT`, {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 11 : 14}px`, color: '#dbeff5', fontStyle: 'bold', lineSpacing: 5
+    }));
+    drawHorizontalBars(this, mods, { x: 18, y: 245, width: modsRect.width - 36, height: Math.min(245, modsRect.height - 270) }, analytics.mods.byRarity.filter((bucket) => bucket.cards > 0).map((bucket) => ({
+      label: `${bucket.label} (${bucket.cards})`, value: bucket.remainingCreditEquivalent, color: bucket.id === 'legendary' ? 0xffb43f : bucket.id === 'supreme' ? 0xfff16a : bucket.id === 'corrupted' ? 0xff4fc8 : bucket.id === 'epic' ? 0xc86aff : bucket.id === 'rare' ? 0x51c8ff : bucket.id === 'uncommon' ? 0x63ff9b : 0xbcd5de
+    })), { maxRows: 7, normalizeLabel: 'REMAINING RANK COST // CR-EQUIVALENT' });
+
+    const infusion = createEconomyPanel(this, root, infusionRect, 'INFUSION / PLASMA ECONOMY', 0xd779ff, 'LIVE DEFINITIONS');
+    addMetric(this, infusion, 18, 52, 'PLASMA BALANCE', analytics.infusions.plasmaBalance.toLocaleString(), 0xd779ff);
+    addMetric(this, infusion, infusionRect.width - 18, 52, 'INFUSED MODS', analytics.infusions.installedCount.toLocaleString(), 0x62efff, 'right');
+    infusion.add(this.add.text(18, 104, `MIN-COST INSTALLS  ${analytics.infusions.minimumCostInstallsAffordable}\nAVERAGE-COST INSTALLS  ${analytics.infusions.averageCostInstallsAffordable}\nSWAPS @ ${analytics.infusions.swapCost} PC  ${analytics.infusions.swapsAffordable}\nREMOVALS @ ${analytics.infusions.removalCost} PC  ${analytics.infusions.removalsAffordable}\nUNINFUSED ELIGIBLE  ${analytics.infusions.uninfusedEligibleCards}`, {
+      fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 13}px`, color: '#d7e9ef', fontStyle: 'bold', lineSpacing: 5
+    }));
+    infusion.add(this.add.text(18, 225, `INSTALL COSTS // ${analytics.infusions.minimumInstallCost}-${analytics.infusions.maximumInstallCost} PC`, { fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#e48cff', fontStyle: 'bold' }));
+    drawVerticalBars(this, infusion, { x: 18, y: 275, width: infusionRect.width - 36, height: Math.min(210, infusionRect.height - 315) }, analytics.infusions.costs, analytics.infusions.plasmaBalance);
+
+    const intel = createEconomyPanel(this, root, intelRect, 'MOD COST CURVE / ECONOMY INTEL', 0xffcc62, 'DETERMINISTIC');
+    drawLineChart(this, intel, { x: 18, y: 58, width: intelRect.width - 36, height: Math.min(260, intelRect.height * 0.4) }, analytics.mods.costCurve, 0xffcc62, 'CR-EQUIVALENT');
+    const intelTop = Math.min(355, intelRect.height * 0.48);
+    analytics.intel.forEach((entry, index) => {
+      const y = intelTop + index * (compact ? 50 : 58);
+      intel.add(this.add.text(18, y, entry.label, { fontFamily: ECONOMY_FONT, fontSize: `${compact ? 10 : 12}px`, color: '#829fac', fontStyle: 'bold' }));
+      intel.add(this.add.text(intelRect.width - 18, y, entry.value, { fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 12 : 15}px`, color: Phaser.Display.Color.IntegerToColor(entry.color).rgba, fontStyle: 'bold' }).setOrigin(1, 0));
+      intel.add(this.add.text(18, y + 19, entry.detail, { fontFamily: ECONOMY_FONT, fontSize: `${compact ? 9 : 11}px`, color: '#c6dbe3', fontStyle: 'bold' }));
+    });
+  }
+
+  private createEconomyTicker(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, height: number): void {
+    const { width } = this.scale;
+    const y = height - 27;
+    root.add(this.add.rectangle(width / 2, y, width - 28, 23, 0x02080d, 0.98).setStrokeStyle(1, 0x62efff, 0.35));
+    root.add(this.add.text(22, y, 'MARKET WIRE //', { fontFamily: ECONOMY_DISPLAY_FONT, fontSize: '10px', color: '#62efff', fontStyle: 'bold' }).setOrigin(0, 0.5));
+    const ticker = this.add.text(128, y, analytics.ticker.join('     ◆     '), {
+      fontFamily: ECONOMY_FONT, fontSize: '11px', color: '#9fc4cf', fontStyle: 'bold'
+    }).setOrigin(0, 0.5).setCrop(0, -12, width - 158, 24);
+    root.add(ticker);
   }
 
   private showPresets(): void {

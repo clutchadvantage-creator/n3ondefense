@@ -7,8 +7,14 @@ import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts
 import type { GaragePresetId } from '../garage/types.ts';
 import type { ArcadeMetricEvent } from '../arcade/types.ts';
 import type { ExchangeCurrency } from '../economy/CurrencyExchange.ts';
+import { buildEconomyAnalytics, type EconomyAnalyticsSnapshot } from '../economy/EconomyAnalytics.ts';
 
 export class SaveSystem {
+  /** Read-only, freshly derived account economy data for presentation surfaces. */
+  static getEconomyAnalytics(): EconomyAnalyticsSnapshot {
+    return buildEconomyAnalytics(PlayerProfileStore.getActiveSave());
+  }
+
   static get(): GameSaveData {
     const save = PlayerProfileStore.getActiveSave();
     return {
