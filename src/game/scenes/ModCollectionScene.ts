@@ -13,6 +13,7 @@ import { getInfusionOperationCost, getInfusionRemovalCost, MOD_INFUSIONS } from 
 import { getModCopyCounts, getRecyclableUnupgradedDuplicates } from '../mods/ModInventoryService.ts';
 import {
   buildModOperationStatus,
+  calculateModOperationStatusRect,
   MOD_OPERATION_STATUS_DURATION_MS,
   type ModOperationStatusTone
 } from '../mods/ModOperationStatus.ts';
@@ -194,12 +195,13 @@ export class ModCollectionScene extends Phaser.Scene {
     const controlsRight = toolbarStart + toolbarButtonWidth * 4 + toolbarGap * 3;
     const statusLeft = controlsRight + statusGap;
     const statusRight = returnX - returnWidth / 2 - statusGap;
-    const statusConsole = createModOperationStatusConsole(this, {
-      x: statusLeft,
-      y: toolbarTop + (compact ? 22 : 26),
-      width: Math.max(80, statusRight - statusLeft),
-      height: toolbarHeight - (compact ? 25 : 29)
-    }, this.status || 'AWAITING MODULE COMMAND', this.status ? this.statusTone : 'info');
+    const statusRect = calculateModOperationStatusRect(statusLeft, statusRight, toolbarTop, toolbarHeight, compact);
+    const statusConsole = createModOperationStatusConsole(
+      this,
+      statusRect,
+      this.status || 'AWAITING MODULE COMMAND',
+      this.status ? this.statusTone : 'info'
+    );
     if (this.status) {
       const remaining = Math.max(0, this.statusExpiresAt - Date.now());
       this.statusTimer = this.time.delayedCall(remaining, () => {

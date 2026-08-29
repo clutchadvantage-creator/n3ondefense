@@ -290,19 +290,19 @@ export const createModOperationStatusConsole = (
   const root = scene.add.container(rect.x, rect.y);
   const compact = rect.width < 300;
   const colors = MOD_STATUS_COLORS[initialTone];
-  const shadow = scene.add.rectangle(4, 4, rect.width, rect.height, 0x000000, 0.45).setOrigin(0);
+  const shadow = scene.add.rectangle(2, 2, Math.max(1, rect.width - 2), Math.max(1, rect.height - 2), 0x000000, 0.42).setOrigin(0);
   const panel = scene.add.rectangle(0, 0, rect.width, rect.height, colors.fill, 0.96)
     .setOrigin(0).setStrokeStyle(1, colors.accent, 0.72);
-  const rail = scene.add.rectangle(6, 5, 3, rect.height - 10, colors.accent, 0.82).setOrigin(0);
-  const scanline = scene.add.rectangle(13, 6, rect.width - 24, 2, colors.accent, 0.38).setOrigin(0);
-  const label = scene.add.text(17, 5, `MODULE STATUS // ${initialTone.toUpperCase()}`, {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 11}px`, color: '#86b7c2', fontStyle: 'bold', letterSpacing: compact ? 0 : 1
+  const rail = scene.add.rectangle(5, 4, 3, Math.max(1, rect.height - 8), colors.accent, 0.82).setOrigin(0);
+  const scanline = scene.add.rectangle(12, 4, Math.max(1, rect.width - 21), 2, colors.accent, 0.38).setOrigin(0);
+  const label = scene.add.text(14, 3, `MODULE STATUS // ${initialTone.toUpperCase()}`, {
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 12}px`, color: '#92c1cb', fontStyle: 'bold', letterSpacing: compact ? 0 : 1
   }).setOrigin(0);
-  const message = scene.add.text(17, compact ? 17 : 18, initialMessage, {
-    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 13 : rect.width < 470 ? 15 : 17}px`,
-    color: colors.text, fontStyle: 'bold', lineSpacing: -2
-  }).setOrigin(0).setWordWrapWidth(Math.max(60, rect.width - 31), true).setMaxLines(2);
-  const led = scene.add.circle(rect.width - 13, 11, 2.5, colors.accent, 0.92);
+  const message = scene.add.text(14, 16, initialMessage, {
+    fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 15 : rect.width < 470 ? 15 : 17}px`,
+    color: colors.text, fontStyle: 'bold', lineSpacing: -5
+  }).setOrigin(0).setWordWrapWidth(Math.max(48, rect.width - 26), true).setMaxLines(2);
+  const led = scene.add.circle(rect.width - 11, 10, 2.5, colors.accent, 0.92);
   root.add([shadow, panel, rail, scanline, label, message, led]);
   scene.tweens.add({ targets: led, alpha: { from: 0.25, to: 1 }, duration: 820, yoyo: true, repeat: -1 });
 

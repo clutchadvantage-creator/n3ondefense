@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildModOperationStatus,
+  calculateModOperationStatusRect,
   MOD_OPERATION_STATUS_DURATION_MS
 } from '../src/game/mods/ModOperationStatus.ts';
 
@@ -29,4 +30,18 @@ test('currency failures include the currently available balance and use error co
 test('equip limits and maximum-rank feedback use the warning presentation', () => {
   assert.equal(buildModOperationStatus({ ok: false, message: 'Only one Legendary Mod may be equipped.' }, wallet).tone, 'warning');
   assert.equal(buildModOperationStatus({ ok: false, message: 'Mod card is already at maximum level.' }, wallet).tone, 'warning');
+});
+
+test('status strip remains inside regular and compact toolbar bounds and consumes only remaining width', () => {
+  for (const input of [
+    { left: 1_010, right: 1_652, top: 124, height: 84, compact: false },
+    { left: 450, right: 690, top: 118, height: 76, compact: true }
+  ]) {
+    const rect = calculateModOperationStatusRect(input.left, input.right, input.top, input.height, input.compact);
+    assert.equal(rect.x, input.left);
+    assert.equal(rect.width, input.right - input.left);
+    assert.ok(rect.y >= input.top);
+    assert.ok(rect.y + rect.height <= input.top + input.height);
+    assert.equal(rect.y + rect.height, input.top + input.height - 4);
+  }
 });

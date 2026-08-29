@@ -17,7 +17,38 @@ export interface ModOperationStatusPresentation {
   tone: ModOperationStatusTone;
 }
 
+export interface ModOperationStatusRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export const MOD_OPERATION_STATUS_DURATION_MS = 3_800;
+
+/**
+ * Fits the status strip into the existing toolbar row. Width is always the
+ * exact remaining span; the compact strip grows upward and shares the bottom
+ * alignment used by its neighboring buttons.
+ */
+export const calculateModOperationStatusRect = (
+  statusLeft: number,
+  statusRight: number,
+  toolbarTop: number,
+  toolbarHeight: number,
+  compact: boolean
+): ModOperationStatusRect => {
+  const bottomInset = 4;
+  const availableHeight = Math.max(1, toolbarHeight - bottomInset * 2);
+  const height = Math.min(compact ? 46 : 50, availableHeight);
+  const bottom = toolbarTop + toolbarHeight - bottomInset;
+  return {
+    x: statusLeft,
+    y: bottom - height,
+    width: Math.max(1, statusRight - statusLeft),
+    height
+  };
+};
 
 const CURRENCY_MATCHERS: ReadonlyArray<{
   pattern: RegExp;

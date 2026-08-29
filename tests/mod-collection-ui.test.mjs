@@ -110,13 +110,15 @@ test('collection presentation delegates to existing buttons and preserves disabl
 });
 
 test('selected-module operations use one readable toolbar status console instead of footer microtext', () => {
-  assert.match(scene, /createModOperationStatusConsole\(this/);
+  assert.match(scene, /createModOperationStatusConsole\(\s*this/);
+  assert.match(scene, /calculateModOperationStatusRect\(statusLeft, statusRight, toolbarTop, toolbarHeight, compact\)/);
   assert.match(scene, /MOD_OPERATION_STATUS_DURATION_MS/);
   assert.match(scene, /AWAITING MODULE COMMAND/);
   assert.match(scene, /const buttonStackBottomInset = compactDetails \? 28 : 34/);
   assert.doesNotMatch(scene, /const statusText = this\.add\.text\(x, y \+ height - 4/);
   assert.match(presentation, /MODULE STATUS/);
   assert.match(presentation, /setMaxLines\(2\)/);
+  assert.match(presentation, /fontSize: `\$\{compact \? 15/);
   assert.doesNotMatch(presentation, /registerUiFocusable[\s\S]*createModOperationStatusConsole/);
 });
 
