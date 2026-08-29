@@ -15,6 +15,7 @@ import type { GaragePresetId, PlayerGarageState } from '../garage/types.ts';
 import {
   commitDeploymentLaunch,
   isSavedDeploymentReminderDue,
+  publishDeploymentConfigurationChanged,
   setSavedDeploymentEnabled
 } from '../garage/SavedDeploymentConfiguration.ts';
 import { resolveWeeklyOperationDecks, type WeeklyOperationDecksSnapshot, type WeeklyOperationProgressSource } from '../progression/WeeklyOperations.ts';
@@ -486,6 +487,7 @@ export class PlayerProfileStore {
     save.garage.nextRun = normalizeRunSetupSelection(selection);
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
+    publishDeploymentConfigurationChanged(save.garage);
     return { ok: true, message: 'Next deployment configuration updated.' };
   }
 
@@ -494,6 +496,7 @@ export class PlayerProfileStore {
     setSavedDeploymentEnabled(save.garage, enabled, nowMs);
     save.profile.lastPlayedAt = new Date(nowMs).toISOString();
     PlayerProfileStore.save();
+    publishDeploymentConfigurationChanged(save.garage);
     return { ok: true, message: enabled ? 'Saved deployment configuration enabled.' : 'Saved deployment configuration disabled.' };
   }
 
@@ -507,6 +510,7 @@ export class PlayerProfileStore {
     if (result.ok) {
       save.profile.lastPlayedAt = new Date(options.nowMs ?? Date.now()).toISOString();
       PlayerProfileStore.save();
+      publishDeploymentConfigurationChanged(save.garage);
     }
     return result;
   }
@@ -527,6 +531,7 @@ export class PlayerProfileStore {
     if (result.ok) {
       save.profile.lastPlayedAt = new Date().toISOString();
       PlayerProfileStore.save();
+      publishDeploymentConfigurationChanged(save.garage);
     }
     return result;
   }

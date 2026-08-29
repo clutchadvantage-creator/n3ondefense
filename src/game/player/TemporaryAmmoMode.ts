@@ -5,14 +5,9 @@ export const TEMPORARY_AMMO_BALANCE = {
   durationMs: 45_000,
   overdriveMaximumDurationMs: 90_000,
   grenade: {
-    /** Dedicated cadence intentionally reads permanent weapon.fireRate rather
-     * than Player.fireRate, so Rapid Fire and field cadence buffs cannot turn
-     * grenades into automatic artillery. */
-    baseFireIntervalMs: 520,
-    minimumFireIntervalMs: 420,
-    maximumFireIntervalMs: 650,
-    referencePermanentFireRate: 9,
-    turretFireIntervalMs: 820,
+    /** Grenade cadence reads the already-resolved permanent weapon rate rather
+     * than Player.fireRate, so store progression and installed Mods apply while
+     * the temporary Rapid Fire pickup remains excluded. */
     projectileSpeedMultiplier: 0.62,
     projectileLifetimeMs: 2_400,
     splashRadius: 32,
@@ -32,6 +27,11 @@ export const TEMPORARY_AMMO_BALANCE = {
      * the requested short 40-70 world-unit band without turning each round
      * into a screen-wide trigger. */
     proximityFuseRadius: 56,
+    /** Important shootable control nodes are smaller than most enemies. This
+     * center-to-center radius adds modest forgiveness without targeting props. */
+    interactiveProximityFuseRadius: 64,
+    /** Physical grenade-to-control-node contact remains live before arming. */
+    interactiveDirectContactPadding: 7,
     /** Direct body contacts remain live immediately; only the forgiving
      * proximity field waits for this short muzzle-clearance window. */
     proximityArmingDelayMs: 150,
@@ -57,16 +57,12 @@ export const grenadeBounceCountForSequence = (sequence: number): number => {
     + Math.abs(Math.floor(Number.isFinite(sequence) ? sequence : 0)) % span;
 };
 
-/** Permanent weapon progression still helps, but the hard lower bound keeps
- * the temporary launcher deliberate. Temporary Rapid Fire is never an input. */
+/** Exactly mirrors the normal weapon's resolved permanent cadence. Callers
+ * intentionally pass Weapon.fireRate rather than Player.fireRate, excluding
+ * only the temporary Rapid Fire pickup from grenade cadence. */
 export const grenadeFireIntervalMs = (permanentFireRate: number): number => {
   const safeRate = Math.max(0.1, Number.isFinite(permanentFireRate) ? permanentFireRate : 1);
-  const scaled = TEMPORARY_AMMO_BALANCE.grenade.baseFireIntervalMs
-    * TEMPORARY_AMMO_BALANCE.grenade.referencePermanentFireRate / safeRate;
-  return Math.max(
-    TEMPORARY_AMMO_BALANCE.grenade.minimumFireIntervalMs,
-    Math.min(TEMPORARY_AMMO_BALANCE.grenade.maximumFireIntervalMs, scaled)
-  );
+  return 1000 / safeRate;
 };
 
 export const grenadeArcHeight = (

@@ -601,7 +601,11 @@ export class OperatorGarageScene extends Phaser.Scene {
     return root;
   }
 
+  private runConfigurationFocusTarget: string | null = null;
+
   private showRunConfiguration(): void {
+    const focusTarget = this.runConfigurationFocusTarget;
+    this.runConfigurationFocusTarget = null;
     const root = this.createOverlay('RUN CONFIGURATION // ONE-RUN SETUP');
     const { width, height } = this.scale;
     const setup = SaveSystem.getNextRunSetupSelection();
@@ -653,6 +657,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         const result = SaveSystem.setSavedDeploymentEnabled(!garageState.savedDeploymentEnabled);
         this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? ''}`;
         this.refreshConfigurationTerminalState();
+        this.runConfigurationFocusTarget = 'persistence';
         this.showRunConfiguration();
         return result.ok;
       },
@@ -663,7 +668,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         fontSize: typography.diagnosticLabel,
         horizontalPadding: 24,
         focusModalDepth: 30,
-        focusDefaultPriority: 45,
+        focusDefaultPriority: focusTarget === 'persistence' ? 90 : 45,
         focusLabel: `KEEP CONFIGURATION ACTIVE ${garageState.savedDeploymentEnabled ? 'ON' : 'OFF'}`
       }
     );
@@ -713,12 +718,16 @@ export class OperatorGarageScene extends Phaser.Scene {
         this.refreshConfigurationTerminalState();
         // Rebuild only the overlay so its selected state and diagnostics update
         // while the player remains in Run Configuration until choosing Close.
+        this.runConfigurationFocusTarget = `signal:${option.id ?? 'none'}`;
         this.showRunConfiguration();
         return true;
       }, rowWidth, 'menu', {
         height: Math.min(density === 'compressed' ? 36 : compact ? 42 : 48, signalGap - 6),
         fontSize: typography.selection,
-        horizontalPadding: compact ? 34 : 52
+        horizontalPadding: compact ? 34 : 52,
+        focusModalDepth: 30,
+        focusDefaultPriority: focusTarget === `signal:${option.id ?? 'none'}` ? 90 : selected ? 35 : 0,
+        focusLabel: `SIGNAL ${option.label}`
       });
       root.add(button);
     });
@@ -762,12 +771,16 @@ export class OperatorGarageScene extends Phaser.Scene {
         this.refreshConfigurationTerminalState();
         // Keep the console open so Signal and Contract can be configured in a
         // single visit; Close remains the only route back to the Garage.
+        this.runConfigurationFocusTarget = `contract:${option.id ?? 'none'}`;
         this.showRunConfiguration();
         return true;
       }, rowWidth, 'menu', {
         height: density === 'compressed' ? 36 : compact ? 42 : 48,
         fontSize: typography.selection,
-        horizontalPadding: compact ? 46 : 64
+        horizontalPadding: compact ? 46 : 64,
+        focusModalDepth: 30,
+        focusDefaultPriority: focusTarget === `contract:${option.id ?? 'none'}` ? 90 : selected ? 35 : 0,
+        focusLabel: `CONTRACT ${option.label}`
       });
       root.add(button);
       root.add(this.add.text(rightX, y + (density === 'compressed' ? 21 : compact ? 26 : 31), option.description, {

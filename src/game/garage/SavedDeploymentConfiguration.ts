@@ -6,6 +6,37 @@ import type { PlayerGarageState } from './types.ts';
 export const SAVED_DEPLOYMENT_REMINDER_INTERVAL_DAYS = 3;
 export const SAVED_DEPLOYMENT_REMINDER_INTERVAL_MS = SAVED_DEPLOYMENT_REMINDER_INTERVAL_DAYS * 24 * 60 * 60 * 1000;
 
+export interface DeploymentConfigurationSnapshot {
+  savedEnabled: boolean;
+  contractId: RunSetupSelection['contract'];
+  signalId: RunSetupSelection['modFocus'];
+  calculatedCurrentCost: number;
+}
+
+type DeploymentConfigurationListener = (snapshot: DeploymentConfigurationSnapshot) => void;
+const deploymentConfigurationListeners = new Set<DeploymentConfigurationListener>();
+
+export const getDeploymentConfigurationSnapshot = (garage: PlayerGarageState): DeploymentConfigurationSnapshot => ({
+  savedEnabled: garage.savedDeploymentEnabled,
+  contractId: garage.nextRun.contract,
+  signalId: garage.nextRun.modFocus,
+  calculatedCurrentCost: getRunSetupCost(garage.nextRun)
+});
+
+/** Lightweight notification only; the profile save remains the sole source of
+ * truth. This lets sleeping/visible UI refresh without retaining a second copy. */
+export const publishDeploymentConfigurationChanged = (garage: PlayerGarageState): void => {
+  const snapshot = getDeploymentConfigurationSnapshot(garage);
+  for (const listener of deploymentConfigurationListeners) listener(snapshot);
+};
+
+export const subscribeDeploymentConfigurationChanged = (
+  listener: DeploymentConfigurationListener
+): (() => void) => {
+  deploymentConfigurationListeners.add(listener);
+  return () => deploymentConfigurationListeners.delete(listener);
+};
+
 export const hasDeploymentSelection = (selection: RunSetupSelection): boolean => Boolean(selection.contract || selection.modFocus);
 
 export const isSavedDeploymentActive = (garage: PlayerGarageState): boolean =>

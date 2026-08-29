@@ -13,6 +13,14 @@ export interface FluxCoreDestroyedEvent {
   droppedCore: boolean;
 }
 
+/** Allocation-free handle for required shootable security objectives. The
+ * visual/runtime implementation remains private to FluxCoreSystem. */
+export interface FluxCoreCombatTarget {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+}
+
 interface FluxCoreVisual {
   id: number;
   x: number;
@@ -127,19 +135,29 @@ export class FluxCoreSystem {
     return false;
   }
 
-  getNearestCore(x: number, y: number, range: number): { x: number; y: number } | null {
+  /** Used by fixed-rate smart-fuse checks. Returns the existing runtime object
+   * through a read-only combat view and therefore creates no per-query object. */
+  getNearestCombatTarget(x: number, y: number, range: number): FluxCoreCombatTarget | null {
     let nearest: FluxCoreVisual | null = null;
     let nearestDistanceSquared = range * range;
     for (const core of this.cores) {
       const dx = core.x - x;
       const dy = core.y - y;
       const distanceSquared = dx * dx + dy * dy;
-      if (distanceSquared <= nearestDistanceSquared) {
-        nearest = core;
-        nearestDistanceSquared = distanceSquared;
-      }
+      if (distanceSquared > nearestDistanceSquared) continue;
+      nearest = core;
+      nearestDistanceSquared = distanceSquared;
     }
     return nearest;
+  }
+
+  /** Routes targeted grenade/direct damage through the same health, visuals,
+   * destruction, loot, and laser-shutdown path as every other damage source. */
+  damageCombatTarget(target: FluxCoreCombatTarget, damage: number, source: FluxCoreDamageSource): boolean {
+    const index = this.cores.findIndex((core) => core.id === target.id);
+    if (index < 0) return false;
+    this.applyDamage(index, damage, source);
+    return true;
   }
 
   damagePoint(x: number, y: number, radius: number, damage: number, source: FluxCoreDamageSource): boolean {

@@ -86,10 +86,10 @@ test('grenade rounds use restrained direct-plus-splash behavior and the shared a
   assert.match(arena, /primaryColor,\s*this\.time\.now,\s*false\s*\);/);
 });
 
-test('grenade rounds use a bounded permanent-progression cadence and deterministic two-to-three bounce arcs', () => {
-  assert.equal(grenadeFireIntervalMs(9), TEMPORARY_AMMO_BALANCE.grenade.baseFireIntervalMs);
-  assert.equal(grenadeFireIntervalMs(99), TEMPORARY_AMMO_BALANCE.grenade.minimumFireIntervalMs);
-  assert.equal(grenadeFireIntervalMs(0), TEMPORARY_AMMO_BALANCE.grenade.maximumFireIntervalMs);
+test('grenade rounds exactly mirror resolved permanent weapon cadence and retain deterministic two-to-three bounce arcs', () => {
+  const permanentRates = [9, 11, 13];
+  for (const rate of permanentRates) assert.equal(grenadeFireIntervalMs(rate), 1000 / rate);
+  assert.equal(grenadeFireIntervalMs(Number.NaN), 1000);
   assert.deepEqual(Array.from({ length: 6 }, (_, index) => grenadeBounceCountForSequence(index)), [2, 3, 2, 3, 2, 3]);
   assert.equal(grenadeArcHeight(0, 0, 100, 40), 0);
   assert.ok(Math.abs(grenadeArcHeight(50, 0, 100, 40) - 40) < 0.000_001);
@@ -97,6 +97,7 @@ test('grenade rounds use a bounded permanent-progression cadence and determinist
   assert.ok(TEMPORARY_AMMO_BALANCE.grenade.fuseMs < TEMPORARY_AMMO_BALANCE.grenade.projectileLifetimeMs);
   const shooting = arena.slice(arena.indexOf('private updatePlayerShooting'), arena.indexOf('private updatePlanting'));
   assert.match(shooting, /grenadeFireIntervalMs\(this\.player\.weapon\.fireRate\)/);
+  assert.doesNotMatch(shooting, /grenadeFireIntervalMs\(this\.player\.fireRate\)/);
   assert.match(arena, /this\.consumeGrenadeBounce\(projectile, now\)/);
   assert.match(arena, /this\.bounceGrenadeFromWall\(p, now\)/);
 });
@@ -106,6 +107,8 @@ test('grenade smart fuses use a short shared arming window and fixed-rate spatia
   assert.ok(grenade.proximityFuseRadius >= 40 && grenade.proximityFuseRadius <= 70);
   assert.ok(grenade.proximityArmingDelayMs >= 100 && grenade.proximityArmingDelayMs <= 200);
   assert.ok(grenade.proximityCheckIntervalMs > 0 && grenade.proximityCheckIntervalMs <= 60);
+  assert.ok(grenade.interactiveProximityFuseRadius >= grenade.proximityFuseRadius);
+  assert.ok(grenade.interactiveProximityFuseRadius <= 70);
   assert.equal(grenadeProximityCheckDue(1_149, 1_150, 1_150), false);
   assert.equal(grenadeProximityCheckDue(1_150, 1_150, 1_150), true);
   assert.equal(grenadeProximityFuseContains(grenade.proximityFuseRadius, 0), true);
@@ -126,6 +129,16 @@ test('grenade smart fuses use a short shared arming window and fixed-rate spatia
   assert.match(arena, /enemySeparationGrid\.forEachNearby\(x, y, radius, this\.findGrenadeFuseNeighbor\)/);
   assert.match(arena, /grenadeArmedAt = 0/);
   assert.match(arena, /grenadeNextProximityCheckAt = 0/);
+  assert.match(arenaContact, /findGrenadeFluxCoreContact/);
+  assert.match(arenaContact, /interactiveProximityFuseRadius/);
+  assert.match(arena, /damageCombatTarget\(directlyHitFluxCore, projectile\.damage, source\)/);
+  assert.match(arena, /grenadeDetonated/);
+
+  const fluxCoreSystem = readFileSync(new URL('../src/game/systems/FluxCoreSystem.ts', import.meta.url), 'utf8');
+  assert.match(fluxCoreSystem, /getNearestCombatTarget/);
+  assert.match(fluxCoreSystem, /damageCombatTarget/);
+  assert.match(fluxCoreSystem, /this\.applyDamage\(index, damage, source\)/);
+  assert.doesNotMatch(arenaContact, /crate|vending|decorative/i);
 
   const heistContact = heist.slice(
     heist.indexOf('private detonateGrenadeForNearbyTarget'),
@@ -164,7 +177,9 @@ test('Legendary Weapon Sync shares only registered offensive effects for eighty 
   assert.equal(sync.activeDamageUntil(10_000), 0);
 
   assert.match(arena, /this\.modRuntime\.turretWeaponSyncEnabled\(\)/);
-  assert.match(arena, /TEMPORARY_AMMO_BALANCE\.grenade\.turretFireIntervalMs/);
+  assert.doesNotMatch(arena, /TEMPORARY_AMMO_BALANCE\.grenade\.turretFireIntervalMs/);
+  assert.match(arena, /const canFire = turret\.canFire\(now, fieldFireRate\)/);
+  assert.match(heist, /const canFire = turret\.canFire\(now\)/);
   assert.match(arena, /this\.turretWeaponSync\.reset\(\)/);
 });
 

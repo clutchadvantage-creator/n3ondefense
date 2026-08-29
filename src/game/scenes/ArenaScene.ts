@@ -31,7 +31,7 @@ import { ArenaGenerator } from '../systems/ArenaGenerator';
 import { LaserSecuritySystem } from '../systems/LaserSecuritySystem';
 import { BombletHazardSystem } from '../systems/BombletHazardSystem';
 import { GasHazardSystem } from '../systems/GasHazardSystem';
-import { FluxCoreSystem } from '../systems/FluxCoreSystem';
+import { FluxCoreSystem, type FluxCoreCombatTarget } from '../systems/FluxCoreSystem';
 import { FLUX_CORE_BALANCE } from '../config/fluxCores';
 import { GAS_HAZARD_BALANCE } from '../config/gasHazards';
 import type { HazardDamageTarget } from '../config/hazardScaling';
@@ -156,6 +156,7 @@ interface Projectile {
   grenadeFuseAt?: number;
   grenadeArmedAt?: number;
   grenadeNextProximityCheckAt?: number;
+  grenadeDetonated?: boolean;
 }
 
 interface SupremeBridgeAwardOutcome {
@@ -1696,6 +1697,7 @@ export class ArenaScene extends Phaser.Scene {
       projectile.grenadeFuseAt = state.grenadeFuseAt ?? 0;
       projectile.grenadeArmedAt = state.grenadeArmedAt ?? 0;
       projectile.grenadeNextProximityCheckAt = state.grenadeNextProximityCheckAt ?? 0;
+      projectile.grenadeDetonated = false;
       if (projectile.ammoMode === 'grenade') {
         projectile.grenadeShadow ??= this.add.circle(state.x, state.y + 3, 7, 0x02050a, 0.42)
           .setStrokeStyle(1, state.tint, 0.28).setDepth(state.depth - 1);
@@ -1745,6 +1747,7 @@ export class ArenaScene extends Phaser.Scene {
         projectile.grenadeFuseAt = 0;
         projectile.grenadeArmedAt = 0;
         projectile.grenadeNextProximityCheckAt = 0;
+        projectile.grenadeDetonated = false;
         projectile.sprite.setOrigin(0.5);
         projectile.grenadeShadow?.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
       }
@@ -3046,6 +3049,15 @@ export class ArenaScene extends Phaser.Scene {
       this.detonateGrenadeRound(projectile, x, y, null, directBoss);
       return true;
     }
+    const directFluxCore = this.findGrenadeFluxCoreContact(
+      x,
+      y,
+      FLUX_CORE_BALANCE.collisionRadius + TEMPORARY_AMMO_BALANCE.grenade.interactiveDirectContactPadding
+    );
+    if (directFluxCore) {
+      this.detonateGrenadeRound(projectile, x, y, null, null, directFluxCore);
+      return true;
+    }
     if (!grenadeProximityCheckDue(
       now,
       projectile.grenadeArmedAt ?? Number.POSITIVE_INFINITY,
@@ -3063,9 +3075,22 @@ export class ArenaScene extends Phaser.Scene {
       y,
       TEMPORARY_AMMO_BALANCE.grenade.proximityFuseRadius
     );
-    if (!nearbyBoss) return false;
-    this.detonateGrenadeRound(projectile, x, y, null, nearbyBoss);
+    if (nearbyBoss) {
+      this.detonateGrenadeRound(projectile, x, y, null, nearbyBoss);
+      return true;
+    }
+    const nearbyFluxCore = this.findGrenadeFluxCoreContact(
+      x,
+      y,
+      TEMPORARY_AMMO_BALANCE.grenade.interactiveProximityFuseRadius
+    );
+    if (!nearbyFluxCore) return false;
+    this.detonateGrenadeRound(projectile, x, y, null, null, nearbyFluxCore);
     return true;
+  }
+
+  private findGrenadeFluxCoreContact(x: number, y: number, radius: number): FluxCoreCombatTarget | null {
+    return this.fluxCores?.getNearestCombatTarget(x, y, radius) ?? null;
   }
 
   private findGrenadeBossContact(x: number, y: number, clearance: number): Boss | null {
@@ -3565,8 +3590,11 @@ export class ArenaScene extends Phaser.Scene {
     x: number,
     y: number,
     directlyHitEnemy: Enemy | null,
-    directlyHitBoss: Boss | null = null
+    directlyHitBoss: Boss | null = null,
+    directlyHitFluxCore: FluxCoreCombatTarget | null = null
   ): void {
+    if (projectile.grenadeDetonated) return;
+    projectile.grenadeDetonated = true;
     const radius = TEMPORARY_AMMO_BALANCE.grenade.splashRadius;
     this.audio.playSfx('grenadeShotExplosion');
     const primaryColor = projectile.sprite.tintTopLeft;
@@ -3621,7 +3649,11 @@ export class ArenaScene extends Phaser.Scene {
       if (source === 'turret') GameplayTelemetryRecorder.recordTurretHit(projectile.turretId ?? '', applied, overkill);
       else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, projectile.critical);
     }
-    this.fluxCores?.damagePoint(x, y, radius, projectile.damage, source);
+    if (directlyHitFluxCore) {
+      this.fluxCores?.damageCombatTarget(directlyHitFluxCore, projectile.damage, source);
+    } else {
+      this.fluxCores?.damagePoint(x, y, radius, projectile.damage, source);
+    }
 
     this.grenadeSplashX = x;
     this.grenadeSplashY = y;
@@ -3879,15 +3911,16 @@ export class ArenaScene extends Phaser.Scene {
       const bossTarget = this.nearestActiveBossTarget(turret.sprite.x, turret.sprite.y);
       const bossInRange = Boolean(bossTarget?.active && !bossTarget.isDefeated
         && (bossTarget.x - turret.sprite.x) ** 2 + (bossTarget.y - turret.sprite.y) ** 2 <= turret.range * turret.range);
-      const fluxTarget = this.fluxCores?.getNearestCore(turret.sprite.x, turret.sprite.y, turret.range) ?? null;
+      const fluxTarget = this.fluxCores?.getNearestCombatTarget(turret.sprite.x, turret.sprite.y, turret.range) ?? null;
       const target: { x: number; y: number } | null = bossInRange ? bossTarget! : enemyTarget ?? fluxTarget;
       if (!target) continue;
       const angle = Phaser.Math.Angle.Between(turret.sprite.x, turret.sprite.y, target.x, target.y);
       turret.aimAt(angle);
       const fieldFireRate = this.bombsiteMods.turretFireRateMultiplier(turret.sprite.x, turret.sprite.y);
-      const canFire = turretAmmoMode === 'grenade'
-        ? turret.canFireAtInterval(now, TEMPORARY_AMMO_BALANCE.grenade.turretFireIntervalMs)
-        : turret.canFire(now, fieldFireRate);
+      // Weapon Sync preserves the turret's own upgraded baseline. Grenade mode
+      // no longer adds a second fixed slowdown, and player Rapid Fire is not an
+      // input to Turret.canFire.
+      const canFire = turret.canFire(now, fieldFireRate);
       if (!canFire) continue;
 
       turret.lastShotMs = now;
@@ -4912,7 +4945,7 @@ export class ArenaScene extends Phaser.Scene {
       || x > bounds.x + bounds.w - clearance || y > bounds.y + bounds.h - clearance) return false;
     if (this.intersectsWallGeometry(x, y, clearance, clearance)) return false;
     if (this.isNearBombSite(x, y, clearance + 72)) return false;
-    const fluxCore = this.fluxCores?.getNearestCore(x, y, clearance + 70);
+    const fluxCore = this.fluxCores?.getNearestCombatTarget(x, y, clearance + 70);
     if (fluxCore) return false;
     const blockedBy = (entityX: number, entityY: number, extra = 0): boolean => {
       const dx = x - entityX;

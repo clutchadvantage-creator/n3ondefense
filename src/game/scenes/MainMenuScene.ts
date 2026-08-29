@@ -14,7 +14,10 @@ import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_FOCUS_LABELS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
 import type { RunSetupSelection } from '../economy/types.ts';
-import { DeploymentLaunchGate } from '../garage/SavedDeploymentConfiguration.ts';
+import {
+  DeploymentLaunchGate,
+  subscribeDeploymentConfigurationChanged
+} from '../garage/SavedDeploymentConfiguration.ts';
 import { formatWeeklyCountdown, type WeeklyOperationDeck, type WeeklyOperationDecksSnapshot, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
@@ -84,7 +87,12 @@ export class MainMenuScene extends Phaser.Scene {
   private readonly deploymentLaunchGate = new DeploymentLaunchGate();
   private deploymentModal: Phaser.GameObjects.Container | null = null;
   private modalEscapeHandler: (() => void) | null = null;
+  private runConfigurationReadout: Phaser.GameObjects.Rectangle | null = null;
+  private runConfigurationAccent: Phaser.GameObjects.Rectangle | null = null;
+  private runConfigurationText: Phaser.GameObjects.Text | null = null;
+  private unsubscribeDeploymentConfiguration: (() => void) | null = null;
   private readonly handleResize = (): void => { this.scene.restart(); };
+  private readonly handleDeploymentConfigurationChanged = (): void => this.refreshRunConfigurationReadout();
 
   constructor() {
     super(SceneKeys.MainMenu);
@@ -99,6 +107,11 @@ export class MainMenuScene extends Phaser.Scene {
   create(data: MainMenuLaunchData = {}): void {
     this.deploymentLaunchGate.reset();
     this.closeDeploymentModal();
+    this.unsubscribeDeploymentConfiguration?.();
+    this.unsubscribeDeploymentConfiguration = null;
+    this.runConfigurationReadout = null;
+    this.runConfigurationAccent = null;
+    this.runConfigurationText = null;
     this.audio.startMusicLoop();
     const { width, height } = this.scale;
     if (this.scene.isActive(SceneKeys.Arena) || this.scene.isPaused(SceneKeys.Arena)) this.scene.stop(SceneKeys.Arena);
@@ -199,19 +212,16 @@ export class MainMenuScene extends Phaser.Scene {
     }
 
     const setupSelection = this.getRunSetupSelection();
-    const savedSetup = profile ? SaveSystem.getGarageState().savedDeploymentEnabled : false;
     const setupCost = getRunSetupCost(setupSelection);
-    const setupSummary = setupSelection.modFocus || setupSelection.contract
-      ? `RUN CONFIG // SIGNAL: ${setupSelection.modFocus ? MOD_FOCUS_LABELS[setupSelection.modFocus].replace(' Signal', '').toUpperCase() : 'NONE'} // CONTRACT: ${setupSelection.contract ? RUN_CONTRACTS[setupSelection.contract].label.toUpperCase() : 'NONE'} // ${setupCost.toLocaleString()}C${savedSetup ? ' // SAVED ACTIVE' : ''}`
-      : 'LOADOUT READY // STANDARD RUN CONFIGURATION // FREE';
     const readoutY = tiny ? 164 : short ? 218 : 290;
     const readoutWidth = protocolWidth + (tiny ? 70 : 130);
-    this.add.rectangle(centerX, readoutY, readoutWidth, tiny ? 23 : 30, 0x06131f, 0.9)
+    this.runConfigurationReadout = this.add.rectangle(centerX, readoutY, readoutWidth, tiny ? 23 : 30, 0x06131f, 0.9)
       .setStrokeStyle(1, setupCost > 0 ? 0xffbf63 : 0x3bb9c9, 0.48);
-    this.add.rectangle(centerX - readoutWidth / 2 + 6, readoutY, 3, tiny ? 13 : 18, setupCost > 0 ? 0xffc56d : 0x6fffc1, 0.9);
-    this.add.text(centerX, readoutY, setupSummary, {
+    this.runConfigurationAccent = this.add.rectangle(centerX - readoutWidth / 2 + 6, readoutY, 3, tiny ? 13 : 18, setupCost > 0 ? 0xffc56d : 0x6fffc1, 0.9);
+    this.runConfigurationText = this.add.text(centerX, readoutY, '', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${tiny ? 10 : short ? 13 : 15}px`, color: setupCost > 0 ? '#ffd287' : '#9ae8f1', align: 'center', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5).setWordWrapWidth(readoutWidth - 24, true).setMaxLines(1);
+    this.refreshRunConfigurationReadout();
 
     const menuStartY = tiny ? 202 : short ? 268 : 356;
     const menuRowGap = tiny ? 38 : short ? 49 : 62;
@@ -367,6 +377,11 @@ export class MainMenuScene extends Phaser.Scene {
     }
     this.scale.off('resize', this.handleResize, this);
     this.scale.on('resize', this.handleResize, this);
+    this.unsubscribeDeploymentConfiguration = subscribeDeploymentConfigurationChanged(
+      this.handleDeploymentConfigurationChanged
+    );
+    this.events.off(Phaser.Scenes.Events.WAKE, this.handleDeploymentConfigurationChanged, this);
+    this.events.on(Phaser.Scenes.Events.WAKE, this.handleDeploymentConfigurationChanged, this);
     const tutorialTargets = new Map<string, Phaser.GameObjects.Container>([
       ['menu.start-local', localStartButton],
       ['menu.store', storeButton],
@@ -396,6 +411,9 @@ export class MainMenuScene extends Phaser.Scene {
     }, 250);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.handleResize, this);
+      this.events.off(Phaser.Scenes.Events.WAKE, this.handleDeploymentConfigurationChanged, this);
+      this.unsubscribeDeploymentConfiguration?.();
+      this.unsubscribeDeploymentConfiguration = null;
       this.tutorialDirector?.destroy();
       this.tutorialDirector = null;
       this.closeDeploymentModal();
@@ -755,6 +773,31 @@ export class MainMenuScene extends Phaser.Scene {
 
   private getRunSetupSelection(): RunSetupSelection {
     return SaveSystem.getNextRunSetupSelection();
+  }
+
+  private refreshRunConfigurationReadout(): void {
+    if (!this.runConfigurationText?.active || !SaveSystem.getActiveProfileSummary()) return;
+    const selection = SaveSystem.getNextRunSetupSelection();
+    const savedEnabled = SaveSystem.getGarageState().savedDeploymentEnabled;
+    const cost = getRunSetupCost(selection);
+    const hasSelection = Boolean(selection.contract || selection.modFocus);
+    let summary: string;
+    if (!hasSelection) {
+      summary = savedEnabled
+        ? 'SAVED DEPLOYMENT // ON // NO CONTRACT OR SIGNAL SELECTED // FREE'
+        : 'LOADOUT READY // STANDARD RUN CONFIGURATION // FREE';
+    } else {
+      const mode = savedEnabled ? 'SAVED DEPLOYMENT // ACTIVE' : 'CURRENT CONFIG // ONE RUN';
+      const signal = selection.modFocus
+        ? MOD_FOCUS_LABELS[selection.modFocus].replace(' Signal', '').toUpperCase()
+        : 'NONE';
+      const contract = selection.contract ? RUN_CONTRACTS[selection.contract].label.toUpperCase() : 'NONE';
+      summary = `${mode} // RUN CONFIG // SIGNAL: ${signal} // CONTRACT: ${contract} // ${cost.toLocaleString()}C`;
+    }
+    const paidColor = cost > 0 ? 0xffbf63 : 0x3bb9c9;
+    this.runConfigurationReadout?.setStrokeStyle(1, paidColor, 0.48);
+    this.runConfigurationAccent?.setFillStyle(cost > 0 ? 0xffc56d : 0x6fffc1, 0.9);
+    this.runConfigurationText.setText(summary).setColor(cost > 0 ? '#ffd287' : savedEnabled ? '#8fffc4' : '#9ae8f1');
   }
 
   private showDeploymentDecisionModal(

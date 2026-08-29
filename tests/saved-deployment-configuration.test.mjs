@@ -8,10 +8,13 @@ import {
   SAVED_DEPLOYMENT_REMINDER_INTERVAL_MS,
   acknowledgeSavedDeploymentReminder,
   commitDeploymentLaunch,
+  getDeploymentConfigurationSnapshot,
   hasDeploymentSelection,
   isSavedDeploymentActive,
   isSavedDeploymentReminderDue,
-  setSavedDeploymentEnabled
+  publishDeploymentConfigurationChanged,
+  setSavedDeploymentEnabled,
+  subscribeDeploymentConfigurationChanged
 } from '../src/game/garage/SavedDeploymentConfiguration.ts';
 import { createDefaultGarageState, normalizeGarageState } from '../src/game/garage/GarageState.ts';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
@@ -45,6 +48,24 @@ test('Contract-only, Signal-only, and combined configurations are recognized', (
   assert.equal(hasDeploymentSelection({ contract: null, modFocus: 'player' }), true);
   assert.equal(hasDeploymentSelection({ contract: 'elite-hunt', modFocus: 'player' }), true);
   assert.equal(hasDeploymentSelection({ contract: null, modFocus: null }), false);
+});
+
+test('deployment change notifications carry IDs, persistence state, and a freshly resolved current cost', () => {
+  const garage = createDefaultGarageState();
+  garage.savedDeploymentEnabled = true;
+  garage.nextRun = { contract: 'elite-hunt', modFocus: 'weapon' };
+  const snapshots = [];
+  const unsubscribe = subscribeDeploymentConfigurationChanged((snapshot) => snapshots.push(snapshot));
+  publishDeploymentConfigurationChanged(garage);
+  unsubscribe();
+  garage.nextRun.contract = 'bomb-rush';
+  publishDeploymentConfigurationChanged(garage);
+  assert.deepEqual(snapshots, [getDeploymentConfigurationSnapshot({
+    ...garage,
+    nextRun: { contract: 'elite-hunt', modFocus: 'weapon' }
+  })]);
+  assert.equal(snapshots[0].calculatedCurrentCost,
+    RUN_CONTRACTS['elite-hunt'].cost + ECONOMY_BALANCE.modFocus.cost);
 });
 
 test('enabling persistence acknowledges the selection without charging anything', () => {
@@ -225,6 +246,11 @@ test('Main Menu routes Local and Online through the shared commit and reminder g
   assert.match(source, /SaveSystem\.isSavedDeploymentReminderDue\(\)/);
   assert.match(source, /SaveSystem\.commitDeploymentLaunch/);
   assert.doesNotMatch(source, /clearRunSetupSelection/);
+  assert.match(source, /subscribeDeploymentConfigurationChanged/);
+  assert.match(source, /Phaser\.Scenes\.Events\.WAKE/);
+  assert.match(source, /refreshRunConfigurationReadout/);
+  assert.match(source, /CURRENT CONFIG \/\/ ONE RUN/);
+  assert.match(source, /SAVED DEPLOYMENT \/\/ ON \/\/ NO CONTRACT OR SIGNAL SELECTED/);
 });
 
 test('Results Try Again is a separately charged new attempt using the same commit', () => {

@@ -87,6 +87,7 @@ interface HeistProjectile {
   grenadeFuseAt?: number;
   grenadeArmedAt?: number;
   grenadeNextProximityCheckAt?: number;
+  grenadeDetonated?: boolean;
 }
 
 interface HeistProjectileSpawn extends Omit<HeistProjectile, 'sprite' | 'crossedFences' | 'nextTrailAt'> {
@@ -398,6 +399,7 @@ export class HeistScene extends Phaser.Scene {
       projectile.grenadeFuseAt = state.grenadeFuseAt ?? 0;
       projectile.grenadeArmedAt = state.grenadeArmedAt ?? 0;
       projectile.grenadeNextProximityCheckAt = state.grenadeNextProximityCheckAt ?? 0;
+      projectile.grenadeDetonated = false;
       projectile.crossedFences.clear();
       if (state.crossedFences) for (const fence of state.crossedFences) projectile.crossedFences.add(fence);
       if (projectile.ammoMode === 'grenade') {
@@ -441,6 +443,7 @@ export class HeistScene extends Phaser.Scene {
         projectile.grenadeFuseAt = 0;
         projectile.grenadeArmedAt = 0;
         projectile.grenadeNextProximityCheckAt = 0;
+        projectile.grenadeDetonated = false;
         projectile.grenadeShadow?.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
       }
     );
@@ -1071,6 +1074,8 @@ export class HeistScene extends Phaser.Scene {
   }
 
   private detonateGrenade(projectile: HeistProjectile, directHit?: Enemy): void {
+    if (projectile.grenadeDetonated) return;
+    projectile.grenadeDetonated = true;
     const radius = TEMPORARY_AMMO_BALANCE.grenade.splashRadius;
     const damage = projectile.damage * TEMPORARY_AMMO_BALANCE.grenade.splashDamageMultiplier;
     this.mineExplosionVfx.emit(projectile.sprite.x, projectile.sprite.y, radius,
@@ -1238,9 +1243,9 @@ export class HeistScene extends Phaser.Scene {
       if (!target) continue;
       const angle = Phaser.Math.Angle.Between(turret.sprite.x, turret.sprite.y, target.x, target.y);
       turret.aimAt(angle);
-      const canFire = turretAmmoMode === 'grenade'
-        ? turret.canFireAtInterval(now, TEMPORARY_AMMO_BALANCE.grenade.turretFireIntervalMs)
-        : turret.canFire(now);
+      // HEIST shares the turret's authoritative baseline cadence. Weapon Sync
+      // grenade mode no longer imposes an obsolete fixed launcher interval.
+      const canFire = turret.canFire(now);
       if (canFire) {
         turret.lastShotMs = now;
         turret.markFired(now);
