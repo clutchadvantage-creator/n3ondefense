@@ -24,6 +24,7 @@ interface HotPackageVisualOptions {
 
 const DROP_HEIGHT = 330;
 const TERMINAL_BURST_COUNT = 18;
+const PARACHUTE_COLLAPSE_MS = 760;
 
 /** Render-only orbital pod presentation. Capture timing remains in HotPackageEvent. */
 export class HotPackageVisualController {
@@ -31,6 +32,7 @@ export class HotPackageVisualController {
   private readonly floorStatic: Phaser.GameObjects.Graphics;
   private readonly floorDynamic: Phaser.GameObjects.Graphics;
   private readonly pod: Phaser.GameObjects.Container;
+  private readonly parachute: Phaser.GameObjects.Container;
   private readonly podDynamic: Phaser.GameObjects.Graphics;
   private readonly leftDoor: Phaser.GameObjects.Rectangle;
   private readonly rightDoor: Phaser.GameObjects.Rectangle;
@@ -49,6 +51,10 @@ export class HotPackageVisualController {
     this.floorDynamic = scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
 
     this.shadow = scene.add.ellipse(0, 28, 98, 34, 0x000000, 0.62);
+    const parachuteCanopy = scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    const parachuteLines = scene.add.graphics();
+    this.drawParachute(parachuteCanopy, parachuteLines);
+    this.parachute = scene.add.container(0, 0, [parachuteLines, parachuteCanopy]);
     const shell = scene.add.graphics();
     this.drawPodShell(shell);
     this.podDynamic = scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
@@ -61,8 +67,13 @@ export class HotPackageVisualController {
       color: Phaser.Display.Color.IntegerToColor(options.color).rgba,
       stroke: '#02050b', strokeThickness: 4
     }).setOrigin(0.5);
-    this.pod = scene.add.container(0, -DROP_HEIGHT, [this.shadow, shell, this.podDynamic, this.core, this.leftDoor, this.rightDoor, tag]);
-    this.root = scene.add.container(options.x, options.y, [this.floorStatic, this.floorDynamic, this.pod])
+    const brand = scene.add.text(-2, 4, 'N3ONDefense\nARMS', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: '8px', fontStyle: 'bold', align: 'center',
+      color: '#e9feff', stroke: '#02050b', strokeThickness: 3, lineSpacing: -2
+    }).setOrigin(0.5);
+    this.pod = scene.add.container(0, -DROP_HEIGHT, [this.parachute, shell, this.podDynamic, this.core,
+      this.leftDoor, this.rightDoor, brand, tag]);
+    this.root = scene.add.container(options.x, options.y, [this.floorStatic, this.floorDynamic, this.shadow, this.pod])
       .setDepth(13).setAlpha(0);
     this.update(startedAt, startedAt, 0, false, options.landingMs + 1);
   }
@@ -76,10 +87,18 @@ export class HotPackageVisualController {
 
     if (landingProgress < 1) {
       const eased = easeInCubic(landingProgress);
-      this.pod.setY(-DROP_HEIGHT * (1 - eased)).setScale(0.7 + eased * 0.3);
+      const drift = Math.sin(elapsed * 0.006) * (1 - landingProgress) * 18;
+      this.pod.setPosition(drift, -DROP_HEIGHT * (1 - eased)).setScale(0.7 + eased * 0.3)
+        .setRotation(Math.sin(elapsed * 0.0045) * (1 - landingProgress) * 0.055);
+      this.parachute.setVisible(true).setAlpha(1).setScale(1 + Math.sin(elapsed * 0.004) * 0.025, 1);
       this.shadow.setScale(0.35 + eased * 0.75).setAlpha(0.12 + eased * 0.5);
     } else {
-      this.pod.setY(Math.sin(now * 0.0035) * 1.4).setScale(1 + pulse * 0.018);
+      const landedElapsed = elapsed - this.options.landingMs;
+      const collapse = clamp01(landedElapsed / PARACHUTE_COLLAPSE_MS);
+      const settle = Math.exp(-landedElapsed / 230) * Math.sin(landedElapsed * 0.035) * 7;
+      this.pod.setPosition(0, settle + Math.sin(now * 0.0035) * 1.1).setScale(1 + pulse * 0.012).setRotation(0);
+      this.parachute.setAlpha(1 - collapse).setScale(1 + collapse * 0.34, Math.max(0.12, 1 - collapse * 0.82))
+        .setY(collapse * 28).setVisible(collapse < 1);
       this.shadow.setScale(1).setAlpha(0.58);
     }
 
@@ -105,6 +124,7 @@ export class HotPackageVisualController {
     const scanY = -72 + ((elapsed * 0.1) % 144);
     this.floorDynamic.lineStyle(2, activeColor, inside ? 0.35 : 0.14).lineBetween(-74, scanY, 74, scanY);
     if (landingProgress < 1) this.drawDescent(elapsed, landingProgress);
+    else this.drawLandingImpact(elapsed - this.options.landingMs);
     if (this.terminal !== 'none') this.drawTerminal(now);
 
     this.podDynamic.clear();
@@ -147,7 +167,9 @@ export class HotPackageVisualController {
 
   private drawPodShell(graphics: Phaser.GameObjects.Graphics): void {
     const color = this.options.color;
-    graphics.fillStyle(0x07141f, 1).fillPoints([
+    // Thick front, top and side planes keep the pod readable as a physical
+    // reinforced crate instead of a flat event marker.
+    graphics.fillStyle(0x3a271b, 1).fillPoints([
       new Phaser.Geom.Point(-43, -36), new Phaser.Geom.Point(27, -36),
       new Phaser.Geom.Point(43, -19), new Phaser.Geom.Point(43, 35),
       new Phaser.Geom.Point(-43, 35), new Phaser.Geom.Point(-43, -19)
@@ -157,7 +179,7 @@ export class HotPackageVisualController {
       new Phaser.Geom.Point(43, -19), new Phaser.Geom.Point(43, 35),
       new Phaser.Geom.Point(-43, 35), new Phaser.Geom.Point(-43, -19)
     ], true, true);
-    graphics.fillStyle(0x173046, 0.95).fillPoints([
+    graphics.fillStyle(0x6b4930, 0.96).fillPoints([
       new Phaser.Geom.Point(-43, -36), new Phaser.Geom.Point(-24, -51),
       new Phaser.Geom.Point(40, -47), new Phaser.Geom.Point(27, -36)
     ], true, true);
@@ -165,8 +187,49 @@ export class HotPackageVisualController {
       new Phaser.Geom.Point(-43, -36), new Phaser.Geom.Point(-24, -51),
       new Phaser.Geom.Point(40, -47), new Phaser.Geom.Point(27, -36)
     ], true, true);
-    graphics.lineStyle(2, 0xff5bcf, 0.72).lineBetween(43, -19, 43, 35);
-    graphics.fillStyle(color, 0.75).fillCircle(-34, 29, 3).fillCircle(34, 29, 3);
+    graphics.fillStyle(0x241821, 1).fillPoints([
+      new Phaser.Geom.Point(27, -36), new Phaser.Geom.Point(43, -19),
+      new Phaser.Geom.Point(43, 35), new Phaser.Geom.Point(28, 28)
+    ], true, true);
+    graphics.lineStyle(2, 0xff5bcf, 0.72).strokePoints([
+      new Phaser.Geom.Point(27, -36), new Phaser.Geom.Point(43, -19),
+      new Phaser.Geom.Point(43, 35), new Phaser.Geom.Point(28, 28)
+    ], true, true);
+    graphics.lineStyle(1, 0xd8a76a, 0.32);
+    for (let y = -24; y <= 24; y += 12) graphics.lineBetween(-38, y, 37, y + 2);
+    graphics.fillStyle(0x091723, 0.94).fillRect(-43, -12, 86, 8).fillRect(-43, 22, 86, 8);
+    graphics.fillStyle(0x142a38, 0.98).fillRect(-34, -40, 8, 72).fillRect(25, -37, 8, 68);
+    graphics.lineStyle(2, color, 0.78).strokeRect(-34, -40, 8, 72).strokeRect(25, -37, 8, 68);
+    for (let x = -27; x <= 21; x += 12) {
+      graphics.fillStyle(x % 24 === 0 ? 0xffd65a : 0x101820, 0.9).fillRect(x, 24, 8, 5);
+    }
+    graphics.fillStyle(0xc8e5ea, 0.82);
+    for (const x of [-36, 35]) for (const y of [-29, 28]) graphics.fillCircle(x, y, 2.4);
+    graphics.fillStyle(color, 0.88).fillCircle(-34, 29, 3).fillCircle(34, 29, 3);
+  }
+
+  private drawParachute(canopy: Phaser.GameObjects.Graphics, lines: Phaser.GameObjects.Graphics): void {
+    const colors = [0x4deeff, 0xff54c9, 0xa766ff, 0xffd65a, 0x54ffa8];
+    const left = -76;
+    const segmentWidth = 152 / colors.length;
+    for (let index = 0; index < colors.length; index += 1) {
+      const x0 = left + index * segmentWidth;
+      const x1 = x0 + segmentWidth;
+      canopy.fillStyle(colors[index], 0.28 + (index % 2) * 0.1).fillPoints([
+        new Phaser.Geom.Point(x0, -116), new Phaser.Geom.Point(x1, -116),
+        new Phaser.Geom.Point(x1 - 7, -139 - (2 - Math.abs(2 - index)) * 7),
+        new Phaser.Geom.Point(x0 + 7, -139 - (2 - Math.abs(2 - index)) * 7)
+      ], true, true);
+      canopy.lineStyle(2, colors[index], 0.88).lineBetween(x0, -116, x1, -116);
+    }
+    canopy.lineStyle(3, 0xe9ffff, 0.72).beginPath();
+    canopy.arc(0, -112, 78, Math.PI, Math.PI * 2, false).strokePath();
+    canopy.lineStyle(2, 0x6ff8ff, 0.5).strokeEllipse(0, -116, 155, 22);
+    lines.lineStyle(1.5, 0xcafcff, 0.68);
+    for (const x of [-70, -35, 35, 70]) {
+      lines.lineBetween(x, -116, x < 0 ? -33 : 33, -45);
+      lines.fillStyle(0xff5bcf, 0.9).fillCircle(x, -116, 2);
+    }
   }
 
   private drawDescent(elapsed: number, progress: number): void {
@@ -181,6 +244,21 @@ export class HotPackageVisualController {
       this.floorDynamic.lineBetween(x, y - length - (elapsed % 70), x, y);
     }
     this.floorDynamic.lineStyle(3, 0xffffff, (1 - progress) * 0.7).strokeCircle(0, 0, 20 + progress * 82);
+  }
+
+  private drawLandingImpact(elapsed: number): void {
+    const t = clamp01(elapsed / 720);
+    if (t >= 1) return;
+    this.floorDynamic.lineStyle(4, 0xe9ffff, (1 - t) * 0.82).strokeEllipse(0, 16, 42 + t * 170, 14 + t * 54);
+    const count = this.options.particlesEnabled ? 16 : 8;
+    for (let index = 0; index < count; index += 1) {
+      const angle = Math.PI * (1.05 + seededUnit(index, 66) * 0.9);
+      const distance = t * (42 + seededUnit(index, 67) * 92);
+      const x = Math.cos(angle) * distance;
+      const y = 26 + Math.sin(angle) * distance * 0.32;
+      this.floorDynamic.fillStyle(index % 3 === 0 ? 0xffd65a : this.options.color, (1 - t) * 0.78)
+        .fillRect(x - 2, y - 2, 3 + index % 3, 3 + index % 3);
+    }
   }
 
   private drawTerminal(now: number): void {

@@ -123,6 +123,7 @@ export class N3ONArcadeController {
     if (!this.active || !this.activeDefinition) return;
     const definition = this.activeDefinition;
     this.active.cleanup(reason);
+    AudioManager.get().stopArcadeEventSfx();
     this.context.emitMetric({
       name: 'arcade_event_failed', eventId: definition.id, round: this.context.round,
       protocol: this.context.protocol, elapsedMs: Math.max(0, this.activeElapsedMs - this.activeStartedAt),
@@ -169,7 +170,8 @@ export class N3ONArcadeController {
       protocol: this.context.protocol, elapsedMs: 0
     });
     const startSfx = ARCADE_EVENT_START_SFX[definition.id];
-    if (startSfx) AudioManager.get().playSfx(startSfx);
+    if (startSfx === 'overloadEvent') AudioManager.get().startArcadeEventLoop(startSfx);
+    else if (startSfx) AudioManager.get().playSfx(startSfx);
     this.hud.announce(definition.displayName, definition.description);
     this.hud.showObjective(event.objectiveText(this.activeElapsedMs));
     return true;
@@ -179,6 +181,9 @@ export class N3ONArcadeController {
     if (!this.active || !this.activeDefinition) return;
     const event = this.active;
     const definition = this.activeDefinition;
+    // Retire the active event bed before completion/failure stingers so the
+    // teardown cannot cut off the newly selected terminal cue.
+    AudioManager.get().stopArcadeEventSfx();
     let rewardLabel = '';
     if (outcome.success) {
       const plan = event.rewardPlan?.() ?? {

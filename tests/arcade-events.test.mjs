@@ -43,13 +43,13 @@ test('Arcade registry centralizes scheduling and registers all six events with p
   }
 });
 
-test('Arcade start and failure recordings use the central one-shot lifecycle and mixer', () => {
+test('Arcade presentation recordings use state-aware central mixer lifecycles', () => {
   const controller = source('../src/game/arcade/N3ONArcadeController.ts');
   const audio = source('../src/game/systems/AudioManager.ts');
   const config = source('../src/game/config/audio.ts');
   const files = {
-    overloadEvent: 'overloadevent.mp3',
-    supplyDropEvent: 'supplydropevent.mp3',
+    overloadEvent: 'overloadeventsound.mp3',
+    supplyDropEvent: 'supplydropsound.mp3',
     dataThiefEntrance: 'datatheifentrence.mp3',
     dataThiefFail: 'datatheiffail.mp3',
     goldenEnemyEvent: 'goldenenemyevent.mp3',
@@ -67,12 +67,42 @@ test('Arcade start and failure recordings use the central one-shot lifecycle and
   assert.match(controller, /'golden-hunt': 'goldenEnemyEvent'/);
   assert.match(controller, /'packet-snatcher': 'dataThiefFail'/);
   assert.match(controller, /'golden-hunt': 'goldenEnemyEventFail'/);
-  assert.match(controller, /private startDefinition[\s\S]*?ARCADE_EVENT_START_SFX\[definition\.id\][\s\S]*?playSfx\(startSfx\)/);
+  assert.match(controller, /startSfx === 'overloadEvent'[\s\S]*?startArcadeEventLoop\(startSfx\)/);
+  assert.match(controller, /else if \(startSfx\) AudioManager\.get\(\)\.playSfx\(startSfx\)/);
   assert.match(controller, /private resolveActive[\s\S]*?ARCADE_EVENT_FAILURE_SFX\[definition\.id\][\s\S]*?playSfx\(failureSfx\)/);
   assert.doesNotMatch(controller.match(/stop\(reason:[\s\S]*?\n  \}/)?.[0] ?? '', /playSfx/);
   assert.match(audio, /ARCADE_EVENT_SFX_NAMES/);
   assert.match(audio, /stopArcadeEventSfx\(\): void/);
+  assert.match(audio, /activeArcadeLoop/);
   assert.match(controller, /AudioManager\.get\(\)\.stopArcadeEventSfx\(\)/);
+});
+
+test('Supply Drop uses validated dimensional clearance and a bounded premium landing rig', () => {
+  const event = source('../src/game/arcade/events/HotPackageEvent.ts');
+  const visual = source('../src/game/arcade/visuals/HotPackageVisualController.ts');
+  const arena = source('../src/game/scenes/ArenaScene.ts');
+  assert.match(event, /const PACKAGE_CLEARANCE = 72/);
+  assert.match(event, /findSpawnPoints\(1, 250, PACKAGE_CLEARANCE\)/);
+  assert.match(arena, /requestedClearance = 24/);
+  assert.match(arena, /intersectsWallGeometry\(point\.x, point\.y, clearance, clearance\)/);
+  assert.match(arena, /isNearBombSite\(point\.x, point\.y, Math\.max\(105, clearance \+ 78\)\)/);
+  for (const feature of ['parachute', 'PARACHUTE_COLLAPSE_MS', 'drawLandingImpact']) {
+    assert.match(visual, new RegExp(feature));
+  }
+  assert.match(visual, /N3ONDefense\\nARMS/);
+  assert.match(visual, /this\.root\.destroy\(true\)/);
+});
+
+test('Overload presentation derives dimensional power feedback from authoritative progress', () => {
+  const event = source('../src/game/arcade/events/RedlineEvent.ts');
+  const visual = source('../src/game/arcade/visuals/RedlineVisualController.ts');
+  assert.match(event, /this\.progressMs \/ REQUIRED_MS/);
+  assert.match(visual, /const quarter = Math\.min\(4, Math\.floor\(progress \* 4/);
+  assert.match(visual, /energyColumn/);
+  assert.match(visual, /hologramBands/);
+  assert.match(visual, /const contactPower = inside \? 1 : 0\.34/);
+  assert.match(visual, /this\.terminal === 'success'/);
+  assert.match(visual, /this\.terminal === 'failure'/);
 });
 
 test('Arcade reward rolls stay side-effect free until the complete plan is physically spawned', () => {

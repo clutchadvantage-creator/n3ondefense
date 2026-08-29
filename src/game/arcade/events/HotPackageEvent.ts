@@ -14,6 +14,7 @@ const CAPTURE_MS = 5_000;
 const CAPTURE_RADIUS = 112;
 const LANDING_MS = 1_350;
 const OPENING_HOLD_MS = 650;
+const PACKAGE_CLEARANCE = 72;
 const QUALITY_COLOR: Record<PackageQuality, number> = {
   standard: 0x55efff,
   enhanced: 0xb55cff,
@@ -59,7 +60,10 @@ export class HotPackageEvent implements ArcadeEvent {
   ) {}
 
   start(activeElapsedMs: number): boolean {
-    const point = this.context.findSpawnPoints(1, 250)[0];
+    // The pod's dimensional crate/parachute footprint needs more room than a
+    // normal event marker. Arena owns geometry, bombsite, and reachability
+    // validation; this event only declares its presentation clearance.
+    const point = this.context.findSpawnPoints(1, 250, PACKAGE_CLEARANCE)[0];
     if (!point) return false;
     this.startedAt = activeElapsedMs;
     this.landedAt = activeElapsedMs + LANDING_MS;

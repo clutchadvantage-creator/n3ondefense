@@ -28,8 +28,11 @@ const PRESENTATION_SFX_SOURCES = {
   mageBossMagicAttack: 'soundeffects/magebossmagicattack.mp3',
   brawlerBossChargeAttack: 'soundeffects/brawlerbosschargeattack.mp3',
   circuitGate: 'soundeffects/arenacircuitgate.mp3',
-  overloadEvent: 'soundeffects/overloadevent.mp3',
-  supplyDropEvent: 'soundeffects/supplydropevent.mp3',
+  overloadEvent: 'soundeffects/overloadeventsound.mp3',
+  supplyDropEvent: 'soundeffects/supplydropsound.mp3',
+  anomalyPortalPower: 'soundeffects/portalpowerupsound.mp3',
+  anomalyPortalTransit: 'soundeffects/portalenterexitsound.mp3',
+  heistDoor: 'soundeffects/heistdoorsound.mp3',
   dataThiefEntrance: 'soundeffects/datatheifentrence.mp3',
   dataThiefFail: 'soundeffects/datatheiffail.mp3',
   goldenEnemyEvent: 'soundeffects/goldenenemyevent.mp3',
@@ -63,6 +66,9 @@ const PRESENTATION_SFX_POOL_SIZES: Record<PresentationSfxName, number> = {
   circuitGate: 2,
   overloadEvent: 1,
   supplyDropEvent: 1,
+  anomalyPortalPower: 4,
+  anomalyPortalTransit: 1,
+  heistDoor: 1,
   dataThiefEntrance: 1,
   dataThiefFail: 1,
   goldenEnemyEvent: 1,
@@ -87,6 +93,9 @@ const PRESENTATION_SFX_MIN_INTERVAL_MS: Record<PresentationSfxName, number> = {
   circuitGate: 80,
   overloadEvent: 750,
   supplyDropEvent: 750,
+  anomalyPortalPower: 45,
+  anomalyPortalTransit: 450,
+  heistDoor: 250,
   dataThiefEntrance: 750,
   dataThiefFail: 750,
   goldenEnemyEvent: 750,
@@ -166,7 +175,8 @@ export class AudioManager {
     gasCanImpact: [], gasFizz: [], totemEntrance: [], totemPulse: [], miniBossSpawn: [],
     bossArtilleryExplosion: [], sentryBossAttack: [], grenadeShotExplosion: [], mageBossLargeAttack: [],
     mageBossMagicAttack: [], brawlerBossChargeAttack: [], circuitGate: [],
-    overloadEvent: [], supplyDropEvent: [], dataThiefEntrance: [], dataThiefFail: [],
+    overloadEvent: [], supplyDropEvent: [], anomalyPortalPower: [], anomalyPortalTransit: [], heistDoor: [],
+    dataThiefEntrance: [], dataThiefFail: [],
     goldenEnemyEvent: [], goldenEnemyEventFail: [],
     bombsiteSkull: [], bombsiteFlower: [], bombsiteBats: [], bombsiteWitch: []
   };
@@ -174,7 +184,8 @@ export class AudioManager {
     gasCanImpact: 0, gasFizz: 0, totemEntrance: 0, totemPulse: 0, miniBossSpawn: 0,
     bossArtilleryExplosion: 0, sentryBossAttack: 0, grenadeShotExplosion: 0, mageBossLargeAttack: 0,
     mageBossMagicAttack: 0, brawlerBossChargeAttack: 0, circuitGate: 0,
-    overloadEvent: 0, supplyDropEvent: 0, dataThiefEntrance: 0, dataThiefFail: 0,
+    overloadEvent: 0, supplyDropEvent: 0, anomalyPortalPower: 0, anomalyPortalTransit: 0, heistDoor: 0,
+    dataThiefEntrance: 0, dataThiefFail: 0,
     goldenEnemyEvent: 0, goldenEnemyEventFail: 0,
     bombsiteSkull: 0, bombsiteFlower: 0, bombsiteBats: 0, bombsiteWitch: 0
   };
@@ -183,7 +194,9 @@ export class AudioManager {
     totemPulse: -Infinity, miniBossSpawn: -Infinity, bossArtilleryExplosion: -Infinity, sentryBossAttack: -Infinity,
     grenadeShotExplosion: -Infinity, mageBossLargeAttack: -Infinity,
     mageBossMagicAttack: -Infinity, brawlerBossChargeAttack: -Infinity, circuitGate: -Infinity,
-    overloadEvent: -Infinity, supplyDropEvent: -Infinity, dataThiefEntrance: -Infinity, dataThiefFail: -Infinity,
+    overloadEvent: -Infinity, supplyDropEvent: -Infinity,
+    anomalyPortalPower: -Infinity, anomalyPortalTransit: -Infinity, heistDoor: -Infinity,
+    dataThiefEntrance: -Infinity, dataThiefFail: -Infinity,
     goldenEnemyEvent: -Infinity, goldenEnemyEventFail: -Infinity,
     bombsiteSkull: -Infinity, bombsiteFlower: -Infinity, bombsiteBats: -Infinity, bombsiteWitch: -Infinity
   };
@@ -202,6 +215,11 @@ export class AudioManager {
   private lowHealthSfx: HTMLAudioElement | null = null;
   private lowHealthLoopRequested = false;
   private lowHealthRestartTimer: number | null = null;
+  private anomalyPortalIdleAudio: HTMLAudioElement | null = null;
+  private anomalyPortalIdleRequested = false;
+  private heistAlarmAudio: HTMLAudioElement | null = null;
+  private heistAlarmRequested = false;
+  private activeArcadeLoop: 'overloadEvent' | null = null;
   private plantingAudio: HTMLAudioElement | null = null;
   private plantingLoopRequested = false;
   private disarmAudio: HTMLAudioElement | null = null;
@@ -246,6 +264,7 @@ export class AudioManager {
     this.initRunStartSfx();
     this.initAbilityFeedbackSfxPools();
     this.initPresentationSfxPools();
+    this.initAnomalyLoopSfx();
   }
 
   static get(): AudioManager {
@@ -396,10 +415,80 @@ export class AudioManager {
     void audio.play().catch(() => undefined);
   }
 
+  private initAnomalyLoopSfx(): void {
+    this.anomalyPortalIdleAudio = new Audio(audioAssetUrl('soundeffects/portalidlesound.mp3'));
+    this.anomalyPortalIdleAudio.preload = 'auto';
+    this.anomalyPortalIdleAudio.loop = true;
+    this.anomalyPortalIdleAudio.volume = this.getSfxVolume('anomalyPortalIdle');
+    this.anomalyPortalIdleAudio.load();
+    this.heistAlarmAudio = new Audio(audioAssetUrl('soundeffects/alarmsound.mp3'));
+    this.heistAlarmAudio.preload = 'auto';
+    this.heistAlarmAudio.loop = true;
+    this.heistAlarmAudio.volume = this.getSfxVolume('heistAlarm');
+    this.heistAlarmAudio.load();
+  }
+
+  private startDedicatedLoop(audio: HTMLAudioElement | null, sound: AudioSfxName): void {
+    if (!audio || !audio.paused) return;
+    try { audio.currentTime = 0; } catch { /* Metadata may not be ready yet. */ }
+    audio.volume = this.getSfxVolume(sound);
+    void audio.play().catch(() => undefined);
+  }
+
+  private stopDedicatedLoop(audio: HTMLAudioElement | null): void {
+    if (!audio) return;
+    audio.pause();
+    try { audio.currentTime = 0; } catch { /* Seeking is optional before metadata loads. */ }
+  }
+
+  startAnomalyPortalIdle(): void {
+    if (this.anomalyPortalIdleRequested) return;
+    this.anomalyPortalIdleRequested = true;
+    this.startDedicatedLoop(this.anomalyPortalIdleAudio, 'anomalyPortalIdle');
+  }
+
+  stopAnomalyPortalIdle(): void {
+    this.anomalyPortalIdleRequested = false;
+    this.stopDedicatedLoop(this.anomalyPortalIdleAudio);
+  }
+
+  startHeistAlarm(): void {
+    if (this.heistAlarmRequested) return;
+    this.heistAlarmRequested = true;
+    this.startDedicatedLoop(this.heistAlarmAudio, 'heistAlarm');
+  }
+
+  stopHeistAlarm(): void {
+    this.heistAlarmRequested = false;
+    this.stopDedicatedLoop(this.heistAlarmAudio);
+  }
+
+  stopAnomalySfx(): void {
+    this.stopAnomalyPortalIdle();
+    this.stopHeistAlarm();
+    // Transit is intentionally allowed to finish across the Scene handoff;
+    // unlike the loops it is a short self-terminating bridge between worlds.
+    for (const name of ['anomalyPortalPower', 'heistDoor'] as const) {
+      for (const audio of this.presentationSfxPools[name]) this.stopDedicatedLoop(audio);
+      this.presentationSfxCursors[name] = 0;
+      this.lastPresentationSfxAt[name] = -Infinity;
+    }
+  }
+
+  startArcadeEventLoop(name: Extract<PresentationSfxName, 'overloadEvent'>): void {
+    this.activeArcadeLoop = name;
+    const audio = this.presentationSfxPools[name][0];
+    if (!audio || (!audio.paused && audio.loop)) return;
+    audio.loop = true;
+    this.startDedicatedLoop(audio, name);
+  }
+
   /** Stops only arcade-event presentation voices when an Arena is discarded. */
   stopArcadeEventSfx(): void {
+    this.activeArcadeLoop = null;
     for (const name of ARCADE_EVENT_SFX_NAMES) {
       for (const audio of this.presentationSfxPools[name]) {
+        audio.loop = false;
         audio.pause();
         try {
           audio.currentTime = 0;
@@ -410,6 +499,26 @@ export class AudioManager {
       this.presentationSfxCursors[name] = 0;
       this.lastPresentationSfxAt[name] = -Infinity;
     }
+  }
+
+  /** Browser Audio elements are outside Phaser's clock, so transient world
+   * loops must explicitly follow gameplay pause/resume without losing their
+   * lifecycle request. */
+  pauseEventPresentationLoops(): void {
+    this.anomalyPortalIdleAudio?.pause();
+    this.heistAlarmAudio?.pause();
+    if (this.activeArcadeLoop) this.presentationSfxPools[this.activeArcadeLoop][0]?.pause();
+  }
+
+  resumeEventPresentationLoops(): void {
+    const resume = (audio: HTMLAudioElement | null, sound: AudioSfxName): void => {
+      if (!audio || !audio.paused) return;
+      audio.volume = this.getSfxVolume(sound);
+      void audio.play().catch(() => undefined);
+    };
+    if (this.anomalyPortalIdleRequested) resume(this.anomalyPortalIdleAudio, 'anomalyPortalIdle');
+    if (this.heistAlarmRequested) resume(this.heistAlarmAudio, 'heistAlarm');
+    if (this.activeArcadeLoop) resume(this.presentationSfxPools[this.activeArcadeLoop][0] ?? null, this.activeArcadeLoop);
   }
 
   private initPickupSfxPools(): void {
@@ -1027,6 +1136,8 @@ export class AudioManager {
     for (const name of Object.keys(this.presentationSfxPools) as PresentationSfxName[]) {
       for (const audio of this.presentationSfxPools[name]) audio.volume = this.getSfxVolume(name);
     }
+    if (this.anomalyPortalIdleAudio) this.anomalyPortalIdleAudio.volume = this.getSfxVolume('anomalyPortalIdle');
+    if (this.heistAlarmAudio) this.heistAlarmAudio.volume = this.getSfxVolume('heistAlarm');
     if (this.runStartSfx) this.runStartSfx.volume = this.getSfxVolume('runStart');
     if (this.securityLaserAudio) this.securityLaserAudio.volume = this.getSfxVolume('securityLaser');
     if (this.lasersOffSfx) this.lasersOffSfx.volume = this.getSfxVolume('lasersOff');
@@ -1159,7 +1270,8 @@ export class AudioManager {
     this.beep('sfx', 1040, 220, 0.035, 'legendaryMod');
   }
 
-  playSfx(name: Exclude<AudioSfxName, 'planting' | 'disarm' | 'securityLaser' | 'fluxCore' | 'lowHealth'>): void {
+  playSfx(name: Exclude<AudioSfxName,
+    'planting' | 'disarm' | 'securityLaser' | 'fluxCore' | 'lowHealth' | 'anomalyPortalIdle' | 'heistAlarm'>): void {
     switch (name) {
       case 'shot':
         this.playShotSfx();
@@ -1220,6 +1332,9 @@ export class AudioManager {
       case 'circuitGate':
       case 'overloadEvent':
       case 'supplyDropEvent':
+      case 'anomalyPortalPower':
+      case 'anomalyPortalTransit':
+      case 'heistDoor':
       case 'dataThiefEntrance':
       case 'dataThiefFail':
       case 'goldenEnemyEvent':

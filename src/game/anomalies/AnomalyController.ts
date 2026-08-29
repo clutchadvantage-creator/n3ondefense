@@ -31,6 +31,7 @@ export class AnomalyController {
   private nextOpportunityAt = Number.POSITIVE_INFINITY;
   private spawnedAt = 0;
   private portalReadyAt = 0;
+  private portalIdleStarted = false;
   private transitionStartedAt = 0;
   private charge = 0;
   private chargeTarget = 1;
@@ -77,6 +78,10 @@ export class AnomalyController {
       }
       const visual = this.visual;
       if (!visual) return;
+      if (visual.readyForInteraction && !this.portalIdleStarted) {
+        this.portalIdleStarted = true;
+        this.audio.play('portal-idle');
+      }
       const distanceSquared = (this.context.player.x - visual.x) ** 2 + (this.context.player.y - visual.y) ** 2;
       if (distanceSquared <= ANOMALY_SCHEDULING.interactionRadius ** 2) {
         if (!visual.readyForInteraction) {
@@ -179,6 +184,7 @@ export class AnomalyController {
     this.stateValue = 'charging';
     this.spawnedAt = this.elapsedMs;
     this.charge = 0;
+    this.portalIdleStarted = false;
     this.chargeTarget = Math.min(definition.chargeMaximum, Math.ceil(definition.chargeBase + this.context.round * definition.chargePerRound));
     this.visual = new AnomalyPortalVisual(this.context.scene, location.x, location.y, this.options.particlesEnabled);
     this.audio.play('anomaly-spawn');
@@ -197,7 +203,6 @@ export class AnomalyController {
     this.cost = this.forcedCost ?? ANOMALY_ENTRY_COSTS[Math.floor(this.random.next() * ANOMALY_ENTRY_COSTS.length)];
     this.visual.transformToPortal();
     this.audio.play('portal-rupture');
-    this.audio.play('portal-idle');
     this.hud.show(this.definition.displayName, `${this.definition.description}\nENTRY COST // ${this.cost} FLUX CORES`, 0xff5bd8, 5600);
     this.context.emitMetric({
       name: 'anomaly_portal_opened', anomalyId: this.definition.id, round: this.context.round,
@@ -268,6 +273,7 @@ export class AnomalyController {
     this.visual?.destroy();
     this.visual = null;
     this.definition = null;
+    this.portalIdleStarted = false;
     this.stateValue = 'resolved';
     this.audio.stopAll();
     this.hud.hide();

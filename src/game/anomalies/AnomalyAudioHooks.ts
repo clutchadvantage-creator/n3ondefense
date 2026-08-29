@@ -1,9 +1,7 @@
-/**
- * Dedicated Anomaly audio boundary. The first implementation deliberately
- * remains silent until purpose-built assets are supplied; no unrelated combat
- * sounds are substituted. Adding assets later only requires replacing this
- * adapter, not touching scheduling or HEIST gameplay.
- */
+import { AudioManager } from '../systems/AudioManager.ts';
+
+/** Dedicated Anomaly audio boundary. Gameplay reports semantic lifecycle cues;
+ * this adapter owns mixer routing, loop idempotency, and teardown. */
 export type AnomalyAudioCue =
   | 'anomaly-spawn'
   | 'anomaly-charging'
@@ -35,4 +33,37 @@ export interface AnomalyAudioHooks {
 export const createSilentAnomalyAudioHooks = (): AnomalyAudioHooks => ({
   play: () => undefined,
   stopAll: () => undefined
+});
+
+export const createAnomalyAudioHooks = (audio = AudioManager.get()): AnomalyAudioHooks => ({
+  play: (cue) => {
+    switch (cue) {
+      case 'essence-absorption':
+        audio.playSfx('anomalyPortalPower');
+        break;
+      case 'portal-idle':
+        audio.startAnomalyPortalIdle();
+        break;
+      case 'portal-entry':
+      case 'portal-return':
+        audio.stopAnomalyPortalIdle();
+        audio.stopHeistAlarm();
+        audio.playSfx('anomalyPortalTransit');
+        break;
+      case 'door-open':
+      case 'door-close':
+        audio.playSfx('heistDoor');
+        break;
+      case 'warning-state':
+        audio.startHeistAlarm();
+        break;
+      case 'heist-failed':
+        audio.stopHeistAlarm();
+        audio.stopAnomalyPortalIdle();
+        break;
+      default:
+        break;
+    }
+  },
+  stopAll: () => audio.stopAnomalySfx()
 });

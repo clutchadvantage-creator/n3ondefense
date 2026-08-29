@@ -44,7 +44,7 @@ import {
   type TemporaryAmmoMode
 } from '../../player/TemporaryAmmoMode.ts';
 import { RICOCHET_MAX_WALL_BOUNCES, reflectRicochetVelocity } from '../../player/RicochetRules.ts';
-import { createSilentAnomalyAudioHooks } from '../AnomalyAudioHooks.ts';
+import { createAnomalyAudioHooks } from '../AnomalyAudioHooks.ts';
 import { AnomalyPortalVisual } from '../AnomalyPortalVisual.ts';
 import { recordAnomalyMetric } from '../AnomalyTelemetry.ts';
 import type {
@@ -124,7 +124,7 @@ const isSessionData = (value: unknown): value is HeistSessionData => {
 const emptyLoot = (): PendingAnomalyLoot => ({ credits: 0, coreTokens: 0, plasmaChips: 0, fluxCores: 0, modIds: [] });
 
 export class HeistScene extends Phaser.Scene {
-  private readonly audio = createSilentAnomalyAudioHooks();
+  private readonly audio = createAnomalyAudioHooks();
   private readonly coreAudio = AudioManager.get();
   private session!: HeistSessionData;
   private player!: Player;
@@ -151,6 +151,7 @@ export class HeistScene extends Phaser.Scene {
   private turrets: Turret[] = [];
   private mines: Mine[] = [];
   private extractionPortal: AnomalyPortalVisual | null = null;
+  private extractionPortalIdleStarted = false;
   private hud!: Hud;
   private hudPayload!: HudPayload;
   private readonly hudBuffs: string[] = [];
@@ -324,6 +325,7 @@ export class HeistScene extends Phaser.Scene {
     this.turrets.length = 0;
     this.mines.length = 0;
     this.extractionPortal = null;
+    this.extractionPortalIdleStarted = false;
     this.hudBuffs.length = 0;
     this.hudRadarContacts.length = 0;
     this.shieldVisual = null;
@@ -1326,6 +1328,10 @@ export class HeistScene extends Phaser.Scene {
       const dy = this.player.y - this.extractionPortal.y;
       const nearby = dx * dx + dy * dy <= HEIST_BALANCE.extractionRadius ** 2;
       const ready = this.extractionPortal.readyForInteraction;
+      if (ready && !this.extractionPortalIdleStarted) {
+        this.extractionPortalIdleStarted = true;
+        this.audio.play('portal-idle');
+      }
       this.promptText.setVisible(nearby).setText(ready
         ? `${this.inputController.prompt('interact', 'E')} EXTRACT // COMMIT COLLECTED HAUL`
         : 'EXTRACTION BREACH STABILIZING');
@@ -1805,6 +1811,7 @@ export class HeistScene extends Phaser.Scene {
     if (this.manuallyPaused || this.returning) return;
     this.manuallyPaused = true;
     this.physics.pause();
+    this.coreAudio.pauseEventPresentationLoops();
     this.inputController.clear();
     this.session.inputBridge?.release?.();
     this.session.inputBridge?.hidePrompt();
@@ -1839,6 +1846,7 @@ export class HeistScene extends Phaser.Scene {
       this.physics.resume();
       this.input.setDefaultCursor('none');
       this.crosshair.setVisible(true);
+      this.coreAudio.resumeEventPresentationLoops();
       return;
     }
     this.session.inputBridge.showResume('CLICK TO RESUME HEIST');
@@ -1859,11 +1867,13 @@ export class HeistScene extends Phaser.Scene {
     this.inputController.clear();
     if (shouldPause) {
       this.physics.pause();
+      this.coreAudio.pauseEventPresentationLoops();
       this.input.setDefaultCursor('default');
       this.crosshair.setVisible(false);
       bridge?.showResume('CLICK TO RESUME HEIST');
     } else {
       this.physics.resume();
+      this.coreAudio.resumeEventPresentationLoops();
       this.input.setDefaultCursor('none');
       this.crosshair.setVisible(true);
       bridge?.hidePrompt();

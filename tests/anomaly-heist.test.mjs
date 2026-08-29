@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { ANOMALY_DEFINITIONS, ANOMALY_ENTRY_COSTS, ANOMALY_SCHEDULING } from '../src/game/anomalies/AnomalyRegistry.ts';
 import { HeistRewardService, isHeistModRewardEligible } from '../src/game/anomalies/heist/HeistRewardService.ts';
 import { HEIST_ROUTE, HEIST_WALL_RECTS, HEIST_WORLD } from '../src/game/anomalies/heist/HeistConfig.ts';
@@ -49,7 +49,7 @@ test('HEIST failure bypasses normal defeat and restores through the Arena return
   assert.doesNotMatch(transition, /this\.scene\.resume\(SceneKeys\.Arena\)/);
 });
 
-test('Anomaly telemetry, silent audio hooks, scene registration, and DEV controls remain explicit', () => {
+test('Anomaly telemetry, mixer audio hooks, scene registration, and DEV controls remain explicit', () => {
   const telemetry = source('../src/game/telemetry/GameplayTelemetryRecorder.ts');
   const audio = source('../src/game/anomalies/AnomalyAudioHooks.ts');
   const arena = source('../src/game/scenes/ArenaScene.ts');
@@ -57,9 +57,33 @@ test('Anomaly telemetry, silent audio hooks, scene registration, and DEV control
   assert.match(telemetry, /anomalyEvents: AnomalyMetricEvent\[\]/);
   assert.match(telemetry, /recordAnomalyEvent/);
   assert.match(audio, /createSilentAnomalyAudioHooks/);
-  assert.doesNotMatch(audio, /AudioManager|playSfx/);
+  assert.match(audio, /createAnomalyAudioHooks/);
+  assert.match(audio, /AudioManager/);
+  assert.match(arena, /audio: createAnomalyAudioHooks\(this\.audio\)/);
   for (const control of ['forceAnomaly', 'forceAnomalyCharge', 'setAnomalyCost', 'setHeistMiniBoss']) assert.match(arena, new RegExp(control));
   assert.match(boot, /SceneKeys\.Heist/);
+});
+
+test('Anomaly and HEIST sounds follow authoritative feed, portal, door, alarm, pause, and cleanup boundaries', () => {
+  const hooks = source('../src/game/anomalies/AnomalyAudioHooks.ts');
+  const controller = source('../src/game/anomalies/AnomalyController.ts');
+  const heist = source('../src/game/anomalies/heist/HeistScene.ts');
+  const manager = source('../src/game/systems/AudioManager.ts');
+  for (const filename of [
+    'portalpowerupsound.mp3', 'portalidlesound.mp3', 'portalenterexitsound.mp3',
+    'heistdoorsound.mp3', 'alarmsound.mp3'
+  ]) assert.ok(existsSync(new URL(`../public/assets/audio/soundeffects/${filename}`, import.meta.url)), filename);
+  assert.match(hooks, /case 'essence-absorption':[\s\S]*?playSfx\('anomalyPortalPower'\)/);
+  assert.match(hooks, /case 'portal-idle':[\s\S]*?startAnomalyPortalIdle\(\)/);
+  assert.match(hooks, /case 'portal-entry':[\s\S]*?case 'portal-return':[\s\S]*?playSfx\('anomalyPortalTransit'\)/);
+  assert.match(hooks, /case 'door-open':[\s\S]*?case 'door-close':[\s\S]*?playSfx\('heistDoor'\)/);
+  assert.match(hooks, /case 'warning-state':[\s\S]*?startHeistAlarm\(\)/);
+  assert.match(controller, /visual\.readyForInteraction && !this\.portalIdleStarted/);
+  assert.doesNotMatch(controller.slice(controller.indexOf('private openPortal'), controller.indexOf('private tryEnter')), /play\('portal-idle'\)/);
+  assert.match(heist, /ready && !this\.extractionPortalIdleStarted/);
+  assert.match(manager, /pauseEventPresentationLoops/);
+  assert.match(manager, /resumeEventPresentationLoops/);
+  assert.match(manager, /stopAnomalySfx/);
 });
 
 test('HEIST combat pool fully disables and resets retired projectile bodies', () => {

@@ -123,6 +123,7 @@ import { SupremeFinaleController } from '../bosses/SupremeFinaleController.ts';
 import { SupremeFinaleOverlay } from '../bosses/SupremeFinaleOverlay.ts';
 import { SupremeVictorySequence } from '../bosses/SupremeVictorySequence.ts';
 import { AnomalyController } from '../anomalies/AnomalyController.ts';
+import { createAnomalyAudioHooks } from '../anomalies/AnomalyAudioHooks.ts';
 import { ANOMALY_BY_ID } from '../anomalies/AnomalyRegistry.ts';
 import { AnomalyReturnLifecycle } from '../anomalies/AnomalyReturnLifecycle.ts';
 import { recordAnomalyMetric } from '../anomalies/AnomalyTelemetry.ts';
@@ -4828,7 +4829,8 @@ export class ArenaScene extends Phaser.Scene {
       walls: this.walls,
       particlesEnabled: this.particlesEnabled,
       isBlocked: (x, y) => this.hitWall(x, y),
-      findSpawnPoints: (count, minimumPlayerDistance) => this.findArcadeSpawnPoints(count, minimumPlayerDistance, seed),
+      findSpawnPoints: (count, minimumPlayerDistance, clearance) =>
+        this.findArcadeSpawnPoints(count, minimumPlayerDistance, seed, clearance),
       findCheckpointPoints: (count) => this.findArcadeCheckpointPoints(count, seed),
       spawnEnemy: ({ type, x, y }) => this.spawnEnemy(type, this.bombSites.activeBombCount() > 0, { x, y }),
       removeEnemy: (enemy) => this.removeArcadeEnemy(enemy),
@@ -4899,7 +4901,8 @@ export class ArenaScene extends Phaser.Scene {
     }, {
       enabled: teachingComplete,
       modeFamily: this.currentModeFamily(),
-      particlesEnabled: this.particlesEnabled
+      particlesEnabled: this.particlesEnabled,
+      audio: createAnomalyAudioHooks(this.audio)
     });
   }
 
@@ -4948,6 +4951,7 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopLowHealthWarning();
     this.laserSecurity?.silence();
     this.audio.stopFluxCoreLoop();
+    this.audio.pauseEventPresentationLoops();
     this.clearGameplayInput();
     // Pointer lock is canvas-owned rather than scene-owned. Keep this exact
     // instance alive through the excursion so HEIST inherits normal aiming
@@ -5307,7 +5311,12 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private findArcadeSpawnPoints(count: number, minimumPlayerDistance: number, seed: number): Array<{ x: number; y: number }> {
+  private findArcadeSpawnPoints(
+    count: number,
+    minimumPlayerDistance: number,
+    seed: number,
+    requestedClearance = 24
+  ): Array<{ x: number; y: number }> {
     const random = new SeededRandom((seed ^ Math.imul(count, 0x45d9f3b) ^ 0x601da7e) >>> 0);
     const candidates = this.buildArcadePointCandidates(random);
     const accepted: Array<{ x: number; y: number }> = [];
@@ -5316,8 +5325,9 @@ export class ArenaScene extends Phaser.Scene {
     for (const candidate of candidates) {
       if (accepted.length >= count) break;
       const point = this.pathfinder.findNearestWalkableWorld(candidate.x, candidate.y, 0, 7);
-      if (!point || this.intersectsWallGeometry(point.x, point.y, 24, 24)) continue;
-      if (this.isNearBombSite(point.x, point.y, 105)) continue;
+      const clearance = Phaser.Math.Clamp(requestedClearance, 24, 96);
+      if (!point || this.intersectsWallGeometry(point.x, point.y, clearance, clearance)) continue;
+      if (this.isNearBombSite(point.x, point.y, Math.max(105, clearance + 78))) continue;
       const playerDx = point.x - this.player.x;
       const playerDy = point.y - this.player.y;
       if (playerDx * playerDx + playerDy * playerDy < minimumPlayerDistanceSquared) continue;
@@ -7511,6 +7521,7 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopDisarmLoop();
     this.laserSecurity?.silence();
     this.audio.stopFluxCoreLoop();
+    this.audio.pauseEventPresentationLoops();
 
     this.state.set(RoundState.Paused);
     this.physics.pause();
@@ -7572,6 +7583,7 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.stopDisarmLoop();
     this.laserSecurity?.silence();
     this.audio.stopFluxCoreLoop();
+    this.audio.pauseEventPresentationLoops();
     this.clearGameplayInput();
     this.crosshair?.setVisible(false);
     this.physics.pause();
@@ -7587,6 +7599,7 @@ export class ArenaScene extends Phaser.Scene {
     else this.physics.resume();
     if (this.state.state === RoundState.Planting) this.audio.startPlantingLoop();
     if (this.state.state === RoundState.Defusing) this.audio.startDisarmLoop();
+    if (!shouldRemainPaused) this.audio.resumeEventPresentationLoops();
     this.legendaryRevealPhysicsWasPaused = false;
     this.legendaryRevealInProgress = false;
   }
@@ -7603,6 +7616,7 @@ export class ArenaScene extends Phaser.Scene {
     this.laserSecurity?.silence();
     this.audio.stopFluxCoreLoop();
     this.audio.stopLowHealthWarning();
+    this.audio.pauseEventPresentationLoops();
     this.clearGameplayInput();
     this.state.set(RoundState.Paused);
     this.physics.pause();
@@ -7628,6 +7642,7 @@ export class ArenaScene extends Phaser.Scene {
   private restoreGameplayAfterPause(): void {
     if (this.state.state !== RoundState.Paused) return;
     this.setGameplayCursorMode();
+    this.audio.resumeEventPresentationLoops();
     if (this.anomalySuspensionState) {
       const suspension = this.anomalySuspensionState;
       this.anomalySuspensionState = null;

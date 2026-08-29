@@ -139,7 +139,7 @@ export interface ArcadeRuntimeContext {
   walls: Phaser.Physics.Arcade.StaticGroup;
   particlesEnabled: boolean;
   isBlocked(x: number, y: number): boolean;
-  findSpawnPoints(count: number, minimumPlayerDistance: number): Array<{ x: number; y: number }>;
+  findSpawnPoints(count: number, minimumPlayerDistance: number, clearance?: number): Array<{ x: number; y: number }>;
   findCheckpointPoints(count: number): Array<{ x: number; y: number }>;
   spawnEnemy(request: ArcadeEnemySpawnRequest): Enemy | null;
   removeEnemy(enemy: Enemy): void;
