@@ -3,7 +3,7 @@ import { UPGRADE_DEFINITIONS, getUpgradeCost } from '../../data/upgrades';
 import type { CosmeticOption } from '../types';
 import { type LocalPlayerSave, type ProfileSummary } from '../save/LocalSaveTypes';
 import { LocalSaveManager } from '../save/LocalSaveManager';
-import { addModDrop, createDefaultModLoadout, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleAllUnupgradedDuplicates, recycleDuplicateMod, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
+import { addModDrop, createDefaultModLoadout, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleAllUnupgradedDuplicates, recycleDuplicateMod, removeModInfusion, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
 import { MOD_DEFINITIONS } from '../mods/definitions.ts';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { RUN_PROTOCOLS, isRunProtocolUnlocked } from '../mods/modBalance.ts';
@@ -20,6 +20,7 @@ import {
 } from '../garage/SavedDeploymentConfiguration.ts';
 import { resolveWeeklyOperationDecks, type WeeklyOperationDecksSnapshot, type WeeklyOperationProgressSource } from '../progression/WeeklyOperations.ts';
 import type { ArcadeMetricEvent } from '../arcade/types.ts';
+import { executeCurrencyExchange, type ExchangeCurrency } from '../economy/CurrencyExchange.ts';
 
 export interface PurchaseResult {
   ok: boolean;
@@ -561,6 +562,29 @@ export class PlayerProfileStore {
     PlayerProfileStore.save();
   }
 
+  static exchangeCurrency(source: ExchangeCurrency, target: ExchangeCurrency, amount: number) {
+    const save = PlayerProfileStore.getActiveSave();
+    const balances = {
+      credits: save.wallet.credits,
+      coreTokens: save.wallet.coreTokens,
+      plasmaChips: save.mods.plasmaChips,
+      fluxCores: save.wallet.fluxCores
+    };
+    const result = executeCurrencyExchange(balances, source, target, amount);
+    if (!result.ok) return result;
+
+    // Commit all four authoritative balances together, then persist once. A
+    // failed quote never touches profile state and conversions are not counted
+    // as newly earned lifetime rewards.
+    save.wallet.credits = balances.credits;
+    save.wallet.coreTokens = balances.coreTokens;
+    save.wallet.fluxCores = balances.fluxCores;
+    save.mods.plasmaChips = balances.plasmaChips;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return result;
+  }
+
   static addFluxCores(amount: number): void {
     if (!Number.isFinite(amount) || amount <= 0) return;
     const save = PlayerProfileStore.getActiveSave();
@@ -624,6 +648,13 @@ export class PlayerProfileStore {
   static infuseModCard(instanceId: string, infusionId: ModInfusionId): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
     const result = infuseModCard(save.mods, instanceId, infusionId);
+    if (result.ok) PlayerProfileStore.save();
+    return result;
+  }
+
+  static removeModInfusion(instanceId: string): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = removeModInfusion(save.mods, instanceId);
     if (result.ok) PlayerProfileStore.save();
     return result;
   }

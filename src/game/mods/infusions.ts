@@ -70,3 +70,16 @@ export const MOD_INFUSIONS: readonly ModInfusionDefinition[] = [
 ] as const;
 
 export const MOD_INFUSION_BY_ID = new Map(MOD_INFUSIONS.map((definition) => [definition.id, definition]));
+
+export const getInfusionOperationCost = (
+  currentInfusionId: ModInfusionId | undefined,
+  targetInfusionId: ModInfusionId
+): number => {
+  if (currentInfusionId === targetInfusionId) return 0;
+  if (currentInfusionId) return MOD_BALANCE.infusionReconfigurationPlasmaCost;
+  return MOD_INFUSION_BY_ID.get(targetInfusionId)?.plasmaCost ?? 0;
+};
+
+export const getInfusionRemovalCost = (currentInfusionId: ModInfusionId | undefined): number => (
+  currentInfusionId ? MOD_BALANCE.infusionRemovalPlasmaCost : 0
+);

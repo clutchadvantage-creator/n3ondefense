@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addModDrop, createDefaultModCollection, deleteModCard, equipMod, getModCopyCounts, getRecyclableUnupgradedDuplicates, infuseModCard, rankUpMod, recycleAllUnupgradedDuplicates, recycleDuplicateMod, sellDuplicateMod } from '../src/game/mods/ModInventoryService.ts';
+import { addModDrop, createDefaultModCollection, deleteModCard, equipMod, getModCopyCounts, getRecyclableUnupgradedDuplicates, infuseModCard, rankUpMod, recycleAllUnupgradedDuplicates, recycleDuplicateMod, removeModInfusion, sellDuplicateMod } from '../src/game/mods/ModInventoryService.ts';
 import { normalizeModCollection, normalizeProtocolPreference } from '../src/game/mods/ModSaveNormalizer.ts';
 import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
 import { applyOperativeSpeedMultipliers, magneticResistanceForEnemy, prioritizeTurretTargets, protocolStart, splitCurrentSecondaryDamage } from '../src/game/mods/ModRules.ts';
@@ -226,9 +226,9 @@ test('Plasma Chip infusions spend chips and remain cosmetic runtime flags', () =
   const mods = createDefaultModCollection();
   addModDrop(mods, 'split-current');
   equipMod(mods, 'weapon', 'split-current');
-  mods.plasmaChips = 12;
+  mods.plasmaChips = MOD_BALANCE.infusionPlasmaCost['detonation-fireworks'];
   assert.equal(infuseModCard(mods, mods.cards[0].instanceId, 'detonation-fireworks').ok, true);
-  assert.equal(mods.plasmaChips, 5);
+  assert.equal(mods.plasmaChips, 0);
   assert.equal(new ModRuntime(mods).hasInfusion('detonation-fireworks'), true);
 });
 
@@ -244,10 +244,24 @@ test('every listed infusion is explicitly cosmetic-only with a positive Plasma C
   ]);
   for (const infusion of MOD_INFUSIONS) {
     assert.equal(infusion.cosmeticOnly, true);
-    assert.ok(infusion.plasmaCost > 0);
+    assert.ok(infusion.plasmaCost >= 300);
     assert.equal(infusion.plasmaCost, MOD_BALANCE.infusionPlasmaCost[infusion.id]);
     assert.ok(infusion.description.length > 20);
   }
+});
+
+test('infusion reconfiguration and removal use explicit lower service charges', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'split-current');
+  const initialCost = MOD_BALANCE.infusionPlasmaCost['enemy-growth'];
+  mods.plasmaChips = initialCost + MOD_BALANCE.infusionReconfigurationPlasmaCost + MOD_BALANCE.infusionRemovalPlasmaCost;
+  assert.equal(infuseModCard(mods, mods.cards[0].instanceId, 'enemy-growth').ok, true);
+  assert.equal(mods.plasmaChips, MOD_BALANCE.infusionReconfigurationPlasmaCost + MOD_BALANCE.infusionRemovalPlasmaCost);
+  assert.equal(infuseModCard(mods, mods.cards[0].instanceId, 'arcade-pop').ok, true);
+  assert.equal(mods.plasmaChips, MOD_BALANCE.infusionRemovalPlasmaCost);
+  assert.equal(removeModInfusion(mods, mods.cards[0].instanceId).ok, true);
+  assert.equal(mods.plasmaChips, 0);
+  assert.equal(mods.cards[0].infusionId, undefined);
 });
 
 test('each new cosmetic infusion installs on its exact card and reaches the runtime snapshot', () => {
@@ -255,7 +269,7 @@ test('each new cosmetic infusion installs on its exact card and reaches the runt
     const mods = createDefaultModCollection();
     addModDrop(mods, 'split-current');
     equipMod(mods, 'weapon', 'split-current', mods.cards[0].instanceId);
-    mods.plasmaChips = 20;
+    mods.plasmaChips = MOD_BALANCE.infusionPlasmaCost[infusionId];
     assert.equal(infuseModCard(mods, mods.cards[0].instanceId, infusionId).ok, true);
     assert.equal(new ModRuntime(mods).hasInfusion(infusionId), true);
     assert.equal(new ModRuntime(mods).snapshot()[0].infusionId, infusionId);
@@ -265,7 +279,7 @@ test('each new cosmetic infusion installs on its exact card and reaches the runt
 test('the specifically equipped card controls cosmetic infusion activation', () => {
   const mods = createDefaultModCollection();
   addModDrop(mods, 'split-current'); addModDrop(mods, 'split-current');
-  mods.plasmaChips = 20;
+  mods.plasmaChips = MOD_BALANCE.infusionPlasmaCost['enemy-growth'];
   infuseModCard(mods, mods.cards[1].instanceId, 'enemy-growth');
   equipMod(mods, 'weapon', 'split-current', mods.cards[0].instanceId);
   assert.equal(new ModRuntime(mods).hasInfusion('enemy-growth'), false);
@@ -276,7 +290,7 @@ test('the specifically equipped card controls cosmetic infusion activation', () 
 test('equipped-card infusions survive run snapshots and legacy id/rank snapshots', () => {
   const mods = createDefaultModCollection();
   addModDrop(mods, 'split-current');
-  mods.plasmaChips = 20;
+  mods.plasmaChips = MOD_BALANCE.infusionPlasmaCost['detonation-fireworks'];
   infuseModCard(mods, mods.cards[0].instanceId, 'detonation-fireworks');
   equipMod(mods, 'weapon', 'split-current', mods.cards[0].instanceId);
 

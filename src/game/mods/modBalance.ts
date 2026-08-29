@@ -18,14 +18,16 @@ export const MOD_BALANCE = {
   duplicateCreditValueByRarity: { common: 100, uncommon: 180, rare: 320, epic: 550, legendary: 900, supreme: 2400 } satisfies Record<ModRarity, number>,
   duplicatePlasmaValueByRarity: { common: 1, uncommon: 2, rare: 3, epic: 5, legendary: 8, supreme: 20 } satisfies Record<ModRarity, number>,
   infusionPlasmaCost: {
-    'enemy-growth': 5,
-    'detonation-fireworks': 7,
-    'prismatic-rounds': 6,
-    'holo-afterimage': 8,
-    'pickup-orbit': 6,
-    'ghost-echoes': 8,
-    'arcade-pop': 5
+    'enemy-growth': 300,
+    'detonation-fireworks': 350,
+    'prismatic-rounds': 375,
+    'holo-afterimage': 400,
+    'pickup-orbit': 325,
+    'ghost-echoes': 425,
+    'arcade-pop': 350
   } as const,
+  infusionReconfigurationPlasmaCost: 90,
+  infusionRemovalPlasmaCost: 60,
   detonationFireworks: { minDurationMs: 20_000, maxDurationMs: 30_000, burstIntervalMs: 520, sparksPerBurst: 12 },
   dropChance: { normalEnemy: 0.0005, eliteEnemy: 0.04, milestone: 0.12, boss: 0.62, arcade: 1, anomaly: 1 } satisfies Record<ModDropSource, number>,
   rarityWeights: { common: 56, uncommon: 27, rare: 12, epic: 4.5, legendary: 0.5, supreme: 4.5 } satisfies Record<ModRarity, number>,

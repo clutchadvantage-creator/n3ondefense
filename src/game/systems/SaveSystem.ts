@@ -6,6 +6,7 @@ import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
 import type { GaragePresetId } from '../garage/types.ts';
 import type { ArcadeMetricEvent } from '../arcade/types.ts';
+import type { ExchangeCurrency } from '../economy/CurrencyExchange.ts';
 
 export class SaveSystem {
   static get(): GameSaveData {
@@ -68,6 +69,10 @@ export class SaveSystem {
 
   static spendPlasmaChips(amount: number): boolean {
     return PlayerProfileStore.spendPlasmaChips(amount);
+  }
+
+  static exchangeCurrency(source: ExchangeCurrency, target: ExchangeCurrency, amount: number) {
+    return PlayerProfileStore.exchangeCurrency(source, target, amount);
   }
 
   static recordRoundCompletion(round: number, protocol?: RunProtocolId): void {
@@ -164,6 +169,7 @@ export class SaveSystem {
   static recycleAllUnupgradedDuplicates() { return PlayerProfileStore.recycleAllUnupgradedDuplicates(); }
   static deleteModCard(instanceId: string) { return PlayerProfileStore.deleteModCard(instanceId); }
   static infuseModCard(instanceId: string, infusionId: ModInfusionId) { return PlayerProfileStore.infuseModCard(instanceId, infusionId); }
+  static removeModInfusion(instanceId: string) { return PlayerProfileStore.removeModInfusion(instanceId); }
   static getPreferredProtocol(): RunProtocolId { return PlayerProfileStore.getActiveSave().protocol.preferred; }
   static setPreferredProtocol(protocol: RunProtocolId) { return PlayerProfileStore.setPreferredProtocol(protocol); }
   static getHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.highestRound; }

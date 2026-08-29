@@ -5,6 +5,7 @@ import { createUpgradeSvgIcon, directionIcon } from './UpgradeIconRegistry.ts';
 import { getCosmeticPriceTier, getCosmeticPurchaseCosts, isPremiumCosmetic, resolveOperativeFrameAppearance } from '../../data/cosmetics.ts';
 import { AudioManager } from '../../game/systems/AudioManager.ts';
 import { createPremiumOperativeFrameSvg } from './PremiumOperativeFrameSvg.ts';
+import { createBaseOperativeFrameSvg } from './BaseOperativeFrameSvg.ts';
 import { createPremiumTurretSkinSvg } from './PremiumTurretSkinSvg.ts';
 import './storefront.css';
 
@@ -49,6 +50,7 @@ const COSMETIC_LABELS: Record<CosmeticOption['category'], string> = {
 const UPGRADE_LABELS: Record<UpgradeDefinition['category'], string> = {
   player: 'Operative', weapon: 'Weapon', fence: 'Fence', turret: 'Turret', mine: 'Mine'
 };
+const COLOR_PALETTE_CATEGORIES = new Set<CosmeticOption['category']>(['playerColor', 'projectileColor', 'trailColor', 'bombColor']);
 
 export class StorefrontUi {
   private readonly options: StorefrontUiOptions;
@@ -609,11 +611,36 @@ export class StorefrontUi {
     if (item.dashTrailEffect) visual.dataset.trailEffect = item.dashTrailEffect;
     if (item.turretSkinEffect) visual.dataset.turretSkin = item.turretSkinEffect;
     visual.innerHTML = '<i class="trail-a"></i><i class="trail-b"></i><b></b><span></span>';
+    if (COLOR_PALETTE_CATEGORIES.has(item.category) && !item.bombExplosionEffect) {
+      visual.classList.add('cyber-palette-control');
+      visual.setAttribute('role', 'img');
+      visual.setAttribute('aria-label', `${item.label} cyber palette swatch`);
+      const tray = document.createElement('div');
+      tray.className = 'cyber-palette-tray';
+      const rail = document.createElement('div');
+      rail.className = 'cyber-palette-rail';
+      for (let index = 0; index < 5; index += 1) {
+        const swatch = document.createElement('i');
+        swatch.className = `cyber-palette-swatch swatch-${index + 1}`;
+        rail.append(swatch);
+      }
+      const readout = document.createElement('small');
+      readout.textContent = item.colorMode === 'prism' ? 'SPECTRUM' : item.colorMode === 'native' ? 'AUTHORED' : `#${previewColor.toString(16).padStart(6, '0').toUpperCase()}`;
+      tray.append(rail, readout);
+      visual.append(tray);
+    }
     if (item.category === 'playerShape' && premium) {
       const detailedFrame = createPremiumOperativeFrameSvg(item.visualShape);
       if (detailedFrame) {
         visual.classList.add('premium-operative-art');
         visual.append(detailedFrame);
+      }
+    }
+    if (item.category === 'playerShape' && !premium) {
+      const baseFrame = createBaseOperativeFrameSvg(item.visualShape);
+      if (baseFrame) {
+        visual.classList.add('base-operative-art');
+        visual.append(baseFrame);
       }
     }
     if (item.category === 'turretSkin' && item.turretSkinEffect) {

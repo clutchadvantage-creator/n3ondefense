@@ -4,6 +4,13 @@ import { createCosmeticPreview } from '../cosmetics/CosmeticPreview.ts';
 import { ECONOMY_BALANCE, MOD_FOCUS_CATEGORIES, MOD_FOCUS_LABELS, RUN_CONTRACT_IDS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
 import type { RunSetupSelection } from '../economy/types.ts';
+import {
+  CURRENCY_EXCHANGE_RATES,
+  getCurrencyExchangeRate,
+  getMaximumExchangeSpend,
+  quoteCurrencyExchange,
+  type ExchangeCurrency
+} from '../economy/CurrencyExchange.ts';
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys.ts';
 import { calculateGarageLayout, type GarageRect } from '../garage/garageLayout.ts';
 import {
@@ -65,6 +72,14 @@ const createConsoleChamferPoints = (width: number, height: number, cut: number):
   0, height - cut, 0, cut
 ];
 
+const EXCHANGE_CURRENCIES: readonly ExchangeCurrency[] = ['credits', 'coreTokens', 'plasmaChips', 'fluxCores'];
+const EXCHANGE_CURRENCY_LABELS: Record<ExchangeCurrency, string> = {
+  credits: 'CREDITS', coreTokens: 'CORE TOKENS', plasmaChips: 'PLASMA CHIPS', fluxCores: 'FLUX CORES'
+};
+const EXCHANGE_CURRENCY_COLORS: Record<ExchangeCurrency, number> = {
+  credits: 0x7fffe5, coreTokens: 0xffd37b, plasmaChips: 0xdb8fff, fluxCores: 0x76ff9e
+};
+
 export class OperatorGarageScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
@@ -76,6 +91,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private readonly configurationValueTexts = new Map<'contract' | 'signal', Phaser.GameObjects.Text>();
   private configurationFeeText: Phaser.GameObjects.Text | null = null;
   private configurationPersistenceText: Phaser.GameObjects.Text | null = null;
+  private readonly walletValueTexts = new Map<ExchangeCurrency, Phaser.GameObjects.Text>();
   private cosmeticPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
   private tutorialDirector: TutorialDirector | null = null;
   private readonly tutorialTargets = new Map<string, Phaser.GameObjects.Container>();
@@ -90,6 +106,11 @@ export class OperatorGarageScene extends Phaser.Scene {
   private protocolTerminalFamily: 'overdrive' | 'supreme' | null = null;
   private cosmeticCategoryIndex = 0;
   private cosmeticPage = 0;
+  private exchangeSource: ExchangeCurrency = 'credits';
+  private exchangeTarget: ExchangeCurrency = 'coreTokens';
+  private exchangeAmount = 200;
+  private exchangeConfirmLockedUntil = 0;
+  private exchangeConfirmationArmed = true;
   private readonly handleEscape = (): void => {
     if (this.overlay) this.closeOverlay();
     else this.returnToPrevious();
@@ -343,25 +364,28 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private createWalletTerminal(rect: GarageRect, compact: boolean): void {
+    this.walletValueTexts.clear();
     const root = this.terminalFrame(rect, 'DIGITAL WALLET', 0xff5bcf);
     const roomy = !compact && rect.height >= 180;
     const contentScale = roomy ? Phaser.Math.Clamp(rect.width / 400, 1, 1.36) : 1;
     const save = SaveSystem.get();
     const plasma = SaveSystem.getModCollection().plasmaChips;
     const values = [
-      ['CREDITS', save.credits.toLocaleString(), '#7fffe5'],
-      ['CORE TOKENS', save.coreTokens.toLocaleString(), '#ffd37b'],
-      ['PLASMA CHIPS', plasma.toLocaleString(), '#db8fff'],
-      ['FLUX CORES', save.fluxCores.toLocaleString(), '#76ff9e']
+      ['credits', 'CREDITS', save.credits.toLocaleString(), '#7fffe5'],
+      ['coreTokens', 'CORE TOKENS', save.coreTokens.toLocaleString(), '#ffd37b'],
+      ['plasmaChips', 'PLASMA CHIPS', plasma.toLocaleString(), '#db8fff'],
+      ['fluxCores', 'FLUX CORES', save.fluxCores.toLocaleString(), '#76ff9e']
     ] as const;
-    values.forEach(([label, value, color], index) => {
+    values.forEach(([currency, label, value, color], index) => {
       const y = (roomy ? 42 * contentScale : 31) + index * (roomy ? 36 * contentScale : 23);
       root.add(this.add.text(15 * contentScale, y, label, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomy ? Math.round(15 * contentScale) : 11}px`, color: '#93b8c7'
       }).setOrigin(0));
-      root.add(this.add.text(rect.width - 15 * contentScale, y - 4 * contentScale, value, {
+      const valueText = this.add.text(rect.width - 15 * contentScale, y - 4 * contentScale, value, {
         fontFamily: 'Orbitron, sans-serif', fontSize: `${roomy ? Math.round(21 * contentScale) : 14}px`, color
-      }).setOrigin(1, 0));
+      }).setOrigin(1, 0);
+      this.walletValueTexts.set(currency, valueText);
+      root.add(valueText);
     });
     if (roomy && rect.height >= 210) root.add(this.add.text(rect.width / 2, rect.height - 18, `HIGHEST ROUND // ${SaveSystem.getHighestRound()}`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${Math.round(15 * contentScale)}px`, fontStyle: 'bold', color: '#b7dce8'
@@ -447,6 +471,17 @@ export class OperatorGarageScene extends Phaser.Scene {
         }
       });
     }
+  }
+
+  private refreshWalletTerminalState(): void {
+    const wallet = SaveSystem.get();
+    const values: Record<ExchangeCurrency, number> = {
+      credits: wallet.credits,
+      coreTokens: wallet.coreTokens,
+      plasmaChips: SaveSystem.getModCollection().plasmaChips,
+      fluxCores: wallet.fluxCores
+    };
+    for (const currency of EXCHANGE_CURRENCIES) this.walletValueTexts.get(currency)?.setText(values[currency].toLocaleString());
   }
 
   private refreshOperatorPreview(): void {
@@ -560,7 +595,11 @@ export class OperatorGarageScene extends Phaser.Scene {
       { label: 'OVERDRIVE', action: () => this.showOverdrive() },
       { label: 'MOD LIBRARY', action: () => this.showLibrary() },
       { label: 'MOD COLLECTION', action: () => this.openCollection() },
-      { label: 'CONFIG PRESETS', action: () => this.showPresets() }
+      { label: 'CONFIG PRESETS', action: () => this.showPresets() },
+      { label: 'CURRENCY EXCHANGE', action: () => {
+        this.exchangeConfirmationArmed = true;
+        this.showCurrencyExchange();
+      } }
     ];
     stations.forEach((station, index) => {
       createStationHousing(this, centers[index], width, index, height);
@@ -1512,6 +1551,200 @@ export class OperatorGarageScene extends Phaser.Scene {
       this.overlayAnimatedTargets.push(led);
       this.tweens.add({ targets: led, alpha: { from: selected ? 0.35 : 0.2, to: 1 }, duration: 720 + index * 45, yoyo: true, repeat: -1 });
     });
+  }
+
+  private showCurrencyExchange(): void {
+    const root = this.createOverlay('CURRENCY EXCHANGE // MARKET NODE');
+    const { width, height } = this.scale;
+    const compact = width < 820 || height < 620;
+    const wallet = SaveSystem.get();
+    const balances = {
+      credits: wallet.credits,
+      coreTokens: wallet.coreTokens,
+      plasmaChips: SaveSystem.getModCollection().plasmaChips,
+      fluxCores: wallet.fluxCores
+    };
+    if (this.exchangeSource === this.exchangeTarget) {
+      this.exchangeTarget = EXCHANGE_CURRENCIES.find((currency) => currency !== this.exchangeSource) ?? 'coreTokens';
+    }
+    const selectedRate = getCurrencyExchangeRate(this.exchangeSource, this.exchangeTarget)!;
+    if (this.exchangeAmount <= 0 || this.exchangeAmount % selectedRate.sourceUnits !== 0) {
+      this.exchangeAmount = selectedRate.sourceUnits;
+    }
+    const quote = quoteCurrencyExchange(balances, this.exchangeSource, this.exchangeTarget, this.exchangeAmount);
+    const panelMargin = compact ? 20 : Phaser.Math.Clamp(width * 0.045, 42, 92);
+    const panelWidth = width - panelMargin * 2;
+    const addFrame = (x: number, y: number, frameWidth: number, frameHeight: number, color: number, alpha = 0.82): Phaser.GameObjects.Container => {
+      const frameRoot = this.add.container(x, y);
+      const shadow = this.add.polygon(6, 7, createConsoleChamferPoints(frameWidth, frameHeight, 13), 0x000000, 0.58).setOrigin(0);
+      const chassis = this.add.polygon(0, 0, createConsoleChamferPoints(frameWidth, frameHeight, 13), 0x07131e, alpha).setOrigin(0).setStrokeStyle(2, color, 0.65);
+      const inner = this.add.rectangle(9, 9, frameWidth - 18, frameHeight - 18, color, 0.025).setOrigin(0).setStrokeStyle(1, color, 0.2);
+      const topLine = this.add.rectangle(18, 5, frameWidth - 36, 3, color, 0.48).setOrigin(0);
+      frameRoot.add([shadow, chassis, inner, topLine]);
+      root.add(frameRoot);
+      return frameRoot;
+    };
+
+    const walletTop = compact ? 88 : 94;
+    const walletHeight = compact ? 68 : 92;
+    const walletFrame = addFrame(panelMargin, walletTop, panelWidth, walletHeight, 0xff5bcf, 0.9);
+    const tileWidth = panelWidth / 4;
+    EXCHANGE_CURRENCIES.forEach((currency, index) => {
+      const color = EXCHANGE_CURRENCY_COLORS[currency];
+      const x = tileWidth * (index + 0.5);
+      if (index > 0) walletFrame.add(this.add.rectangle(tileWidth * index, walletHeight / 2 + 4, 1, walletHeight - 30, 0x568091, 0.3));
+      walletFrame.add(this.add.text(x, compact ? 18 : 21, EXCHANGE_CURRENCY_LABELS[currency], {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 14}px`, fontStyle: 'bold', color: '#91bcca'
+      }).setOrigin(0.5));
+      walletFrame.add(this.add.text(x, compact ? 43 : 56, balances[currency].toLocaleString(), {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 14 : 23}px`, fontStyle: 'bold', color: Phaser.Display.Color.IntegerToColor(color).rgba
+      }).setOrigin(0.5));
+    });
+
+    const selectionY = compact ? (height < 530 ? 190 : 205) : Phaser.Math.Clamp(height * 0.285, 220, 308);
+    const columnX = [width * 0.29, width * 0.71];
+    const selectorWidth = compact ? Math.min(190, width * 0.31) : Phaser.Math.Clamp(width * 0.27, 245, 410);
+    const cycleCurrency = (role: 'source' | 'target', direction: number): void => {
+      const current = role === 'source' ? this.exchangeSource : this.exchangeTarget;
+      let index = EXCHANGE_CURRENCIES.indexOf(current);
+      do index = (index + direction + EXCHANGE_CURRENCIES.length) % EXCHANGE_CURRENCIES.length;
+      while (EXCHANGE_CURRENCIES[index] === (role === 'source' ? this.exchangeTarget : this.exchangeSource));
+      if (role === 'source') this.exchangeSource = EXCHANGE_CURRENCIES[index];
+      else this.exchangeTarget = EXCHANGE_CURRENCIES[index];
+      this.exchangeAmount = getCurrencyExchangeRate(this.exchangeSource, this.exchangeTarget)?.sourceUnits ?? 1;
+      this.exchangeConfirmationArmed = true;
+      this.status = '';
+      this.showCurrencyExchange();
+    };
+    const sourceColor = EXCHANGE_CURRENCY_COLORS[this.exchangeSource];
+    const targetColor = EXCHANGE_CURRENCY_COLORS[this.exchangeTarget];
+    for (const [index, role] of (['source', 'target'] as const).entries()) {
+      const currency = role === 'source' ? this.exchangeSource : this.exchangeTarget;
+      const color = role === 'source' ? sourceColor : targetColor;
+      const frameWidth = selectorWidth + (compact ? 28 : 54);
+      const frameHeight = compact ? 72 : 90;
+      const frame = addFrame(columnX[index] - frameWidth / 2, selectionY - frameHeight / 2, frameWidth, frameHeight, color, 0.94);
+      frame.add(this.add.text(frameWidth / 2, 17, role === 'source' ? 'SOURCE ACCOUNT' : 'TARGET ACCOUNT', {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, fontStyle: 'bold', color: '#91bcca', letterSpacing: 1
+      }).setOrigin(0.5));
+      root.add(createButton(this, columnX[index], selectionY + (compact ? 11 : 15), EXCHANGE_CURRENCY_LABELS[currency], () => {
+        cycleCurrency(role, 1);
+      }, selectorWidth, 'menu', { height: compact ? 38 : 48, fontSize: compact ? 14 : 18, focusModalDepth: 30 }));
+      frame.add(this.add.text(frameWidth / 2, frameHeight - 7, 'SELECT / CYCLE', {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 8 : 10}px`, color: '#688b99'
+      }).setOrigin(0.5, 1));
+    }
+    root.add(createButton(this, width / 2, selectionY + (compact ? 8 : 12), 'SWAP', () => {
+      [this.exchangeSource, this.exchangeTarget] = [this.exchangeTarget, this.exchangeSource];
+      this.exchangeAmount = getCurrencyExchangeRate(this.exchangeSource, this.exchangeTarget)?.sourceUnits ?? 1;
+      this.exchangeConfirmationArmed = true;
+      this.status = '';
+      this.showCurrencyExchange();
+    }, compact ? 66 : 84, 'menu', { height: compact ? 36 : 42, fontSize: compact ? 11 : 14, focusModalDepth: 30 }));
+
+    const amountY = selectionY + (compact ? 61 : 91);
+    const previewY = amountY + (compact ? 51 : 70);
+    const controlsY = previewY + (compact ? 55 : 71);
+    const confirmY = Math.min(height - (compact ? 43 : 54), controlsY + (compact ? 65 : 80));
+    root.add(this.add.text(width / 2, amountY - (compact ? 20 : 25), 'SOURCE AMOUNT', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 14}px`, fontStyle: 'bold', color: '#82adbc', letterSpacing: 1
+    }).setOrigin(0.5));
+    root.add(this.add.text(width / 2, amountY + (compact ? 6 : 8), this.exchangeAmount.toLocaleString(), {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 22 : 34}px`, fontStyle: 'bold', color: Phaser.Display.Color.IntegerToColor(sourceColor).rgba
+    }).setOrigin(0.5));
+
+    const previewWidth = Math.min(panelWidth, compact ? 570 : 860);
+    const previewFrame = addFrame(width / 2 - previewWidth / 2, previewY - (compact ? 25 : 32), previewWidth, compact ? 50 : 64, quote.ok ? 0x64f4ff : 0xff6f8c, 0.92);
+    previewFrame.add(this.add.text(previewWidth / 2, compact ? 15 : 18,
+      quote.ok
+        ? `${quote.spent.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeSource]}  >>  ${quote.received.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeTarget]}`
+        : quote.message.toUpperCase(), {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 12 : 18}px`, fontStyle: 'bold', color: quote.ok ? '#e8fdff' : '#ff9bac', align: 'center'
+      }).setOrigin(0.5, 0));
+    previewFrame.add(this.add.text(previewWidth / 2, compact ? 35 : 43,
+      `MARKET RATE // ${selectedRate.sourceUnits.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeSource]} = ${selectedRate.targetUnits.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeTarget]}`, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 9 : 12}px`, fontStyle: 'bold', color: '#89b8c8'
+      }).setOrigin(0.5, 0));
+
+    const maxSpend = getMaximumExchangeSpend(balances, this.exchangeSource, this.exchangeTarget);
+    const amountActions: Array<{ label: string; amount: () => number }> = [
+      { label: '- STEP', amount: () => Math.max(selectedRate.sourceUnits, this.exchangeAmount - selectedRate.sourceUnits) },
+      { label: '+ STEP', amount: () => this.exchangeAmount + selectedRate.sourceUnits },
+      { label: 'x5', amount: () => selectedRate.sourceUnits * 5 },
+      { label: 'x10', amount: () => selectedRate.sourceUnits * 10 },
+      { label: 'MAX', amount: () => maxSpend || selectedRate.sourceUnits }
+    ];
+    const controlWidth = compact ? Phaser.Math.Clamp((width - 72) / 5, 64, 88) : 100;
+    const controlGap = compact ? 7 : 12;
+    const totalControlWidth = controlWidth * amountActions.length + controlGap * (amountActions.length - 1);
+    amountActions.forEach((action, index) => {
+      root.add(createButton(this, width / 2 - totalControlWidth / 2 + controlWidth / 2 + index * (controlWidth + controlGap), controlsY, action.label, () => {
+        this.exchangeAmount = action.amount();
+        this.exchangeConfirmationArmed = true;
+        this.status = '';
+        this.showCurrencyExchange();
+      }, controlWidth, 'menu', { height: compact ? 36 : 42, fontSize: compact ? 12 : 14, focusModalDepth: 30 }));
+    });
+
+    const confirm = createButton(this, width / 2, confirmY, quote.ok
+      ? this.exchangeConfirmationArmed ? 'CONFIRM SECURE EXCHANGE' : 'ADJUST TO EXCHANGE AGAIN'
+      : 'EXCHANGE UNAVAILABLE', () => {
+      if (!this.exchangeConfirmationArmed || this.time.now < this.exchangeConfirmLockedUntil) return false;
+      this.exchangeConfirmLockedUntil = this.time.now + 450;
+      this.exchangeConfirmationArmed = false;
+      const result = SaveSystem.exchangeCurrency(this.exchangeSource, this.exchangeTarget, this.exchangeAmount);
+      this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message}`;
+      if (result.ok) this.refreshWalletTerminalState();
+      this.showCurrencyExchange();
+      return result.ok;
+    }, compact ? Math.min(310, width - 80) : 360, 'menu', { height: compact ? 42 : 50, fontSize: compact ? 14 : 18, focusModalDepth: 30, focusDefaultPriority: 40 });
+    if (!quote.ok || !this.exchangeConfirmationArmed) disableButton(confirm);
+    root.add(confirm);
+
+    const footerY = Math.min(height - 13, confirmY + (compact ? 31 : 38));
+    root.add(this.add.text(width / 2, footerY, this.status || `LOSSY MARKET ROUTING // ${CURRENCY_EXCHANGE_RATES.length} SECURE PAIRS ONLINE`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 10 : 13}px`, fontStyle: 'bold', color: this.status.startsWith('BLOCKED') ? '#ff91a4' : this.status ? '#76ffad' : '#688e9d', align: 'center'
+    }).setOrigin(0.5).setWordWrapWidth(width - 50, true).setMaxLines(1));
+
+    // Desktop space becomes a believable market-data bay. The trend is a
+    // deterministic presentation graph (rates themselves remain fixed), so it
+    // costs no per-frame calculation and never implies a fluctuating quote.
+    const chartTop = footerY + 17;
+    const chartHeight = height - chartTop - 22;
+    if (!compact && chartHeight >= 82) {
+      const chartGap = 18;
+      const chartWidth = (panelWidth - chartGap) / 2;
+      for (let chartIndex = 0; chartIndex < 2; chartIndex += 1) {
+        const chartLeft = panelMargin + chartIndex * (chartWidth + chartGap);
+        addFrame(chartLeft, chartTop, chartWidth, chartHeight, chartIndex === 0 ? sourceColor : targetColor, 0.76);
+        root.add(this.add.text(chartLeft + 17, chartTop + 13, chartIndex === 0 ? 'MARKET DEPTH // FIXED RATE TRACE' : 'LIQUIDITY ROUTE // SECURE LEDGER', {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#7fa9b8', letterSpacing: 1
+        }));
+        const graph = this.add.graphics();
+        const graphLeft = chartLeft + 18;
+        const graphTop = chartTop + 37;
+        const graphWidth = chartWidth - 36;
+        const graphHeight = chartHeight - 53;
+        graph.lineStyle(1, 0x477182, 0.2);
+        for (let gridIndex = 1; gridIndex < 5; gridIndex += 1) {
+          graph.lineBetween(graphLeft, graphTop + graphHeight * gridIndex / 5, graphLeft + graphWidth, graphTop + graphHeight * gridIndex / 5);
+          graph.lineBetween(graphLeft + graphWidth * gridIndex / 5, graphTop, graphLeft + graphWidth * gridIndex / 5, graphTop + graphHeight);
+        }
+        const graphColor = chartIndex === 0 ? sourceColor : targetColor;
+        graph.lineStyle(2, graphColor, 0.84);
+        const points = Array.from({ length: 11 }, (_, pointIndex) => {
+          const normalized = pointIndex / 10;
+          const wave = Math.sin(pointIndex * 1.37 + chartIndex * 0.8) * 0.15 + Math.cos(pointIndex * 0.61) * 0.08;
+          return new Phaser.Math.Vector2(graphLeft + graphWidth * normalized, graphTop + graphHeight * (0.56 - normalized * 0.18 + wave));
+        });
+        graph.strokePoints(points, false);
+        root.add(graph);
+        const scan = this.add.rectangle(graphLeft, graphTop, 2, graphHeight, graphColor, 0.34).setOrigin(0);
+        root.add(scan);
+        this.overlayAnimatedTargets.push(scan);
+        this.tweens.add({ targets: scan, x: graphLeft + graphWidth, alpha: { from: 0.18, to: 0.6 }, duration: 2600 + chartIndex * 500, repeat: -1, yoyo: true, ease: 'Sine.easeInOut' });
+      }
+    }
   }
 
   private showPresets(): void {

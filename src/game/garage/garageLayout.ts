@@ -44,12 +44,12 @@ export const calculateGarageLayout = (width: number, height: number): GarageLayo
   const preferredDockY = clamp(height * (compact ? 0.56 : 0.565), 224, height - 128);
   const stationGap = clamp(width * 0.01, 6, 14);
   const stationWidth = Math.floor(clamp(
-    (width - safe * 2 - stationGap * 4) / 5,
+    (width - safe * 2 - stationGap * 5) / 6,
     96,
     compact ? 190 : clamp(250 * uiScale, 190, 290)
   ));
   const stationHeight = compact ? 40 : Math.round(clamp(54 * uiScale, 46, 64));
-  const totalStationWidth = stationWidth * 5 + stationGap * 4;
+  const totalStationWidth = stationWidth * 6 + stationGap * 5;
   const stationStartX = (width - totalStationWidth) / 2 + stationWidth / 2;
   const terminalWidth = Math.floor(compact
     ? clamp(width * 0.27, 138, 224)
@@ -83,7 +83,7 @@ export const calculateGarageLayout = (width: number, height: number): GarageLayo
     dockActionHeight,
     dockActionGap,
     dockCenters: Array.from({ length: 5 }, (_, index) => ({ x: dockStartX + index * (cardWidth + dockGap), y: dockY })),
-    stationCenters: Array.from({ length: 5 }, (_, index) => ({ x: stationStartX + index * (stationWidth + stationGap), y: stationY })),
+    stationCenters: Array.from({ length: 6 }, (_, index) => ({ x: stationStartX + index * (stationWidth + stationGap), y: stationY })),
     stationWidth,
     stationHeight,
     configTerminal: { x: terminalInset, y: terminalY, width: terminalWidth, height: terminalHeight },

@@ -1,7 +1,7 @@
 import { MOD_BY_ID } from './definitions.ts';
 import { MOD_BALANCE } from './modBalance.ts';
 import type { LocalModCollection, ModCardInstance, ModInfusionId, ModLoadoutSlots, ModRank, ModSlot, OwnedModState, RunProtocolId } from './types.ts';
-import { MOD_INFUSION_BY_ID } from './infusions.ts';
+import { getInfusionOperationCost, getInfusionRemovalCost, MOD_INFUSION_BY_ID } from './infusions.ts';
 import { validateModEquip } from './ModLoadoutRules.ts';
 
 export interface ModOperationResult { ok: boolean; message: string; }
@@ -158,12 +158,26 @@ export const infuseModCard = (mods: LocalModCollection, instanceId: string, infu
   if (!card) return { ok: false, message: 'Card not found.' };
   const infusion = MOD_INFUSION_BY_ID.get(infusionId);
   if (!infusion) return { ok: false, message: 'Unknown cosmetic infusion.' };
-  const cost = infusion.plasmaCost;
   if (card.infusionId === infusionId) return { ok: false, message: 'That infusion is already installed.' };
+  const replacing = Boolean(card.infusionId);
+  const cost = getInfusionOperationCost(card.infusionId, infusionId);
   if (mods.plasmaChips < cost) return { ok: false, message: `Requires ${cost} Plasma Chips.` };
   mods.plasmaChips -= cost;
   card.infusionId = infusionId;
-  return { ok: true, message: 'Cosmetic infusion installed.' };
+  return { ok: true, message: replacing
+    ? `Cosmetic infusion reconfigured for ${cost} Plasma Chips.`
+    : `Cosmetic infusion installed for ${cost} Plasma Chips.` };
+};
+
+export const removeModInfusion = (mods: LocalModCollection, instanceId: string): ModOperationResult => {
+  const card = mods.cards.find((entry) => entry.instanceId === instanceId);
+  if (!card) return { ok: false, message: 'Card not found.' };
+  if (!card.infusionId) return { ok: false, message: 'That card has no infusion installed.' };
+  const cost = getInfusionRemovalCost(card.infusionId);
+  if (mods.plasmaChips < cost) return { ok: false, message: `Requires ${cost} Plasma Chips.` };
+  mods.plasmaChips -= cost;
+  card.infusionId = undefined;
+  return { ok: true, message: `Cosmetic infusion removed for ${cost} Plasma Chips.` };
 };
 
 export const rankUpMod = (mods: LocalModCollection, modId: string, credits: number, coreTokens = 0, instanceId?: string): ModOperationResult & { cost?: number; coreTokenCost?: number } => {

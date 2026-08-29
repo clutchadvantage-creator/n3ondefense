@@ -232,7 +232,7 @@ test('Garage responsive layout keeps critical docks, terminals, and stations on 
   for (const [width, height] of [[640, 480], [1024, 640], [1366, 768], [1920, 1080], [2560, 1440], [720, 900]]) {
     const layout = calculateGarageLayout(width, height);
     assert.equal(layout.dockCenters.length, 5);
-    assert.equal(layout.stationCenters.length, 5);
+    assert.equal(layout.stationCenters.length, 6);
     assert.ok(layout.cardWidth >= 84);
     for (const point of layout.dockCenters) {
       assert.ok(point.x - layout.cardWidth / 2 >= layout.safe - 1);

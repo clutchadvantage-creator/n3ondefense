@@ -9,7 +9,7 @@ import { SaveSystem } from '../systems/SaveSystem';
 import { disableButton } from '../utils/ui';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { rollModDrop } from '../mods/ModDropService.ts';
-import { MOD_INFUSIONS } from '../mods/infusions.ts';
+import { getInfusionOperationCost, getInfusionRemovalCost, MOD_INFUSIONS } from '../mods/infusions.ts';
 import { getModCopyCounts, getRecyclableUnupgradedDuplicates } from '../mods/ModInventoryService.ts';
 import { showConfirmDialog, type LocalModalHandle } from '../utils/localSaveUi.ts';
 import { resolveModCollectionReturnRoute, type ModCollectionReturnRequest } from '../mods/ModCollectionNavigation.ts';
@@ -70,6 +70,7 @@ export class ModCollectionScene extends Phaser.Scene {
   private status = '';
   private infusionModal: Phaser.GameObjects.Container | null = null;
   private bulkRecycleModal: LocalModalHandle | null = null;
+  private infusionConfirmModal: LocalModalHandle | null = null;
   private infusionPage = 0;
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
   private resumePausedScene = false;
@@ -77,7 +78,11 @@ export class ModCollectionScene extends Phaser.Scene {
   private archiveRefreshPending = false;
   private targetSlot: ModSlot | null = null;
   private readonly handleEscape = (): void => {
-    if (this.bulkRecycleModal) {
+    if (this.infusionConfirmModal) {
+      this.infusionConfirmModal.destroy();
+      this.infusionConfirmModal = null;
+      setSceneUiModalDepth(this, this.infusionModal ? 30 : 0);
+    } else if (this.bulkRecycleModal) {
       this.bulkRecycleModal.destroy();
       this.bulkRecycleModal = null;
     } else if (this.infusionModal) this.hideInfusionModal();
@@ -241,6 +246,10 @@ export class ModCollectionScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', this.handleEscape);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
+      this.infusionConfirmModal?.destroy();
+      this.infusionConfirmModal = null;
+      this.bulkRecycleModal?.destroy();
+      this.bulkRecycleModal = null;
       this.tutorialDirector?.destroy();
       this.tutorialDirector = null;
     });
@@ -379,7 +388,9 @@ export class ModCollectionScene extends Phaser.Scene {
     this.hideInfusionModal();
     setSceneUiModalDepth(this, 30);
     const { width, height } = this.scale;
-    const root = this.add.container(0, 0).setDepth(6000);
+    // Keep the infusion terminal above the collection, but below the shared
+    // 4000-depth confirmation dialog used for paid install/swap/remove actions.
+    const root = this.add.container(0, 0).setDepth(3000);
     const blocker = this.add.rectangle(width / 2, height / 2, width, height, 0x02050b, 0.88).setInteractive();
     const panelWidth = Math.min(900, width - 16);
     const panelHeight = Math.min(680, height - 16);
@@ -429,7 +440,9 @@ export class ModCollectionScene extends Phaser.Scene {
     visibleInfusions.forEach((infusion, index) => {
       const rowY = rowsTop + rowSlotHeight * (index + 0.5);
       const installed = card.infusionId === infusion.id;
-      const affordable = SaveSystem.getModCollection().plasmaChips >= infusion.plasmaCost;
+      const operationCost = getInfusionOperationCost(card.infusionId, infusion.id);
+      const affordable = SaveSystem.getModCollection().plasmaChips >= operationCost;
+      const replacing = Boolean(card.infusionId && !installed);
       const rowAccent = installed ? 0x62ffae : 0x4bbfdb;
       root.add(this.add.rectangle(width / 2, rowY, panelWidth - 44, rowHeight, installed ? 0x103329 : 0x0c1a29, 0.95).setStrokeStyle(installed ? 2 : 1, rowAccent, installed ? 1 : 0.65));
       root.add(this.add.rectangle(width / 2, rowY - rowHeight / 2 + 4, panelWidth - 64, 2, rowAccent, installed ? 0.72 : 0.34));
@@ -439,9 +452,18 @@ export class ModCollectionScene extends Phaser.Scene {
       root.add(this.add.text(copyX, rowY - 15, infusion.description, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#c0d9e7', lineSpacing: 0
       }).setOrigin(0, 0).setWordWrapWidth(copyWidth, true).setMaxLines(2));
-      root.add(this.add.text(copyX, rowY + rowHeight / 2 - 15, installed ? 'INSTALLED' : `${infusion.plasmaCost} PLASMA CHIPS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', fontStyle: 'bold', color: installed ? '#70ffad' : affordable ? '#ffd98a' : '#ff91a4' }).setOrigin(0, 0.5));
-      const install = createModCollectionButton(this, installX, rowY, installed ? 'Installed' : affordable ? 'Install' : 'Not Enough Chips', () => {
-        return !installed && affordable ? this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion.id)) : false;
+      root.add(this.add.text(copyX, rowY + rowHeight / 2 - 15, installed
+        ? 'INSTALLED'
+        : `${replacing ? 'RECONFIGURE' : 'INSTALL'} // ${operationCost} PLASMA CHIPS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', fontStyle: 'bold', color: installed ? '#70ffad' : affordable ? '#ffd98a' : '#ff91a4' }).setOrigin(0, 0.5));
+      const install = createModCollectionButton(this, installX, rowY, installed ? 'Installed' : affordable ? replacing ? 'Swap' : 'Install' : 'Not Enough Chips', () => {
+        if (installed || !affordable) return false;
+        this.confirmInfusionOperation(
+          replacing ? 'RECONFIGURE COSMETIC INFUSION' : 'INSTALL COSMETIC INFUSION',
+          `${replacing ? 'Replace the current infusion with' : 'Install'} ${infusion.name.toUpperCase()}?\n\nExact charge: ${operationCost} Plasma Chips.\nBalance after transaction: ${(SaveSystem.getModCollection().plasmaChips - operationCost).toLocaleString()} Plasma Chips.`,
+          replacing ? 'Confirm Swap' : 'Confirm Install',
+          () => this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion.id))
+        );
+        return true;
       }, installWidth, installed ? 'return' : affordable ? 'utility' : 'warning');
       if (installed || !affordable) disableButton(install);
       root.add(install);
@@ -464,11 +486,45 @@ export class ModCollectionScene extends Phaser.Scene {
       }).setOrigin(0.5),
       nextPage
     ]);
-    root.add(createModCollectionButton(this, width / 2, closeY, 'Close', () => this.hideInfusionModal(), 220, 'return'));
+    if (card.infusionId) {
+      const removalCost = getInfusionRemovalCost(card.infusionId);
+      const canRemove = SaveSystem.getModCollection().plasmaChips >= removalCost;
+      const bottomWidth = Phaser.Math.Clamp((panelWidth - 72) / 2, 150, 220);
+      const bottomGap = 14;
+      const removeButton = createModCollectionButton(this, width / 2 - bottomWidth / 2 - bottomGap / 2, closeY,
+        canRemove ? `Remove // ${removalCost} Chips` : `Need ${removalCost} Chips`, () => {
+          if (!canRemove) return false;
+          this.confirmInfusionOperation(
+            'REMOVE COSMETIC INFUSION',
+            `Remove the installed infusion from this Mod card?\n\nExact charge: ${removalCost} Plasma Chips.\nBalance after transaction: ${(SaveSystem.getModCollection().plasmaChips - removalCost).toLocaleString()} Plasma Chips.`,
+            'Confirm Removal',
+            () => this.apply(() => SaveSystem.removeModInfusion(card.instanceId))
+          );
+          return true;
+        }, bottomWidth, canRemove ? 'warning' : 'return');
+      if (!canRemove) disableButton(removeButton);
+      root.add([
+        removeButton,
+        createModCollectionButton(this, width / 2 + bottomWidth / 2 + bottomGap / 2, closeY, 'Close', () => this.hideInfusionModal(), bottomWidth, 'return')
+      ]);
+    } else {
+      root.add(createModCollectionButton(this, width / 2, closeY, 'Close', () => this.hideInfusionModal(), 220, 'return'));
+    }
     this.infusionModal = root;
   }
 
+  private confirmInfusionOperation(title: string, body: string, label: string, operation: () => void): void {
+    this.infusionConfirmModal?.destroy();
+    setSceneUiModalDepth(this, 50);
+    this.infusionConfirmModal = showConfirmDialog(this, title, body, label, operation, 'Cancel', () => {
+      this.infusionConfirmModal = null;
+      setSceneUiModalDepth(this, this.infusionModal ? 30 : 0);
+    });
+  }
+
   private hideInfusionModal(): void {
+    this.infusionConfirmModal?.destroy();
+    this.infusionConfirmModal = null;
     this.infusionModal?.destroy(true);
     this.infusionModal = null;
     setSceneUiModalDepth(this, 0);

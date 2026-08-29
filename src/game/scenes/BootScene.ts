@@ -7,6 +7,7 @@ import type { EnemyType } from '../types';
 import { createPremiumOperativeFrameTextures } from '../cosmetics/PremiumOperativeFrameTextures.ts';
 import { COSMETICS } from '../../data/cosmetics.ts';
 import { createPremiumOperativeFrameSvgDataUri } from '../../ui/stores/PremiumOperativeFrameSvg.ts';
+import { createBaseOperativeFrameSvgDataUri } from '../../ui/stores/BaseOperativeFrameSvg.ts';
 import { createDetailedEnemyRobotTextures } from '../enemies/EnemyArtTextures.ts';
 import { createDetailedBossTextures } from '../bosses/BossArtTextures.ts';
 
@@ -18,9 +19,13 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     this.load.audio('sfx-boost', publicAssetUrl('assets/audio/soundeffects/boostsound.mp3'));
     for (const frame of COSMETICS) {
-      if (frame.category !== 'playerShape' || !frame.nativeTextureKey) continue;
-      const source = createPremiumOperativeFrameSvgDataUri(frame.visualShape, frame.color, frame.accentColor ?? frame.color);
-      if (source) this.load.svg(frame.nativeTextureKey, source, { width: 62, height: 50 });
+      if (frame.category !== 'playerShape') continue;
+      if (frame.nativeTextureKey) {
+        const source = createPremiumOperativeFrameSvgDataUri(frame.visualShape, frame.color, frame.accentColor ?? frame.color);
+        if (source) this.load.svg(frame.nativeTextureKey, source, { width: 62, height: 50 });
+      }
+      const baseSource = createBaseOperativeFrameSvgDataUri(frame.visualShape);
+      if (baseSource && frame.textureKey) this.load.svg(frame.textureKey, baseSource, { width: 58, height: 56 });
     }
   }
 
@@ -43,69 +48,6 @@ export class BootScene extends Phaser.Scene {
     g.lineStyle(2, 0x1f2840, 1);
     g.strokeRect(2, 2, 60, 60);
     g.generateTexture('panel', 64, 64);
-
-    const createPlayerTexture = (key: string, drawShape: (graphics: Phaser.GameObjects.Graphics) => void): void => {
-      g.clear();
-      g.fillStyle(0x04070d, 0);
-      g.fillRect(0, 0, 32, 32);
-      g.fillStyle(0xffffff, 1);
-      drawShape(g);
-      g.lineStyle(2, 0x121a2b, 1);
-      drawShape(g);
-      g.generateTexture(key, 32, 32);
-    };
-
-    createPlayerTexture('player-circle', (graphics) => {
-      graphics.fillCircle(16, 16, 11);
-      graphics.strokeCircle(16, 16, 11);
-    });
-
-    createPlayerTexture('player-square', (graphics) => {
-      graphics.fillRect(6, 6, 20, 20);
-      graphics.strokeRect(6, 6, 20, 20);
-    });
-
-    createPlayerTexture('player-triangle', (graphics) => {
-      graphics.fillPoints([{ x: 16, y: 5 }, { x: 5, y: 26 }, { x: 27, y: 26 }], true);
-      graphics.strokePoints([{ x: 16, y: 5 }, { x: 5, y: 26 }, { x: 27, y: 26 }], true);
-    });
-
-    createPlayerTexture('player-star', (graphics) => {
-      const points: Phaser.Types.Math.Vector2Like[] = [];
-      for (let i = 0; i < 10; i += 1) {
-        const outer = i % 2 === 0;
-        const radius = outer ? 12 : 5.5;
-        const angle = -Math.PI / 2 + (Math.PI / 5) * i;
-        points.push({ x: 16 + Math.cos(angle) * radius, y: 16 + Math.sin(angle) * radius });
-      }
-      graphics.fillPoints(points, true);
-      graphics.strokePoints(points, true);
-    });
-
-    createPlayerTexture('player-hexagon', (graphics) => {
-      const points = Array.from({ length: 6 }, (_, index) => {
-        const angle = Math.PI / 6 + index * Math.PI / 3;
-        return { x: 16 + Math.cos(angle) * 12, y: 16 + Math.sin(angle) * 12 };
-      });
-      graphics.fillPoints(points, true);
-      graphics.strokePoints(points, true);
-    });
-
-    createPlayerTexture('player-diamond', (graphics) => {
-      const points = [{ x: 16, y: 3 }, { x: 29, y: 16 }, { x: 16, y: 29 }, { x: 3, y: 16 }];
-      graphics.fillPoints(points, true);
-      graphics.strokePoints(points, true);
-    });
-
-    createPlayerTexture('player-cross', (graphics) => {
-      const points = [
-        { x: 11, y: 3 }, { x: 21, y: 3 }, { x: 21, y: 11 }, { x: 29, y: 11 },
-        { x: 29, y: 21 }, { x: 21, y: 21 }, { x: 21, y: 29 }, { x: 11, y: 29 },
-        { x: 11, y: 21 }, { x: 3, y: 21 }, { x: 3, y: 11 }, { x: 11, y: 11 }
-      ];
-      graphics.fillPoints(points, true);
-      graphics.strokePoints(points, true);
-    });
 
     g.clear();
     g.fillStyle(0x04070d, 0);
