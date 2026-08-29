@@ -56,5 +56,5 @@ test('Garage fee and setup console both use the authoritative resolver and selec
   assert.match(setup, /const totalCost = getRunSetupCost\(setup\)/);
   assert.match(refresh, /const setup = SaveSystem\.getNextRunSetupSelection\(\)/);
   assert.match(refresh, /const cost = getRunSetupCost\(setup\)/);
-  assert.equal((setup.match(/this\.refreshConfigurationTerminalState\(\)/g) ?? []).length, 2);
+  assert.equal((setup.match(/this\.refreshConfigurationTerminalState\(\)/g) ?? []).length, 3);
 });

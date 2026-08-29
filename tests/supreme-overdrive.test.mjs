@@ -196,7 +196,7 @@ test('version-thirteen saves migrate Supreme progression defaults without losing
   delete old.progress.supremeHighestRound;
   delete old.progress.supremeOverdriveCompleted;
   const migrated = normalizeLocalSave(old);
-  assert.equal(migrated.version, 16);
+  assert.equal(migrated.version, 17);
   assert.equal(migrated.wallet.credits, 76543);
   assert.equal(migrated.progress.highestRound, 63);
   assert.equal(migrated.progress.supremeHighestRound, 0);

@@ -11,6 +11,7 @@ export interface RunConfigurationWallet {
 
 export interface RunConfigurationConsoleData {
   setup: RunSetupSelection;
+  savedDeploymentEnabled: boolean;
   totalCost: number;
   signalMultiplier: number;
   contractLabel: string;
@@ -134,10 +135,15 @@ export const createRunConfigurationConsole = (
   const systemWidth = Math.min(columnWidth - 8, density === 'compressed' ? 330 : compact ? 420 : 500);
   const systemX = outerMargin + systemWidth * 0.5;
   const system = createEmbeddedMonitor(scene, root, systemX, statusY, systemWidth, statusHeight, 'SYSTEM STATUS', 0x55efff, typography.monitorTitle);
-  addText(scene, system, -systemWidth * 0.5 + 17, statusHeight * 0.16, 'CORE ONLINE   //   SECURE LINK', typography.diagnosticLabel, '#72ffae');
-  const statusLed = scene.add.circle(systemWidth / 2 - 38, statusHeight * 0.16, 3, 0x72ffae, 0.95);
-  system.add(statusLed);
-  animatedTargets.push(statusLed);
+  addText(
+    scene,
+    system,
+    -systemWidth * 0.5 + 17,
+    statusHeight * 0.16,
+    data.savedDeploymentEnabled ? 'PERSISTENCE LINK // ACTIVE' : 'PERSISTENCE LINK // MANUAL',
+    typography.diagnosticLabel,
+    data.savedDeploymentEnabled ? '#72ffae' : '#8fc6d5'
+  );
 
   const walletWidth = Math.min(width - outerMargin * 2 - systemWidth - columnGap, density === 'compressed' ? 680 : 900);
   const walletX = width - outerMargin - walletWidth * 0.5;
@@ -226,14 +232,18 @@ export const createRunConfigurationConsole = (
   const signalSummary = data.setup.modFocus ? data.setup.modFocus.toUpperCase() : 'STANDARD';
   const summaryLine = `SIGNAL ${signalSummary}   //   CONTRACT ${data.contractLabel.toUpperCase()}   //   RUN FEE ${data.totalCost.toLocaleString()}C`;
   addText(scene, summary, 0, density === 'compressed' ? 0 : compact ? 1 : 2, summaryLine, typography.summary, '#d4f8ff', 0.5, 'Orbitron, sans-serif');
-  addText(scene, summary, 0, density === 'compressed' ? 20 : compact ? 24 : 29, data.totalCost <= data.wallet.credits ? 'CONFIGURATION VALID // AWAITING DEPLOYMENT' : 'INSUFFICIENT CREDITS', typography.summaryStatus, data.totalCost <= data.wallet.credits ? '#71ffad' : '#ff7a96', 0.5);
+  const summaryStatus = data.totalCost > data.wallet.credits
+    ? 'INSUFFICIENT CREDITS'
+    : data.savedDeploymentEnabled
+      ? 'SAVED CONFIGURATION ACTIVE // CHARGED PER NEW RUN'
+      : 'CONFIGURATION VALID // CONSUMED ON NEXT DEPLOYMENT';
+  addText(scene, summary, 0, density === 'compressed' ? 20 : compact ? 24 : 29, summaryStatus, typography.summaryStatus, data.totalCost <= data.wallet.credits ? '#71ffad' : '#ff7a96', 0.5);
 
   const sweep = scene.add.rectangle(outerMargin + 10, height / 2, 2, height - 54, 0x55efff, 0.045);
   root.add(sweep);
   animatedTargets.push(sweep, topBusGlow);
   scene.tweens.add({ targets: sweep, x: width - outerMargin - 10, duration: 5200, repeat: -1, repeatDelay: 1800, ease: 'Sine.easeInOut' });
   scene.tweens.add({ targets: topBusGlow, alpha: { from: 0.02, to: 0.11 }, duration: 1900, yoyo: true, repeat: -1 });
-  scene.tweens.add({ targets: statusLed, alpha: { from: 0.2, to: 1 }, duration: 760, yoyo: true, repeat: -1 });
 
   return {
     layout,

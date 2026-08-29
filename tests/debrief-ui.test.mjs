@@ -54,7 +54,8 @@ test('debrief action routes preserve completion flow and expose safe post-failur
   }
   assert.match(finished, /returnScene: SceneKeys\.RoundFinished/);
   assert.match(failed, /SceneKeys\.Mods, \{ returnScene: SceneKeys\.MainMenu, resumePausedScene: false \}/);
-  assert.match(failed, /buildRunEconomySnapshot\(\{ modFocus: null, contract: null \}, 0\)/);
+  assert.match(failed, /SaveSystem\.commitDeploymentLaunch\(\)/);
+  assert.match(failed, /\.\.\.commit\.economySnapshot/);
 });
 
 test('round-finished readability tier increases only secondary typography', () => {

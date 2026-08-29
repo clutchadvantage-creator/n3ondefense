@@ -179,6 +179,9 @@ export class SaveSystem {
   static getGarageState() { return PlayerProfileStore.getGarageState(); }
   static getNextRunSetupSelection(): RunSetupSelection { return PlayerProfileStore.getNextRunSetupSelection(); }
   static setNextRunSetupSelection(selection: RunSetupSelection) { return PlayerProfileStore.setNextRunSetupSelection(selection); }
+  static setSavedDeploymentEnabled(enabled: boolean, nowMs = Date.now()) { return PlayerProfileStore.setSavedDeploymentEnabled(enabled, nowMs); }
+  static isSavedDeploymentReminderDue(nowMs = Date.now()): boolean { return PlayerProfileStore.isSavedDeploymentReminderDue(nowMs); }
+  static commitDeploymentLaunch(options: { acknowledgeReminder?: boolean; nowMs?: number } = {}) { return PlayerProfileStore.commitDeploymentLaunch(options); }
   static saveGaragePreset(presetId: GaragePresetId) { return PlayerProfileStore.saveGaragePreset(presetId); }
   static loadGaragePreset(presetId: GaragePresetId) { return PlayerProfileStore.loadGaragePreset(presetId); }
   static purchaseAdditionalModLoadoutSlot() { return PlayerProfileStore.purchaseAdditionalModLoadoutSlot(); }

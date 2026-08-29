@@ -41,6 +41,8 @@ const createEmptyPreset = (id: GaragePresetId, index: number): GaragePreset => (
 
 export const createDefaultGarageState = (): PlayerGarageState => ({
   nextRun: { contract: null, modFocus: null },
+  savedDeploymentEnabled: false,
+  lastDeploymentReminderAt: null,
   presets: GARAGE_PRESET_IDS.map(createEmptyPreset)
 });
 
@@ -65,6 +67,10 @@ export const normalizeGarageState = (value: unknown): PlayerGarageState => {
   const rawPresets = Array.isArray(value.presets) ? value.presets : [];
   return {
     nextRun: normalizeRunSetupSelection(value.nextRun),
+    savedDeploymentEnabled: value.savedDeploymentEnabled === true,
+    lastDeploymentReminderAt: typeof value.lastDeploymentReminderAt === 'string' && !Number.isNaN(Date.parse(value.lastDeploymentReminderAt))
+      ? value.lastDeploymentReminderAt
+      : null,
     presets: GARAGE_PRESET_IDS.map((id, index) => {
       const fallback = createEmptyPreset(id, index);
       const raw = rawPresets.find((entry) => isObject(entry) && entry.id === id) ?? rawPresets[index];

@@ -12,6 +12,11 @@ import { buildRunEconomySnapshot, getNextLoadoutSlotCost, getRunSetupCost, purch
 import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
 import { loadGaragePreset, normalizeRunSetupSelection, saveCurrentGaragePreset } from '../garage/GarageState.ts';
 import type { GaragePresetId, PlayerGarageState } from '../garage/types.ts';
+import {
+  commitDeploymentLaunch,
+  isSavedDeploymentReminderDue,
+  setSavedDeploymentEnabled
+} from '../garage/SavedDeploymentConfiguration.ts';
 import { resolveWeeklyOperationDecks, type WeeklyOperationDecksSnapshot, type WeeklyOperationProgressSource } from '../progression/WeeklyOperations.ts';
 import type { ArcadeMetricEvent } from '../arcade/types.ts';
 
@@ -482,6 +487,28 @@ export class PlayerProfileStore {
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
     return { ok: true, message: 'Next deployment configuration updated.' };
+  }
+
+  static setSavedDeploymentEnabled(enabled: boolean, nowMs = Date.now()): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    setSavedDeploymentEnabled(save.garage, enabled, nowMs);
+    save.profile.lastPlayedAt = new Date(nowMs).toISOString();
+    PlayerProfileStore.save();
+    return { ok: true, message: enabled ? 'Saved deployment configuration enabled.' : 'Saved deployment configuration disabled.' };
+  }
+
+  static isSavedDeploymentReminderDue(nowMs = Date.now()): boolean {
+    return isSavedDeploymentReminderDue(PlayerProfileStore.getActiveSave().garage, nowMs);
+  }
+
+  static commitDeploymentLaunch(options: { acknowledgeReminder?: boolean; nowMs?: number } = {}) {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = commitDeploymentLaunch(save, options);
+    if (result.ok) {
+      save.profile.lastPlayedAt = new Date(options.nowMs ?? Date.now()).toISOString();
+      PlayerProfileStore.save();
+    }
+    return result;
   }
 
   static saveGaragePreset(presetId: GaragePresetId): PurchaseResult {

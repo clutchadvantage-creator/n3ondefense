@@ -16,6 +16,9 @@ export interface GaragePreset {
 
 export interface PlayerGarageState {
   nextRun: RunSetupSelection;
+  /** Retains nextRun after a committed attempt; it never represents prepayment. */
+  savedDeploymentEnabled: boolean;
+  /** ISO timestamp of the last explicit saved-configuration acknowledgement. */
+  lastDeploymentReminderAt: string | null;
   presets: GaragePreset[];
 }
-

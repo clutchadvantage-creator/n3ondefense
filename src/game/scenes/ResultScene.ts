@@ -21,6 +21,9 @@ import {
 import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton } from '../utils/ui';
 import { setSceneUiModalDepth } from '../input/UiNavigationController.ts';
+import { DeploymentLaunchGate } from '../garage/SavedDeploymentConfiguration.ts';
+import { getRunSetupCost } from '../economy/EconomyService.ts';
+import { createDeploymentConfigurationModal } from '../ui/DeploymentConfigurationModal.ts';
 
 const displayId = (value: string | null | undefined): string => value
   ? value.replace(/([A-Z])/g, ' $1').replace(/-/g, ' ').trim().toUpperCase()
@@ -33,12 +36,17 @@ const formatRunTime = (durationMs: number | undefined): string => {
 
 export class ResultScene extends Phaser.Scene {
   private readonly handleResize = (): void => { this.scene.restart(); };
+  private readonly deploymentLaunchGate = new DeploymentLaunchGate();
+  private deploymentModal: Phaser.GameObjects.Container | null = null;
+  private modalEscapeHandler: (() => void) | null = null;
 
   constructor() {
     super(SceneKeys.Results);
   }
 
   create(): void {
+    this.deploymentLaunchGate.reset();
+    this.closeDeploymentModal();
     setSceneUiModalDepth(this, 0);
     const result = this.registry.get('result') as ArenaReward | undefined;
     const resultProtocol = normalizeRunProtocolId(result?.protocol);
@@ -92,8 +100,22 @@ export class ResultScene extends Phaser.Scene {
         label: 'REPLAY LOCAL',
         primary: true,
         onClick: () => {
+          if (!this.deploymentLaunchGate.begin()) return false;
+          const selection = SaveSystem.getNextRunSetupSelection();
+          if (!SaveSystem.canAffordRunSetup(selection)) {
+            this.deploymentLaunchGate.release();
+            this.showInsufficientFunds(selection);
+            return false;
+          }
+          const commit = SaveSystem.commitDeploymentLaunch();
+          if (!commit.ok || !commit.economySnapshot) {
+            this.deploymentLaunchGate.release();
+            this.showInsufficientFunds(commit.selection);
+            return false;
+          }
           OnlineRunManager.beginLocalRun();
           disableButton(replayButton);
+          this.deploymentLaunchGate.commit();
           this.registry.remove('round-finished');
           const protocol = resultProtocol;
           const deploymentStart = protocolStart(
@@ -113,9 +135,9 @@ export class ResultScene extends Phaser.Scene {
               runStartedAt: Date.now(),
               equippedMods: new ModRuntime(SaveSystem.getModCollection(), undefined, protocol).snapshot(),
               modsEarned: [],
-              // Paid one-run setup is consumed by the original run. Replay never
-              // grants a free Contract or focused Mod signal.
-              ...SaveSystem.buildRunEconomySnapshot({ modFocus: null, contract: null }, 0)
+              // A replay is a new attempt: persistent configuration is charged
+              // once here, while manual configuration was consumed previously.
+              ...commit.economySnapshot
             },
             message: 'Rebuilding mission arena...'
           });
@@ -147,12 +169,40 @@ export class ResultScene extends Phaser.Scene {
     this.scale.off('resize', this.handleResize, this);
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', this.handleResize, this));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.closeDeploymentModal());
 
     const briefingState = SaveSystem.getInitialDeploymentBriefingState();
     if (shouldShowInitialDeploymentBriefing(result, briefingState)) {
       SaveSystem.markInitialDeploymentBriefingSeen();
       this.showInitialDeploymentBriefing();
     }
+  }
+
+  private showInsufficientFunds(selection: ReturnType<typeof SaveSystem.getNextRunSetupSelection>): void {
+    this.closeDeploymentModal();
+    setSceneUiModalDepth(this, 100);
+    const close = (): void => this.closeDeploymentModal();
+    this.deploymentModal = createDeploymentConfigurationModal(this, {
+      kind: 'insufficient',
+      selection,
+      cost: getRunSetupCost(selection),
+      walletCredits: SaveSystem.get().credits,
+      onCancel: close,
+      onConfigure: () => {
+        close();
+        this.scene.start(SceneKeys.Garage, { returnScene: SceneKeys.Results, openRunConfiguration: true });
+      }
+    });
+    this.modalEscapeHandler = close;
+    this.input.keyboard?.once('keydown-ESC', close);
+  }
+
+  private closeDeploymentModal(): void {
+    if (this.modalEscapeHandler) this.input.keyboard?.off('keydown-ESC', this.modalEscapeHandler);
+    this.modalEscapeHandler = null;
+    this.deploymentModal?.destroy(true);
+    this.deploymentModal = null;
+    setSceneUiModalDepth(this, 0);
   }
 
   private showInitialDeploymentBriefing(): void {

@@ -193,7 +193,7 @@ test('version-seven profiles migrate to empty Garage presets without losing data
   delete legacy.garage;
   const migrated = normalizeLocalSave(legacy);
   assert.ok(migrated);
-  assert.equal(migrated.version, 16);
+  assert.equal(migrated.version, 17);
   assert.equal(migrated.wallet.credits, 4567);
   assert.equal(migrated.mods.plasmaChips, 33);
   assert.deepEqual(migrated.garage, createDefaultGarageState());

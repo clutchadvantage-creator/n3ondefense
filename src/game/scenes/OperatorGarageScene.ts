@@ -45,7 +45,7 @@ import {
   setSceneUiModalDepth
 } from '../input/UiNavigationController.ts';
 
-interface OperatorGarageSceneData { returnScene?: SceneKeyValue }
+interface OperatorGarageSceneData { returnScene?: SceneKeyValue; openRunConfiguration?: boolean }
 
 const LIBRARY_CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player', 'defense', 'bombSite', 'utility'];
 const LIBRARY_RARITIES: Array<'all' | ModRarity> = ['all', 'common', 'uncommon', 'rare', 'epic', 'legendary', 'supreme'];
@@ -75,6 +75,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private operatorPreviewLayout: { rect: GarageRect; compact: boolean } | null = null;
   private readonly configurationValueTexts = new Map<'contract' | 'signal', Phaser.GameObjects.Text>();
   private configurationFeeText: Phaser.GameObjects.Text | null = null;
+  private configurationPersistenceText: Phaser.GameObjects.Text | null = null;
   private cosmeticPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
   private tutorialDirector: TutorialDirector | null = null;
   private readonly tutorialTargets = new Map<string, Phaser.GameObjects.Container>();
@@ -232,6 +233,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       this.tutorialDirector?.destroy();
       this.tutorialDirector = null;
     });
+    if (data?.openRunConfiguration) this.time.delayedCall(0, () => this.showRunConfiguration());
   }
 
   private terminalFrame(rect: GarageRect, title: string, color = 0x55efff): Phaser.GameObjects.Container {
@@ -270,6 +272,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private createConfigurationTerminal(rect: GarageRect, compact: boolean): void {
     this.configurationValueTexts.clear();
     this.configurationFeeText = null;
+    this.configurationPersistenceText = null;
     const root = this.terminalFrame(rect, 'DEPLOYMENT CONFIGURATION');
     const roomy = !compact && rect.height >= 180;
     const contentScale = roomy ? Phaser.Math.Clamp(rect.width / 400, 1, 1.36) : 1;
@@ -314,10 +317,14 @@ export class OperatorGarageScene extends Phaser.Scene {
     });
     if (roomy) {
       const cost = getRunSetupCost(setup);
-      this.configurationFeeText = this.add.text(rect.width / 2, rect.height - 19, cost > 0 ? `NEXT RUN FEE // ${cost.toLocaleString()} CREDITS` : 'NEXT RUN FEE // FREE', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${Math.round(15 * contentScale)}px`, fontStyle: 'bold', color: cost > 0 ? '#ffd077' : '#7fffc2'
+      const saved = SaveSystem.getGarageState().savedDeploymentEnabled;
+      this.configurationPersistenceText = this.add.text(rect.width / 2, rect.height - 36 * contentScale, saved ? 'SAVED CONFIGURATION // ACTIVE' : 'SAVED CONFIGURATION // OFF', {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.round(10 * contentScale)}px`, fontStyle: 'bold', color: saved ? '#72ffae' : '#7895a2'
       }).setOrigin(0.5);
-      root.add(this.configurationFeeText);
+      this.configurationFeeText = this.add.text(rect.width / 2, rect.height - 17, cost > 0 ? `RUN COST // ${cost.toLocaleString()} CREDITS` : 'RUN COST // FREE', {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${Math.round(14 * contentScale)}px`, fontStyle: 'bold', color: cost > 0 ? '#ffd077' : '#7fffc2'
+      }).setOrigin(0.5);
+      root.add([this.configurationPersistenceText, this.configurationFeeText]);
     }
   }
 
@@ -326,8 +333,12 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.configurationValueTexts.get('contract')?.setText(`${setup.contract ? RUN_CONTRACTS[setup.contract].label : 'NO CONTRACT ACTIVE'}  [CHANGE]`);
     this.configurationValueTexts.get('signal')?.setText(`${setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus] : 'NO SIGNAL ACTIVE'}  [CHANGE]`);
     const cost = getRunSetupCost(setup);
+    const saved = SaveSystem.getGarageState().savedDeploymentEnabled;
+    this.configurationPersistenceText
+      ?.setText(saved ? 'SAVED CONFIGURATION // ACTIVE' : 'SAVED CONFIGURATION // OFF')
+      .setColor(saved ? '#72ffae' : '#7895a2');
     this.configurationFeeText
-      ?.setText(cost > 0 ? `NEXT RUN FEE // ${cost.toLocaleString()} CREDITS` : 'NEXT RUN FEE // FREE')
+      ?.setText(cost > 0 ? `RUN COST // ${cost.toLocaleString()} CREDITS` : 'RUN COST // FREE')
       .setColor(cost > 0 ? '#ffd077' : '#7fffc2');
   }
 
@@ -594,12 +605,14 @@ export class OperatorGarageScene extends Phaser.Scene {
     const root = this.createOverlay('RUN CONFIGURATION // ONE-RUN SETUP');
     const { width, height } = this.scale;
     const setup = SaveSystem.getNextRunSetupSelection();
+    const garageState = SaveSystem.getGarageState();
     const totalCost = getRunSetupCost(setup);
     const save = SaveSystem.get();
     const modCollection = SaveSystem.getModCollection();
     const contract = setup.contract ? RUN_CONTRACTS[setup.contract] : null;
     const consoleView = createRunConfigurationConsole(this, root, width, height, {
       setup,
+      savedDeploymentEnabled: garageState.savedDeploymentEnabled,
       totalCost,
       signalMultiplier: ECONOMY_BALANCE.modFocus.categoryWeightMultiplier,
       contractLabel: contract?.label ?? 'No Contract',
@@ -628,6 +641,33 @@ export class OperatorGarageScene extends Phaser.Scene {
       typography
     } = consoleView.layout;
     this.overlayAnimatedTargets.push(...consoleView.animatedTargets);
+
+    const systemWidth = Math.min(columnWidth - 8, density === 'compressed' ? 330 : compact ? 420 : 500);
+    const systemX = consoleView.layout.outerMargin + systemWidth * 0.5;
+    const persistenceButton = createButton(
+      this,
+      systemX,
+      statusY + statusHeight * 0.16,
+      garageState.savedDeploymentEnabled ? 'KEEP CONFIGURATION ACTIVE // ON' : 'KEEP CONFIGURATION ACTIVE // OFF',
+      () => {
+        const result = SaveSystem.setSavedDeploymentEnabled(!garageState.savedDeploymentEnabled);
+        this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? ''}`;
+        this.refreshConfigurationTerminalState();
+        this.showRunConfiguration();
+        return result.ok;
+      },
+      systemWidth - 32,
+      'menu',
+      {
+        height: Math.min(34, statusHeight * 0.46),
+        fontSize: typography.diagnosticLabel,
+        horizontalPadding: 24,
+        focusModalDepth: 30,
+        focusDefaultPriority: 45,
+        focusLabel: `KEEP CONFIGURATION ACTIVE ${garageState.savedDeploymentEnabled ? 'ON' : 'OFF'}`
+      }
+    );
+    root.add(persistenceButton);
 
     const feeSummary = totalCost > 0
       ? `RUN FEE // ${totalCost.toLocaleString()} CREDITS // CHARGED ON DEPLOYMENT`

@@ -14,11 +14,14 @@ import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_FOCUS_LABELS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
 import type { RunSetupSelection } from '../economy/types.ts';
+import { DeploymentLaunchGate } from '../garage/SavedDeploymentConfiguration.ts';
 import { formatWeeklyCountdown, type WeeklyOperationDeck, type WeeklyOperationDecksSnapshot, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { completeFirstRunTeachingRound } from '../tutorial/TutorialProgress.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
+import { createDeploymentConfigurationModal, type DeploymentConfigurationModalOptions } from '../ui/DeploymentConfigurationModal.ts';
+import { setSceneUiModalDepth } from '../input/UiNavigationController.ts';
 
 const MAIN_MENU_TIPS = [
   'Shoot through a placed fence to split and multiply your projectiles.',
@@ -78,6 +81,9 @@ export class MainMenuScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
   private tutorialDirector: TutorialDirector | null = null;
   private operationDeck: WeeklyOperationDeck = 'regular';
+  private readonly deploymentLaunchGate = new DeploymentLaunchGate();
+  private deploymentModal: Phaser.GameObjects.Container | null = null;
+  private modalEscapeHandler: (() => void) | null = null;
   private readonly handleResize = (): void => { this.scene.restart(); };
 
   constructor() {
@@ -91,6 +97,8 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   create(data: MainMenuLaunchData = {}): void {
+    this.deploymentLaunchGate.reset();
+    this.closeDeploymentModal();
     this.audio.startMusicLoop();
     const { width, height } = this.scale;
     if (this.scene.isActive(SceneKeys.Arena) || this.scene.isPaused(SceneKeys.Arena)) this.scene.stop(SceneKeys.Arena);
@@ -191,9 +199,10 @@ export class MainMenuScene extends Phaser.Scene {
     }
 
     const setupSelection = this.getRunSetupSelection();
+    const savedSetup = profile ? SaveSystem.getGarageState().savedDeploymentEnabled : false;
     const setupCost = getRunSetupCost(setupSelection);
     const setupSummary = setupSelection.modFocus || setupSelection.contract
-      ? `RUN CONFIG // SIGNAL: ${setupSelection.modFocus ? MOD_FOCUS_LABELS[setupSelection.modFocus].replace(' Signal', '').toUpperCase() : 'NONE'} // CONTRACT: ${setupSelection.contract ? RUN_CONTRACTS[setupSelection.contract].label.toUpperCase() : 'NONE'} // ${setupCost.toLocaleString()}C`
+      ? `RUN CONFIG // SIGNAL: ${setupSelection.modFocus ? MOD_FOCUS_LABELS[setupSelection.modFocus].replace(' Signal', '').toUpperCase() : 'NONE'} // CONTRACT: ${setupSelection.contract ? RUN_CONTRACTS[setupSelection.contract].label.toUpperCase() : 'NONE'} // ${setupCost.toLocaleString()}C${savedSetup ? ' // SAVED ACTIVE' : ''}`
       : 'LOADOUT READY // STANDARD RUN CONFIGURATION // FREE';
     const readoutY = tiny ? 164 : short ? 218 : 290;
     const readoutWidth = protocolWidth + (tiny ? 70 : 130);
@@ -209,86 +218,107 @@ export class MainMenuScene extends Phaser.Scene {
     const singleButtonWidth = Phaser.Math.Clamp(width * (narrow ? 0.42 : 0.23), narrow && width < 750 ? 250 : 330, 450);
     const menuButtonHeight = tiny ? 32 : short ? 41 : 52;
 
-    const startButton = this.createCommandButton(centerX, menuStartY, 'DEPLOY ONLINE', () => {
-      if (!profile) {
-        this.scene.start(SceneKeys.LocalProfiles);
-        return;
+    let startButton!: Phaser.GameObjects.Container;
+    let localStartButton!: Phaser.GameObjects.Container;
+    const setStartButtonsEnabled = (enabled: boolean): void => {
+      for (const button of [startButton, localStartButton]) {
+        if (!button) continue;
+        if (enabled) enableButton(button); else disableButton(button);
       }
-      if (!this.allowTeachingMenuAction('online', onlineStatus)) return false;
+    };
+    const showInsufficientFunds = (selection: RunSetupSelection): void => {
+      const cost = getRunSetupCost(selection);
+      onlineStatus.setText(`DEPLOYMENT BLOCKED // ${cost.toLocaleString()} CREDITS REQUIRED.`).setColor('#ff9aab');
+      this.showDeploymentDecisionModal({
+        kind: 'insufficient',
+        selection,
+        cost,
+        walletCredits: SaveSystem.get().credits,
+        onConfigure: () => this.scene.start(SceneKeys.Garage, { returnScene: SceneKeys.MainMenu, openRunConfiguration: true })
+      });
+    };
+    const launchConfiguredRun = (mode: 'online' | 'local', reminderAcknowledged = false): boolean => {
+      if (!this.deploymentLaunchGate.begin()) return false;
       const selection = this.getRunSetupSelection();
+      if (!reminderAcknowledged && SaveSystem.isSavedDeploymentReminderDue()) {
+        this.deploymentLaunchGate.release();
+        this.showDeploymentDecisionModal({
+          kind: 'reminder',
+          selection,
+          cost: getRunSetupCost(selection),
+          walletCredits: SaveSystem.get().credits,
+          onConfirm: () => launchConfiguredRun(mode, true)
+        });
+        return true;
+      }
       if (!SaveSystem.canAffordRunSetup(selection)) {
-        onlineStatus.setText(`RUN CONFIGURATION REQUIRES ${getRunSetupCost(selection).toLocaleString()} CREDITS.`).setColor('#ff9aab');
+        this.deploymentLaunchGate.release();
+        showInsufficientFunds(selection);
         return false;
       }
-      disableButton(startButton);
-      void (async () => {
-        onlineStatus.setText('CREATING SERVER-AUTHORIZED RUN...').setColor('#9fc8d8');
-        const result = await OnlineRunManager.beginRun(profile.id, profile.name, protocol, equippedMods);
-        if (!result.ok || result.seed === undefined) {
-          onlineStatus.setText(`${result.message} CHOOSE LOCAL MODE OR RETRY.`).setColor('#ff9aab');
-          enableButton(startButton);
-          return;
+
+      setStartButtonsEnabled(false);
+      const commitAndStart = (seed: number): boolean => {
+        const commit = SaveSystem.commitDeploymentLaunch({ acknowledgeReminder: reminderAcknowledged });
+        if (!commit.ok || !commit.economySnapshot) {
+          this.deploymentLaunchGate.release();
+          setStartButtonsEnabled(true);
+          showInsufficientFunds(commit.selection);
+          return false;
         }
-        const purchase = SaveSystem.purchaseRunSetup(selection);
-        if (!purchase.ok) {
-          OnlineRunManager.complete('quit');
-          onlineStatus.setText(purchase.message.toUpperCase()).setColor('#ff9aab');
-          enableButton(startButton);
-          return;
+        if (mode === 'local') {
+          this.confirmLocalTeachingSelection();
+          OnlineRunManager.beginLocalRun();
         }
-        const economySnapshot = SaveSystem.buildRunEconomySnapshot(selection, purchase.cost);
-        this.clearRunSetupSelection();
+        this.deploymentLaunchGate.commit();
         startArenaLoad(this, {
           reason: 'new-run',
           session: {
-            baseSeed: result.seed,
+            baseSeed: seed,
             round: deploymentStart.startingRound,
             objectiveMode: OBJECTIVE_CONFIG.defaultMode,
             protocol,
             runStartedAt: Date.now(),
             equippedMods,
             modsEarned: [],
-            ...economySnapshot
+            ...commit.economySnapshot
           },
-          message: 'Deploying server-authorized online operation...'
+          message: mode === 'online' ? 'Deploying server-authorized online operation...' : 'Building explicitly local operation...'
         });
+        return true;
+      };
+
+      if (mode === 'local') return commitAndStart(Phaser.Math.Between(1, 999_999_999));
+      void (async () => {
+        onlineStatus.setText('CREATING SERVER-AUTHORIZED RUN...').setColor('#9fc8d8');
+        const result = await OnlineRunManager.beginRun(profile!.id, profile!.name, protocol, equippedMods);
+        if (!result.ok || result.seed === undefined) {
+          onlineStatus.setText(`${result.message} CHOOSE LOCAL MODE OR RETRY.`).setColor('#ff9aab');
+          this.deploymentLaunchGate.release();
+          setStartButtonsEnabled(true);
+          return;
+        }
+        if (!commitAndStart(result.seed)) OnlineRunManager.complete('quit');
       })();
       return true;
+    };
+
+    startButton = this.createCommandButton(centerX, menuStartY, 'DEPLOY ONLINE', () => {
+      if (!profile) {
+        this.scene.start(SceneKeys.LocalProfiles);
+        return;
+      }
+      if (!this.allowTeachingMenuAction('online', onlineStatus)) return false;
+      return launchConfiguredRun('online');
     }, singleButtonWidth, menuButtonHeight + 2, 'primary', 'runStart', tiny ? 15 : short ? 18 : 21);
 
-    const localStartButton = this.createCommandButton(centerX, menuStartY + menuRowGap, 'START LOCAL', () => {
+    localStartButton = this.createCommandButton(centerX, menuStartY + menuRowGap, 'START LOCAL', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
       }
       if (!this.allowTeachingMenuAction('local', onlineStatus)) return false;
-      disableButton(localStartButton);
-      const selection = this.getRunSetupSelection();
-      const purchase = SaveSystem.purchaseRunSetup(selection);
-      if (!purchase.ok) {
-        onlineStatus.setText(purchase.message.toUpperCase()).setColor('#ff9aab');
-        enableButton(localStartButton);
-        return false;
-      }
-      const economySnapshot = SaveSystem.buildRunEconomySnapshot(selection, purchase.cost);
-      this.clearRunSetupSelection();
-      this.confirmLocalTeachingSelection();
-      OnlineRunManager.beginLocalRun();
-      startArenaLoad(this, {
-        reason: 'new-run',
-        session: {
-          baseSeed: Phaser.Math.Between(1, 999_999_999),
-          round: deploymentStart.startingRound,
-          objectiveMode: OBJECTIVE_CONFIG.defaultMode,
-          protocol,
-          runStartedAt: Date.now(),
-          equippedMods,
-          modsEarned: [],
-          ...economySnapshot
-        },
-        message: 'Building explicitly local operation...'
-      });
-      return true;
+      return launchConfiguredRun('local');
     }, singleButtonWidth, menuButtonHeight, 'secondary', 'runStart', tiny ? 14 : short ? 17 : 20);
 
     const navFontSize = tiny ? 14 : short ? 16 : 19;
@@ -368,6 +398,7 @@ export class MainMenuScene extends Phaser.Scene {
       this.scale.off('resize', this.handleResize, this);
       this.tutorialDirector?.destroy();
       this.tutorialDirector = null;
+      this.closeDeploymentModal();
     });
   }
 
@@ -726,8 +757,28 @@ export class MainMenuScene extends Phaser.Scene {
     return SaveSystem.getNextRunSetupSelection();
   }
 
-  private clearRunSetupSelection(): void {
-    SaveSystem.setNextRunSetupSelection({ modFocus: null, contract: null });
+  private showDeploymentDecisionModal(
+    options: Omit<DeploymentConfigurationModalOptions, 'onCancel'>
+  ): void {
+    this.closeDeploymentModal();
+    setSceneUiModalDepth(this, 100);
+    const close = (): void => this.closeDeploymentModal();
+    this.deploymentModal = createDeploymentConfigurationModal(this, {
+      ...options,
+      onConfirm: options.onConfirm ? () => { close(); options.onConfirm?.(); } : undefined,
+      onConfigure: options.onConfigure ? () => { close(); options.onConfigure?.(); } : undefined,
+      onCancel: close
+    });
+    this.modalEscapeHandler = close;
+    this.input.keyboard?.once('keydown-ESC', close);
+  }
+
+  private closeDeploymentModal(): void {
+    if (this.modalEscapeHandler) this.input.keyboard?.off('keydown-ESC', this.modalEscapeHandler);
+    this.modalEscapeHandler = null;
+    this.deploymentModal?.destroy(true);
+    this.deploymentModal = null;
+    setSceneUiModalDepth(this, 0);
   }
 
   private createStaticBackground(width: number, height: number): void {
