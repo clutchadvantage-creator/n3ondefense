@@ -76,6 +76,14 @@ test('Store card navigation exposes stable IDs and a shared geometric grid group
   assert.match(controller, /!element\.classList\.contains\('store-card'\)/);
 });
 
+test('Store cards use the same visible line frame for pointer hover, controller focus, and persistent selection', () => {
+  const styles = readFileSync(new URL('../src/ui/stores/storefront.css', import.meta.url), 'utf8');
+  for (const state of [':hover::before', ':focus-visible::before', '.controller-focus::before', '.selected::before']) {
+    assert.ok(styles.includes(`.store-card${state}`), `missing Store card line frame for ${state}`);
+  }
+  assert.match(styles, /left top\/30px 2px no-repeat[\s\S]*?right bottom\/2px 30px no-repeat/);
+});
+
 test('Upgrade and Cosmetic modes share the same layered cyber-console storefront shell', () => {
   const ui = readFileSync(new URL('../src/ui/stores/StorefrontUi.ts', import.meta.url), 'utf8');
   const styles = readFileSync(new URL('../src/ui/stores/storefront.css', import.meta.url), 'utf8');
