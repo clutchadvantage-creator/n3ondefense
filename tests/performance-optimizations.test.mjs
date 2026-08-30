@@ -143,6 +143,20 @@ test('projectile trails are batched without per-projectile display objects or tw
   assert.doesNotMatch(batch, /tweens|add\.circle/);
 });
 
+test('player muzzle flashes use a bounded directional graphics renderer instead of expanding circles', () => {
+  const arena = fs.readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  const heist = fs.readFileSync(new URL('../src/game/anomalies/heist/HeistScene.ts', import.meta.url), 'utf8');
+  const muzzle = fs.readFileSync(new URL('../src/game/vfx/PlayerMuzzleFlashVfx.ts', import.meta.url), 'utf8');
+  assert.match(arena, /this\.muzzleFlashVfx\.emit\(\s*spawnX,\s*spawnY,\s*angle,\s*projectileColor,/);
+  assert.match(heist, /this\.muzzleFlashVfx\.emit\(\s*x,\s*y,\s*angle,\s*projectileColor,/);
+  assert.doesNotMatch(arena, /radius: ammoMode === 'scattershot' \? 16/);
+  assert.match(muzzle, /FULL_QUALITY_SLOTS = 12/);
+  assert.match(muzzle, /fillTriangle\(/);
+  assert.match(muzzle, /smokeGraphics/);
+  assert.match(muzzle, /mixColor\(color, 0x83949d, 0\.7\)/);
+  assert.doesNotMatch(muzzle, /scene\.add\.circle|this\.tweens|scene\.tweens|delayedCall\(|setTimeout\(/);
+});
+
 test('persistent combat progression is batched at safe transitions instead of every kill', () => {
   const arena = fs.readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   assert.match(arena, /this\.pendingProgressEnemyKills \+= 1/);

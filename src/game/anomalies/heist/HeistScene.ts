@@ -27,6 +27,7 @@ import { UniformSpatialGrid } from '../../performance/UniformSpatialGrid.ts';
 import { ProjectileTrailBatch } from '../../performance/ProjectileTrailBatch.ts';
 import { MineExplosionVfx } from '../../vfx/MineExplosionVfx.ts';
 import { OperativeShieldEffect } from '../../vfx/OperativeShieldEffect.ts';
+import { PlayerMuzzleFlashVfx } from '../../vfx/PlayerMuzzleFlashVfx.ts';
 import { resolveMineFrameAppearance } from '../../cosmetics/MineFrameAppearance.ts';
 import { resolveProjectileCosmeticPresentation } from '../../cosmetics/ProjectileCosmeticPresentation.ts';
 import { drawReticle } from '../../ui/ReticleRenderer.ts';
@@ -148,6 +149,7 @@ export class HeistScene extends Phaser.Scene {
   private projectilePool!: ReusableObjectPool<HeistProjectile, HeistProjectileSpawn>;
   private fxCirclePool!: ReusableObjectPool<Phaser.GameObjects.Arc, BoostFxCircleSpawn>;
   private projectileTrails!: ProjectileTrailBatch;
+  private muzzleFlashVfx!: PlayerMuzzleFlashVfx;
   private boostVisual!: BoostVisualSystem;
   private mineExplosionVfx!: MineExplosionVfx;
   private containers: HeistContainer[] = [];
@@ -245,6 +247,7 @@ export class HeistScene extends Phaser.Scene {
     this.aimSettings = normalizeAimSettings(settings.aim);
     this.resolveProjectileCosmetics();
     this.createCombatPools();
+    this.muzzleFlashVfx = new PlayerMuzzleFlashVfx(this, settings.particles);
     this.boostVisual = new BoostVisualSystem(
       this,
       settings.particles,
@@ -495,12 +498,14 @@ export class HeistScene extends Phaser.Scene {
       && this.player.hp > 0 && this.player.hp <= this.player.stats.maxHealth * 0.25);
     if (this.inputCapturePaused || this.manuallyPaused) {
       this.player.setVelocity(0, 0);
+      this.muzzleFlashVfx.reset();
       this.updateHud(now);
       return;
     }
     this.player.updateEnergy(dt);
     this.updatePlayerMovement(now);
     this.updatePlayerCombat(now);
+    this.muzzleFlashVfx.update(now);
     this.updateAbilities(now);
     this.enemySpatialGrid.rebuild(this.enemies);
     this.updateProjectiles(now, delta);
@@ -757,6 +762,14 @@ export class HeistScene extends Phaser.Scene {
         this.spawnPlayerAmmoProjectile(ammoMode, x, y, angle + offset, damage, projectileColor, trailColor, critical, ricochets);
       }
     } else this.spawnPlayerAmmoProjectile(ammoMode, x, y, angle, damage, projectileColor, trailColor, critical, ricochets);
+    this.muzzleFlashVfx.emit(
+      x,
+      y,
+      angle,
+      projectileColor,
+      now,
+      ammoMode === 'scattershot' ? 1.18 : ammoMode === 'grenade' ? 1.1 : 1
+    );
     this.coreAudio.playSfx('shot');
   }
 

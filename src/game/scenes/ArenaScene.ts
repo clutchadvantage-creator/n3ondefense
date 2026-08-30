@@ -80,6 +80,7 @@ import { MineExplosionVfx } from '../vfx/MineExplosionVfx.ts';
 import { BombExplosionCosmeticVfx } from '../cosmetics/BombExplosionCosmeticVfx.ts';
 import { resolveMineFrameAppearance } from '../cosmetics/MineFrameAppearance.ts';
 import { OperativeShieldEffect } from '../vfx/OperativeShieldEffect.ts';
+import { PlayerMuzzleFlashVfx } from '../vfx/PlayerMuzzleFlashVfx.ts';
 import { BOMB_EXPLOSION_COSMETIC_DEFINITIONS } from '../cosmetics/BombExplosionCosmeticDefinitions.ts';
 import { resolveProjectileCosmeticPresentation } from '../cosmetics/ProjectileCosmeticPresentation.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
@@ -342,6 +343,7 @@ export class ArenaScene extends Phaser.Scene {
   private projectilePool!: ReusableObjectPool<Projectile, ProjectileSpawn>;
   private fxCirclePool!: ReusableObjectPool<Phaser.GameObjects.Arc, FxCircleSpawn>;
   private projectileTrails: ProjectileTrailBatch | null = null;
+  private muzzleFlashVfx!: PlayerMuzzleFlashVfx;
   private boostVisual!: BoostVisualSystem;
   private mineExplosionVfx!: MineExplosionVfx;
   private bombExplosionCosmeticVfx!: BombExplosionCosmeticVfx;
@@ -824,6 +826,7 @@ export class ArenaScene extends Phaser.Scene {
       () => this.modRuntime.hasInfusion('pickup-orbit')
     );
     this.createCombatPools();
+    this.muzzleFlashVfx = new PlayerMuzzleFlashVfx(this, this.particlesEnabled);
     this.boostVisual = new BoostVisualSystem(
       this,
       this.particlesEnabled,
@@ -1416,12 +1419,14 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (this.tutorialHardPaused || this.state.state === RoundState.Paused || this.legendaryRevealInProgress || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
+      this.muzzleFlashVfx.reset();
       return;
     }
 
     if (!this.tutorialDirector?.isActive()) this.anomalyController?.update(delta);
     if (this.anomalyController?.blocksArenaGameplay) {
       this.player.setVelocity(0, 0);
+      this.muzzleFlashVfx.reset();
       this.updateHud(now);
       return;
     }
@@ -1439,6 +1444,7 @@ export class ArenaScene extends Phaser.Scene {
     this.resolvePlayerDashWallCollision(now, delta);
     this.updatePlayerMovement(now);
     this.updatePlayerShooting(now);
+    this.muzzleFlashVfx.update(now);
 
     if (this.bossEncounter || this.supremeFinale) {
       const bossCombatAtFrameStart = this.bossFlowPhase === 'combat';
@@ -2000,14 +2006,14 @@ export class ArenaScene extends Phaser.Scene {
 
     this.player.heat += this.player.weapon.heatPerShot;
 
-    const flash = this.obtainFxCircle({
-      x: this.player.x + Math.cos(angle) * 18, y: this.player.y + Math.sin(angle) * 18,
-      radius: ammoMode === 'scattershot' ? 16 : ammoMode === 'grenade' ? 14 : 11,
-      color: ammoMode === 'normal' ? 0xffffff : projectileColor,
-      alpha: 0.8,
-      depth: 9
-    });
-    this.tweens.add({ targets: flash, alpha: 0, scale: 2.2, duration: 110, onComplete: () => this.retireFxCircle(flash) });
+    this.muzzleFlashVfx.emit(
+      spawnX,
+      spawnY,
+      angle,
+      projectileColor,
+      now,
+      ammoMode === 'scattershot' ? 1.18 : ammoMode === 'grenade' ? 1.1 : 1
+    );
     this.audio.playSfx('shot');
   }
 
@@ -8151,6 +8157,7 @@ export class ArenaScene extends Phaser.Scene {
     this.mineExplosionVfx.reset();
     this.bombExplosionCosmeticVfx.reset();
     this.projectileTrails?.reset();
+    this.muzzleFlashVfx.reset();
     for (const missile of this.homingMissiles) missile.sprite.destroy();
     for (const p of this.pickups) p.sprite.destroy();
     for (const p of this.modPickups) p.sprite.destroy();
@@ -8253,6 +8260,7 @@ export class ArenaScene extends Phaser.Scene {
     this.boostVisual?.destroy();
     this.mineExplosionVfx?.destroy();
     this.bombExplosionCosmeticVfx?.destroy();
+    this.muzzleFlashVfx?.destroy();
     this.projectilePool?.destroy((projectile) => this.destroyPooledProjectile(projectile));
     this.fxCirclePool?.destroy((circle) => circle.destroy());
     this.projectileTrails?.destroy();
