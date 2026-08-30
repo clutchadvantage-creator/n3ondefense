@@ -258,6 +258,7 @@ class DomNavigationLayer implements NavigationLayer {
   readonly manager = new UiFocusManager();
   readonly priority = 100;
   private readonly observer: MutationObserver;
+  private readonly focusFrame: HTMLDivElement;
   private readonly controls = new Map<HTMLElement, () => void>();
   private refreshQueued = false;
   private sequence = 0;
@@ -267,6 +268,11 @@ class DomNavigationLayer implements NavigationLayer {
   private readonly focusIds = new Map<HTMLElement, string>();
 
   constructor(private readonly root: HTMLElement) {
+    this.focusFrame = document.createElement('div');
+    this.focusFrame.className = 'controller-dom-focus-frame';
+    this.focusFrame.hidden = true;
+    this.focusFrame.setAttribute('aria-hidden', 'true');
+    document.body.append(this.focusFrame);
     this.observer = new MutationObserver(() => this.queueRefresh());
     this.observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'disabled', 'aria-hidden', 'aria-disabled', 'class', 'data-controller-ignore'] });
     this.refresh();
@@ -305,7 +311,28 @@ class DomNavigationLayer implements NavigationLayer {
   }
 
   drawFocus(_now: number, visible: boolean): void {
-    this.root.classList.toggle('controller-navigation-active', visible && this.isAvailable());
+    const active = visible && this.isAvailable();
+    this.root.classList.toggle('controller-navigation-active', active);
+    const control = active ? this.manager.current : null;
+    if (!control) {
+      this.focusFrame.hidden = true;
+      return;
+    }
+    const rect = control.getRect();
+    if (!Number.isFinite(rect.x) || !Number.isFinite(rect.y) || rect.width <= 0 || rect.height <= 0) {
+      this.focusFrame.hidden = true;
+      return;
+    }
+    const padding = 6;
+    const left = Math.max(2, rect.x - padding);
+    const top = Math.max(2, rect.y - padding);
+    const right = Math.min(window.innerWidth - 2, rect.x + rect.width + padding);
+    const bottom = Math.min(window.innerHeight - 2, rect.y + rect.height + padding);
+    this.focusFrame.hidden = false;
+    this.focusFrame.style.left = `${Math.round(left)}px`;
+    this.focusFrame.style.top = `${Math.round(top)}px`;
+    this.focusFrame.style.width = `${Math.max(2, Math.round(right - left))}px`;
+    this.focusFrame.style.height = `${Math.max(2, Math.round(bottom - top))}px`;
   }
 
   get hasScrollableFocus(): boolean { return Boolean(this.manager.current?.scroll); }
@@ -317,6 +344,7 @@ class DomNavigationLayer implements NavigationLayer {
     this.controls.clear();
     this.manager.clear();
     this.root.classList.remove('controller-navigation-active');
+    this.focusFrame.remove();
   }
 
   private queueRefresh(): void {

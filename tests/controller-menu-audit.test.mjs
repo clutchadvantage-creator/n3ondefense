@@ -18,6 +18,18 @@ test('shared controller router covers DOM controls, text entry, sliders, selects
   ]) assert.ok(navigation.includes(token), `missing controller infrastructure: ${token}`);
 });
 
+test('every focused DOM menu control receives one unclipped screen-space selector frame', () => {
+  const navigation = source('src/game/input/UiNavigationController.ts');
+  const styles = source('src/style.css');
+  assert.match(navigation, /className = 'controller-dom-focus-frame'/);
+  assert.match(navigation, /const control = active \? this\.manager\.current : null/);
+  assert.match(navigation, /control\.getRect\(\)/);
+  assert.match(navigation, /this\.focusFrame\.style\.left/);
+  assert.match(navigation, /this\.focusFrame\.remove\(\)/);
+  assert.match(styles, /\.controller-dom-focus-frame \{[\s\S]*?position: fixed;[\s\S]*?pointer-events: none;/);
+  assert.doesNotMatch(styles, /\.controller-focus::after/);
+});
+
 test('controller-capable scene families register their interactive controls through the shared focus layer', () => {
   const checks = [
     ['src/game/scenes/MainMenuScene.ts', /createButton\(/],
