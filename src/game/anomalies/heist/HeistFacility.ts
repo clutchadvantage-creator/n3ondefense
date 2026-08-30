@@ -22,6 +22,11 @@ import {
   type HeistVaultDoorSpec
 } from './HeistFacilityLayout.ts';
 import { HeistWallPointIndex, mergeAxisAlignedHeistWalls } from './HeistWallRuntime.ts';
+import {
+  HEIST_ZONE_ALPHA,
+  HeistZoneVisibility,
+  heistVisibilityZoneRect
+} from './HeistZoneVisibility.ts';
 
 export interface HeistFacilityRuntime {
   layout: HeistFacilityLayout;
@@ -51,6 +56,7 @@ export interface HeistFacilityRuntime {
     wallIndexBuckets: number;
     wallIndexMaximumCandidates: number;
     staticTextureObjects: number;
+    visibilityZones: number;
   };
   setVaultDoorOpen(open: boolean): void;
   setEscapeRoute(active: boolean): void;
@@ -60,8 +66,15 @@ export interface HeistFacilityRuntime {
   containsWallPoint(x: number, y: number): boolean;
   prepareNavigationTarget(targetX: number, targetY: number): void;
   navigationTarget(x: number, y: number, targetX: number, targetY: number, out?: HeistLayoutPoint): HeistLayoutPoint;
-  update(now: number): void;
+  isPresentationOpenArea(): boolean;
+  update(now: number, playerX: number, playerY: number): void;
   destroy(): void;
+}
+
+interface WallVisual {
+  rect: RectSpec;
+  cap: Phaser.GameObjects.Image;
+  facades: Phaser.GameObjects.TileSprite[];
 }
 
 interface DoorVisual {
@@ -112,6 +125,52 @@ const HEIST_WALL_TEXTURES = {
   verticalMagenta: 'heist-runtime-wall-v-magenta-v1'
 } as const;
 
+const HEIST_WALL_FACADE_TEXTURES = {
+  horizontalCyan: 'heist-runtime-wall-face-h-cyan-v1',
+  horizontalMagenta: 'heist-runtime-wall-face-h-magenta-v1',
+  verticalCyan: 'heist-runtime-wall-face-v-cyan-v1',
+  verticalMagenta: 'heist-runtime-wall-face-v-magenta-v1'
+} as const;
+const HEIST_WALL_PROJECTION_X = 14;
+const HEIST_WALL_PROJECTION_Y = 58;
+const HEIST_WALL_CAP_DEPTH = 30.2;
+const HEIST_WALL_FACE_DEPTH = 30.1;
+const HEIST_VISIBILITY_DEPTH = 40;
+
+const drawWallFacade = (
+  graphics: Phaser.GameObjects.Graphics,
+  width: number,
+  height: number,
+  vertical: boolean,
+  magenta: boolean
+): void => {
+  const accent = magenta ? 0xff4dcb : 0x43edfa;
+  graphics.fillStyle(0x02050a, 1).fillRect(0, 0, width, height);
+  graphics.fillStyle(0x07131e, 1).fillRect(vertical ? 2 : 0, vertical ? 0 : 3,
+    vertical ? Math.max(1, width - 4) : width, vertical ? height : Math.max(1, height - 7));
+  graphics.fillStyle(0x0c2230, 0.92).fillRect(vertical ? 3 : 0, vertical ? 0 : 7,
+    vertical ? Math.max(1, width - 6) : width, vertical ? height : Math.max(1, height - 16));
+  graphics.fillStyle(accent, 0.76).fillRect(vertical ? 2 : 0, vertical ? 0 : 5,
+    vertical ? 2 : width, vertical ? height : 3);
+  graphics.fillStyle(0xc8fdff, 0.32).fillRect(vertical ? 5 : 0, vertical ? 0 : 9,
+    vertical ? 1 : width, vertical ? height : 1);
+  if (vertical) {
+    for (let y = 18; y < height; y += 38) {
+      graphics.fillStyle(y % 76 ? 0x102d3b : accent, y % 76 ? 0.78 : 0.58)
+        .fillRect(3, y, Math.max(2, width - 6), 4);
+      graphics.fillStyle(0x000207, 0.82).fillRect(5, y + 7, Math.max(1, width - 10), 17);
+    }
+  } else {
+    for (let x = 16; x < width; x += 58) {
+      graphics.fillStyle(0x02070d, 0.9).fillRect(x, 14, 38, Math.max(8, height - 23));
+      graphics.lineStyle(1, accent, 0.24).strokeRect(x + 3, 17, 32, Math.max(4, height - 29));
+      graphics.fillStyle(0x617985, 0.52).fillCircle(x + 6, 20, 1.5).fillCircle(x + 32, 20, 1.5);
+    }
+    graphics.fillStyle(accent, 0.46).fillRect(0, height - 8, width, 2);
+    graphics.fillStyle(0x000207, 0.9).fillRect(0, height - 4, width, 4);
+  }
+};
+
 const ensureFacilityTextures = (scene: Phaser.Scene): void => {
   if (!scene.textures.exists(HEIST_FLOOR_TEXTURE)) {
     const width = HEIST_LAYOUT_GRID.cellWidth * 2;
@@ -160,6 +219,20 @@ const ensureFacilityTextures = (scene: Phaser.Scene): void => {
     graphics.generateTexture(key, width, height);
     graphics.destroy();
   }
+
+  const facadeSpecs = [
+    [HEIST_WALL_FACADE_TEXTURES.horizontalCyan, 256, HEIST_WALL_PROJECTION_Y, false, false],
+    [HEIST_WALL_FACADE_TEXTURES.horizontalMagenta, 256, HEIST_WALL_PROJECTION_Y, false, true],
+    [HEIST_WALL_FACADE_TEXTURES.verticalCyan, HEIST_WALL_PROJECTION_X, 256, true, false],
+    [HEIST_WALL_FACADE_TEXTURES.verticalMagenta, HEIST_WALL_PROJECTION_X, 256, true, true]
+  ] as const;
+  for (const [key, width, height, vertical, magenta] of facadeSpecs) {
+    if (scene.textures.exists(key)) continue;
+    const graphics = scene.make.graphics({ x: 0, y: 0 }, false);
+    drawWallFacade(graphics, width, height, vertical, magenta);
+    graphics.generateTexture(key, width, height);
+    graphics.destroy();
+  }
 };
 
 const createDoorVisual = (
@@ -172,30 +245,39 @@ const createDoorVisual = (
   body.setVisible(false).setDisplaySize(horizontal ? spec.width : HEIST_LAYOUT_GRID.wallThickness,
     horizontal ? HEIST_LAYOUT_GRID.wallThickness : spec.width).refreshBody();
 
-  const root = scene.add.container(spec.x, spec.y).setDepth(6);
+  const root = scene.add.container(spec.x - HEIST_WALL_PROJECTION_X * 0.5,
+    spec.y - HEIST_WALL_PROJECTION_Y * 0.5).setDepth(29.6);
   const chassisWidth = horizontal ? spec.width + 34 : 104;
-  const chassisHeight = horizontal ? 104 : spec.width + 34;
+  const chassisHeight = (horizontal ? 104 : spec.width + 34) + HEIST_WALL_PROJECTION_Y;
+  const shadow = scene.add.rectangle(8, 12, chassisWidth + 18, chassisHeight + 18, 0x000207, 0.72);
   const outer = scene.add.rectangle(0, 0, chassisWidth, chassisHeight, 0x030811, 1)
     .setStrokeStyle(4, 0x4deaff, 0.72);
   const inset = scene.add.rectangle(0, 0, chassisWidth - 20, chassisHeight - 20, 0x0a1e2b, 1)
     .setStrokeStyle(2, 0xff4bc9, 0.58);
   const panelWidth = horizontal ? (spec.width - 20) * 0.5 : 70;
-  const panelHeight = horizontal ? 70 : (spec.width - 20) * 0.5;
+  const panelHeight = horizontal ? 70 + HEIST_WALL_PROJECTION_Y : (spec.width - 20) * 0.5 + 20;
   const firstPanel = scene.add.rectangle(horizontal ? -panelWidth * 0.5 : 0, horizontal ? 0 : -panelHeight * 0.5,
     panelWidth, panelHeight, 0x123546, 1).setStrokeStyle(2, 0x64f5ff, 0.9);
   const secondPanel = scene.add.rectangle(horizontal ? panelWidth * 0.5 : 0, horizontal ? 0 : panelHeight * 0.5,
     panelWidth, panelHeight, 0x152b3e, 1).setStrokeStyle(2, 0xff62d2, 0.88);
-  const seam = scene.add.rectangle(0, 0, horizontal ? 7 : 70, horizontal ? 70 : 7, 0xe8ffff, 0.72)
+  const seam = scene.add.rectangle(0, 0, horizontal ? 7 : 70,
+    horizontal ? panelHeight : 7, 0xe8ffff, 0.72)
     .setBlendMode(Phaser.BlendModes.ADD);
-  const status = scene.add.circle(horizontal ? -chassisWidth * 0.4 : chassisWidth * 0.62,
-    horizontal ? -chassisHeight * 0.62 : -chassisHeight * 0.4, 7, 0xff4d71, 1)
+  const status = scene.add.circle(horizontal ? -chassisWidth * 0.4 : chassisWidth * 0.38,
+    -chassisHeight * 0.4, 7, 0xff4d71, 1)
     .setStrokeStyle(2, 0xffb0be, 0.72);
-  const label = scene.add.text(0, horizontal ? -72 : -chassisHeight * 0.5 - 30,
+  const crown = scene.add.rectangle(0, -chassisHeight * 0.5 + 10, chassisWidth - 18, 14, 0x0d2b3a, 1)
+    .setStrokeStyle(2, 0x63f2ff, 0.68);
+  const leftRail = scene.add.rectangle(-chassisWidth * 0.5 + 11, 0, 13, chassisHeight - 22, 0x102b3a, 1)
+    .setStrokeStyle(1, 0xff4dcb, 0.54);
+  const rightRail = scene.add.rectangle(chassisWidth * 0.5 - 11, 0, 13, chassisHeight - 22, 0x102b3a, 1)
+    .setStrokeStyle(1, 0x43edfa, 0.54);
+  const label = scene.add.text(0, -chassisHeight * 0.5 - 24,
     `VAULT // ${spec.side.toUpperCase()} SEALED`, {
       fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#ff72d9',
       backgroundColor: '#020710e8', padding: { x: 8, y: 4 }
     }).setOrigin(0.5);
-  root.add([outer, inset, firstPanel, secondPanel, seam, status, label]);
+  root.add([shadow, outer, inset, crown, firstPanel, secondPanel, seam, leftRail, rightRail, status, label]);
   return { spec, body, root, firstPanel, secondPanel, seam, status, label };
 };
 
@@ -235,6 +317,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     HEIST_LAYOUT_GRID.rows * HEIST_LAYOUT_GRID.cellHeight,
     HEIST_FLOOR_TEXTURE
   ).setOrigin(0).setDepth(0.1));
+  const wallVisuals: WallVisual[] = [];
   for (let index = 0; index < runtimeWallRects.length; index += 1) {
     const rect = runtimeWallRects[index];
     const horizontal = rect.w >= rect.h;
@@ -242,8 +325,23 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     const texture = horizontal
       ? magenta ? HEIST_WALL_TEXTURES.horizontalMagenta : HEIST_WALL_TEXTURES.horizontalCyan
       : magenta ? HEIST_WALL_TEXTURES.verticalMagenta : HEIST_WALL_TEXTURES.verticalCyan;
-    staticVisuals.push(scene.add.image(rect.x, rect.y, texture).setOrigin(0)
-      .setDisplaySize(rect.w, rect.h).setDepth(1));
+    const frontFacadeTexture = magenta
+      ? HEIST_WALL_FACADE_TEXTURES.horizontalMagenta : HEIST_WALL_FACADE_TEXTURES.horizontalCyan;
+    const sideFacadeTexture = magenta
+      ? HEIST_WALL_FACADE_TEXTURES.verticalMagenta : HEIST_WALL_FACADE_TEXTURES.verticalCyan;
+    const cap = scene.add.image(rect.x - HEIST_WALL_PROJECTION_X, rect.y - HEIST_WALL_PROJECTION_Y, texture)
+      .setOrigin(0).setDisplaySize(rect.w, rect.h).setDepth(HEIST_WALL_CAP_DEPTH);
+    const frontFacade = scene.add.tileSprite(rect.x - HEIST_WALL_PROJECTION_X,
+      rect.y + rect.h - HEIST_WALL_PROJECTION_Y,
+      rect.w + HEIST_WALL_PROJECTION_X, HEIST_WALL_PROJECTION_Y, frontFacadeTexture)
+      .setOrigin(0).setDepth(HEIST_WALL_FACE_DEPTH);
+    const facades = [frontFacade];
+    if (!horizontal) facades.push(scene.add.tileSprite(rect.x + rect.w - HEIST_WALL_PROJECTION_X,
+      rect.y - HEIST_WALL_PROJECTION_Y,
+      HEIST_WALL_PROJECTION_X, rect.h + HEIST_WALL_PROJECTION_Y, sideFacadeTexture)
+      .setOrigin(0).setDepth(HEIST_WALL_FACE_DEPTH + 0.02));
+    wallVisuals.push({ rect, cap, facades });
+    staticVisuals.push(cap, ...facades);
   }
 
   const vault = layout.vaultBounds;
@@ -271,7 +369,18 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     }).setOrigin(0.5).setDepth(2));
 
   const decalPlan = createEnvironmentDecalPlan('heist', layout.seed, layout.wallRects, 18);
-  for (const decal of decalPlan.decals) textObjects.push(createEnvironmentDecalText(scene, decal).setDepth(2));
+  for (const decal of decalPlan.decals) textObjects.push(createEnvironmentDecalText(scene, {
+    ...decal,
+    x: decal.x - HEIST_WALL_PROJECTION_X,
+    y: decal.y - HEIST_WALL_PROJECTION_Y
+  }).setDepth(HEIST_WALL_CAP_DEPTH + 0.2));
+
+  const zoneVisibility = new HeistZoneVisibility(layout);
+  const visibilityLayers = layout.nodes.map((node) => {
+    const rect = heistVisibilityZoneRect(layout, node);
+    return scene.add.rectangle(rect.x + rect.w * 0.5, rect.y + rect.h * 0.5,
+      rect.w + 2, rect.h + 2, 0x01040a, HEIST_ZONE_ALPHA.hidden).setDepth(HEIST_VISIBILITY_DEPTH);
+  });
 
   const walls = scene.physics.add.staticGroup();
   for (const rect of runtimeWallRects) {
@@ -284,6 +393,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
 
   const ambientGraphics = scene.add.graphics().setDepth(4).setBlendMode(Phaser.BlendModes.ADD);
   let lastAmbientDraw = -1;
+  let lastPresentationUpdate = -1_000;
   let escapeGuideActive = false;
   let guideMarkers: HeistLayoutPoint[] = [];
   let cachedTargetNodeId = '';
@@ -388,7 +498,8 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       staticPhysicsBodies: runtimeWallRects.length + layout.vaultDoors.length,
       wallIndexBuckets: wallPointIndex.diagnostics.bucketCount,
       wallIndexMaximumCandidates: wallPointIndex.diagnostics.maximumCandidatesPerBucket,
-      staticTextureObjects: staticVisuals.length
+      staticTextureObjects: staticVisuals.length,
+      visibilityZones: visibilityLayers.length
     },
     setVaultDoorOpen: setDoorsOpen,
     setEscapeRoute(active: boolean): void {
@@ -434,7 +545,39 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       result.y = node?.y ?? targetY;
       return result;
     },
-    update(now: number): void {
+    isPresentationOpenArea(): boolean {
+      return zoneVisibility.isOpenArea();
+    },
+    update(now: number, playerX: number, playerY: number): void {
+      if (now - lastPresentationUpdate >= 32) {
+        lastPresentationUpdate = now;
+        zoneVisibility.revealAt(playerX, playerY, doorsOpen);
+        for (let index = 0; index < visibilityLayers.length; index += 1) {
+          const layer = visibilityLayers[index];
+          layer.setAlpha(Phaser.Math.Linear(layer.alpha, zoneVisibility.targetAlpha[index], 0.24));
+        }
+        for (let index = 0; index < wallVisuals.length; index += 1) {
+          const visual = wallVisuals[index];
+          const rect = visual.rect;
+          const nearestX = Math.max(rect.x, Math.min(playerX, rect.x + rect.w));
+          const nearestY = Math.max(rect.y, Math.min(playerY, rect.y + rect.h));
+          const dx = playerX - nearestX;
+          const dy = playerY - nearestY;
+          const projectedOverlap = playerX >= rect.x - HEIST_WALL_PROJECTION_X - 38
+            && playerX <= rect.x + rect.w + 38
+            && playerY >= rect.y - HEIST_WALL_PROJECTION_Y - 44
+            && playerY <= rect.y + rect.h + 46;
+          const foreground = projectedOverlap && dx * dx + dy * dy <= 104 * 104
+            && rect.y + rect.h >= playerY - 18;
+          const targetCapAlpha = foreground ? 0.34 : 1;
+          const targetFaceAlpha = foreground ? 0.18 : 1;
+          visual.cap.setAlpha(Phaser.Math.Linear(visual.cap.alpha, targetCapAlpha, 0.3));
+          for (let facadeIndex = 0; facadeIndex < visual.facades.length; facadeIndex += 1) {
+            const facade = visual.facades[facadeIndex];
+            facade.setAlpha(Phaser.Math.Linear(facade.alpha, targetFaceAlpha, 0.3));
+          }
+        }
+      }
       if (now - lastAmbientDraw < 90) return;
       lastAmbientDraw = now;
       ambientGraphics.clear();
@@ -457,6 +600,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     destroy(): void {
       scene.tweens.killTweensOf(doorVisuals.flatMap((visual) => [visual.firstPanel, visual.secondPanel, visual.seam, visual.status]));
       for (const visual of staticVisuals) visual.destroy();
+      for (const layer of visibilityLayers) layer.destroy();
       ambientGraphics.destroy();
       for (const label of textObjects) label.destroy();
       for (const visual of doorVisuals) visual.root.destroy(true);
@@ -466,6 +610,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       cachedTargetNext.clear();
       navigationQueue.length = 0;
       navigationVisited.clear();
+      wallVisuals.length = 0;
     }
   };
 };

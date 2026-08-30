@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { generateHeistFacilityLayout } from '../src/game/anomalies/heist/HeistFacilityLayout.ts';
 import { HeistWallPointIndex, mergeAxisAlignedHeistWalls } from '../src/game/anomalies/heist/HeistWallRuntime.ts';
+import { HeistZoneVisibility } from '../src/game/anomalies/heist/HeistZoneVisibility.ts';
 
 const seeds = [17, 9_973, 81_337, 194_911, 712_009];
 const layouts = seeds.map(generateHeistFacilityLayout);
@@ -57,6 +58,17 @@ const averageNodes = layouts.reduce((total, layout) => total + layout.nodes.leng
 const legacyNearestNodeComparisons = modeledEnemies * averageNodes * 2;
 const cachedTargetNearestNodeComparisons = (modeledEnemies + 1) * averageNodes;
 
+const visibilityRuntimes = layouts.map((layout) => new HeistZoneVisibility(layout));
+let visibilityTransitions = 0;
+let visibilityChecksum = 0;
+const visibilityStart = performance.now();
+for (let index = 0; index < queryCount; index += 1) {
+  const runtime = visibilityRuntimes[index % visibilityRuntimes.length];
+  if (runtime.revealAt(queryX[index], queryY[index], index % 17 > 3)) visibilityTransitions += 1;
+  visibilityChecksum += runtime.targetAlpha[index % runtime.targetAlpha.length];
+}
+const visibilityMs = performance.now() - visibilityStart;
+
 console.log('N3ONDefense HEIST runtime benchmark');
 console.log(`Layouts: ${layouts.length}; collision queries: ${queryCount.toLocaleString()}`);
 console.log(`Static wall bodies: ${averageSourceWalls.toFixed(1)} -> ${averageRuntimeWalls.toFixed(1)} average`);
@@ -69,3 +81,5 @@ console.log(`Collision result parity: ${rawHits.toLocaleString()} hits`);
 console.log(`24-enemy nearest-node comparisons/frame: ${legacyNearestNodeComparisons.toFixed(0)} -> ${cachedTargetNearestNodeComparisons.toFixed(0)}`);
 console.log(`Navigation comparison reduction: ${((1 - cachedTargetNearestNodeComparisons / legacyNearestNodeComparisons) * 100).toFixed(1)}%`);
 console.log('Facility rendering: world-sized retained Graphics replaced by 1 cached floor tile + cached wall sprites.');
+console.log(`Graph-zone visibility: ${visibilityTransitions.toLocaleString()} transitions in ${visibilityMs.toFixed(2)}ms`);
+console.log(`Visibility throughput: ${(queryCount / Math.max(0.001, visibilityMs) * 1000).toFixed(0)} updates/sec; checksum ${visibilityChecksum.toFixed(1)}`);

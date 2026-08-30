@@ -64,6 +64,7 @@ import { HeistRewardService, type HeistContainerReward } from './HeistRewardServ
 import { HeistLootPickupSystem } from './HeistLootPickupSystem.ts';
 import { HeistTrapSystem } from './HeistTrapSystem.ts';
 import { HeistPerformanceProfiler } from './HeistPerformanceProfiler.ts';
+import { HeistCameraPresentation } from './HeistCameraPresentation.ts';
 import {
   GAMEPLAY_PICKUP_COLOR_BY_TYPE,
   GAMEPLAY_PICKUP_SFX_BY_TYPE,
@@ -145,6 +146,7 @@ export class HeistScene extends Phaser.Scene {
   private player!: Player;
   private inputController!: PlayerInput;
   private facility!: HeistFacilityRuntime;
+  private cameraPresentation: HeistCameraPresentation | null = null;
   private trapSystem!: HeistTrapSystem;
   private random!: SeededRandom;
   private rewards!: HeistRewardService;
@@ -556,7 +558,8 @@ export class HeistScene extends Phaser.Scene {
     }
     this.updateInputCapture();
     profiler?.mark('presentationInput');
-    this.facility.update(now);
+    this.facility.update(now, this.player.x, this.player.y);
+    this.cameraPresentation?.update(delta, this.facility.isPresentationOpenArea());
     this.extractionPortal?.update(now);
     this.updateCrosshair();
     this.mineExplosionVfx.update(now);
@@ -647,8 +650,11 @@ export class HeistScene extends Phaser.Scene {
     if (source.tint !== null) this.player.setTint(source.tint);
     this.physics.add.collider(this.player, this.facility.walls);
     this.physics.add.collider(this.player, this.facility.vaultDoors);
-    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-    this.cameras.main.setZoom(0.92);
+    this.cameraPresentation = new HeistCameraPresentation(
+      this.cameras.main,
+      this.player,
+      this.facility.layout.vaultBounds
+    );
   }
 
   private createVaultContainers(): void {
@@ -2447,6 +2453,7 @@ export class HeistScene extends Phaser.Scene {
       this.events.off(Phaser.Scenes.Events.UPDATE, this.onDevPhysicsUpdateComplete, this);
     });
     this.extractionPortal = null;
+    this.cameraPresentation = null;
     this.shieldVisual = null;
     safely('resize-listener', () => this.scale.off('resize', this.handleResize, this));
     this.projectiles.length = 0;

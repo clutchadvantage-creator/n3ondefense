@@ -67,7 +67,7 @@ test('HEIST static facility presentation uses cached textures instead of replayi
   const facility = source('../src/game/anomalies/heist/HeistFacility.ts');
   assert.match(facility, /ensureFacilityTextures\(scene\)/);
   assert.match(facility, /scene\.add\.tileSprite/);
-  assert.match(facility, /scene\.add\.image\(rect\.x, rect\.y, texture\)/);
+  assert.match(facility, /scene\.add\.image\(rect\.x - HEIST_WALL_PROJECTION_X, rect\.y - HEIST_WALL_PROJECTION_Y, texture\)/);
   assert.doesNotMatch(facility, /staticGraphics\.fillStyle/);
   assert.match(facility, /runtimeWallRects: runtimeWallRects\.length/);
 });
