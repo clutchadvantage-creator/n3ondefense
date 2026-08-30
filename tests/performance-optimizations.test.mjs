@@ -103,6 +103,7 @@ test('frame monitor reports hitch thresholds without per-frame arrays', () => {
   assert.equal(snapshot.framesOver33Ms, 2);
   assert.equal(snapshot.framesOver50Ms, 1);
   assert.equal(snapshot.maximumMs, 51);
+  assert.equal(snapshot.p99Ms, 51);
   assert.equal(snapshot.averageMs, 27.6);
 });
 

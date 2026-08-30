@@ -63,6 +63,7 @@ import { createHeistFacility, type HeistFacilityRuntime } from './HeistFacility.
 import { HeistRewardService, type HeistContainerReward } from './HeistRewardService.ts';
 import { HeistLootPickupSystem } from './HeistLootPickupSystem.ts';
 import { HeistTrapSystem } from './HeistTrapSystem.ts';
+import { HeistPerformanceProfiler } from './HeistPerformanceProfiler.ts';
 import {
   GAMEPLAY_PICKUP_COLOR_BY_TYPE,
   GAMEPLAY_PICKUP_SFX_BY_TYPE,
@@ -202,6 +203,10 @@ export class HeistScene extends Phaser.Scene {
   private nextHoloAfterimageAt = 0;
   private grenadeProjectileSequence = 0;
   private readonly enemySpatialGrid = new UniformSpatialGrid<Enemy>(64);
+  private readonly navigationTargetScratch = { x: 0, y: 0 };
+  private separationSubject: Enemy | null = null;
+  private separationSteerX = 0;
+  private separationSteerY = 0;
   private grenadeFuseQueryX = 0;
   private grenadeFuseQueryY = 0;
   private grenadeFuseQueryProximity = false;
@@ -218,6 +223,12 @@ export class HeistScene extends Phaser.Scene {
   private escapeReinforcementSequence = 0;
   private movementSnaredUntil = 0;
   private enemyLootSequence = 0;
+  private performanceProfiler = import.meta.env.DEV ? new HeistPerformanceProfiler() : null;
+  private devPerformanceOverlay: Phaser.GameObjects.Text | null = null;
+  private devRenderStartedAt = 0;
+  private devPhysicsUpdateStartedAt = 0;
+  private nextDevPerformanceOverlayAt = 0;
+  private devFirstCombatFrameReported = false;
   private readonly findGrenadeFuseNeighbor = (enemy: Enemy): void => {
     if (!enemy.active || enemy.hp <= 0) return;
     const dx = enemy.x - this.grenadeFuseQueryX;
@@ -239,6 +250,16 @@ export class HeistScene extends Phaser.Scene {
     if (dx * dx + dy * dy > this.grenadeSplashRadiusSquared) return;
     this.damageEnemy(enemy, this.grenadeSplashDamage);
   };
+  private readonly applyEnemySeparationNeighbor = (other: Enemy): void => {
+    const enemy = this.separationSubject;
+    if (!enemy || other === enemy || !other.active) return;
+    const offsetX = enemy.x - other.x;
+    const offsetY = enemy.y - other.y;
+    const distanceSquared = offsetX * offsetX + offsetY * offsetY;
+    if (distanceSquared <= 0 || distanceSquared >= 34 * 34) return;
+    this.separationSteerX += offsetX / distanceSquared * 80;
+    this.separationSteerY += offsetY / distanceSquared * 80;
+  };
 
   constructor() { super(SceneKeys.Heist); }
 
@@ -254,6 +275,7 @@ export class HeistScene extends Phaser.Scene {
       this.scene.stop();
       return;
     }
+    const devCreateStartedAt = import.meta.env.DEV ? performance.now() : 0;
     this.resetSessionState();
     this.session = data;
     const settings = SaveSystem.get().settings;
@@ -281,6 +303,10 @@ export class HeistScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, HEIST_WORLD.width, HEIST_WORLD.height);
     this.cameras.main.setBackgroundColor(0x02050a);
     this.facility = createHeistFacility(this, (data.seed ^ Math.imul(data.round, 0x45d9f3b)) >>> 0);
+    if (import.meta.env.DEV) console.debug('[HEIST lifecycle] facility-ready', {
+      elapsedMs: performance.now() - devCreateStartedAt,
+      facility: this.facility.diagnostics
+    });
     this.createPlayer();
     if (this.time.now < this.abilityState.shieldActiveUntil) {
       this.shieldVisual = new OperativeShieldEffect(this, this.player);
@@ -309,6 +335,7 @@ export class HeistScene extends Phaser.Scene {
         forceHeistAmbush?: () => void;
         forceHeistExtraction?: () => void;
         forceHeistReturn?: (success?: boolean) => boolean;
+        n3onHeistPerf?: () => Record<string, unknown>;
       };
       debug.forceHeistAmbush = () => {
         for (const container of this.containers) container.opened = true;
@@ -326,6 +353,16 @@ export class HeistScene extends Phaser.Scene {
         this.returnToArena(success, success ? 'extracted' : 'player-dead');
         return true;
       };
+      debug.n3onHeistPerf = () => this.createDevPerformanceSnapshot();
+      this.input.keyboard?.on('keydown-F6', this.toggleDevPerformanceOverlay, this);
+      this.events.on(Phaser.Scenes.Events.PRE_RENDER, this.onDevPreRender, this);
+      this.events.on(Phaser.Scenes.Events.RENDER, this.onDevRender, this);
+      this.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.onDevPreUpdate, this);
+      this.events.on(Phaser.Scenes.Events.UPDATE, this.onDevPhysicsUpdateComplete, this);
+      console.debug('[HEIST lifecycle] scene-created', {
+        createMs: performance.now() - devCreateStartedAt,
+        ...this.createDevPerformanceSnapshot()
+      });
     }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     if (import.meta.env.DEV && data.dev?.instantReturn) {
@@ -360,6 +397,7 @@ export class HeistScene extends Phaser.Scene {
     this.nextPlayerShotAt = 0;
     this.grenadeProjectileSequence = 0;
     this.enemySpatialGrid.clear();
+    this.separationSubject = null;
     this.damageDealt = 0;
     this.damageTaken = 0;
     this.containersOpened = 0;
@@ -376,11 +414,13 @@ export class HeistScene extends Phaser.Scene {
     this.mineSalvoInput.cancel();
     this.nextHoloAfterimageAt = 0;
     this.nextPoolMaintenanceAt = 0;
+    this.devFirstCombatFrameReported = false;
     this.escapeDeadline = 0;
     this.nextEscapeReinforcementAt = 0;
     this.escapeReinforcementSequence = 0;
     this.movementSnaredUntil = 0;
     this.enemyLootSequence = 0;
+    if (import.meta.env.DEV) this.performanceProfiler = new HeistPerformanceProfiler();
   }
 
   private resolveProjectileCosmetics(): void {
@@ -503,6 +543,8 @@ export class HeistScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (this.returning) return;
+    const profiler = import.meta.env.DEV ? this.performanceProfiler : null;
+    profiler?.beginFrame(delta);
     const now = this.time.now;
     const dt = Math.min(delta, 100) / 1000;
     this.elapsedMs += Math.min(delta, 250);
@@ -513,16 +555,21 @@ export class HeistScene extends Phaser.Scene {
       else this.pauseHeist();
     }
     this.updateInputCapture();
-    this.facility.update(now, this.player.x, this.player.y);
+    profiler?.mark('presentationInput');
+    this.facility.update(now);
     this.extractionPortal?.update(now);
     this.updateCrosshair();
     this.mineExplosionVfx.update(now);
     this.coreAudio.setLowHealthWarning(!this.manuallyPaused && !this.inputCapturePaused
       && this.player.hp > 0 && this.player.hp <= this.player.stats.maxHealth * 0.25);
+    profiler?.mark('facilityAndVfx');
     if (this.inputCapturePaused || this.manuallyPaused) {
       this.player.setVelocity(0, 0);
       this.muzzleFlashVfx.reset();
       this.updateHud(now);
+      profiler?.mark('hudMaintenance');
+      profiler?.finishFrame();
+      if (import.meta.env.DEV) this.updateDevPerformanceOverlay(now);
       return;
     }
     this.player.updateEnergy(dt);
@@ -530,12 +577,17 @@ export class HeistScene extends Phaser.Scene {
     this.updatePlayerCombat(now);
     this.muzzleFlashVfx.update(now);
     this.updateAbilities(now);
+    this.facility.prepareNavigationTarget(this.player.x, this.player.y);
+    profiler?.mark('playerCombatAndMods');
     this.enemySpatialGrid.rebuild(this.enemies);
     this.updateProjectiles(now, delta);
+    profiler?.mark('projectiles');
     this.updateEnemies(now, dt);
+    profiler?.mark('enemies');
     this.updateMines(now);
     this.updateFences(now, dt);
     this.updateTurrets(now);
+    profiler?.mark('deployables');
     this.updatePickups(now);
     const pickupField = this.modRuntime.magneticServiceField(this.player.stats.pickupRadius);
     this.lootPickups.update(now, dt, this.player.x, this.player.y, this.player.stats.pickupRadius,
@@ -545,8 +597,16 @@ export class HeistScene extends Phaser.Scene {
       getProtocolModeBalance(this.session.protocol).hazardDamageMultiplier);
     this.updateMission(now);
     this.updateEscapeReinforcements(now);
+    profiler?.mark('pickupsHazardsMission');
     this.updateHud(now);
     this.maintainCombatPools(now);
+    profiler?.mark('hudMaintenance');
+    profiler?.finishFrame();
+    if (import.meta.env.DEV) this.updateDevPerformanceOverlay(now);
+    if (import.meta.env.DEV && !this.devFirstCombatFrameReported && this.enemies.length > 0) {
+      this.devFirstCombatFrameReported = true;
+      console.debug('[HEIST lifecycle] first-combat-frame', this.createDevPerformanceSnapshot());
+    }
     if (this.player.isDead()) this.failHeist();
   }
 
@@ -1192,7 +1252,13 @@ export class HeistScene extends Phaser.Scene {
       const enemy = this.enemies[index];
       if (!enemy.active || enemy.hp <= 0) { this.removeEnemy(enemy, index); continue; }
       enemy.updateDamageFlash(now);
-      const navigationTarget = this.facility.navigationTarget(enemy.x, enemy.y, this.player.x, this.player.y);
+      const navigationTarget = this.facility.navigationTarget(
+        enemy.x,
+        enemy.y,
+        this.player.x,
+        this.player.y,
+        this.navigationTargetScratch
+      );
       const dx = navigationTarget.x - enemy.x;
       const dy = navigationTarget.y - enemy.y;
       const playerDx = this.player.x - enemy.x;
@@ -1201,13 +1267,12 @@ export class HeistScene extends Phaser.Scene {
       const navigationDistance = Math.sqrt(Math.max(1, dx * dx + dy * dy));
       let steerX = dx / navigationDistance;
       let steerY = dy / navigationDistance;
-      for (const other of this.enemies) {
-        if (other === enemy || !other.active) continue;
-        const ox = enemy.x - other.x;
-        const oy = enemy.y - other.y;
-        const d2 = ox * ox + oy * oy;
-        if (d2 > 0 && d2 < 34 * 34) { steerX += ox / d2 * 80; steerY += oy / d2 * 80; }
-      }
+      this.separationSubject = enemy;
+      this.separationSteerX = steerX;
+      this.separationSteerY = steerY;
+      this.enemySpatialGrid.forEachNearby(enemy.x, enemy.y, 34, this.applyEnemySeparationNeighbor);
+      steerX = this.separationSteerX;
+      steerY = this.separationSteerY;
       if (enemy.stats.type === 'shooter' && distanceSquared < 360 * 360) {
         enemy.setVelocity(steerX * enemy.stats.speed * 0.2, steerY * enemy.stats.speed * 0.2);
         if (now - enemy.lastShotMs >= 1350) {
@@ -1987,6 +2052,7 @@ export class HeistScene extends Phaser.Scene {
     this.lootText?.setX(width - 18);
     this.promptText?.setPosition(width * 0.5, height - 48);
     this.announcementText?.setPosition(width * 0.5, height * 0.32);
+    this.devPerformanceOverlay?.setX(width - 14);
   };
 
   private setPhase(phase: HeistPhase): void { this.phase = phase; this.phaseStartedAt = this.time.now; }
@@ -2088,7 +2154,7 @@ export class HeistScene extends Phaser.Scene {
       const halfHeight = door.orientation === 'horizontal' ? 34 : door.width * 0.5;
       return Math.abs(x - door.x) <= halfWidth && Math.abs(y - door.y) <= halfHeight;
     })) return true;
-    return this.facility.wallRects.some((rect) => x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h);
+    return this.facility.containsWallPoint(x, y);
   }
 
   private findContainerHit(x: number, y: number): HeistContainer | null {
@@ -2209,6 +2275,149 @@ export class HeistScene extends Phaser.Scene {
     });
   }
 
+  private readonly onDevPreRender = (): void => {
+    this.devRenderStartedAt = performance.now();
+  };
+
+  private readonly onDevPreUpdate = (): void => {
+    this.devPhysicsUpdateStartedAt = performance.now();
+  };
+
+  private readonly onDevPhysicsUpdateComplete = (): void => {
+    if (this.devPhysicsUpdateStartedAt <= 0) return;
+    // Arcade World.update is registered on Scene UPDATE before this DEV-only
+    // listener. This captures that update envelope without wrapping or
+    // replacing Phaser's physics implementation.
+    this.performanceProfiler?.recordPhysicsUpdateEnvelope(performance.now() - this.devPhysicsUpdateStartedAt);
+    this.devPhysicsUpdateStartedAt = 0;
+  };
+
+  private readonly onDevRender = (): void => {
+    if (this.devRenderStartedAt <= 0) return;
+    this.performanceProfiler?.recordRender(performance.now() - this.devRenderStartedAt);
+    this.devRenderStartedAt = 0;
+  };
+
+  private readonly toggleDevPerformanceOverlay = (): void => {
+    if (!import.meta.env.DEV) return;
+    if (!this.devPerformanceOverlay) {
+      this.devPerformanceOverlay = this.add.text(this.scale.width - 14, 14, '', {
+        fontFamily: 'Consolas, monospace',
+        fontSize: '12px',
+        color: '#bdfaff',
+        backgroundColor: '#02070eef',
+        padding: { x: 10, y: 8 },
+        lineSpacing: 2
+      }).setOrigin(1, 0).setScrollFactor(0).setDepth(50_000);
+    } else this.devPerformanceOverlay.setVisible(!this.devPerformanceOverlay.visible);
+    this.nextDevPerformanceOverlayAt = 0;
+  };
+
+  private updateDevPerformanceOverlay(now: number): void {
+    if (!this.devPerformanceOverlay?.visible || now < this.nextDevPerformanceOverlayAt) return;
+    this.nextDevPerformanceOverlayAt = now + 500;
+    const snapshot = this.performanceProfiler?.snapshot();
+    if (!snapshot) return;
+    const projectiles = this.projectilePool.stats();
+    const fx = this.fxCirclePool.stats();
+    const category = snapshot.categories;
+    this.devPerformanceOverlay.setText(
+      `HEIST PERF (F6)  frame ${snapshot.frameTime.averageMs.toFixed(1)}ms p95 ${snapshot.frameTime.p95Ms.toFixed(1)}`
+      + ` p99 ${snapshot.frameTime.p99Ms.toFixed(1)} max ${snapshot.frameTime.maximumMs.toFixed(1)}\n`
+      + `update ${snapshot.updateWork.averageMs.toFixed(2)}ms physics ${snapshot.physicsUpdateEnvelope.averageMs.toFixed(2)}`
+      + ` render ${snapshot.renderWork.averageMs.toFixed(2)}ms\n`
+      + `facility/VFX ${category.facilityAndVfx.averageMs.toFixed(2)}`
+      + ` player/Mods ${category.playerCombatAndMods.averageMs.toFixed(2)}`
+      + ` projectile ${category.projectiles.averageMs.toFixed(2)}`
+      + ` enemy ${category.enemies.averageMs.toFixed(2)} HUD ${category.hudMaintenance.averageMs.toFixed(2)}\n`
+      + `enemy ${this.enemies.length} projectile ${this.projectiles.length} display ${this.children.list.length}`
+      + ` physics ${this.physics.world.bodies.entries.length}/${this.physics.world.staticBodies.entries.length}\n`
+      + `walls ${this.facility.diagnostics.sourceWallRects}->${this.facility.diagnostics.runtimeWallRects}`
+      + ` bucket max ${this.facility.diagnostics.wallIndexMaximumCandidates}`
+      + ` pool P ${projectiles.active}/${projectiles.available} FX ${fx.active}/${fx.available}\n`
+      + `Arena sleeping ${this.scene.isSleeping(SceneKeys.Arena)} visible ${this.scene.isVisible(SceneKeys.Arena)}`
+    );
+  }
+
+  private createDevPerformanceSnapshot(): Record<string, unknown> {
+    const arena = this.scene.manager.getScene(SceneKeys.Arena);
+    const arenaRuntime = arena as Phaser.Scene & { physics?: Phaser.Physics.Arcade.ArcadePhysics };
+    const arenaClock = arena.time as unknown as { _active?: unknown[]; _pendingInsertion?: unknown[] };
+    const heistClock = this.time as unknown as { _active?: unknown[]; _pendingInsertion?: unknown[] };
+    const arenaChildren = arena.children?.list ?? [];
+    const heistChildren = this.children?.list ?? [];
+    const projectiles = this.projectilePool?.stats();
+    const fx = this.fxCirclePool?.stats();
+    return {
+      profiler: this.performanceProfiler?.snapshot() ?? null,
+      scenes: this.scene.manager.scenes.map((scene, index) => ({
+        index,
+        key: scene.sys.settings.key,
+        active: scene.sys.isActive(),
+        visible: scene.sys.isVisible(),
+        sleeping: scene.sys.isSleeping(),
+        paused: scene.sys.isPaused(),
+        status: scene.sys.getStatus(),
+        displayObjects: scene.sys.displayList?.list.length ?? 0
+      })),
+      arenaIsolation: {
+        active: arena.sys.isActive(),
+        visible: arena.sys.isVisible(),
+        sleeping: arena.sys.isSleeping(),
+        paused: arena.sys.isPaused(),
+        status: arena.sys.getStatus(),
+        displayObjectsRetained: arena.sys.displayList?.list.length ?? 0,
+        activeVisibleSprites: arenaChildren.filter((child) => child.active
+          && (child as Phaser.GameObjects.GameObject & { visible?: boolean }).visible
+          && (child.type === 'Sprite' || child.type === 'Image')).length,
+        graphicsObjects: arenaChildren.filter((child) => child.type === 'Graphics').length,
+        particleEmitters: arenaChildren.filter((child) => child.type === 'ParticleEmitter').length,
+        dynamicPhysicsBodies: arenaRuntime.physics?.world.bodies.entries.length ?? 0,
+        staticPhysicsBodies: arenaRuntime.physics?.world.staticBodies.entries.length ?? 0,
+        colliders: arenaRuntime.physics?.world.colliders.getActive().length ?? 0,
+        tweens: arena.tweens?.getTweens().length ?? 0,
+        timers: (arenaClock._active?.length ?? 0) + (arenaClock._pendingInsertion?.length ?? 0),
+        simulationAndRenderingInert: arena.sys.isSleeping() && !arena.sys.isActive() && !arena.sys.isVisible()
+      },
+      heist: {
+        phase: this.phase,
+        elapsedMs: this.elapsedMs,
+        displayObjects: heistChildren.length,
+        activeVisibleSprites: heistChildren.filter((child) => child.active
+          && (child as Phaser.GameObjects.GameObject & { visible?: boolean }).visible
+          && (child.type === 'Sprite' || child.type === 'Image')).length,
+        graphicsObjects: heistChildren.filter((child) => child.type === 'Graphics').length,
+        particleEmitters: heistChildren.filter((child) => child.type === 'ParticleEmitter').length,
+        dynamicPhysicsBodies: this.physics?.world?.bodies.entries.length ?? 0,
+        staticPhysicsBodies: this.physics?.world?.staticBodies.entries.length ?? 0,
+        colliders: this.physics?.world?.colliders.getActive().length ?? 0,
+        tweens: this.tweens?.getTweens().length ?? 0,
+        timers: (heistClock._active?.length ?? 0) + (heistClock._pendingInsertion?.length ?? 0),
+        playingAudioInstances: this.sound?.getAllPlaying().length ?? 0,
+        domUiElements: typeof document === 'undefined' ? 0 : document.querySelectorAll('#game-ui-root *').length,
+        enemies: this.enemies.length,
+        projectiles: this.projectiles.length,
+        containers: this.containers.length,
+        pickups: this.pickups.length,
+        mines: this.mines.length,
+        fences: this.fences.length,
+        turrets: this.turrets.length,
+        facility: this.facility?.diagnostics ?? null,
+        projectilePool: projectiles,
+        fxPool: fx
+      },
+      listeners: {
+        sceneShutdown: this.events.listenerCount(Phaser.Scenes.Events.SHUTDOWN),
+        scenePreRender: this.events.listenerCount(Phaser.Scenes.Events.PRE_RENDER),
+        sceneRender: this.events.listenerCount(Phaser.Scenes.Events.RENDER),
+        scenePreUpdate: this.events.listenerCount(Phaser.Scenes.Events.PRE_UPDATE),
+        sceneUpdate: this.events.listenerCount(Phaser.Scenes.Events.UPDATE),
+        resize: this.scale.listenerCount('resize'),
+        f6: this.input.keyboard?.listenerCount('keydown-F6') ?? 0
+      }
+    };
+  }
+
   private cleanup(): void {
     const finalInputDevice = this.inputController?.activeDevice ?? this.session?.initialInputDevice;
     this.pendingFadeReturn = null;
@@ -2229,6 +2438,14 @@ export class HeistScene extends Phaser.Scene {
     safely('low-health-audio', () => this.coreAudio.setLowHealthWarning(false));
     safely('input-controller', () => this.inputController?.destroy());
     this.pauseMenu = null;
+    this.devPerformanceOverlay = null;
+    safely('performance-listeners', () => {
+      this.input.keyboard?.off('keydown-F6', this.toggleDevPerformanceOverlay, this);
+      this.events.off(Phaser.Scenes.Events.PRE_RENDER, this.onDevPreRender, this);
+      this.events.off(Phaser.Scenes.Events.RENDER, this.onDevRender, this);
+      this.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.onDevPreUpdate, this);
+      this.events.off(Phaser.Scenes.Events.UPDATE, this.onDevPhysicsUpdateComplete, this);
+    });
     this.extractionPortal = null;
     this.shieldVisual = null;
     safely('resize-listener', () => this.scale.off('resize', this.handleResize, this));
@@ -2237,6 +2454,7 @@ export class HeistScene extends Phaser.Scene {
     safely('fx-pool-references', () => this.fxCirclePool?.discardReferences());
     safely('loot-pickup-references', () => this.lootPickups?.discardReferences());
     this.enemies.length = 0;
+    this.separationSubject = null;
     this.enemySpatialGrid.clear();
     this.containers.length = 0;
     this.pickups.length = 0;
@@ -2256,10 +2474,12 @@ export class HeistScene extends Phaser.Scene {
         forceHeistAmbush?: unknown;
         forceHeistExtraction?: unknown;
         forceHeistReturn?: unknown;
+        n3onHeistPerf?: unknown;
       };
       delete debug.forceHeistAmbush;
       delete debug.forceHeistExtraction;
       delete debug.forceHeistReturn;
+      delete debug.n3onHeistPerf;
     }
   }
 }

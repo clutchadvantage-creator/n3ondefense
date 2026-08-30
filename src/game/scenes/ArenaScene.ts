@@ -5341,6 +5341,8 @@ export class ArenaScene extends Phaser.Scene {
   private anomalyReturnDebugSnapshot(): Record<string, unknown> {
     const playerBody = this.player?.body as Phaser.Physics.Arcade.Body | null | undefined;
     const camera = this.cameras?.main;
+    const clock = this.time as unknown as { _active?: unknown[]; _pendingInsertion?: unknown[] };
+    const children = this.children?.list ?? [];
     return {
       lifecycle: this.anomalyReturnLifecycle.snapshot(),
       devSoakResult: this.devAnomalyReturnSoakResult,
@@ -5380,6 +5382,27 @@ export class ArenaScene extends Phaser.Scene {
         clockTimeScale: this.time?.timeScale,
         physicsPaused: this.physics?.world?.isPaused,
         physicsTimeScale: this.physics?.world?.timeScale
+      },
+      resources: {
+        displayObjects: children.length,
+        activeVisibleSprites: children.filter((child) => child.active
+          && (child as Phaser.GameObjects.GameObject & { visible?: boolean }).visible
+          && (child.type === 'Sprite' || child.type === 'Image')).length,
+        graphicsObjects: children.filter((child) => child.type === 'Graphics').length,
+        particleEmitters: children.filter((child) => child.type === 'ParticleEmitter').length,
+        dynamicPhysicsBodies: this.physics?.world?.bodies.entries.length ?? 0,
+        staticPhysicsBodies: this.physics?.world?.staticBodies.entries.length ?? 0,
+        colliders: this.physics?.world?.colliders.getActive().length ?? 0,
+        tweens: this.tweens?.getTweens().length ?? 0,
+        timers: (clock._active?.length ?? 0) + (clock._pendingInsertion?.length ?? 0),
+        playingAudioInstances: this.sound?.getAllPlaying().length ?? 0,
+        frameTime: this.performanceMonitor.snapshot()
+      },
+      listeners: {
+        sceneUpdate: this.events.listenerCount(Phaser.Scenes.Events.UPDATE),
+        sceneShutdown: this.events.listenerCount(Phaser.Scenes.Events.SHUTDOWN),
+        sceneWake: this.events.listenerCount(Phaser.Scenes.Events.WAKE),
+        resize: this.scale.listenerCount('resize')
       },
       player: {
         active: this.player?.active,

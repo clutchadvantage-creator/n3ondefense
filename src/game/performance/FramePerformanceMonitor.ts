@@ -2,6 +2,7 @@ export interface FramePerformanceSnapshot {
   samples: number;
   averageMs: number;
   p95Ms: number;
+  p99Ms: number;
   maximumMs: number;
   framesOver33Ms: number;
   framesOver50Ms: number;
@@ -24,7 +25,9 @@ export class FramePerformanceMonitor {
   }
 
   snapshot(): FramePerformanceSnapshot {
-    if (this.count === 0) return { samples: 0, averageMs: 0, p95Ms: 0, maximumMs: 0, framesOver33Ms: 0, framesOver50Ms: 0 };
+    if (this.count === 0) return {
+      samples: 0, averageMs: 0, p95Ms: 0, p99Ms: 0, maximumMs: 0, framesOver33Ms: 0, framesOver50Ms: 0
+    };
     const ordered = new Array<number>(this.count);
     let total = 0;
     let maximum = 0;
@@ -43,6 +46,7 @@ export class FramePerformanceMonitor {
       samples: this.count,
       averageMs: total / this.count,
       p95Ms: ordered[Math.min(this.count - 1, Math.floor(this.count * 0.95))],
+      p99Ms: ordered[Math.min(this.count - 1, Math.floor(this.count * 0.99))],
       maximumMs: maximum,
       framesOver33Ms,
       framesOver50Ms

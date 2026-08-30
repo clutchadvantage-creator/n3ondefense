@@ -21,6 +21,7 @@ import {
   type HeistTrapPlacement,
   type HeistVaultDoorSpec
 } from './HeistFacilityLayout.ts';
+import { HeistWallPointIndex, mergeAxisAlignedHeistWalls } from './HeistWallRuntime.ts';
 
 export interface HeistFacilityRuntime {
   layout: HeistFacilityLayout;
@@ -44,14 +45,22 @@ export interface HeistFacilityRuntime {
     decalCount: number;
     loops: number;
     deadEnds: number;
+    sourceWallRects: number;
+    runtimeWallRects: number;
+    staticPhysicsBodies: number;
+    wallIndexBuckets: number;
+    wallIndexMaximumCandidates: number;
+    staticTextureObjects: number;
   };
   setVaultDoorOpen(open: boolean): void;
   setEscapeRoute(active: boolean): void;
   activateEscapeGuide(playerX: number, playerY: number): void;
   isInsideVault(x: number, y: number, padding?: number): boolean;
   distanceSquaredToVault(x: number, y: number): number;
-  navigationTarget(x: number, y: number, targetX: number, targetY: number): HeistLayoutPoint;
-  update(now: number, playerX: number, playerY: number): void;
+  containsWallPoint(x: number, y: number): boolean;
+  prepareNavigationTarget(targetX: number, targetY: number): void;
+  navigationTarget(x: number, y: number, targetX: number, targetY: number, out?: HeistLayoutPoint): HeistLayoutPoint;
+  update(now: number): void;
   destroy(): void;
 }
 
@@ -92,6 +101,64 @@ const drawWallPanel = (graphics: Phaser.GameObjects.Graphics, rect: RectSpec, in
   } else if (!horizontal && rect.h > 210) {
     drawVentSlats(graphics, rect.x + 12, rect.y + rect.h * 0.64, Math.max(16, rect.w - depth - 24),
       Math.min(88, rect.h * 0.22), false, accent);
+  }
+};
+
+const HEIST_FLOOR_TEXTURE = 'heist-runtime-floor-plates-v1';
+const HEIST_WALL_TEXTURES = {
+  horizontalCyan: 'heist-runtime-wall-h-cyan-v1',
+  horizontalMagenta: 'heist-runtime-wall-h-magenta-v1',
+  verticalCyan: 'heist-runtime-wall-v-cyan-v1',
+  verticalMagenta: 'heist-runtime-wall-v-magenta-v1'
+} as const;
+
+const ensureFacilityTextures = (scene: Phaser.Scene): void => {
+  if (!scene.textures.exists(HEIST_FLOOR_TEXTURE)) {
+    const width = HEIST_LAYOUT_GRID.cellWidth * 2;
+    const height = HEIST_LAYOUT_GRID.cellHeight * 2;
+    const graphics = scene.make.graphics({ x: 0, y: 0 }, false);
+    graphics.fillStyle(0x06111c, 1).fillRect(0, 0, width, height);
+    for (let column = 0; column < 2; column += 1) {
+      for (let row = 0; row < 2; row += 1) {
+        const x = column * HEIST_LAYOUT_GRID.cellWidth + 8;
+        const y = row * HEIST_LAYOUT_GRID.cellHeight + 8;
+        const plateWidth = HEIST_LAYOUT_GRID.cellWidth - 16;
+        const plateHeight = HEIST_LAYOUT_GRID.cellHeight - 16;
+        const alternate = (column + row * 2) % 4 === 0;
+        drawBeveledTechPlate(graphics, x, y, plateWidth, plateHeight, {
+          face: alternate ? 0x0a1b29 : 0x071521,
+          inset: alternate ? 0x07131e : 0x06101a,
+          edge: alternate ? 0x295a70 : 0x173849,
+          side: 0x010409,
+          highlight: alternate ? 0x6faeb9 : 0x3f6876,
+          depth: 6,
+          alpha: 0.92
+        });
+        if ((column + row) % 2 === 0) {
+          drawPanelBolts(graphics, x + 4, y + 4, plateWidth - 14, plateHeight - 14, 0x526f7d, 13);
+        }
+        if (column !== row) {
+          drawVentSlats(graphics, x + plateWidth - 94, y + 20, 66, 34, true,
+            column % 2 ? 0xff4dcb : 0x43edfa);
+        }
+      }
+    }
+    graphics.generateTexture(HEIST_FLOOR_TEXTURE, width, height);
+    graphics.destroy();
+  }
+
+  const wallSpecs = [
+    [HEIST_WALL_TEXTURES.horizontalCyan, 256, HEIST_LAYOUT_GRID.wallThickness, 0],
+    [HEIST_WALL_TEXTURES.horizontalMagenta, 256, HEIST_LAYOUT_GRID.wallThickness, 1],
+    [HEIST_WALL_TEXTURES.verticalCyan, HEIST_LAYOUT_GRID.wallThickness, 256, 0],
+    [HEIST_WALL_TEXTURES.verticalMagenta, HEIST_LAYOUT_GRID.wallThickness, 256, 1]
+  ] as const;
+  for (const [key, width, height, variant] of wallSpecs) {
+    if (scene.textures.exists(key)) continue;
+    const graphics = scene.make.graphics({ x: 0, y: 0 }, false);
+    drawWallPanel(graphics, { x: 0, y: 0, w: width, h: height }, variant);
+    graphics.generateTexture(key, width, height);
+    graphics.destroy();
   }
 };
 
@@ -149,44 +216,45 @@ const appendGuideMarkers = (points: readonly HeistLayoutPoint[]): HeistLayoutPoi
 
 export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFacilityRuntime => {
   const layout = generateHeistFacilityLayout(seed);
-  const staticGraphics = scene.add.graphics().setDepth(0);
-  staticGraphics.fillStyle(0x01040a, 1).fillRect(0, 0, layout.world.width, layout.world.height);
-  staticGraphics.fillStyle(0x06111c, 1).fillRect(90, 90, layout.world.width - 180, layout.world.height - 180);
-
-  // One static Graphics batch owns floor, walls, machinery and conduits. No
-  // decorative object receives its own update loop.
-  for (let column = 0; column < HEIST_LAYOUT_GRID.columns; column += 1) {
-    for (let row = 0; row < HEIST_LAYOUT_GRID.rows; row += 1) {
-      const x = HEIST_LAYOUT_GRID.margin + column * HEIST_LAYOUT_GRID.cellWidth + 8;
-      const y = HEIST_LAYOUT_GRID.margin + row * HEIST_LAYOUT_GRID.cellHeight + 8;
-      const width = HEIST_LAYOUT_GRID.cellWidth - 16;
-      const height = HEIST_LAYOUT_GRID.cellHeight - 16;
-      const alternate = (column + row * 2) % 4 === 0;
-      drawBeveledTechPlate(staticGraphics, x, y, width, height, {
-        face: alternate ? 0x0a1b29 : 0x071521,
-        inset: alternate ? 0x07131e : 0x06101a,
-        edge: alternate ? 0x295a70 : 0x173849,
-        side: 0x010409,
-        highlight: alternate ? 0x6faeb9 : 0x3f6876,
-        depth: 6,
-        alpha: 0.92
-      });
-      if ((column + row) % 4 === 0) drawPanelBolts(staticGraphics, x + 4, y + 4, width - 14, height - 14, 0x526f7d, 13);
-      if ((column * 3 + row) % 9 === 0) {
-        drawVentSlats(staticGraphics, x + width - 94, y + 20, 66, 34, true,
-          (column + row) % 2 ? 0xff4dcb : 0x43edfa);
-      }
-    }
+  const runtimeWallRects = mergeAxisAlignedHeistWalls(layout.wallRects);
+  const wallPointIndex = new HeistWallPointIndex(runtimeWallRects);
+  ensureFacilityTextures(scene);
+  const staticVisuals: Phaser.GameObjects.GameObject[] = [];
+  staticVisuals.push(scene.add.rectangle(
+    layout.world.width * 0.5,
+    layout.world.height * 0.5,
+    layout.world.width,
+    layout.world.height,
+    0x01040a,
+    1
+  ).setDepth(0));
+  staticVisuals.push(scene.add.tileSprite(
+    HEIST_LAYOUT_GRID.margin,
+    HEIST_LAYOUT_GRID.margin,
+    HEIST_LAYOUT_GRID.columns * HEIST_LAYOUT_GRID.cellWidth,
+    HEIST_LAYOUT_GRID.rows * HEIST_LAYOUT_GRID.cellHeight,
+    HEIST_FLOOR_TEXTURE
+  ).setOrigin(0).setDepth(0.1));
+  for (let index = 0; index < runtimeWallRects.length; index += 1) {
+    const rect = runtimeWallRects[index];
+    const horizontal = rect.w >= rect.h;
+    const magenta = index % 5 === 1;
+    const texture = horizontal
+      ? magenta ? HEIST_WALL_TEXTURES.horizontalMagenta : HEIST_WALL_TEXTURES.horizontalCyan
+      : magenta ? HEIST_WALL_TEXTURES.verticalMagenta : HEIST_WALL_TEXTURES.verticalCyan;
+    staticVisuals.push(scene.add.image(rect.x, rect.y, texture).setOrigin(0)
+      .setDisplaySize(rect.w, rect.h).setDepth(1));
   }
 
-  layout.wallRects.forEach((rect, index) => drawWallPanel(staticGraphics, rect, index));
   const vault = layout.vaultBounds;
-  staticGraphics.fillStyle(0x02060c, 0.92).fillRect(vault.x + 20, vault.y + 20, vault.w - 40, vault.h - 40);
-  staticGraphics.fillStyle(0x0a1824, 0.92).fillRect(vault.x + 44, vault.y + 44, vault.w - 88, vault.h - 88);
-  staticGraphics.lineStyle(4, 0xff4fc9, 0.48).strokeRect(vault.x + 58, vault.y + 58, vault.w - 116, vault.h - 116);
-  staticGraphics.lineStyle(2, 0x54efff, 0.52).strokeRect(vault.x + 82, vault.y + 82, vault.w - 164, vault.h - 164);
-  drawHazardStripes(staticGraphics, vault.x + 70, vault.y + 68, vault.w - 140, 12, 0xffc857, 0.58, 13);
-  drawHazardStripes(staticGraphics, vault.x + 70, vault.y + vault.h - 80, vault.w - 140, 12, 0xff4f77, 0.52, 13);
+  const vaultGraphics = scene.add.graphics().setDepth(1.1);
+  vaultGraphics.fillStyle(0x02060c, 0.92).fillRect(vault.x + 20, vault.y + 20, vault.w - 40, vault.h - 40);
+  vaultGraphics.fillStyle(0x0a1824, 0.92).fillRect(vault.x + 44, vault.y + 44, vault.w - 88, vault.h - 88);
+  vaultGraphics.lineStyle(4, 0xff4fc9, 0.48).strokeRect(vault.x + 58, vault.y + 58, vault.w - 116, vault.h - 116);
+  vaultGraphics.lineStyle(2, 0x54efff, 0.52).strokeRect(vault.x + 82, vault.y + 82, vault.w - 164, vault.h - 164);
+  drawHazardStripes(vaultGraphics, vault.x + 70, vault.y + 68, vault.w - 140, 12, 0xffc857, 0.58, 13);
+  drawHazardStripes(vaultGraphics, vault.x + 70, vault.y + vault.h - 80, vault.w - 140, 12, 0xff4f77, 0.52, 13);
+  staticVisuals.push(vaultGraphics);
 
   const textObjects = layout.nodes.filter((node) => node.kind === 'facility'
     && (node.column + node.row * 2) % 11 === 0).slice(0, 12).map((node, index) => scene.add.text(
@@ -206,7 +274,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
   for (const decal of decalPlan.decals) textObjects.push(createEnvironmentDecalText(scene, decal).setDepth(2));
 
   const walls = scene.physics.add.staticGroup();
-  for (const rect of layout.wallRects) {
+  for (const rect of runtimeWallRects) {
     const body = walls.create(rect.x + rect.w * 0.5, rect.y + rect.h * 0.5, 'pixel') as Phaser.Physics.Arcade.Image;
     body.setVisible(false).setDisplaySize(rect.w, rect.h).refreshBody();
   }
@@ -219,27 +287,38 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
   let escapeGuideActive = false;
   let guideMarkers: HeistLayoutPoint[] = [];
   let cachedTargetNodeId = '';
-  let cachedTargetNext = new Map<string, string>();
+  const cachedTargetNext = new Map<string, string>();
+  const nodeById = new Map(layout.nodes.map((node) => [node.id, node]));
+  const buildNavigationAdjacency = (includeVault: boolean): Map<string, string[]> => {
+    const adjacency = new Map(layout.nodes.map((node) => [node.id, [] as string[]]));
+    for (const [a, b] of layout.edges) {
+      if (!includeVault && (a === layout.vaultNodeId || b === layout.vaultNodeId)) continue;
+      adjacency.get(a)?.push(b);
+      adjacency.get(b)?.push(a);
+    }
+    return adjacency;
+  };
+  const closedDoorAdjacency = buildNavigationAdjacency(false);
+  const openDoorAdjacency = buildNavigationAdjacency(true);
+  const navigationQueue: string[] = [];
+  const navigationVisited = new Set<string>();
   let doorsOpen = false;
 
   const rebuildNavigationMap = (targetNodeId: string): void => {
     cachedTargetNodeId = targetNodeId;
-    cachedTargetNext = new Map();
-    const adjacency = new Map(layout.nodes.map((node) => [node.id, [] as string[]]));
-    for (const [a, b] of layout.edges) {
-      if (!doorsOpen && (a === layout.vaultNodeId || b === layout.vaultNodeId)) continue;
-      adjacency.get(a)?.push(b);
-      adjacency.get(b)?.push(a);
-    }
-    const queue = [targetNodeId];
-    const visited = new Set(queue);
-    for (let read = 0; read < queue.length; read += 1) {
-      const current = queue[read];
+    cachedTargetNext.clear();
+    navigationQueue.length = 0;
+    navigationQueue.push(targetNodeId);
+    navigationVisited.clear();
+    navigationVisited.add(targetNodeId);
+    const adjacency = doorsOpen ? openDoorAdjacency : closedDoorAdjacency;
+    for (let read = 0; read < navigationQueue.length; read += 1) {
+      const current = navigationQueue[read];
       for (const neighbor of adjacency.get(current) ?? []) {
-        if (visited.has(neighbor)) continue;
-        visited.add(neighbor);
+        if (navigationVisited.has(neighbor)) continue;
+        navigationVisited.add(neighbor);
         cachedTargetNext.set(neighbor, current);
-        queue.push(neighbor);
+        navigationQueue.push(neighbor);
       }
     }
   };
@@ -278,13 +357,19 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
   };
 
   if (import.meta.env.DEV) console.debug('[HEIST layout]', {
-    seed: layout.seed, entry: layout.entryNodeId, extraction: layout.extractionNodeId, ...layout.diagnostics
+    seed: layout.seed,
+    entry: layout.entryNodeId,
+    extraction: layout.extractionNodeId,
+    sourceWallRects: layout.wallRects.length,
+    runtimeWallRects: runtimeWallRects.length,
+    wallIndex: wallPointIndex.diagnostics,
+    ...layout.diagnostics
   });
 
   return {
     layout,
     walls,
-    wallRects: layout.wallRects.map((rect) => ({ ...rect })),
+    wallRects: runtimeWallRects,
     vaultDoor,
     vaultDoors,
     route: layout.route,
@@ -297,7 +382,13 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       identity: 'heist-maze-facility', seed: layout.seed,
       staticGraphicsBatches: 1, liveAmbientBatches: 1, independentAnimationLoops: 1,
       guideMarkerMaximum: 96, decalCount: decalPlan.decals.length,
-      loops: layout.diagnostics.loops, deadEnds: layout.diagnostics.deadEnds
+      loops: layout.diagnostics.loops, deadEnds: layout.diagnostics.deadEnds,
+      sourceWallRects: layout.wallRects.length,
+      runtimeWallRects: runtimeWallRects.length,
+      staticPhysicsBodies: runtimeWallRects.length + layout.vaultDoors.length,
+      wallIndexBuckets: wallPointIndex.diagnostics.bucketCount,
+      wallIndexMaximumCandidates: wallPointIndex.diagnostics.maximumCandidatesPerBucket,
+      staticTextureObjects: staticVisuals.length
     },
     setVaultDoorOpen: setDoorsOpen,
     setEscapeRoute(active: boolean): void {
@@ -320,14 +411,28 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       const dy = y - nearestY;
       return dx * dx + dy * dy;
     },
-    navigationTarget(x: number, y: number, targetX: number, targetY: number): HeistLayoutPoint {
+    containsWallPoint(x: number, y: number): boolean {
+      return wallPointIndex.contains(x, y);
+    },
+    prepareNavigationTarget(targetX: number, targetY: number): void {
+      const targetNodeId = nearestHeistNodeId(layout, targetX, targetY);
+      if (targetNodeId !== cachedTargetNodeId) rebuildNavigationMap(targetNodeId);
+    },
+    navigationTarget(x: number, y: number, targetX: number, targetY: number, out?: HeistLayoutPoint): HeistLayoutPoint {
       const from = nearestHeistNodeId(layout, x, y);
-      const target = nearestHeistNodeId(layout, targetX, targetY);
-      if (target !== cachedTargetNodeId) rebuildNavigationMap(target);
+      if (!cachedTargetNodeId) rebuildNavigationMap(nearestHeistNodeId(layout, targetX, targetY));
+      const target = cachedTargetNodeId;
+      const result = out ?? { x: targetX, y: targetY };
       const next = cachedTargetNext.get(from);
-      if (!next || from === target) return { x: targetX, y: targetY };
-      const node = layout.nodes.find((candidate) => candidate.id === next);
-      return node ? { x: node.x, y: node.y } : { x: targetX, y: targetY };
+      if (!next || from === target) {
+        result.x = targetX;
+        result.y = targetY;
+        return result;
+      }
+      const node = nodeById.get(next);
+      result.x = node?.x ?? targetX;
+      result.y = node?.y ?? targetY;
+      return result;
     },
     update(now: number): void {
       if (now - lastAmbientDraw < 90) return;
@@ -351,7 +456,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     },
     destroy(): void {
       scene.tweens.killTweensOf(doorVisuals.flatMap((visual) => [visual.firstPanel, visual.secondPanel, visual.seam, visual.status]));
-      staticGraphics.destroy();
+      for (const visual of staticVisuals) visual.destroy();
       ambientGraphics.destroy();
       for (const label of textObjects) label.destroy();
       for (const visual of doorVisuals) visual.root.destroy(true);
@@ -359,6 +464,8 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       vaultDoors.destroy(true);
       guideMarkers = [];
       cachedTargetNext.clear();
+      navigationQueue.length = 0;
+      navigationVisited.clear();
     }
   };
 };
