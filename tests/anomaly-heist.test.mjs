@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { ANOMALY_DEFINITIONS, ANOMALY_ENTRY_COSTS, ANOMALY_SCHEDULING } from '../src/game/anomalies/AnomalyRegistry.ts';
 import { HeistRewardService, isHeistModRewardEligible } from '../src/game/anomalies/heist/HeistRewardService.ts';
-import { HEIST_ROUTE, HEIST_WALL_RECTS, HEIST_WORLD } from '../src/game/anomalies/heist/HeistConfig.ts';
+import { HEIST_BALANCE, HEIST_ROUTE, HEIST_WALL_RECTS, HEIST_WORLD } from '../src/game/anomalies/heist/HeistConfig.ts';
 import { AnomalyReturnLifecycle } from '../src/game/anomalies/AnomalyReturnLifecycle.ts';
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -24,6 +24,36 @@ test('HEIST rewards accumulate in an isolated pending container without mutating
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
   assert.doesNotMatch(heist, /SaveSystem\.add(?:Credits|CoreTokens|FluxCores|PlasmaChips|Mod)/);
   assert.match(heist, /loot: success \? this\.pendingLoot : emptyLoot\(\)/);
+});
+
+test('HEIST vault starts with a premium currency and Mod floor before weighted extras', () => {
+  const rewards = new HeistRewardService(417, 30, 'overdrive-phoenix', 150);
+  const firstFour = Array.from({ length: 4 }, () => rewards.rollContainer());
+  assert.deepEqual(firstFour.map((reward) => reward.kind), ['credits', 'plasmaChips', 'coreTokens', 'mod']);
+  assert.ok(firstFour[0].amount >= 200_000);
+  assert.ok(firstFour[1].amount >= 119, 'guaranteed Plasma should fund approximately one engineering roll');
+  assert.ok(firstFour[2].amount >= 42);
+  assert.ok(firstFour[3].modId);
+});
+
+test('HEIST reward scaling improves with entry risk but never guarantees a full Flux refund', () => {
+  for (const cost of [100, 150, 200]) {
+    let fullRefunds = 0;
+    let plasma = 0;
+    let flux = 0;
+    for (let run = 0; run < 1_000; run += 1) {
+      const rewards = new HeistRewardService(1000 + run * 97, 30, 'overdrive-phoenix', cost);
+      const loot = rewards.createEmpty();
+      const containers = HEIST_BALANCE.containerMinimum + run % (HEIST_BALANCE.containerMaximum - HEIST_BALANCE.containerMinimum + 1);
+      for (let index = 0; index < containers; index += 1) rewards.add(loot, rewards.rollContainer());
+      plasma += loot.plasmaChips;
+      flux += loot.fluxCores;
+      if (loot.fluxCores >= cost) fullRefunds += 1;
+    }
+    assert.ok(plasma / 1_000 >= 120);
+    assert.ok(flux / 1_000 > 5, 'Flux recovery should be meaningful across successful expeditions');
+    assert.ok(fullRefunds < 25, 'the entry fee must remain real rather than an automatic refund');
+  }
 });
 
 test('Arena suspension is the authoritative preservation boundary and only commits successful extraction', () => {
@@ -73,7 +103,7 @@ test('Anomaly and HEIST sounds follow authoritative feed, portal, door, alarm, p
     'portalpowerupsound.mp3', 'portalidlesound.mp3', 'portalenterexitsound.mp3',
     'heistdoorsound.mp3', 'alarmsound.mp3'
   ]) assert.ok(existsSync(new URL(`../public/assets/audio/soundeffects/${filename}`, import.meta.url)), filename);
-  assert.match(hooks, /case 'essence-absorption':[\s\S]*?playSfx\('anomalyPortalPower'\)/);
+  assert.match(hooks, /case 'essence-absorption':[\s\S]*?restartAnomalyPortalPower\(\)/);
   assert.match(hooks, /case 'portal-idle':[\s\S]*?startAnomalyPortalIdle\(\)/);
   assert.match(hooks, /case 'portal-entry':[\s\S]*?case 'portal-return':[\s\S]*?playSfx\('anomalyPortalTransit'\)/);
   assert.match(hooks, /case 'door-open':[\s\S]*?case 'door-close':[\s\S]*?playSfx\('heistDoor'\)/);
@@ -84,6 +114,10 @@ test('Anomaly and HEIST sounds follow authoritative feed, portal, door, alarm, p
   assert.match(manager, /pauseEventPresentationLoops/);
   assert.match(manager, /resumeEventPresentationLoops/);
   assert.match(manager, /stopAnomalySfx/);
+  assert.match(manager, /private anomalyPortalPowerAudio: HTMLAudioElement \| null = null/);
+  assert.match(manager, /restartAnomalyPortalPower[\s\S]*?audio\.pause\(\)[\s\S]*?audio\.currentTime = 0[\s\S]*?audio\.play\(\)/);
+  assert.doesNotMatch(manager, /anomalyPortalPower:\s*\[\]/);
+  assert.match(hooks, /case 'portal-idle':[\s\S]*?stopAnomalyPortalPower\(\)[\s\S]*?startAnomalyPortalIdle\(\)/);
 });
 
 test('HEIST combat pool fully disables and resets retired projectile bodies', () => {
@@ -181,6 +215,11 @@ test('HEIST shutdown leaves Phaser-owned objects to Phaser and resets reusable s
   assert.match(reset, /this\.returnResultDelivered = false/);
   assert.match(reset, /this\.containers\.length = 0/);
   assert.match(cleanup, /Do not destroy[\s\S]*a second time/);
+  assert.match(cleanup, /projectilePool\?\.discardReferences\(\)/);
+  assert.match(cleanup, /fxCirclePool\?\.discardReferences\(\)/);
+  assert.match(cleanup, /lootPickups\?\.discardReferences\(\)/);
+  assert.match(heist, /private maintainCombatPools/);
+  assert.match(heist, /nextPoolMaintenanceAt = now \+ 2_000/);
   assert.doesNotMatch(cleanup, /this\.facility\?\.destroy|this\.hud\?\.destroy|this\.projectilePool\?\.destroy/);
 });
 

@@ -21,6 +21,7 @@ import type {
   ModStat,
   RunProtocolId
 } from './types.ts';
+import { formatCalibrationModifier, getEffectiveModModifiers } from './PlasmaRecalibration.ts';
 
 export type ModDiscoveryStatus = 'undiscovered' | 'discovered' | 'owned';
 export type ModProtocolFamily = 'normal' | 'overdrive' | 'supreme';
@@ -45,6 +46,7 @@ export interface ModDatabaseStatEntry {
   baseline: number;
   values: Record<ModRank, number>;
   displays: { baseline: string } & Record<ModRank, string>;
+  calibrated: boolean;
 }
 
 export interface ModDatabaseUpgradeStep {
@@ -105,6 +107,7 @@ export interface ModDatabaseEntry {
   stats: ModDatabaseStatEntry[];
   economy: ModDatabaseEconomyProfile;
   acquisition: ModDatabaseAcquisitionProfile;
+  calibrationActive: boolean;
 }
 
 const DROP_SOURCE_LABELS: Record<ModDropSource, string> = {
@@ -236,6 +239,9 @@ const createDatabaseEntry = (mods: LocalModCollection, definition: ModDefinition
   const owned = card !== null;
   const status: ModDiscoveryStatus = owned ? 'owned' : discovered ? 'discovered' : 'undiscovered';
   const currentRank = card?.upgradeLevel ?? null;
+  const effectiveModifiers = card ? getEffectiveModModifiers(definition, card) : [...(definition.modifiers ?? [])];
+  const calibratedStats = new Set(card?.calibrations?.map((entry) => entry.stat) ?? []);
+  const calibrationActive = calibratedStats.size > 0;
   return {
     definition,
     status,
@@ -245,15 +251,18 @@ const createDatabaseEntry = (mods: LocalModCollection, definition: ModDefinition
     currentRank,
     ranks: ([0, 1, 2, 3] as const).map((rank) => ({
       rank,
-      description: definition.rankDescriptions[rank],
+      description: calibrationActive
+        ? effectiveModifiers.map((modifier) => `${formatCalibrationModifier(modifier, rank)} ${splitIdentifier(modifier.stat)}`).join(' // ')
+        : definition.rankDescriptions[rank],
       current: currentRank === rank
     })),
-    stats: (definition.modifiers ?? []).map((modifier) => ({
+    stats: effectiveModifiers.map((modifier) => ({
       stat: modifier.stat,
       label: splitIdentifier(modifier.stat),
       mode: modifier.mode,
       baseline: modifier.mode === 'multiply' ? 1 : 0,
       values: { ...modifier.values },
+      calibrated: calibratedStats.has(modifier.stat),
       displays: {
         baseline: modifier.mode === 'multiply' ? '0%' : '0',
         0: formatModifierValue(modifier.stat, modifier.mode, modifier.values[0]),
@@ -263,7 +272,8 @@ const createDatabaseEntry = (mods: LocalModCollection, definition: ModDefinition
       }
     })),
     economy: createEconomyProfile(definition, currentRank),
-    acquisition: createAcquisitionProfile(definition)
+    acquisition: createAcquisitionProfile(definition),
+    calibrationActive
   };
 };
 

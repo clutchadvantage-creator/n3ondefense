@@ -39,13 +39,18 @@ export const createAnomalyAudioHooks = (audio = AudioManager.get()): AnomalyAudi
   play: (cue) => {
     switch (cue) {
       case 'essence-absorption':
-        audio.playSfx('anomalyPortalPower');
+        audio.restartAnomalyPortalPower();
+        break;
+      case 'portal-rupture':
+        audio.stopAnomalyPortalPower();
         break;
       case 'portal-idle':
+        audio.stopAnomalyPortalPower();
         audio.startAnomalyPortalIdle();
         break;
       case 'portal-entry':
       case 'portal-return':
+        audio.stopAnomalyPortalPower();
         audio.stopAnomalyPortalIdle();
         audio.stopHeistAlarm();
         audio.playSfx('anomalyPortalTransit');
@@ -58,6 +63,7 @@ export const createAnomalyAudioHooks = (audio = AudioManager.get()): AnomalyAudi
         audio.startHeistAlarm();
         break;
       case 'heist-failed':
+        audio.stopAnomalyPortalPower();
         audio.stopHeistAlarm();
         audio.stopAnomalyPortalIdle();
         break;

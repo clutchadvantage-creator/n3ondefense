@@ -1,13 +1,15 @@
 import { MOD_BY_ID } from './definitions.ts';
 import { createDefaultModCollection, createDefaultModLoadout, normalizeOwnedMod } from './ModInventoryService.ts';
-import type { LocalModCollection, ModCardInstance, ModInfusionId, ModSlot, ProtocolPreference } from './types.ts';
+import type { LocalModCollection, ModCardInstance, ModInfusionId, ModSlot, ModStat, PlasmaRecalibrationQuality, ProtocolPreference } from './types.ts';
 import { normalizeRunProtocolId } from './modBalance.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
 import { ECONOMY_BALANCE } from '../economy/economyBalance.ts';
 import { countEquippedSupremeMods, isLegendaryModId, isSupremeModId, MAX_EQUIPPED_SUPREME_MODS } from './ModLoadoutRules.ts';
+import { getRecalibrationCandidatePool, getRecalibrationSlots, PLASMA_RECALIBRATION_STAT_RANGES } from './PlasmaRecalibration.ts';
 
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const MOD_SLOTS: ModSlot[] = ['weapon', 'player', 'defense', 'bombSite', 'wildcard'];
+const CALIBRATION_QUALITIES = new Set<PlasmaRecalibrationQuality>(['optimal', 'enhanced', 'stable', 'degraded', 'misaligned']);
 
 export const normalizeModCollection = (mods: unknown): LocalModCollection => {
   const defaults = createDefaultModCollection();
@@ -26,12 +28,40 @@ export const normalizeModCollection = (mods: unknown): LocalModCollection => {
     for (const raw of mods.cards) {
       if (!isObject(raw) || typeof raw.instanceId !== 'string' || typeof raw.modId !== 'string' || !inventory[raw.modId] || seenCards.has(raw.instanceId)) continue;
       seenCards.add(raw.instanceId);
+      const definition = MOD_BY_ID.get(raw.modId)!;
+      const eligibleSlots = new Set(getRecalibrationSlots(definition).filter((slot) => !slot.protected).map((slot) => slot.slotIndex));
+      const seenCalibrationSlots = new Set<number>();
+      const seenCalibrationStats = new Set<ModStat>();
+      const acceptedCalibrations: ModCardInstance['calibrations'] = [];
+      const calibrations = Array.isArray(raw.calibrations) ? raw.calibrations.flatMap((entry) => {
+        if (!isObject(entry)) return [];
+        const slotIndex = Math.floor(Number(entry.slotIndex));
+        const stat = typeof entry.stat === 'string' ? entry.stat as ModStat : null;
+        const range = stat ? PLASMA_RECALIBRATION_STAT_RANGES[stat] : undefined;
+        const quality = typeof entry.quality === 'string' ? entry.quality as PlasmaRecalibrationQuality : null;
+        if (!eligibleSlots.has(slotIndex) || seenCalibrationSlots.has(slotIndex) || !stat || seenCalibrationStats.has(stat)
+          || !getRecalibrationCandidatePool(definition, { calibrations: acceptedCalibrations }).includes(stat)
+          || !range || entry.mode !== range.mode || !quality || !CALIBRATION_QUALITIES.has(quality)) return [];
+        seenCalibrationSlots.add(slotIndex);
+        seenCalibrationStats.add(stat);
+        const calibration = {
+          slotIndex,
+          stat,
+          mode: range.mode,
+          quality,
+          normalizedPower: Math.max(0, Math.min(1, Number(entry.normalizedPower) || 0)),
+          calibratedAt: typeof entry.calibratedAt === 'string' ? entry.calibratedAt : new Date(0).toISOString()
+        };
+        acceptedCalibrations.push(calibration);
+        return [calibration];
+      }) : [];
       cards.push({
         instanceId: raw.instanceId,
         modId: raw.modId,
         acquiredAt: typeof raw.acquiredAt === 'string' ? raw.acquiredAt : new Date(0).toISOString(),
         upgradeLevel: Math.max(0, Math.min(3, Math.floor(Number(raw.upgradeLevel) || 0))) as 0 | 1 | 2 | 3,
-        ...(typeof raw.infusionId === 'string' && MOD_INFUSION_BY_ID.has(raw.infusionId as ModInfusionId) ? { infusionId: raw.infusionId as ModCardInstance['infusionId'] } : {})
+        ...(typeof raw.infusionId === 'string' && MOD_INFUSION_BY_ID.has(raw.infusionId as ModInfusionId) ? { infusionId: raw.infusionId as ModCardInstance['infusionId'] } : {}),
+        ...(calibrations.length > 0 ? { calibrations } : {})
       });
     }
   }

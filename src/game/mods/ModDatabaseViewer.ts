@@ -119,6 +119,9 @@ export class ModDatabaseViewer {
         ? 'SUPREME'
         : entry.definition.rarity === 'legendary' ? 'LEGENDARY' : 'STANDARD';
     identityY = this.addFixedRow(identityX, identityY, identityWidth, 'CLASS', classification, rarityColor, typography);
+    if (entry.calibrationActive) {
+      identityY = this.addFixedRow(identityX, identityY, identityWidth, 'CALIBRATION', 'ACTIVE // PLASMA', 0xdb8fff, typography);
+    }
     identityY = this.addFixedValue(identityX, identityY + 6, identityWidth, entry.definition.tags.map((tag) => tag.toUpperCase()).join(' // '), '#9ac2ce', typography.secondary);
 
     const detailTop = Math.max(cardY + cardHeight / 2, identityY) + (shortViewport ? 14 : 18);
@@ -293,7 +296,7 @@ export class ModDatabaseViewer {
         const rowHeight = typography.table + 34;
         const back = this.scene.add.rectangle(3, y, width - 6, rowHeight, 0x081722, 0.82).setOrigin(0, 0);
         this.detailContent.add(back);
-        const values = [stat.label, stat.displays.baseline, stat.displays[0], stat.displays[1], stat.displays[2], stat.displays[3]];
+        const values = [`${stat.label}${stat.calibrated ? '\nPLASMA CALIBRATED' : ''}`, stat.displays.baseline, stat.displays[0], stat.displays[1], stat.displays[2], stat.displays[3]];
         values.forEach((value, index) => {
           const current = index > 1 && this.entry.currentRank === index - 2;
           const text = this.scene.add.text(5 + columnWidth * index + (index === 0 ? 0 : columnWidth / 2), y + rowHeight / 2, value, {

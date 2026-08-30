@@ -130,6 +130,20 @@ export interface ModStatModifier {
   values: Record<ModRank, number>;
 }
 
+export type PlasmaRecalibrationQuality = 'optimal' | 'enhanced' | 'stable' | 'degraded' | 'misaligned';
+
+/** One permanent replacement of an existing, ordinary stat slot. The saved
+ * normalized power is rank-independent; runtime resolves the four rank values
+ * from the central calibration ranges so later card upgrades remain correct. */
+export interface ModStatCalibration {
+  slotIndex: number;
+  stat: ModStat;
+  mode: 'multiply' | 'add';
+  quality: PlasmaRecalibrationQuality;
+  normalizedPower: number;
+  calibratedAt: string;
+}
+
 export interface ModDefinition {
   id: string;
   name: string;
@@ -157,6 +171,7 @@ export interface ModCardInstance {
   acquiredAt: string;
   infusionId?: ModInfusionId;
   upgradeLevel: ModRank;
+  calibrations?: ModStatCalibration[];
 }
 
 export interface OwnedModState {
@@ -202,4 +217,6 @@ export interface EquippedModSnapshot {
   rank: ModRank;
   /** Cosmetic-only state needed to preserve the exact equipped card across rounds. */
   infusionId?: ModInfusionId;
+  /** Exact per-card calibration state frozen with the encounter loadout. */
+  calibrations?: ModStatCalibration[];
 }

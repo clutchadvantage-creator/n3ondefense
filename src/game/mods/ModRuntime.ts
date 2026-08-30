@@ -1,9 +1,10 @@
 import { MOD_BALANCE } from './modBalance.ts';
 import { MOD_BY_ID } from './definitions.ts';
-import type { EquippedModSnapshot, LocalModCollection, ModInfusionId, ModRank, ModStat, RunProtocolId } from './types.ts';
+import type { EquippedModSnapshot, LocalModCollection, ModInfusionId, ModRank, ModStat, ModStatCalibration, RunProtocolId } from './types.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
 import { isLegendaryModId, isSupremeModId, MAX_EQUIPPED_SUPREME_MODS } from './ModLoadoutRules.ts';
 import { isSupremeProtocol } from '../progression/SupremeProgression.ts';
+import { getEffectiveModModifiers, isNativeModSlotActive } from './PlasmaRecalibration.ts';
 
 /** Engine-stability ceilings, not intended balance nerfs. They prevent future
  * Supreme combinations from producing zero cooldowns or unbounded entities. */
@@ -31,6 +32,7 @@ export class ModRuntime {
   private readonly equipped = new Map<string, ModRank>();
   private readonly infusions = new Set<ModInfusionId>();
   private readonly infusionByModId = new Map<string, ModInfusionId>();
+  private readonly calibrationsByModId = new Map<string, ModStatCalibration[]>();
   private emergencyCapacitorUsed = false;
   private previousHealthRatio = 1;
   private readonly bombShieldCooldownUntil = new Map<string, number>();
@@ -48,11 +50,15 @@ export class ModRuntime {
       this.infusions.add(infusionId);
       this.infusionByModId.set(modId, infusionId);
     };
+    const addCalibrations = (modId: string, calibrations: readonly ModStatCalibration[] | undefined): void => {
+      if (!calibrations?.length) return;
+      this.calibrationsByModId.set(modId, calibrations.map((entry) => ({ ...entry })));
+    };
 
     if (snapshot) {
       let hasLegendary = false;
       let supremeCount = 0;
-      snapshot.forEach(({ id, rank, infusionId }) => {
+      snapshot.forEach(({ id, rank, infusionId, calibrations }) => {
         if (!MOD_BY_ID.has(id) || this.equipped.has(id)) return;
         if (isSupremeModId(id) && (!isSupremeProtocol(protocol) || supremeCount >= MAX_EQUIPPED_SUPREME_MODS)) return;
         if (isLegendaryModId(id) && hasLegendary) return;
@@ -62,6 +68,7 @@ export class ModRuntime {
         // Old run snapshots contain only id/rank. Resolve those from the exact
         // currently equipped card so in-progress local sessions remain valid.
         addInfusion(id, infusionId ?? equippedCardFor(id)?.infusionId);
+        addCalibrations(id, calibrations ?? equippedCardFor(id)?.calibrations);
       });
       return;
     }
@@ -78,6 +85,7 @@ export class ModRuntime {
         if (isLegendaryModId(modId)) hasLegendary = true;
         if (isSupremeModId(modId)) supremeCount += 1;
         addInfusion(modId, card?.infusionId);
+        addCalibrations(modId, card?.calibrations);
       }
     }
   }
@@ -92,13 +100,20 @@ export class ModRuntime {
 
   rank(modId: string): ModRank | 0 { return this.equipped.get(modId) ?? 0; }
   has(modId: string): boolean { return this.equipped.has(modId); }
+  nativeSlotActive(modId: string, slotIndex: number): boolean {
+    return isNativeModSlotActive({ calibrations: this.calibrationsByModId.get(modId) }, slotIndex);
+  }
+  private effectiveModifiers(modId: string) {
+    const definition = MOD_BY_ID.get(modId);
+    return definition ? getEffectiveModModifiers(definition, { calibrations: this.calibrationsByModId.get(modId) }) : [];
+  }
   multiplier(stat: ModStat): number {
     let result = 1;
     let includesSupreme = false;
     for (const [modId, rank] of this.equipped) {
       const definition = MOD_BY_ID.get(modId);
       if (definition?.rarity === 'supreme') includesSupreme = true;
-      for (const modifier of definition?.modifiers ?? []) {
+      for (const modifier of this.effectiveModifiers(modId)) {
         if (modifier.stat === stat && modifier.mode === 'multiply') result *= modifier.values[rank];
       }
     }
@@ -113,7 +128,7 @@ export class ModRuntime {
     for (const [modId, rank] of this.equipped) {
       const definition = MOD_BY_ID.get(modId);
       if (definition?.rarity === 'supreme') includesSupreme = true;
-      for (const modifier of definition?.modifiers ?? []) {
+      for (const modifier of this.effectiveModifiers(modId)) {
         if (modifier.stat === stat && modifier.mode === 'add') result += modifier.values[rank];
       }
     }
@@ -201,7 +216,12 @@ export class ModRuntime {
   }
   hasInfusion(infusionId: ModInfusionId): boolean { return this.infusions.has(infusionId); }
   snapshot(): EquippedModSnapshot[] {
-    return Array.from(this.equipped, ([id, rank]) => ({ id, rank, infusionId: this.infusionByModId.get(id) }));
+    return Array.from(this.equipped, ([id, rank]) => ({
+      id,
+      rank,
+      infusionId: this.infusionByModId.get(id),
+      ...(this.calibrationsByModId.has(id) ? { calibrations: this.calibrationsByModId.get(id)!.map((entry) => ({ ...entry })) } : {})
+    }));
   }
 
   checkEmergencyCapacitor(currentHealthRatio: number): { energyShare: number; speedMultiplier: number; speedDurationMs: number } | null {

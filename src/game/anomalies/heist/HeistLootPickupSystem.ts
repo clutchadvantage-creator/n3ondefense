@@ -144,4 +144,10 @@ export class HeistLootPickupSystem {
     for (const pickup of this.pickups) pickup.root.destroy(true);
     this.pickups.length = 0;
   }
+
+  /** Phaser owns destruction during Scene shutdown; this releases the retained
+   * pickup graph without touching already-destroyed display objects. */
+  discardReferences(): void {
+    this.pickups.length = 0;
+  }
 }

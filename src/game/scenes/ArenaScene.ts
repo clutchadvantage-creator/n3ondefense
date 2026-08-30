@@ -2253,7 +2253,10 @@ export class ArenaScene extends Phaser.Scene {
     if (this.modRuntime.hasInfusion('enemy-growth')) enemy.setScale(1.12);
     if (type === 'star') {
       enemy.setTexture('enemy-star');
-      enemy.setBlendMode(Phaser.BlendModes.ADD);
+      // Detailed layered enemy art uses authored opaque facets plus a baked
+      // shadow. ADD blending washed the star chassis transparent and left its
+      // shadow looking like a detached slab after the art pass.
+      enemy.setBlendMode(Phaser.BlendModes.NORMAL);
       enemy.setAngularVelocity(52);
     }
     const wallCollider = this.physics.add.collider(enemy, this.walls);
@@ -4401,7 +4404,7 @@ export class ArenaScene extends Phaser.Scene {
   private triggerSplitCurrent(killedEnemy: Enemy, finalKillingDamage: number): void {
     const standardRank = this.modRuntime.rank('split-current');
     const corruptedRank = this.modRuntime.rank('fractured-current');
-    const hasStandard = this.modRuntime.has('split-current');
+    const hasStandard = this.modRuntime.has('split-current') && this.modRuntime.nativeSlotActive('split-current', 0);
     const hasCorrupted = this.modRuntime.has('fractured-current');
     if (!hasStandard && !hasCorrupted) return;
     const standardShare = hasStandard ? MOD_BALANCE.splitCurrent.damageShare[standardRank] : 0;

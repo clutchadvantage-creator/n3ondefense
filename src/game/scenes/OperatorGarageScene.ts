@@ -30,16 +30,26 @@ import {
 } from '../garage/GarageEnvironment.ts';
 import { getGarageDockModels, getModLibraryEntries, getModLibraryProgress } from '../garage/GarageState.ts';
 import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
-import { filterModDatabaseEntries, type ModDatabaseStatusFilter } from '../mods/ModDatabaseService.ts';
+import { filterModDatabaseEntries, getModDatabaseEntry, type ModDatabaseStatusFilter } from '../mods/ModDatabaseService.ts';
 import { ModDatabaseViewer } from '../mods/ModDatabaseViewer.ts';
 import { MOD_RARITY_COLORS, createModCardView } from '../mods/ModCardView.ts';
 import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, isRunProtocolUnlocked } from '../mods/modBalance.ts';
 import type { ModCardInstance, ModCategory, ModRarity, ModSlot, RunProtocolId } from '../mods/types.ts';
+import {
+  describeRecalibrationSlot,
+  formatCalibrationModifier,
+  getRecalibrationCandidatePool,
+  getRecalibrationSlots,
+  PLASMA_RECALIBRATION_BALANCE,
+  resolveCalibrationModifier,
+  type PlasmaRecalibrationCandidate
+} from '../mods/PlasmaRecalibration.ts';
 import { countEquippedSupremeMods, MAX_EQUIPPED_SUPREME_MODS } from '../mods/ModLoadoutRules.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
 import { SaveSystem } from '../systems/SaveSystem.ts';
 import type { CosmeticOption } from '../types.ts';
-import { createModCollectionButton, createModCollectionFrame, getModCollectionFrameHeaderHeight } from '../ui/ModCollectionUi.ts';
+import { createModCollectionButton, createModCollectionFrame, createModOperationStatusConsole, getModCollectionFrameHeaderHeight } from '../ui/ModCollectionUi.ts';
+import type { ModOperationStatusTone } from '../mods/ModOperationStatus.ts';
 import { createRunConfigurationConsole } from '../ui/RunConfigurationConsoleUi.ts';
 import { createButton, disableButton } from '../utils/ui.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
@@ -118,6 +128,13 @@ export class OperatorGarageScene extends Phaser.Scene {
   private libraryPage = 0;
   private librarySelectedId = MOD_DEFINITIONS[0]?.id ?? '';
   private libraryViewer: ModDatabaseViewer | null = null;
+  private recalibrationCandidate: PlasmaRecalibrationCandidate | null = null;
+  private recalibrationCardId: string | null = null;
+  private recalibrationProcessing = false;
+  private recalibrationRevealTimer: Phaser.Time.TimerEvent | null = null;
+  private recalibrationStatus: { message: string; tone: ModOperationStatusTone } = {
+    message: 'SELECT AN OWNED MOD // PLASMA LINK READY', tone: 'info'
+  };
   private protocolTerminalFamily: 'overdrive' | 'supreme' | null = null;
   private cosmeticCategoryIndex = 0;
   private cosmeticPage = 0;
@@ -128,7 +145,10 @@ export class OperatorGarageScene extends Phaser.Scene {
   private exchangeConfirmationArmed = true;
   private economyConsoleTabIndex = 0;
   private readonly handleEscape = (): void => {
-    if (this.overlay) this.closeOverlay();
+    if (this.overlay) {
+      this.clearRecalibrationSession();
+      this.closeOverlay();
+    }
     else this.returnToPrevious();
   };
   private readonly handleResize = (): void => {
@@ -650,7 +670,10 @@ export class OperatorGarageScene extends Phaser.Scene {
     const closeWidth = narrow ? 104 : 128;
     const closeRightInset = narrow ? 18 : 30;
     const closeY = narrow ? 48 : 50;
-    const close = createButton(this, width - closeWidth / 2 - closeRightInset, closeY, 'CLOSE', () => this.closeOverlay(), closeWidth);
+    const close = createButton(this, width - closeWidth / 2 - closeRightInset, closeY, 'CLOSE', () => {
+      this.clearRecalibrationSession();
+      this.closeOverlay();
+    }, closeWidth);
     root.add([blocker, panel, scanlines, heading, close]);
     this.overlay = root;
     return root;
@@ -846,6 +869,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private showLibrary(): void {
+    configureSceneUiNavigation(this, { onBack: this.handleEscape });
     const root = this.createOverlay('MOD LIBRARY // SYSTEM DATABASE');
     const { width, height } = this.scale;
     const layout = calculateModLibraryLayout(width, height);
@@ -857,11 +881,12 @@ export class OperatorGarageScene extends Phaser.Scene {
     const allEntries = getModLibraryEntries(mods);
     const entries = filterModDatabaseEntries(allEntries, { category, rarity, status: ownership });
     const toolbarGap = layout.compact ? 8 : 12;
-    [
+    const toolbarControls = [
       { label: `TYPE: ${category.toUpperCase()}`, action: () => { this.libraryCategoryIndex = (this.libraryCategoryIndex + 1) % LIBRARY_CATEGORIES.length; } },
       { label: `RARITY: ${rarity.toUpperCase()}`, action: () => { this.libraryRarityIndex = (this.libraryRarityIndex + 1) % LIBRARY_RARITIES.length; } },
       { label: `STATUS: ${ownership.toUpperCase()}`, action: () => { this.libraryOwnershipIndex = (this.libraryOwnershipIndex + 1) % LIBRARY_OWNERSHIP.length; } }
-    ].forEach((control, index) => {
+    ];
+    toolbarControls.forEach((control, index) => {
       const x = layout.grid.x + layout.toolbarButtonWidth / 2 + index * (layout.toolbarButtonWidth + toolbarGap);
       root.add(createModCollectionButton(this, x, layout.toolbarY, control.label, () => {
         control.action();
@@ -872,6 +897,20 @@ export class OperatorGarageScene extends Phaser.Scene {
         fontSize: layout.compact ? 11 : 13
       }));
     });
+    const recalibrationX = layout.grid.x + layout.toolbarButtonWidth / 2 + 3 * (layout.toolbarButtonWidth + toolbarGap);
+    root.add(createModCollectionButton(this, recalibrationX, layout.toolbarY, 'PLASMA RECALIBRATION', () => {
+      const selected = entries.find((entry) => entry.definition.id === this.librarySelectedId) ?? entries[0];
+      if (!selected) {
+        this.audio.playSfx('itemLocked');
+        return false;
+      }
+      this.showPlasmaRecalibration(selected.definition.id);
+      return true;
+    }, layout.toolbarButtonWidth, 'utility', {
+      height: layout.toolbarButtonHeight,
+      fontSize: layout.compact ? 9 : 11,
+      focusDefaultPriority: 24
+    }));
 
     root.add(createModCollectionFrame(this, layout.grid, 'DATABASE INDEX // THREE-ROW ARCHIVE', 0x55eaff));
     const frameHeaderHeight = getModCollectionFrameHeaderHeight(layout.grid.height);
@@ -953,6 +992,186 @@ export class OperatorGarageScene extends Phaser.Scene {
         fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 14 : 18}px`, color: '#6c95a3'
       }).setOrigin(0.5));
     }
+  }
+
+  private showPlasmaRecalibration(modId: string): void {
+    const root = this.createOverlay('PLASMA RECALIBRATION // MODULE ENGINEERING');
+    const { width, height } = this.scale;
+    const compact = width < 1250 || height < 760;
+    const mods = SaveSystem.getModCollection();
+    const entry = getModDatabaseEntry(mods, modId);
+    if (!entry) {
+      this.recalibrationStatus = { message: 'MODULE DEFINITION NOT FOUND', tone: 'error' };
+      return;
+    }
+    const card = entry.card;
+    const slots = getRecalibrationSlots(entry.definition);
+    const eligibleSlots = slots.filter((slot) => !slot.protected);
+    const pool = card ? getRecalibrationCandidatePool(entry.definition, card) : [];
+    const safe = compact ? 22 : 34;
+    const statusY = compact ? 82 : 88;
+    const status = createModOperationStatusConsole(this, {
+      x: width * .25,
+      y: statusY,
+      width: width * .5,
+      height: compact ? 54 : 62
+    }, this.recalibrationStatus.message, this.recalibrationStatus.tone);
+    root.add(status.root);
+
+    const contentTop = statusY + (compact ? 68 : 80);
+    const contentBottom = height - (compact ? 78 : 92);
+    const gap = compact ? 12 : 20;
+    const usable = width - safe * 2 - gap * 2;
+    const leftWidth = usable * .27;
+    const centerWidth = usable * .37;
+    const rightWidth = usable - leftWidth - centerWidth;
+    const panelHeight = contentBottom - contentTop;
+    const leftRect = { x: safe, y: contentTop, width: leftWidth, height: panelHeight };
+    const centerRect = { x: safe + leftWidth + gap, y: contentTop, width: centerWidth, height: panelHeight };
+    const rightRect = { x: centerRect.x + centerWidth + gap, y: contentTop, width: rightWidth, height: panelHeight };
+    root.add(createModCollectionFrame(this, leftRect, 'SELECTED MODULE', 0x55eaff));
+    root.add(createModCollectionFrame(this, centerRect, 'CURRENT CONFIGURATION // REPLACEMENT SLOTS', 0xdb8fff));
+    root.add(createModCollectionFrame(this, rightRect, 'PLASMA INJECTION CONTROL', 0xff5bcf));
+
+    const displayCard = card ?? syntheticLibraryCard(entry.definition);
+    const cardWidth = Math.min(leftWidth - 42, panelHeight * .62 / 1.4, compact ? 205 : 260);
+    const cardView = createModCardView(this, leftRect.x + leftWidth / 2, leftRect.y + panelHeight * .42, displayCard, displayCard.upgradeLevel, {
+      width: cardWidth, height: cardWidth * 1.4, interactive: false, compact: false,
+      rankLabel: card ? undefined : 'R—'
+    }).setAlpha(card ? 1 : .54);
+    root.add(cardView);
+    root.add(this.add.text(leftRect.x + leftWidth / 2, leftRect.y + panelHeight * .78,
+      `${entry.definition.name.toUpperCase()}\n${entry.definition.rarity.toUpperCase()} // ${card ? `RANK ${card.upgradeLevel}/3` : 'NOT OWNED'}\n\nSTAT CAPACITY // ${slots.length} / ${slots.length}`,
+      { fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 15 : 19}px`, color: '#dff9ff', fontStyle: 'bold', align: 'center', lineSpacing: 5,
+        wordWrap: { width: leftWidth - 30, useAdvancedWrap: true } }).setOrigin(.5, 0));
+
+    const slotTop = centerRect.y + (compact ? 58 : 68);
+    const slotHeight = Math.min(compact ? 74 : 92, Math.max(58, (panelHeight * .54) / Math.max(1, slots.length)));
+    if (!slots.length) {
+      root.add(this.add.text(centerRect.x + centerWidth / 2, centerRect.y + panelHeight / 2,
+        'IDENTITY-LOCKED MODULE\nNO ORDINARY STAT SLOTS ARE SAFE TO REPLACE', {
+          fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 13 : 16}px`, color: '#ffadbe', align: 'center', lineSpacing: 8
+        }).setOrigin(.5));
+    }
+    slots.forEach((slot, index) => {
+      const y = slotTop + index * (slotHeight + (compact ? 8 : 12));
+      const protectedSlot = slot.protected;
+      const back = this.add.rectangle(centerRect.x + centerWidth / 2, y + slotHeight / 2, centerWidth - 28, slotHeight,
+        protectedSlot ? 0x24121a : 0x0a2029, .94).setStrokeStyle(1, protectedSlot ? 0xff668e : 0x69efff, .62);
+      const label = this.add.text(centerRect.x + 24, y + 10, `STAT ${slot.slotIndex + 1} // ${protectedSlot ? 'CORRUPTED IDENTITY LOCK' : 'RECALIBRATABLE'}`, {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 10 : 12}px`, color: protectedSlot ? '#ff8baa' : '#75efff', fontStyle: 'bold'
+      }).setOrigin(0);
+      const value = this.add.text(centerRect.x + 24, y + slotHeight - 12,
+        card ? describeRecalibrationSlot(entry.definition, card, slot, card.upgradeLevel) : slot.label, {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 15 : 19}px`, color: '#ecfbff', fontStyle: 'bold',
+          wordWrap: { width: centerWidth - 48, useAdvancedWrap: true }
+        }).setOrigin(0, 1);
+      root.add([back, label, value]);
+    });
+
+    const reserve = mods.plasmaChips;
+    const projected = Math.max(0, reserve - PLASMA_RECALIBRATION_BALANCE.rollCost);
+    root.add(this.add.text(rightRect.x + 22, rightRect.y + 64,
+      `PLASMA RESERVE\n${reserve.toLocaleString()} PC\n\nROLL COST\n${PLASMA_RECALIBRATION_BALANCE.rollCost} PC\n\nPROJECTED RESERVE\n${projected.toLocaleString()} PC`, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 17 : 22}px`, color: '#e8f8ff', fontStyle: 'bold', lineSpacing: 6
+      }).setOrigin(0));
+
+    const candidate = this.recalibrationCardId === card?.instanceId ? this.recalibrationCandidate : null;
+    if (this.recalibrationProcessing) {
+      const scan = this.add.text(rightRect.x + rightWidth / 2, rightRect.y + panelHeight * .58,
+        'PLASMA INJECTION\nMODULE SCAN\nATTRIBUTE DESTABILIZATION...', {
+          fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 13 : 17}px`, color: '#dc8fff', fontStyle: 'bold', align: 'center', lineSpacing: 10
+        }).setOrigin(.5);
+      root.add(scan);
+      this.tweens.add({ targets: scan, alpha: { from: .35, to: 1 }, scaleX: { from: .97, to: 1.03 }, duration: 210, yoyo: true, repeat: -1 });
+    } else if (candidate && card) {
+      const modifier = resolveCalibrationModifier(candidate);
+      const qualityColor: Record<string, string> = {
+        optimal: '#78ffc4', enhanced: '#83f3ff', stable: '#dff6ff', degraded: '#ffca72', misaligned: '#ff739d'
+      };
+      root.add(this.add.text(rightRect.x + rightWidth / 2, rightRect.y + panelHeight * .49,
+        `${candidate.quality.toUpperCase()}\n${modifier ? formatCalibrationModifier(modifier, card.upgradeLevel) : ''} ${candidate.stat.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toUpperCase()}\n\nSELECT STAT TO REPLACE`, {
+          fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 13 : 17}px`, color: qualityColor[candidate.quality], fontStyle: 'bold', align: 'center', lineSpacing: 8,
+          wordWrap: { width: rightWidth - 30, useAdvancedWrap: true }
+        }).setOrigin(.5));
+      eligibleSlots.forEach((slot, index) => {
+        const buttonWidth = eligibleSlots.length === 1 ? rightWidth - 34 : (rightWidth - 46) / 2;
+        const column = eligibleSlots.length === 1 ? 0 : index % 2;
+        const row = eligibleSlots.length === 1 ? 0 : Math.floor(index / 2);
+        const buttonX = eligibleSlots.length === 1
+          ? rightRect.x + rightWidth / 2
+          : rightRect.x + 17 + buttonWidth / 2 + column * (buttonWidth + 12);
+        const buttonY = rightRect.y + panelHeight - (compact ? 146 : 166) + row * (compact ? 38 : 44);
+        root.add(createModCollectionButton(this, buttonX, buttonY, `REPLACE STAT ${slot.slotIndex + 1}`, () => {
+          const result = SaveSystem.applyPlasmaRecalibration(card.instanceId, slot.slotIndex, candidate);
+          this.recalibrationStatus = { message: result.message ?? 'RECALIBRATION COMPLETE', tone: result.ok ? 'success' : 'error' };
+          if (result.ok) {
+            this.recalibrationCandidate = null;
+            this.recalibrationCardId = null;
+          }
+          this.showPlasmaRecalibration(modId);
+          return result.ok;
+        }, buttonWidth, 'utility', { height: compact ? 34 : 38, fontSize: compact ? 9 : 11 }));
+      });
+      root.add(createModCollectionButton(this, rightRect.x + rightWidth / 2, rightRect.y + panelHeight - 34, 'KEEP CURRENT', () => {
+        this.recalibrationCandidate = null;
+        this.recalibrationCardId = null;
+        this.recalibrationStatus = { message: 'CURRENT CALIBRATION RETAINED // ROLL COST SPENT', tone: 'warning' };
+        this.showPlasmaRecalibration(modId);
+      }, rightWidth - 34, 'standard', { height: compact ? 36 : 42, fontSize: compact ? 11 : 13 }));
+    } else {
+      const canRoll = Boolean(card && eligibleSlots.length && pool.length && reserve >= PLASMA_RECALIBRATION_BALANCE.rollCost);
+      const rollButton = createModCollectionButton(this, rightRect.x + rightWidth / 2, rightRect.y + panelHeight - (compact ? 80 : 92),
+        `RECALIBRATE // ${PLASMA_RECALIBRATION_BALANCE.rollCost} PC`, () => {
+          if (this.recalibrationProcessing || !card) return false;
+          this.recalibrationProcessing = true;
+          const result = SaveSystem.rollPlasmaRecalibration(card.instanceId);
+          if (!result.ok || !result.candidate) {
+            this.recalibrationProcessing = false;
+            this.recalibrationStatus = { message: result.message ?? 'RECALIBRATION BLOCKED', tone: 'error' };
+            this.audio.playSfx('itemLocked');
+            this.showPlasmaRecalibration(modId);
+            return false;
+          }
+          this.recalibrationStatus = { message: 'PLASMA INJECTION ACTIVE // ATTRIBUTE DESTABILIZING', tone: 'info' };
+          this.recalibrationCardId = card.instanceId;
+          this.recalibrationCandidate = result.candidate;
+          this.showPlasmaRecalibration(modId);
+          this.recalibrationRevealTimer = this.time.delayedCall(PLASMA_RECALIBRATION_BALANCE.revealDurationMs, () => {
+            this.recalibrationRevealTimer = null;
+            this.recalibrationProcessing = false;
+            this.recalibrationStatus = { message: `${result.candidate!.quality.toUpperCase()} CALIBRATION GENERATED // CHOOSE A STAT SLOT`, tone: 'success' };
+            this.showPlasmaRecalibration(modId);
+          });
+          return true;
+        }, rightWidth - 34, 'utility', { height: compact ? 42 : 50, fontSize: compact ? 12 : 15 });
+      if (!canRoll) disableButton(rollButton);
+      root.add(rollButton);
+      if (!card || !eligibleSlots.length || !pool.length || reserve < PLASMA_RECALIBRATION_BALANCE.rollCost) {
+        const reason = !card ? 'OWNED MOD REQUIRED'
+          : !eligibleSlots.length || !pool.length ? 'NO SAFE RECALIBRATION ATTRIBUTES'
+            : `INSUFFICIENT PLASMA CHIPS — ${PLASMA_RECALIBRATION_BALANCE.rollCost} REQUIRED`;
+        root.add(this.add.text(rightRect.x + rightWidth / 2, rightRect.y + panelHeight * .63, reason, {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 14 : 17}px`, color: '#ff96ae', fontStyle: 'bold', align: 'center',
+          wordWrap: { width: rightWidth - 34, useAdvancedWrap: true }
+        }).setOrigin(.5));
+      }
+    }
+
+    root.add(createModCollectionButton(this, width / 2, height - (compact ? 28 : 34), 'BACK TO MOD LIBRARY', () => {
+      this.clearRecalibrationSession();
+      this.showLibrary();
+    }, compact ? 220 : 280, 'return', { height: compact ? 38 : 44, fontSize: compact ? 12 : 14 }));
+    configureSceneUiNavigation(this, { onBack: () => { this.clearRecalibrationSession(); this.showLibrary(); } });
+  }
+
+  private clearRecalibrationSession(): void {
+    this.recalibrationRevealTimer?.remove(false);
+    this.recalibrationRevealTimer = null;
+    this.recalibrationCandidate = null;
+    this.recalibrationCardId = null;
+    this.recalibrationProcessing = false;
+    this.recalibrationStatus = { message: 'SELECT AN OWNED MOD // PLASMA LINK READY', tone: 'info' };
   }
 
   private showCosmetics(): void {
@@ -2035,6 +2254,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.input.off('wheel', this.handleLibraryWheel);
     this.libraryViewer?.destroy();
     this.libraryViewer = null;
+    this.recalibrationRevealTimer?.remove(false);
+    this.recalibrationRevealTimer = null;
     this.cosmeticPreviewColorTimer?.remove(false);
     this.cosmeticPreviewColorTimer = null;
     this.cosmeticPreviewColorTargets = [];

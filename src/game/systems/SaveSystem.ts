@@ -8,6 +8,7 @@ import type { GaragePresetId } from '../garage/types.ts';
 import type { ArcadeMetricEvent } from '../arcade/types.ts';
 import type { ExchangeCurrency } from '../economy/CurrencyExchange.ts';
 import { buildEconomyAnalytics, type EconomyAnalyticsSnapshot } from '../economy/EconomyAnalytics.ts';
+import type { PlasmaRecalibrationCandidate } from '../mods/PlasmaRecalibration.ts';
 
 export class SaveSystem {
   /** Read-only, freshly derived account economy data for presentation surfaces. */
@@ -75,6 +76,14 @@ export class SaveSystem {
 
   static spendPlasmaChips(amount: number): boolean {
     return PlayerProfileStore.spendPlasmaChips(amount);
+  }
+
+  static rollPlasmaRecalibration(instanceId: string) {
+    return PlayerProfileStore.rollPlasmaRecalibration(instanceId);
+  }
+
+  static applyPlasmaRecalibration(instanceId: string, slotIndex: number, candidate: PlasmaRecalibrationCandidate) {
+    return PlayerProfileStore.applyPlasmaRecalibration(instanceId, slotIndex, candidate);
   }
 
   static exchangeCurrency(source: ExchangeCurrency, target: ExchangeCurrency, amount: number) {

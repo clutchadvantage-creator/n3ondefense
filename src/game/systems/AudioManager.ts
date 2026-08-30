@@ -30,7 +30,6 @@ const PRESENTATION_SFX_SOURCES = {
   circuitGate: 'soundeffects/arenacircuitgate.mp3',
   overloadEvent: 'soundeffects/overloadeventsound.mp3',
   supplyDropEvent: 'soundeffects/supplydropsound.mp3',
-  anomalyPortalPower: 'soundeffects/portalpowerupsound.mp3',
   anomalyPortalTransit: 'soundeffects/portalenterexitsound.mp3',
   heistDoor: 'soundeffects/heistdoorsound.mp3',
   dataThiefEntrance: 'soundeffects/datatheifentrence.mp3',
@@ -66,7 +65,6 @@ const PRESENTATION_SFX_POOL_SIZES: Record<PresentationSfxName, number> = {
   circuitGate: 2,
   overloadEvent: 1,
   supplyDropEvent: 1,
-  anomalyPortalPower: 4,
   anomalyPortalTransit: 1,
   heistDoor: 1,
   dataThiefEntrance: 1,
@@ -93,7 +91,6 @@ const PRESENTATION_SFX_MIN_INTERVAL_MS: Record<PresentationSfxName, number> = {
   circuitGate: 80,
   overloadEvent: 750,
   supplyDropEvent: 750,
-  anomalyPortalPower: 45,
   anomalyPortalTransit: 450,
   heistDoor: 250,
   dataThiefEntrance: 750,
@@ -175,7 +172,7 @@ export class AudioManager {
     gasCanImpact: [], gasFizz: [], totemEntrance: [], totemPulse: [], miniBossSpawn: [],
     bossArtilleryExplosion: [], sentryBossAttack: [], grenadeShotExplosion: [], mageBossLargeAttack: [],
     mageBossMagicAttack: [], brawlerBossChargeAttack: [], circuitGate: [],
-    overloadEvent: [], supplyDropEvent: [], anomalyPortalPower: [], anomalyPortalTransit: [], heistDoor: [],
+    overloadEvent: [], supplyDropEvent: [], anomalyPortalTransit: [], heistDoor: [],
     dataThiefEntrance: [], dataThiefFail: [],
     goldenEnemyEvent: [], goldenEnemyEventFail: [],
     bombsiteSkull: [], bombsiteFlower: [], bombsiteBats: [], bombsiteWitch: []
@@ -184,7 +181,7 @@ export class AudioManager {
     gasCanImpact: 0, gasFizz: 0, totemEntrance: 0, totemPulse: 0, miniBossSpawn: 0,
     bossArtilleryExplosion: 0, sentryBossAttack: 0, grenadeShotExplosion: 0, mageBossLargeAttack: 0,
     mageBossMagicAttack: 0, brawlerBossChargeAttack: 0, circuitGate: 0,
-    overloadEvent: 0, supplyDropEvent: 0, anomalyPortalPower: 0, anomalyPortalTransit: 0, heistDoor: 0,
+    overloadEvent: 0, supplyDropEvent: 0, anomalyPortalTransit: 0, heistDoor: 0,
     dataThiefEntrance: 0, dataThiefFail: 0,
     goldenEnemyEvent: 0, goldenEnemyEventFail: 0,
     bombsiteSkull: 0, bombsiteFlower: 0, bombsiteBats: 0, bombsiteWitch: 0
@@ -195,7 +192,7 @@ export class AudioManager {
     grenadeShotExplosion: -Infinity, mageBossLargeAttack: -Infinity,
     mageBossMagicAttack: -Infinity, brawlerBossChargeAttack: -Infinity, circuitGate: -Infinity,
     overloadEvent: -Infinity, supplyDropEvent: -Infinity,
-    anomalyPortalPower: -Infinity, anomalyPortalTransit: -Infinity, heistDoor: -Infinity,
+    anomalyPortalTransit: -Infinity, heistDoor: -Infinity,
     dataThiefEntrance: -Infinity, dataThiefFail: -Infinity,
     goldenEnemyEvent: -Infinity, goldenEnemyEventFail: -Infinity,
     bombsiteSkull: -Infinity, bombsiteFlower: -Infinity, bombsiteBats: -Infinity, bombsiteWitch: -Infinity
@@ -217,6 +214,7 @@ export class AudioManager {
   private lowHealthRestartTimer: number | null = null;
   private anomalyPortalIdleAudio: HTMLAudioElement | null = null;
   private anomalyPortalIdleRequested = false;
+  private anomalyPortalPowerAudio: HTMLAudioElement | null = null;
   private heistAlarmAudio: HTMLAudioElement | null = null;
   private heistAlarmRequested = false;
   private activeArcadeLoop: 'overloadEvent' | null = null;
@@ -416,6 +414,10 @@ export class AudioManager {
   }
 
   private initAnomalyLoopSfx(): void {
+    this.anomalyPortalPowerAudio = new Audio(audioAssetUrl('soundeffects/portalpowerupsound.mp3'));
+    this.anomalyPortalPowerAudio.preload = 'auto';
+    this.anomalyPortalPowerAudio.volume = this.getSfxVolume('anomalyPortalPower');
+    this.anomalyPortalPowerAudio.load();
     this.anomalyPortalIdleAudio = new Audio(audioAssetUrl('soundeffects/portalidlesound.mp3'));
     this.anomalyPortalIdleAudio.preload = 'auto';
     this.anomalyPortalIdleAudio.loop = true;
@@ -452,6 +454,22 @@ export class AudioManager {
     this.stopDedicatedLoop(this.anomalyPortalIdleAudio);
   }
 
+  /** Every successful essence feed is the newest event. Restarting the one
+   * dedicated voice prevents eight-second clips from stacking while preserving
+   * the authored attack from the beginning of the file. */
+  restartAnomalyPortalPower(): void {
+    const audio = this.anomalyPortalPowerAudio;
+    if (!audio) return;
+    audio.pause();
+    try { audio.currentTime = 0; } catch { /* Metadata may still be loading. */ }
+    audio.volume = this.getSfxVolume('anomalyPortalPower');
+    void audio.play().catch(() => undefined);
+  }
+
+  stopAnomalyPortalPower(): void {
+    this.stopDedicatedLoop(this.anomalyPortalPowerAudio);
+  }
+
   startHeistAlarm(): void {
     if (this.heistAlarmRequested) return;
     this.heistAlarmRequested = true;
@@ -464,11 +482,12 @@ export class AudioManager {
   }
 
   stopAnomalySfx(): void {
+    this.stopAnomalyPortalPower();
     this.stopAnomalyPortalIdle();
     this.stopHeistAlarm();
     // Transit is intentionally allowed to finish across the Scene handoff;
     // unlike the loops it is a short self-terminating bridge between worlds.
-    for (const name of ['anomalyPortalPower', 'heistDoor'] as const) {
+    for (const name of ['heistDoor'] as const) {
       for (const audio of this.presentationSfxPools[name]) this.stopDedicatedLoop(audio);
       this.presentationSfxCursors[name] = 0;
       this.lastPresentationSfxAt[name] = -Infinity;
@@ -1332,7 +1351,6 @@ export class AudioManager {
       case 'circuitGate':
       case 'overloadEvent':
       case 'supplyDropEvent':
-      case 'anomalyPortalPower':
       case 'anomalyPortalTransit':
       case 'heistDoor':
       case 'dataThiefEntrance':
@@ -1344,6 +1362,9 @@ export class AudioManager {
       case 'bombsiteBats':
       case 'bombsiteWitch':
         this.playPresentationSfx(name);
+        break;
+      case 'anomalyPortalPower':
+        this.restartAnomalyPortalPower();
         break;
       case 'pickup':
       case 'healthPickup':

@@ -92,7 +92,7 @@ export const calculateModLibraryLayout = (width: number, height: number): ModLib
     safe,
     toolbarY,
     toolbarHeight,
-    toolbarButtonWidth: clamp((grid.width - (compact ? 24 : 34)) / 3, 124, 190),
+    toolbarButtonWidth: clamp((grid.width - (compact ? 30 : 46)) / 4, 112, 190),
     toolbarButtonHeight: compact ? 34 : 40,
     grid,
     viewer,

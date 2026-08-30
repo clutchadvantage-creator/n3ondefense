@@ -38,7 +38,7 @@ test('version-16 profiles migrate selected IDs without enabling persistence', ()
   legacy.garage = { nextRun: { contract: 'bomb-rush', modFocus: 'defense' }, presets: legacy.garage.presets };
   const migrated = normalizeLocalSave(legacy);
   assert.ok(migrated);
-  assert.equal(migrated.version, 17);
+  assert.equal(migrated.version, 18);
   assert.equal(migrated.garage.savedDeploymentEnabled, false);
   assert.deepEqual(migrated.garage.nextRun, { contract: 'bomb-rush', modFocus: 'defense' });
 });

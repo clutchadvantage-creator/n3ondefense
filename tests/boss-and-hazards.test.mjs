@@ -34,6 +34,8 @@ test('boss gates occur every fifth completed round with bounded progression rewa
   assert.ok(early.credits > 0 && early.coreTokens > 0 && early.plasmaChips > 0);
   assert.ok(late.credits > early.credits);
   assert.ok(late.plasmaChips >= early.plasmaChips);
+  assert.equal(early.plasmaChips, 6);
+  assert.equal(late.plasmaChips, 14);
 });
 
 test('boss selection is deterministic and uses only the three unique archetypes', () => {

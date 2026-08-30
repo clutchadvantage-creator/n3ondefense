@@ -198,6 +198,7 @@ export class HeistScene extends Phaser.Scene {
   private grenadeSplashRadiusSquared = 0;
   private grenadeSplashDamage = 0;
   private grenadeSplashExcludedEnemy: Enemy | null = null;
+  private nextPoolMaintenanceAt = 0;
   private readonly findGrenadeFuseNeighbor = (enemy: Enemy): void => {
     if (!enemy.active || enemy.hp <= 0) return;
     const dx = enemy.x - this.grenadeFuseQueryX;
@@ -249,7 +250,7 @@ export class HeistScene extends Phaser.Scene {
     );
     this.mineExplosionVfx = new MineExplosionVfx(this, settings.particles);
     this.random = new SeededRandom((data.seed ^ 0x4e1a57 ^ Math.imul(data.round, 0x27d4eb2d)) >>> 0);
-    this.rewards = new HeistRewardService(data.seed, data.round, data.protocol);
+    this.rewards = new HeistRewardService(data.seed, data.round, data.protocol, data.cost);
     this.pickupPresentation = new GameplayPickupPresentation(
       this,
       () => this.modRuntime.hasInfusion('pickup-orbit')
@@ -349,6 +350,7 @@ export class HeistScene extends Phaser.Scene {
     this.pendingMineSalvo = false;
     this.mineSalvoInput.cancel();
     this.nextHoloAfterimageAt = 0;
+    this.nextPoolMaintenanceAt = 0;
   }
 
   private resolveProjectileCosmetics(): void {
@@ -502,7 +504,24 @@ export class HeistScene extends Phaser.Scene {
     this.updateHazards(now);
     this.updateMission(now);
     this.updateHud(now);
+    this.maintainCombatPools(now);
     if (this.player.isDead()) this.failHeist();
+  }
+
+  private maintainCombatPools(now: number): void {
+    if (now < this.nextPoolMaintenanceAt) return;
+    this.nextPoolMaintenanceAt = now + 2_000;
+    const projectileStats = this.projectilePool.stats();
+    if (projectileStats.active < 256 && projectileStats.available > 960) {
+      this.projectilePool.trimAvailable(640, (projectile) => {
+        projectile.grenadeShadow?.destroy();
+        projectile.sprite.destroy();
+      }, 96);
+    }
+    const fxStats = this.fxCirclePool.stats();
+    if (fxStats.active < 64 && fxStats.available > 512) {
+      this.fxCirclePool.trimAvailable(256, (circle) => circle.destroy(), 64);
+    }
   }
 
   private createPlayer(): void {
@@ -1511,7 +1530,7 @@ export class HeistScene extends Phaser.Scene {
   }
 
   private triggerSplitCurrent(killedEnemy: Enemy, killingDamage: number): void {
-    const standard = this.modRuntime.has('split-current');
+    const standard = this.modRuntime.has('split-current') && this.modRuntime.nativeSlotActive('split-current', 0);
     const corrupted = this.modRuntime.has('fractured-current');
     if (!standard && !corrupted) return;
     const standardRank = this.modRuntime.rank('split-current');
@@ -1961,7 +1980,12 @@ export class HeistScene extends Phaser.Scene {
   }
 
   private removeEnemy(enemy: Enemy, index: number): void {
-    if (enemy.name === 'heist-mini-boss' && enemy.hp <= 0) this.miniBossKilled = true;
+    if (enemy.name === 'heist-mini-boss' && enemy.hp <= 0) {
+      this.miniBossKilled = true;
+      const premiumDrop = this.rewards.rollMiniBossReward();
+      this.audio.play('loot-spawn');
+      this.lootPickups.spawn(enemy.x, enemy.y, premiumDrop, 1000 + this.containersOpened);
+    }
     if (enemy.hp <= 0) {
       this.coreAudio.playSfx('enemyDeath');
       const color = enemy.stats.color;
@@ -2038,6 +2062,9 @@ export class HeistScene extends Phaser.Scene {
     this.shieldVisual = null;
     safely('resize-listener', () => this.scale.off('resize', this.handleResize, this));
     this.projectiles.length = 0;
+    safely('projectile-pool-references', () => this.projectilePool?.discardReferences());
+    safely('fx-pool-references', () => this.fxCirclePool?.discardReferences());
+    safely('loot-pickup-references', () => this.lootPickups?.discardReferences());
     this.enemies.length = 0;
     this.enemySpatialGrid.clear();
     this.containers.length = 0;

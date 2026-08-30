@@ -48,6 +48,17 @@ test('reusable pool trims only inactive high-water capacity with a bounded budge
   assert.equal(destroyed.length, 2);
 });
 
+test('reusable pool can release references after its external Scene lifecycle destroys objects', () => {
+  const pool = new ReusableObjectPool((state) => ({ ...state }), Object.assign, () => {});
+  const first = pool.obtain({ value: 1 });
+  const second = pool.obtain({ value: 2 });
+  pool.release(first);
+  assert.equal(pool.owns(second), true);
+  pool.discardReferences();
+  assert.deepEqual(pool.stats(), { created: 2, reused: 0, active: 0, available: 0 });
+  assert.equal(pool.owns(second), false);
+});
+
 test('grid pathfinding reuses typed search storage and routes around padded walls', () => {
   const pathfinder = new GridPathfinder(640, 480, 32, [{ x: 256, y: 0, w: 32, h: 320 }], 8);
   const path = pathfinder.findPath(64, 64, 560, 64, { smooth: true, maxIterations: 5000 });

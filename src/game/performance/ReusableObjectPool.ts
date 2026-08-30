@@ -96,6 +96,18 @@ export class ReusableObjectPool<T, TState> {
     this.owned.clear();
   }
 
+  /**
+   * Drops JavaScript ownership after an external lifecycle has already
+   * destroyed the pooled objects. Phaser tears down a Scene's display list and
+   * physics world before user SHUTDOWN callbacks, so calling destroyItem from
+   * that callback would double-destroy bodies and can interrupt SceneManager.
+   */
+  discardReferences(): void {
+    this.available.length = 0;
+    this.active.clear();
+    this.owned.clear();
+  }
+
   stats(): ObjectPoolStats {
     return {
       created: this.created,

@@ -25,11 +25,14 @@ export class HeistRewardService {
   private readonly seed: number;
   private readonly round: number;
   private readonly protocol: RunProtocolId;
+  private readonly entryCost: number;
+  private containerSequence = 0;
 
-  constructor(seed: number, round: number, protocol: RunProtocolId) {
+  constructor(seed: number, round: number, protocol: RunProtocolId, entryCost = 150) {
     this.seed = seed;
     this.round = round;
     this.protocol = protocol;
+    this.entryCost = Math.max(0, Math.floor(entryCost));
     this.random = new SeededRandom((seed ^ Math.imul(round, 0x45d9f3b) ^ 0x4e1a57) >>> 0);
   }
 
@@ -38,17 +41,59 @@ export class HeistRewardService {
   }
 
   rollContainer(): HeistContainerReward {
+    const guaranteedKind = HEIST_REWARD_TABLE.guaranteedVaultSequence[this.containerSequence++];
+    if (guaranteedKind === 'credits') return { kind: 'credits', amount: Math.round(
+      HEIST_REWARD_TABLE.guaranteedCreditsBase
+      + this.entryCost * HEIST_REWARD_TABLE.guaranteedCreditsPerFlux
+      + this.round * HEIST_REWARD_TABLE.guaranteedCreditsPerRound
+      + this.random.float(0, HEIST_REWARD_TABLE.creditsVariance)
+    ) };
+    if (guaranteedKind === 'plasmaChips') return { kind: 'plasmaChips', amount: Math.max(1, Math.round(
+      HEIST_REWARD_TABLE.guaranteedPlasmaBase
+      + this.entryCost * HEIST_REWARD_TABLE.guaranteedPlasmaPerFlux
+      + this.round * HEIST_REWARD_TABLE.guaranteedPlasmaPerRound
+      + this.random.float(0, 5)
+    )) };
+    if (guaranteedKind === 'coreTokens') return { kind: 'coreTokens', amount: Math.max(1, Math.round(
+      HEIST_REWARD_TABLE.guaranteedCoreBase
+      + this.entryCost * HEIST_REWARD_TABLE.guaranteedCorePerFlux
+      + this.round * HEIST_REWARD_TABLE.guaranteedCorePerRound
+      + this.random.float(0, 3)
+    )) };
+    if (guaranteedKind === 'mod') return this.rollModOrFallback();
+
     const roll = this.random.next();
     const coreTokensThreshold = HEIST_REWARD_TABLE.creditsWeight + HEIST_REWARD_TABLE.coreTokensWeight;
     const plasmaThreshold = coreTokensThreshold + HEIST_REWARD_TABLE.plasmaChipsWeight;
     const fluxThreshold = plasmaThreshold + HEIST_REWARD_TABLE.fluxCoresWeight;
     if (roll < HEIST_REWARD_TABLE.creditsWeight) return { kind: 'credits', amount: Math.round(
-      HEIST_REWARD_TABLE.creditsBase + this.round * HEIST_REWARD_TABLE.creditsPerRound
+      HEIST_REWARD_TABLE.creditsBase + this.entryCost * HEIST_REWARD_TABLE.creditsPerFlux
+      + this.round * HEIST_REWARD_TABLE.creditsPerRound
       + this.random.float(0, HEIST_REWARD_TABLE.creditsVariance)
     ) };
-    if (roll < coreTokensThreshold) return { kind: 'coreTokens', amount: Math.max(1, Math.round(2 + this.round * 0.09 + this.random.float(0, 2))) };
-    if (roll < plasmaThreshold) return { kind: 'plasmaChips', amount: Math.max(2, Math.round(4 + this.round * 0.13 + this.random.float(0, 5))) };
-    if (roll < fluxThreshold) return { kind: 'fluxCores', amount: Math.max(1, Math.round(1 + this.round * 0.025 + this.random.float(0, 1.6))) };
+    if (roll < coreTokensThreshold) return { kind: 'coreTokens', amount: Math.max(1, Math.round(
+      HEIST_REWARD_TABLE.coreBase + this.entryCost * HEIST_REWARD_TABLE.corePerFlux
+      + this.round * HEIST_REWARD_TABLE.corePerRound + this.random.float(0, 3)
+    )) };
+    if (roll < plasmaThreshold) return { kind: 'plasmaChips', amount: Math.max(2, Math.round(
+      HEIST_REWARD_TABLE.plasmaBase + this.entryCost * HEIST_REWARD_TABLE.plasmaPerFlux
+      + this.round * HEIST_REWARD_TABLE.plasmaPerRound + this.random.float(0, 6)
+    )) };
+    if (roll < fluxThreshold) return { kind: 'fluxCores', amount: Math.max(1, Math.round(
+      HEIST_REWARD_TABLE.fluxBase + this.entryCost * HEIST_REWARD_TABLE.fluxPerEntryFlux
+      + this.round * HEIST_REWARD_TABLE.fluxPerRound + this.random.float(0, 3)
+    )) };
+    return this.rollModOrFallback();
+  }
+
+  rollMiniBossReward(): HeistContainerReward {
+    return { kind: 'plasmaChips', amount: Math.max(4, Math.round(
+      HEIST_REWARD_TABLE.miniBossPlasmaBase + this.round * HEIST_REWARD_TABLE.miniBossPlasmaPerRound
+      + this.random.float(0, 6)
+    )) };
+  }
+
+  private rollModOrFallback(): HeistContainerReward {
     const mod = rollModDrop({
       source: 'anomaly', round: this.round, seed: this.seed, sequence: this.sequence++, protocol: this.protocol, guaranteed: true
     });

@@ -6,6 +6,15 @@ import { LocalSaveManager } from '../save/LocalSaveManager';
 import { addModDrop, createDefaultModLoadout, deleteModCard, equipMod, infuseModCard, rankUpMod, recycleAllUnupgradedDuplicates, recycleDuplicateMod, removeModInfusion, sellDuplicateMod, unequipMod } from '../mods/ModInventoryService.ts';
 import { MOD_DEFINITIONS } from '../mods/definitions.ts';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
+import {
+  applyPlasmaRecalibration,
+  findRecalibrationCard,
+  getRecalibrationCandidatePool,
+  getRecalibrationSlots,
+  PLASMA_RECALIBRATION_BALANCE,
+  rollPlasmaRecalibrationCandidate,
+  type PlasmaRecalibrationCandidate
+} from '../mods/PlasmaRecalibration.ts';
 import { RUN_PROTOCOLS, isRunProtocolUnlocked } from '../mods/modBalance.ts';
 import { isSupremeProtocol } from '../progression/SupremeProgression.ts';
 import { buildRunEconomySnapshot, getNextLoadoutSlotCost, getRunSetupCost, purchaseRunSetup, spendCreditsAtomic } from '../economy/EconomyService.ts';
@@ -612,6 +621,37 @@ export class PlayerProfileStore {
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
     return true;
+  }
+
+  static rollPlasmaRecalibration(instanceId: string): PurchaseResult & { candidate?: PlasmaRecalibrationCandidate; cost?: number } {
+    const save = PlayerProfileStore.getActiveSave();
+    const selection = findRecalibrationCard(save.mods.cards, instanceId);
+    if (!selection) return { ok: false, message: 'OWNED MOD CARD NOT FOUND' };
+    const slots = getRecalibrationSlots(selection.definition).filter((slot) => !slot.protected);
+    if (!slots.length || !getRecalibrationCandidatePool(selection.definition, selection.card).length) {
+      return { ok: false, message: 'NO SAFE RECALIBRATION ATTRIBUTES AVAILABLE' };
+    }
+    const cost = PLASMA_RECALIBRATION_BALANCE.rollCost;
+    if (save.mods.plasmaChips < cost) return { ok: false, message: `INSUFFICIENT PLASMA CHIPS — ${cost} REQUIRED`, cost };
+    const roll = rollPlasmaRecalibrationCandidate(selection.definition, selection.card);
+    if (!roll.ok || !roll.candidate) return { ok: false, message: roll.message, cost };
+    // One atomic transaction: the candidate is generated before mutation, then
+    // exactly one cost is committed and persisted regardless of Keep/Replace.
+    save.mods.plasmaChips -= cost;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return { ok: true, message: roll.message, candidate: roll.candidate, cost };
+  }
+
+  static applyPlasmaRecalibration(instanceId: string, slotIndex: number, candidate: PlasmaRecalibrationCandidate): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const selection = findRecalibrationCard(save.mods.cards, instanceId);
+    if (!selection) return { ok: false, message: 'OWNED MOD CARD NOT FOUND' };
+    const result = applyPlasmaRecalibration(selection.card, selection.definition, slotIndex, candidate);
+    if (!result.ok) return result;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    return result;
   }
 
   static sellDuplicateMod(instanceId: string): PurchaseResult {

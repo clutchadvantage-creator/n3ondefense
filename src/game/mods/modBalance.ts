@@ -41,7 +41,7 @@ export const MOD_BALANCE = {
     arcade: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5, supreme: 1.1 },
     // Anomaly vault rewards use the established optional-event curve. The
     // guaranteed roll affects acquisition frequency, not rarity inflation.
-    anomaly: { common: 0.5, uncommon: 1, rare: 1.7, epic: 1.5, legendary: 0.5, supreme: 1.45 }
+    anomaly: { common: 0.35, uncommon: 0.85, rare: 1.85, epic: 1.8, legendary: 1.15, supreme: 1.45 }
   } satisfies Record<ModDropSource, Record<ModRarity, number>>,
   rarityRoundBonusPerRound: 0.025,
   guaranteedMilestoneEveryRounds: 5,

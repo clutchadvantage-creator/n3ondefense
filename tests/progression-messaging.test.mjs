@@ -31,7 +31,7 @@ test('new and version-six saves safely default the one-time briefing flag', () =
     progress: { ...current.progress, initialDeploymentBriefingSeen: undefined }
   });
   assert.ok(migrated);
-  assert.equal(migrated.version, 17);
+  assert.equal(migrated.version, 18);
   assert.equal(migrated.progress.initialDeploymentBriefingSeen, false);
 
   const persisted = normalizeLocalSave({
