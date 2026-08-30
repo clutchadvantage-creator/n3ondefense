@@ -50,9 +50,9 @@ export class CosmeticsStoreScene extends Phaser.Scene {
           equippedCosmetics: current.equippedCosmetics
         };
       },
-      onBack: () => this.returnToMainMenu(returnRoute),
+      onBack: returnRoute.returnScene === SceneKeys.Arena ? undefined : () => this.returnToMainMenu(returnRoute),
       onReturn: returnRoute.returnScene === SceneKeys.MainMenu ? undefined : () => this.returnToPreviousScene(returnRoute),
-      returnLabel: returnRoute.returnScene === SceneKeys.Arena ? 'BACK TO GAME' : 'BACK TO RESULTS',
+      returnLabel: returnRoute.returnScene === SceneKeys.Arena ? 'RETURN TO GAME' : 'BACK TO RESULTS',
       onUnlock: (item) => this.unlockCosmetic(item),
       onEquip: (item) => this.equipCosmetic(item),
       onUpgrade: (definition, level) => this.purchaseUpgrade(definition, level)

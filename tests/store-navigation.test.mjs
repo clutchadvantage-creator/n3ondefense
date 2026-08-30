@@ -42,11 +42,11 @@ test('completed-round Store returns to results without gaining resumable gamepla
   });
 });
 
-test('Pause Menu launches Store over the paused Arena and restores the pause screen', () => {
+test('Pause Menu launches Store over the paused Arena and Return To Game restores gameplay', () => {
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   assert.match(arena, /scene\.pause\(\);[\s\S]*?scene\.launch\(SceneKeys\.Upgrades, \{ returnScene: SceneKeys\.Arena, resumePausedScene: true \}\)/);
   assert.match(arena, /events\.on\('return-from-store', this\.onReturnFromStore\)/);
-  assert.match(arena, /events\.on\('quit-from-store', this\.onQuitFromStore\)/);
+  assert.match(arena, /onReturnFromStore[\s\S]*?if \(this\.state\.state === RoundState\.Paused\) this\.resumeGameplay\(\)/);
 });
 
 test('both Store scenes validate return data before rendering a secondary return button', () => {
@@ -54,8 +54,26 @@ test('both Store scenes validate return data before rendering a secondary return
     const source = readFileSync(new URL(`../src/game/scenes/${scene}`, import.meta.url), 'utf8');
     assert.match(source, /resolveStoreReturnRoute\(data, arenaCanResume\)/);
     assert.match(source, /returnRoute\.returnScene === SceneKeys\.MainMenu \? undefined/);
+    assert.match(source, /onBack: returnRoute\.returnScene === SceneKeys\.Arena \? undefined/);
+    assert.match(source, /returnRoute\.returnScene === SceneKeys\.Arena \? 'RETURN TO GAME'/);
     assert.match(source, /this\.scene\.isPaused\(SceneKeys\.Arena\) && this\.registry\.has\('arena-session'\)/);
   }
+});
+
+test('active-run Store removes Main Menu from both DOM and controller focus instead of disabling it', () => {
+  const ui = readFileSync(new URL('../src/ui/stores/StorefrontUi.ts', import.meta.url), 'utf8');
+  assert.match(ui, /if \(this\.options\.onBack\) \{[\s\S]*?back\.textContent = 'MAIN MENU'/);
+  assert.match(ui, /onBack\?\(\): void/);
+  assert.doesNotMatch(ui, /back\.disabled\s*=/);
+});
+
+test('Store card navigation exposes stable IDs and a shared geometric grid group', () => {
+  const ui = readFileSync(new URL('../src/ui/stores/StorefrontUi.ts', import.meta.url), 'utf8');
+  const controller = readFileSync(new URL('../src/game/input/UiNavigationController.ts', import.meta.url), 'utf8');
+  assert.match(ui, /controllerFocusId = `store-card-\$\{id\}`/);
+  assert.match(ui, /controllerGroup = 'store-card-grid'/);
+  assert.match(controller, /element\.classList\.contains\('store-card'\) \? 'store-card-grid'/);
+  assert.match(controller, /!element\.classList\.contains\('store-card'\)/);
 });
 
 test('Upgrade and Cosmetic modes share the same layered cyber-console storefront shell', () => {

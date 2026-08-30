@@ -35,6 +35,7 @@ export interface ModCardViewOptions {
   focusModalDepth?: number;
   focusDefaultPriority?: number;
   focusLocked?: boolean;
+  focusGroup?: string;
 }
 
 const resolveCardMotion = (requested?: HudAnimationLevel): HudAnimationLevel => {
@@ -340,7 +341,8 @@ export const createModCardView = (
       activate: () => container.emit('pointerdown'),
       modalDepth: options.focusModalDepth,
       defaultPriority: options.focusDefaultPriority ?? (options.selected ? 12 : 0),
-      locked: () => options.focusLocked === true
+      locked: () => options.focusLocked === true,
+      group: options.focusGroup
     });
     container.on('pointerover', () => {
       AudioManager.get().playSfx('menuHover');

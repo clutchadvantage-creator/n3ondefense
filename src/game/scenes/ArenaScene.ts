@@ -43,6 +43,7 @@ import { startArenaLoad } from '../utils/runFlow';
 import { createButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { GameplayPointerLock } from '../input/GameplayPointerLock';
+import { configureSceneUiNavigation } from '../input/UiNavigationController.ts';
 import { PlayerInput } from '../input/PlayerInput.ts';
 import type { InputDevice } from '../input/ActionInput.ts';
 import { MineSalvoInput, type MineSalvoInputResolution } from '../input/MineSalvoInput.ts';
@@ -675,7 +676,7 @@ export class ArenaScene extends Phaser.Scene {
   };
   private readonly onReturnFromStore = (): void => {
     this.refreshHudWallet();
-    if (this.state.state === RoundState.Paused) this.showPauseMenu();
+    if (this.state.state === RoundState.Paused) this.resumeGameplay();
   };
   private readonly onQuitFromStore = (): void => this.quitToMenu();
   private readonly onAnomalyReturn = (result: AnomalyReturnResult): void => {
@@ -7888,6 +7889,7 @@ export class ArenaScene extends Phaser.Scene {
     this.hidePauseMenu();
     this.setMenuCursorMode();
     this.pauseMenuOpenedAt = Date.now();
+    configureSceneUiNavigation(this, { onBack: () => this.resumeGameplay() });
 
     this.pauseMenu = createPauseMenuView(this, {
       encounter: this.supremeFinale
@@ -7921,6 +7923,7 @@ export class ArenaScene extends Phaser.Scene {
   private showEquippedModsViewer(): void {
     this.hidePauseMenu();
     this.hideEquippedModsViewer();
+    configureSceneUiNavigation(this, { onBack: () => { this.hideEquippedModsViewer(); this.showPauseMenu(); } });
     const { width, height } = this.scale;
     const panelWidth = Math.min(width - 40, 1080);
     const panelHeight = Math.min(height - 32, 520);

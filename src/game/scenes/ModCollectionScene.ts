@@ -216,7 +216,7 @@ export class ModCollectionScene extends Phaser.Scene {
         + (index % archiveLayout.columns) * (archiveLayout.cardWidth + archiveLayout.cardGapX);
       const y = archiveLayout.cardGridTop + archiveLayout.cardHeight / 2
         + Math.floor(index / archiveLayout.columns) * (archiveLayout.cardHeight + archiveLayout.cardGapY);
-      const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: archiveLayout.cardWidth, height: archiveLayout.cardHeight, selected: card.instanceId === this.selectedCardId, compact: true, equipped: equippedCardIds.has(card.instanceId), duplicateCount: Math.max(0, (copyCounts.get(card.modId) ?? 1) - 1) });
+      const view = createModCardView(this, x, y, card, card.upgradeLevel, { width: archiveLayout.cardWidth, height: archiveLayout.cardHeight, selected: card.instanceId === this.selectedCardId, compact: true, equipped: equippedCardIds.has(card.instanceId), duplicateCount: Math.max(0, (copyCounts.get(card.modId) ?? 1) - 1), focusGroup: 'mod-collection-card-grid' });
       view.on('pointerdown', () => {
         AudioManager.get().playSfx('menu');
         this.selectedCardId = card.instanceId;

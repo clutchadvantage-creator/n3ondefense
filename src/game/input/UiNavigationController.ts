@@ -326,7 +326,7 @@ class DomNavigationLayer implements NavigationLayer {
   }
 
   private refresh(): void {
-    const selector = 'button:not([data-controller-ignore="true"]), [role="button"]:not([data-controller-ignore="true"]), [role="tab"]:not([data-controller-ignore="true"]), input[type="range"]:not([data-controller-ignore="true"]), .store-card:not([data-controller-ignore="true"]), .profile-card:not([data-controller-ignore="true"])';
+    const selector = 'button:not([data-controller-ignore="true"]), [role="button"]:not([data-controller-ignore="true"]), [role="tab"]:not([data-controller-ignore="true"]), input:not([type="hidden"]):not([type="file"]):not([data-controller-ignore="true"]), select:not([data-controller-ignore="true"]), textarea:not([data-controller-ignore="true"]), .store-card:not([data-controller-ignore="true"]), .profile-card:not([data-controller-ignore="true"])';
     const elements = [...this.root.querySelectorAll<HTMLElement>(selector)];
     const present = new Set(elements);
     for (const [element, unregister] of this.controls) {
@@ -347,10 +347,18 @@ class DomNavigationLayer implements NavigationLayer {
       const focusKey = element.dataset.controllerFocusId ?? base;
       const modalDepth = element.closest('.store-dialog-backdrop, .profile-modal-backdrop, [role="dialog"], .feedback-modal, .tutorial-overlay:not([hidden])') ? 1 : 0;
       const input = element instanceof HTMLInputElement && element.type === 'range' ? element : null;
+      const tabGroup = element.dataset.controllerTabGroup;
+      const group = element.dataset.controllerGroup
+        ?? (tabGroup ? `tabs:${tabGroup}` : undefined)
+        ?? (element.classList.contains('store-card') ? 'store-card-grid' : undefined)
+        ?? (element.classList.contains('profile-card') ? 'profile-card-grid' : undefined);
       const control: UiFocusableControl = {
         id,
         getRect: () => elementRect(element),
-        activate: () => element.click(),
+        activate: () => {
+          if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) element.focus({ preventScroll: true });
+          else element.click();
+        },
         setFocused: (focused) => {
           element.classList.toggle('controller-focus', focused);
           if (focused) {
@@ -360,8 +368,20 @@ class DomNavigationLayer implements NavigationLayer {
           }
         },
         isVisible: () => isVisibleElement(element),
-        isDisabled: () => element instanceof HTMLButtonElement ? element.disabled : element.getAttribute('aria-disabled') === 'true' && !element.classList.contains('locked'),
-        isLocked: () => element.classList.contains('locked') || element.dataset.locked === 'true',
+        isDisabled: () => element.matches(':disabled')
+          || (element.getAttribute('aria-disabled') === 'true' && !element.classList.contains('locked')),
+        // Store cards remain selectable for inspection even when their
+        // purchase action is unavailable. Only an explicit controller lock (or
+        // a non-card legacy lock) blocks activation.
+        isLocked: () => element.dataset.controllerLocked === 'true'
+          || (!element.classList.contains('store-card') && (element.classList.contains('locked') || element.dataset.locked === 'true')),
+        group,
+        neighbors: {
+          up: element.dataset.controllerUp,
+          down: element.dataset.controllerDown,
+          left: element.dataset.controllerLeft,
+          right: element.dataset.controllerRight
+        },
         modalDepth,
         defaultPriority: element.classList.contains('store-card') && element.classList.contains('selected')
           ? 30
@@ -374,6 +394,12 @@ class DomNavigationLayer implements NavigationLayer {
           input.value = `${Math.max(Number(input.min) || 0, Math.min(Number(input.max) || 100, Number(input.value) + direction * step))}`;
           input.dispatchEvent(new Event('input', { bubbles: true }));
           input.dispatchEvent(new Event('change', { bubbles: true }));
+        } : element instanceof HTMLSelectElement ? (direction) => {
+          const next = Math.max(0, Math.min(element.options.length - 1, element.selectedIndex + direction));
+          if (next === element.selectedIndex) return;
+          element.selectedIndex = next;
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+          element.dispatchEvent(new Event('change', { bubbles: true }));
         } : undefined,
         scroll: (amount) => {
           const scrollable = nearestScrollable(element);
@@ -485,7 +511,7 @@ export class UiNavigationController {
     for (const candidate of this.layers) candidate.drawFocus(now, this.device === 'gamepad' && candidate === layer);
     this.updateHints(layer);
     if (!layer || this.device !== 'gamepad') return;
-    const direction = this.heldDirection();
+    const direction = this.heldDirection(pad.uiNavigateX, pad.uiNavigateY, pad.uiAxisX, pad.uiAxisY);
     const hasUiAction = Boolean(direction)
       || this.states.pressed('confirm') || this.states.pressed('cancel')
       || this.states.pressed('tabLeft') || this.states.pressed('tabRight')
@@ -529,7 +555,14 @@ export class UiNavigationController {
     return active;
   }
 
-  private heldDirection(): UiFocusDirection | null {
+  private heldDirection(uiX: -1 | 0 | 1, uiY: -1 | 0 | 1, analogX: number, analogY: number): UiFocusDirection | null {
+    // Resolve a diagonal analog gesture by its dominant axis. D-pad cardinal
+    // input remains deterministic, while every stick quadrant can still reach
+    // both rows and columns without permanent vertical bias.
+    if (uiX !== 0 && uiY !== 0) {
+      if (Math.abs(analogX) >= Math.abs(analogY)) return uiX < 0 ? 'left' : 'right';
+      return uiY < 0 ? 'up' : 'down';
+    }
     if (this.states.held('navigateUp')) return 'up';
     if (this.states.held('navigateDown')) return 'down';
     if (this.states.held('navigateLeft')) return 'left';

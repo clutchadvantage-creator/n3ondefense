@@ -23,7 +23,8 @@ const control = (id, bounds, options = {}) => ({
   destructive: options.destructive,
   adjust: options.adjust,
   scroll: options.scroll,
-  neighbors: options.neighbors
+  neighbors: options.neighbors,
+  group: options.group
 });
 
 test('focus chooses the safest high-priority default and never defaults destructive', () => {
@@ -46,6 +47,30 @@ test('geometric navigation follows visible rows and columns and honors explicit 
   manager.focus('a');
   assert.equal(manager.move('down'), true);
   assert.equal(manager.currentId, 'c');
+});
+
+test('grouped card grids prefer real row and column neighbors over nearby controls outside the grid', () => {
+  const manager = new UiFocusManager();
+  manager.register(control('card-a', rect(100, 100, 80, 100), { group: 'cards' }));
+  manager.register(control('card-b', rect(200, 100, 80, 100), { group: 'cards' }));
+  manager.register(control('card-c', rect(100, 220, 80, 100), { group: 'cards' }));
+  manager.register(control('detail-action', rect(188, 112, 20, 30)));
+  manager.focus('card-a');
+  assert.equal(manager.move('right'), true);
+  assert.equal(manager.currentId, 'card-b', 'horizontal card navigation stays in its rendered row');
+  manager.focus('card-a');
+  assert.equal(manager.move('down'), true);
+  assert.equal(manager.currentId, 'card-c', 'vertical navigation reaches an incomplete final row');
+});
+
+test('group edges remain escapable so card grids and tab rails cannot trap focus', () => {
+  const manager = new UiFocusManager();
+  manager.register(control('card-a', rect(100, 100, 80, 100), { group: 'cards' }));
+  manager.register(control('card-b', rect(200, 100, 80, 100), { group: 'cards' }));
+  manager.register(control('details', rect(330, 100, 100, 80)));
+  manager.focus('card-b');
+  assert.equal(manager.move('right'), true);
+  assert.equal(manager.currentId, 'details');
 });
 
 test('disabled controls are skipped while locked controls remain inspectable but cannot activate', () => {
@@ -137,6 +162,10 @@ test('UI thresholds stay independent of configurable gameplay dead zones and rig
   assert.equal(belowUiThreshold.uiScrollY, 0);
   const deliberate = reader.poll([pad([0.82, 0, 0, 0.7])], settings);
   assert.equal(deliberate.held('navigateRight'), true);
+  assert.equal(deliberate.uiNavigateX, 1);
+  assert.equal(deliberate.uiNavigateY, 0);
+  assert.equal(deliberate.uiAxisX, 0.82);
+  assert.equal(deliberate.uiAxisY, 0);
   assert.equal(deliberate.uiScrollY, 0.7);
 });
 

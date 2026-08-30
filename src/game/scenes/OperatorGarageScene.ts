@@ -805,7 +805,8 @@ export class OperatorGarageScene extends Phaser.Scene {
         horizontalPadding: compact ? 34 : 52,
         focusModalDepth: 30,
         focusDefaultPriority: focusTarget === `signal:${option.id ?? 'none'}` ? 90 : selected ? 35 : 0,
-        focusLabel: `SIGNAL ${option.label}`
+        focusLabel: `SIGNAL ${option.label}`,
+        focusGroup: 'run-configuration-signals'
       });
       root.add(button);
     });
@@ -858,7 +859,8 @@ export class OperatorGarageScene extends Phaser.Scene {
         horizontalPadding: compact ? 46 : 64,
         focusModalDepth: 30,
         focusDefaultPriority: focusTarget === `contract:${option.id ?? 'none'}` ? 90 : selected ? 35 : 0,
-        focusLabel: `CONTRACT ${option.label}`
+        focusLabel: `CONTRACT ${option.label}`,
+        focusGroup: 'run-configuration-contracts'
       });
       root.add(button);
       root.add(this.add.text(rightX, y + (density === 'compressed' ? 21 : compact ? 26 : 31), option.description, {
@@ -894,7 +896,8 @@ export class OperatorGarageScene extends Phaser.Scene {
         this.showLibrary();
       }, layout.toolbarButtonWidth, index === 2 ? 'utility' : 'standard', {
         height: layout.toolbarButtonHeight,
-        fontSize: layout.compact ? 11 : 13
+        fontSize: layout.compact ? 11 : 13,
+        focusGroup: 'mod-library-toolbar'
       }));
     });
     const recalibrationX = layout.grid.x + layout.toolbarButtonWidth / 2 + 3 * (layout.toolbarButtonWidth + toolbarGap);
@@ -909,7 +912,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     }, layout.toolbarButtonWidth, 'utility', {
       height: layout.toolbarButtonHeight,
       fontSize: layout.compact ? 9 : 11,
-      focusDefaultPriority: 24
+      focusDefaultPriority: 24,
+      focusGroup: 'mod-library-toolbar'
     }));
 
     root.add(createModCollectionFrame(this, layout.grid, 'DATABASE INDEX // THREE-ROW ARCHIVE', 0x55eaff));
@@ -934,7 +938,8 @@ export class OperatorGarageScene extends Phaser.Scene {
         height: layout.cardHeight,
         compact: true,
         selected: entry.definition.id === this.librarySelectedId,
-        rankLabel: entry.owned ? undefined : 'R—'
+        rankLabel: entry.owned ? undefined : 'R—',
+        focusGroup: 'mod-library-card-grid'
       });
       view.setDepth(2002).setAlpha(entry.status === 'owned' ? 1 : entry.status === 'discovered' ? 0.72 : 0.48).on('pointerdown', () => {
         this.audio.playSfx('menu');
@@ -1372,7 +1377,8 @@ export class OperatorGarageScene extends Phaser.Scene {
       }, tabWidth, 'standard', {
         height: layout.categoryHeight,
         fontSize: layout.compact ? 9 : Phaser.Math.Clamp(tabWidth / 12, 10, 13),
-        horizontalPadding: layout.compact ? 16 : 24
+        horizontalPadding: layout.compact ? 16 : 24,
+        focusGroup: 'gear-locker-categories'
       });
       button.setAlpha(active ? 1 : 0.66);
       const label = button.getByName('button-label') as Phaser.GameObjects.Text | null;
@@ -1471,6 +1477,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     });
     registerUiFocusable(this, root, {
       label: `${item.label} ${equipped ? 'equipped' : 'owned cosmetic'}`,
+      group: 'gear-locker-card-grid',
       defaultPriority: equipped ? 40 : 0,
       activate: () => {
         SaveSystem.equipCosmetic(item.category, item.id);
@@ -1779,6 +1786,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       });
       registerUiFocusable(this, hitZone, {
         label: `${definition.label} ${unlocked ? selected ? 'active' : 'unlocked' : 'locked'}`,
+        group: 'overdrive-protocol-grid',
         locked: () => !unlocked,
         defaultPriority: selected ? 60 : unlocked ? 10 : 0
       });
@@ -1838,7 +1846,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         this.exchangeConfirmationArmed = true;
         this.status = '';
         this.showCurrencyExchange();
-      }, tabWidth, 'menu', { height: compact ? 32 : 40, fontSize: compact ? 13 : 16, focusModalDepth: 30, focusDefaultPriority: selected ? 35 : 0 }));
+      }, tabWidth, 'menu', { height: compact ? 32 : 40, fontSize: compact ? 13 : 16, focusModalDepth: 30, focusDefaultPriority: selected ? 35 : 0, focusGroup: 'economy-console-tabs' }));
     });
 
     const walletTop = compact ? 106 : 119;
@@ -1930,7 +1938,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const actionWidth = (rect.width - 34 - actionGap * 4) / 5;
     actions.forEach((action, index) => root.add(createButton(this, rect.x + 17 + actionWidth / 2 + index * (actionWidth + actionGap), amountY + (compact ? 65 : 78), action.label, () => {
       this.exchangeAmount = action.amount(); this.exchangeConfirmationArmed = true; this.status = ''; this.showCurrencyExchange();
-    }, actionWidth, 'menu', { height: compact ? 30 : 36, fontSize: compact ? 10 : 13, focusModalDepth: 30 })));
+    }, actionWidth, 'menu', { height: compact ? 30 : 36, fontSize: compact ? 10 : 13, focusModalDepth: 30, focusGroup: 'currency-exchange-amounts' })));
 
     const previewTop = amountY + (compact ? 91 : 113);
     panel.add(this.add.rectangle(17, previewTop - rect.y, rect.width - 34, short ? 52 : compact ? 98 : 121, quote.ok ? 0x113039 : 0x37131e, 0.88).setOrigin(0).setStrokeStyle(1, quote.ok ? 0x62efff : 0xff6f89, 0.52));

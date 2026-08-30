@@ -78,6 +78,7 @@ export interface ButtonPresentationOptions {
   focusDefaultPriority?: number;
   focusShortcut?: 'page-left' | 'page-right' | 'tab-left' | 'tab-right';
   focusLabel?: string;
+  focusGroup?: string;
 }
 
 export const createButton = (
@@ -103,9 +104,16 @@ export const createButton = (
     wordWrap: { width: Math.max(40, width - horizontalPadding), useAdvancedWrap: true }
   }).setOrigin(0.5).setMaxLines(2).setName('button-label');
 
-  const hit = scene.add.rectangle(0, 0, width, height, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+  // These are screen-space UI controls. Arena's camera can be scrolled far
+  // from the world origin; Phaser reads the interactive child's scroll factor
+  // independently of a screen-fixed ancestor Container. Keeping the hit target
+  // at scroll factor zero makes its pointer geometry match the rendered button
+  // at every camera position and viewport scale.
+  const hit = scene.add.rectangle(0, 0, width, height, 0xffffff, 0.001)
+    .setScrollFactor(0)
+    .setInteractive({ useHandCursor: true });
   hit.setName('button-hit');
-  const button = scene.add.container(x, y, [bg, label, hit]);
+  const button = scene.add.container(x, y, [bg, label, hit]).setScrollFactor(0);
   const state: ButtonAudioState = { enabled: true, jiggleTargets: [button] };
   buttonAudioStates.set(button, state);
   hit.on('pointerover', () => {
@@ -137,6 +145,7 @@ export const createButton = (
     modalDepth: presentation.focusModalDepth,
     defaultPriority: presentation.focusDefaultPriority ?? (/^(?:deploy|start|continue|resume|ready|engage|next fight)/i.test(normalizedLabel) ? 30 : 0),
     destructive: /delete|quit|restart|reset progress/i.test(normalizedLabel),
+    group: presentation.focusGroup,
     shortcut: presentation.focusShortcut ?? (isPrevious ? 'page-left' : isNext ? 'page-right' : undefined)
   });
 

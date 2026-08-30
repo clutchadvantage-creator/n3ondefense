@@ -134,6 +134,12 @@ export interface GamepadPollResult {
   aim: MutableStick;
   /** Raw UI scroll intent uses a fixed threshold, independent of aim settings. */
   uiScrollY: number;
+  /** Fixed-threshold menu intent, independent of gameplay stick settings. */
+  uiNavigateX: -1 | 0 | 1;
+  uiNavigateY: -1 | 0 | 1;
+  /** Unmodified left-stick axes used only to resolve diagonal UI intent. */
+  uiAxisX: number;
+  uiAxisY: number;
   held: (action: InputAction) => boolean;
 }
 
@@ -146,6 +152,8 @@ export class StandardGamepadReader {
   private readonly heldActions = new Uint8Array(INPUT_ACTIONS.length);
   private uiNavigateX: -1 | 0 | 1 = 0;
   private uiNavigateY: -1 | 0 | 1 = 0;
+  private uiAxisX = 0;
+  private uiAxisY = 0;
   private uiScrollY = 0;
   private connected = false;
   private supported = false;
@@ -167,6 +175,10 @@ export class StandardGamepadReader {
       move: this.move,
       aim: this.aim,
       uiScrollY: 0,
+      uiNavigateX: 0,
+      uiNavigateY: 0,
+      uiAxisX: 0,
+      uiAxisY: 0,
       held: (action) => this.heldActions[ACTION_INDEX[action]] === 1
     };
   }
@@ -202,6 +214,11 @@ export class StandardGamepadReader {
     if (!this.supported) {
       this.move.x = this.move.y = this.move.magnitude = 0;
       this.aim.x = this.aim.y = this.aim.magnitude = 0;
+      this.uiNavigateX = 0;
+      this.uiNavigateY = 0;
+      this.uiAxisX = 0;
+      this.uiAxisY = 0;
+      this.uiScrollY = 0;
       this.meaningful = false;
       this.freshActivity = false;
       return this.syncResult();
@@ -229,8 +246,10 @@ export class StandardGamepadReader {
     // Menu navigation deliberately does not inherit gameplay dead-zone or aim
     // sensitivity settings. Hysteresis rejects drift without making Options
     // capable of configuring its own navigation into an unusable state.
-    this.uiNavigateX = this.digitalAxis(pad.axes[0] ?? 0, this.uiNavigateX);
-    this.uiNavigateY = this.digitalAxis(pad.axes[1] ?? 0, this.uiNavigateY);
+    this.uiAxisX = pad.axes[0] ?? 0;
+    this.uiAxisY = pad.axes[1] ?? 0;
+    this.uiNavigateX = this.digitalAxis(this.uiAxisX, this.uiNavigateX);
+    this.uiNavigateY = this.digitalAxis(this.uiAxisY, this.uiNavigateY);
     const rawScroll = pad.axes[3] ?? 0;
     this.uiScrollY = Math.abs(rawScroll) >= 0.28 ? rawScroll : 0;
     set('navigateUp', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.dpadUp) || this.uiNavigateY < 0);
@@ -292,6 +311,8 @@ export class StandardGamepadReader {
     this.heldActions.fill(0);
     this.uiNavigateX = 0;
     this.uiNavigateY = 0;
+    this.uiAxisX = 0;
+    this.uiAxisY = 0;
     this.uiScrollY = 0;
     this.priorInputs.clear();
   }
@@ -305,6 +326,10 @@ export class StandardGamepadReader {
     this.result.meaningful = this.meaningful;
     this.result.freshActivity = this.freshActivity;
     this.result.uiScrollY = this.uiScrollY;
+    this.result.uiNavigateX = this.uiNavigateX;
+    this.result.uiNavigateY = this.uiNavigateY;
+    this.result.uiAxisX = this.uiAxisX;
+    this.result.uiAxisY = this.uiAxisY;
     return this.result;
   }
 

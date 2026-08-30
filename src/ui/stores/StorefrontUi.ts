@@ -37,7 +37,7 @@ export interface StorefrontUiOptions {
   upgrades?: UpgradeDefinition[];
   particlesEnabled: boolean;
   getSnapshot(): StoreSnapshot;
-  onBack(): void;
+  onBack?(): void;
   onReturn?(): void;
   returnLabel?: string;
   onUnlock?(item: CosmeticOption): StoreActionResult;
@@ -215,16 +215,22 @@ export class StorefrontUi {
       const returnToGame = document.createElement('button');
       returnToGame.type = 'button';
       returnToGame.className = 'store-back game';
+      returnToGame.dataset.controllerFocusId = 'store-return';
+      returnToGame.dataset.controllerGroup = 'store-header-actions';
       returnToGame.textContent = this.options.returnLabel ?? 'BACK';
       returnToGame.addEventListener('click', this.options.onReturn);
       actions.append(returnToGame);
     }
-    const back = document.createElement('button');
-    back.type = 'button';
-    back.className = 'store-back';
-    back.textContent = 'MAIN MENU';
-    back.addEventListener('click', this.options.onBack);
-    actions.append(back);
+    if (this.options.onBack) {
+      const back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'store-back';
+      back.dataset.controllerFocusId = 'store-main-menu';
+      back.dataset.controllerGroup = 'store-header-actions';
+      back.textContent = 'MAIN MENU';
+      back.addEventListener('click', this.options.onBack);
+      actions.append(back);
+    }
     header.append(branding, wallet, actions);
     return header;
   }
@@ -405,6 +411,8 @@ export class StorefrontUi {
     card.type = 'button';
     card.className = `store-card ${classes} ${id === this.selectedId ? 'selected' : ''}`;
     card.dataset.itemId = id;
+    card.dataset.controllerFocusId = `store-card-${id}`;
+    card.dataset.controllerGroup = 'store-card-grid';
     if (locked) card.dataset.locked = 'true';
     card.addEventListener('click', () => {
       this.selectedId = id;
@@ -455,6 +463,7 @@ export class StorefrontUi {
     const action = document.createElement('button');
     action.type = 'button';
     action.className = 'store-action';
+    action.dataset.controllerFocusId = `store-action-${item.id}`;
     const unavailable = equipped || (!owned && !affordable) || this.actionLocked;
     action.dataset.menuAudio = 'deferred';
     action.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
@@ -504,6 +513,7 @@ export class StorefrontUi {
     const action = document.createElement('button');
     action.type = 'button';
     action.className = 'store-action';
+    action.dataset.controllerFocusId = `store-action-${item.id}`;
     action.dataset.tutorialTarget = 'store.upgrade-action';
     const unavailable = maxed || !affordable || this.actionLocked;
     action.dataset.menuAudio = 'deferred';
@@ -614,9 +624,9 @@ export class StorefrontUi {
     body.textContent = bodyText;
     const actions = document.createElement('div');
     const cancel = document.createElement('button');
-    cancel.type = 'button'; cancel.textContent = 'CANCEL';
+    cancel.type = 'button'; cancel.textContent = 'CANCEL'; cancel.dataset.controllerFocusId = 'store-dialog-cancel'; cancel.dataset.controllerGroup = 'store-dialog-actions';
     const confirm = document.createElement('button');
-    confirm.type = 'button'; confirm.className = 'confirm'; confirm.textContent = confirmText;
+    confirm.type = 'button'; confirm.className = 'confirm'; confirm.textContent = confirmText; confirm.dataset.controllerFocusId = 'store-dialog-confirm'; confirm.dataset.controllerGroup = 'store-dialog-actions';
     const close = (): void => { this.dialogOpen = false; backdrop.remove(); };
     cancel.addEventListener('click', close);
     confirm.addEventListener('click', () => { close(); onConfirm(); });
@@ -766,7 +776,7 @@ export class StorefrontUi {
   }
 
   private handleKey(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && !this.dialogOpen) { (this.options.onReturn ?? this.options.onBack)(); return; }
+    if (event.key === 'Escape' && !this.dialogOpen) { (this.options.onReturn ?? this.options.onBack)?.(); return; }
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
     const cards = Array.from(this.options.root.querySelectorAll<HTMLButtonElement>('.store-card'));
     if (cards.length === 0) return;

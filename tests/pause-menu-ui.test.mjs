@@ -48,3 +48,12 @@ test('pause menu uses the shared cyber-console presentation and keeps every exis
   assert.match(arena, /this\.pointerLock\?\.showResume\(\)/);
   assert.doesNotMatch(arena, /JustDown\(this\.keys\.esc\)/);
 });
+
+test('shared Phaser buttons keep Arena hit targets in screen space and Equipped Mods owns a controller Back route', () => {
+  const buttons = readFileSync(new URL('../src/game/utils/ui.ts', import.meta.url), 'utf8');
+  const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+  assert.match(buttons, /scene\.add\.rectangle\(0, 0, width, height, 0xffffff, 0\.001\)[\s\S]*?\.setScrollFactor\(0\)[\s\S]*?\.setInteractive/);
+  assert.match(buttons, /scene\.add\.container\(x, y, \[bg, label, hit\]\)\.setScrollFactor\(0\)/);
+  assert.match(arena, /showEquippedModsViewer\(\)[\s\S]*?configureSceneUiNavigation\(this, \{ onBack: \(\) => \{ this\.hideEquippedModsViewer\(\); this\.showPauseMenu\(\); \} \}\)/);
+  assert.doesNotMatch(arena, /pointerY\s*[-+]=|pointer\.y\s*[-+]/);
+});

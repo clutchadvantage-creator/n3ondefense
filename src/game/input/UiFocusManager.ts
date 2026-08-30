@@ -139,10 +139,26 @@ export class UiFocusManager {
     const originRect = current.getRect();
     if (!isFiniteRect(originRect)) return false;
     const origin = center(originRect);
+    const eligible = this.eligibleControls().filter((candidate) => candidate.id !== current.id);
+    // Repeating card grids and tab rails should behave as coherent controls,
+    // not as a cloud of unrelated rectangles. Prefer a candidate in the same
+    // authored group when one exists in the requested visual lane, then fall
+    // back to the complete screen so focus can naturally leave the group at an
+    // edge. This remains layout-driven and supports incomplete final rows.
+    const sameGroupLane = current.group
+      ? eligible.filter((candidate) => candidate.group === current.group && this.isInDirectionalLane(originRect, candidate.getRect(), direction))
+      : [];
+    const outsideGroup = current.group
+      ? eligible.filter((candidate) => candidate.group !== current.group)
+      : [];
+    const candidates = sameGroupLane.length > 0
+      ? sameGroupLane
+      : current.group && outsideGroup.length > 0
+        ? outsideGroup
+        : eligible;
     let best: UiFocusableControl | null = null;
     let bestScore = Number.POSITIVE_INFINITY;
-    for (const candidate of this.eligibleControls()) {
-      if (candidate.id === current.id) continue;
+    for (const candidate of candidates) {
       const rect = candidate.getRect();
       if (!isFiniteRect(rect)) continue;
       const point = center(rect);
@@ -162,6 +178,25 @@ export class UiFocusManager {
     if (!best) return false;
     this.applyFocus(best.id);
     return true;
+  }
+
+  private isInDirectionalLane(origin: UiFocusRect, candidate: UiFocusRect, direction: UiFocusDirection): boolean {
+    if (!isFiniteRect(candidate)) return false;
+    const from = center(origin);
+    const to = center(candidate);
+    if (direction === 'left' || direction === 'right') {
+      const primary = direction === 'left' ? from.x - to.x : to.x - from.x;
+      if (primary <= 1) return false;
+      const overlap = Math.min(origin.y + origin.height, candidate.y + candidate.height) - Math.max(origin.y, candidate.y);
+      return overlap > 0 || Math.abs(to.y - from.y) <= Math.max(origin.height, candidate.height) * 0.6;
+    }
+    const primary = direction === 'up' ? from.y - to.y : to.y - from.y;
+    if (primary <= 1) return false;
+    // Vertical grid navigation may need to reach a shorter/incomplete final
+    // row. A generous column lane selects the nearest real card without
+    // hardcoding a catalog column count.
+    const overlap = Math.min(origin.x + origin.width, candidate.x + candidate.width) - Math.max(origin.x, candidate.x);
+    return overlap > 0 || Math.abs(to.x - from.x) <= Math.max(origin.width, candidate.width) * 1.35;
   }
 
   activate(): UiActivationResult {
