@@ -6,11 +6,13 @@ import { SaveSystem } from '../systems/SaveSystem';
 import { getGameUiRoot } from '../../ui/getGameUiRoot';
 import { LocalProfilesUi, type LocalProfilesUiHandle } from '../../ui/local-profiles/LocalProfilesUi';
 import { downloadJsonFile, pickJsonFile, showConfirmDialog, showInfoDialog, showNameInputDialog, type DialogHandle } from '../../ui/local-profiles/ProfileDialogs';
+import { ProfileArchiveBackdrop } from '../rendering/ProfileArchiveBackdrop.ts';
 
 export class LocalProfileScene extends Phaser.Scene {
   private profileUi?: LocalProfilesUiHandle;
   private selectedProfileId: string | null = null;
   private activeDialog: DialogHandle | null = null;
+  private archiveBackdrop: ProfileArchiveBackdrop | null = null;
 
   constructor() {
     super(SceneKeys.LocalProfiles);
@@ -18,6 +20,8 @@ export class LocalProfileScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(0x04070d);
+    this.archiveBackdrop = new ProfileArchiveBackdrop(this);
+    this.scale.on('resize', this.handleResize, this);
     this.mountUi();
 
     const legacy = LocalSaveManager.detectLegacyProgress();
@@ -349,7 +353,14 @@ export class LocalProfileScene extends Phaser.Scene {
     this.activeDialog = null;
   }
 
+  private readonly handleResize = (gameSize: Phaser.Structs.Size): void => {
+    this.archiveBackdrop?.resize(gameSize.width, gameSize.height);
+  };
+
   private shutdown(): void {
+    this.scale.off('resize', this.handleResize, this);
+    this.archiveBackdrop?.destroy();
+    this.archiveBackdrop = null;
     this.closeActiveDialog();
     this.profileUi?.destroy();
     this.profileUi = undefined;
