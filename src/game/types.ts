@@ -244,7 +244,15 @@ export type CosmeticVisualShape =
   | 'sword'
   | 'bubbles'
   | 'balloons'
-  | 'carrot';
+  | 'carrot'
+  | 'medicalNeedle'
+  | 'hardwareBolt'
+  | 'alienGoo'
+  | 'cerealLoop'
+  | 'fly'
+  | 'joint'
+  | 'tacticalMissile'
+  | 'teardrop';
 
 export type BombExplosionCosmeticEffectId = 'death-signal' | 'neon-bloom' | 'neon-bats' | 'witch-signal';
 export type DashTrailCosmeticEffectId = 'ion' | 'fire-smoke' | 'grass-clippings' | 'bubbles' | 'plasma' | 'jet-plume' | 'stars';
@@ -256,7 +264,8 @@ export type TurretSkinCosmeticEffectId =
   | 'hellfire-core'
   | 'arctic-zero'
   | 'mini-orbital'
-  | 'bomb-buddy';
+  | 'bomb-buddy'
+  | 'harbor-beacon';
 export type MineFrameCosmeticEffectId =
   | 'road-hazard'
   | 'lifeline'
@@ -284,6 +293,8 @@ export interface CosmeticOption {
   textureKey?: string;
   /** Optional untinted, authored-color texture used by Native Palette. */
   nativeTextureKey?: string;
+  /** Preserve authored projectile materials; equipped color drives emissive accents instead of flattening the texture. */
+  preserveNativePalette?: boolean;
   /** Optional presentation hints used by richer cosmetic viewers. */
   previewColor?: number;
   previewIcon?: string;

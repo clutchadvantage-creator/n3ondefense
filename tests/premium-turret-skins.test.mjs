@@ -21,10 +21,11 @@ const EXPECTED = new Map([
   ['turret-hellfire-core', 'hellfire-core'],
   ['turret-arctic-zero', 'arctic-zero'],
   ['turret-mini-orbital', 'mini-orbital'],
-  ['turret-bomb-buddy', 'bomb-buddy']
+  ['turret-bomb-buddy', 'bomb-buddy'],
+  ['turret-harbor-beacon', 'harbor-beacon']
 ]);
 
-test('all eight premium turret chassis are distinct multi-currency cosmetics', () => {
+test('all nine premium turret chassis are distinct multi-currency cosmetics', () => {
   for (const [id, effect] of EXPECTED) {
     const item = COSMETICS.find((candidate) => candidate.id === id);
     assert.ok(item, id);

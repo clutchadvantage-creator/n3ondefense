@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { starterWeapon } from '../../data/weapons';
 import { getUpgradeEffect, getUpgradeLevel } from '../../data/upgrades';
-import { getCosmeticById, getCosmeticTextureKey } from '../../data/cosmetics';
+import { getCosmeticById } from '../../data/cosmetics';
 import { COLORS, WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { OBJECTIVE_CONFIG } from '../config/gameplay';
 import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, TANK_HOMING_MISSILE_BALANCE, WEAPON_BALANCE, getConcurrentSpawnPressure, getDefuseAssigneeCount, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
@@ -80,6 +80,7 @@ import { BombExplosionCosmeticVfx } from '../cosmetics/BombExplosionCosmeticVfx.
 import { resolveMineFrameAppearance } from '../cosmetics/MineFrameAppearance.ts';
 import { OperativeShieldEffect } from '../vfx/OperativeShieldEffect.ts';
 import { BOMB_EXPLOSION_COSMETIC_DEFINITIONS } from '../cosmetics/BombExplosionCosmeticDefinitions.ts';
+import { resolveProjectileCosmeticPresentation } from '../cosmetics/ProjectileCosmeticPresentation.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
@@ -159,6 +160,8 @@ interface Projectile {
   grenadeArmedAt?: number;
   grenadeNextProximityCheckAt?: number;
   grenadeDetonated?: boolean;
+  nativePalette?: boolean;
+  emissiveColor?: number;
 }
 
 interface SupremeBridgeAwardOutcome {
@@ -382,6 +385,7 @@ export class ArenaScene extends Phaser.Scene {
   private projectileTextureKey = 'projectile-pulse';
   private projectileWidth = 8;
   private projectileHeight = 8;
+  private projectileNativePalette = false;
   private modsEarned: ModRewardRecord[] = [];
   private modDropSequence = 0;
   private physicalLootSequence = 0;
@@ -806,26 +810,13 @@ export class ArenaScene extends Phaser.Scene {
     this.prismFenceStyle = SaveSystem.isPrismCosmetic('fenceStyle');
     this.prismTurretSkin = SaveSystem.isPrismCosmetic('turretSkin');
     this.prismBombColor = SaveSystem.isPrismCosmetic('bombColor');
-    this.projectileTextureKey = getCosmeticTextureKey(SaveSystem.getEquippedCosmeticId('projectileShape'), 'projectile-pulse');
-    if (this.projectileTextureKey === 'projectile-missile' || this.projectileTextureKey === 'projectile-sword') {
-      this.projectileWidth = 17;
-      this.projectileHeight = 8;
-    } else if (this.projectileTextureKey === 'projectile-lightning') {
-      this.projectileWidth = 15;
-      this.projectileHeight = 10;
-    } else if (this.projectileTextureKey === 'projectile-carrot') {
-      this.projectileWidth = 16;
-      this.projectileHeight = 9;
-    } else if (this.projectileTextureKey === 'projectile-bubbles') {
-      this.projectileWidth = 13;
-      this.projectileHeight = 11;
-    } else if (this.projectileTextureKey === 'projectile-balloons') {
-      this.projectileWidth = 14;
-      this.projectileHeight = 13;
-    } else {
-      this.projectileWidth = 8;
-      this.projectileHeight = 8;
-    }
+    const projectilePresentation = resolveProjectileCosmeticPresentation(
+      getCosmeticById(SaveSystem.getEquippedCosmeticId('projectileShape'))
+    );
+    this.projectileTextureKey = projectilePresentation.textureKey;
+    this.projectileWidth = projectilePresentation.displayWidth;
+    this.projectileHeight = projectilePresentation.displayHeight;
+    this.projectileNativePalette = projectilePresentation.preserveNativePalette;
     this.modRuntime = new ModRuntime(SaveSystem.getModCollection(), session?.equippedMods, this.protocol);
     this.pickupPresentation = new GameplayPickupPresentation(
       this,
@@ -1673,7 +1664,20 @@ export class ArenaScene extends Phaser.Scene {
       }
       sprite.setActive(true).setVisible(true).setPosition(state.x, state.y);
       sprite.setTexture(state.texture).setOrigin(0.5).setScale(1).setDisplaySize(state.width, state.height);
-      sprite.clearTint().setTint(state.tint).setAlpha(1).setRotation(state.rotation).setDepth(state.depth);
+      const nativePalette = state.nativePalette ?? (
+        state.from !== 'enemy'
+        && (state.ammoMode ?? 'normal') === 'normal'
+        && state.texture === this.projectileTextureKey
+        && this.projectileNativePalette
+      );
+      sprite.clearTint();
+      if (!nativePalette) sprite.setTint(state.tint);
+      sprite.setAlpha(1).setRotation(state.rotation).setDepth(state.depth);
+      if (body && nativePalette) {
+        body.setSize(8 / Math.max(0.001, Math.abs(sprite.scaleX)), 8 / Math.max(0.001, Math.abs(sprite.scaleY)), true);
+      } else if (body) {
+        body.setSize(sprite.width, sprite.height, true);
+      }
 
       projectile.damage = state.damage;
       projectile.from = state.from;
@@ -1701,6 +1705,8 @@ export class ArenaScene extends Phaser.Scene {
       projectile.grenadeArmedAt = state.grenadeArmedAt ?? 0;
       projectile.grenadeNextProximityCheckAt = state.grenadeNextProximityCheckAt ?? 0;
       projectile.grenadeDetonated = false;
+      projectile.nativePalette = nativePalette;
+      projectile.emissiveColor = state.emissiveColor ?? state.tint;
       if (projectile.ammoMode === 'grenade') {
         projectile.grenadeShadow ??= this.add.circle(state.x, state.y + 3, 7, 0x02050a, 0.42)
           .setStrokeStyle(1, state.tint, 0.28).setDepth(state.depth - 1);
@@ -1751,6 +1757,8 @@ export class ArenaScene extends Phaser.Scene {
         projectile.grenadeArmedAt = 0;
         projectile.grenadeNextProximityCheckAt = 0;
         projectile.grenadeDetonated = false;
+        projectile.nativePalette = false;
+        projectile.emissiveColor = undefined;
         projectile.sprite.setOrigin(0.5);
         projectile.grenadeShadow?.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
       }
@@ -3234,20 +3242,27 @@ export class ArenaScene extends Phaser.Scene {
       );
 
       let visualTrailColor = p.trailColor;
+      let emissiveColor = p.emissiveColor ?? p.trailColor;
       const friendlyProjectile = p.from === 'player' || p.from === 'turret';
       const colorTime = now + (p.sprite.x + p.sprite.y) * 1.5;
       if (friendlyProjectile && this.prismProjectileColor) {
-        p.sprite.setTint(SaveSystem.getCosmeticColor('projectileColor', colorTime));
+        emissiveColor = SaveSystem.getCosmeticColor('projectileColor', colorTime);
+        if (!p.nativePalette) p.sprite.setTint(emissiveColor);
       }
       if (friendlyProjectile && this.prismTrailColor) {
         visualTrailColor = SaveSystem.getCosmeticColor('trailColor', colorTime);
       }
       if (friendlyProjectile && prismaticRounds) {
         visualTrailColor = this.infusionSpectrumColor((p.sprite.x + p.sprite.y) * 0.0007);
-        p.sprite.setTint(visualTrailColor);
+        emissiveColor = visualTrailColor;
+        if (!p.nativePalette) p.sprite.setTint(visualTrailColor);
       }
+      p.emissiveColor = emissiveColor;
       if (now >= p.nextTrailAt) {
         this.spawnProjectileTrail(p.sprite.x, p.sprite.y, visualTrailColor, now);
+        if (friendlyProjectile && p.nativePalette) {
+          this.projectileTrails?.emitAccent(p.sprite.x, p.sprite.y, emissiveColor, now);
+        }
         if (p.bossAttack) {
           const directionX = Math.cos(p.sprite.rotation);
           const directionY = Math.sin(p.sprite.rotation);
@@ -3285,7 +3300,7 @@ export class ArenaScene extends Phaser.Scene {
         ? 'weapon'
         : p.from === 'turret' ? 'turret' : 'enemy-projectile';
       if (p.ammoMode !== 'grenade' && this.fluxCores?.damagePoint(p.sprite.x, p.sprite.y, 7, p.damage, fluxSource)) {
-        this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.sprite.tintTopLeft);
+        this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.nativePalette ? (p.emissiveColor ?? p.trailColor) : p.sprite.tintTopLeft);
         this.retireProjectile(p);
         continue;
       }
@@ -3328,7 +3343,7 @@ export class ArenaScene extends Phaser.Scene {
           const overkill = Math.max(0, p.damage - applied);
           if (p.from === 'turret') GameplayTelemetryRecorder.recordTurretHit(p.turretId ?? '', applied, overkill);
           else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
-          this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.sprite.tintTopLeft);
+          this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.nativePalette ? (p.emissiveColor ?? p.trailColor) : p.sprite.tintTopLeft);
           this.retireProjectile(p);
           if (boss.isDefeated && (boss === this.bossEncounter?.boss || this.supremeFinale?.allDefeated)) {
             // Preserve all unprocessed pooled projectiles for the deferred boss
@@ -3361,7 +3376,7 @@ export class ArenaScene extends Phaser.Scene {
           if (wasAlive && hitEnemy.isDead() && p.from === 'player' && p.splitCurrentEligible) {
             this.triggerSplitCurrent(hitEnemy, finalDamage);
           }
-          this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.sprite.tintTopLeft, hitEnemy);
+          this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.nativePalette ? (p.emissiveColor ?? p.trailColor) : p.sprite.tintTopLeft, hitEnemy);
           this.retireProjectile(p);
           continue;
         }
@@ -3507,7 +3522,9 @@ export class ArenaScene extends Phaser.Scene {
     const { streamCount: count, damageShare } = splitStage;
     const spacing = ABILITY_BALANCE.fence.projectileFanSpacingRadians;
     const texture = projectile.sprite.texture.key;
-    const tint = projectile.sprite.tintTopLeft;
+    const tint = projectile.nativePalette
+      ? (projectile.emissiveColor ?? projectile.trailColor)
+      : projectile.sprite.tintTopLeft;
     const width = projectile.sprite.displayWidth;
     const height = projectile.sprite.displayHeight;
     const crossedFences = projectile.crossedFences ?? new Set<Fence>();
@@ -3532,6 +3549,8 @@ export class ArenaScene extends Phaser.Scene {
         turretId: projectile.turretId,
         ricochetsRemaining: projectile.ricochetsRemaining,
         ammoMode: projectile.ammoMode,
+        nativePalette: projectile.nativePalette,
+        emissiveColor: projectile.emissiveColor,
         grenadeBouncesRemaining: projectile.grenadeBouncesRemaining,
         grenadeTotalBounces: projectile.grenadeTotalBounces,
         grenadeBounceStartedAt: projectile.grenadeBounceStartedAt,

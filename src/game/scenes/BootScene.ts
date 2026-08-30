@@ -11,6 +11,10 @@ import { createBaseOperativeFrameSvgDataUri } from '../../ui/stores/BaseOperativ
 import { createDetailedEnemyRobotTextures } from '../enemies/EnemyArtTextures.ts';
 import { createDetailedBossTextures } from '../bosses/BossArtTextures.ts';
 import { createMineFrameSvgDataUri } from '../cosmetics/MineFrameArt.ts';
+import {
+  createPremiumProjectileShapeSvgDataUri,
+  isPremiumProjectileShape
+} from '../cosmetics/PremiumProjectileShapeArt.ts';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -34,6 +38,21 @@ export class BootScene extends Phaser.Scene {
         frame.textureKey,
         createMineFrameSvgDataUri(frame.mineFrameEffect ?? 'default', frame.color, frame.accentColor ?? frame.color),
         { width: 72, height: 62 }
+      );
+    }
+    for (const projectile of COSMETICS) {
+      if (projectile.category !== 'projectileShape'
+        || !projectile.preserveNativePalette
+        || !projectile.textureKey
+        || !isPremiumProjectileShape(projectile.visualShape)) continue;
+      this.load.svg(
+        projectile.textureKey,
+        createPremiumProjectileShapeSvgDataUri(
+          projectile.visualShape,
+          projectile.color,
+          projectile.accentColor ?? projectile.color
+        ),
+        { width: 120, height: 64 }
       );
     }
   }

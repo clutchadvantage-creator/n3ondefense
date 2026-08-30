@@ -212,7 +212,12 @@ export const createCosmeticPreview = (
       addImage(item.previewIcon ?? operativeAppearance?.textureKey ?? options.operatorTextureKey ?? 'player-circle', maxWidth, maxHeight, operativeAppearance ? operativeAppearance.tint : initialColor);
       break;
     case 'projectileShape':
-      addImage(item.previewIcon ?? item.textureKey ?? 'projectile-pulse', maxWidth, maxHeight * 0.72);
+      addImage(
+        item.previewIcon ?? item.textureKey ?? 'projectile-pulse',
+        maxWidth,
+        maxHeight * 0.72,
+        item.preserveNativePalette ? null : initialColor
+      );
       break;
     case 'projectileColor':
       addImage(item.previewIcon ?? options.projectileTextureKey ?? 'projectile-pulse', maxWidth, maxHeight * 0.72);

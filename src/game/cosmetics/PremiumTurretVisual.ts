@@ -49,6 +49,8 @@ export const createPremiumTurretVisual = (
     orbitB.setStrokeStyle(1, accent, 0.5);
     pulse.setFillStyle(primary, 0.75);
     muzzleFlash.setFillStyle(accent, 1);
+    pulse.setPosition(0, 0);
+    muzzleFlash.setPosition(0, -24);
 
     // Every chassis gets a low-cost, non-colliding 2.5D floor mount.
     baseArt.fillStyle(0x07111b, 0.98).fillEllipse(0, 7, 29, 13);
@@ -137,11 +139,46 @@ export const createPremiumTurretVisual = (
         headArt.lineStyle(1.5, primary, 0.94).strokeRoundedRect(-5, -27, 10, 16, 2);
         headArt.lineStyle(1, accent, 0.65).lineBetween(-10, -3, 10, -3);
         break;
+      case 'harbor-beacon':
+        // Heavy pier footing and anchor hardware keep the silhouette readable
+        // as a friendly turret rather than a passive scenery post.
+        panel(baseArt, [-17, 9, -13, -2, 12, -2, 18, 9, 12, 14, -12, 14], 0x26333b, primary);
+        for (const boltX of [-11, 11]) {
+          baseArt.fillStyle(0xd8e5e9, 0.95).fillCircle(boltX, 8, 2);
+          baseArt.lineStyle(1, 0x26333b, 0.9).strokeCircle(boltX, 8, 2);
+        }
+        panel(headArt, [-13, 8, -15, -5, -10, -14, 10, -14, 15, -5, 13, 8], 0xcad8dc, primary);
+        panel(headArt, [-11, 5, -11, -8, 7, -11, 12, -5, 10, 6], 0x253849, 0xa9c0c9, 0.98);
+        // Mooring collar, safety band, and rope wrap.
+        headArt.fillStyle(0x18252e, 1).fillRect(-15, 1, 30, 5);
+        for (let stripe = -13; stripe <= 9; stripe += 7) {
+          headArt.fillStyle(stripe % 2 ? accent : 0xff6f45, 0.95).fillPoints([
+            { x: stripe, y: 1 }, { x: stripe + 6, y: 1 }, { x: stripe + 4, y: 6 }, { x: stripe - 2, y: 6 }
+          ], true);
+        }
+        headArt.lineStyle(2.2, 0xc6a36a, 0.86);
+        headArt.beginPath();
+        headArt.arc(0, -1, 13, 0.15, Math.PI - 0.15, false);
+        headArt.strokePath();
+        // Caged navigation light with two defensive emitters built into the cap.
+        headArt.fillStyle(0x0b151c, 1).fillRoundedRect(-9, -21, 18, 11, 3);
+        headArt.lineStyle(1.6, 0xe7f2f2, 0.9).strokeRoundedRect(-9, -21, 18, 11, 3);
+        headArt.fillStyle(primary, 0.82).fillEllipse(0, -16, 11, 7);
+        headArt.lineStyle(1.2, accent, 0.92).strokeEllipse(0, -16, 11, 7);
+        for (const cageX of [-6, 0, 6]) headArt.lineStyle(1, 0xd7e5e8, 0.8).lineBetween(cageX, -22, cageX, -10);
+        panel(headArt, [-8, -23, -5, -30, -1, -30, -2, -21], 0x293945, primary);
+        panel(headArt, [2, -21, 1, -30, 5, -30, 8, -23], 0x293945, primary);
+        headArt.lineStyle(1.4, 0xffd25f, 0.88).lineBetween(-13, -7, 13, -7);
+        energyArt.lineStyle(1.2, primary, 0.62).lineBetween(-15, -16, 15, -16);
+        energyArt.fillStyle(accent, 0.7).fillCircle(-5, -29, 1.7).fillCircle(5, -29, 1.7);
+        pulse.setPosition(0, -16);
+        muzzleFlash.setPosition(0, -31);
+        break;
     }
   };
 
   draw();
-  orbitA.setVisible(effect === 'void-reactor' || effect === 'mini-orbital' || effect === 'arc-tesla');
+  orbitA.setVisible(effect === 'void-reactor' || effect === 'mini-orbital' || effect === 'arc-tesla' || effect === 'harbor-beacon');
   orbitB.setVisible(effect === 'void-reactor' || effect === 'mini-orbital');
   return {
     root,
@@ -152,11 +189,11 @@ export const createPremiumTurretVisual = (
       const phase = timeMs * 0.001;
       const breathe = 0.5 + Math.sin(phase * 3.2) * 0.5;
       pulse.setScale(0.78 + breathe * 0.34).setAlpha(0.42 + breathe * 0.5);
-      orbitA.rotation = phase * (effect === 'mini-orbital' ? 1.8 : 0.45);
+      orbitA.rotation = phase * (effect === 'mini-orbital' ? 1.8 : effect === 'harbor-beacon' ? 0.8 : 0.45);
       orbitB.rotation = -phase * (effect === 'void-reactor' ? 1.2 : 0.3);
-      orbitA.setScale(1, effect === 'mini-orbital' ? 0.42 : 1);
+      orbitA.setScale(effect === 'harbor-beacon' ? 1.18 : 1, effect === 'mini-orbital' ? 0.42 : effect === 'harbor-beacon' ? 0.3 : 1);
       orbitB.setScale(effect === 'mini-orbital' ? 0.68 : 1, 1);
-      orbitA.setVisible(effect === 'void-reactor' || effect === 'mini-orbital' || effect === 'arc-tesla');
+      orbitA.setVisible(effect === 'void-reactor' || effect === 'mini-orbital' || effect === 'arc-tesla' || effect === 'harbor-beacon');
       orbitB.setVisible(effect === 'void-reactor' || effect === 'mini-orbital');
       energyArt.setAlpha(effect === 'glitch-phantom' ? 0.42 + Math.abs(Math.sin(phase * 17)) * 0.58 : 0.55 + breathe * 0.4);
       energyArt.x = effect === 'glitch-phantom' ? Math.round(Math.sin(phase * 19) * 2) : 0;

@@ -100,6 +100,16 @@ test('Mine Frame Phaser textures use valid base64 SVG data URIs', () => {
   assert.match(decoded, /^<svg/);
 });
 
+test('Roll Station reads as a deep rolling tray with a restrained weed-leaf detail', () => {
+  const svg = createMineFrameSvgMarkup('roll-station', 0x72ff82, 0xb66cff);
+  assert.match(svg, /mf-tray-side/);
+  assert.match(svg, /mf-tray-front/);
+  assert.match(svg, /mf-tray-rim/);
+  assert.match(svg, /mf-weed-leaf/);
+  assert.match(svg, /mf-weed-stem/);
+  assert.match(svg, /mf-core/);
+});
+
 test('Store, Gear Locker, Economy Console, and controller-ready category navigation include Mine Frames', () => {
   assert.match(store, /mineFrame: 'Mine Frames'/);
   assert.match(store, /createMineFrameSvg\(item\.mineFrameEffect \?\? 'default'/);

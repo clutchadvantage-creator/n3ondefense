@@ -8,6 +8,7 @@ import { createPremiumOperativeFrameSvg } from './PremiumOperativeFrameSvg.ts';
 import { createBaseOperativeFrameSvg } from './BaseOperativeFrameSvg.ts';
 import { createPremiumTurretSkinSvg } from './PremiumTurretSkinSvg.ts';
 import { createMineFrameSvg } from '../../game/cosmetics/MineFrameArt.ts';
+import { createPremiumProjectileShapeSvg } from '../../game/cosmetics/PremiumProjectileShapeArt.ts';
 import './storefront.css';
 
 export type StoreMode = 'cosmetics' | 'upgrades';
@@ -682,6 +683,17 @@ export class StorefrontUi {
     if (item.category === 'mineFrame') {
       visual.classList.add('premium-mine-frame-art');
       visual.append(createMineFrameSvg(item.mineFrameEffect ?? 'default', item.color, item.accentColor ?? item.color));
+    }
+    if (item.category === 'projectileShape' && item.preserveNativePalette) {
+      const projectileArt = createPremiumProjectileShapeSvg(
+        item.visualShape,
+        item.color,
+        item.accentColor ?? item.color
+      );
+      if (projectileArt) {
+        visual.classList.add('premium-projectile-art');
+        visual.append(projectileArt);
+      }
     }
     return visual;
   }

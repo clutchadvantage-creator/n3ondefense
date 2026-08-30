@@ -16,7 +16,7 @@ import { Turret } from '../../abilities/Turret.ts';
 import { Mine } from '../../abilities/Mine.ts';
 import { getMineRackEnergyCost, getMineRackPatternOffsets } from '../../abilities/MineRackSalvo.ts';
 import { resolveFenceSplitStage } from '../../abilities/FenceSplitRules.ts';
-import { getCosmeticById, getCosmeticTextureKey } from '../../../data/cosmetics.ts';
+import { getCosmeticById } from '../../../data/cosmetics.ts';
 import { SaveSystem } from '../../systems/SaveSystem.ts';
 import { AudioManager } from '../../systems/AudioManager.ts';
 import { Hud, type HudPayload, type HudRadarContact } from '../../systems/Hud.ts';
@@ -28,6 +28,7 @@ import { ProjectileTrailBatch } from '../../performance/ProjectileTrailBatch.ts'
 import { MineExplosionVfx } from '../../vfx/MineExplosionVfx.ts';
 import { OperativeShieldEffect } from '../../vfx/OperativeShieldEffect.ts';
 import { resolveMineFrameAppearance } from '../../cosmetics/MineFrameAppearance.ts';
+import { resolveProjectileCosmeticPresentation } from '../../cosmetics/ProjectileCosmeticPresentation.ts';
 import { drawReticle } from '../../ui/ReticleRenderer.ts';
 import { createPauseMenuView, type PauseMenuView } from '../../ui/PauseMenuUi.ts';
 import { MOD_BALANCE } from '../../mods/modBalance.ts';
@@ -89,6 +90,8 @@ interface HeistProjectile {
   grenadeArmedAt?: number;
   grenadeNextProximityCheckAt?: number;
   grenadeDetonated?: boolean;
+  nativePalette?: boolean;
+  emissiveColor?: number;
 }
 
 interface HeistProjectileSpawn extends Omit<HeistProjectile, 'sprite' | 'crossedFences' | 'nextTrailAt'> {
@@ -182,6 +185,7 @@ export class HeistScene extends Phaser.Scene {
   private projectileTextureKey = 'projectile-pulse';
   private projectileWidth = 8;
   private projectileHeight = 8;
+  private projectileNativePalette = false;
   private readonly aimScratch = new Phaser.Math.Vector2();
   private readonly mineSalvoInput = new MineSalvoInput();
   private pendingMineSalvo = false;
@@ -354,23 +358,13 @@ export class HeistScene extends Phaser.Scene {
   }
 
   private resolveProjectileCosmetics(): void {
-    this.projectileTextureKey = getCosmeticTextureKey(
-      SaveSystem.getEquippedCosmeticId('projectileShape'),
-      'projectile-pulse'
+    const presentation = resolveProjectileCosmeticPresentation(
+      getCosmeticById(SaveSystem.getEquippedCosmeticId('projectileShape'))
     );
-    if (this.projectileTextureKey === 'projectile-missile' || this.projectileTextureKey === 'projectile-sword') {
-      this.projectileWidth = 17; this.projectileHeight = 8;
-    } else if (this.projectileTextureKey === 'projectile-lightning') {
-      this.projectileWidth = 15; this.projectileHeight = 10;
-    } else if (this.projectileTextureKey === 'projectile-carrot') {
-      this.projectileWidth = 16; this.projectileHeight = 9;
-    } else if (this.projectileTextureKey === 'projectile-bubbles') {
-      this.projectileWidth = 13; this.projectileHeight = 11;
-    } else if (this.projectileTextureKey === 'projectile-balloons') {
-      this.projectileWidth = 14; this.projectileHeight = 13;
-    } else {
-      this.projectileWidth = 8; this.projectileHeight = 8;
-    }
+    this.projectileTextureKey = presentation.textureKey;
+    this.projectileWidth = presentation.displayWidth;
+    this.projectileHeight = presentation.displayHeight;
+    this.projectileNativePalette = presentation.preserveNativePalette;
   }
 
   private createCombatPools(): void {
@@ -381,9 +375,23 @@ export class HeistScene extends Phaser.Scene {
         body.reset(state.previousX, state.previousY);
         body.setVelocity(state.velocityX, state.velocityY);
       }
+      const nativePalette = state.nativePalette ?? (
+        state.owner !== 'enemy'
+        && state.ammoMode === 'normal'
+        && state.texture === this.projectileTextureKey
+        && this.projectileNativePalette
+      );
       projectile.sprite.setActive(true).setVisible(true).setPosition(state.previousX, state.previousY)
-        .setTexture(state.texture).setOrigin(0.5).setDisplaySize(state.width, state.height).clearTint().setTint(state.tint)
+        .setTexture(state.texture).setOrigin(0.5).setDisplaySize(state.width, state.height).clearTint()
         .setAlpha(1).setRotation(state.rotation).setDepth(9);
+      if (!nativePalette) projectile.sprite.setTint(state.tint);
+      if (body && nativePalette) {
+        body.setSize(
+          8 / Math.max(0.001, Math.abs(projectile.sprite.scaleX)),
+          8 / Math.max(0.001, Math.abs(projectile.sprite.scaleY)),
+          true
+        );
+      } else if (body) body.setSize(projectile.sprite.width, projectile.sprite.height, true);
       projectile.owner = state.owner;
       projectile.damage = state.damage;
       projectile.lifeMs = state.lifeMs;
@@ -403,6 +411,8 @@ export class HeistScene extends Phaser.Scene {
       projectile.grenadeArmedAt = state.grenadeArmedAt ?? 0;
       projectile.grenadeNextProximityCheckAt = state.grenadeNextProximityCheckAt ?? 0;
       projectile.grenadeDetonated = false;
+      projectile.nativePalette = nativePalette;
+      projectile.emissiveColor = state.emissiveColor ?? state.tint;
       projectile.crossedFences.clear();
       if (state.crossedFences) for (const fence of state.crossedFences) projectile.crossedFences.add(fence);
       if (projectile.ammoMode === 'grenade') {
@@ -447,6 +457,8 @@ export class HeistScene extends Phaser.Scene {
         projectile.grenadeArmedAt = 0;
         projectile.grenadeNextProximityCheckAt = 0;
         projectile.grenadeDetonated = false;
+        projectile.nativePalette = false;
+        projectile.emissiveColor = undefined;
         projectile.grenadeShadow?.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
       }
     );
@@ -1025,10 +1037,19 @@ export class HeistScene extends Phaser.Scene {
           const green = Math.round(128 + Math.sin(phase + 2.094) * 127);
           const blue = Math.round(128 + Math.sin(phase + 4.188) * 127);
           const prism = (red << 16) | (green << 8) | blue;
-          projectile.sprite.setTint(prism);
+          if (!projectile.nativePalette) projectile.sprite.setTint(prism);
+          projectile.emissiveColor = prism;
           projectile.trailColor = prism;
         }
         this.projectileTrails.emit(projectile.sprite.x, projectile.sprite.y, projectile.trailColor, now);
+        if (projectile.owner !== 'enemy' && projectile.nativePalette) {
+          this.projectileTrails.emitAccent(
+            projectile.sprite.x,
+            projectile.sprite.y,
+            projectile.emissiveColor ?? projectile.trailColor,
+            now
+          );
+        }
         projectile.nextTrailAt = now + 34;
       }
       if (this.pointBlocked(projectile.sprite.x, projectile.sprite.y)) {
@@ -1625,7 +1646,9 @@ export class HeistScene extends Phaser.Scene {
           texture: projectile.sprite.texture.key,
           width: projectile.sprite.displayWidth,
           height: projectile.sprite.displayHeight,
-          tint: projectile.sprite.tintTopLeft,
+          tint: projectile.nativePalette
+            ? (projectile.emissiveColor ?? projectile.trailColor)
+            : projectile.sprite.tintTopLeft,
           rotation: angle,
           velocityX: Math.cos(angle) * speed,
           velocityY: Math.sin(angle) * speed,
@@ -1635,6 +1658,8 @@ export class HeistScene extends Phaser.Scene {
           critical: projectile.critical,
           ricochetsRemaining: projectile.ricochetsRemaining,
           ammoMode: projectile.ammoMode,
+          nativePalette: projectile.nativePalette,
+          emissiveColor: projectile.emissiveColor,
           previousX: x,
           previousY: y,
           crossedFences,

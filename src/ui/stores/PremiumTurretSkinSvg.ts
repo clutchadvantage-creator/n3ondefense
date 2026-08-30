@@ -49,6 +49,19 @@ const TURRET_MARKUP: Record<TurretSkinCosmeticEffectId, string> = {
     <path class="pt-shell heavy" d="M43 109V47l22-25h70l22 25v62l-21 18H64z"/><path class="pt-panel" d="M62 42h76v60H62z"/><path class="pt-hazard" d="M63 85h75v18H63z"/>
     <path class="pt-barrel heavy" d="M86 50 82 4h36l-4 46z"/><circle class="pt-status green" cx="72" cy="55" r="6"/><circle class="pt-status red" cx="128" cy="55" r="6"/>
     <path class="pt-telemetry" d="M82 57h36M78 68h18m8 0h18M66 114h26m15 0h27"/><text class="pt-label" x="100" y="97" text-anchor="middle">BUDDY//01</text>
+  `,
+  'harbor-beacon': `
+    <ellipse class="pt-shadow" cx="100" cy="142" rx="68" ry="17"/>
+    <path class="pt-base harbor" d="m39 127 17-23h88l18 23-15 22H53z"/><path class="pt-footing" d="m50 119 14-19h72l14 19-13 17H63z"/>
+    <g class="pt-bolts"><circle cx="58" cy="124" r="5"/><circle cx="142" cy="124" r="5"/><circle cx="72" cy="139" r="4"/><circle cx="128" cy="139" r="4"/></g>
+    <path class="pt-harbor-side" d="M59 103 55 46l17-21 55 4 18 22-7 57-20 14-39-3z"/>
+    <path class="pt-harbor-shell" d="M55 96 53 42l18-20h55l19 21-5 55-21 14H77z"/>
+    <path class="pt-harbor-panel" d="M72 35h51l10 15-4 50-18 9H82l-17-12-2-47z"/>
+    <path class="pt-hazard harbor" d="M62 79h70"/><path class="pt-rope" d="M58 71c27 15 58 15 84-2M59 66c27 15 57 15 82-2"/>
+    <path class="pt-emitter" d="m73 36 4-27h17l-2 29zm35 2-2-29h17l4 27z"/>
+    <path class="pt-beacon-cap" d="m72 35 7-18h42l8 18-12 8H84z"/><path class="pt-beacon-glass pulse" d="M83 18 89 4h23l8 14-7 15H91z"/>
+    <path class="pt-beacon-cage" d="M83 18h37M89 4l2 29M112 4l1 29M79 18h42"/><path class="pt-scan orbit" d="M60 17h80"/>
+    <path class="pt-marine-id" d="M77 91h46v12H77z"/><text class="pt-label harbor-label" x="100" y="100" text-anchor="middle">PORT//07</text>
   `
 };
 
