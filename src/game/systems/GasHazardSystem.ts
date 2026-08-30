@@ -60,13 +60,15 @@ export class GasHazardSystem {
   private readonly ignitionGraphics: Phaser.GameObjects.Graphics;
   private readonly ignitionStates: GasIgnitionState[];
   private readonly impactStates: GasImpactBurstState[];
+  /** Canister presentation is prewarmed and reused across every gas phase. */
+  private readonly canisterPool: GasCanisterTarget[];
   private readonly densityColumns = Math.ceil(WORLD_WIDTH / GAS_HAZARD_BALANCE.densityCellSize);
   private readonly densityRows = Math.ceil(WORLD_HEIGHT / GAS_HAZARD_BALANCE.densityCellSize);
   /** Persistent logical footprint: tunneling never removes gas exposure. */
   private readonly density = new Uint8Array(this.densityColumns * this.densityRows);
   /** Visual-only mask used to keep animated wisps out of carved tunnels. */
   private readonly tunnelMask = new Uint8Array(this.densityColumns * this.densityRows);
-  private canisters: GasCanisterTarget[] = [];
+  private readonly canisters: GasCanisterTarget[] = [];
   private nextPhaseAt: number;
   private phaseStartedAt = 0;
   private phaseIndex = 0;
@@ -77,6 +79,8 @@ export class GasHazardSystem {
   private lastWispDrawAt = -Infinity;
   private lastTunnelX = Number.NaN;
   private lastTunnelY = Number.NaN;
+  private impactPresentationVisible = false;
+  private ignitionPresentationVisible = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -115,6 +119,10 @@ export class GasHazardSystem {
       primaryColor: 0xff9d24,
       secondaryColor: 0xe9ff38
     }));
+    this.canisterPool = Array.from(
+      { length: GAS_HAZARD_BALANCE.maximumCanisters },
+      () => this.createCanisterSlot()
+    );
     this.warningText = scene.add.text(scene.scale.width * 0.5, 248, '', {
       fontFamily: 'Orbitron, sans-serif',
       fontSize: '17px',
@@ -250,6 +258,11 @@ export class GasHazardSystem {
 
   destroy(): void {
     this.clearCanisters();
+    for (const target of this.canisterPool) {
+      target.marker.destroy();
+      target.canister.destroy();
+    }
+    this.canisterPool.length = 0;
     this.resetIgnitionBurns();
     this.resetImpactBursts();
     this.warningText.destroy();
@@ -262,6 +275,41 @@ export class GasHazardSystem {
     this.tunnelBrush.destroy();
     this.density.fill(0);
     this.tunnelMask.fill(0);
+  }
+
+  /** Starts the production gas path immediately, but is unreachable in production builds. */
+  forcePhaseForDevelopment(now: number): boolean {
+    if (!import.meta.env.DEV || this.round < GAS_HAZARD_BALANCE.unlockRound) return false;
+    this.clearCanisters();
+    this.startPhase(now);
+    return this.active;
+  }
+
+  /** Exercises the real mine-ignition path against an already released DEV cloud. */
+  igniteFirstCloudForDevelopment(mineRadius: number): boolean {
+    if (!import.meta.env.DEV) return false;
+    for (const target of this.canisters) {
+      if (target.released) return this.igniteFromMine(target.x, target.y, mineRadius);
+    }
+    return false;
+  }
+
+  diagnostics(): Readonly<{
+    activeCanisters: number;
+    pooledCanisters: number;
+    activeImpacts: number;
+    activeIgnitions: number;
+  }> {
+    let activeImpacts = 0;
+    let activeIgnitions = 0;
+    for (const state of this.impactStates) if (state.active) activeImpacts += 1;
+    for (const state of this.ignitionStates) if (state.active) activeIgnitions += 1;
+    return {
+      activeCanisters: this.canisters.length,
+      pooledCanisters: this.canisterPool.length,
+      activeImpacts,
+      activeIgnitions
+    };
   }
 
   private ensureBrushTextures(): void {
@@ -387,23 +435,53 @@ export class GasHazardSystem {
     this.nextGasDamageAt = 0;
     this.lastWispDrawAt = -Infinity;
     this.releasedCanisterCount = 0;
-    this.canisters = points.map((point, index) => {
-      const marker = this.scene.add.circle(point.x, point.y, 31, GAS_COLOR, 0.06)
-        .setStrokeStyle(3, GAS_COLOR, 0.9)
-        .setDepth(6);
-      const canister = this.scene.add.image(point.x, point.y - config.fallHeight, GAS_CANISTER_TEXTURE)
-        .setDepth(9)
-        .setAlpha(0);
-      return {
-        ...point,
-        delayMs: index * config.staggerMs,
-        released: false,
-        showSkull: index % 3 === 0,
-        wispPhase: this.random.float(0, Math.PI * 2),
-        marker,
-        canister
-      };
-    });
+    this.canisters.length = 0;
+    for (let index = 0; index < points.length; index += 1) {
+      const point = points[index];
+      const target = this.canisterPool[index];
+      target.x = point.x;
+      target.y = point.y;
+      target.delayMs = index * config.staggerMs;
+      target.released = false;
+      target.showSkull = index % 3 === 0;
+      target.wispPhase = this.random.float(0, Math.PI * 2);
+      target.marker
+        .setPosition(point.x, point.y)
+        .setScale(1)
+        .setAlpha(0.06)
+        .setVisible(true)
+        .setActive(true);
+      target.canister
+        .setPosition(point.x, point.y - config.fallHeight)
+        .setRotation(0)
+        .setAlpha(0)
+        .setVisible(true)
+        .setActive(true);
+      this.canisters.push(target);
+    }
+  }
+
+  private createCanisterSlot(): GasCanisterTarget {
+    const marker = this.scene.add.circle(0, 0, 31, GAS_COLOR, 0.06)
+      .setStrokeStyle(3, GAS_COLOR, 0.9)
+      .setDepth(6)
+      .setVisible(false)
+      .setActive(false);
+    const canister = this.scene.add.image(0, 0, GAS_CANISTER_TEXTURE)
+      .setDepth(9)
+      .setAlpha(0)
+      .setVisible(false)
+      .setActive(false);
+    return {
+      x: 0,
+      y: 0,
+      delayMs: 0,
+      released: false,
+      showSkull: false,
+      wispPhase: 0,
+      marker,
+      canister
+    };
   }
 
   private releaseGas(target: GasCanisterTarget): void {
@@ -441,7 +519,19 @@ export class GasHazardSystem {
 
   /** One bounded graphics batch replaces per-impact circles and five tweens. */
   private updateImpactBursts(now: number): void {
+    let hasActiveState = false;
+    for (const state of this.impactStates) {
+      if (!state.active) continue;
+      if (now - state.startedAt >= 700) state.active = false;
+      else hasActiveState = true;
+    }
+    if (!hasActiveState) {
+      if (this.impactPresentationVisible) this.impactGraphics.clear();
+      this.impactPresentationVisible = false;
+      return;
+    }
     this.impactGraphics.clear();
+    this.impactPresentationVisible = true;
     for (let stateIndex = 0; stateIndex < this.impactStates.length; stateIndex += 1) {
       const state = this.impactStates[stateIndex];
       if (!state.active) continue;
@@ -467,6 +557,7 @@ export class GasHazardSystem {
   private resetImpactBursts(): void {
     for (const state of this.impactStates) state.active = false;
     this.impactGraphics.clear();
+    this.impactPresentationVisible = false;
   }
 
   private stampDensity(x: number, y: number, radius: number): void {
@@ -654,8 +745,24 @@ export class GasHazardSystem {
   }
 
   private updateIgnitionBurns(now: number): void {
-    this.ignitionGraphics.clear();
     const duration = GAS_HAZARD_BALANCE.mineIgnitionVisualMs;
+    let hasActiveState = false;
+    for (const state of this.ignitionStates) {
+      if (!state.active) continue;
+      if (now - state.startedAt >= duration) {
+        if (state.lastEraseRadius < state.radius) this.eraseVisualGasAt(state.x, state.y, state.radius);
+        state.active = false;
+      } else {
+        hasActiveState = true;
+      }
+    }
+    if (!hasActiveState) {
+      if (this.ignitionPresentationVisible) this.ignitionGraphics.clear();
+      this.ignitionPresentationVisible = false;
+      return;
+    }
+    this.ignitionGraphics.clear();
+    this.ignitionPresentationVisible = true;
     for (let stateIndex = 0; stateIndex < this.ignitionStates.length; stateIndex += 1) {
       const state = this.ignitionStates[stateIndex];
       if (!state.active) continue;
@@ -735,6 +842,7 @@ export class GasHazardSystem {
   private resetIgnitionBurns(): void {
     for (const state of this.ignitionStates) state.active = false;
     this.ignitionGraphics.clear();
+    this.ignitionPresentationVisible = false;
   }
 
   private hasGasAt(x: number, y: number): boolean {
@@ -775,10 +883,11 @@ export class GasHazardSystem {
 
   private clearCanisters(): void {
     for (const target of this.canisters) {
-      target.marker.destroy();
-      target.canister.destroy();
+      target.marker.setVisible(false).setActive(false).setAlpha(0).setScale(1);
+      target.canister.setVisible(false).setActive(false).setAlpha(0).setRotation(0);
+      target.released = false;
     }
-    this.canisters = [];
+    this.canisters.length = 0;
     this.releasedCanisterCount = 0;
     this.wispGraphics.clear();
     this.lastTunnelX = Number.NaN;

@@ -93,12 +93,15 @@ test('Totem is removed for detonation, successful defuse, defeat, round cleanup,
 });
 
 test('five Totems reuse bounded slots and redraw only active impact, charge, and pulse state', () => {
-  assert.match(totem, /if \(this\.slots\.length >= MAX_ACTIVE_TOTEMS\) return null/);
+  assert.match(totem, /if \(prewarm\) \{\s+for \(let index = 0; index < MAX_ACTIVE_TOTEMS; index \+= 1\) this\.slots\.push\(this\.createSlot\(\)\)/);
+  assert.match(system, /}, this\.shouldShowField\(\)\)/);
   assert.match(totem, /for \(const slot of this\.slots\) if \(!slot\.active\) return slot/);
+  assert.match(totem, /private obtainSlot\(\): TotemSlot \| null \{[\s\S]*?return null/);
   assert.match(totem, /for \(const slot of this\.slots\) \{\s+if \(!slot\.active\) continue;/);
   assert.match(totem, /const RAY_COS = new Float32Array/);
   assert.match(totem, /const RAY_SIN = new Float32Array/);
   assert.match(totem, /if \(frame === slot\.lastDebrisFrame\) return/);
+  assert.match(totem, /if \(slot\.dynamicPresentationVisible\) graphics\.clear\(\)/);
   assert.match(totem, /graphics\.clear\(\)/);
 });
 

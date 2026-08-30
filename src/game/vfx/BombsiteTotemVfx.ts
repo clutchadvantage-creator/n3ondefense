@@ -32,6 +32,7 @@ interface TotemSlot {
   debris: Phaser.GameObjects.Graphics;
   lastDebrisFrame: number;
   dynamic: Phaser.GameObjects.Graphics;
+  dynamicPresentationVisible: boolean;
   shadow: Phaser.GameObjects.Ellipse;
   body: Phaser.GameObjects.Graphics;
   channels: Phaser.GameObjects.Graphics;
@@ -119,8 +120,15 @@ export class BombsiteTotemVfx {
     private readonly scene: Phaser.Scene,
     private readonly callbacks: {
       onEntrance?: (siteId: string) => void;
-    } = {}
-  ) {}
+    } = {},
+    prewarm = true
+  ) {
+    // Build the bounded rig pool during Arena setup, never on the combat frame
+    // where a totem begins its entrance.
+    if (prewarm) {
+      for (let index = 0; index < MAX_ACTIVE_TOTEMS; index += 1) this.slots.push(this.createSlot());
+    }
+  }
 
   deploy(siteId: string, x: number, y: number, now: number): boolean {
     this.remove(siteId);
@@ -157,6 +165,7 @@ export class BombsiteTotemVfx {
     slot.debris.clear().setAlpha(1).setVisible(false);
     slot.lastDebrisFrame = -1;
     slot.dynamic.clear().setVisible(true).setAlpha(1);
+    slot.dynamicPresentationVisible = false;
     slot.shadow.setVisible(true).setAlpha(0.08).setScale(0.38);
     // Keep the descending chassis unmistakable against the dark arena. The
     // powered state still ramps up after impact, but the orbital device itself
@@ -250,10 +259,7 @@ export class BombsiteTotemVfx {
 
   private obtainSlot(): TotemSlot | null {
     for (const slot of this.slots) if (!slot.active) return slot;
-    if (this.slots.length >= MAX_ACTIVE_TOTEMS) return null;
-    const slot = this.createSlot();
-    this.slots.push(slot);
-    return slot;
+    return null;
   }
 
   private createSlot(): TotemSlot {
@@ -295,7 +301,7 @@ export class BombsiteTotemVfx {
       chargeKind: 'electric', pulseStartedAt: 0, pulseDurationMs: 0, pulseRadius: 0,
       pulseColor: 0x63efff, pulseKind: 'electric', flashStartedAt: 0, flashColor: 0xffffff,
       root, ground, rig, marker, fissures, fissureBranches, debris, lastDebrisFrame: -1,
-      dynamic, shadow, body, channels, face, coreGlow, core, innerRing, outerRing
+      dynamic, dynamicPresentationVisible: false, shadow, body, channels, face, coreGlow, core, innerRing, outerRing
     };
   }
 
@@ -633,7 +639,21 @@ export class BombsiteTotemVfx {
 
   private drawDynamicEffects(slot: TotemSlot, now: number): void {
     const graphics = slot.dynamic;
+    const descentTrailActive = !slot.impacted && now >= slot.deployedAt + TARGETING_MS;
+    const impactActive = slot.impacted && now - slot.impactAt < IMPACT_FLASH_MS;
+    const chargeActive = now < slot.chargeUntil;
+    const pulseActive = slot.pulseStartedAt > 0
+      && now >= slot.pulseStartedAt
+      && now - slot.pulseStartedAt < slot.pulseDurationMs;
+    const flashActive = slot.flashStartedAt > 0 && now - slot.flashStartedAt < 180;
+    if (slot.pulseStartedAt > 0 && now >= slot.pulseStartedAt + slot.pulseDurationMs) slot.pulseStartedAt = 0;
+    if (!descentTrailActive && !impactActive && !chargeActive && !pulseActive && !flashActive) {
+      if (slot.dynamicPresentationVisible) graphics.clear();
+      slot.dynamicPresentationVisible = false;
+      return;
+    }
     graphics.clear();
+    slot.dynamicPresentationVisible = true;
     if (!slot.impacted) {
       if (now >= slot.deployedAt + TARGETING_MS) {
         const trailProgress = clamp01((now - slot.deployedAt - TARGETING_MS) / DROP_MS);
@@ -750,6 +770,7 @@ export class BombsiteTotemVfx {
     slot.fissureBranches.clear();
     slot.debris.clear();
     slot.dynamic.clear();
+    slot.dynamicPresentationVisible = false;
     slot.lastDebrisFrame = -1;
     slot.chargeUntil = 0;
     slot.pulseStartedAt = 0;

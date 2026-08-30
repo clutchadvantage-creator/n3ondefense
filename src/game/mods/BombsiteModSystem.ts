@@ -97,7 +97,7 @@ export class BombsiteModSystem {
   ) {
     this.totems = new BombsiteTotemVfx(scene, {
       onEntrance: () => this.callbacks.playTotemCue?.('entrance')
-    });
+    }, this.shouldShowField());
   }
 
   onBombArmed(site: BombSiteRuntime, defenseMs: number, now: number): void {
@@ -174,6 +174,11 @@ export class BombsiteModSystem {
     // Keep the argument explicit for future deterministic cadence work and to
     // document that the system advances using ArenaScene's authoritative clock.
     void deltaMs;
+  }
+
+  /** Read-only DEV telemetry; the bounded totem pool remains owned by its VFX controller. */
+  activeTotemCount(): number {
+    return this.totems.activeCount();
   }
 
   processDefuse(

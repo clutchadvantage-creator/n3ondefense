@@ -54,7 +54,10 @@ test('gas phases remain occasional, suppress lasers, permit bomblets, and carve 
   assert.match(gas, /GAS_SKULL_TEXTURE/);
   assert.match(gas, /GAS_CANISTER_TEXTURE/);
   assert.match(gas, /hazard-gas-canister-v3/);
-  assert.match(gas, /this\.scene\.add\.image\(point\.x, point\.y - config\.fallHeight, GAS_CANISTER_TEXTURE\)/);
+  assert.match(gas, /private readonly canisterPool: GasCanisterTarget\[\]/);
+  assert.match(gas, /length: GAS_HAZARD_BALANCE\.maximumCanisters/);
+  assert.match(gas, /private createCanisterSlot/);
+  assert.match(gas, /target\.canister[\s\S]*?setPosition\(point\.x, point\.y - config\.fallHeight\)/);
   assert.match(gas, /updateGasAnimation\(now, dissipateProgress\)/);
   assert.match(gas, /Batched toxic pockets per cloud; no sprites, tweens, physics, or allocations/);
   assert.match(gas, /this\.drawGasBubbles\(target, index, now, time\)/);
@@ -175,7 +178,9 @@ test('bomblets share the bounded mine nebula renderer without temporary blast ob
   const detonateStart = bomblets.indexOf('private detonate');
   const detonateEnd = bomblets.indexOf('private clearTargets', detonateStart);
   const detonate = bomblets.slice(detonateStart, detonateEnd);
-  assert.match(bomblets, /const explosionPalette: ExplosionPalette = \[0xffffff, color, secondaryColor, this\.theme\.primary\]/);
+  assert.match(bomblets, /private readonly targetPool: TargetPoint\[\]/);
+  assert.match(bomblets, /target\.explosionPalette\[0\] = 0xffffff/);
+  assert.match(bomblets, /target\.explosionPalette\[3\] = this\.theme\.primary/);
   assert.match(arena, /mineExplosionVfx\.emit\(x, y, blastRadius, explosionPalette, this\.time\.now, false\)/);
   assert.match(vfx, /private drawSmokeNebula/);
   assert.match(vfx, /multi-segment bolts crackle through the nebula/);

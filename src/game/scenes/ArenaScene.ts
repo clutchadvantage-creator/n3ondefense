@@ -502,6 +502,9 @@ export class ArenaScene extends Phaser.Scene {
   private readonly performanceMonitor = new FramePerformanceMonitor(600);
   private nextPerformanceTelemetryAt = 0;
   private nextPoolMaintenanceAt = 0;
+  private devHazardIgnitionAt = 0;
+  private devHazardIgnitionRadius = 0;
+  private devHazardIgnitionPending = false;
   private readonly telemetryFrameBuffs = {
     damageBoost: false,
     speedBoost: false,
@@ -1437,6 +1440,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.performanceMonitor.record(delta);
     this.updatePerformanceTelemetry(now);
+    this.updateDevHazardStress(now);
     this.maintainCombatPools(now);
     this.recordTelemetryFrame(delta, now);
     const energyBeforeRegeneration = this.player.energy;
@@ -7367,6 +7371,19 @@ export class ArenaScene extends Phaser.Scene {
       ));
     }
 
+    // Exercise the production overlap deliberately: both air-drop systems begin
+    // together, then a real gas ignition starts while their impacts overlap.
+    // Every entry point remains hard-gated to DEV builds.
+    this.gasHazard?.forcePhaseForDevelopment(now);
+    this.bombletHazard?.forceStrikeForDevelopment(now);
+    this.devHazardIgnitionAt = now
+      + GAS_HAZARD_BALANCE.telegraphMs
+      + GAS_HAZARD_BALANCE.fallMs
+      + GAS_HAZARD_BALANCE.staggerMs * 3
+      + 20;
+    this.devHazardIgnitionRadius = mineCfg.radius;
+    this.devHazardIgnitionPending = Boolean(this.gasHazard);
+
     for (let index = 0; index < 18; index += 1) {
       const angle = index / 18 * Math.PI * 2;
       this.dropPickup(this.player.x + Math.cos(angle) * 165, this.player.y + Math.sin(angle) * 165);
@@ -7413,6 +7430,12 @@ export class ArenaScene extends Phaser.Scene {
     this.showBanner('DEV PERFORMANCE STRESS // ROUND 30\nF5 RESET  â€¢  F6 METRICS');
   }
 
+  private updateDevHazardStress(now: number): void {
+    if (!import.meta.env.DEV || !this.devHazardIgnitionPending || now < this.devHazardIgnitionAt) return;
+    this.devHazardIgnitionPending = false;
+    this.gasHazard?.igniteFirstCloudForDevelopment(this.devHazardIgnitionRadius);
+  }
+
   private updatePerformanceTelemetry(now: number): void {
     if (!import.meta.env.DEV || !this.performanceTelemetry?.visible || now < this.nextPerformanceTelemetryAt) return;
     this.nextPerformanceTelemetryAt = now + 500;
@@ -7420,12 +7443,19 @@ export class ArenaScene extends Phaser.Scene {
     const projectiles = this.projectilePool.stats();
     const fx = this.fxCirclePool.stats();
     const trails = this.projectileTrails?.stats();
+    const bomblets = this.bombletHazard?.diagnostics();
+    const gas = this.gasHazard?.diagnostics();
     this.performanceTelemetry.setText(
       `PERF DEV (F6)  avg ${frames.averageMs.toFixed(1)}ms  p95 ${frames.p95Ms.toFixed(1)}ms  max ${frames.maximumMs.toFixed(1)}ms\n`
       + `>33ms ${frames.framesOver33Ms}/${frames.samples}  >50ms ${frames.framesOver50Ms}/${frames.samples}\n`
       + `Enemies ${this.enemies.length}  Projectiles ${this.projectiles.length}  Missiles ${this.homingMissiles.length}\n`
       + `Projectile pool new ${projectiles.created} reuse ${projectiles.reused} free ${projectiles.available}\n`
       + `FX pool new ${fx.created} reuse ${fx.reused} active ${fx.active} free ${fx.available}\n`
+      + `Hazards B ${bomblets?.activeTargets ?? 0}/${bomblets?.pooledTargets ?? 0}`
+      + `  G ${gas?.activeCanisters ?? 0}/${gas?.pooledCanisters ?? 0}`
+      + ` impact ${gas?.activeImpacts ?? 0} ignite ${gas?.activeIgnitions ?? 0}`
+      + `  explosions ${this.mineExplosionVfx.activeExplosionCount}`
+      + `  totems ${this.bombsiteMods?.activeTotemCount() ?? 0}\n`
       + `Trail samples ${trails?.active ?? 0}/${trails?.retained ?? 0} peak ${trails?.peak ?? 0}  Display ${this.children.list.length}\n`
       + `Physics colliders ${this.physics.world.colliders.getActive().length}  Tweens ${this.tweens.getTweens().length}`
     );
@@ -8084,6 +8114,9 @@ export class ArenaScene extends Phaser.Scene {
     this.nextHoloAfterimageAt = 0;
     this.arcadePopSequence = 0;
     this.physicalLootSequence = 0;
+    this.devHazardIgnitionAt = 0;
+    this.devHazardIgnitionRadius = 0;
+    this.devHazardIgnitionPending = false;
     this.temporaryAmmo.reset();
     this.turretWeaponSync.reset();
     this.grenadeProjectileSequence = 0;

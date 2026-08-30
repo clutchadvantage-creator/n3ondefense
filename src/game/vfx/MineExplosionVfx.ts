@@ -46,6 +46,8 @@ export class MineExplosionVfx {
   private readonly nebulaCos = new Float32Array(FULL_NEBULA_LOBE_COUNT);
   private readonly nebulaSin = new Float32Array(FULL_NEBULA_LOBE_COUNT);
   private sequence = 0;
+  private activeStateCount = 0;
+  private presentationVisible = false;
 
   constructor(private readonly scene: Phaser.Scene, private readonly particlesEnabled: boolean) {
     this.maximumActiveExplosions = particlesEnabled ? MAX_ACTIVE_EXPLOSIONS : REDUCED_ACTIVE_EXPLOSIONS;
@@ -116,6 +118,7 @@ export class MineExplosionVfx {
         state = candidate;
       }
     }
+    if (!state.active) this.activeStateCount += 1;
     state.active = true;
     state.x = x;
     state.y = y;
@@ -134,22 +137,35 @@ export class MineExplosionVfx {
   }
 
   update(now: number): void {
+    if (this.activeStateCount === 0) {
+      if (this.presentationVisible) {
+        this.smokeGraphics.clear();
+        this.graphics.clear();
+        this.presentationVisible = false;
+      }
+      return;
+    }
     this.smokeGraphics.clear();
     this.graphics.clear();
+    this.presentationVisible = true;
     for (const state of this.states) {
       if (!state.active) continue;
       const elapsed = now - state.startedAt;
       if (elapsed >= EXPLOSION_LIFETIME_MS) {
         state.active = false;
+        this.activeStateCount -= 1;
         continue;
       }
       this.drawSmokeNebula(state, elapsed);
       this.drawExplosion(state, elapsed);
     }
+    if (this.activeStateCount === 0) this.presentationVisible = false;
   }
 
   reset(): void {
     for (const state of this.states) state.active = false;
+    this.activeStateCount = 0;
+    this.presentationVisible = false;
     this.smokeGraphics.clear();
     this.graphics.clear();
   }
@@ -161,9 +177,7 @@ export class MineExplosionVfx {
   }
 
   get activeExplosionCount(): number {
-    let count = 0;
-    for (const state of this.states) if (state.active) count += 1;
-    return count;
+    return this.activeStateCount;
   }
 
   private drawExplosion(state: MineExplosionState, elapsed: number): void {

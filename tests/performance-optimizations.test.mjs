@@ -199,4 +199,21 @@ test('the integrated Round 30 stress scenario is guarded behind DEV-only F5 inpu
   assert.match(source, /new RoundManager\(this\.roundManager\.seedBase, this\.roundManager\.mode, 30\)/);
   assert.match(source, /for \(const xOffset of \[55, 110\]\)/);
   assert.match(source, /for \(let index = 0; index < 240; index \+= 1\)/);
+  assert.match(source, /this\.gasHazard\?\.forcePhaseForDevelopment\(now\)/);
+  assert.match(source, /this\.bombletHazard\?\.forceStrikeForDevelopment\(now\)/);
+  assert.match(source, /this\.gasHazard\?\.igniteFirstCloudForDevelopment/);
+});
+
+test('hazard presentation pools are prewarmed and idle graphics redraws are gated', () => {
+  const bomblets = fs.readFileSync(new URL('../src/game/systems/BombletHazardSystem.ts', import.meta.url), 'utf8');
+  const gas = fs.readFileSync(new URL('../src/game/systems/GasHazardSystem.ts', import.meta.url), 'utf8');
+  const explosions = fs.readFileSync(new URL('../src/game/vfx/MineExplosionVfx.ts', import.meta.url), 'utf8');
+  assert.match(bomblets, /targetPool = Array\.from/);
+  assert.match(bomblets, /target\.marker\.setVisible\(false\)\.setActive\(false\)/);
+  assert.doesNotMatch(bomblets, /this\.targets = points\.map/);
+  assert.match(gas, /canisterPool = Array\.from/);
+  assert.match(gas, /if \(!hasActiveState\) \{[\s\S]*?impactPresentationVisible/);
+  assert.match(gas, /if \(!hasActiveState\) \{[\s\S]*?ignitionPresentationVisible/);
+  assert.match(explosions, /if \(this\.activeStateCount === 0\)/);
+  assert.match(explosions, /return this\.activeStateCount/);
 });

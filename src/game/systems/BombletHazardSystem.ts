@@ -12,7 +12,10 @@ interface TargetPoint {
   y: number;
   marker: Phaser.GameObjects.Arc;
   bomb: Phaser.GameObjects.Container;
-  explosionPalette: ExplosionPalette;
+  horizontalFin: Phaser.GameObjects.Rectangle;
+  verticalFin: Phaser.GameObjects.Rectangle;
+  shell: Phaser.GameObjects.Arc;
+  explosionPalette: [core: number, primary: number, secondary: number, outer: number];
   delayMs: number;
   exploded: boolean;
 }
@@ -21,7 +24,9 @@ interface TargetPoint {
 export class BombletHazardSystem {
   private readonly random: SeededRandom;
   private readonly warningText: Phaser.GameObjects.Text;
-  private targets: TargetPoint[] = [];
+  /** Display objects are prewarmed once so a late-game strike never constructs them mid-frame. */
+  private readonly targetPool: TargetPoint[];
+  private readonly targets: TargetPoint[] = [];
   private nextStrikeAt: number;
   private strikeStartedAt = 0;
   private strikeIndex = 0;
@@ -55,6 +60,10 @@ export class BombletHazardSystem {
       stroke: '#050812',
       strokeThickness: 5
     }).setOrigin(0.5).setScrollFactor(0).setDepth(1050).setAlpha(0);
+    this.targetPool = Array.from(
+      { length: BOMBLET_HAZARD_BALANCE.maximumBomblets },
+      () => this.createTargetSlot()
+    );
   }
 
   get active(): boolean {
@@ -92,7 +101,8 @@ export class BombletHazardSystem {
       this.warningText.setAlpha(0.78);
     }
 
-    for (const [index, target] of this.targets.entries()) {
+    for (let index = 0; index < this.targets.length; index += 1) {
+      const target = this.targets[index];
       const dropElapsed = elapsed - config.telegraphMs - target.delayMs;
       const fallProgress = Phaser.Math.Clamp(dropElapsed / config.fallMs, 0, 1);
       const pulse = 0.72 + Math.sin(now * 0.024 + index * 0.7) * 0.2;
@@ -117,7 +127,24 @@ export class BombletHazardSystem {
 
   destroy(): void {
     this.clearTargets();
+    for (const target of this.targetPool) {
+      target.marker.destroy();
+      target.bomb.destroy(true);
+    }
+    this.targetPool.length = 0;
     this.warningText.destroy();
+  }
+
+  /** Starts the production strike path immediately, but is unreachable in production builds. */
+  forceStrikeForDevelopment(now: number): boolean {
+    if (!import.meta.env.DEV) return false;
+    this.clearTargets();
+    this.startStrike(now);
+    return this.active;
+  }
+
+  diagnostics(): Readonly<{ activeTargets: number; pooledTargets: number }> {
+    return { activeTargets: this.targets.length, pooledTargets: this.targetPool.length };
   }
 
   private startStrike(now: number): void {
@@ -138,22 +165,68 @@ export class BombletHazardSystem {
       random: this.random,
       isBlocked: this.isBlocked
     });
-    this.targets = points.map((point, index) => {
+    this.targets.length = 0;
+    for (let index = 0; index < points.length; index += 1) {
+      const point = points[index];
+      const target = this.targetPool[index];
       const color = [this.theme.accent, this.theme.secondary, 0xffa340, 0xff5e75][index % 4];
       const secondaryColor = color === this.theme.secondary ? this.theme.primary : this.theme.secondary;
-      const explosionPalette: ExplosionPalette = [0xffffff, color, secondaryColor, this.theme.primary];
-      const marker = this.scene.add.circle(point.x, point.y, config.blastRadius, color, 0.08)
+      target.x = point.x;
+      target.y = point.y;
+      target.delayMs = index * config.staggerMs;
+      target.exploded = false;
+      target.explosionPalette[0] = 0xffffff;
+      target.explosionPalette[1] = color;
+      target.explosionPalette[2] = secondaryColor;
+      target.explosionPalette[3] = this.theme.primary;
+      target.marker
+        .setPosition(point.x, point.y)
+        .setRadius(config.blastRadius)
+        .setFillStyle(color, 0.08)
         .setStrokeStyle(3, color, 0.82)
-        .setDepth(5);
-      const horizontalFin = this.scene.add.rectangle(0, 0, 26, 4, color, 0.9);
-      const verticalFin = this.scene.add.rectangle(0, 0, 4, 26, color, 0.9);
-      const shell = this.scene.add.circle(0, 0, 9, 0x10141c, 1).setStrokeStyle(3, color, 0.98);
-      const core = this.scene.add.circle(-2, -2, 2, 0xffffff, 0.8);
-      const bomb = this.scene.add.container(point.x, point.y - config.fallHeight, [horizontalFin, verticalFin, shell, core])
-        .setDepth(8)
+        .setVisible(true)
+        .setActive(true)
+        .setScale(1)
+        .setAlpha(0.08);
+      target.horizontalFin.setFillStyle(color, 0.9);
+      target.verticalFin.setFillStyle(color, 0.9);
+      target.shell.setStrokeStyle(3, color, 0.98);
+      target.bomb
+        .setPosition(point.x, point.y - config.fallHeight)
+        .setRotation(0)
+        .setVisible(true)
+        .setActive(true)
         .setAlpha(0);
-      return { ...point, marker, bomb, explosionPalette, delayMs: index * config.staggerMs, exploded: false };
-    });
+      this.targets.push(target);
+    }
+  }
+
+  private createTargetSlot(): TargetPoint {
+    const marker = this.scene.add.circle(0, 0, BOMBLET_HAZARD_BALANCE.blastRadius, 0xffffff, 0)
+      .setDepth(5)
+      .setVisible(false)
+      .setActive(false);
+    const horizontalFin = this.scene.add.rectangle(0, 0, 26, 4, 0xffffff, 0.9);
+    const verticalFin = this.scene.add.rectangle(0, 0, 4, 26, 0xffffff, 0.9);
+    const shell = this.scene.add.circle(0, 0, 9, 0x10141c, 1);
+    const core = this.scene.add.circle(-2, -2, 2, 0xffffff, 0.8);
+    const bomb = this.scene.add.container(0, 0, [horizontalFin, verticalFin, shell, core])
+      .setDepth(8)
+      .setVisible(false)
+      .setActive(false)
+      .setAlpha(0);
+    return {
+      x: 0,
+      y: 0,
+      marker,
+      bomb,
+      horizontalFin,
+      verticalFin,
+      shell,
+      explosionPalette: [0xffffff, 0xffffff, 0xffffff, 0xffffff],
+      delayMs: 0,
+      exploded: false
+    };
   }
 
   private detonate(target: TargetPoint, player: Player, damageTargets: HazardDamageTarget[]): void {
@@ -195,9 +268,10 @@ export class BombletHazardSystem {
 
   private clearTargets(): void {
     for (const target of this.targets) {
-      target.marker.destroy();
-      target.bomb.destroy();
+      target.marker.setVisible(false).setActive(false).setAlpha(0).setScale(1);
+      target.bomb.setVisible(false).setActive(false).setAlpha(0).setRotation(0);
+      target.exploded = false;
     }
-    this.targets = [];
+    this.targets.length = 0;
   }
 }
