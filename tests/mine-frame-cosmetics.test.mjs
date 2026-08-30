@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { COSMETICS, getCosmeticPurchaseCosts } from '../src/data/cosmetics.ts';
-import { createMineFrameSvgMarkup } from '../src/game/cosmetics/MineFrameArt.ts';
+import { createMineFrameSvgDataUri, createMineFrameSvgMarkup } from '../src/game/cosmetics/MineFrameArt.ts';
 import { resolveMineFrameAppearance } from '../src/game/cosmetics/MineFrameAppearance.ts';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import { calculateGearLockerLayout } from '../src/game/garage/gearLockerLayout.ts';
@@ -90,6 +90,14 @@ test('Mine Frames use cached art with shared arming overlays and unchanged comba
   assert.match(arena, /getEquippedCosmeticId\('mineFrame'\)/);
   assert.match(heist, /getEquippedCosmeticId\('mineFrame'\)/);
   assert.match(arena, /STAR_DEATH_MINE_VISUAL_THEME/);
+});
+
+test('Mine Frame Phaser textures use valid base64 SVG data URIs', () => {
+  const uri = createMineFrameSvgDataUri('road-hazard', 0xffa52e, 0xff445f);
+  assert.match(uri, /^data:image\/svg\+xml;base64,/);
+  const decoded = Buffer.from(uri.slice(uri.indexOf(',') + 1), 'base64').toString('utf8');
+  assert.match(decoded, /data-mine-frame="road-hazard"/);
+  assert.match(decoded, /^<svg/);
 });
 
 test('Store, Gear Locker, Economy Console, and controller-ready category navigation include Mine Frames', () => {

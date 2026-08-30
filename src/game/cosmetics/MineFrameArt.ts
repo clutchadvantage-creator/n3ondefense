@@ -98,7 +98,18 @@ export const createMineFrameSvgDataUri = (
   artId: MineFrameArtId,
   primaryColor: number,
   accentColor: number
-): string => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(createMineFrameSvgMarkup(artId, primaryColor, accentColor))}`;
+): string => {
+  // Phaser's SVG loader treats inline data as base64 and decodes it with
+  // `atob()`. A percent-encoded UTF-8 URI therefore throws during BootScene's
+  // preload and prevents the game from starting. Match the established
+  // operative-frame texture path and explicitly encode the SVG as UTF-8
+  // base64 before handing it to Phaser.
+  const source = createMineFrameSvgMarkup(artId, primaryColor, accentColor);
+  const bytes = new TextEncoder().encode(source);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `data:image/svg+xml;base64,${btoa(binary)}`;
+};
 
 export const createMineFrameSvg = (
   artId: MineFrameArtId,
