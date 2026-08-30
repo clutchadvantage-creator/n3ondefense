@@ -1099,7 +1099,7 @@ export class ArenaScene extends Phaser.Scene {
       },
       (x, y, blastRadius, shouldPlaySound, explosionPalette) => {
         if (shouldPlaySound) this.audio.playSfx('bomblet');
-        this.mineExplosionVfx.emit(x, y, blastRadius, explosionPalette, this.time.now, false);
+        this.mineExplosionVfx.emitBomblet(x, y, blastRadius, explosionPalette, this.time.now);
         this.fluxCores?.damageArea(x, y, blastRadius, 9999, 'bomblet');
         this.gasHazard?.carveVisualBlast(
           x,
@@ -6160,7 +6160,7 @@ export class ArenaScene extends Phaser.Scene {
       },
       (x, y, blastRadius, shouldPlaySound, explosionPalette) => {
         if (shouldPlaySound) this.audio.playSfx('bomblet');
-        this.mineExplosionVfx.emit(x, y, blastRadius, explosionPalette, this.time.now, false);
+        this.mineExplosionVfx.emitBomblet(x, y, blastRadius, explosionPalette, this.time.now);
         this.fluxCores?.damageArea(x, y, blastRadius, 9999, 'bomblet');
         this.gasHazard?.carveVisualBlast(
           x,

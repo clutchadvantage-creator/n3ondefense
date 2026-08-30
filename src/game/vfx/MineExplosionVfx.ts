@@ -13,6 +13,8 @@ const FULL_NEBULA_LOBE_COUNT = 9;
 const REDUCED_NEBULA_LOBE_COUNT = 5;
 const FULL_ELECTRIC_BOLT_COUNT = 6;
 const REDUCED_ELECTRIC_BOLT_COUNT = 3;
+const EXPLOSION_STYLE_STANDARD = 0;
+const EXPLOSION_STYLE_BOMBLET = 1;
 
 interface MineExplosionState {
   active: boolean;
@@ -25,6 +27,7 @@ interface MineExplosionState {
   primaryColor: number;
   secondaryColor: number;
   outerColor: number;
+  visualStyle: typeof EXPLOSION_STYLE_STANDARD | typeof EXPLOSION_STYLE_BOMBLET;
 }
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
@@ -63,7 +66,8 @@ export class MineExplosionVfx {
       coreColor: 0xffffff,
       primaryColor: 0xffffff,
       secondaryColor: 0xffffff,
-      outerColor: 0xffffff
+      outerColor: 0xffffff,
+      visualStyle: EXPLOSION_STYLE_STANDARD
     }));
     for (let index = 0; index < FULL_RAY_COUNT; index += 1) {
       const angle = index * Math.PI * 2 / FULL_RAY_COUNT;
@@ -93,6 +97,28 @@ export class MineExplosionVfx {
     this.emitColors(x, y, radius, palette[0], palette[1], palette[2], palette[3], now, cameraImpulse);
   }
 
+  /** Premium bomblet styling inside the same bounded explosion-state pool. */
+  emitBomblet(
+    x: number,
+    y: number,
+    radius: number,
+    palette: ExplosionPalette,
+    now: number
+  ): void {
+    this.emitStyledColors(
+      x,
+      y,
+      radius,
+      palette[0],
+      palette[1],
+      palette[2],
+      palette[3],
+      now,
+      false,
+      EXPLOSION_STYLE_BOMBLET
+    );
+  }
+
   /** Scalar-color variant used by projectile impacts to avoid a palette-array allocation per hit. */
   emitColors(
     x: number,
@@ -104,6 +130,32 @@ export class MineExplosionVfx {
     outerColor: number,
     now: number,
     cameraImpulse = true
+  ): void {
+    this.emitStyledColors(
+      x,
+      y,
+      radius,
+      coreColor,
+      primaryColor,
+      secondaryColor,
+      outerColor,
+      now,
+      cameraImpulse,
+      EXPLOSION_STYLE_STANDARD
+    );
+  }
+
+  private emitStyledColors(
+    x: number,
+    y: number,
+    radius: number,
+    coreColor: number,
+    primaryColor: number,
+    secondaryColor: number,
+    outerColor: number,
+    now: number,
+    cameraImpulse: boolean,
+    visualStyle: typeof EXPLOSION_STYLE_STANDARD | typeof EXPLOSION_STYLE_BOMBLET
   ): void {
     let state = this.states[0];
     let oldestStartedAt = Number.POSITIVE_INFINITY;
@@ -129,6 +181,7 @@ export class MineExplosionVfx {
     state.primaryColor = primaryColor;
     state.secondaryColor = secondaryColor;
     state.outerColor = outerColor;
+    state.visualStyle = visualStyle;
     this.sequence += 1;
 
     // force=false prevents rapid mine chains from repeatedly restarting shake.
@@ -388,6 +441,83 @@ export class MineExplosionVfx {
           x + baseX * offset,
           y + baseY * offset,
           radius * (0.18 + index * 0.018) * (0.7 + lifetimeProgress * 0.55)
+        );
+      }
+    }
+
+    if (state.visualStyle === EXPLOSION_STYLE_BOMBLET) {
+      this.drawBombletPremiumLayers(state, elapsed, lifetimeFade, phaseCos, phaseSin);
+    }
+  }
+
+  /**
+   * A bounded bomblet-only art layer: angular impact flare, perspective pulse,
+   * and four armored shell fragments. Everything draws into the shared batch.
+   */
+  private drawBombletPremiumLayers(
+    state: MineExplosionState,
+    elapsed: number,
+    lifetimeFade: number,
+    phaseCos: number,
+    phaseSin: number
+  ): void {
+    const { x, y, radius, coreColor, primaryColor, secondaryColor } = state;
+    const impactFade = 1 - clamp01(elapsed / 180);
+    if (impactFade > 0) {
+      const reach = radius * (0.18 + easeOutCubic(clamp01(elapsed / 130)) * 0.24);
+      this.graphics.fillStyle(primaryColor, 0.24 * impactFade);
+      this.graphics.fillTriangle(x, y - reach, x + reach * 0.46, y, x, y + reach);
+      this.graphics.fillStyle(secondaryColor, 0.2 * impactFade);
+      this.graphics.fillTriangle(x, y - reach, x - reach * 0.46, y, x, y + reach);
+      this.graphics.lineStyle(2.4, coreColor, 0.86 * impactFade);
+      this.graphics.lineBetween(x - reach * 0.76, y, x + reach * 0.76, y);
+      this.graphics.lineBetween(x, y - reach, x, y + reach);
+    }
+
+    // A flattened containment wave reads clearly against gas and dense combat.
+    const pulseProgress = easeOutCubic(clamp01((elapsed - 42) / 410));
+    if (elapsed >= 42 && pulseProgress < 1) {
+      const pulseFade = (1 - pulseProgress) * lifetimeFade;
+      const pulseWidth = radius * (0.35 + pulseProgress * 1.8);
+      const pulseHeight = radius * (0.13 + pulseProgress * 0.58);
+      this.graphics.lineStyle(3.2, primaryColor, 0.68 * pulseFade);
+      this.graphics.strokeEllipse(x, y + radius * 0.06, pulseWidth, pulseHeight);
+      this.graphics.lineStyle(1.4, coreColor, 0.48 * pulseFade);
+      this.graphics.strokeEllipse(x, y + radius * 0.06, pulseWidth * 0.82, pulseHeight * 0.82);
+    }
+
+    // Four fixed metallic plates imply the upgraded shell breaking apart. They
+    // reuse the precomputed fragment directions and add no objects or arrays.
+    const fragmentProgress = easeOutCubic(clamp01((elapsed - 55) / 520));
+    const fragmentFade = 1 - clamp01((elapsed - 170) / 430);
+    if (elapsed >= 55 && fragmentFade > 0) {
+      for (let index = 0; index < 4; index += 1) {
+        const directionIndex = index * 3;
+        const baseX = this.fragmentCos[directionIndex];
+        const baseY = this.fragmentSin[directionIndex];
+        const directionX = baseX * phaseCos - baseY * phaseSin;
+        const directionY = baseX * phaseSin + baseY * phaseCos;
+        const distance = radius * fragmentProgress * (0.58 + index * 0.1);
+        const fragmentX = x + directionX * distance;
+        const fragmentY = y + directionY * distance + radius * 0.1 * fragmentProgress * fragmentProgress;
+        const size = radius * (0.035 + (index % 2) * 0.008) * fragmentFade;
+        const tangentX = -directionY * size;
+        const tangentY = directionX * size;
+        this.graphics.fillStyle(0x9eb2bd, 0.72 * fragmentFade);
+        this.graphics.fillTriangle(
+          fragmentX + directionX * size * 2.3,
+          fragmentY + directionY * size * 2.3,
+          fragmentX + tangentX,
+          fragmentY + tangentY,
+          fragmentX - tangentX * 0.72,
+          fragmentY - tangentY * 0.72
+        );
+        this.graphics.lineStyle(1.2, index % 2 === 0 ? primaryColor : secondaryColor, 0.78 * fragmentFade);
+        this.graphics.lineBetween(
+          fragmentX - directionX * size,
+          fragmentY - directionY * size,
+          fragmentX + directionX * size * 2,
+          fragmentY + directionY * size * 2
         );
       }
     }

@@ -210,10 +210,16 @@ test('hazard presentation pools are prewarmed and idle graphics redraws are gate
   const explosions = fs.readFileSync(new URL('../src/game/vfx/MineExplosionVfx.ts', import.meta.url), 'utf8');
   assert.match(bomblets, /targetPool = Array\.from/);
   assert.match(bomblets, /target\.marker\.setVisible\(false\)\.setActive\(false\)/);
+  assert.match(bomblets, /This runs at strike setup \(at most 15 times\), never in the frame loop/);
+  assert.match(bomblets, /const bombArt = this\.scene\.add\.graphics\(\)/);
+  assert.match(bomblets, /const bombEmissive = this\.scene\.add\.graphics\(\)/);
   assert.doesNotMatch(bomblets, /this\.targets = points\.map/);
   assert.match(gas, /canisterPool = Array\.from/);
   assert.match(gas, /if \(!hasActiveState\) \{[\s\S]*?impactPresentationVisible/);
   assert.match(gas, /if \(!hasActiveState\) \{[\s\S]*?ignitionPresentationVisible/);
   assert.match(explosions, /if \(this\.activeStateCount === 0\)/);
   assert.match(explosions, /return this\.activeStateCount/);
+  assert.match(explosions, /emitBomblet\(/);
+  assert.match(explosions, /Everything draws into the shared batch/);
+  assert.doesNotMatch(explosions, /private drawBombletPremiumLayers[\s\S]*?scene\.add\./);
 });

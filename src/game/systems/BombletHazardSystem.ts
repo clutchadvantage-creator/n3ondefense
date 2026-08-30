@@ -12,9 +12,8 @@ interface TargetPoint {
   y: number;
   marker: Phaser.GameObjects.Arc;
   bomb: Phaser.GameObjects.Container;
-  horizontalFin: Phaser.GameObjects.Rectangle;
-  verticalFin: Phaser.GameObjects.Rectangle;
-  shell: Phaser.GameObjects.Arc;
+  bombArt: Phaser.GameObjects.Graphics;
+  bombEmissive: Phaser.GameObjects.Graphics;
   explosionPalette: [core: number, primary: number, secondary: number, outer: number];
   delayMs: number;
   exploded: boolean;
@@ -109,7 +108,9 @@ export class BombletHazardSystem {
       target.marker.setScale(pulse).setAlpha(target.exploded ? 0 : 0.28 + fallProgress * 0.55);
       target.bomb
         .setPosition(target.x, target.y - config.fallHeight * (1 - fallProgress))
-        .setRotation(now * 0.007 + index)
+        // Keep the armored nose aimed into the fall, with a small aerodynamic
+        // sway instead of spinning the detailed silhouette into visual noise.
+        .setRotation(Math.sin(now * 0.009 + index * 1.31) * 0.14)
         .setAlpha(dropElapsed < 0 || target.exploded ? 0 : 0.35 + fallProgress * 0.65);
 
       if (!target.exploded && dropElapsed >= config.fallMs) this.detonate(target, player, targets);
@@ -169,8 +170,34 @@ export class BombletHazardSystem {
     for (let index = 0; index < points.length; index += 1) {
       const point = points[index];
       const target = this.targetPool[index];
-      const color = [this.theme.accent, this.theme.secondary, 0xffa340, 0xff5e75][index % 4];
-      const secondaryColor = color === this.theme.secondary ? this.theme.primary : this.theme.secondary;
+      let color = this.theme.accent;
+      let secondaryColor = this.theme.secondary;
+      switch (index % 7) {
+        case 1:
+          color = this.theme.secondary;
+          secondaryColor = this.theme.primary;
+          break;
+        case 2:
+          color = 0xffa340;
+          secondaryColor = 0xff563d;
+          break;
+        case 3:
+          color = 0x39eeff;
+          secondaryColor = 0x3d7dff;
+          break;
+        case 4:
+          color = 0x53ff8a;
+          secondaryColor = 0xb8ff3d;
+          break;
+        case 5:
+          color = 0xff4ed3;
+          secondaryColor = 0xff5e75;
+          break;
+        case 6:
+          color = 0xffdf52;
+          secondaryColor = 0xff8d32;
+          break;
+      }
       target.x = point.x;
       target.y = point.y;
       target.delayMs = index * config.staggerMs;
@@ -188,9 +215,7 @@ export class BombletHazardSystem {
         .setActive(true)
         .setScale(1)
         .setAlpha(0.08);
-      target.horizontalFin.setFillStyle(color, 0.9);
-      target.verticalFin.setFillStyle(color, 0.9);
-      target.shell.setStrokeStyle(3, color, 0.98);
+      this.drawBombletArt(target, color, secondaryColor);
       target.bomb
         .setPosition(point.x, point.y - config.fallHeight)
         .setRotation(0)
@@ -206,11 +231,11 @@ export class BombletHazardSystem {
       .setDepth(5)
       .setVisible(false)
       .setActive(false);
-    const horizontalFin = this.scene.add.rectangle(0, 0, 26, 4, 0xffffff, 0.9);
-    const verticalFin = this.scene.add.rectangle(0, 0, 4, 26, 0xffffff, 0.9);
-    const shell = this.scene.add.circle(0, 0, 9, 0x10141c, 1);
-    const core = this.scene.add.circle(-2, -2, 2, 0xffffff, 0.8);
-    const bomb = this.scene.add.container(0, 0, [horizontalFin, verticalFin, shell, core])
+    // These two retained Graphics objects replace the old four-primitive cross.
+    // They are redrawn only when a strike starts and remain fixed-slot pooled.
+    const bombArt = this.scene.add.graphics();
+    const bombEmissive = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    const bomb = this.scene.add.container(0, 0, [bombArt, bombEmissive])
       .setDepth(8)
       .setVisible(false)
       .setActive(false)
@@ -220,13 +245,106 @@ export class BombletHazardSystem {
       y: 0,
       marker,
       bomb,
-      horizontalFin,
-      verticalFin,
-      shell,
+      bombArt,
+      bombEmissive,
       explosionPalette: [0xffffff, 0xffffff, 0xffffff, 0xffffff],
       delayMs: 0,
       exploded: false
     };
+  }
+
+  /**
+   * Bakes one classic tapered bomb silhouette into its retained slot.
+   * This runs at strike setup (at most 15 times), never in the frame loop.
+   */
+  private drawBombletArt(target: TargetPoint, accent: number, secondaryAccent: number): void {
+    const art = target.bombArt;
+    const glow = target.bombEmissive;
+    art.clear();
+    glow.clear();
+
+    // Compact glow keeps the colored identity readable without obscuring the
+    // dark metallic body or becoming a large transparent-overdraw disc.
+    glow.fillStyle(accent, 0.075).fillEllipse(0, 3, 31, 53);
+    glow.lineStyle(5, accent, 0.12).lineBetween(-10, -22, -5, -12);
+    glow.lineBetween(10, -22, 5, -12);
+    glow.lineStyle(3, secondaryAccent, 0.34).strokeEllipse(0, 15, 19, 7);
+    glow.fillStyle(accent, 0.52).fillRoundedRect(-7, -4, 14, 4, 1.5);
+
+    // Baked drop shadow and broad old-military silhouette.
+    art.fillStyle(0x000000, 0.42).fillEllipse(2.5, 5, 26, 47);
+    art.fillStyle(0x070b11, 1);
+    art.beginPath();
+    art.moveTo(-5, -15);
+    art.lineTo(-15, -28);
+    art.lineTo(-13, -10);
+    art.lineTo(-7, -5);
+    art.lineTo(7, -5);
+    art.lineTo(13, -10);
+    art.lineTo(15, -28);
+    art.lineTo(5, -15);
+    art.closePath();
+    art.fillPath();
+    art.lineStyle(1.6, 0x8ca1ae, 0.72).strokePath();
+
+    // Accent inset on the rear stabilizer fins, with a recessed center stem.
+    art.fillStyle(accent, 0.78);
+    art.beginPath();
+    art.moveTo(-6, -16);
+    art.lineTo(-12, -24);
+    art.lineTo(-11, -12);
+    art.lineTo(-6, -8);
+    art.closePath();
+    art.fillPath();
+    art.beginPath();
+    art.moveTo(6, -16);
+    art.lineTo(12, -24);
+    art.lineTo(11, -12);
+    art.lineTo(6, -8);
+    art.closePath();
+    art.fillPath();
+    art.fillStyle(0x111923, 1).fillRoundedRect(-4, -24, 8, 14, 2);
+    art.lineStyle(1, secondaryAccent, 0.9).strokeRoundedRect(-3.5, -23.5, 7, 13, 2);
+
+    // Layered steel body: broad face, darker side plate, and a cool-metal
+    // highlight create dimensionality while keeping one clean silhouette.
+    art.fillStyle(0x1b2732, 1).fillEllipse(0, 5, 24, 43);
+    art.lineStyle(2, 0x91a9b8, 0.9).strokeEllipse(0, 5, 24, 43);
+    art.fillStyle(0x080d14, 0.88).fillEllipse(4.2, 5.5, 14, 39);
+    art.fillStyle(0x526573, 0.34).fillEllipse(-4.4, 2.5, 7, 31);
+    art.fillStyle(0xc9e1ec, 0.22).fillEllipse(-5.5, -1.5, 2.6, 17);
+
+    // Reinforcement collars, glowing panel seam, vents, and rivets give the
+    // shell the same layered industrial detail language as premium cosmetics.
+    art.fillStyle(0x070b10, 0.94).fillRoundedRect(-10.5, -12, 21, 5, 1.5);
+    art.lineStyle(1.5, accent, 0.96).lineBetween(-9, -9.5, 9, -9.5);
+    art.fillStyle(0x05080d, 0.94).fillRoundedRect(-9, -4.5, 18, 6, 1.5);
+    art.fillStyle(accent, 0.75).fillRoundedRect(-7.5, -3, 15, 3, 1);
+    art.lineStyle(1, secondaryAccent, 0.8).strokeRoundedRect(-7.5, -3, 15, 3, 1);
+    art.lineStyle(1.2, 0x8ca3b1, 0.7).lineBetween(0, 2, 0, 18);
+    art.lineStyle(1.3, secondaryAccent, 0.88).strokeEllipse(0, 15, 18, 6);
+    art.fillStyle(0x020509, 0.88).fillRoundedRect(4, 4, 4, 9, 1);
+    art.lineStyle(1, accent, 0.72);
+    art.lineBetween(5, 6, 7, 6);
+    art.lineBetween(5, 8.5, 7, 8.5);
+    art.lineBetween(5, 11, 7, 11);
+    art.fillStyle(0x05080d, 0.96).fillCircle(-7.4, -7.4, 1.45);
+    art.fillStyle(0xd9f3ff, 0.84).fillCircle(-7.7, -7.7, 0.62);
+    art.fillStyle(0x05080d, 0.96).fillCircle(7.4, -7.4, 1.45);
+    art.fillStyle(accent, 0.92).fillCircle(7.1, -7.7, 0.62);
+
+    // The tapered armored nose remains dark metal with a color-coded arming band.
+    art.fillStyle(0x0a1018, 1);
+    art.beginPath();
+    art.moveTo(-8.4, 17);
+    art.lineTo(0, 29);
+    art.lineTo(8.4, 17);
+    art.closePath();
+    art.fillPath();
+    art.lineStyle(1.6, 0x91a9b8, 0.82).strokePath();
+    art.lineStyle(2.2, accent, 0.94).lineBetween(-7.1, 19, 7.1, 19);
+    art.fillStyle(secondaryAccent, 0.88).fillCircle(0, 25.2, 1.7);
+    art.fillStyle(0xffffff, 0.82).fillCircle(-0.45, 24.7, 0.58);
   }
 
   private detonate(target: TargetPoint, player: Player, damageTargets: HazardDamageTarget[]): void {

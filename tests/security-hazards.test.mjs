@@ -181,8 +181,34 @@ test('bomblets share the bounded mine nebula renderer without temporary blast ob
   assert.match(bomblets, /private readonly targetPool: TargetPoint\[\]/);
   assert.match(bomblets, /target\.explosionPalette\[0\] = 0xffffff/);
   assert.match(bomblets, /target\.explosionPalette\[3\] = this\.theme\.primary/);
-  assert.match(arena, /mineExplosionVfx\.emit\(x, y, blastRadius, explosionPalette, this\.time\.now, false\)/);
+  assert.match(arena, /mineExplosionVfx\.emitBomblet\(x, y, blastRadius, explosionPalette, this\.time\.now\)/);
   assert.match(vfx, /private drawSmokeNebula/);
   assert.match(vfx, /multi-segment bolts crackle through the nebula/);
+  assert.match(vfx, /EXPLOSION_STYLE_BOMBLET/);
+  assert.match(vfx, /private drawBombletPremiumLayers/);
+  assert.match(vfx, /Four fixed metallic plates imply the upgraded shell breaking apart/);
   assert.doesNotMatch(detonate, /scene\.add\.circle|scene\.tweens\.add/);
+});
+
+test('bomblet premium art stays prewarmed, color-varied, and out of the frame loop', () => {
+  const bomblets = readFileSync(new URL('../src/game/systems/BombletHazardSystem.ts', import.meta.url), 'utf8');
+  const updateStart = bomblets.indexOf('  update(now:');
+  const updateEnd = bomblets.indexOf('  destroy():', updateStart);
+  const update = bomblets.slice(updateStart, updateEnd);
+  const strikeStart = bomblets.indexOf('  private startStrike');
+  const strikeEnd = bomblets.indexOf('  private createTargetSlot', strikeStart);
+  const strike = bomblets.slice(strikeStart, strikeEnd);
+  assert.match(bomblets, /bombArt: Phaser\.GameObjects\.Graphics/);
+  assert.match(bomblets, /bombEmissive: Phaser\.GameObjects\.Graphics/);
+  assert.match(bomblets, /private drawBombletArt/);
+  assert.match(bomblets, /switch \(index % 7\)/);
+  for (const accent of ['0xffa340', '0x39eeff', '0x53ff8a', '0xff4ed3', '0xffdf52']) {
+    assert.match(bomblets, new RegExp(accent));
+  }
+  assert.match(bomblets, /classic tapered bomb silhouette/);
+  assert.match(bomblets, /rear stabilizer fins/);
+  assert.match(update, /setRotation\(Math\.sin\(now \* 0\.009 \+ index \* 1\.31\) \* 0\.14\)/);
+  assert.match(strike, /this\.drawBombletArt\(target, color, secondaryColor\)/);
+  assert.doesNotMatch(strike, /scene\.add\./);
+  assert.doesNotMatch(update, /\.clear\(\)|scene\.add\./);
 });
