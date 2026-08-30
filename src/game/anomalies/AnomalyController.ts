@@ -142,6 +142,17 @@ export class AnomalyController {
     return true;
   }
 
+  /** Development-only entry through the exact paid transition path. The only
+   * difference is that the wallet transaction is skipped at the portal gate. */
+  tryEnterDevBypass(): boolean {
+    if (!import.meta.env.DEV || !this.context.isGameplayEligible()
+      || this.stateValue !== 'portal-ready' || !this.visual?.readyForInteraction) return false;
+    const dx = this.context.player.x - this.visual.x;
+    const dy = this.context.player.y - this.visual.y;
+    if (dx * dx + dy * dy > ANOMALY_SCHEDULING.interactionRadius ** 2) return false;
+    return this.tryEnter({ bypassCost: true, source: 'dev-hotkey' });
+  }
+
   setForcedCost(cost: number | null): void {
     this.forcedCost = cost === null ? null : ANOMALY_ENTRY_COSTS.reduce((best, candidate) =>
       Math.abs(candidate - cost) < Math.abs(best - cost) ? candidate : best, ANOMALY_ENTRY_COSTS[0]);
@@ -210,21 +221,25 @@ export class AnomalyController {
     });
   }
 
-  private tryEnter(): void {
-    if (this.stateValue !== 'portal-ready' || !this.definition || !this.visual || !this.visual.readyForInteraction) return;
-    if (this.context.availableFluxCores() < this.cost || !this.context.spendFluxCores(this.cost)) {
+  private tryEnter(options: { bypassCost?: boolean; source?: 'dev-hotkey' } = {}): boolean {
+    if (this.stateValue !== 'portal-ready' || !this.definition || !this.visual || !this.visual.readyForInteraction) return false;
+    if (!options.bypassCost
+      && (this.context.availableFluxCores() < this.cost || !this.context.spendFluxCores(this.cost))) {
       this.hud.show('ACCESS DENIED', `INSUFFICIENT FLUX CORES // ${this.context.availableFluxCores()} / ${this.cost}`, 0xff5f7c, 1800);
       this.context.emitMetric({ name: 'anomaly_entry_denied', anomalyId: this.definition.id, round: this.context.round,
         protocol: this.context.protocol, elapsedMs: this.elapsedMs - this.spawnedAt, cost: this.cost, reason: 'insufficient-flux' });
-      return;
+      return false;
     }
+    if (options.bypassCost && import.meta.env.DEV) console.debug('[HEIST DEV] Portal cost bypassed via F9');
     this.stateValue = 'transitioning';
     this.transitionStartedAt = this.context.scene.time.now;
     this.context.player.setVelocity(0, 0);
     this.audio.play('portal-entry');
     this.context.emitMetric({ name: 'anomaly_entry_confirmed', anomalyId: this.definition.id, round: this.context.round,
-      protocol: this.context.protocol, elapsedMs: this.elapsedMs - this.spawnedAt, cost: this.cost });
+      protocol: this.context.protocol, elapsedMs: this.elapsedMs - this.spawnedAt, cost: this.cost,
+      reason: options.source });
     this.hud.show('ANOMALY TRANSIT LOCKED', 'ARENA STATE SUSPENDING // HEIST LINK ESTABLISHED', 0xff5bd8);
+    return true;
   }
 
   private launchActive(): void {

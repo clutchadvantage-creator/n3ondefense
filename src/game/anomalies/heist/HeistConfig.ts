@@ -1,39 +1,12 @@
-import type { RectSpec } from '../../types.ts';
+import { generateHeistFacilityLayout } from './HeistFacilityLayout.ts';
 
-export const HEIST_WORLD = { width: 4000, height: 2300 } as const;
+export { HEIST_WORLD } from './HeistFacilityLayout.ts';
 
-export const HEIST_WALL_RECTS: readonly RectSpec[] = [
-  { x: 0, y: 0, w: HEIST_WORLD.width, h: 90 },
-  { x: 0, y: HEIST_WORLD.height - 90, w: HEIST_WORLD.width, h: 90 },
-  { x: 0, y: 0, w: 90, h: HEIST_WORLD.height },
-  { x: HEIST_WORLD.width - 90, y: 0, w: 90, h: HEIST_WORLD.height },
-  { x: 850, y: 90, w: 105, h: 1220 },
-  { x: 1600, y: 980, w: 110, h: 1230 },
-  { x: 2400, y: 90, w: 110, h: 1200 },
-  { x: 3158, y: 90, w: 124, h: 1290 },
-  { x: 3158, y: 1940, w: 124, h: 270 },
-  { x: 250, y: 920, w: 330, h: 95 },
-  { x: 1080, y: 1110, w: 270, h: 90 },
-  { x: 1880, y: 1190, w: 300, h: 92 },
-  { x: 2670, y: 730, w: 280, h: 94 },
-  { x: 2760, y: 1860, w: 250, h: 80 }
-] as const;
-
-export const HEIST_ROUTE = [
-  { x: 250, y: 610 },
-  { x: 650, y: 610 },
-  { x: 650, y: 1560 },
-  { x: 1180, y: 1560 },
-  { x: 1380, y: 1560 },
-  { x: 1380, y: 690 },
-  { x: 2020, y: 690 },
-  { x: 2200, y: 690 },
-  { x: 2200, y: 1560 },
-  { x: 2780, y: 1560 },
-  { x: 3060, y: 1660 },
-  { x: 3370, y: 1660 },
-  { x: 3700, y: 1660 }
-] as const;
+/** Stable compatibility fixture used by tests and diagnostics. Live HEIST runs
+ * generate their own layout from the run/session seed. */
+export const DEFAULT_HEIST_LAYOUT = generateHeistFacilityLayout(0x48333135);
+export const HEIST_WALL_RECTS = DEFAULT_HEIST_LAYOUT.wallRects;
+export const HEIST_ROUTE = DEFAULT_HEIST_LAYOUT.route;
 
 export const HEIST_BALANCE = {
   containerMinimum: 5,
@@ -43,12 +16,15 @@ export const HEIST_BALANCE = {
   enemyPerEightRounds: 1,
   maximumRegularEnemies: 16,
   extractionRadius: 104,
-  vaultDoorX: 3220,
-  vaultDoorY: 1660,
   vaultApproachRadius: 330,
-  vaultInsideX: 3340,
   doorOpenDurationMs: 980,
   alarmDelayMs: 1350,
+  extractionDurationMs: 45_000,
+  escapeReinforcementIntervalMs: 5_800,
+  escapeInitialEnemyCount: 11,
+  escapeMaximumEnemies: 24,
+  escapeReinforcementCount: 3,
+  enemyAnomalyLootChance: 0.075,
   transitionDurationMs: 620,
   safeReturnInvulnerabilityMs: 1500,
   supportHealthAmount: 34,
@@ -92,5 +68,7 @@ export const HEIST_REWARD_TABLE = {
   miniBossPlasmaBase: 32,
   miniBossPlasmaPerRound: 0.28,
   fallbackCreditsBase: 75_000,
-  fallbackCreditsPerRound: 1_000
+  fallbackCreditsPerRound: 1_000,
+  enemyBonusCreditsBase: 650,
+  enemyBonusCreditsPerRound: 85
 } as const;

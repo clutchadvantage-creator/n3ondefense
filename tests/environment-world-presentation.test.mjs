@@ -64,9 +64,11 @@ test('bombsites retain objective behavior while using a layered metallic landing
 
 test('HEIST keeps a separate industrial identity and bounded facility presentation', () => {
   const facility = source('../src/game/anomalies/heist/HeistFacility.ts');
-  assert.match(facility, /identity: 'heist-interior'/);
+  assert.match(facility, /identity: 'heist-maze-facility'/);
   assert.match(facility, /createEnvironmentDecalPlan\('heist'/);
-  assert.match(facility, /Research machinery/);
+  assert.match(facility, /RESEARCH SECTOR/);
+  assert.match(facility, /MAINTENANCE ACCESS/);
+  assert.match(facility, /drawBeveledTechPlate/);
   assert.match(facility, /drawHazardStripes/);
   assert.match(facility, /staticGraphicsBatches: 1/);
   assert.match(facility, /liveAmbientBatches: 1/);

@@ -4,6 +4,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { ANOMALY_DEFINITIONS, ANOMALY_ENTRY_COSTS, ANOMALY_SCHEDULING } from '../src/game/anomalies/AnomalyRegistry.ts';
 import { HeistRewardService, isHeistModRewardEligible } from '../src/game/anomalies/heist/HeistRewardService.ts';
 import { HEIST_BALANCE, HEIST_ROUTE, HEIST_WALL_RECTS, HEIST_WORLD } from '../src/game/anomalies/heist/HeistConfig.ts';
+import {
+  findHeistNodePath,
+  generateHeistFacilityLayout,
+  validateHeistFacilityLayout
+} from '../src/game/anomalies/heist/HeistFacilityLayout.ts';
 import { AnomalyReturnLifecycle } from '../src/game/anomalies/AnomalyReturnLifecycle.ts';
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -70,8 +75,8 @@ test('Arena suspension is the authoritative preservation boundary and only commi
 
 test('HEIST failure bypasses normal defeat and restores through the Arena return event', () => {
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
-  assert.match(heist, /private failHeist\(\)/);
-  assert.match(heist, /beginReturnFade\(false, 'player-dead', 500\)/);
+  assert.match(heist, /private failHeist\(reason: 'player-dead' \| 'extraction-timeout' = 'player-dead'\)/);
+  assert.match(heist, /beginReturnFade\(false, reason, 500\)/);
   assert.doesNotMatch(heist, /SceneKeys\.Results|triggerDefeat/);
   assert.match(heist, /arena\.events\.emit\('anomaly-return'/);
   assert.match(heist, /Phaser\.Cameras\.Scene2D\.Events\.FADE_OUT_COMPLETE/);
@@ -145,7 +150,8 @@ test('HEIST uses the shared combat runtime instead of a parallel simplified load
   assert.match(heist, /findFenceHit[\s\S]*?fence\.hp -= projectile\.damage/);
   assert.match(heist, /applyEnemyHealthMode/);
   assert.match(heist, /applyEnemyDamageMode/);
-  assert.match(heist, /resourcePickupCapMultiplier/);
+  assert.match(heist, /resourcePickupCap\(/);
+  assert.match(heist, /nextPickupBuffStack\(/);
   assert.match(heist, /this\.player\.hp = Math\.max\(0, source\.hp\)/);
   assert.match(heist, /this\.player\.energy = Math\.max\(0, source\.energy\)/);
   assert.match(heist, /this\.time\.now < this\.abilityState\.shieldActiveUntil/);
@@ -158,8 +164,8 @@ test('HEIST vault collision follows the real door body and world geometry in bot
   assert.match(heist, /HEIST_WORLD\.height - 74/);
   assert.match(heist, /this\.facility\.vaultDoor\.body\?\.enable/);
   assert.doesNotMatch(heist, /y > 948/);
-  assert.match(facility, /door\.body\.enable = false/);
-  assert.match(facility, /door\.body\.enable = true/);
+  assert.match(facility, /body\.disableBody\(true, false\)/);
+  assert.match(facility, /body\.enableBody\(false, spec\.x, spec\.y, true, false\)/);
 });
 
 test('HEIST facility and shared Arcade HUD use bounded dimensional presentation layers', () => {
@@ -255,12 +261,51 @@ test('Anomaly return lifecycle is idempotent across 12 consecutive transfers', (
 test('HEIST facility is a multi-room route with no guide point embedded in collision geometry', () => {
   assert.ok(HEIST_WORLD.width >= 4_000);
   assert.ok(HEIST_WORLD.height >= 2_300);
-  assert.ok(HEIST_ROUTE.length >= 12);
+  assert.ok(HEIST_ROUTE.length >= 9);
   for (const point of HEIST_ROUTE) {
     const blocked = HEIST_WALL_RECTS.some((rect) => point.x >= rect.x && point.x <= rect.x + rect.w
       && point.y >= rect.y && point.y <= rect.y + rect.h);
     assert.equal(blocked, false, `route point ${point.x},${point.y} is inside a wall`);
   }
+});
+
+test('seeded HEIST layouts validate across varied entry and extraction nodes', () => {
+  const entries = new Set();
+  const extractions = new Set();
+  for (let seed = 1; seed <= 96; seed += 1) {
+    const layout = generateHeistFacilityLayout(seed * 0x45d9f3b);
+    const validation = validateHeistFacilityLayout(layout);
+    assert.deepEqual(validation.reasons, [], `seed ${seed}: ${validation.reasons.join(', ')}`);
+    assert.equal(validation.valid, true);
+    assert.notEqual(layout.entryNodeId, layout.extractionNodeId);
+    assert.ok(layout.vaultDoors.length >= 2);
+    assert.ok(layout.diagnostics.loops >= 1);
+    assert.ok(layout.diagnostics.deadEnds >= 1);
+    assert.equal(layout.diagnostics.initialVaultLineOfSightBlocked, true);
+    assert.ok(findHeistNodePath(layout, layout.entryNodeId, layout.vaultNodeId).length >= 9);
+    assert.ok(findHeistNodePath(layout, layout.vaultNodeId, layout.extractionNodeId).length >= 7);
+    entries.add(layout.entryNodeId);
+    extractions.add(layout.extractionNodeId);
+  }
+  assert.ok(entries.size >= 8, `expected varied entry nodes, got ${entries.size}`);
+  assert.ok(extractions.size >= 8, `expected varied extraction nodes, got ${extractions.size}`);
+});
+
+test('HEIST DEV F9 bypass skips only payment and enters through the normal transition pipeline', () => {
+  const controller = source('../src/game/anomalies/AnomalyController.ts');
+  const arena = source('../src/game/scenes/ArenaScene.ts');
+  const bypass = controller.slice(controller.indexOf('tryEnterDevBypass()'), controller.indexOf('setForcedCost'));
+  assert.match(bypass, /import\.meta\.env\.DEV/);
+  assert.match(bypass, /this\.context\.isGameplayEligible\(\)/);
+  assert.match(bypass, /stateValue !== 'portal-ready'/);
+  assert.match(bypass, /readyForInteraction/);
+  assert.match(bypass, /interactionRadius/);
+  assert.match(bypass, /this\.tryEnter\(\{ bypassCost: true, source: 'dev-hotkey' \}\)/);
+  assert.equal((controller.match(/this\.context\.beginTransition\(/g) ?? []).length, 1,
+    'paid and DEV entry must share one transition owner');
+  assert.match(controller, /Portal cost bypassed via F9/);
+  assert.match(arena, /import\.meta\.env\.DEV && Phaser\.Input\.Keyboard\.JustDown\(this\.keys\.f9\)/);
+  assert.match(arena, /this\.anomalyController\?\.tryEnterDevBypass\(\)/);
 });
 
 test('HEIST creates physical provisional loot and extraction never waits for every hostile to die', () => {
@@ -276,6 +321,25 @@ test('HEIST creates physical provisional loot and extraction never waits for eve
   assert.match(heist, /this\.openExtraction\(\);/);
   assert.doesNotMatch(heist, /this\.enemies\.length === 0\) this\.openExtraction/);
   assert.match(heist, /phase === 'escape'/);
+});
+
+test('HEIST escape timer, traps, patrols, and reinforcements remain bounded and phase-correct', () => {
+  const heist = source('../src/game/anomalies/heist/HeistScene.ts');
+  const facility = source('../src/game/anomalies/heist/HeistFacility.ts');
+  const traps = source('../src/game/anomalies/heist/HeistTrapSystem.ts');
+  assert.equal(HEIST_BALANCE.extractionDurationMs, 45_000);
+  assert.match(heist, /phase === 'egress-ready' && !this\.facility\.isInsideVault/);
+  assert.match(heist, /this\.escapeDeadline = now \+ HEIST_BALANCE\.extractionDurationMs/);
+  assert.match(heist, /private spawnInfiltrationPatrols/);
+  assert.match(heist, /escapeMaximumEnemies - this\.enemies\.length/);
+  assert.match(heist, /selectEnemyPickup/);
+  assert.match(heist, /enemyAnomalyLootChance/);
+  assert.match(facility, /heistPathPoints\(layout, from, layout\.extractionNodeId\)/);
+  assert.match(facility, /guideMarkers\.length/);
+  for (const type of ['fire', 'spike', 'snag']) assert.match(traps, new RegExp(`'${type}'`));
+  assert.match(traps, /this\.nextUpdateAt = now \+ 50/);
+  assert.match(traps, /physicsBodies: 0/);
+  assert.match(traps, /now \+ 1_000/);
 });
 
 test('HEIST Supreme Mod eligibility is restricted to Supreme Overdrive protocols', () => {

@@ -526,6 +526,7 @@ export class ArenaScene extends Phaser.Scene {
   };
 
   private keys!: {
+    f9: Phaser.Input.Keyboard.Key;
     f8: Phaser.Input.Keyboard.Key;
     f7: Phaser.Input.Keyboard.Key;
     f6: Phaser.Input.Keyboard.Key;
@@ -1386,6 +1387,9 @@ export class ArenaScene extends Phaser.Scene {
     if (import.meta.env.DEV && Phaser.Input.Keyboard.JustDown(this.keys.f8)) {
       this.balanceTelemetry?.setVisible(!this.balanceTelemetry.visible);
     }
+    if (import.meta.env.DEV && Phaser.Input.Keyboard.JustDown(this.keys.f9)) {
+      this.anomalyController?.tryEnterDevBypass();
+    }
     if(import.meta.env.DEV&&Phaser.Input.Keyboard.JustDown(this.keys.f7)){
       this.createRoundFromDefinition(this.roundManager.currentDefinition());
       return;
@@ -1560,6 +1564,7 @@ export class ArenaScene extends Phaser.Scene {
     if (!kb) throw new Error('Keyboard input unavailable.');
 
     this.keys = {
+      f9: kb.addKey('F9'),
       f8: kb.addKey('F8')
       ,f7: kb.addKey('F7')
       ,f6: kb.addKey('F6')

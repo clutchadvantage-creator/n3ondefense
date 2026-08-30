@@ -201,7 +201,7 @@ export interface AnomalyReturnResult {
   success: boolean;
   sourcePortal: { x: number; y: number };
   loot: PendingAnomalyLoot;
-  reason: 'extracted' | 'player-dead' | 'scene-shutdown';
+  reason: 'extracted' | 'player-dead' | 'extraction-timeout' | 'scene-shutdown';
   /** Final active device in the anomaly, used to restore the matching Arena input path. */
   inputDevice?: InputDevice;
   playerState?: AnomalyPlayerState;

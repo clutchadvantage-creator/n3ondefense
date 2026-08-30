@@ -93,6 +93,21 @@ export class HeistRewardService {
     )) };
   }
 
+  /** Small provisional anomaly opportunities layered on top of the normal
+   * shared enemy-pickup roll. This never commits before successful extraction. */
+  rollEnemyBonus(): HeistContainerReward {
+    const roll = this.random.next();
+    if (roll < 0.7) return { kind: 'credits', amount: Math.round(
+      HEIST_REWARD_TABLE.enemyBonusCreditsBase
+      + this.round * HEIST_REWARD_TABLE.enemyBonusCreditsPerRound
+      + this.random.float(0, HEIST_REWARD_TABLE.enemyBonusCreditsBase)
+    ) };
+    if (roll < 0.9) return { kind: 'plasmaChips', amount: Math.max(1, Math.round(1 + this.round * 0.035 + this.random.float(0, 2))) };
+    if (roll < 0.97) return { kind: 'coreTokens', amount: 1 };
+    if (roll < 0.995) return { kind: 'fluxCores', amount: 1 };
+    return this.rollModOrFallback();
+  }
+
   private rollModOrFallback(): HeistContainerReward {
     const mod = rollModDrop({
       source: 'anomaly', round: this.round, seed: this.seed, sequence: this.sequence++, protocol: this.protocol, guaranteed: true
