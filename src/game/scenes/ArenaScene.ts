@@ -77,6 +77,7 @@ import { resolveSweptCircleMotion } from '../physics/SweptCircleCollision.ts';
 import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
 import { MineExplosionVfx } from '../vfx/MineExplosionVfx.ts';
 import { BombExplosionCosmeticVfx } from '../cosmetics/BombExplosionCosmeticVfx.ts';
+import { resolveMineFrameAppearance } from '../cosmetics/MineFrameAppearance.ts';
 import { OperativeShieldEffect } from '../vfx/OperativeShieldEffect.ts';
 import { BOMB_EXPLOSION_COSMETIC_DEFINITIONS } from '../cosmetics/BombExplosionCosmeticDefinitions.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
@@ -3769,7 +3770,11 @@ export class ArenaScene extends Phaser.Scene {
         this.audio.playSfx('unavailable');
         return;
       }
-      const mine = new Mine(this, x, y, COLORS.orange, cfg.armMs, cfg.damage, cfg.radius);
+      const mine = new Mine(
+        this, x, y, COLORS.orange, cfg.armMs, cfg.damage, cfg.radius,
+        undefined, undefined,
+        resolveMineFrameAppearance(getCosmeticById(SaveSystem.getEquippedCosmeticId('mineFrame')))
+      );
       this.mines.push(mine);
     }
 
@@ -3810,6 +3815,7 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
+    const mineFrame = resolveMineFrameAppearance(getCosmeticById(SaveSystem.getEquippedCosmeticId('mineFrame')));
     points.forEach((point, index) => {
       this.mines.push(new Mine(
         this,
@@ -3824,7 +3830,9 @@ export class ArenaScene extends Phaser.Scene {
           fromY: this.player.y,
           durationMs: salvo.flightMs,
           delayMs: index * salvo.staggerMs
-        }
+        },
+        undefined,
+        mineFrame
       ));
     });
     this.player.spendEnergy(totalEnergyCost);
@@ -7308,6 +7316,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const mineCfg = this.getAbilityConfig('mine');
+    const mineFrame = resolveMineFrameAppearance(getCosmeticById(SaveSystem.getEquippedCosmeticId('mineFrame')));
     for (let index = 0; index < 4; index += 1) {
       const angle = index / 4 * Math.PI * 2 + Math.PI / 4;
       this.mines.push(new Mine(
@@ -7317,7 +7326,10 @@ export class ArenaScene extends Phaser.Scene {
         COLORS.orange,
         mineCfg.armMs,
         mineCfg.damage,
-        mineCfg.radius
+        mineCfg.radius,
+        undefined,
+        undefined,
+        mineFrame
       ));
     }
 

@@ -257,10 +257,20 @@ export type TurretSkinCosmeticEffectId =
   | 'arctic-zero'
   | 'mini-orbital'
   | 'bomb-buddy';
+export type MineFrameCosmeticEffectId =
+  | 'road-hazard'
+  | 'lifeline'
+  | 'hatchling'
+  | 'bed-side-manner'
+  | 'old-reliable'
+  | 'pond-trap'
+  | 'breakfast-blast'
+  | 'roll-station'
+  | 'watcher';
 
 export interface CosmeticOption {
   id: string;
-  category: 'playerColor' | 'playerShape' | 'projectileColor' | 'projectileShape' | 'trailColor' | 'bombColor' | 'turretSkin' | 'fenceStyle' | 'dashTrail';
+  category: 'playerColor' | 'playerShape' | 'projectileColor' | 'projectileShape' | 'trailColor' | 'bombColor' | 'turretSkin' | 'mineFrame' | 'fenceStyle' | 'dashTrail';
   label: string;
   currency: 'credits' | 'coreTokens' | 'plasmaChips';
   cost: number;
@@ -291,6 +301,8 @@ export interface CosmeticOption {
   dashTrailEffect?: DashTrailCosmeticEffectId;
   /** Presentation-only turret chassis. Turret combat values and body size are unchanged. */
   turretSkinEffect?: TurretSkinCosmeticEffectId;
+  /** Presentation-only mine chassis. Trigger radius, damage, timing, and collision are unchanged. */
+  mineFrameEffect?: MineFrameCosmeticEffectId;
   /** Store and locker presentation copy; gameplay never reads this field. */
   description?: string;
 }

@@ -140,7 +140,7 @@ const CURRENCY_META: Record<ExchangeCurrency, { label: string; purpose: string; 
 const COSMETIC_CATEGORY_LABELS: Record<CosmeticOption['category'], string> = {
   playerColor: 'Operative Colors', playerShape: 'Operative Frames', projectileColor: 'Projectile Colors',
   projectileShape: 'Projectile Shapes', trailColor: 'Trails', bombColor: 'Bombsites',
-  turretSkin: 'Turrets', fenceStyle: 'Fences', dashTrail: 'Dash Trails'
+  turretSkin: 'Turret Frames', mineFrame: 'Mine Frames', fenceStyle: 'Fence Frames', dashTrail: 'Dash Trails'
 };
 
 const UPGRADE_CATEGORY_LABELS: Record<UpgradeDefinition['category'], string> = {

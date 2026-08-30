@@ -137,6 +137,9 @@
 .cosmetic-visual.projectileShape[data-shape=sword].large b { width:72px;height:30px; }.cosmetic-visual.projectileShape[data-shape=bubbles].large b { width:64px;height:50px; }.cosmetic-visual.projectileShape[data-shape=balloons].large b { width:66px;height:54px; }.cosmetic-visual.projectileShape[data-shape=carrot].large b { width:72px;height:33px; }
 .cosmetic-visual.bombColor b { animation:preview-pulse 1.4s ease-in-out infinite; }.cosmetic-visual.turretSkin b { border-radius:4px;clip-path:polygon(50% 0,100% 100%,0 100%);animation:store-rotate 3s linear infinite; }.cosmetic-visual.fenceStyle b { width:105px;height:7px;border-radius:0;animation:fence-current .7s ease-in-out infinite; }
 .cosmetic-visual.turretSkin.premium-turret-art > b,.cosmetic-visual.turretSkin.premium-turret-art > span,.cosmetic-visual.turretSkin.premium-turret-art > i { display:none; }
+.cosmetic-visual.mineFrame.premium-mine-frame-art > b,.cosmetic-visual.mineFrame.premium-mine-frame-art > span,.cosmetic-visual.mineFrame.premium-mine-frame-art > i { display:none; }
+.cosmetic-visual.mineFrame .premium-mine-frame-svg { position:absolute;z-index:2;width:112px;height:90px;overflow:visible;filter:drop-shadow(0 0 8px color-mix(in srgb,var(--item-color) 58%,transparent));transform:translateY(1px); }
+.cosmetic-visual.mineFrame.large .premium-mine-frame-svg { width:218px;height:174px; }
 .premium-turret-svg { position:absolute;z-index:2;width:118px;height:94px;overflow:visible;filter:drop-shadow(0 0 7px color-mix(in srgb,var(--item-color) 55%,transparent));transform:translateY(2px); }
 .cosmetic-visual.large .premium-turret-svg { width:220px;height:176px; }
 .premium-turret-svg .pt-shadow { fill:#000;opacity:.58; }.premium-turret-svg .pt-base { fill:#07141e;stroke:var(--item-color);stroke-width:3; }.premium-turret-svg .pt-base.heavy { fill:#11151a;stroke-width:4; }

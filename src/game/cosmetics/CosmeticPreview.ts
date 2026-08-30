@@ -324,6 +324,28 @@ export const createCosmeticPreview = (
       addCircle(0, 0, unit * 0.16, 1);
       break;
     }
+    case 'mineFrame': {
+      const art = addImage(item.textureKey ?? 'mine-frame-default', maxWidth, maxHeight, null);
+      const ringRadius = Math.min(maxWidth, maxHeight) * 0.16;
+      const armedRing = addCircle(0, 0, ringRadius, 0.06, Math.max(1, ringRadius * 0.1));
+      const armedCore = addCircle(0, 0, Math.max(2, ringRadius * 0.28), 0.9, 1);
+      scene.tweens.add({
+        targets: [armedRing, armedCore],
+        alpha: { from: 0.42, to: 1 },
+        scaleX: { from: 0.86, to: 1.12 },
+        scaleY: { from: 0.86, to: 1.12 },
+        duration: 760,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+      scene.tweens.add({ targets: art, angle: { from: -1.2, to: 1.2 }, duration: 1_800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      container.once('destroy', () => {
+        scene.tweens.killTweensOf(art);
+        scene.tweens.killTweensOf([armedRing, armedCore]);
+      });
+      break;
+    }
     case 'fenceStyle': {
       const fenceWidth = maxWidth * 0.88;
       const beam = addRectangle(0, 0, fenceWidth, Math.max(4, maxHeight * 0.14), 0.66).setStrokeStyle(2, initialColor, 1);

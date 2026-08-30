@@ -11,13 +11,14 @@ export interface GearLockerPanelOptions {
 
 export const GEAR_LOCKER_CATEGORY_LABELS: Record<CosmeticOption['category'], string> = {
   playerColor: 'OPERATIVE COLOR',
-  playerShape: 'OPERATIVE FRAME',
+  playerShape: 'OPERATIVE FRAMES',
   projectileColor: 'PROJECTILE COLOR',
   projectileShape: 'PROJECTILE SHAPE',
   trailColor: 'MOVEMENT TRAIL',
   bombColor: 'BOMBSITE EXPLOSION',
-  turretSkin: 'TURRET SKIN',
-  fenceStyle: 'FENCE STYLE',
+  turretSkin: 'TURRET FRAMES',
+  mineFrame: 'MINE FRAMES',
+  fenceStyle: 'FENCE FRAMES',
   dashTrail: 'DASH TRAIL'
 };
 
@@ -113,6 +114,13 @@ export const createGearLockerCategoryIcon = (
       line(-11, 12, 11, 12, 3); line(-7, 12, -4, 2, 3); line(7, 12, 4, 2, 3);
       root.add(scene.add.rectangle(0, 0, 15, 8, color, 0.18).setStrokeStyle(2, color, 0.95));
       line(4, -4, 13, -9, 3);
+      break;
+    case 'mineFrame':
+      circle(0, 6, 10, 0.08); circle(0, 6, 4, 0.74);
+      for (let index = 0; index < 8; index += 1) {
+        const angle = index * Math.PI / 4;
+        line(Math.cos(angle) * 10, 6 + Math.sin(angle) * 10, Math.cos(angle) * 15, 6 + Math.sin(angle) * 15, 2);
+      }
       break;
     case 'fenceStyle':
       line(-10, -5, -10, 16, 3); line(10, -5, 10, 16, 3);

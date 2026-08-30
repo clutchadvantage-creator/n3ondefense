@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { ExplosionPalette } from '../vfx/MineExplosionVfx.ts';
+import type { MineFrameAppearance } from '../cosmetics/MineFrameAppearance.ts';
 
 export interface MineLaunchOptions {
   fromX: number;
@@ -59,6 +60,10 @@ export class Mine {
   private readonly innerRing: Phaser.GameObjects.Arc;
   private readonly core: Phaser.GameObjects.Arc;
   private readonly spikeRing: Phaser.GameObjects.Container;
+  private readonly frameArt: Phaser.GameObjects.Image | null;
+  private readonly frameArtBaseScaleX: number;
+  private readonly frameArtBaseScaleY: number;
+  private readonly premiumFrame: boolean;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -69,25 +74,41 @@ export class Mine {
     damage: number,
     radius: number,
     launch?: MineLaunchOptions,
-    private readonly visualTheme: MineVisualTheme = PLAYER_MINE_VISUAL_THEME
+    private readonly visualTheme: MineVisualTheme = PLAYER_MINE_VISUAL_THEME,
+    frameAppearance?: MineFrameAppearance
   ) {
-    this.glow = scene.add.circle(0, 0, 18, color, 0.14).setBlendMode(Phaser.BlendModes.ADD);
+    this.premiumFrame = !!frameAppearance && scene.textures.exists(frameAppearance.textureKey);
+    const framePrimary = frameAppearance?.primaryColor ?? color;
+    const frameAccent = frameAppearance?.accentColor ?? this.visualTheme.secondaryColor;
+    this.glow = scene.add.circle(0, 0, this.premiumFrame ? 22 : 18, framePrimary, 0.14).setBlendMode(Phaser.BlendModes.ADD);
     this.spikeRing = scene.add.container(0, 0);
-    for (let index = 0; index < 12; index += 1) {
-      const angle = index * Math.PI * 2 / 12;
-      const spikeColor = index % 2 === 0 ? color : this.visualTheme.secondaryColor;
-      const spike = scene.add.triangle(0, 0, -2.8, 3, 0, -10, 2.8, 3, spikeColor, 0.96)
-        .setPosition(Math.cos(angle) * 12, Math.sin(angle) * 12)
-        .setRotation(angle + Math.PI / 2)
-        .setStrokeStyle(1, this.visualTheme.spikeStrokeColor, 0.55);
-      this.spikeRing.add(spike);
+    if (!this.premiumFrame) {
+      for (let index = 0; index < 12; index += 1) {
+        const angle = index * Math.PI * 2 / 12;
+        const spikeColor = index % 2 === 0 ? color : this.visualTheme.secondaryColor;
+        const spike = scene.add.triangle(0, 0, -2.8, 3, 0, -10, 2.8, 3, spikeColor, 0.96)
+          .setPosition(Math.cos(angle) * 12, Math.sin(angle) * 12)
+          .setRotation(angle + Math.PI / 2)
+          .setStrokeStyle(1, this.visualTheme.spikeStrokeColor, 0.55);
+        this.spikeRing.add(spike);
+      }
     }
-    this.shell = scene.add.circle(0, 0, 11, this.visualTheme.shellFillColor, 0.98).setStrokeStyle(2.5, color, 1);
-    this.innerRing = scene.add.circle(0, 0, 7, this.visualTheme.innerFillColor, 0.98).setStrokeStyle(2, this.visualTheme.secondaryColor, 0.92);
-    this.core = scene.add.circle(0, 0, 3.4, color, 0.92).setStrokeStyle(1, 0xffffff, 0.92);
+    this.frameArt = this.premiumFrame && frameAppearance
+      ? scene.add.image(0, 0, frameAppearance.textureKey).setDisplaySize(50, 43)
+      : null;
+    this.frameArtBaseScaleX = this.frameArt?.scaleX ?? 1;
+    this.frameArtBaseScaleY = this.frameArt?.scaleY ?? 1;
+    this.shell = scene.add.circle(0, 0, this.premiumFrame ? 9.5 : 11, this.visualTheme.shellFillColor, this.premiumFrame ? 0.08 : 0.98)
+      .setStrokeStyle(this.premiumFrame ? 1.4 : 2.5, framePrimary, this.premiumFrame ? 0.42 : 1);
+    this.innerRing = scene.add.circle(0, 0, this.premiumFrame ? 6.2 : 7, this.visualTheme.innerFillColor, this.premiumFrame ? 0.12 : 0.98)
+      .setStrokeStyle(this.premiumFrame ? 1.2 : 2, frameAccent, this.premiumFrame ? 0.62 : 0.92);
+    this.core = scene.add.circle(0, 0, this.premiumFrame ? 2.8 : 3.4, framePrimary, 0.92).setStrokeStyle(1, 0xffffff, 0.92);
     const startX = launch?.fromX ?? x;
     const startY = launch?.fromY ?? y;
-    this.sprite = scene.add.container(startX, startY, [this.glow, this.spikeRing, this.shell, this.innerRing, this.core])
+    const displayObjects: Phaser.GameObjects.GameObject[] = [this.glow, this.spikeRing];
+    if (this.frameArt) displayObjects.push(this.frameArt);
+    displayObjects.push(this.shell, this.innerRing, this.core);
+    this.sprite = scene.add.container(startX, startY, displayObjects)
       .setDepth(6);
     const launchDelay = Math.max(0, launch?.delayMs ?? 0);
     const launchDuration = Math.max(0, launch?.durationMs ?? 0);
@@ -115,8 +136,9 @@ export class Mine {
   update(now: number): void {
     if (!this.armed && now >= this.armAt) {
       this.armed = true;
-      this.shell.setFillStyle(this.visualTheme.armedShellFillColor, 1).setStrokeStyle(3, this.visualTheme.armedShellStrokeColor, 1);
-      this.innerRing.setStrokeStyle(2, this.visualTheme.armedInnerStrokeColor, 1);
+      this.shell.setFillStyle(this.visualTheme.armedShellFillColor, this.premiumFrame ? 0.12 : 1)
+        .setStrokeStyle(this.premiumFrame ? 1.8 : 3, this.visualTheme.armedShellStrokeColor, 1);
+      this.innerRing.setStrokeStyle(this.premiumFrame ? 1.5 : 2, this.visualTheme.armedInnerStrokeColor, 1);
       this.core.setFillStyle(this.visualTheme.armedCoreColor, 1);
     }
     const urgency = this.detonateAt > 0 ? 0.022 : this.armed ? 0.011 : 0.006;
@@ -125,6 +147,10 @@ export class Mine {
     this.glow.setScale(0.82 + pulse * (this.detonateAt > 0 ? 0.58 : 0.28));
     this.core.setScale(0.84 + pulse * 0.34);
     this.spikeRing.setRotation(now * (this.armed ? 0.00105 : 0.00042));
+    if (this.frameArt) {
+      const breathe = 1 + pulse * 0.025;
+      this.frameArt.setScale(this.frameArtBaseScaleX * breathe, this.frameArtBaseScaleY * breathe);
+    }
   }
 
   beginDetonation(now: number, delayMs: number): void {

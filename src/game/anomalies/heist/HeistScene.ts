@@ -27,6 +27,7 @@ import { UniformSpatialGrid } from '../../performance/UniformSpatialGrid.ts';
 import { ProjectileTrailBatch } from '../../performance/ProjectileTrailBatch.ts';
 import { MineExplosionVfx } from '../../vfx/MineExplosionVfx.ts';
 import { OperativeShieldEffect } from '../../vfx/OperativeShieldEffect.ts';
+import { resolveMineFrameAppearance } from '../../cosmetics/MineFrameAppearance.ts';
 import { drawReticle } from '../../ui/ReticleRenderer.ts';
 import { createPauseMenuView, type PauseMenuView } from '../../ui/PauseMenuUi.ts';
 import { MOD_BALANCE } from '../../mods/modBalance.ts';
@@ -795,7 +796,11 @@ export class HeistScene extends Phaser.Scene {
     }
     if (!this.mineChargeRack.spend(now, cfg.cooldownMs)) return;
     this.player.spendEnergy(cfg.energyCost);
-    this.mines.push(new Mine(this, aim.x, aim.y, COLORS.orange, cfg.armMs, cfg.damage, cfg.radius));
+    this.mines.push(new Mine(
+      this, aim.x, aim.y, COLORS.orange, cfg.armMs, cfg.damage, cfg.radius,
+      undefined, undefined,
+      resolveMineFrameAppearance(getCosmeticById(SaveSystem.getEquippedCosmeticId('mineFrame')))
+    ));
     this.coreAudio.playSfx('placeMine');
   }
 
@@ -828,9 +833,10 @@ export class HeistScene extends Phaser.Scene {
       this.coreAudio.playSfx('unavailable');
       return;
     }
+    const mineFrame = resolveMineFrameAppearance(getCosmeticById(SaveSystem.getEquippedCosmeticId('mineFrame')));
     points.forEach((point, index) => this.mines.push(new Mine(this, point.x, point.y, COLORS.orange,
       cfg.armMs, cfg.damage, cfg.radius, { fromX: this.player.x, fromY: this.player.y,
-        durationMs: salvo.flightMs, delayMs: index * salvo.staggerMs })));
+        durationMs: salvo.flightMs, delayMs: index * salvo.staggerMs }, undefined, mineFrame)));
     this.player.spendEnergy(cost);
     this.time.delayedCall(salvo.flightMs, () => this.coreAudio.playSfx('placeMine'));
   }

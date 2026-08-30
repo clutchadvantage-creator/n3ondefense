@@ -10,6 +10,7 @@ import { createPremiumOperativeFrameSvgDataUri } from '../../ui/stores/PremiumOp
 import { createBaseOperativeFrameSvgDataUri } from '../../ui/stores/BaseOperativeFrameSvg.ts';
 import { createDetailedEnemyRobotTextures } from '../enemies/EnemyArtTextures.ts';
 import { createDetailedBossTextures } from '../bosses/BossArtTextures.ts';
+import { createMineFrameSvgDataUri } from '../cosmetics/MineFrameArt.ts';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -26,6 +27,14 @@ export class BootScene extends Phaser.Scene {
       }
       const baseSource = createBaseOperativeFrameSvgDataUri(frame.visualShape);
       if (baseSource && frame.textureKey) this.load.svg(frame.textureKey, baseSource, { width: 58, height: 56 });
+    }
+    for (const frame of COSMETICS) {
+      if (frame.category !== 'mineFrame' || !frame.textureKey) continue;
+      this.load.svg(
+        frame.textureKey,
+        createMineFrameSvgDataUri(frame.mineFrameEffect ?? 'default', frame.color, frame.accentColor ?? frame.color),
+        { width: 72, height: 62 }
+      );
     }
   }
 

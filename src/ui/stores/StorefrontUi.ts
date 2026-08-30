@@ -7,6 +7,7 @@ import { AudioManager } from '../../game/systems/AudioManager.ts';
 import { createPremiumOperativeFrameSvg } from './PremiumOperativeFrameSvg.ts';
 import { createBaseOperativeFrameSvg } from './BaseOperativeFrameSvg.ts';
 import { createPremiumTurretSkinSvg } from './PremiumTurretSkinSvg.ts';
+import { createMineFrameSvg } from '../../game/cosmetics/MineFrameArt.ts';
 import './storefront.css';
 
 export type StoreMode = 'cosmetics' | 'upgrades';
@@ -44,8 +45,8 @@ export interface StorefrontUiOptions {
 }
 
 const COSMETIC_LABELS: Record<CosmeticOption['category'], string> = {
-  playerColor: 'Operative Color', playerShape: 'Operative Frame', projectileColor: 'Projectile Color', projectileShape: 'Projectile Shape', trailColor: 'Trail',
-  bombColor: 'Bomb', turretSkin: 'Turret', fenceStyle: 'Fence', dashTrail: 'Dash Trail'
+  playerColor: 'Operative Colors', playerShape: 'Operative Frames', projectileColor: 'Projectile Colors', projectileShape: 'Projectile Shapes', trailColor: 'Trails',
+  bombColor: 'Bombsite Explosions', turretSkin: 'Turret Frames', mineFrame: 'Mine Frames', fenceStyle: 'Fence Frames', dashTrail: 'Dash Trails'
 };
 const UPGRADE_LABELS: Record<UpgradeDefinition['category'], string> = {
   player: 'Operative', weapon: 'Weapon', fence: 'Fence', turret: 'Turret', mine: 'Mine'
@@ -276,7 +277,13 @@ export class StorefrontUi {
         count.textContent = `${complete} / ${total}`;
         button.append(indicator, systemIcon, text, count);
       } else {
-        button.innerHTML = `<i></i><span>${label}</span><small>${complete} / ${total}</small>`;
+        button.classList.add('has-system-icon');
+        const indicator = document.createElement('i');
+        const text = document.createElement('span');
+        text.textContent = label;
+        const count = document.createElement('small');
+        count.textContent = `${complete} / ${total}`;
+        button.append(indicator, this.createCosmeticCategoryIcon(category as CosmeticOption['category']), text, count);
       }
       button.addEventListener('click', () => {
         this.selectedCategory = category;
@@ -288,6 +295,27 @@ export class StorefrontUi {
       nav.append(button);
     }
     return nav;
+  }
+
+  private createCosmeticCategoryIcon(category: CosmeticOption['category']): SVGSVGElement {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.classList.add('store-category-icon');
+    const markup: Record<CosmeticOption['category'], string> = {
+      playerColor: '<circle cx="8" cy="9" r="4"/><circle cx="16" cy="9" r="4"/><path d="m8 14 4 6 4-6"/>',
+      playerShape: '<path d="M12 2 21 7v10l-9 5-9-5V7z"/><circle cx="12" cy="12" r="3"/>',
+      projectileColor: '<path d="M3 8h8M2 12h11M4 16h7"/><path d="m11 6 10 6-10 6z"/>',
+      projectileShape: '<path d="m12 2 9 10-9 10L3 12z"/><path d="M8 12h8"/>',
+      trailColor: '<path d="M2 7h13M5 12h16M2 17h12"/>',
+      bombColor: '<circle cx="11" cy="13" r="8"/><path d="m16 7 4-5m-2 2 3 2"/><circle cx="11" cy="13" r="2"/>',
+      turretSkin: '<path d="M4 20h16M7 20l2-6h6l2 6M8 14V8h9v6M14 8l6-4"/>',
+      mineFrame: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M1 12h4m14 0h4M4 4l3 3m10 10 3 3M20 4l-3 3M7 17l-3 3"/>',
+      fenceStyle: '<path d="M5 3v18M19 3v18M5 7h14M5 12h14M5 17h14"/><circle cx="5" cy="3" r="2"/><circle cx="19" cy="3" r="2"/>',
+      dashTrail: '<path d="M2 7h10M5 12h11M2 17h10"/><path d="m13 5 9 7-9 7z"/>'
+    };
+    svg.innerHTML = markup[category];
+    return svg;
   }
 
   private renderGrid(snapshot: StoreSnapshot): HTMLElement {
@@ -610,6 +638,7 @@ export class StorefrontUi {
     if (item.bombExplosionEffect) visual.dataset.effect = item.bombExplosionEffect;
     if (item.dashTrailEffect) visual.dataset.trailEffect = item.dashTrailEffect;
     if (item.turretSkinEffect) visual.dataset.turretSkin = item.turretSkinEffect;
+    if (item.mineFrameEffect) visual.dataset.mineFrame = item.mineFrameEffect;
     visual.innerHTML = '<i class="trail-a"></i><i class="trail-b"></i><b></b><span></span>';
     if (COLOR_PALETTE_CATEGORIES.has(item.category) && !item.bombExplosionEffect) {
       visual.classList.add('cyber-palette-control');
@@ -650,6 +679,10 @@ export class StorefrontUi {
         visual.append(detailedTurret);
       }
     }
+    if (item.category === 'mineFrame') {
+      visual.classList.add('premium-mine-frame-art');
+      visual.append(createMineFrameSvg(item.mineFrameEffect ?? 'default', item.color, item.accentColor ?? item.color));
+    }
     return visual;
   }
 
@@ -662,6 +695,7 @@ export class StorefrontUi {
       trailColor: 'A repeating motion pass previews the wake left behind moving objects.',
       bombColor: 'A safe holographic charge pulse previews the detonation palette.',
       turretSkin: 'A rotating sentinel model previews this defensive skin.',
+      mineFrame: 'An armed-state hologram previews this mine chassis without changing its combat footprint.',
       fenceStyle: 'An energized lattice previews this fence style and current flow.',
       dashTrail: 'A short dash cycle previews the high-speed trail effect.'
     })[category];
