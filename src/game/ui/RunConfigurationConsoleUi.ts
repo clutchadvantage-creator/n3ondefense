@@ -21,6 +21,12 @@ export interface RunConfigurationConsoleData {
   wallet: RunConfigurationWallet;
 }
 
+export interface RunConfigurationConsoleHandle {
+  layout: RunConfigurationConsoleLayout;
+  animatedTargets: Phaser.GameObjects.GameObject[];
+  setWallet: (wallet: RunConfigurationWallet) => void;
+}
+
 const chamfer = (width: number, height: number, cut: number): number[] => [
   cut, 0, width - cut, 0, width, cut, width, height - cut,
   width - cut, height, cut, height, 0, height - cut, 0, cut
@@ -83,7 +89,7 @@ export const createRunConfigurationConsole = (
   width: number,
   height: number,
   data: RunConfigurationConsoleData
-): { layout: RunConfigurationConsoleLayout; animatedTargets: Phaser.GameObjects.GameObject[] } => {
+): RunConfigurationConsoleHandle => {
   const layout = calculateRunConfigurationLayout(width, height);
   const {
     density,
@@ -148,8 +154,10 @@ export const createRunConfigurationConsole = (
   const walletWidth = Math.min(width - outerMargin * 2 - systemWidth - columnGap, density === 'compressed' ? 680 : 900);
   const walletX = width - outerMargin - walletWidth * 0.5;
   const wallet = createEmbeddedMonitor(scene, root, walletX, statusY, walletWidth, statusHeight, 'TACTICAL WALLET', 0xff5bcf, typography.monitorTitle);
-  const walletLine = `${data.wallet.credits.toLocaleString()} CREDITS  //  ${data.wallet.coreTokens.toLocaleString()} CORE  //  ${data.wallet.plasmaChips.toLocaleString()} PLASMA  //  ${data.wallet.fluxCores.toLocaleString()} FLUX`;
-  addText(scene, wallet, 0, statusHeight * 0.16, walletLine, typography.walletValue, '#ffe4f8', 0.5, 'Orbitron, sans-serif');
+  const formatWallet = (value: RunConfigurationWallet): string =>
+    `${value.credits.toLocaleString()} CREDITS  //  ${value.coreTokens.toLocaleString()} CORE  //  ${value.plasmaChips.toLocaleString()} PLASMA  //  ${value.fluxCores.toLocaleString()} FLUX`;
+  const walletLine = formatWallet(data.wallet);
+  const walletText = addText(scene, wallet, 0, statusHeight * 0.16, walletLine, typography.walletValue, '#ffe4f8', 0.5, 'Orbitron, sans-serif');
 
   const createModuleFrame = (centerX: number, title: string, accent: number, channel: string): void => {
     const moduleHeight = panelBottom - panelTop;
@@ -247,6 +255,7 @@ export const createRunConfigurationConsole = (
 
   return {
     layout,
-    animatedTargets
+    animatedTargets,
+    setWallet: (value) => walletText.setText(formatWallet(value))
   };
 };

@@ -87,6 +87,7 @@ export class ModCollectionScene extends Phaser.Scene {
   private tutorialDirector: TutorialDirector | null = null;
   private archiveRefreshPending = false;
   private targetSlot: ModSlot | null = null;
+  private walletUnsubscribe: (() => void) | null = null;
   private readonly handleEscape = (): void => {
     if (this.infusionConfirmModal) {
       this.infusionConfirmModal.destroy();
@@ -140,13 +141,21 @@ export class ModCollectionScene extends Phaser.Scene {
     if (!cards.some((card) => card.instanceId === this.selectedCardId)) this.selectedCardId = cards[0]?.instanceId ?? '';
 
     const wallet = SaveSystem.get();
-    createModCollectionShell(this, width, height, [
+    const shell = createModCollectionShell(this, width, height, [
       { label: 'OWNED CARDS', value: mods.cards.length.toLocaleString(), color: 0x62efff },
       { label: 'PLASMA CHIPS', value: mods.plasmaChips.toLocaleString(), color: 0xc877ff, delta: data?.currencyDeltas?.plasmaChips },
       { label: 'CORE TOKENS', value: wallet.coreTokens.toLocaleString(), color: 0xffc86b, delta: data?.currencyDeltas?.coreTokens },
       { label: 'FLUX CORES', value: wallet.fluxCores.toLocaleString(), color: 0x69ff9c, delta: data?.currencyDeltas?.fluxCores },
       { label: 'CREDITS', value: wallet.credits.toLocaleString(), color: 0xffed67, delta: data?.currencyDeltas?.credits }
     ]);
+    this.walletUnsubscribe?.();
+    this.walletUnsubscribe = SaveSystem.subscribeWalletChanges(({ current }) => {
+      if (!this.scene.isActive()) return;
+      shell.setReadoutValue('PLASMA CHIPS', current.plasmaChips.toLocaleString());
+      shell.setReadoutValue('CORE TOKENS', current.coreTokens.toLocaleString());
+      shell.setReadoutValue('FLUX CORES', current.fluxCores.toLocaleString());
+      shell.setReadoutValue('CREDITS', current.credits.toLocaleString());
+    }, false);
 
     const chromeLayout = getModCollectionChromeLayout(width, height);
     const { compact, toolbarTop, toolbarHeight, toolbarButtonY, toolbarButtonHeight, contentTop, returnInset } = chromeLayout;
@@ -288,6 +297,8 @@ export class ModCollectionScene extends Phaser.Scene {
       this.tutorialDirector = null;
       this.statusTimer?.remove(false);
       this.statusTimer = null;
+      this.walletUnsubscribe?.();
+      this.walletUnsubscribe = null;
     });
     if (import.meta.env.DEV) this.installDevKeys();
   }

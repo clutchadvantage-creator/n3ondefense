@@ -5,6 +5,10 @@ import { LOWER_IS_BETTER_MOD_STATS, type ModCardInstance, type ModDefinition, ty
 export const PLASMA_RECALIBRATION_BALANCE = {
   rollCost: 125,
   revealDurationMs: 1050,
+  /** Rare top-end rolls may edge past the strongest standard (non-Supreme,
+   * non-Corrupted) native version of the same stat without turning every
+   * calibration into an automatic replacement. */
+  nativeOverclockCeiling: 1.10,
   qualityWeights: {
     optimal: 0.15,
     enhanced: 0.40,
@@ -22,7 +26,7 @@ export const PLASMA_RECALIBRATION_BALANCE = {
   rankPower: { 0: 0.52, 1: 0.68, 2: 0.84, 3: 1 } satisfies Record<ModRank, number>
 } as const;
 
-interface RecalibrationRange {
+export interface RecalibrationRange {
   mode: 'multiply' | 'add';
   minimum: number;
   baseline: number;
@@ -53,17 +57,20 @@ export const PLASMA_RECALIBRATION_STAT_RANGES: Partial<Record<ModStat, Recalibra
   fenceDamage: { mode: 'multiply', minimum: .06, baseline: .25, high: .52 },
   fenceHealth: { mode: 'multiply', minimum: .07, baseline: .30, high: .62 },
   fenceDuration: { mode: 'multiply', minimum: .06, baseline: .24, high: .50 },
+  fenceMaxActive: { mode: 'add', minimum: .25, baseline: 1, high: 2.20 },
   fenceCooldown: { mode: 'multiply', minimum: .04, baseline: .16, high: .31 },
   fenceEnergyCost: { mode: 'multiply', minimum: .03, baseline: .14, high: .28 },
   turretDamage: { mode: 'multiply', minimum: .06, baseline: .24, high: .50 },
   turretHealth: { mode: 'multiply', minimum: .07, baseline: .29, high: .60 },
   turretFireRate: { mode: 'multiply', minimum: .05, baseline: .20, high: .40 },
   turretRange: { mode: 'multiply', minimum: .05, baseline: .19, high: .38 },
+  turretMaxActive: { mode: 'add', minimum: .25, baseline: 1, high: 2.20 },
   turretCooldown: { mode: 'multiply', minimum: .04, baseline: .16, high: .31 },
   turretEnergyCost: { mode: 'multiply', minimum: .03, baseline: .14, high: .28 },
   mineDamage: { mode: 'multiply', minimum: .07, baseline: .29, high: .62 },
   mineRadius: { mode: 'multiply', minimum: .05, baseline: .20, high: .42 },
   mineArmTime: { mode: 'multiply', minimum: .05, baseline: .20, high: .38 },
+  mineMaxActive: { mode: 'add', minimum: .25, baseline: 1, high: 2.20 },
   mineCooldown: { mode: 'multiply', minimum: .04, baseline: .16, high: .31 },
   mineEnergyCost: { mode: 'multiply', minimum: .03, baseline: .14, high: .28 },
   shieldDuration: { mode: 'multiply', minimum: .06, baseline: .24, high: .50 },
@@ -77,16 +84,12 @@ export const PLASMA_RECALIBRATION_STAT_RANGES: Partial<Record<ModStat, Recalibra
   bombDuration: { mode: 'multiply', minimum: .04, baseline: .15, high: .29 }
 };
 
-const STAT_POOLS = {
-  weapon: ['weaponDamage', 'weaponFireRate', 'weaponProjectileSpeed', 'weaponCritChance', 'weaponCritDamage', 'weaponHeatPerShot', 'weaponMaxHeat', 'weaponCooling', 'weaponEnergyCost'],
-  player: ['playerMaxHealth', 'playerEnergyMax', 'playerEnergyRegen', 'playerMoveSpeed', 'playerDashCooldown', 'playerDashDistance', 'playerPickupRadius', 'playerInvulnerability', 'gasDamageTaken'],
-  fence: ['fenceDamage', 'fenceHealth', 'fenceDuration', 'fenceCooldown', 'fenceEnergyCost'],
-  turret: ['turretDamage', 'turretHealth', 'turretFireRate', 'turretRange', 'turretCooldown', 'turretEnergyCost'],
-  mine: ['mineDamage', 'mineRadius', 'mineArmTime', 'mineCooldown', 'mineEnergyCost'],
-  shield: ['shieldDuration', 'shieldCooldown', 'shieldEnergyCost'],
-  pickup: ['healthPickupValue', 'energyPickupValue', 'buffDuration', 'playerPickupRadius', 'enemyPickupChance', 'creditValue'],
-  bomb: ['bombDuration']
-} satisfies Record<string, readonly ModStat[]>;
+/** Every entry in this registry is consumed by ModRuntime and therefore has a
+ * real gameplay effect. Recalibration intentionally uses the full matrix so a
+ * movement card can discover weapon, mine, defense, pickup, or economy stats. */
+export const PLASMA_RECALIBRATION_STAT_POOL = Object.freeze(
+  Object.keys(PLASMA_RECALIBRATION_STAT_RANGES) as ModStat[]
+);
 
 const SPECIAL_SLOT_IDS = new Set(['split-current']);
 const PROTECTED_CORRUPTED_SLOTS: Readonly<Record<string, readonly number[]>> = {
@@ -136,33 +139,28 @@ export const getRecalibrationSlots = (definition: ModDefinition): RecalibrationS
 export const getActiveCalibration = (card: CalibrationCarrier | undefined, slotIndex: number): ModStatCalibration | undefined =>
   card?.calibrations?.find((entry) => entry.slotIndex === slotIndex);
 
-const poolForStat = (stat: ModStat): readonly ModStat[] => {
-  if (stat.startsWith('weapon')) return STAT_POOLS.weapon;
-  if (stat.startsWith('player') || stat === 'gasDamageTaken') return STAT_POOLS.player;
-  if (stat.startsWith('fence')) return STAT_POOLS.fence;
-  if (stat.startsWith('turret')) return STAT_POOLS.turret;
-  if (stat.startsWith('mine')) return STAT_POOLS.mine;
-  if (stat.startsWith('shield')) return STAT_POOLS.shield;
-  if (stat === 'bombDuration') return STAT_POOLS.bomb;
-  return STAT_POOLS.pickup;
+const activeStatAtSlot = (card: CalibrationCarrier | undefined, slot: RecalibrationSlot): ModStat | null =>
+  getActiveCalibration(card, slot.slotIndex)?.stat ?? slot.nativeStat;
+
+/** A rolled stat may replace any open slot unless that would leave the card
+ * with the same stat in two slots. A same-stat overclock is valid on the slot
+ * that already owns that stat. */
+export const getApplicableRecalibrationSlots = (
+  definition: ModDefinition,
+  card: CalibrationCarrier | undefined,
+  stat: ModStat
+): RecalibrationSlot[] => {
+  const slots = getRecalibrationSlots(definition);
+  return slots.filter((slot) => {
+    if (slot.protected) return false;
+    return !slots.some((other) => other.slotIndex !== slot.slotIndex && activeStatAtSlot(card, other) === stat);
+  });
 };
 
 export const getRecalibrationCandidatePool = (definition: ModDefinition, card?: CalibrationCarrier): ModStat[] => {
   const slots = getRecalibrationSlots(definition).filter((slot) => !slot.protected);
   if (!slots.length) return [];
-  const candidates = new Set<ModStat>();
-  if (definition.id === 'split-current') for (const stat of STAT_POOLS.weapon) candidates.add(stat);
-  for (const slot of slots) {
-    const current = getActiveCalibration(card, slot.slotIndex)?.stat ?? slot.nativeStat;
-    if (current) for (const stat of poolForStat(current)) candidates.add(stat);
-  }
-  const active = new Set<ModStat>();
-  (definition.modifiers ?? []).forEach((modifier, slotIndex) => active.add(getActiveCalibration(card, slotIndex)?.stat ?? modifier.stat));
-  if (definition.id === 'split-current') {
-    const calibrated = getActiveCalibration(card, 0)?.stat;
-    if (calibrated) active.add(calibrated);
-  }
-  return [...candidates].filter((stat) => PLASMA_RECALIBRATION_STAT_RANGES[stat] && !active.has(stat));
+  return PLASMA_RECALIBRATION_STAT_POOL.filter((stat) => getApplicableRecalibrationSlots(definition, card, stat).length > 0);
 };
 
 const rollQuality = (random: () => number): PlasmaRecalibrationQuality => {
@@ -197,8 +195,41 @@ const contributionAtPower = (range: RecalibrationRange, normalizedPower: number)
   return range.baseline + (range.high - range.baseline) * (power - .55) / .45;
 };
 
+const nativeContribution = (modifier: ModStatModifier): number => {
+  const value = modifier.values[3];
+  if (modifier.mode === 'add') return Math.max(0, value);
+  return LOWER_IS_BETTER_MOD_STATS.has(modifier.stat) ? Math.max(0, 1 - value) : Math.max(0, value - 1);
+};
+
+const nativeCeilingCache = new Map<ModStat, number>();
+
+/** The top of a stat's roll range follows the actual Mod registry. This keeps
+ * future Mods in the recalibration economy automatically and gives only the
+ * highest part of an Optimal roll a chance to beat the best standard native
+ * version of that stat. Corrupted tradeoffs do not raise this ceiling. */
+export const getRecalibrationStatRange = (stat: ModStat): RecalibrationRange | null => {
+  const configured = PLASMA_RECALIBRATION_STAT_RANGES[stat];
+  if (!configured) return null;
+  let nativeCeiling = nativeCeilingCache.get(stat);
+  if (nativeCeiling === undefined) {
+    nativeCeiling = 0;
+    for (const definition of MOD_BY_ID.values()) {
+      if (definition.variant === 'corrupted' || definition.rarity === 'supreme') continue;
+      for (const modifier of definition.modifiers ?? []) {
+        if (modifier.stat !== stat || modifier.mode !== configured.mode) continue;
+        nativeCeiling = Math.max(nativeCeiling, nativeContribution(modifier));
+      }
+    }
+    nativeCeilingCache.set(stat, nativeCeiling);
+  }
+  return {
+    ...configured,
+    high: Math.max(configured.high, nativeCeiling * PLASMA_RECALIBRATION_BALANCE.nativeOverclockCeiling)
+  };
+};
+
 export const resolveCalibrationModifier = (calibration: Pick<ModStatCalibration, 'stat' | 'mode' | 'normalizedPower'>): ModStatModifier | null => {
-  const range = PLASMA_RECALIBRATION_STAT_RANGES[calibration.stat];
+  const range = getRecalibrationStatRange(calibration.stat);
   if (!range || range.mode !== calibration.mode) return null;
   const values = {} as Record<ModRank, number>;
   for (const rank of [0, 1, 2, 3] as const) {
@@ -256,6 +287,9 @@ export const applyPlasmaRecalibration = (
   const slot = getRecalibrationSlots(definition).find((entry) => entry.slotIndex === slotIndex && !entry.protected);
   if (!slot) return { ok: false, message: 'SELECTED STAT SLOT IS PROTECTED' };
   if (!getRecalibrationCandidatePool(definition, card).includes(candidate.stat)) return { ok: false, message: 'CALIBRATION ATTRIBUTE CONFLICT' };
+  if (!getApplicableRecalibrationSlots(definition, card, candidate.stat).some((entry) => entry.slotIndex === slotIndex)) {
+    return { ok: false, message: 'STAT ALREADY ACTIVE // SELECT ITS CURRENT SLOT' };
+  }
   const range = PLASMA_RECALIBRATION_STAT_RANGES[candidate.stat];
   if (!range || range.mode !== candidate.mode) return { ok: false, message: 'CALIBRATION ATTRIBUTE INVALID' };
   const replacement: ModStatCalibration = {

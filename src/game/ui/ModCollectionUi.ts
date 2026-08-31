@@ -37,6 +37,10 @@ export interface ModOperationStatusHandle {
   setStatus: (message: string, tone: ModOperationStatusTone) => void;
 }
 
+export interface ModCollectionShellHandle {
+  setReadoutValue: (label: string, value: string) => void;
+}
+
 export type CollectionButtonTone = 'standard' | 'utility' | 'warning' | 'return';
 
 export interface ModCollectionChromeLayout {
@@ -149,7 +153,7 @@ export const createModCollectionShell = (
   width: number,
   height: number,
   readouts: readonly CollectionReadout[]
-): void => {
+): ModCollectionShellHandle => {
   const layout = getModCollectionChromeLayout(width, height);
   const { compact } = layout;
   scene.add.rectangle(width / 2, height / 2, width, height, 0x03070d, 1);
@@ -207,6 +211,7 @@ export const createModCollectionShell = (
   const railLeft = width / 2 - railWidth / 2;
   const cellGap = compact ? 4 : 7;
   const cellWidth = (railWidth - cellGap * (readouts.length - 1)) / readouts.length;
+  const readoutValues = new Map<string, Phaser.GameObjects.Text>();
   readouts.forEach((readout, index) => {
     const x = railLeft + index * (cellWidth + cellGap);
     const cell = scene.add.rectangle(x, railY - railHeight / 2, cellWidth, railHeight, 0x07141f, 0.94)
@@ -219,6 +224,7 @@ export const createModCollectionShell = (
     const value = scene.add.text(x + cellWidth - 12, railY, readout.value, {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${tightCell ? 12 : compact ? 13 : 15}px`, color: Phaser.Display.Color.IntegerToColor(readout.color).rgba, fontStyle: 'bold'
     }).setOrigin(1, 0.5).setMaxLines(1);
+    readoutValues.set(readout.label, value);
     shell.add([cell, edge, label, value]);
     if (readout.delta) {
       const gained = readout.delta > 0;
@@ -244,6 +250,9 @@ export const createModCollectionShell = (
   scene.tweens.add({ targets: [title, topRail], alpha: { from: 0.75, to: 1 }, duration: 1750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   scene.tweens.add({ targets: rightStatus, alpha: { from: 0.3, to: 1 }, duration: 860, yoyo: true, repeat: -1 });
   scene.tweens.add({ targets: shell, alpha: 1, duration: 330, ease: 'Sine.easeOut' });
+  return {
+    setReadoutValue: (label, value) => readoutValues.get(label)?.setText(value)
+  };
 };
 
 export const createModCollectionFrame = (

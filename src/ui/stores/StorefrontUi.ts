@@ -82,6 +82,21 @@ export class StorefrontUi {
     this.options.root.querySelectorAll<HTMLElement>('.store-dialog-backdrop').forEach((dialog) => dialog.remove());
   }
 
+  /** Wallet mutations are published by the profile transaction layer. This
+   * lightweight path keeps a mounted store header current without rebuilding
+   * its card grid or disturbing controller focus/scroll position. */
+  refreshWalletReadout(): void {
+    const wallet = this.screen?.querySelector<HTMLElement>('.store-wallet');
+    if (!wallet) return;
+    const snapshot = this.options.getSnapshot();
+    const credits = wallet.querySelector<HTMLElement>('.credits');
+    const tokens = wallet.querySelector<HTMLElement>('.tokens');
+    const chips = wallet.querySelector<HTMLElement>('.chips');
+    if (credits) credits.innerHTML = `<b>◆</b> ${snapshot.credits.toLocaleString()} <small>CREDITS</small>`;
+    if (tokens) tokens.innerHTML = `<b>⬡</b> ${snapshot.coreTokens.toLocaleString()} <small>CORE TOKENS</small>`;
+    if (chips) chips.innerHTML = `<b>◇</b> ${snapshot.plasmaChips.toLocaleString()} <small>PLASMA CHIPS</small>`;
+  }
+
   private getCategories(): string[] {
     const values = this.options.mode === 'cosmetics'
       ? (this.options.cosmetics ?? []).map((item) => item.category)

@@ -5,7 +5,7 @@ import { normalizeRunProtocolId } from './modBalance.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
 import { ECONOMY_BALANCE } from '../economy/economyBalance.ts';
 import { countEquippedSupremeMods, isLegendaryModId, isSupremeModId, MAX_EQUIPPED_SUPREME_MODS } from './ModLoadoutRules.ts';
-import { getRecalibrationCandidatePool, getRecalibrationSlots, PLASMA_RECALIBRATION_STAT_RANGES } from './PlasmaRecalibration.ts';
+import { getApplicableRecalibrationSlots, getRecalibrationCandidatePool, getRecalibrationSlots, PLASMA_RECALIBRATION_STAT_RANGES } from './PlasmaRecalibration.ts';
 
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const MOD_SLOTS: ModSlot[] = ['weapon', 'player', 'defense', 'bombSite', 'wildcard'];
@@ -31,7 +31,6 @@ export const normalizeModCollection = (mods: unknown): LocalModCollection => {
       const definition = MOD_BY_ID.get(raw.modId)!;
       const eligibleSlots = new Set(getRecalibrationSlots(definition).filter((slot) => !slot.protected).map((slot) => slot.slotIndex));
       const seenCalibrationSlots = new Set<number>();
-      const seenCalibrationStats = new Set<ModStat>();
       const acceptedCalibrations: ModCardInstance['calibrations'] = [];
       const calibrations = Array.isArray(raw.calibrations) ? raw.calibrations.flatMap((entry) => {
         if (!isObject(entry)) return [];
@@ -39,11 +38,11 @@ export const normalizeModCollection = (mods: unknown): LocalModCollection => {
         const stat = typeof entry.stat === 'string' ? entry.stat as ModStat : null;
         const range = stat ? PLASMA_RECALIBRATION_STAT_RANGES[stat] : undefined;
         const quality = typeof entry.quality === 'string' ? entry.quality as PlasmaRecalibrationQuality : null;
-        if (!eligibleSlots.has(slotIndex) || seenCalibrationSlots.has(slotIndex) || !stat || seenCalibrationStats.has(stat)
+        if (!eligibleSlots.has(slotIndex) || seenCalibrationSlots.has(slotIndex) || !stat
           || !getRecalibrationCandidatePool(definition, { calibrations: acceptedCalibrations }).includes(stat)
+          || !getApplicableRecalibrationSlots(definition, { calibrations: acceptedCalibrations }, stat).some((slot) => slot.slotIndex === slotIndex)
           || !range || entry.mode !== range.mode || !quality || !CALIBRATION_QUALITIES.has(quality)) return [];
         seenCalibrationSlots.add(slotIndex);
-        seenCalibrationStats.add(stat);
         const calibration = {
           slotIndex,
           stat,

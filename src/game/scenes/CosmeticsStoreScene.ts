@@ -16,6 +16,7 @@ interface StoreSceneData extends StoreReturnRequest {}
 
 export class CosmeticsStoreScene extends Phaser.Scene {
   private storefront: StorefrontUi | null = null;
+  private walletUnsubscribe: (() => void) | null = null;
 
   constructor() {
     super(SceneKeys.Cosmetics);
@@ -57,10 +58,13 @@ export class CosmeticsStoreScene extends Phaser.Scene {
       onEquip: (item) => this.equipCosmetic(item),
       onUpgrade: (definition, level) => this.purchaseUpgrade(definition, level)
     });
+    this.walletUnsubscribe = SaveSystem.subscribeWalletChanges(() => this.storefront?.refreshWalletReadout(), false);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.storefront?.destroy();
       this.storefront = null;
+      this.walletUnsubscribe?.();
+      this.walletUnsubscribe = null;
     });
   }
 

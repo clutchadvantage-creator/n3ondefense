@@ -9,8 +9,17 @@ import type { ArcadeMetricEvent } from '../arcade/types.ts';
 import type { ExchangeCurrency } from '../economy/CurrencyExchange.ts';
 import { buildEconomyAnalytics, type EconomyAnalyticsSnapshot } from '../economy/EconomyAnalytics.ts';
 import type { PlasmaRecalibrationCandidate } from '../mods/PlasmaRecalibration.ts';
+import type { WalletChangeListener, WalletSnapshot } from '../economy/WalletState.ts';
 
 export class SaveSystem {
+  static getWalletSnapshot(): WalletSnapshot {
+    return PlayerProfileStore.getWalletSnapshot();
+  }
+
+  static subscribeWalletChanges(listener: WalletChangeListener, emitCurrent = true): () => void {
+    return PlayerProfileStore.subscribeWalletChanges(listener, emitCurrent);
+  }
+
   /** Read-only, freshly derived account economy data for presentation surfaces. */
   static getEconomyAnalytics(): EconomyAnalyticsSnapshot {
     return buildEconomyAnalytics(PlayerProfileStore.getActiveSave());

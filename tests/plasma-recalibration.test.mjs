@@ -9,6 +9,7 @@ import {
   PLASMA_RECALIBRATION_BALANCE,
   applyPlasmaRecalibration,
   getEffectiveModModifiers,
+  getApplicableRecalibrationSlots,
   getRecalibrationCandidatePool,
   getRecalibrationSlots,
   resolveCalibrationModifier,
@@ -55,18 +56,33 @@ test('Corrupted drawbacks remain identity-locked while their intended positive s
   assert.equal(getRecalibrationSlots(definition('fractured-current')).length, 0, 'fully bespoke Corrupted identity stays immutable');
 });
 
-test('candidate pools stay within the native system and exclude every active stat', () => {
-  const turret = definition('siege-firmware');
-  const turretCard = cardFor(turret.id);
-  const active = new Set(turret.modifiers.map((modifier) => modifier.stat));
-  const pool = getRecalibrationCandidatePool(turret, turretCard);
+test('candidate pools use the universal gameplay matrix and retain native stats for overclock rolls', () => {
+  const temporal = definition('temporal-sovereign');
+  const temporalCard = cardFor(temporal.id, 3);
+  const pool = getRecalibrationCandidatePool(temporal, temporalCard);
   assert.ok(pool.length > 0);
-  assert.ok(pool.every((stat) => stat.startsWith('turret')));
-  assert.ok(pool.every((stat) => !active.has(stat)));
+  assert.ok(pool.includes('playerMoveSpeed'), 'native stats remain rollable');
+  assert.ok(pool.includes('weaponDamage'), 'weapon stats cross into player Mods');
+  assert.ok(pool.includes('mineDamage'), 'mine stats cross into player Mods');
+  assert.ok(pool.includes('turretMaxActive'), 'ability-capacity stats participate in the matrix');
 
-  const mine = getRecalibrationCandidatePool(definition('cataclysm-mines'), cardFor('cataclysm-mines'));
-  assert.ok(mine.every((stat) => stat.startsWith('mine')));
-  assert.ok(!mine.some((stat) => stat.startsWith('player') || stat.startsWith('turret')));
+  assert.deepEqual(getApplicableRecalibrationSlots(temporal, temporalCard, 'playerMoveSpeed').map((slot) => slot.slotIndex), [0]);
+  assert.equal(getApplicableRecalibrationSlots(temporal, temporalCard, 'mineDamage').length, 4);
+});
+
+test('a rare optimal same-stat roll can exceed the original Legendary native stat', () => {
+  const temporal = definition('temporal-sovereign');
+  const card = cardFor(temporal.id, 3);
+  const pool = getRecalibrationCandidatePool(temporal, card);
+  const moveSpeedIndex = pool.indexOf('playerMoveSpeed');
+  assert.ok(moveSpeedIndex >= 0);
+  const values = [(moveSpeedIndex + .1) / pool.length, .1, .999999];
+  const rolled = rollPlasmaRecalibrationCandidate(temporal, card, () => values.shift());
+  assert.equal(rolled.candidate.stat, 'playerMoveSpeed');
+  const modifier = resolveCalibrationModifier(rolled.candidate);
+  assert.ok(modifier.values[3] > temporal.modifiers[0].values[3]);
+  assert.equal(applyPlasmaRecalibration(card, temporal, 1, rolled.candidate).ok, false, 'same stat cannot duplicate into another slot');
+  assert.equal(applyPlasmaRecalibration(card, temporal, 0, rolled.candidate).ok, true, 'native slot accepts its overclock');
 });
 
 test('quality selection hits every configured band and weak rolls remain beneficial in the correct direction', () => {
@@ -124,7 +140,7 @@ test('Split Current replacement disables its native arc and activates only the c
   assert.equal(runtime.snapshot()[0].calibrations[0].stat, 'weaponDamage');
 });
 
-test('old saves default to native stats and malformed calibration data is discarded safely', () => {
+test('old saves default to native stats, cross-system rolls survive, and protected data is discarded safely', () => {
   const raw = createDefaultModCollection();
   addModDrop(raw, 'glass-cannon');
   raw.cards[0].calibrations = [
@@ -132,7 +148,8 @@ test('old saves default to native stats and malformed calibration data is discar
     { slotIndex: 0, stat: 'turretDamage', mode: 'multiply', quality: 'optimal', normalizedPower: 1, calibratedAt: 'bad-system' }
   ];
   const normalized = normalizeModCollection(raw);
-  assert.equal(normalized.cards[0].calibrations?.length ?? 0, 0, 'protected and cross-system calibration data is rejected');
+  assert.equal(normalized.cards[0].calibrations?.length ?? 0, 1, 'cross-system calibration is valid while protected data is rejected');
+  assert.equal(normalized.cards[0].calibrations[0].stat, 'turretDamage');
 
   const legacy = createDefaultModCollection();
   addModDrop(legacy, 'calibrated-barrel');

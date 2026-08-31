@@ -38,6 +38,7 @@ import type { ModCardInstance, ModCategory, ModRarity, ModSlot, RunProtocolId } 
 import {
   describeRecalibrationSlot,
   formatCalibrationModifier,
+  getApplicableRecalibrationSlots,
   getRecalibrationCandidatePool,
   getRecalibrationSlots,
   PLASMA_RECALIBRATION_BALANCE,
@@ -117,6 +118,8 @@ export class OperatorGarageScene extends Phaser.Scene {
   private configurationFeeText: Phaser.GameObjects.Text | null = null;
   private configurationPersistenceText: Phaser.GameObjects.Text | null = null;
   private readonly walletValueTexts = new Map<ExchangeCurrency, Phaser.GameObjects.Text>();
+  private walletUnsubscribe: (() => void) | null = null;
+  private runConfigurationWalletUpdater: ((wallet: { credits: number; coreTokens: number; plasmaChips: number; fluxCores: number }) => void) | null = null;
   private cosmeticPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
   private tutorialDirector: TutorialDirector | null = null;
   private readonly tutorialTargets = new Map<string, Phaser.GameObjects.Container>();
@@ -209,6 +212,12 @@ export class OperatorGarageScene extends Phaser.Scene {
 
     this.createConfigurationTerminal(layout.configTerminal, layout.compact);
     this.createWalletTerminal(layout.walletTerminal, layout.compact);
+    this.walletUnsubscribe?.();
+    this.walletUnsubscribe = SaveSystem.subscribeWalletChanges(({ current }) => {
+      if (!this.scene.isActive()) return;
+      this.refreshWalletTerminalState();
+      this.runConfigurationWalletUpdater?.(current);
+    }, false);
     this.createOperatorPreview(layout.operatorPreview, layout.compact);
     this.createModDocks(
       layout.cardWidth,
@@ -289,6 +298,8 @@ export class OperatorGarageScene extends Phaser.Scene {
       this.destroyOperatorPreview();
       this.tutorialDirector?.destroy();
       this.tutorialDirector = null;
+      this.walletUnsubscribe?.();
+      this.walletUnsubscribe = null;
     });
     if (data?.openRunConfiguration) this.time.delayedCall(0, () => this.showRunConfiguration());
   }
@@ -708,6 +719,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         fluxCores: save.fluxCores
       }
     });
+    this.runConfigurationWalletUpdater = consoleView.setWallet;
     const {
       density,
       compact,
@@ -1099,11 +1111,12 @@ export class OperatorGarageScene extends Phaser.Scene {
           fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 13 : 17}px`, color: qualityColor[candidate.quality], fontStyle: 'bold', align: 'center', lineSpacing: 8,
           wordWrap: { width: rightWidth - 30, useAdvancedWrap: true }
         }).setOrigin(.5));
-      eligibleSlots.forEach((slot, index) => {
-        const buttonWidth = eligibleSlots.length === 1 ? rightWidth - 34 : (rightWidth - 46) / 2;
-        const column = eligibleSlots.length === 1 ? 0 : index % 2;
-        const row = eligibleSlots.length === 1 ? 0 : Math.floor(index / 2);
-        const buttonX = eligibleSlots.length === 1
+      const applicableSlots = getApplicableRecalibrationSlots(entry.definition, card, candidate.stat);
+      applicableSlots.forEach((slot, index) => {
+        const buttonWidth = applicableSlots.length === 1 ? rightWidth - 34 : (rightWidth - 46) / 2;
+        const column = applicableSlots.length === 1 ? 0 : index % 2;
+        const row = applicableSlots.length === 1 ? 0 : Math.floor(index / 2);
+        const buttonX = applicableSlots.length === 1
           ? rightRect.x + rightWidth / 2
           : rightRect.x + 17 + buttonWidth / 2 + column * (buttonWidth + 12);
         const buttonY = rightRect.y + panelHeight - (compact ? 146 : 166) + row * (compact ? 38 : 44);
@@ -1125,6 +1138,11 @@ export class OperatorGarageScene extends Phaser.Scene {
         this.showPlasmaRecalibration(modId);
       }, rightWidth - 34, 'standard', { height: compact ? 36 : 42, fontSize: compact ? 11 : 13 }));
     } else {
+      root.add(this.add.text(rightRect.x + rightWidth / 2, rightRect.y + panelHeight * .48,
+        'UNIVERSAL ATTRIBUTE MATRIX\nCROSS-SYSTEM ROLLS ENABLED\nOPTIMAL ROLLS MAY EXCEED NATIVE LIMITS', {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 13 : 16}px`, color: '#8eeeff', fontStyle: 'bold', align: 'center', lineSpacing: 5,
+          wordWrap: { width: rightWidth - 34, useAdvancedWrap: true }
+        }).setOrigin(.5));
       const canRoll = Boolean(card && eligibleSlots.length && pool.length && reserve >= PLASMA_RECALIBRATION_BALANCE.rollCost);
       const rollButton = createModCollectionButton(this, rightRect.x + rightWidth / 2, rightRect.y + panelHeight - (compact ? 80 : 92),
         `RECALIBRATE // ${PLASMA_RECALIBRATION_BALANCE.rollCost} PC`, () => {
@@ -2267,6 +2285,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.cosmeticPreviewColorTimer?.remove(false);
     this.cosmeticPreviewColorTimer = null;
     this.cosmeticPreviewColorTargets = [];
+    this.runConfigurationWalletUpdater = null;
     this.tweens.killTweensOf(this.overlayAnimatedTargets);
     this.overlayAnimatedTargets.length = 0;
     this.overlay?.destroy(true);

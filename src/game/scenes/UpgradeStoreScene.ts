@@ -19,6 +19,7 @@ interface StoreSceneData extends StoreReturnRequest {}
 export class UpgradeStoreScene extends Phaser.Scene {
   private storefront: StorefrontUi | null = null;
   private tutorialDirector: TutorialDirector | null = null;
+  private walletUnsubscribe: (() => void) | null = null;
 
   constructor() {
     super(SceneKeys.Upgrades);
@@ -60,6 +61,7 @@ export class UpgradeStoreScene extends Phaser.Scene {
       onUnlock: (item) => this.unlockCosmetic(item),
       onEquip: (item) => this.equipCosmetic(item)
     });
+    this.walletUnsubscribe = SaveSystem.subscribeWalletChanges(() => this.storefront?.refreshWalletReadout(), false);
     this.tutorialDirector = new TutorialDirector({
       scene: 'upgrades',
       resolveTarget: (target) => {
@@ -82,6 +84,8 @@ export class UpgradeStoreScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.storefront?.destroy();
       this.storefront = null;
+      this.walletUnsubscribe?.();
+      this.walletUnsubscribe = null;
       this.tutorialDirector?.destroy();
       this.tutorialDirector = null;
     });

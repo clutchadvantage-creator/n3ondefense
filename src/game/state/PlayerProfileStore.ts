@@ -30,6 +30,7 @@ import {
 import { resolveWeeklyOperationDecks, type WeeklyOperationDecksSnapshot, type WeeklyOperationProgressSource } from '../progression/WeeklyOperations.ts';
 import type { ArcadeMetricEvent } from '../arcade/types.ts';
 import { executeCurrencyExchange, type ExchangeCurrency } from '../economy/CurrencyExchange.ts';
+import { walletState, type WalletChangeListener, type WalletSnapshot } from '../economy/WalletState.ts';
 
 export interface PurchaseResult {
   ok: boolean;
@@ -53,15 +54,35 @@ export class PlayerProfileStore {
   private static noticeUntil = 0;
   private static lastPlaytimeCommitAt = Date.now();
 
+  private static walletSnapshot(save: LocalPlayerSave): WalletSnapshot {
+    return {
+      profileId: save.profile.id,
+      credits: save.wallet.credits,
+      coreTokens: save.wallet.coreTokens,
+      plasmaChips: save.mods.plasmaChips,
+      fluxCores: save.wallet.fluxCores
+    };
+  }
+
+  static getWalletSnapshot(): WalletSnapshot {
+    return PlayerProfileStore.walletSnapshot(PlayerProfileStore.getActiveSave());
+  }
+
+  static subscribeWalletChanges(listener: WalletChangeListener, emitCurrent = true): () => void {
+    return walletState.subscribe(listener, emitCurrent);
+  }
+
   static bootstrap(): void {
     const selected = LocalSaveManager.getActiveProfileSave();
     if (selected) {
       PlayerProfileStore.activeSave = selected;
       PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
+      walletState.prime(PlayerProfileStore.walletSnapshot(selected));
       return;
     }
 
     PlayerProfileStore.activeSave = null;
+    walletState.prime(null);
   }
 
   static hasActiveProfile(): boolean {
@@ -73,6 +94,7 @@ export class PlayerProfileStore {
     if (!PlayerProfileStore.activeSave) {
       const loaded = LocalSaveManager.getActiveProfileSave();
       PlayerProfileStore.activeSave = loaded ?? null;
+      if (loaded) walletState.prime(PlayerProfileStore.walletSnapshot(loaded));
     }
     if (!PlayerProfileStore.activeSave) {
       throw new Error('No active local profile is selected.');
@@ -116,11 +138,13 @@ export class PlayerProfileStore {
     const result = LocalSaveManager.selectProfile(profileId);
     if (!result.ok || !result.save) {
       PlayerProfileStore.activeSave = null;
+      walletState.prime(null);
       return { ok: false, message: result.message };
     }
 
     PlayerProfileStore.activeSave = result.save;
     PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
+    walletState.publish(PlayerProfileStore.walletSnapshot(result.save), true);
     PlayerProfileStore.markNotice('SAVED LOCALLY');
     return { ok: true };
   }
@@ -130,6 +154,7 @@ export class PlayerProfileStore {
     if (!result.ok || !result.save) return { ok: false, message: result.message };
     PlayerProfileStore.activeSave = result.save;
     PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
+    walletState.publish(PlayerProfileStore.walletSnapshot(result.save), true);
     PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
     return { ok: true };
   }
@@ -139,6 +164,7 @@ export class PlayerProfileStore {
     if (!result.ok || !result.save) return { ok: false, message: result.message };
     PlayerProfileStore.activeSave = result.save;
     PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
+    walletState.publish(PlayerProfileStore.walletSnapshot(result.save), true);
     PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
     return { ok: true };
   }
@@ -159,7 +185,10 @@ export class PlayerProfileStore {
     if (PlayerProfileStore.activeSave?.profile.id === profileId) {
       PlayerProfileStore.activeSave = null;
       const fallback = LocalSaveManager.getActiveProfileSave();
-      if (fallback) PlayerProfileStore.activeSave = fallback;
+      if (fallback) {
+        PlayerProfileStore.activeSave = fallback;
+        walletState.publish(PlayerProfileStore.walletSnapshot(fallback), true);
+      } else walletState.prime(null);
     }
     PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
     return { ok: true };
@@ -170,6 +199,7 @@ export class PlayerProfileStore {
     if (!result.ok) return result;
     if (PlayerProfileStore.activeSave?.profile.id === profileId) {
       PlayerProfileStore.activeSave = LocalSaveManager.getActiveProfileSave();
+      if (PlayerProfileStore.activeSave) walletState.publish(PlayerProfileStore.walletSnapshot(PlayerProfileStore.activeSave), true);
     }
     PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
     return { ok: true };
@@ -180,6 +210,7 @@ export class PlayerProfileStore {
     if (!result.ok) return result;
     if (PlayerProfileStore.activeSave?.profile.id === profileId) {
       PlayerProfileStore.activeSave = LocalSaveManager.getActiveProfileSave();
+      if (PlayerProfileStore.activeSave) walletState.publish(PlayerProfileStore.walletSnapshot(PlayerProfileStore.activeSave), true);
     }
     PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
     return { ok: true };
@@ -198,6 +229,7 @@ export class PlayerProfileStore {
     if (!result.ok) return result;
     if (mode === 'replace' && targetProfileId) {
       PlayerProfileStore.activeSave = LocalSaveManager.getActiveProfileSave();
+      if (PlayerProfileStore.activeSave) walletState.publish(PlayerProfileStore.walletSnapshot(PlayerProfileStore.activeSave), true);
     }
     PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
     return { ok: true };
@@ -780,6 +812,7 @@ export class PlayerProfileStore {
     } else {
       PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
     }
+    walletState.publish(PlayerProfileStore.walletSnapshot(save));
   }
 
   static resetSessionTracking(): void {
