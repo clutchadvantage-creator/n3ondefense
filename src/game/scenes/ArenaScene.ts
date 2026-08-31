@@ -60,12 +60,17 @@ import { compactBindingLabel } from '../config/controls';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_BALANCE, RUN_PROTOCOLS, normalizeRunProtocolId } from '../mods/modBalance.ts';
 import { isGuaranteedMilestone, rollModDrop } from '../mods/ModDropService.ts';
-import type { ModDefinition, ModDropSource, ModRewardRecord, ModSlot, RunProtocolId } from '../mods/types.ts';
+import type { ModDefinition, ModDropSource, ModRarity, ModRewardRecord, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { magneticResistanceForEnemy, splitCurrentSecondaryDamage } from '../mods/ModRules.ts';
 import { createModCardView } from '../mods/ModCardView.ts';
 import { MOD_BY_ID } from '../mods/definitions.ts';
 import { ModAcquisitionPresenter } from '../mods/ModAcquisitionPresenter.ts';
 import { MOD_PICKUP_REVEAL_LEAD_IN_MS } from '../mods/ModAcquisition.ts';
+import {
+  resolvePremiumModRevealReturn,
+  shouldRequestPremiumRevealPointerLock,
+  type PremiumModRevealReturnContext
+} from '../mods/PremiumModRevealFlow.ts';
 import { BombsiteModSystem } from '../mods/BombsiteModSystem.ts';
 import { SupremeModEffectSystem } from '../mods/SupremeModEffectSystem.ts';
 import { MOD_FOCUS_CATEGORIES, RUN_CONTRACT_IDS, getContract, getRoundCompletionCredits } from '../economy/economyBalance.ts';
@@ -532,6 +537,8 @@ export class ArenaScene extends Phaser.Scene {
   private modAcquisitionPresenter: ModAcquisitionPresenter | null = null;
   private legendaryRevealPhysicsWasPaused = false;
   private legendaryRevealInProgress = false;
+  private legendaryRevealPointerWasLocked = false;
+  private legendaryRevealRequiresAcknowledgement = false;
   private siteActionText!: Phaser.GameObjects.Text;
   private crosshair!: Phaser.GameObjects.Graphics;
   private crosshairValid: boolean | null = null;
@@ -920,7 +927,8 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.modAcquisitionPresenter = new ModAcquisitionPresenter(this, {
-      onLegendaryStart: () => this.pauseForLegendaryModReveal(),
+      onLegendaryStart: (request) => this.pauseForLegendaryModReveal(request.rarity),
+      onLegendaryAcknowledge: () => this.preparePremiumRevealAcknowledgement(),
       onLegendaryComplete: () => this.resumeAfterLegendaryModReveal()
     });
     this.tutorialDirector = new TutorialDirector({
@@ -7860,8 +7868,10 @@ export class ArenaScene extends Phaser.Scene {
     this.input.keyboard?.resetKeys();
   }
 
-  private pauseForLegendaryModReveal(): void {
+  private pauseForLegendaryModReveal(rarity: ModRarity): void {
     this.legendaryRevealInProgress = true;
+    this.legendaryRevealRequiresAcknowledgement = rarity === 'supreme';
+    this.legendaryRevealPointerWasLocked = Boolean(this.pointerLock?.locked);
     this.audio.stopLowHealthWarning();
     this.legendaryRevealPhysicsWasPaused = this.physics.world.isPaused;
     this.audio.stopPlantingLoop();
@@ -7871,23 +7881,69 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.pauseEventPresentationLoops();
     this.clearGameplayInput();
     this.crosshair?.setVisible(false);
+    if (this.legendaryRevealRequiresAcknowledgement) {
+      // Supreme uses an explicit Continue control. Release browser capture
+      // without invoking the normal Escape/pause path so its pointer hit area
+      // exactly matches the visible button.
+      this.setMenuCursorMode();
+      this.pointerLock?.hidePrompt();
+      this.pointerLock?.release();
+    }
     this.physics.pause();
   }
 
+  private preparePremiumRevealAcknowledgement(): void {
+    if (!this.legendaryRevealInProgress || !this.legendaryRevealRequiresAcknowledgement) return;
+    const context = this.premiumRevealReturnContext();
+    // This runs synchronously inside the trusted Continue activation. It is
+    // the only reliable browser window in which pointer lock can be restored.
+    if (shouldRequestPremiumRevealPointerLock(context)) this.pointerLock?.requestLock();
+  }
+
   private resumeAfterLegendaryModReveal(): void {
-    this.crosshair?.setVisible(true);
-    const shouldRemainPaused = this.legendaryRevealPhysicsWasPaused
-      || this.state.state === RoundState.Paused
-      || this.state.state === RoundState.Victory
-      || this.state.state === RoundState.Defeat;
-    if (shouldRemainPaused) this.physics.pause();
-    else this.physics.resume();
+    const context = this.premiumRevealReturnContext();
+    const returnMode = resolvePremiumModRevealReturn(context);
+    let resumedLivePresentation = false;
+    if (returnMode === 'remain-paused') {
+      this.physics.pause();
+      this.setMenuCursorMode();
+    } else if (returnMode === 'await-pointer-lock') {
+      // A browser may reject pointer capture even after a trusted activation.
+      // Keep the operative safe and use the existing explicit resume gate.
+      this.state.set(RoundState.Paused);
+      this.physics.pause();
+      this.pointerLockInitialGate = true;
+      this.setMenuCursorMode();
+      this.pointerLock?.showResume('CLICK TO RESUME OPERATION');
+    } else {
+      this.physics.resume();
+      resumedLivePresentation = true;
+      if (returnMode === 'boss-collection') this.setMenuCursorMode();
+      else this.setGameplayCursorMode();
+    }
+    this.crosshair?.setVisible(returnMode === 'resume-gameplay');
     if (this.state.state === RoundState.Planting) this.audio.startPlantingLoop();
     if (this.state.state === RoundState.Defusing) this.audio.startDisarmLoop();
-    if (!shouldRemainPaused) this.audio.resumeEventPresentationLoops();
+    if (resumedLivePresentation) this.audio.resumeEventPresentationLoops();
     this.legendaryRevealPhysicsWasPaused = false;
+    this.legendaryRevealPointerWasLocked = false;
+    this.legendaryRevealRequiresAcknowledgement = false;
     this.legendaryRevealInProgress = false;
     this.refreshBossCollectionGate();
+  }
+
+  private premiumRevealReturnContext(): PremiumModRevealReturnContext {
+    return {
+      requiresAcknowledgement: this.legendaryRevealRequiresAcknowledgement,
+      pointerWasLocked: this.legendaryRevealPointerWasLocked,
+      pointerIsLocked: Boolean(this.pointerLock?.locked),
+      mouseInput: this.playerInput.activeDevice !== 'gamepad',
+      roundMustRemainPaused: this.legendaryRevealPhysicsWasPaused
+        || this.state.state === RoundState.Paused
+        || this.state.state === RoundState.Victory
+        || this.state.state === RoundState.Defeat,
+      bossCollection: this.bossFlowPhase === 'loot-collection'
+    };
   }
 
   private pauseForPointerLock(reason: 'initial' | 'unlock' | 'blur' | 'hidden' | 'error'): void {
@@ -8599,6 +8655,8 @@ export class ArenaScene extends Phaser.Scene {
     this.tutorialHardPaused = false;
     this.tutorialClockWasPaused = false;
     this.legendaryRevealInProgress = false;
+    this.legendaryRevealPointerWasLocked = false;
+    this.legendaryRevealRequiresAcknowledgement = false;
     this.scale.off('resize', this.handleResize, this);
     this.events.off('resume-from-options', this.onResumeFromOptions);
     this.events.off('return-from-mod-collection', this.onReturnFromModCollection);

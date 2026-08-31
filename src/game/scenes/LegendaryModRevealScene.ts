@@ -5,6 +5,7 @@ import { createModCardView, MOD_RARITY_COLORS } from '../mods/ModCardView.ts';
 import {
   LEGENDARY_MOD_REVEAL_COMPLETE_EVENT,
   LEGENDARY_MOD_REVEAL_HOLD_MS,
+  PREMIUM_MOD_REVEAL_ACKNOWLEDGE_EVENT,
   SUPREME_MOD_REVEAL_HOLD_MS,
   calculateModRevealCardWidth,
   type ModAcquisitionPresentation
@@ -44,6 +45,7 @@ export class LegendaryModRevealScene extends Phaser.Scene {
     }
 
     this.finished = false;
+    this.input.setDefaultCursor('default');
     this.cameras.main.setBackgroundColor('rgba(0,0,0,0)');
     this.scene.pause(this.ownerSceneKey);
     this.scene.bringToTop();
@@ -201,6 +203,7 @@ export class LegendaryModRevealScene extends Phaser.Scene {
       this.scale.height - 52,
       'CONTINUE',
       () => {
+        if (this.token) this.game.events.emit(PREMIUM_MOD_REVEAL_ACKNOWLEDGE_EVENT, this.token);
         if (this.continueButton) disableButton(this.continueButton);
         this.dismissPresentation();
       },

@@ -4,6 +4,7 @@ export const NORMAL_MOD_REVEAL_HOLD_MS = 2_000;
 export const LEGENDARY_MOD_REVEAL_HOLD_MS = 2_100;
 export const SUPREME_MOD_REVEAL_HOLD_MS = 2_650;
 export const LEGENDARY_MOD_REVEAL_COMPLETE_EVENT = 'mod-reveal:legendary-complete';
+export const PREMIUM_MOD_REVEAL_ACKNOWLEDGE_EVENT = 'mod-reveal:premium-acknowledge';
 export const MOD_PICKUP_REVEAL_LEAD_IN_MS = 180;
 
 export interface ModAcquisitionPresentation {

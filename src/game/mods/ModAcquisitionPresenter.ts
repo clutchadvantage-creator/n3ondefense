@@ -5,13 +5,15 @@ import { createModCardView, MOD_RARITY_COLORS } from './ModCardView.ts';
 import {
   LEGENDARY_MOD_REVEAL_COMPLETE_EVENT,
   NORMAL_MOD_REVEAL_HOLD_MS,
+  PREMIUM_MOD_REVEAL_ACKNOWLEDGE_EVENT,
   calculateModRevealCardWidth,
   enqueueModAcquisition,
   type ModAcquisitionPresentation
 } from './ModAcquisition.ts';
 
 export interface ModAcquisitionPresenterHooks {
-  onLegendaryStart: () => void;
+  onLegendaryStart: (request: ModAcquisitionPresentation) => void;
+  onLegendaryAcknowledge: (request: ModAcquisitionPresentation) => void;
   onLegendaryComplete: () => void;
 }
 
@@ -31,6 +33,7 @@ export class ModAcquisitionPresenter {
     private readonly hooks: ModAcquisitionPresenterHooks
   ) {
     this.scene.game.events.on(LEGENDARY_MOD_REVEAL_COMPLETE_EVENT, this.handleLegendaryComplete, this);
+    this.scene.game.events.on(PREMIUM_MOD_REVEAL_ACKNOWLEDGE_EVENT, this.handleLegendaryAcknowledge, this);
   }
 
   enqueue(request: ModAcquisitionPresentation): void {
@@ -69,6 +72,7 @@ export class ModAcquisitionPresenter {
     this.holdTimer?.remove(false);
     this.holdTimer = null;
     this.scene.game.events.off(LEGENDARY_MOD_REVEAL_COMPLETE_EVENT, this.handleLegendaryComplete, this);
+    this.scene.game.events.off(PREMIUM_MOD_REVEAL_ACKNOWLEDGE_EVENT, this.handleLegendaryAcknowledge, this);
     if (this.activeRoot) {
       this.scene.tweens.killTweensOf(this.activeRoot.list);
       this.activeRoot.destroy(true);
@@ -193,7 +197,7 @@ export class ModAcquisitionPresenter {
 
   private presentLegendary(request: ModAcquisitionPresentation): void {
     this.legendaryToken = `${request.card.instanceId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    this.hooks.onLegendaryStart();
+    this.hooks.onLegendaryStart(request);
     try {
       this.scene.scene.launch(SceneKeys.LegendaryModReveal, {
         ownerSceneKey: this.scene.scene.key,
@@ -213,6 +217,11 @@ export class ModAcquisitionPresenter {
     this.legendaryToken = '';
     this.hooks.onLegendaryComplete();
     this.completeActive();
+  };
+
+  private readonly handleLegendaryAcknowledge = (token: string): void => {
+    if (this.destroyed || !this.active || token !== this.legendaryToken) return;
+    this.hooks.onLegendaryAcknowledge(this.active);
   };
 
   private completeActive(): void {
