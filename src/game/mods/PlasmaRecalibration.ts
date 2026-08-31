@@ -1,9 +1,10 @@
 import { MOD_BY_ID } from './definitions.ts';
 import { MOD_BALANCE } from './modBalance.ts';
-import { LOWER_IS_BETTER_MOD_STATS, type ModCardInstance, type ModDefinition, type ModRank, type ModStat, type ModStatCalibration, type ModStatModifier, type PlasmaRecalibrationQuality } from './types.ts';
+import { LOWER_IS_BETTER_MOD_STATS, type LocalModCollection, type ModCardInstance, type ModDefinition, type ModRank, type ModStat, type ModStatCalibration, type ModStatModifier, type PlasmaRecalibrationQuality } from './types.ts';
 
 export const PLASMA_RECALIBRATION_BALANCE = {
   rollCost: 125,
+  resetCost: 75,
   revealDurationMs: 1050,
   /** Rare top-end rolls may edge past the strongest standard (non-Supreme,
    * non-Corrupted) native version of the same stat without turning every
@@ -121,6 +122,41 @@ export interface PlasmaRecalibrationRollResult {
 
 type CalibrationCarrier = Pick<ModCardInstance, 'calibrations'>;
 
+export type ModStatPresentationState = 'native' | 'recalibrated';
+
+export interface ResolvedModStatSlot {
+  slotIndex: number;
+  native: ModStatModifier | null;
+  effective: ModStatModifier | null;
+  calibration?: ModStatCalibration;
+  differsFromNative: boolean;
+}
+
+/** Canonical, instance-aware stat view consumed by gameplay and UI. Native
+ * definition data is copied before exposure so a recalibration can never
+ * mutate the registry that Reset to Native relies on. */
+export interface ResolvedModStatState {
+  nativeStats: ModStatModifier[];
+  effectiveStats: ModStatModifier[];
+  slots: ResolvedModStatSlot[];
+  presentation: ModStatPresentationState;
+  recalibrated: boolean;
+}
+
+const STAT_COMPARISON_EPSILON = 1e-7;
+
+const copyModifier = (modifier: ModStatModifier): ModStatModifier => ({
+  stat: modifier.stat,
+  mode: modifier.mode,
+  values: { ...modifier.values }
+});
+
+const modifiersMatch = (left: ModStatModifier | null, right: ModStatModifier | null): boolean => {
+  if (!left || !right) return left === right;
+  if (left.stat !== right.stat || left.mode !== right.mode) return false;
+  return ([0, 1, 2, 3] as const).every((rank) => Math.abs(left.values[rank] - right.values[rank]) <= STAT_COMPARISON_EPSILON);
+};
+
 const statLabel = (stat: ModStat): string => stat.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toUpperCase();
 
 export const getRecalibrationSlots = (definition: ModDefinition): RecalibrationSlot[] => {
@@ -178,6 +214,9 @@ export const rollPlasmaRecalibrationCandidate = (
   card: ModCardInstance,
   random: () => number = Math.random
 ): PlasmaRecalibrationRollResult => {
+  if (!isModRecalibrationEligible(definition, card)) {
+    return { ok: false, message: `MAX RANK ${definition.maxRank} REQUIRED` };
+  }
   const pool = getRecalibrationCandidatePool(definition, card);
   if (!pool.length) return { ok: false, message: 'NO SAFE RECALIBRATION ATTRIBUTES AVAILABLE' };
   const stat = pool[Math.min(pool.length - 1, Math.floor(Math.max(0, random()) * pool.length))];
@@ -241,19 +280,48 @@ export const resolveCalibrationModifier = (calibration: Pick<ModStatCalibration,
   return { stat: calibration.stat, mode: calibration.mode, values };
 };
 
-export const getEffectiveModModifiers = (definition: ModDefinition, card?: CalibrationCarrier): ModStatModifier[] => {
+export const getNativeModModifiers = (definition: ModDefinition): ModStatModifier[] =>
+  (definition.modifiers ?? []).map(copyModifier);
+
+export const resolveModStatState = (definition: ModDefinition, card?: CalibrationCarrier): ResolvedModStatState => {
+  const nativeStats = getNativeModModifiers(definition);
   const output: ModStatModifier[] = [];
-  (definition.modifiers ?? []).forEach((native, slotIndex) => {
-    const calibration = getActiveCalibration(card, slotIndex);
-    output.push(calibration ? resolveCalibrationModifier(calibration) ?? native : native);
-  });
-  if (SPECIAL_SLOT_IDS.has(definition.id)) {
-    const calibration = getActiveCalibration(card, 0);
+  const slots = getRecalibrationSlots(definition).map((slot): ResolvedModStatSlot => {
+    const native = definition.modifiers?.[slot.slotIndex] ? copyModifier(definition.modifiers[slot.slotIndex]) : null;
+    const calibration = getActiveCalibration(card, slot.slotIndex);
     const resolved = calibration ? resolveCalibrationModifier(calibration) : null;
-    if (resolved) output.push(resolved);
-  }
-  return output;
+    const effective = resolved ?? native;
+    if (effective) output.push(copyModifier(effective));
+    return {
+      slotIndex: slot.slotIndex,
+      native,
+      effective: effective ? copyModifier(effective) : null,
+      ...(calibration ? { calibration: { ...calibration } } : {}),
+      differsFromNative: Boolean(resolved && !modifiersMatch(native, resolved))
+    };
+  });
+
+  // Definitions without recalibratable slots still expose their authoritative
+  // native modifiers to ModRuntime.
+  if (slots.length === 0) output.push(...nativeStats.map(copyModifier));
+  const recalibrated = slots.some((slot) => slot.differsFromNative);
+  return {
+    nativeStats,
+    effectiveStats: output,
+    slots,
+    presentation: recalibrated ? 'recalibrated' : 'native',
+    recalibrated
+  };
 };
+
+export const getEffectiveModModifiers = (definition: ModDefinition, card?: CalibrationCarrier): ModStatModifier[] =>
+  resolveModStatState(definition, card).effectiveStats;
+
+export const isModRecalibrated = (definition: ModDefinition, card?: CalibrationCarrier): boolean =>
+  resolveModStatState(definition, card).recalibrated;
+
+export const isModRecalibrationEligible = (definition: ModDefinition, card: Pick<ModCardInstance, 'upgradeLevel'>): boolean =>
+  card.upgradeLevel >= definition.maxRank;
 
 export const isNativeModSlotActive = (card: CalibrationCarrier | undefined, slotIndex: number): boolean => !getActiveCalibration(card, slotIndex);
 
@@ -261,7 +329,15 @@ export const describeRecalibrationSlot = (definition: ModDefinition, card: ModCa
   const calibration = getActiveCalibration(card, slot.slotIndex);
   if (calibration) {
     const modifier = resolveCalibrationModifier(calibration);
-    return modifier ? `${formatCalibrationModifier(modifier, rank)} ${statLabel(modifier.stat)} // PLASMA CALIBRATED` : 'CALIBRATION DATA INVALID';
+    const native = definition.modifiers?.[slot.slotIndex];
+    const nativeLabel = native
+      ? `${formatCalibrationModifier(native, rank)} ${statLabel(native.stat)}`
+      : definition.id === 'split-current'
+        ? `${Math.round(MOD_BALANCE.splitCurrent.damageShare[rank] * 100)}% ARC DAMAGE // ${MOD_BALANCE.splitCurrent.radius[rank]} RANGE`
+        : 'NO NATIVE NUMERIC STAT';
+    return modifier
+      ? `CURRENT ${formatCalibrationModifier(modifier, rank)} ${statLabel(modifier.stat)}\nNATIVE ${nativeLabel}`
+      : 'CALIBRATION DATA INVALID';
   }
   if (definition.id === 'split-current') {
     return `${Math.round(MOD_BALANCE.splitCurrent.damageShare[rank] * 100)}% ARC DAMAGE // ${MOD_BALANCE.splitCurrent.radius[rank]} RANGE`;
@@ -277,6 +353,14 @@ export const formatCalibrationModifier = (modifier: ModStatModifier, rank: ModRa
   return `${percent >= 0 ? '+' : ''}${percent.toFixed(1).replace(/\.0$/, '')}%`;
 };
 
+export const describeEffectiveModStats = (definition: ModDefinition, card: ModCardInstance, rank: ModRank = card.upgradeLevel): string => {
+  const state = resolveModStatState(definition, card);
+  if (!state.recalibrated) return definition.rankDescriptions[rank];
+  return state.effectiveStats
+    .map((modifier) => `${formatCalibrationModifier(modifier, rank)} ${statLabel(modifier.stat)}`)
+    .join(' // ');
+};
+
 export const applyPlasmaRecalibration = (
   card: ModCardInstance,
   definition: ModDefinition,
@@ -284,6 +368,7 @@ export const applyPlasmaRecalibration = (
   candidate: PlasmaRecalibrationCandidate,
   calibratedAt = new Date().toISOString()
 ): { ok: boolean; message: string } => {
+  if (!isModRecalibrationEligible(definition, card)) return { ok: false, message: `MAX RANK ${definition.maxRank} REQUIRED` };
   const slot = getRecalibrationSlots(definition).find((entry) => entry.slotIndex === slotIndex && !entry.protected);
   if (!slot) return { ok: false, message: 'SELECTED STAT SLOT IS PROTECTED' };
   if (!getRecalibrationCandidatePool(definition, card).includes(candidate.stat)) return { ok: false, message: 'CALIBRATION ATTRIBUTE CONFLICT' };
@@ -303,6 +388,41 @@ export const applyPlasmaRecalibration = (
   card.calibrations = [...(card.calibrations ?? []).filter((entry) => entry.slotIndex !== slotIndex), replacement]
     .sort((a, b) => a.slotIndex - b.slotIndex);
   return { ok: true, message: `STAT ${slotIndex + 1} REPLACED // ${statLabel(candidate.stat)}` };
+};
+
+/** Clears only the per-instance stat override. Rank, rarity, infusion,
+ * ownership, and loadout identity remain untouched. Currency is handled by
+ * the profile transaction layer. */
+export const resetPlasmaRecalibrationToNative = (
+  card: ModCardInstance,
+  definition: ModDefinition
+): { ok: boolean; message: string } => {
+  if (!isModRecalibrationEligible(definition, card)) return { ok: false, message: `MAX RANK ${definition.maxRank} REQUIRED` };
+  if (!isModRecalibrated(definition, card)) return { ok: false, message: 'MODULE ALREADY RUNNING NATIVE STATS' };
+  delete card.calibrations;
+  return { ok: true, message: 'NATIVE STATS RESTORED' };
+};
+
+export const resetPlasmaRecalibrationTransaction = (
+  collection: Pick<LocalModCollection, 'cards' | 'plasmaChips'>,
+  instanceId: string
+): { ok: boolean; message: string; cost: number; card?: ModCardInstance; definition?: ModDefinition } => {
+  const cost = PLASMA_RECALIBRATION_BALANCE.resetCost;
+  const selection = findRecalibrationCard(collection.cards, instanceId);
+  if (!selection) return { ok: false, message: 'OWNED MOD CARD NOT FOUND', cost };
+  if (!isModRecalibrationEligible(selection.definition, selection.card)) {
+    return { ok: false, message: `MAX RANK ${selection.definition.maxRank} REQUIRED`, cost };
+  }
+  if (!isModRecalibrated(selection.definition, selection.card)) {
+    return { ok: false, message: 'MODULE ALREADY RUNNING NATIVE STATS', cost };
+  }
+  if (collection.plasmaChips < cost) {
+    return { ok: false, message: `INSUFFICIENT PLASMA CHIPS — ${cost} REQUIRED`, cost };
+  }
+  const result = resetPlasmaRecalibrationToNative(selection.card, selection.definition);
+  if (!result.ok) return { ...result, cost };
+  collection.plasmaChips -= cost;
+  return { ...result, cost, card: selection.card, definition: selection.definition };
 };
 
 export const findRecalibrationCard = (cards: readonly ModCardInstance[], instanceId: string): { card: ModCardInstance; definition: ModDefinition } | null => {

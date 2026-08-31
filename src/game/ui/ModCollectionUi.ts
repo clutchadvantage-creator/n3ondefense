@@ -3,6 +3,7 @@ import { createButton, type ButtonPresentationOptions } from '../utils/ui.ts';
 import type { ModArchiveAnalytics } from '../mods/ModArchiveAnalytics.ts';
 import type { ModOperationStatusTone } from '../mods/ModOperationStatus.ts';
 import type { ModArchiveTerminalLayout, ModArchiveRect } from './ModArchiveTerminalLayout.ts';
+import type { ModStatPresentationState } from '../mods/PlasmaRecalibration.ts';
 
 export interface CollectionFrameRect {
   x: number;
@@ -30,6 +31,7 @@ export interface ModSelectedInspectorData {
   cardIndex: number;
   totalCards: number;
   signalTrace: readonly number[];
+  statState: ModStatPresentationState;
 }
 
 export interface ModOperationStatusHandle {
@@ -505,7 +507,7 @@ export const createModSelectedTracePanel = (
   const label = scene.add.text(12, 8, 'SIGNAL TRACE // MODULE INSPECTION', {
     fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#8ddce6', fontStyle: 'bold', letterSpacing: 1
   }).setOrigin(0, 0);
-  const state = scene.add.text(rect.width - 12, 8, `${formatArchiveTimestamp(data.acquiredAt)} // ${data.infused ? 'INFUSED' : 'BASE'} // ${data.equipped ? 'LINKED' : 'STORED'}`, {
+  const state = scene.add.text(rect.width - 12, 8, `${formatArchiveTimestamp(data.acquiredAt)} // ${data.statState === 'recalibrated' ? '★ RECALIBRATED' : 'FEATHER NATIVE'} // ${data.infused ? 'INFUSED' : 'BASE'} // ${data.equipped ? 'LINKED' : 'STORED'}`, {
     fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: data.equipped ? '#72ffad' : '#bce6eb', fontStyle: 'bold'
   }).setOrigin(1, 0);
   const graph = scene.add.graphics();

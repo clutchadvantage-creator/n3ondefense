@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { MOD_BY_ID } from '../src/game/mods/definitions.ts';
+import { MOD_BY_ID, MOD_DEFINITIONS } from '../src/game/mods/definitions.ts';
 import { addModDrop, createDefaultModCollection, equipMod } from '../src/game/mods/ModInventoryService.ts';
 import { normalizeModCollection } from '../src/game/mods/ModSaveNormalizer.ts';
 import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
@@ -12,10 +12,17 @@ import {
   getApplicableRecalibrationSlots,
   getRecalibrationCandidatePool,
   getRecalibrationSlots,
+  isModRecalibrated,
+  isModRecalibrationEligible,
+  resetPlasmaRecalibrationTransaction,
+  resetPlasmaRecalibrationToNative,
+  resolveModStatState,
   resolveCalibrationModifier,
   rollPlasmaRecalibrationCandidate
 } from '../src/game/mods/PlasmaRecalibration.ts';
 import { LOWER_IS_BETTER_MOD_STATS } from '../src/game/mods/types.ts';
+import { modStatEvents } from '../src/game/mods/ModStatEvents.ts';
+import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 
 const definition = (id) => {
   const value = MOD_BY_ID.get(id);
@@ -92,7 +99,7 @@ test('quality selection hits every configured band and weak rolls remain benefic
   ];
   for (const [qualityRoll, expected] of qualityRolls) {
     const values = [0, qualityRoll, 0];
-    const rolled = rollPlasmaRecalibrationCandidate(mod, cardFor(mod.id), () => values.shift());
+    const rolled = rollPlasmaRecalibrationCandidate(mod, cardFor(mod.id, 3), () => values.shift());
     assert.equal(rolled.ok, true);
     assert.equal(rolled.candidate.quality, expected);
     const modifier = resolveCalibrationModifier(rolled.candidate);
@@ -106,7 +113,7 @@ test('quality selection hits every configured band and weak rolls remain benefic
 
 test('accepting a candidate replaces one slot, cannot create a third stat, and scales through later ranks', () => {
   const mod = definition('field-medic');
-  const card = cardFor(mod.id, 1);
+  const card = cardFor(mod.id, 3);
   const rolled = rollPlasmaRecalibrationCandidate(mod, card, (() => {
     const values = [0, .2, .75];
     return () => values.shift();
@@ -130,6 +137,7 @@ test('Split Current replacement disables its native arc and activates only the c
   const mods = createDefaultModCollection();
   addModDrop(mods, 'split-current');
   const card = mods.cards[0];
+  card.upgradeLevel = 3;
   const mod = definition('split-current');
   const candidate = { stat: 'weaponDamage', mode: 'multiply', quality: 'enhanced', normalizedPower: .8 };
   assert.equal(applyPlasmaRecalibration(card, mod, 0, candidate).ok, true);
@@ -158,6 +166,169 @@ test('old saves default to native stats, cross-system rolls survive, and protect
   assert.deepEqual(getEffectiveModModifiers(definition('calibrated-barrel'), old.cards[0]), definition('calibrated-barrel').modifiers);
 });
 
+test('only the definition max rank is eligible for new Plasma Recalibration rolls', () => {
+  const mod = definition('calibrated-barrel');
+  for (const rank of [0, 1, 2]) {
+    const card = cardFor(mod.id, rank);
+    assert.equal(isModRecalibrationEligible(mod, card), false);
+    assert.equal(rollPlasmaRecalibrationCandidate(mod, card, () => 0).ok, false);
+  }
+  const maxed = cardFor(mod.id, mod.maxRank);
+  assert.equal(isModRecalibrationEligible(mod, maxed), true);
+  assert.equal(rollPlasmaRecalibrationCandidate(mod, maxed, () => 0).ok, true);
+});
+
+test('canonical state keeps native definitions immutable and derives feather/star from current values', () => {
+  const mod = definition('calibrated-barrel');
+  const card = cardFor(mod.id, 3);
+  const original = structuredClone(mod.modifiers);
+  const native = resolveModStatState(mod, card);
+  assert.equal(native.presentation, 'native');
+  assert.equal(native.recalibrated, false);
+  assert.deepEqual(native.effectiveStats, native.nativeStats);
+
+  assert.equal(applyPlasmaRecalibration(card, mod, 0, {
+    stat: 'mineDamage', mode: 'multiply', quality: 'optimal', normalizedPower: .94
+  }).ok, true);
+  const calibrated = resolveModStatState(mod, card);
+  assert.equal(calibrated.presentation, 'recalibrated');
+  assert.equal(isModRecalibrated(mod, card), true);
+  assert.notDeepEqual(calibrated.effectiveStats, calibrated.nativeStats);
+  assert.deepEqual(mod.modifiers, original, 'instance overrides never mutate canonical native definitions');
+
+  assert.equal(resetPlasmaRecalibrationToNative(card, mod).ok, true);
+  const reset = resolveModStatState(mod, card);
+  assert.equal(reset.presentation, 'native');
+  assert.deepEqual(reset.effectiveStats, reset.nativeStats);
+  assert.deepEqual(mod.modifiers, original);
+});
+
+test('Reset to Native is an atomic 75-chip instance transaction and preserves infusion/equip identity', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'calibrated-barrel');
+  const card = mods.cards[0];
+  card.upgradeLevel = 3;
+  card.infusionId = 'arcade-pop';
+  assert.equal(equipMod(mods, 'weapon', card.modId, card.instanceId).ok, true);
+  assert.equal(applyPlasmaRecalibration(card, definition(card.modId), 0, {
+    stat: 'mineDamage', mode: 'multiply', quality: 'enhanced', normalizedPower: .8
+  }).ok, true);
+  mods.plasmaChips = 75;
+  const loadoutBefore = structuredClone(mods.loadouts);
+  const result = resetPlasmaRecalibrationTransaction(mods, card.instanceId);
+  assert.equal(result.ok, true);
+  assert.equal(result.cost, 75);
+  assert.equal(mods.plasmaChips, 0);
+  assert.equal(card.calibrations, undefined);
+  assert.equal(card.infusionId, 'arcade-pop');
+  assert.deepEqual(mods.loadouts, loadoutBefore);
+  assert.equal(resolveModStatState(definition(card.modId), card).presentation, 'native');
+});
+
+test('invalid Reset to Native paths never spend chips or partially mutate the card', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'calibrated-barrel');
+  const card = mods.cards[0];
+  card.upgradeLevel = 3;
+  mods.plasmaChips = 75;
+  assert.equal(resetPlasmaRecalibrationTransaction(mods, card.instanceId).ok, false, 'native card cannot reset');
+  assert.equal(mods.plasmaChips, 75);
+
+  assert.equal(applyPlasmaRecalibration(card, definition(card.modId), 0, {
+    stat: 'mineDamage', mode: 'multiply', quality: 'enhanced', normalizedPower: .8
+  }).ok, true);
+  const calibration = structuredClone(card.calibrations);
+  mods.plasmaChips = 74;
+  assert.equal(resetPlasmaRecalibrationTransaction(mods, card.instanceId).ok, false, 'insufficient funds cannot reset');
+  assert.equal(mods.plasmaChips, 74);
+  assert.deepEqual(card.calibrations, calibration);
+  assert.equal(resetPlasmaRecalibrationTransaction(mods, 'missing-card').ok, false);
+  assert.equal(mods.plasmaChips, 74);
+  assert.deepEqual(card.calibrations, calibration);
+});
+
+test('every recalibratable definition restores its exact native stat set losslessly', () => {
+  for (const mod of MOD_DEFINITIONS) {
+    const card = cardFor(mod.id, mod.maxRank);
+    const pool = getRecalibrationCandidatePool(mod, card);
+    if (!pool.length || !isModRecalibrationEligible(mod, card)) continue;
+    const stat = pool[0];
+    const slot = getApplicableRecalibrationSlots(mod, card, stat)[0];
+    assert.ok(slot, `${mod.id} requires an applicable test slot`);
+    const mode = resolveCalibrationModifier({ stat, mode: 'multiply', normalizedPower: .77 })
+      ? 'multiply'
+      : 'add';
+    const candidate = { stat, mode, quality: 'enhanced', normalizedPower: .77 };
+    const nativeBefore = structuredClone(resolveModStatState(mod, card).nativeStats);
+    const applied = applyPlasmaRecalibration(card, mod, slot.slotIndex, candidate);
+    if (!applied.ok && mode === 'multiply') {
+      candidate.mode = 'add';
+      assert.equal(applyPlasmaRecalibration(card, mod, slot.slotIndex, candidate).ok, true, mod.id);
+    } else assert.equal(applied.ok, true, mod.id);
+    assert.deepEqual(resolveModStatState(mod, card).nativeStats, nativeBefore, `${mod.id} native data changed`);
+    assert.equal(resetPlasmaRecalibrationToNative(card, mod).ok, true, mod.id);
+    assert.deepEqual(resolveModStatState(mod, card).effectiveStats, nativeBefore, `${mod.id} reset was not lossless`);
+  }
+});
+
+test('recalibrated instance metadata and equipped identity survive normalization, then reset persists cleanly', () => {
+  const mods = createDefaultModCollection();
+  addModDrop(mods, 'calibrated-barrel');
+  const card = mods.cards[0];
+  card.upgradeLevel = 3;
+  card.infusionId = 'arcade-pop';
+  assert.equal(equipMod(mods, 'weapon', card.modId, card.instanceId).ok, true);
+  assert.equal(applyPlasmaRecalibration(card, definition(card.modId), 0, {
+    stat: 'turretDamage', mode: 'multiply', quality: 'optimal', normalizedPower: .9
+  }).ok, true);
+  const migrated = normalizeModCollection(structuredClone(mods));
+  const migratedCard = migrated.cards[0];
+  assert.equal(resolveModStatState(definition(migratedCard.modId), migratedCard).presentation, 'recalibrated');
+  assert.equal(migratedCard.infusionId, 'arcade-pop');
+  assert.equal(migrated.loadouts[0].cardSlots.weapon, migratedCard.instanceId);
+  migrated.plasmaChips = 75;
+  assert.equal(resetPlasmaRecalibrationTransaction(migrated, migratedCard.instanceId).ok, true);
+  const reloaded = normalizeModCollection(structuredClone(migrated));
+  assert.equal(resolveModStatState(definition(reloaded.cards[0].modId), reloaded.cards[0]).presentation, 'native');
+  assert.equal(reloaded.cards[0].infusionId, 'arcade-pop');
+  assert.equal(reloaded.loadouts[0].cardSlots.weapon, reloaded.cards[0].instanceId);
+});
+
+test('legacy full profiles migrate native and recalibrated cards without losing their effective values', () => {
+  const save = createDefaultLocalSave('legacy-stats', 'Legacy Stats');
+  addModDrop(save.mods, 'calibrated-barrel');
+  addModDrop(save.mods, 'gas-mask');
+  const calibrated = save.mods.cards.find((card) => card.modId === 'calibrated-barrel');
+  const native = save.mods.cards.find((card) => card.modId === 'gas-mask');
+  calibrated.upgradeLevel = 3;
+  native.upgradeLevel = 3;
+  assert.equal(applyPlasmaRecalibration(calibrated, definition(calibrated.modId), 0, {
+    stat: 'mineDamage', mode: 'multiply', quality: 'optimal', normalizedPower: .91
+  }).ok, true);
+  const effectiveBefore = structuredClone(resolveModStatState(definition(calibrated.modId), calibrated).effectiveStats);
+  save.version = 17;
+  const migrated = normalizeLocalSave(structuredClone(save));
+  assert.ok(migrated);
+  const migratedCalibrated = migrated.mods.cards.find((card) => card.instanceId === calibrated.instanceId);
+  const migratedNative = migrated.mods.cards.find((card) => card.instanceId === native.instanceId);
+  assert.deepEqual(resolveModStatState(definition(calibrated.modId), migratedCalibrated).effectiveStats, effectiveBefore);
+  assert.equal(resolveModStatState(definition(calibrated.modId), migratedCalibrated).presentation, 'recalibrated');
+  assert.equal(resolveModStatState(definition(native.modId), migratedNative).presentation, 'native');
+});
+
+test('Mod stat change notifications carry identity only and unsubscribe cleanly', () => {
+  const received = [];
+  const unsubscribe = modStatEvents.subscribe((event) => received.push(event));
+  const event = { profileId: 'profile-a', instanceId: 'card-a', modId: 'calibrated-barrel', reason: 'reset-native' };
+  modStatEvents.publish(event);
+  unsubscribe();
+  modStatEvents.publish({ ...event, reason: 'recalibrated' });
+  assert.deepEqual(received, [event]);
+  const store = readFileSync(new URL('../src/game/state/PlayerProfileStore.ts', import.meta.url), 'utf8');
+  assert.match(store, /modStatEvents\.publish\([\s\S]*?reason: 'recalibrated'/);
+  assert.match(store, /modStatEvents\.publish\([\s\S]*?reason: 'reset-native'/);
+});
+
 test('profile transaction layer spends exactly once before reveal and never refunds Keep Current', () => {
   const store = readFileSync(new URL('../src/game/state/PlayerProfileStore.ts', import.meta.url), 'utf8');
   const roll = store.slice(store.indexOf('static rollPlasmaRecalibration'), store.indexOf('static applyPlasmaRecalibration'));
@@ -167,5 +338,10 @@ test('profile transaction layer spends exactly once before reveal and never refu
   const garage = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
   assert.match(garage, /PLASMA RECALIBRATION/);
   assert.match(garage, /CURRENT CALIBRATION RETAINED \/\/ ROLL COST SPENT/);
+  assert.match(garage, /RESET TO NATIVE/);
+  assert.match(garage, /showConfirmDialog/);
   assert.match(garage, /configureSceneUiNavigation/);
+  const cardView = readFileSync(new URL('../src/game/mods/ModCardView.ts', import.meta.url), 'utf8');
+  assert.match(cardView, /createModStatStatusIcon/);
+  assert.doesNotMatch(cardView, /SUPREME OD ONLY|ANY SLOT \/\/ 2 MAX/);
 });

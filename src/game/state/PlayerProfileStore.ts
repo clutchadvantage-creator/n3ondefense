@@ -11,10 +11,13 @@ import {
   findRecalibrationCard,
   getRecalibrationCandidatePool,
   getRecalibrationSlots,
+  isModRecalibrationEligible,
   PLASMA_RECALIBRATION_BALANCE,
+  resetPlasmaRecalibrationTransaction,
   rollPlasmaRecalibrationCandidate,
   type PlasmaRecalibrationCandidate
 } from '../mods/PlasmaRecalibration.ts';
+import { modStatEvents, type ModStatChangeListener } from '../mods/ModStatEvents.ts';
 import { RUN_PROTOCOLS, isRunProtocolUnlocked } from '../mods/modBalance.ts';
 import { isSupremeProtocol } from '../progression/SupremeProgression.ts';
 import { buildRunEconomySnapshot, getNextLoadoutSlotCost, getRunSetupCost, purchaseRunSetup, spendCreditsAtomic } from '../economy/EconomyService.ts';
@@ -70,6 +73,10 @@ export class PlayerProfileStore {
 
   static subscribeWalletChanges(listener: WalletChangeListener, emitCurrent = true): () => void {
     return walletState.subscribe(listener, emitCurrent);
+  }
+
+  static subscribeModStatChanges(listener: ModStatChangeListener): () => void {
+    return modStatEvents.subscribe(listener);
   }
 
   static bootstrap(): void {
@@ -659,6 +666,9 @@ export class PlayerProfileStore {
     const save = PlayerProfileStore.getActiveSave();
     const selection = findRecalibrationCard(save.mods.cards, instanceId);
     if (!selection) return { ok: false, message: 'OWNED MOD CARD NOT FOUND' };
+    if (!isModRecalibrationEligible(selection.definition, selection.card)) {
+      return { ok: false, message: `MAX RANK ${selection.definition.maxRank} REQUIRED` };
+    }
     const slots = getRecalibrationSlots(selection.definition).filter((slot) => !slot.protected);
     if (!slots.length || !getRecalibrationCandidatePool(selection.definition, selection.card).length) {
       return { ok: false, message: 'NO SAFE RECALIBRATION ATTRIBUTES AVAILABLE' };
@@ -679,11 +689,50 @@ export class PlayerProfileStore {
     const save = PlayerProfileStore.getActiveSave();
     const selection = findRecalibrationCard(save.mods.cards, instanceId);
     if (!selection) return { ok: false, message: 'OWNED MOD CARD NOT FOUND' };
+    const previousCalibrations = selection.card.calibrations?.map((entry) => ({ ...entry }));
     const result = applyPlasmaRecalibration(selection.card, selection.definition, slotIndex, candidate);
     if (!result.ok) return result;
     save.profile.lastPlayedAt = new Date().toISOString();
-    PlayerProfileStore.save();
+    if (!PlayerProfileStore.save()) {
+      if (previousCalibrations?.length) selection.card.calibrations = previousCalibrations;
+      else delete selection.card.calibrations;
+      return { ok: false, message: 'LOCAL SAVE COMMIT FAILED // CALIBRATION NOT APPLIED' };
+    }
+    modStatEvents.publish({
+      profileId: save.profile.id,
+      instanceId: selection.card.instanceId,
+      modId: selection.card.modId,
+      reason: 'recalibrated'
+    });
     return result;
+  }
+
+  static resetPlasmaRecalibration(instanceId: string): PurchaseResult & { cost?: number } {
+    const save = PlayerProfileStore.getActiveSave();
+    const selection = findRecalibrationCard(save.mods.cards, instanceId);
+    if (!selection) return { ok: false, message: 'OWNED MOD CARD NOT FOUND' };
+    const cost = PLASMA_RECALIBRATION_BALANCE.resetCost;
+    const previousChips = save.mods.plasmaChips;
+    const previousCalibrations = selection.card.calibrations?.map((entry) => ({ ...entry }));
+    const previousLastPlayedAt = save.profile.lastPlayedAt;
+    const reset = resetPlasmaRecalibrationTransaction(save.mods, instanceId);
+    if (!reset.ok) return reset;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    if (!PlayerProfileStore.save()) {
+      save.mods.plasmaChips = previousChips;
+      save.profile.lastPlayedAt = previousLastPlayedAt;
+      if (previousCalibrations?.length) selection.card.calibrations = previousCalibrations;
+      else delete selection.card.calibrations;
+      walletState.prime(PlayerProfileStore.walletSnapshot(save));
+      return { ok: false, message: 'LOCAL SAVE COMMIT FAILED // NO CHIPS SPENT', cost };
+    }
+    modStatEvents.publish({
+      profileId: save.profile.id,
+      instanceId: selection.card.instanceId,
+      modId: selection.card.modId,
+      reason: 'reset-native'
+    });
+    return { ok: true, message: 'NATIVE STATS RESTORED', cost };
   }
 
   static sellDuplicateMod(instanceId: string): PurchaseResult {
@@ -796,7 +845,7 @@ export class PlayerProfileStore {
     PlayerProfileStore.save();
   }
 
-  static save(): void {
+  static save(): boolean {
     const save = PlayerProfileStore.getActiveSave();
     const now = Date.now();
     const deltaSeconds = Math.max(0, Math.floor((now - PlayerProfileStore.lastPlaytimeCommitAt) / 1000));
@@ -813,6 +862,7 @@ export class PlayerProfileStore {
       PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
     }
     walletState.publish(PlayerProfileStore.walletSnapshot(save));
+    return result.ok;
   }
 
   static resetSessionTracking(): void {

@@ -43,6 +43,7 @@ import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { configureSceneUiNavigation, setSceneUiModalDepth } from '../input/UiNavigationController.ts';
+import { resolveModStatState } from '../mods/PlasmaRecalibration.ts';
 
 type SortMode = 'acquired' | 'type' | 'rank' | 'rarity';
 type FilterMode = 'all' | 'duplicates';
@@ -330,7 +331,8 @@ export class ModCollectionScene extends Phaser.Scene {
       acquiredAt: card.acquiredAt,
       cardIndex: Math.max(1, collection.cards.findIndex((entry) => entry.instanceId === card.instanceId) + 1),
       totalCards: collection.cards.length,
-      signalTrace: analytics.signalTrace
+      signalTrace: analytics.signalTrace,
+      statState: resolveModStatState(definition, card).presentation
     };
     createModSelectedInspector(this, detailRect, {
       x: x - detailCardWidth / 2,

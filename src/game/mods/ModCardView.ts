@@ -10,6 +10,8 @@ import {
   SupremeModCardEffects,
   type SupremeCardPresentationState
 } from './SupremeModCardEffects.ts';
+import { describeEffectiveModStats, resolveModStatState } from './PlasmaRecalibration.ts';
+import { createModStatStatusIcon } from './ModStatStatusIcon.ts';
 
 export const MOD_RARITY_COLORS = {
   common: 0xffffff,
@@ -167,19 +169,13 @@ export const createModCardView = (
   const name = scene.add.text(0, height * 0.075, definition.name.toUpperCase(), {
     fontFamily: 'Orbitron, sans-serif', fontSize: `${nameFontSize}px`, color: '#f4fdff', align: 'center', lineSpacing: compact ? -1 : 1
   }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(2).setShadow(0, 1, '#02050a', 4, true, false);
-  const stat = scene.add.text(0, height * 0.25, definition.rankDescriptions[rank], {
+  const statState = resolveModStatState(definition, card);
+  const stat = scene.add.text(0, height * 0.25, describeEffectiveModStats(definition, card, rank), {
     fontFamily: 'Rajdhani, sans-serif', fontSize: `${statFontSize}px`, color: '#d8f2f8', align: 'center', lineSpacing: compact ? 0 : 2
   }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(compact && card.infusionId ? 2 : 3);
   const infusion = scene.add.text(0, height / 2 - 10, card.infusionId ? `◆ ${MOD_INFUSION_BY_ID.get(card.infusionId)?.name.toUpperCase() ?? 'INFUSED'}` : '', {
     fontFamily: 'Rajdhani, sans-serif', fontSize: `${infusionFontSize}px`, fontStyle: 'bold', color: '#a5fff0', align: 'center'
   }).setOrigin(0.5, 1);
-  const supremeRule = supreme
-    ? scene.add.text(0, height / 2 - (card.infusionId ? 27 : 8), 'SUPREME OD ONLY\nANY SLOT // 2 MAX', {
-      fontFamily: 'Rajdhani, sans-serif',
-      fontSize: `${compact ? Phaser.Math.Clamp(width * 0.052, 8, 10) : Phaser.Math.Clamp(width * 0.05, 10, 12)}px`,
-      fontStyle: 'bold', color: '#dfffff', align: 'center', letterSpacing: 1, lineSpacing: -2
-    }).setOrigin(0.5, 1).setShadow(0, 0, '#7cf8ff', 5, true, true)
-    : null;
   if (supreme) {
     const badgeWidth = Math.max(compact ? 54 : 68, rarity.displayWidth + (compact ? 18 : 24));
     const badgeHeight = Math.max(compact ? 15 : 19, rarity.displayHeight + 6);
@@ -230,7 +226,14 @@ export const createModCardView = (
     }
   }
   container.add([rankLabel, rarity, iconRing, icon, name, stat, infusion]);
-  if (supremeRule) container.add(supremeRule);
+  const statStatus = createModStatStatusIcon(
+    scene,
+    -width / 2 + (options.equipped ? compact ? 31 : 40 : compact ? 13 : 17),
+    height / 2 - (compact ? 14 : 17),
+    statState.presentation,
+    compact
+  );
+  container.add(statStatus);
 
   if (options.equipped) {
     const markerX = -width / 2 + 15;

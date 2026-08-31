@@ -21,7 +21,7 @@ import type {
   ModStat,
   RunProtocolId
 } from './types.ts';
-import { formatCalibrationModifier, getEffectiveModModifiers } from './PlasmaRecalibration.ts';
+import { formatCalibrationModifier, resolveModStatState, type ModStatPresentationState } from './PlasmaRecalibration.ts';
 
 export type ModDiscoveryStatus = 'undiscovered' | 'discovered' | 'owned';
 export type ModProtocolFamily = 'normal' | 'overdrive' | 'supreme';
@@ -108,6 +108,7 @@ export interface ModDatabaseEntry {
   economy: ModDatabaseEconomyProfile;
   acquisition: ModDatabaseAcquisitionProfile;
   calibrationActive: boolean;
+  statState: ModStatPresentationState;
 }
 
 const DROP_SOURCE_LABELS: Record<ModDropSource, string> = {
@@ -239,9 +240,12 @@ const createDatabaseEntry = (mods: LocalModCollection, definition: ModDefinition
   const owned = card !== null;
   const status: ModDiscoveryStatus = owned ? 'owned' : discovered ? 'discovered' : 'undiscovered';
   const currentRank = card?.upgradeLevel ?? null;
-  const effectiveModifiers = card ? getEffectiveModModifiers(definition, card) : [...(definition.modifiers ?? [])];
-  const calibratedStats = new Set(card?.calibrations?.map((entry) => entry.stat) ?? []);
-  const calibrationActive = calibratedStats.size > 0;
+  const resolvedStats = resolveModStatState(definition, card ?? undefined);
+  const effectiveModifiers = resolvedStats.effectiveStats;
+  const calibratedStats = new Set(resolvedStats.slots
+    .filter((slot) => slot.differsFromNative && slot.effective)
+    .map((slot) => slot.effective!.stat));
+  const calibrationActive = resolvedStats.recalibrated;
   return {
     definition,
     status,
@@ -273,7 +277,8 @@ const createDatabaseEntry = (mods: LocalModCollection, definition: ModDefinition
     })),
     economy: createEconomyProfile(definition, currentRank),
     acquisition: createAcquisitionProfile(definition),
-    calibrationActive
+    calibrationActive,
+    statState: resolvedStats.presentation
   };
 };
 

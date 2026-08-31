@@ -41,6 +41,8 @@ import {
   getApplicableRecalibrationSlots,
   getRecalibrationCandidatePool,
   getRecalibrationSlots,
+  isModRecalibrated,
+  isModRecalibrationEligible,
   PLASMA_RECALIBRATION_BALANCE,
   resolveCalibrationModifier,
   type PlasmaRecalibrationCandidate
@@ -76,6 +78,7 @@ import {
   registerUiFocusable,
   setSceneUiModalDepth
 } from '../input/UiNavigationController.ts';
+import { showConfirmDialog, type LocalModalHandle } from '../utils/localSaveUi.ts';
 
 interface OperatorGarageSceneData { returnScene?: SceneKeyValue; openRunConfiguration?: boolean }
 
@@ -135,6 +138,8 @@ export class OperatorGarageScene extends Phaser.Scene {
   private recalibrationCardId: string | null = null;
   private recalibrationProcessing = false;
   private recalibrationRevealTimer: Phaser.Time.TimerEvent | null = null;
+  private resetNativeConfirmModal: LocalModalHandle | null = null;
+  private modStatsDirty = false;
   private recalibrationStatus: { message: string; tone: ModOperationStatusTone } = {
     message: 'SELECT AN OWNED MOD // PLASMA LINK READY', tone: 'info'
   };
@@ -148,9 +153,13 @@ export class OperatorGarageScene extends Phaser.Scene {
   private exchangeConfirmationArmed = true;
   private economyConsoleTabIndex = 0;
   private readonly handleEscape = (): void => {
-    if (this.overlay) {
+    if (this.resetNativeConfirmModal) {
+      this.resetNativeConfirmModal.destroy();
+      this.resetNativeConfirmModal = null;
+      setSceneUiModalDepth(this, 30);
+    } else if (this.overlay) {
       this.clearRecalibrationSession();
-      this.closeOverlay();
+      this.closeOverlay(true);
     }
     else this.returnToPrevious();
   };
@@ -294,7 +303,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
       this.scale.off('resize', this.handleResize, this);
-      this.closeOverlay();
+      this.closeOverlay(false);
       this.destroyOperatorPreview();
       this.tutorialDirector?.destroy();
       this.tutorialDirector = null;
@@ -666,7 +675,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private createOverlay(title: string): Phaser.GameObjects.Container {
-    this.closeOverlay();
+    this.closeOverlay(false);
     setSceneUiModalDepth(this, 30);
     const { width, height } = this.scale;
     const root = this.add.container(0, 0).setDepth(2000);
@@ -683,7 +692,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const closeY = narrow ? 48 : 50;
     const close = createButton(this, width - closeWidth / 2 - closeRightInset, closeY, 'CLOSE', () => {
       this.clearRecalibrationSession();
-      this.closeOverlay();
+      this.closeOverlay(true);
     }, closeWidth);
     root.add([blocker, panel, scanlines, heading, close]);
     this.overlay = root;
@@ -1024,7 +1033,9 @@ export class OperatorGarageScene extends Phaser.Scene {
     const card = entry.card;
     const slots = getRecalibrationSlots(entry.definition);
     const eligibleSlots = slots.filter((slot) => !slot.protected);
-    const pool = card ? getRecalibrationCandidatePool(entry.definition, card) : [];
+    const eligible = Boolean(card && isModRecalibrationEligible(entry.definition, card));
+    const recalibrated = Boolean(card && isModRecalibrated(entry.definition, card));
+    const pool = card && eligible ? getRecalibrationCandidatePool(entry.definition, card) : [];
     const safe = compact ? 22 : 34;
     const statusY = compact ? 82 : 88;
     const status = createModOperationStatusConsole(this, {
@@ -1047,7 +1058,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const centerRect = { x: safe + leftWidth + gap, y: contentTop, width: centerWidth, height: panelHeight };
     const rightRect = { x: centerRect.x + centerWidth + gap, y: contentTop, width: rightWidth, height: panelHeight };
     root.add(createModCollectionFrame(this, leftRect, 'SELECTED MODULE', 0x55eaff));
-    root.add(createModCollectionFrame(this, centerRect, 'CURRENT CONFIGURATION // REPLACEMENT SLOTS', 0xdb8fff));
+    root.add(createModCollectionFrame(this, centerRect, 'NATIVE / EFFECTIVE STAT MATRIX', 0xdb8fff));
     root.add(createModCollectionFrame(this, rightRect, 'PLASMA INJECTION CONTROL', 0xff5bcf));
 
     const displayCard = card ?? syntheticLibraryCard(entry.definition);
@@ -1058,7 +1069,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     }).setAlpha(card ? 1 : .54);
     root.add(cardView);
     root.add(this.add.text(leftRect.x + leftWidth / 2, leftRect.y + panelHeight * .78,
-      `${entry.definition.name.toUpperCase()}\n${entry.definition.rarity.toUpperCase()} // ${card ? `RANK ${card.upgradeLevel}/3` : 'NOT OWNED'}\n\nSTAT CAPACITY // ${slots.length} / ${slots.length}`,
+      `${entry.definition.name.toUpperCase()}\n${entry.definition.rarity.toUpperCase()} // ${card ? `RANK ${card.upgradeLevel}/${entry.definition.maxRank}` : 'NOT OWNED'}\n${recalibrated ? '★ RECALIBRATED STATS' : 'FEATHER // NATIVE STATS'}\n\nSTAT CAPACITY // ${slots.length} / ${slots.length}`,
       { fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 15 : 19}px`, color: '#dff9ff', fontStyle: 'bold', align: 'center', lineSpacing: 5,
         wordWrap: { width: leftWidth - 30, useAdvancedWrap: true } }).setOrigin(.5, 0));
 
@@ -1126,6 +1137,7 @@ export class OperatorGarageScene extends Phaser.Scene {
           if (result.ok) {
             this.recalibrationCandidate = null;
             this.recalibrationCardId = null;
+            this.modStatsDirty = true;
           }
           this.showPlasmaRecalibration(modId);
           return result.ok;
@@ -1143,7 +1155,7 @@ export class OperatorGarageScene extends Phaser.Scene {
           fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 13 : 16}px`, color: '#8eeeff', fontStyle: 'bold', align: 'center', lineSpacing: 5,
           wordWrap: { width: rightWidth - 34, useAdvancedWrap: true }
         }).setOrigin(.5));
-      const canRoll = Boolean(card && eligibleSlots.length && pool.length && reserve >= PLASMA_RECALIBRATION_BALANCE.rollCost);
+      const canRoll = Boolean(card && eligible && eligibleSlots.length && pool.length && reserve >= PLASMA_RECALIBRATION_BALANCE.rollCost);
       const rollButton = createModCollectionButton(this, rightRect.x + rightWidth / 2, rightRect.y + panelHeight - (compact ? 80 : 92),
         `RECALIBRATE // ${PLASMA_RECALIBRATION_BALANCE.rollCost} PC`, () => {
           if (this.recalibrationProcessing || !card) return false;
@@ -1170,9 +1182,61 @@ export class OperatorGarageScene extends Phaser.Scene {
         }, rightWidth - 34, 'utility', { height: compact ? 42 : 50, fontSize: compact ? 12 : 15 });
       if (!canRoll) disableButton(rollButton);
       root.add(rollButton);
-      if (!card || !eligibleSlots.length || !pool.length || reserve < PLASMA_RECALIBRATION_BALANCE.rollCost) {
+      const canReset = Boolean(card && eligible && recalibrated && reserve >= PLASMA_RECALIBRATION_BALANCE.resetCost);
+      const resetButton = createModCollectionButton(
+        this,
+        rightRect.x + rightWidth / 2,
+        rightRect.y + panelHeight - (compact ? 34 : 38),
+        `RESET TO NATIVE // ${PLASMA_RECALIBRATION_BALANCE.resetCost} PC`,
+        () => {
+          if (!card || !canReset) return false;
+          this.resetNativeConfirmModal?.destroy();
+          setSceneUiModalDepth(this, 50);
+          this.resetNativeConfirmModal = showConfirmDialog(
+            this,
+            'RESET TO NATIVE STATS?',
+            `Restores ${entry.definition.name}'s original stat values.\n\nThe current recalibrated values will be permanently discarded.\n\nCost: ${PLASMA_RECALIBRATION_BALANCE.resetCost} Plasma Chips`,
+            'RESET TO NATIVE',
+            () => {
+              this.resetNativeConfirmModal = null;
+              setSceneUiModalDepth(this, 30);
+              const result = SaveSystem.resetPlasmaRecalibration(card.instanceId);
+              this.recalibrationStatus = { message: result.message ?? 'RESET BLOCKED', tone: result.ok ? 'success' : 'error' };
+              if (result.ok) this.modStatsDirty = true;
+              if (!result.ok) this.audio.playSfx('itemLocked');
+              this.showPlasmaRecalibration(modId);
+            },
+            'CANCEL',
+            () => {
+              this.resetNativeConfirmModal = null;
+              setSceneUiModalDepth(this, 30);
+            }
+          );
+          return true;
+        },
+        rightWidth - 34,
+        'warning',
+        { height: compact ? 34 : 38, fontSize: compact ? 10 : 13 }
+      );
+      if (!canReset) disableButton(resetButton);
+      root.add(resetButton);
+      if (card && eligible && (!recalibrated || reserve < PLASMA_RECALIBRATION_BALANCE.resetCost)) {
+        root.add(this.add.text(
+          rightRect.x + rightWidth / 2,
+          rightRect.y + panelHeight * .72,
+          recalibrated
+            ? `RESET REQUIRES ${PLASMA_RECALIBRATION_BALANCE.resetCost} PLASMA CHIPS`
+            : 'RESET UNAVAILABLE // MODULE ALREADY NATIVE',
+          {
+            fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 13}px`, color: recalibrated ? '#ff9aad' : '#86dce8',
+            fontStyle: 'bold', align: 'center', wordWrap: { width: rightWidth - 34, useAdvancedWrap: true }
+          }
+        ).setOrigin(.5));
+      }
+      if (!card || !eligible || !eligibleSlots.length || !pool.length || reserve < PLASMA_RECALIBRATION_BALANCE.rollCost) {
         const reason = !card ? 'OWNED MOD REQUIRED'
-          : !eligibleSlots.length || !pool.length ? 'NO SAFE RECALIBRATION ATTRIBUTES'
+          : !eligible ? `FULL UPGRADE REQUIRED // RANK ${entry.definition.maxRank}`
+            : !eligibleSlots.length || !pool.length ? 'NO SAFE RECALIBRATION ATTRIBUTES'
             : `INSUFFICIENT PLASMA CHIPS — ${PLASMA_RECALIBRATION_BALANCE.rollCost} REQUIRED`;
         root.add(this.add.text(rightRect.x + rightWidth / 2, rightRect.y + panelHeight * .63, reason, {
           fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 14 : 17}px`, color: '#ff96ae', fontStyle: 'bold', align: 'center',
@@ -2276,7 +2340,9 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.scene.start(SceneKeys.Mods, { returnScene: SceneKeys.Garage, selectedCardId, initialCategory, targetSlot });
   }
 
-  private closeOverlay(): void {
+  private closeOverlay(refreshGarage = false): void {
+    this.resetNativeConfirmModal?.destroy();
+    this.resetNativeConfirmModal = null;
     this.input.off('wheel', this.handleLibraryWheel);
     this.libraryViewer?.destroy();
     this.libraryViewer = null;
@@ -2297,6 +2363,10 @@ export class OperatorGarageScene extends Phaser.Scene {
       onPageLeft: undefined,
       onPageRight: undefined
     });
+    if (refreshGarage && this.modStatsDirty && this.scene.isActive()) {
+      this.modStatsDirty = false;
+      this.scene.restart({ returnScene: this.returnScene });
+    }
   }
 
   private returnToPrevious(): void {

@@ -10,6 +10,7 @@ import type { ExchangeCurrency } from '../economy/CurrencyExchange.ts';
 import { buildEconomyAnalytics, type EconomyAnalyticsSnapshot } from '../economy/EconomyAnalytics.ts';
 import type { PlasmaRecalibrationCandidate } from '../mods/PlasmaRecalibration.ts';
 import type { WalletChangeListener, WalletSnapshot } from '../economy/WalletState.ts';
+import type { ModStatChangeListener } from '../mods/ModStatEvents.ts';
 
 export class SaveSystem {
   static getWalletSnapshot(): WalletSnapshot {
@@ -18,6 +19,10 @@ export class SaveSystem {
 
   static subscribeWalletChanges(listener: WalletChangeListener, emitCurrent = true): () => void {
     return PlayerProfileStore.subscribeWalletChanges(listener, emitCurrent);
+  }
+
+  static subscribeModStatChanges(listener: ModStatChangeListener): () => void {
+    return PlayerProfileStore.subscribeModStatChanges(listener);
   }
 
   /** Read-only, freshly derived account economy data for presentation surfaces. */
@@ -93,6 +98,10 @@ export class SaveSystem {
 
   static applyPlasmaRecalibration(instanceId: string, slotIndex: number, candidate: PlasmaRecalibrationCandidate) {
     return PlayerProfileStore.applyPlasmaRecalibration(instanceId, slotIndex, candidate);
+  }
+
+  static resetPlasmaRecalibration(instanceId: string) {
+    return PlayerProfileStore.resetPlasmaRecalibration(instanceId);
   }
 
   static exchangeCurrency(source: ExchangeCurrency, target: ExchangeCurrency, amount: number) {

@@ -119,9 +119,15 @@ export class ModDatabaseViewer {
         ? 'SUPREME'
         : entry.definition.rarity === 'legendary' ? 'LEGENDARY' : 'STANDARD';
     identityY = this.addFixedRow(identityX, identityY, identityWidth, 'CLASS', classification, rarityColor, typography);
-    if (entry.calibrationActive) {
-      identityY = this.addFixedRow(identityX, identityY, identityWidth, 'CALIBRATION', 'ACTIVE // PLASMA', 0xdb8fff, typography);
-    }
+    identityY = this.addFixedRow(
+      identityX,
+      identityY,
+      identityWidth,
+      'STAT STATE',
+      entry.calibrationActive ? 'STAR // RECALIBRATED' : 'FEATHER // NATIVE',
+      entry.calibrationActive ? 0xff75dc : 0x77f6ff,
+      typography
+    );
     identityY = this.addFixedValue(identityX, identityY + 6, identityWidth, entry.definition.tags.map((tag) => tag.toUpperCase()).join(' // '), '#9ac2ce', typography.secondary);
 
     const detailTop = Math.max(cardY + cardHeight / 2, identityY) + (shortViewport ? 14 : 18);
