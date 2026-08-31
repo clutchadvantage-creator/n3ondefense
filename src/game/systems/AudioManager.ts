@@ -1104,6 +1104,31 @@ export class AudioManager {
     return Boolean(this.musicAudio && !this.musicAudio.paused && this.musicStarted);
   }
 
+  /** DEV/lifecycle diagnostics only; no playback state is mutated here. */
+  roundLoopDiagnostics(): Readonly<{
+    activeCount: number;
+    planting: boolean;
+    disarm: boolean;
+    securityLaser: boolean;
+    fluxCore: boolean;
+    lowHealth: boolean;
+    anomalyPortal: boolean;
+    arcadeEvent: boolean;
+    heistAlarm: boolean;
+  }> {
+    const result = {
+      planting: this.plantingLoopRequested,
+      disarm: this.disarmLoopRequested,
+      securityLaser: this.securityLaserLoopRequested,
+      fluxCore: this.fluxCoreLoopRequested,
+      lowHealth: this.lowHealthLoopRequested,
+      anomalyPortal: this.anomalyPortalIdleRequested,
+      arcadeEvent: this.activeArcadeLoop !== null,
+      heistAlarm: this.heistAlarmRequested
+    };
+    return { activeCount: Object.values(result).filter(Boolean).length, ...result };
+  }
+
   startMusicLoop(): void {
     if (!this.musicAudio) {
       this.mountTrack(this.getCurrentTrackUrl());

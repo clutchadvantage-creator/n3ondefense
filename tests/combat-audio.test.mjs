@@ -54,7 +54,7 @@ test('ability placement and unavailable actions use dedicated non-interrupting r
   assert.match(feedbackPlayback, /if \(availableIndex < 0\) return/);
   assert.doesNotMatch(feedbackPlayback, /audio\.pause\(\)/);
   assert.match(arena, /type === 'turret' \? 'placeTurret' : type === 'fence' \? 'electricFence' : 'placeMine'/);
-  assert.match(arena, /delayedCall\(salvo\.flightMs, \(\) => this\.audio\.playSfx\('placeMine'\)\)/);
+  assert.match(arena, /scheduleRoundDelayedCall\(salvo\.flightMs, \(\) => this\.audio\.playSfx\('placeMine'\)\)/);
   assert.doesNotMatch(arena, /points\.forEach\(\(_?, index\)[\s\S]{0,180}playSfx\('placeMine'\)/);
   assert.match(arena, /recordAbilityDenied\('dash', 'cooldown'\);\s*this\.audio\.playSfx\('unavailable'\)/);
   assert.match(arena, /recordAbilityDenied\('shield', 'cooldown'\);\s*this\.audio\.playSfx\('unavailable'\)/);

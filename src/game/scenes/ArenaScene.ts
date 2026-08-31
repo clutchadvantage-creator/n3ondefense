@@ -6,6 +6,7 @@ import { COLORS, WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { OBJECTIVE_CONFIG } from '../config/gameplay';
 import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, TANK_HOMING_MISSILE_BALANCE, WEAPON_BALANCE, getConcurrentSpawnPressure, getDefuseAssigneeCount, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
+import { RoundRuntimeLifecycle, type RoundRuntimeKind, type RoundRuntimeToken } from '../flow/RoundRuntimeLifecycle.ts';
 import { SceneKeys } from '../flow/SceneKeys';
 import { Mine, STAR_DEATH_MINE_VISUAL_THEME } from '../abilities/Mine';
 import { MineChargeRack } from '../abilities/MineChargeRack.ts';
@@ -268,6 +269,44 @@ interface TurretTargetDecision {
 
 type BossFlowPhase = 'none' | 'intro' | 'combat' | 'destruction' | 'loot-collection' | 'transitioning';
 
+type RoundRuntimeEndReason = 'replace' | 'completed' | 'defeated' | 'restart' | 'menu' | 'scene-handoff' | 'dev-soak' | 'start-failed';
+
+interface RoundRuntimeDiagnostics {
+  enemies: number;
+  bossControllers: number;
+  bossSupportEnemies: number;
+  projectiles: number;
+  activeProjectilePool: number;
+  activeFxPool: number;
+  activeTrails: number;
+  pickups: number;
+  deployables: number;
+  hazardControllers: number;
+  hazardSlots: number;
+  arcadeControllers: number;
+  anomalyControllers: number;
+  timers: number;
+  tweens: number;
+  colliders: number;
+  infusionEffects: number;
+  bossHudObjects: number;
+  queuedSpawns: number;
+  roundAudioLoops: number;
+}
+
+interface RoundBoundaryReport {
+  from: string;
+  generation: number;
+  reason: RoundRuntimeEndReason;
+  before: RoundRuntimeDiagnostics;
+  after: RoundRuntimeDiagnostics;
+  frameAverageMs: number;
+  frameP99Ms: number;
+  displayObjects: number;
+  physicsBodies: number;
+  heapBytes: number | null;
+}
+
 interface BossDeathSnapshot {
   encounter: BossEncounter;
   x: number;
@@ -327,6 +366,10 @@ export class ArenaScene extends Phaser.Scene {
 
   private walls!: Phaser.Physics.Arcade.StaticGroup;
   private wallRects: RectSpec[] = [];
+  /** One authoritative generation gate owns both ordinary and boss rounds. */
+  private readonly roundRuntime = new RoundRuntimeLifecycle();
+  private readonly roundBoundaryHistory: RoundBoundaryReport[] = [];
+  private devRoundLifecycleSoakRemaining = 0;
   /**
    * Phaser reuses the ArenaScene instance after it has been stopped. Scene
    * shutdown has already disposed its physics groups, so a subsequent create
@@ -920,6 +963,8 @@ export class ArenaScene extends Phaser.Scene {
         n3onInputDebug?:()=>Record<string, unknown>;
         n3onAnomalyDebug?:()=>Record<string, unknown>;
         n3onAnomalyReturnSoak?:(cycles?:number)=>boolean;
+        n3onRoundLifecycleSoak?:(cycles?:number)=>Record<string, unknown>;
+        n3onRoundLifecycleReport?:()=>readonly RoundBoundaryReport[];
       };
       debugGlobal.forceArenaType=(type)=>{ArenaGenerator.forceArenaType(type);this.createRoundFromDefinition(this.roundManager.currentDefinition());};
       debugGlobal.regenerateArena=()=>this.createRoundFromDefinition(this.roundManager.currentDefinition());
@@ -934,6 +979,8 @@ export class ArenaScene extends Phaser.Scene {
       debugGlobal.setHeistMiniBoss=(enabled)=>this.registry.set('heist-dev-force-miniboss',enabled);
       debugGlobal.n3onAnomalyDebug=()=>this.anomalyReturnDebugSnapshot();
       debugGlobal.n3onAnomalyReturnSoak=(cycles=10)=>this.startDevAnomalyReturnSoak(cycles);
+      debugGlobal.n3onRoundLifecycleSoak=(cycles=20)=>this.beginDevRoundLifecycleSoak(cycles);
+      debugGlobal.n3onRoundLifecycleReport=()=>this.roundBoundaryHistory.map((entry)=>structuredClone(entry));
       debugGlobal.forceSupremeStage=(protocol)=>{
         const stage=getSupremeStage(protocol);
         if(!stage)return false;
@@ -1016,7 +1063,10 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private createRoundFromDefinition(def: ReturnType<RoundManager['currentDefinition']>): void {
-    this.prepareForRoundCreation();
+    this.startRoundRuntime('round', `round-${def.round}`, () => this.initializeStandardRound(def));
+  }
+
+  private initializeStandardRound(def: ReturnType<RoundManager['currentDefinition']>): void {
     this.temporaryAmmo.reset();
     this.turretWeaponSync.reset();
     this.grenadeProjectileSequence = 0;
@@ -1165,7 +1215,6 @@ export class ArenaScene extends Phaser.Scene {
     this.roundFluxCores = 0;
 
     this.state.set(RoundState.PrePlant);
-    this.hasLiveRoundObjects = true;
     this.createArcadeController(def.round, def.seed);
     this.createAnomalyController(def.round, def.seed);
 
@@ -3345,7 +3394,7 @@ export class ArenaScene extends Phaser.Scene {
               this.detonateHomingMissile(hitMissile, 'intercepted');
             } else {
               hitMissile.sprite.setTintFill(0xffffff);
-              this.time.delayedCall(55, () => {
+              this.scheduleRoundDelayedCall(55, () => {
                 if (hitMissile.sprite.active) hitMissile.sprite.setTint(COLORS.pink);
               });
             }
@@ -3878,7 +3927,7 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.recordAbilityUse('mine', totalEnergyCost);
     // A rack salvo is one placement action. Use one cue when the first mine
     // lands instead of stacking a sound for every mine in the pattern.
-    this.time.delayedCall(salvo.flightMs, () => this.audio.playSfx('placeMine'));
+    this.scheduleRoundDelayedCall(salvo.flightMs, () => this.audio.playSfx('placeMine'));
     if (this.tutorialDirector?.awaits('combat.ability.mine')) TutorialEventBus.emit('combat.ability.mine', { type: 'mine', count: points.length, salvo: true });
   }
 
@@ -4517,10 +4566,11 @@ export class ArenaScene extends Phaser.Scene {
     const totalBursts = Math.max(1, Math.ceil(duration / config.burstIntervalMs));
     if (totalBursts === 1) return;
     let timer: Phaser.Time.TimerEvent | null = null;
+    const generation = this.roundRuntime.generation;
     timer = this.time.addEvent({
       delay: config.burstIntervalMs,
       repeat: totalBursts - 2,
-      callback: () => {
+      callback: this.roundRuntime.guard(generation, () => {
         if (!this.sys.isActive() || this.time.now - startsAt > duration) {
           timer?.remove();
           if (timer) this.roundInfusionTimers.delete(timer);
@@ -4528,7 +4578,7 @@ export class ArenaScene extends Phaser.Scene {
           return;
         }
         emitBurst();
-      }
+      })
     });
     this.roundInfusionTimers.add(timer);
   }
@@ -5962,7 +6012,7 @@ export class ArenaScene extends Phaser.Scene {
       return false;
     });
 
-    this.time.delayedCall(850, () => {
+    this.scheduleRoundDelayedCall(850, () => {
       this.physics.world.timeScale = 1;
       this.bombSites.onDetonated(site, this.layout.theme);
       this.detonatingSiteIds.delete(site.id);
@@ -6056,7 +6106,7 @@ export class ArenaScene extends Phaser.Scene {
         this.registry.remove('arena-session');
         this.registry.remove('round-finished');
         RunTransitionManager.clearForMenu(this);
-        this.prepareArenaSceneHandoff();
+        this.endCurrentRoundRuntime('completed');
         this.scene.start(SceneKeys.MainMenu);
         return;
       }
@@ -6132,7 +6182,7 @@ export class ArenaScene extends Phaser.Scene {
     };
     this.pendingRoundPayload = finalizedPayload;
     this.registry.set('round-finished', finalizedPayload);
-    this.prepareArenaSceneHandoff();
+    this.endCurrentRoundRuntime('completed');
     if (plan.milestone) {
       this.registry.set('supreme-milestone', { kind: plan.milestone });
       this.scene.start(SceneKeys.SupremeMilestone, { kind: plan.milestone });
@@ -6142,7 +6192,12 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private beginBossFight(payload: RoundFinishedPayload, terminalEncounter = false): void {
-    this.prepareForRoundCreation();
+    this.startRoundRuntime('boss', `${terminalEncounter ? 'supreme-finale' : 'boss'}-${payload.completedRound}`, () => {
+      this.initializeBossRound(payload, terminalEncounter);
+    });
+  }
+
+  private initializeBossRound(payload: RoundFinishedPayload, terminalEncounter: boolean): void {
     this.pendingRoundPayload = payload;
     this.bossRound = payload.completedRound;
     this.bossVictoryHandled = false;
@@ -6335,7 +6390,6 @@ export class ArenaScene extends Phaser.Scene {
     this.supremeFinaleOverlay?.destroy();
     this.supremeFinaleOverlay = terminalEncounter ? new SupremeFinaleOverlay(this, () => this.startBossCombat()) : null;
     if (terminalEncounter) this.supremeConstellation?.setFinaleIntensity(true);
-    this.hasLiveRoundObjects = true;
     this.cameras.main.flash(450, 40, 10, 60);
   }
 
@@ -6648,7 +6702,7 @@ export class ArenaScene extends Phaser.Scene {
     // invalidates their active iterators (and used to leave the scene frozen or
     // throw on already-destroyed Phaser objects). Move lifetime teardown to the
     // next Scene Clock turn, after the fatal-hit callback has fully unwound.
-    this.bossSequenceTimers.push(this.time.delayedCall(0, () => this.beginBossDestruction(snapshot)));
+    this.bossSequenceTimers.push(this.scheduleRoundDelayedCall(0, () => this.beginBossDestruction(snapshot)));
   }
 
   private handleSupremeBossDefeated(archetype: BossArchetype, remaining: number): void {
@@ -6673,7 +6727,7 @@ export class ArenaScene extends Phaser.Scene {
       || !this.transitionBossFlow('combat', 'destruction')) return;
     this.bossVictoryHandled = true;
     this.supremeFinale.cancelCombat();
-    this.bossSequenceTimers.push(this.time.delayedCall(0, () => {
+    this.bossSequenceTimers.push(this.scheduleRoundDelayedCall(0, () => {
       if (!this.supremeFinale || !this.pendingRoundPayload || this.bossFlowPhase !== 'destruction') return;
       this.boostVisual.reset();
       this.state.set(RoundState.Victory);
@@ -6741,7 +6795,7 @@ export class ArenaScene extends Phaser.Scene {
         this.supremeVictorySequence?.destroy();
         this.supremeVictorySequence = null;
         this.registry.set('round-finished', payload);
-        this.prepareArenaSceneHandoff();
+        this.endCurrentRoundRuntime('completed');
         this.scene.start(SceneKeys.RoundFinished);
       });
     }));
@@ -6764,7 +6818,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.showBanner('BOSS CORE DESTABILIZING');
     for (let index = 0; index < 4; index += 1) {
-      const timer = this.time.delayedCall(index * 260, () => {
+      const timer = this.scheduleRoundDelayedCall(index * 260, () => {
         if (this.bossFlowPhase !== 'destruction' || this.bossEncounter !== snapshot.encounter) return;
         const angle = index * Math.PI * 0.62 + this.time.now * 0.001;
         const distance = 18 + index * 8;
@@ -6774,7 +6828,7 @@ export class ArenaScene extends Phaser.Scene {
       });
       this.bossSequenceTimers.push(timer);
     }
-    this.bossSequenceTimers.push(this.time.delayedCall(1120, () => {
+    this.bossSequenceTimers.push(this.scheduleRoundDelayedCall(1120, () => {
       if (this.bossFlowPhase !== 'destruction' || this.bossEncounter !== snapshot.encounter) return;
       this.audio.playSfx('bomblet');
       this.createDeathExplosion(snapshot.x, snapshot.y, snapshot.color, true);
@@ -7074,20 +7128,27 @@ export class ArenaScene extends Phaser.Scene {
 
     this.transitionAfterModReveals(700, () => {
       this.registry.set('result', result);
-      this.prepareArenaSceneHandoff();
+      this.endCurrentRoundRuntime('defeated');
       this.scene.start(SceneKeys.Results);
     });
   }
 
   private transitionAfterModReveals(fallbackDelayMs: number, callback: () => void): void {
+    const generation = this.roundRuntime.generation;
+    const guardedCallback = this.roundRuntime.guard(generation, callback);
     if (!this.modAcquisitionPresenter?.isBusy()) {
-      this.time.delayedCall(fallbackDelayMs, callback);
+      this.scheduleRoundDelayedCall(fallbackDelayMs, guardedCallback);
       return;
     }
-    this.modAcquisitionPresenter.whenIdle(() => {
+    this.modAcquisitionPresenter.whenIdle(this.roundRuntime.guard(generation, () => {
       if (!this.scene.isActive()) return;
-      this.time.delayedCall(150, callback);
-    });
+      this.scheduleRoundDelayedCall(150, guardedCallback);
+    }));
+  }
+
+  private scheduleRoundDelayedCall(delayMs: number, callback: () => void): Phaser.Time.TimerEvent {
+    const generation = this.roundRuntime.generation;
+    return this.time.delayedCall(delayMs, this.roundRuntime.guard(generation, callback));
   }
 
   private refreshHudWallet(wallet = SaveSystem.get()): void {
@@ -8113,7 +8174,7 @@ export class ArenaScene extends Phaser.Scene {
     this.captureTelemetryEndState();
     GameplayTelemetryRecorder.endEncounter('quit', { credits: this.roundCredits, coreTokens: this.roundCoreTokens, fluxCores: this.roundFluxCores });
     GameplayTelemetryRecorder.finishRun('quit');
-    this.prepareArenaSceneHandoff();
+    this.endCurrentRoundRuntime('restart');
     startArenaLoad(this, { reason: 'new-run', message: 'Restarting from round 1...' });
   }
 
@@ -8127,7 +8188,7 @@ export class ArenaScene extends Phaser.Scene {
     OnlineRunManager.complete('quit', this.currentCombatRound());
     this.registry.remove('arena-session');
     RunTransitionManager.clearForMenu(this);
-    this.prepareArenaSceneHandoff();
+    this.endCurrentRoundRuntime('menu');
     this.scene.start(SceneKeys.MainMenu);
   }
 
@@ -8144,59 +8205,190 @@ export class ArenaScene extends Phaser.Scene {
     SaveSystem.recordCombatProgress(enemiesDestroyed, bombSitesDestroyed, this.protocol);
   }
 
-  private prepareForRoundCreation(): void {
-    if (this.hasLiveRoundObjects) {
-      this.cleanupRoundObjects();
-      return;
+  /**
+   * The only Arena round-start gate. Ordinary and boss encounters differ only
+   * in their initializer; ownership, generation, replacement, and failure
+   * handling are identical.
+   */
+  private startRoundRuntime(kind: RoundRuntimeKind, label: string, initialize: () => void): void {
+    if (this.roundRuntime.hasRuntime || this.hasLiveRoundObjects) {
+      this.endCurrentRoundRuntime('replace');
+    } else {
+      // Phaser reuses the ArenaScene instance after stop. Its display list and
+      // physics world have already discarded the previous run, so only reset
+      // our plain references before beginning the new generation.
+      this.clearRoundCollections();
     }
 
-    // A stopped Phaser scene is restarted using the same class instance. Its
-    // display list and physics world are already gone at this point, so only
-    // discard our plain references. In particular, never call clear() on the
-    // previous run's disposed StaticGroup here.
-    this.clearRoundCollections();
+    const token = this.roundRuntime.beginStart(kind, label);
+    this.hasLiveRoundObjects = true;
+    try {
+      initialize();
+      if (!this.roundRuntime.markActive(token)) throw new Error(`Round generation ${token.generation} failed to activate.`);
+    } catch (error) {
+      this.endCurrentRoundRuntime('start-failed');
+      throw error;
+    }
   }
 
   /**
-   * Scene shutdown occurs after Phaser has disposed its display list and
-   * physics world. Retire the active encounter while those systems are still
-   * alive so a boss-sized pool cannot be walked through after its bodies have
-   * already been destroyed.
+   * The only live-scene teardown gate. It is deliberately idempotent and runs
+   * before Phaser shutdown so timers, tweens, physics, and pooled active slots
+   * are still valid and can be retired safely.
    */
-  private prepareArenaSceneHandoff(): void {
-    if (!this.hasLiveRoundObjects) return;
-    this.audio.stopPlantingLoop();
-    this.audio.stopDisarmLoop();
-    this.audio.stopSecurityLaserLoop();
-    this.audio.stopFluxCoreLoop();
-    this.audio.stopLowHealthWarning();
-    this.clearGameplayInput();
-    this.cleanupRoundObjects();
-    this.validateArenaHandoffCleanup();
+  private endCurrentRoundRuntime(reason: RoundRuntimeEndReason): void {
+    const token = this.roundRuntime.beginEnd(reason);
+    if (!token) return;
+    const before = this.captureRoundRuntimeDiagnostics();
+    if (!this.roundRuntime.beginCleanup(token)) return;
+
+    try {
+      this.audio.stopPlantingLoop();
+      this.audio.stopDisarmLoop();
+      this.audio.stopSecurityLaserLoop();
+      this.audio.stopFluxCoreLoop();
+      this.audio.stopLowHealthWarning();
+      this.audio.stopArcadeEventSfx();
+      this.audio.stopAnomalySfx();
+      this.clearGameplayInput();
+      this.retireRoundOwnedResources();
+    } finally {
+      this.hasLiveRoundObjects = false;
+      this.roundRuntime.finishCleanup(token);
+    }
+
+    const after = this.captureRoundRuntimeDiagnostics();
+    this.recordRoundBoundary(token, reason, before, after);
+    this.validateRoundRuntimeCleanup(token, reason, after);
   }
 
-  private validateArenaHandoffCleanup(): void {
-    if (!import.meta.env.DEV) return;
-    const residue = {
-      bossEncounter: this.bossEncounter !== null,
-      supremeFinale: this.supremeFinale !== null,
-      bossTimers: this.bossSequenceTimers.length,
-      bossSupportEnemies: this.bossSupportEnemies.size,
-      bossColliders: (this.bossWallCollider ? 1 : 0) + this.supremeBossWallColliders.length,
+  private captureRoundRuntimeDiagnostics(): RoundRuntimeDiagnostics {
+    const clock = this.time as Phaser.Time.Clock & {
+      _active?: Phaser.Time.TimerEvent[];
+      _pendingInsertion?: Phaser.Time.TimerEvent[];
+    };
+    const gas = this.gasHazard?.diagnostics();
+    const bomblets = this.bombletHazard?.diagnostics();
+    const activeColliders = this.physics?.world?.colliders?.getActive?.().filter((collider) => collider.active).length ?? 0;
+    return {
       enemies: this.enemies.length,
-      projectiles: this.projectiles.length + this.pendingSplitProjectiles.length,
+      bossControllers: Number(Boolean(this.bossEncounter)) + Number(Boolean(this.supremeFinale)),
+      bossSupportEnemies: this.bossSupportEnemies.size,
+      projectiles: this.projectiles.length + this.pendingSplitProjectiles.length + this.homingMissiles.length,
       activeProjectilePool: this.projectilePool?.stats().active ?? 0,
       activeFxPool: this.fxCirclePool?.stats().active ?? 0,
+      activeTrails: this.projectileTrails?.stats().active ?? 0,
       pickups: this.pickups.length + this.modPickups.length,
-      hazards: Number(Boolean(this.laserSecurity))
-        + Number(Boolean(this.bombletHazard))
-        + Number(Boolean(this.gasHazard))
-        + Number(Boolean(this.fluxCores))
+      deployables: this.fences.length + this.turrets.length + this.mines.length + this.deathMines.length,
+      hazardControllers: Number(Boolean(this.laserSecurity)) + Number(Boolean(this.bombletHazard))
+        + Number(Boolean(this.gasHazard)) + Number(Boolean(this.fluxCores)),
+      hazardSlots: (bomblets?.activeTargets ?? 0) + (gas?.activeCanisters ?? 0)
+        + (gas?.activeImpacts ?? 0) + (gas?.activeIgnitions ?? 0) + (this.fluxCores?.activeCount ?? 0),
+      arcadeControllers: Number(Boolean(this.arcadeController?.activeEventId)) + Number(Boolean(this.arcadeController)),
+      anomalyControllers: Number(Boolean(this.anomalyController)),
+      timers: (clock?._active?.length ?? 0) + (clock?._pendingInsertion?.length ?? 0),
+      tweens: this.tweens?.tweens?.length ?? 0,
+      colliders: activeColliders,
+      infusionEffects: this.roundInfusionEffects.size,
+      bossHudObjects: Number(Boolean(this.bossIntroOverlay)) + Number(Boolean(this.supremeFinaleOverlay))
+        + Number(Boolean(this.supremeVictorySequence)) + Number(Boolean(this.bossNextFightButton)),
+      queuedSpawns: this.bossSequenceTimers.length + this.bossLootLaunchesPending,
+      roundAudioLoops: this.audio.roundLoopDiagnostics().activeCount
     };
-    if (Object.values(residue).some((value) => value !== 0 && value !== false)) {
-      // eslint-disable-next-line no-console
-      console.warn('[ARENA HANDOFF] retained round state detected', residue);
+  }
+
+  private validateRoundRuntimeCleanup(
+    token: RoundRuntimeToken,
+    reason: RoundRuntimeEndReason,
+    residue: RoundRuntimeDiagnostics
+  ): void {
+    if (!import.meta.env.DEV) return;
+    const survivors = Object.entries(residue).filter(([, count]) => count > 0);
+    if (!survivors.length) return;
+    const detail = Object.fromEntries(survivors);
+    // eslint-disable-next-line no-console
+    console.warn(`[ROUND LIFECYCLE] ${token.label} generation ${token.generation} (${reason}) residue`, detail);
+  }
+
+  private cancelAllRoundTimers(): void {
+    const clock = this.time as Phaser.Time.Clock & {
+      _active?: Phaser.Time.TimerEvent[];
+      _pendingInsertion?: Phaser.Time.TimerEvent[];
+      _pendingRemoval?: Phaser.Time.TimerEvent[];
+    };
+    // Clock.removeAllEvents only queues currently-active entries for removal;
+    // callbacks added during the current frame remain in _pendingInsertion and
+    // can otherwise wake up in the next generation. Remove all three queues.
+    const timers = new Set<Phaser.Time.TimerEvent>([
+      ...(clock._active ?? []),
+      ...(clock._pendingInsertion ?? []),
+      ...(clock._pendingRemoval ?? [])
+    ]);
+    for (const timer of timers) {
+      timer.remove(false);
+      timer.destroy();
     }
+    if (timers.size > 0) this.time.removeEvent([...timers]);
+    this.time.clearPendingEvents();
+  }
+
+  private recordRoundBoundary(
+    token: RoundRuntimeToken,
+    reason: RoundRuntimeEndReason,
+    before: RoundRuntimeDiagnostics,
+    after: RoundRuntimeDiagnostics
+  ): void {
+    const frames = this.performanceMonitor.snapshot();
+    const memory = performance as Performance & { memory?: { usedJSHeapSize?: number } };
+    const report: RoundBoundaryReport = {
+      from: token.label,
+      generation: token.generation,
+      reason,
+      before,
+      after,
+      frameAverageMs: frames.averageMs,
+      frameP99Ms: frames.p99Ms,
+      displayObjects: this.children?.list?.length ?? 0,
+      physicsBodies: this.physics?.world?.bodies?.entries?.length ?? 0,
+      heapBytes: Number.isFinite(memory.memory?.usedJSHeapSize) ? memory.memory!.usedJSHeapSize! : null
+    };
+    this.roundBoundaryHistory.push(report);
+    if (this.roundBoundaryHistory.length > 24) this.roundBoundaryHistory.shift();
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.debug('[ROUND LIFECYCLE] boundary', report);
+      if (this.devRoundLifecycleSoakRemaining > 0) {
+        this.devRoundLifecycleSoakRemaining -= 1;
+        if (this.devRoundLifecycleSoakRemaining === 0) {
+          // eslint-disable-next-line no-console
+          console.table(this.roundBoundaryHistory.map((entry) => ({
+            generation: entry.generation,
+            runtime: entry.from,
+            reason: entry.reason,
+            residue: Object.values(entry.after).reduce((sum, value) => sum + value, 0),
+            frameAverageMs: Number(entry.frameAverageMs.toFixed(2)),
+            frameP99Ms: Number(entry.frameP99Ms.toFixed(2)),
+            displayObjects: entry.displayObjects,
+            physicsBodies: entry.physicsBodies,
+            heapMB: entry.heapBytes === null ? '-' : Number((entry.heapBytes / 1_048_576).toFixed(1))
+          })));
+        }
+      }
+    }
+  }
+
+  private beginDevRoundLifecycleSoak(cycles: number): Record<string, unknown> {
+    if (!import.meta.env.DEV) return { started: false, reason: 'development-build-only' };
+    const requested = Phaser.Math.Clamp(Math.floor(cycles), 1, 100);
+    this.roundBoundaryHistory.length = 0;
+    this.devRoundLifecycleSoakRemaining = requested;
+    return {
+      started: true,
+      requested,
+      mode: this.protocol,
+      generation: this.roundRuntime.generation,
+      instruction: `Play or DEV-cycle ${requested} encounter boundaries; a trend table prints automatically.`
+    };
   }
 
   private clearRoundCollections(): void {
@@ -8250,10 +8442,17 @@ export class ArenaScene extends Phaser.Scene {
     this.defuseCandidateDistanceSquared = new WeakMap<Enemy, number>();
   }
 
-  private cleanupRoundObjects(): void {
-    this.arcadeController?.destroy('replaced');
+  private retireRoundOwnedResources(): void {
+    // Cancel deferred work before destroying any target it could wake up and
+    // mutate. Every Arena clock event and tween is encounter-scoped; HEIST
+    // never calls this method because it sleeps the live generation instead.
+    this.retireRoundOwner('deferred-work', () => {
+      this.cancelAllRoundTimers();
+      this.tweens.killAll();
+    });
+    this.retireRoundOwner('arcade-controller', () => this.arcadeController?.destroy('replaced'));
     this.arcadeController = null;
-    this.anomalyController?.destroy('round-ended');
+    this.retireRoundOwner('anomaly-controller', () => this.anomalyController?.destroy('round-ended'));
     this.anomalyController = null;
     this.anomalyReturnLifecycle.reset();
     this.pendingAnomalyReturn = null;
@@ -8263,90 +8462,116 @@ export class ArenaScene extends Phaser.Scene {
     this.devAnomalyReturnSoak = null;
     this.devAnomalyReturnSoakResult = null;
     this.anomalySuspensionState = null;
-    this.clearRoundInfusionEffects();
-    this.arenaVisuals?.destroy();
+    this.retireRoundOwner('infusion-presentation', () => this.clearRoundInfusionEffects());
+    this.retireRoundOwner('arena-visuals', () => this.arenaVisuals?.destroy());
     this.arenaVisuals = null;
-    this.supremeConstellation?.destroy();
+    this.retireRoundOwner('supreme-floor', () => this.supremeConstellation?.destroy());
     this.supremeConstellation = null;
-    this.walls?.clear(true, true);
-    this.boostVisual?.reset();
+    this.retireRoundOwner('walls', () => this.walls?.clear(true, true));
+    this.retireRoundOwner('boost-vfx', () => this.boostVisual?.reset());
     this.mineSalvoInput.cancel();
     this.pendingMineSalvo = false;
     this.playerInput?.clear();
     this.audio.stopFluxCoreLoop();
     for (const timer of this.bossSequenceTimers) timer.remove(false);
     this.bossSequenceTimers.length = 0;
-    this.bossNextFightButton?.destroy();
+    this.retireRoundOwner('boss-command', () => this.bossNextFightButton?.destroy());
     this.bossNextFightButton = null;
-    this.bossEncounter?.destroy();
+    this.retireRoundOwner('boss-controller', () => this.bossEncounter?.destroy());
     this.bossEncounter = null;
-    this.supremeFinale?.destroy();
+    this.retireRoundOwner('supreme-boss-controller', () => this.supremeFinale?.destroy());
     this.supremeFinale = null;
-    this.supremeFinaleOverlay?.destroy();
+    this.retireRoundOwner('supreme-boss-hud', () => this.supremeFinaleOverlay?.destroy());
     this.supremeFinaleOverlay = null;
-    this.supremeVictorySequence?.destroy();
+    this.retireRoundOwner('supreme-victory', () => this.supremeVictorySequence?.destroy());
     this.supremeVictorySequence = null;
-    this.supremeBossWallColliders.forEach((collider) => collider.destroy());
+    this.retireRoundOwner('supreme-boss-colliders', () => this.supremeBossWallColliders.forEach((collider) => collider.destroy()));
     this.supremeBossWallColliders.length = 0;
-    this.clearBossSupportEnemies();
-    this.bossIntroOverlay?.destroy();
+    this.retireRoundOwner('boss-support-enemies', () => this.clearBossSupportEnemies());
+    this.retireRoundOwner('boss-intro-hud', () => this.bossIntroOverlay?.destroy());
     this.bossIntroOverlay = null;
     this.bossFlowPhase = 'none';
-    this.laserSecurity?.destroy();
+    this.retireRoundOwner('laser-hazard', () => this.laserSecurity?.destroy());
     this.laserSecurity = null;
-    this.bombletHazard?.destroy();
+    this.retireRoundOwner('bomblet-hazard', () => this.bombletHazard?.destroy());
     this.bombletHazard = null;
-    this.gasHazard?.destroy();
+    this.retireRoundOwner('gas-hazard', () => this.gasHazard?.destroy());
     this.gasHazard = null;
-    this.fluxCores?.destroy();
+    this.retireRoundOwner('flux-core-hazard', () => this.fluxCores?.destroy());
     this.fluxCores = null;
-    this.supremeModEffects?.destroy();
+    this.retireRoundOwner('supreme-mod-effects', () => this.supremeModEffects?.destroy());
     this.supremeModEffects = null;
-    this.bombsiteMods?.destroy();
-    for (const e of this.enemies) {
-      this.destroyEnemyColliders(e);
-      e.destroy();
-    }
-    this.playerWallCollider?.destroy();
+    this.retireRoundOwner('bombsite-mod-effects', () => this.bombsiteMods?.destroy());
+    this.retireRoundOwner('enemies', () => {
+      for (const enemy of this.enemies) {
+        this.destroyEnemyColliders(enemy);
+        enemy.destroy();
+      }
+    });
+    this.retireRoundOwner('player-collider', () => this.playerWallCollider?.destroy());
     this.playerWallCollider = null;
-    this.bossWallCollider?.destroy();
+    this.retireRoundOwner('boss-collider', () => this.bossWallCollider?.destroy());
     this.bossWallCollider = null;
-    for (const p of this.projectiles) this.retireProjectile(p);
-    this.projectilePool.releaseAll();
-    this.fxCirclePool.releaseAll();
-    this.mineExplosionVfx.reset();
-    this.bombExplosionCosmeticVfx.reset();
-    this.projectileTrails?.reset();
-    this.muzzleFlashVfx.reset();
-    for (const missile of this.homingMissiles) missile.sprite.destroy();
-    for (const p of this.pickups) p.sprite.destroy();
-    for (const p of this.modPickups) p.sprite.destroy();
-    for (const f of this.fences) f.destroy();
-    for (const t of this.turrets) t.destroy();
-    for (const m of this.mines) m.destroy();
-    for (const m of this.deathMines) m.mine.destroy();
-    this.bombSites?.destroy();
-    this.destroyShieldOrb();
+    this.retireRoundOwner('projectile-pools', () => {
+      for (const projectile of this.projectiles) this.retireProjectile(projectile);
+      this.projectilePool.releaseAll();
+      this.fxCirclePool.releaseAll();
+    });
+    this.retireRoundOwner('combat-vfx', () => {
+      this.mineExplosionVfx.reset();
+      this.bombExplosionCosmeticVfx.reset();
+      this.projectileTrails?.reset();
+      this.muzzleFlashVfx.reset();
+    });
+    this.retireRoundOwner('missiles', () => this.homingMissiles.forEach((missile) => missile.sprite.destroy()));
+    this.retireRoundOwner('pickups', () => {
+      this.pickups.forEach((pickup) => pickup.sprite.destroy());
+      this.modPickups.forEach((pickup) => pickup.sprite.destroy());
+    });
+    this.retireRoundOwner('deployables', () => {
+      this.fences.forEach((fence) => fence.destroy());
+      this.turrets.forEach((turret) => turret.destroy());
+      this.mines.forEach((mine) => mine.destroy());
+      this.deathMines.forEach((mine) => mine.mine.destroy());
+    });
+    this.retireRoundOwner('bomb-sites', () => this.bombSites?.destroy());
+    this.retireRoundOwner('shield', () => this.destroyShieldOrb());
 
     this.clearRoundCollections();
-    this.hasLiveRoundObjects = false;
 
-    this.children.list
-      .filter((obj) => 'depth' in obj
-        && (obj as { depth: number }).depth <= 4
-        && obj !== this.player
-        && !this.projectilePool.owns(obj)
-        && !this.fxCirclePool.owns(obj))
-      .forEach((obj) => obj.destroy());
+    this.retireRoundOwner('unclaimed-low-depth-presentation', () => {
+      this.children.list
+        .filter((obj) => 'depth' in obj
+          && (obj as { depth: number }).depth <= 4
+          && obj !== this.player
+          && !this.projectilePool.owns(obj)
+          && !this.fxCirclePool.owns(obj))
+        .forEach((obj) => obj.destroy());
+    });
+  }
+
+  private retireRoundOwner(owner: string, retire: () => void): void {
+    try {
+      retire();
+    } catch (error) {
+      // Continue retiring other owners so one already-disposed Phaser object
+      // cannot strand the rest of an encounter. DEV diagnostics keep the
+      // owning subsystem visible instead of silently swallowing the failure.
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.error(`[ROUND LIFECYCLE] ${owner} cleanup failed`, error);
+      }
+    }
   }
 
   private cleanup(): void {
     // Phaser shuts down the display list, tweens, and Arcade Physics before
     // emitting the Scene shutdown event handled here. Only release our
-    // references at this point; cleanupRoundObjects handles explicit teardown
+    // references at this point; endCurrentRoundRuntime handles explicit teardown
     // while the Arena scene and its plugins are still active.
     const needsFallbackRoundCleanup = this.hasLiveRoundObjects;
     this.hasLiveRoundObjects = false;
+    this.roundRuntime.abandon();
     this.arcadeController?.destroy('scene-shutdown');
     this.arcadeController = null;
     this.anomalyController?.destroy('scene-shutdown');
@@ -8364,6 +8589,7 @@ export class ArenaScene extends Phaser.Scene {
     this.supremeConstellation = null;
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
+    this.audio.stopSecurityLaserLoop();
     this.audio.stopFluxCoreLoop();
     this.audio.stopLowHealthWarning();
     this.modAcquisitionPresenter?.destroy();
@@ -8455,6 +8681,8 @@ export class ArenaScene extends Phaser.Scene {
         n3onInputDebug?:unknown;
         n3onAnomalyDebug?:unknown;
         n3onAnomalyReturnSoak?:unknown;
+        n3onRoundLifecycleSoak?:unknown;
+        n3onRoundLifecycleReport?:unknown;
       };
       delete debugGlobal.forceArenaType;
       delete debugGlobal.regenerateArena;
@@ -8471,6 +8699,8 @@ export class ArenaScene extends Phaser.Scene {
       delete debugGlobal.n3onInputDebug;
       delete debugGlobal.n3onAnomalyDebug;
       delete debugGlobal.n3onAnomalyReturnSoak;
+      delete debugGlobal.n3onRoundLifecycleSoak;
+      delete debugGlobal.n3onRoundLifecycleReport;
     }
     this.setMenuCursorMode();
   }

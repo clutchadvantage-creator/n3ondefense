@@ -88,22 +88,22 @@ test('premium Mod reveal completes presenter bookkeeping before resuming the Are
 
 test('boss and Supreme handoffs retire the live encounter before changing scenes', () => {
   const handoff = arenaSource.slice(
-    arenaSource.indexOf('private prepareArenaSceneHandoff'),
+    arenaSource.indexOf('private endCurrentRoundRuntime'),
     arenaSource.indexOf('private clearRoundCollections')
   );
-  assert.match(handoff, /this\.cleanupRoundObjects\(\)/);
-  assert.match(handoff, /this\.validateArenaHandoffCleanup\(\)/);
+  assert.match(handoff, /this\.retireRoundOwnedResources\(\)/);
+  assert.match(handoff, /this\.validateRoundRuntimeCleanup\(/);
   assert.match(handoff, /this\.audio\.stopSecurityLaserLoop\(\)/);
   const completed = arenaSource.slice(
     arenaSource.indexOf('private presentCompletedRound'),
     arenaSource.indexOf('private beginBossFight')
   );
-  assert.match(completed, /this\.prepareArenaSceneHandoff\(\)/);
+  assert.match(completed, /this\.endCurrentRoundRuntime\('completed'\)/);
   const supreme = arenaSource.slice(
     arenaSource.indexOf('private completeSupremeTerminalEncounter'),
     arenaSource.indexOf('private beginBossDestruction')
   );
-  assert.match(supreme, /this\.prepareArenaSceneHandoff\(\)[\s\S]*?this\.scene\.start\(SceneKeys\.RoundFinished\)/);
+  assert.match(supreme, /this\.endCurrentRoundRuntime\('completed'\)[\s\S]*?this\.scene\.start\(SceneKeys\.RoundFinished\)/);
   const shutdown = arenaSource.slice(arenaSource.indexOf('private cleanup(): void'));
   assert.match(shutdown, /this\.projectilePool\?\.discardReferences\(\)/);
   assert.doesNotMatch(shutdown, /this\.projectilePool\?\.destroy/);

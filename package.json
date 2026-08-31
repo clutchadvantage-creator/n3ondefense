@@ -19,6 +19,7 @@
     "performance:world": "node --experimental-strip-types scripts/benchmark-world-presentation.ts",
     "performance:hazards": "node --experimental-strip-types scripts/benchmark-hazard-overlap.ts",
     "performance:heist": "node --experimental-strip-types scripts/benchmark-heist-runtime.ts",
+    "performance:round-lifecycle": "node --experimental-strip-types scripts/benchmark-round-lifecycle.ts",
     "preview": "vite preview"
   },
   "devDependencies": {

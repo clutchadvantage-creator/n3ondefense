@@ -96,7 +96,7 @@ test('different accepted seeds can select distinct city districts without changi
 test('scene shutdown does not tear down Phaser-owned visuals or physics twice', () => {
   const source = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   const roundCleanup = source.slice(
-    source.indexOf('private cleanupRoundObjects(): void'),
+    source.indexOf('private retireRoundOwnedResources(): void'),
     source.indexOf('private cleanup(): void')
   );
   const sceneCleanup = source.slice(source.indexOf('private cleanup(): void'));
@@ -109,8 +109,8 @@ test('scene shutdown does not tear down Phaser-owned visuals or physics twice', 
 
 test('a restarted Arena scene skips teardown of the previous disposed round', () => {
   const source = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
-  const prepareRound = source.slice(
-    source.indexOf('private prepareForRoundCreation(): void'),
+  const startRound = source.slice(
+    source.indexOf('private startRoundRuntime('),
     source.indexOf('private clearRoundCollections(): void')
   );
   const createRound = source.slice(
@@ -119,10 +119,11 @@ test('a restarted Arena scene skips teardown of the previous disposed round', ()
   );
   const sceneCleanup = source.slice(source.indexOf('private cleanup(): void'));
 
-  assert.match(createRound, /this\.prepareForRoundCreation\(\)/);
-  assert.match(prepareRound, /if \(this\.hasLiveRoundObjects\)/);
-  assert.match(prepareRound, /this\.cleanupRoundObjects\(\)/);
-  assert.match(prepareRound, /this\.clearRoundCollections\(\)/);
+  assert.match(createRound, /this\.startRoundRuntime\('round'/);
+  assert.match(startRound, /this\.roundRuntime\.hasRuntime \|\| this\.hasLiveRoundObjects/);
+  assert.match(startRound, /this\.endCurrentRoundRuntime\('replace'\)/);
+  assert.match(startRound, /this\.clearRoundCollections\(\)/);
   assert.match(sceneCleanup, /this\.hasLiveRoundObjects = false/);
+  assert.match(sceneCleanup, /this\.roundRuntime\.abandon\(\)/);
   assert.match(sceneCleanup, /this\.clearRoundCollections\(\)/);
 });
