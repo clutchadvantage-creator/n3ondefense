@@ -122,8 +122,8 @@ test('pooled combat objects and Arena listeners are fully retired on restart and
   assert.match(source, /body\.enable = false/);
   assert.match(source, /projectile\.crossedFences\?\.clear\(\)/);
   assert.match(source, /projectile\.telemetryOwner = undefined/);
-  assert.match(source, /this\.projectilePool\?\.destroy/);
-  assert.match(source, /this\.fxCirclePool\?\.destroy/);
+  assert.match(source, /this\.projectilePool\?\.discardReferences\(\)/);
+  assert.match(source, /this\.fxCirclePool\?\.discardReferences\(\)/);
   assert.match(source, /this\.projectileTrails\?\.destroy/);
   assert.match(source, /this\.destroyEnemyColliders\(enemy\)/);
   assert.match(source, /for \(const collider of colliders\) collider\.destroy\(\)/);

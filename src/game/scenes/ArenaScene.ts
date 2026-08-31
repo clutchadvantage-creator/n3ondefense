@@ -6056,6 +6056,7 @@ export class ArenaScene extends Phaser.Scene {
         this.registry.remove('arena-session');
         this.registry.remove('round-finished');
         RunTransitionManager.clearForMenu(this);
+        this.prepareArenaSceneHandoff();
         this.scene.start(SceneKeys.MainMenu);
         return;
       }
@@ -6131,6 +6132,7 @@ export class ArenaScene extends Phaser.Scene {
     };
     this.pendingRoundPayload = finalizedPayload;
     this.registry.set('round-finished', finalizedPayload);
+    this.prepareArenaSceneHandoff();
     if (plan.milestone) {
       this.registry.set('supreme-milestone', { kind: plan.milestone });
       this.scene.start(SceneKeys.SupremeMilestone, { kind: plan.milestone });
@@ -6739,6 +6741,7 @@ export class ArenaScene extends Phaser.Scene {
         this.supremeVictorySequence?.destroy();
         this.supremeVictorySequence = null;
         this.registry.set('round-finished', payload);
+        this.prepareArenaSceneHandoff();
         this.scene.start(SceneKeys.RoundFinished);
       });
     }));
@@ -7071,6 +7074,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.transitionAfterModReveals(700, () => {
       this.registry.set('result', result);
+      this.prepareArenaSceneHandoff();
       this.scene.start(SceneKeys.Results);
     });
   }
@@ -8109,6 +8113,7 @@ export class ArenaScene extends Phaser.Scene {
     this.captureTelemetryEndState();
     GameplayTelemetryRecorder.endEncounter('quit', { credits: this.roundCredits, coreTokens: this.roundCoreTokens, fluxCores: this.roundFluxCores });
     GameplayTelemetryRecorder.finishRun('quit');
+    this.prepareArenaSceneHandoff();
     startArenaLoad(this, { reason: 'new-run', message: 'Restarting from round 1...' });
   }
 
@@ -8122,6 +8127,7 @@ export class ArenaScene extends Phaser.Scene {
     OnlineRunManager.complete('quit', this.currentCombatRound());
     this.registry.remove('arena-session');
     RunTransitionManager.clearForMenu(this);
+    this.prepareArenaSceneHandoff();
     this.scene.start(SceneKeys.MainMenu);
   }
 
@@ -8149,6 +8155,48 @@ export class ArenaScene extends Phaser.Scene {
     // discard our plain references. In particular, never call clear() on the
     // previous run's disposed StaticGroup here.
     this.clearRoundCollections();
+  }
+
+  /**
+   * Scene shutdown occurs after Phaser has disposed its display list and
+   * physics world. Retire the active encounter while those systems are still
+   * alive so a boss-sized pool cannot be walked through after its bodies have
+   * already been destroyed.
+   */
+  private prepareArenaSceneHandoff(): void {
+    if (!this.hasLiveRoundObjects) return;
+    this.audio.stopPlantingLoop();
+    this.audio.stopDisarmLoop();
+    this.audio.stopSecurityLaserLoop();
+    this.audio.stopFluxCoreLoop();
+    this.audio.stopLowHealthWarning();
+    this.clearGameplayInput();
+    this.cleanupRoundObjects();
+    this.validateArenaHandoffCleanup();
+  }
+
+  private validateArenaHandoffCleanup(): void {
+    if (!import.meta.env.DEV) return;
+    const residue = {
+      bossEncounter: this.bossEncounter !== null,
+      supremeFinale: this.supremeFinale !== null,
+      bossTimers: this.bossSequenceTimers.length,
+      bossSupportEnemies: this.bossSupportEnemies.size,
+      bossColliders: (this.bossWallCollider ? 1 : 0) + this.supremeBossWallColliders.length,
+      enemies: this.enemies.length,
+      projectiles: this.projectiles.length + this.pendingSplitProjectiles.length,
+      activeProjectilePool: this.projectilePool?.stats().active ?? 0,
+      activeFxPool: this.fxCirclePool?.stats().active ?? 0,
+      pickups: this.pickups.length + this.modPickups.length,
+      hazards: Number(Boolean(this.laserSecurity))
+        + Number(Boolean(this.bombletHazard))
+        + Number(Boolean(this.gasHazard))
+        + Number(Boolean(this.fluxCores))
+    };
+    if (Object.values(residue).some((value) => value !== 0 && value !== false)) {
+      // eslint-disable-next-line no-console
+      console.warn('[ARENA HANDOFF] retained round state detected', residue);
+    }
   }
 
   private clearRoundCollections(): void {
@@ -8297,6 +8345,7 @@ export class ArenaScene extends Phaser.Scene {
     // emitting the Scene shutdown event handled here. Only release our
     // references at this point; cleanupRoundObjects handles explicit teardown
     // while the Arena scene and its plugins are still active.
+    const needsFallbackRoundCleanup = this.hasLiveRoundObjects;
     this.hasLiveRoundObjects = false;
     this.arcadeController?.destroy('scene-shutdown');
     this.arcadeController = null;
@@ -8344,37 +8393,45 @@ export class ArenaScene extends Phaser.Scene {
     this.performanceTelemetry = null;
     this.hidePauseMenu();
     this.hideEquippedModsViewer();
-    this.bombsiteMods?.destroy();
-    this.supremeModEffects?.destroy();
+    // Normal handoffs retire these systems before Scene shutdown. Keep this
+    // fallback only for an unexpected external stop, and never destroy the
+    // same boss/hazard objects twice.
+    if (needsFallbackRoundCleanup) {
+      this.bombsiteMods?.destroy();
+      this.supremeModEffects?.destroy();
+      this.bombSites?.destroy();
+      this.laserSecurity?.destroy();
+      this.bombletHazard?.destroy();
+      this.gasHazard?.destroy();
+      this.fluxCores?.destroy();
+      this.bossEncounter?.destroy();
+      this.supremeFinale?.destroy();
+      this.supremeFinaleOverlay?.destroy();
+      this.supremeVictorySequence?.destroy();
+      this.bossIntroOverlay?.destroy();
+    }
     this.supremeModEffects = null;
-    this.bombSites?.destroy();
-    this.laserSecurity?.destroy();
     this.laserSecurity = null;
-    this.bombletHazard?.destroy();
     this.bombletHazard = null;
-    this.gasHazard?.destroy();
     this.gasHazard = null;
-    this.fluxCores?.destroy();
     this.fluxCores = null;
-    this.bossEncounter?.destroy();
     this.bossEncounter = null;
-    this.supremeFinale?.destroy();
     this.supremeFinale = null;
-    this.supremeFinaleOverlay?.destroy();
     this.supremeFinaleOverlay = null;
-    this.supremeVictorySequence?.destroy();
     this.supremeVictorySequence = null;
     this.supremeBossWallColliders.length = 0;
-    this.bossIntroOverlay?.destroy();
     this.bossIntroOverlay = null;
     this.bossFlowPhase = 'none';
-    this.destroyShieldOrb();
+    if (needsFallbackRoundCleanup) this.destroyShieldOrb();
     this.boostVisual?.destroy();
     this.mineExplosionVfx?.destroy();
     this.bombExplosionCosmeticVfx?.destroy();
     this.muzzleFlashVfx?.destroy();
-    this.projectilePool?.destroy((projectile) => this.destroyPooledProjectile(projectile));
-    this.fxCirclePool?.destroy((circle) => circle.destroy());
+    // Phaser already owns and destroys every pooled display/physics object at
+    // shutdown. Drop JavaScript ownership without re-running body retirement
+    // over a potentially enormous boss-fight high-water pool.
+    this.projectilePool?.discardReferences();
+    this.fxCirclePool?.discardReferences();
     this.projectileTrails?.destroy();
     this.projectileTrails = null;
     this.clearRoundCollections();

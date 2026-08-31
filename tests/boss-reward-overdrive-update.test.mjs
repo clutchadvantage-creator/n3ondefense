@@ -86,6 +86,29 @@ test('premium Mod reveal completes presenter bookkeeping before resuming the Are
   assert.ok(ownerResume > completionEvent);
 });
 
+test('boss and Supreme handoffs retire the live encounter before changing scenes', () => {
+  const handoff = arenaSource.slice(
+    arenaSource.indexOf('private prepareArenaSceneHandoff'),
+    arenaSource.indexOf('private clearRoundCollections')
+  );
+  assert.match(handoff, /this\.cleanupRoundObjects\(\)/);
+  assert.match(handoff, /this\.validateArenaHandoffCleanup\(\)/);
+  assert.match(handoff, /this\.audio\.stopSecurityLaserLoop\(\)/);
+  const completed = arenaSource.slice(
+    arenaSource.indexOf('private presentCompletedRound'),
+    arenaSource.indexOf('private beginBossFight')
+  );
+  assert.match(completed, /this\.prepareArenaSceneHandoff\(\)/);
+  const supreme = arenaSource.slice(
+    arenaSource.indexOf('private completeSupremeTerminalEncounter'),
+    arenaSource.indexOf('private beginBossDestruction')
+  );
+  assert.match(supreme, /this\.prepareArenaSceneHandoff\(\)[\s\S]*?this\.scene\.start\(SceneKeys\.RoundFinished\)/);
+  const shutdown = arenaSource.slice(arenaSource.indexOf('private cleanup(): void'));
+  assert.match(shutdown, /this\.projectilePool\?\.discardReferences\(\)/);
+  assert.doesNotMatch(shutdown, /this\.projectilePool\?\.destroy/);
+});
+
 test('boss and standard arenas keep a bounded health and energy support reserve', () => {
   assert.equal(BOSS_BALANCE.supportPickupTargetPerType, 2);
   assert.equal(BOSS_BALANCE.maximumSupportPickups, 4);
