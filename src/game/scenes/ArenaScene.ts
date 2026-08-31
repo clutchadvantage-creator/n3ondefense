@@ -38,6 +38,7 @@ import type { HazardDamageTarget } from '../config/hazardScaling';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossRewards, getBossTier, isBossRound, selectBossArchetype, type BossArchetype } from '../config/bossBalance';
 import { BossEncounter, type BossAttackKind, type BossProjectileSpec } from '../bosses/BossEncounter';
 import { BossIntroOverlay } from '../bosses/BossIntroOverlay.ts';
+import { canAdvanceFromBossLootCollection } from '../bosses/BossLootCollectionGate.ts';
 import { SeededRandom } from '../systems/SeededRandom';
 import { startArenaLoad } from '../utils/runFlow';
 import { createButton } from '../utils/ui';
@@ -4219,11 +4220,13 @@ export class ArenaScene extends Phaser.Scene {
     this.updateFloatingPickupMotion(now, dt);
     this.separateFloatingPickups();
     let writeIndex = 0;
+    let bossLootChanged = false;
     for (const p of this.pickups) {
       this.pickupPresentation.update(p.sprite, now);
       if (now > p.expiresAt) {
         GameplayTelemetryRecorder.recordPickupExpired(p.type);
         if (p.arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_expired', p.arcadeEventId, p.type, p.amount ?? 1);
+        if (p.source === 'boss-loot') bossLootChanged = true;
         p.sprite.destroy();
         continue;
       }
@@ -4242,6 +4245,7 @@ export class ArenaScene extends Phaser.Scene {
         }
         this.collectPickup(p.type, p.source, p.amount);
         if (p.arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_collected', p.arcadeEventId, p.type, p.amount ?? 1);
+        if (p.source === 'boss-loot') bossLootChanged = true;
         p.sprite.destroy();
         continue;
       }
@@ -4257,6 +4261,7 @@ export class ArenaScene extends Phaser.Scene {
       writeIndex += 1;
     }
     this.pickups.length = writeIndex;
+    if (bossLootChanged) this.refreshBossCollectionGate();
   }
 
   private updateFloatingPickupMotion(now: number, dt: number): void {
@@ -5710,10 +5715,15 @@ export class ArenaScene extends Phaser.Scene {
     const magneticField = this.modRuntime.magneticServiceField(collectionRadius);
     const attractionRadiusSquared = magneticField.attractionRadius * magneticField.attractionRadius;
     let writeIndex = 0;
+    let bossLootChanged = false;
     for (const pickup of this.modPickups) {
-      if (!pickup.sprite.active || pickup.collected) continue;
+      if (!pickup.sprite.active || pickup.collected) {
+        if (pickup.source === 'boss') bossLootChanged = true;
+        continue;
+      }
       if (now > pickup.expiresAt) {
         if (pickup.arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_expired', pickup.arcadeEventId, 'mod', 1);
+        if (pickup.source === 'boss') bossLootChanged = true;
         pickup.sprite.destroy();
         continue;
       }
@@ -5729,6 +5739,7 @@ export class ArenaScene extends Phaser.Scene {
         this.audio.playSfx('modPickup');
         this.awardResolvedMod(pickup.definition, pickup.source, x, y, MOD_PICKUP_REVEAL_LEAD_IN_MS);
         if (pickup.arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_collected', pickup.arcadeEventId, 'mod', 1);
+        if (pickup.source === 'boss') bossLootChanged = true;
         continue;
       }
       if (now >= pickup.collectibleAt && magneticField.pullSpeed > 0 && distanceSquared < attractionRadiusSquared) {
@@ -5742,6 +5753,7 @@ export class ArenaScene extends Phaser.Scene {
       this.modPickups[writeIndex++] = pickup;
     }
     this.modPickups.length = writeIndex;
+    if (bossLootChanged) this.refreshBossCollectionGate();
   }
 
   private awardResolvedMod(definition: ModDefinition, source: ModDropSource, x: number, y: number, leadInMs = 0, contextLine?: string): boolean {
@@ -5763,6 +5775,7 @@ export class ArenaScene extends Phaser.Scene {
         contextLine
       });
       this.modAcquisitionPresenter?.whenIdle(() => {
+        if (source === 'boss') this.refreshBossCollectionGate();
         TutorialEventBus.emit('mod.revealed', { modId: definition.id, rarity: definition.rarity, duplicate });
         if (definition.rarity === 'legendary') TutorialEventBus.emit('mod.legendaryRevealed', { modId: definition.id });
         if (definition.variant === 'corrupted') TutorialEventBus.emit('mod.corruptedRevealed', { modId: definition.id });
@@ -6812,7 +6825,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     const modPickup = this.tryAwardMod('boss', false, originX, originY);
     if (modPickup) this.launchBossModPickup(modPickup, lootIndex++, lootCount);
-    if (this.bossLootLaunchesPending === 0) this.showBossNextFightButton();
+    if (this.bossLootLaunchesPending === 0) this.refreshBossCollectionGate();
   }
 
   private launchBossResourcePickup(
@@ -6827,16 +6840,18 @@ export class ArenaScene extends Phaser.Scene {
     const landing = this.findBossLootLanding(originX, originY, index, total);
     const sprite = this.createPickupSprite(type, originX, originY, color).setDepth(15);
     this.pickupMotion.delete(sprite);
-    this.pickups.push({
+    const pickup: Pickup = {
       type,
       amount,
       sprite,
       expiresAt: Number.POSITIVE_INFINITY,
-      collectibleAt: this.time.now + 820,
+      collectibleAt: Number.POSITIVE_INFINITY,
       source: 'boss-loot'
-    });
+    };
+    this.pickups.push(pickup);
     GameplayTelemetryRecorder.recordPickupDropped(type, 'boss-loot');
     this.animateBossLootLaunch(sprite, landing.x, landing.y, index, () => {
+      pickup.collectibleAt = this.time.now;
       const phase = Math.abs(landing.x * 0.019 + landing.y * 0.027 + index);
       this.pickupMotion.set(sprite, { velocityX: Math.cos(phase) * 8, velocityY: Math.sin(phase) * 8, phase });
     });
@@ -6844,8 +6859,10 @@ export class ArenaScene extends Phaser.Scene {
 
   private launchBossModPickup(pickup: ModPickup, index: number, total: number): void {
     const landing = this.findBossLootLanding(pickup.sprite.x, pickup.sprite.y, index, total);
-    pickup.collectibleAt = this.time.now + 820;
-    this.animateBossLootLaunch(pickup.sprite, landing.x, landing.y, index);
+    pickup.collectibleAt = Number.POSITIVE_INFINITY;
+    this.animateBossLootLaunch(pickup.sprite, landing.x, landing.y, index, () => {
+      pickup.collectibleAt = this.time.now;
+    });
   }
 
   private animateBossLootLaunch(
@@ -6878,7 +6895,7 @@ export class ArenaScene extends Phaser.Scene {
           onComplete: () => {
             onLanded?.();
             this.bossLootLaunchesPending = Math.max(0, this.bossLootLaunchesPending - 1);
-            if (this.bossLootLaunchesPending === 0) this.showBossNextFightButton();
+            if (this.bossLootLaunchesPending === 0) this.refreshBossCollectionGate();
           }
         });
       }
@@ -6898,7 +6915,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private showBossNextFightButton(): void {
-    if (this.bossFlowPhase !== 'loot-collection' || this.bossNextFightButton) return;
+    if (!this.canFinishBossCollection() || this.bossNextFightButton) return;
     this.setMenuCursorMode();
     this.pointerLock?.hidePrompt();
     this.pointerLock?.release();
@@ -6908,9 +6925,42 @@ export class ArenaScene extends Phaser.Scene {
     this.bossNextFightButton.setGamePosition(this.scale.width * 0.5, this.scale.height - 58, 270, 46);
   }
 
+  private canFinishBossCollection(): boolean {
+    let resourcePickupsRemaining = 0;
+    for (const pickup of this.pickups) {
+      if (pickup.source === 'boss-loot' && pickup.sprite.active) resourcePickupsRemaining += 1;
+    }
+    let modPickupsRemaining = 0;
+    for (const pickup of this.modPickups) {
+      if (pickup.source === 'boss' && pickup.sprite.active && !pickup.collected) modPickupsRemaining += 1;
+    }
+    return canAdvanceFromBossLootCollection({
+      phase: this.bossFlowPhase,
+      pendingLaunches: this.bossLootLaunchesPending,
+      resourcePickupsRemaining,
+      modPickupsRemaining,
+      revealQueueBusy: this.modAcquisitionPresenter?.isBusy() ?? false,
+      premiumRevealActive: this.legendaryRevealInProgress
+    });
+  }
+
+  private refreshBossCollectionGate(): void {
+    if (!this.canFinishBossCollection()) {
+      this.bossNextFightButton?.destroy();
+      this.bossNextFightButton = null;
+      return;
+    }
+    this.showBossNextFightButton();
+  }
+
   private finishBossCollection(): void {
-    if (!this.pendingRoundPayload || !this.bossEncounter
-      || !this.transitionBossFlow('loot-collection', 'transitioning')) return;
+    if (!this.pendingRoundPayload || !this.bossEncounter) return;
+    if (!this.canFinishBossCollection()) {
+      this.refreshBossCollectionGate();
+      this.showBanner('COLLECT ALL BOSS REWARDS');
+      return;
+    }
+    if (!this.transitionBossFlow('loot-collection', 'transitioning')) return;
     this.bossNextFightButton?.destroy();
     this.bossNextFightButton = null;
     this.state.set(RoundState.Victory);
@@ -7196,7 +7246,7 @@ export class ArenaScene extends Phaser.Scene {
     this.hudPayload.objective = finale
       ? `TERMINAL OVERRIDE // DESTROY ALL THREE // ${finale.remaining} REMAIN`
       : this.bossFlowPhase === 'loot-collection'
-      ? 'COLLECT BOSS REWARDS // NEXT FIGHT WHEN READY'
+      ? 'COLLECT ALL BOSS REWARDS // NEXT FIGHT UNLOCKS AFTER RECOVERY'
       : `ELIMINATE ${BOSS_ARCHETYPES[encounter!.archetype].label}`;
     this.hudPayload.objectiveTimerMs = null;
     this.hudPayload.defuseAlert = false;
@@ -7772,6 +7822,7 @@ export class ArenaScene extends Phaser.Scene {
     if (!shouldRemainPaused) this.audio.resumeEventPresentationLoops();
     this.legendaryRevealPhysicsWasPaused = false;
     this.legendaryRevealInProgress = false;
+    this.refreshBossCollectionGate();
   }
 
   private pauseForPointerLock(reason: 'initial' | 'unlock' | 'blur' | 'hidden' | 'error'): void {

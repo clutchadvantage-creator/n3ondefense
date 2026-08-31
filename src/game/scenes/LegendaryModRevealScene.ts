@@ -253,10 +253,17 @@ export class LegendaryModRevealScene extends Phaser.Scene {
 
   private finish(): void {
     if (this.finished) return;
-    this.finished = true;
-    if (this.scene.isPaused(this.ownerSceneKey)) this.scene.resume(this.ownerSceneKey);
-    this.game.events.emit(LEGENDARY_MOD_REVEAL_COMPLETE_EVENT, this.token);
+    this.completeOwnerHandoff();
     this.scene.stop();
+  }
+
+  private completeOwnerHandoff(): void {
+    if (this.finished) return;
+    this.finished = true;
+    // Complete the presenter's queue and restore its physics bookkeeping before
+    // the Arena is allowed to run another update frame.
+    if (this.token) this.game.events.emit(LEGENDARY_MOD_REVEAL_COMPLETE_EVENT, this.token);
+    if (this.scene.isPaused(this.ownerSceneKey)) this.scene.resume(this.ownerSceneKey);
   }
 
   private cleanup(): void {
@@ -265,11 +272,7 @@ export class LegendaryModRevealScene extends Phaser.Scene {
     this.idleTweens = [];
     this.continueButton?.destroy(true);
     this.continueButton = null;
-    if (!this.finished && this.token) {
-      this.finished = true;
-      if (this.scene.isPaused(this.ownerSceneKey)) this.scene.resume(this.ownerSceneKey);
-      this.game.events.emit(LEGENDARY_MOD_REVEAL_COMPLETE_EVENT, this.token);
-    }
+    if (!this.finished && this.token) this.completeOwnerHandoff();
     this.root = null;
     this.backdrop = null;
     this.scanlines = null;

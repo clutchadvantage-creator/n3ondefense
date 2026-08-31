@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { BOSS_BALANCE } from '../src/game/config/bossBalance.ts';
 import { MOD_BALANCE } from '../src/game/mods/modBalance.ts';
+import { canAdvanceFromBossLootCollection } from '../src/game/bosses/BossLootCollectionGate.ts';
 import {
   OVERDRIVE_MAX_PICKUP_BUFF_STACKS,
   nextPickupBuffStack,
@@ -14,6 +15,7 @@ const arenaSource = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', imp
 const encounterSource = readFileSync(new URL('../src/game/bosses/BossEncounter.ts', import.meta.url), 'utf8');
 const introOverlaySource = readFileSync(new URL('../src/game/bosses/BossIntroOverlay.ts', import.meta.url), 'utf8');
 const audioSource = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+const legendaryRevealSource = readFileSync(new URL('../src/game/scenes/LegendaryModRevealScene.ts', import.meta.url), 'utf8');
 
 test('Overdrive pickup stacks cap at two and refresh without changing normal mode', () => {
   assert.equal(OVERDRIVE_MAX_PICKUP_BUFF_STACKS, 2);
@@ -44,6 +46,44 @@ test('boss READY and NEXT FIGHT use camera-independent DOM commands', () => {
   assert.doesNotMatch(introOverlaySource, /this\.root\.add\([^;]*this\.ready/);
   assert.match(arenaSource, /this\.bossNextFightButton = new ArenaCommandButton\(this, 'NEXT FIGHT'/);
   assert.match(arenaSource, /this\.finishBossCollection\(\)/);
+});
+
+test('boss NEXT FIGHT remains locked until every physical reward and reveal is complete', () => {
+  const ready = {
+    phase: 'loot-collection',
+    pendingLaunches: 0,
+    resourcePickupsRemaining: 0,
+    modPickupsRemaining: 0,
+    revealQueueBusy: false,
+    premiumRevealActive: false
+  };
+  assert.equal(canAdvanceFromBossLootCollection(ready), true);
+  for (const blocked of [
+    { pendingLaunches: 1 },
+    { resourcePickupsRemaining: 1 },
+    { modPickupsRemaining: 1 },
+    { revealQueueBusy: true },
+    { premiumRevealActive: true },
+    { phase: 'transitioning' }
+  ]) {
+    assert.equal(canAdvanceFromBossLootCollection({ ...ready, ...blocked }), false);
+  }
+  assert.match(arenaSource, /private finishBossCollection\(\): void \{[\s\S]*?if \(!this\.canFinishBossCollection\(\)\)[\s\S]*?transitionBossFlow\('loot-collection', 'transitioning'\)/);
+  assert.match(arenaSource, /if \(bossLootChanged\) this\.refreshBossCollectionGate\(\)/);
+  assert.match(arenaSource, /if \(source === 'boss'\) this\.refreshBossCollectionGate\(\)/);
+  assert.match(arenaSource, /collectibleAt: Number\.POSITIVE_INFINITY,[\s\S]*?source: 'boss-loot'/);
+  assert.match(arenaSource, /pickup\.collectibleAt = this\.time\.now/);
+});
+
+test('premium Mod reveal completes presenter bookkeeping before resuming the Arena', () => {
+  const handoff = legendaryRevealSource.slice(
+    legendaryRevealSource.indexOf('private completeOwnerHandoff'),
+    legendaryRevealSource.indexOf('private cleanup')
+  );
+  const completionEvent = handoff.indexOf('LEGENDARY_MOD_REVEAL_COMPLETE_EVENT');
+  const ownerResume = handoff.indexOf('this.scene.resume(this.ownerSceneKey)');
+  assert.ok(completionEvent >= 0);
+  assert.ok(ownerResume > completionEvent);
 });
 
 test('boss and standard arenas keep a bounded health and energy support reserve', () => {
