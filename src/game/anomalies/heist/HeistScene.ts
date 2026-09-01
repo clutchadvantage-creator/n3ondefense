@@ -65,6 +65,9 @@ import { HeistLootPickupSystem } from './HeistLootPickupSystem.ts';
 import { HeistTrapSystem } from './HeistTrapSystem.ts';
 import { HeistPerformanceProfiler } from './HeistPerformanceProfiler.ts';
 import { HeistCameraPresentation } from './HeistCameraPresentation.ts';
+import { ArenaSmashableSystem } from '../../arena/ArenaSmashableSystem.ts';
+import type { ArenaSmashableLoot } from '../../arena/ArenaSmashableDefinitions.ts';
+import { createHeistSmashablePlacements } from './HeistSmashablePlacement.ts';
 import {
   GAMEPLAY_PICKUP_COLOR_BY_TYPE,
   GAMEPLAY_PICKUP_SFX_BY_TYPE,
@@ -127,7 +130,7 @@ interface HeistPickup {
   kind: PickupType;
   root: Phaser.GameObjects.Container;
   expiresAt: number;
-  source: 'support' | 'enemy';
+  source: 'support' | 'enemy' | 'smashable';
   provisionalReward?: HeistContainerReward;
 }
 
@@ -164,6 +167,7 @@ export class HeistScene extends Phaser.Scene {
   private muzzleFlashVfx!: PlayerMuzzleFlashVfx;
   private boostVisual!: BoostVisualSystem;
   private mineExplosionVfx!: MineExplosionVfx;
+  private environmentSmashables: ArenaSmashableSystem | null = null;
   private containers: HeistContainer[] = [];
   private pickups: HeistPickup[] = [];
   private fences: Fence[] = [];
@@ -305,6 +309,7 @@ export class HeistScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, HEIST_WORLD.width, HEIST_WORLD.height);
     this.cameras.main.setBackgroundColor(0x02050a);
     this.facility = createHeistFacility(this, (data.seed ^ Math.imul(data.round, 0x45d9f3b)) >>> 0);
+    this.createEnvironmentSmashables();
     if (import.meta.env.DEV) console.debug('[HEIST lifecycle] facility-ready', {
       elapsedMs: performance.now() - devCreateStartedAt,
       facility: this.facility.diagnostics
@@ -388,6 +393,7 @@ export class HeistScene extends Phaser.Scene {
     this.projectiles.length = 0;
     this.containers.length = 0;
     this.pickups.length = 0;
+    this.environmentSmashables = null;
     this.fences.length = 0;
     this.turrets.length = 0;
     this.mines.length = 0;
@@ -563,6 +569,7 @@ export class HeistScene extends Phaser.Scene {
     this.extractionPortal?.update(now);
     this.updateCrosshair();
     this.mineExplosionVfx.update(now);
+    this.environmentSmashables?.update(now);
     this.coreAudio.setLowHealthWarning(!this.manuallyPaused && !this.inputCapturePaused
       && this.player.hp > 0 && this.player.hp <= this.player.stats.maxHealth * 0.25);
     profiler?.mark('facilityAndVfx');
@@ -777,6 +784,34 @@ export class HeistScene extends Phaser.Scene {
         source: 'support'
       });
     }
+  }
+
+  private createEnvironmentSmashables(): void {
+    const placements = createHeistSmashablePlacements(this.facility.layout, this.session.round);
+    this.environmentSmashables = new ArenaSmashableSystem(
+      this,
+      placements,
+      (type, x, y) => this.dropEnvironmentSmashableLoot(type, x, y),
+      SaveSystem.get().settings.particles,
+      'heist'
+    );
+  }
+
+  private dropEnvironmentSmashableLoot(type: ArenaSmashableLoot, x: number, y: number): void {
+    const provisionalReward: HeistContainerReward | undefined = type === 'credits'
+      ? { kind: 'credits', amount: PICKUP_BALANCE.credits }
+      : type === 'coreToken' ? { kind: 'coreTokens', amount: 1 } : undefined;
+    const root = this.pickupPresentation.create(type, x, y, GAMEPLAY_PICKUP_COLOR_BY_TYPE[type]).setDepth(8);
+    root.setScale(0.72);
+    this.tweens.add({ targets: root, scale: 1, duration: 180, ease: 'Back.Out' });
+    this.pickups.push({
+      kind: type,
+      root,
+      expiresAt: this.time.now + PICKUP_BALANCE.lifetimeMs,
+      source: 'smashable',
+      provisionalReward
+    });
+    this.audio.play('loot-spawn');
   }
 
   private updatePlayerMovement(now: number): void {
@@ -1186,6 +1221,13 @@ export class HeistScene extends Phaser.Scene {
         continue;
       }
       if (projectile.owner === 'player' || projectile.owner === 'turret') {
+        const smashedProp = projectile.ammoMode === 'grenade'
+          ? false
+          : this.environmentSmashables?.damagePoint(projectile.sprite.x, projectile.sprite.y, projectile.damage, 5);
+        if (smashedProp) {
+          this.retireProjectile(projectile, index);
+          continue;
+        }
         const container = projectile.ammoMode === 'grenade' ? null : this.findContainerHit(projectile.sprite.x, projectile.sprite.y);
         if (container) {
           this.damageContainer(container, projectile.damage);
@@ -1239,6 +1281,7 @@ export class HeistScene extends Phaser.Scene {
     if (primary) this.damageEnemy(primary, projectile.damage);
     const container = this.findContainerHit(projectile.sprite.x, projectile.sprite.y);
     if (container) this.damageContainer(container, projectile.damage);
+    this.environmentSmashables?.damageArea(projectile.sprite.x, projectile.sprite.y, radius, damage);
     this.grenadeSplashX = projectile.sprite.x;
     this.grenadeSplashY = projectile.sprite.y;
     this.grenadeSplashRadiusSquared = radius * radius;
@@ -1800,6 +1843,7 @@ export class HeistScene extends Phaser.Scene {
   }
 
   private blast(x: number, y: number, radius: number, damage: number): void {
+    this.environmentSmashables?.damageArea(x, y, radius, damage);
     for (const enemy of this.enemies) {
       const dx = enemy.x - x; const dy = enemy.y - y;
       const distanceSquared = dx * dx + dy * dy;
@@ -2404,6 +2448,7 @@ export class HeistScene extends Phaser.Scene {
         enemies: this.enemies.length,
         projectiles: this.projectiles.length,
         containers: this.containers.length,
+        smashables: this.environmentSmashables?.diagnostics() ?? null,
         pickups: this.pickups.length,
         mines: this.mines.length,
         fences: this.fences.length,
@@ -2460,6 +2505,8 @@ export class HeistScene extends Phaser.Scene {
     safely('projectile-pool-references', () => this.projectilePool?.discardReferences());
     safely('fx-pool-references', () => this.fxCirclePool?.discardReferences());
     safely('loot-pickup-references', () => this.lootPickups?.discardReferences());
+    safely('smashable-references', () => this.environmentSmashables?.discardReferences());
+    this.environmentSmashables = null;
     this.enemies.length = 0;
     this.separationSubject = null;
     this.enemySpatialGrid.clear();

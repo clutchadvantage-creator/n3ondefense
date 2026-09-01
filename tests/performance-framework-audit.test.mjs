@@ -6,9 +6,23 @@ import { arenaCombatWarmupPlan } from '../src/game/performance/ArenaRuntimePrepa
 import { explosionCameraImpulse } from '../src/game/vfx/ExplosionCameraImpulse.ts';
 import {
   ARENA_SMASHABLE_LOOT_TABLE,
-  resolveArenaSmashableLoot
+  HEIST_SMASHABLE_LOOT_TABLE,
+  resolveArenaSmashableLoot,
+  resolveSmashableLootDrops
 } from '../src/game/arena/ArenaSmashableDefinitions.ts';
-import { createArenaSmashablePlacements } from '../src/game/arena/ArenaSmashablePlacement.ts';
+import {
+  ARENA_SMASHABLE_MAXIMUM,
+  createArenaSmashablePlacements,
+  isArenaSmashablePlacementSafe
+} from '../src/game/arena/ArenaSmashablePlacement.ts';
+import { smashableWorldFootprint, rectanglesOverlap } from '../src/game/arena/SmashablePlacementGeometry.ts';
+import { generateHeistFacilityLayout } from '../src/game/anomalies/heist/HeistFacilityLayout.ts';
+import {
+  createHeistSmashablePlacements,
+  HEIST_SMASHABLE_MAXIMUM,
+  HEIST_SMASHABLE_MINIMUM,
+  isHeistSmashablePlacementSafe
+} from '../src/game/anomalies/heist/HeistSmashablePlacement.ts';
 
 const source = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -53,8 +67,23 @@ test('Arena smashable loot is restrained and excludes premium/progression reward
   const allowed = new Set(['credits', 'health', 'energy', 'coreToken', 'damageBoost', 'speedBoost',
     'rapidFire', 'ricochet', 'grenadeRounds', 'scattershot']);
   assert.ok(ARENA_SMASHABLE_LOOT_TABLE.every((entry) => allowed.has(entry.type)));
+  assert.ok(HEIST_SMASHABLE_LOOT_TABLE.every((entry) => allowed.has(entry.type)));
   assert.equal(ARENA_SMASHABLE_LOOT_TABLE.some((entry) => ['plasmaChip', 'fluxCore', 'mod'].includes(entry.type)), false);
+  assert.equal(HEIST_SMASHABLE_LOOT_TABLE.some((entry) => ['plasmaChip', 'fluxCore', 'mod'].includes(entry.type)), false);
   for (let index = 0; index < 100; index += 1) assert.ok(allowed.has(resolveArenaSmashableLoot(index / 100)));
+  const arenaResults = new Set();
+  const heistResults = new Set();
+  let combinations = 0;
+  for (let index = 0; index < 1000; index += 1) {
+    const arena = resolveSmashableLootDrops('arena', index / 1000);
+    const heist = resolveSmashableLootDrops('heist', index / 1000);
+    arena.forEach((type) => arenaResults.add(type));
+    heist.forEach((type) => heistResults.add(type));
+    if (heist.length > 1) combinations += 1;
+  }
+  assert.ok(arenaResults.size >= 8);
+  assert.ok(heistResults.size >= 8);
+  assert.ok(combinations > 0);
 });
 
 test('Arena smashable placement is deterministic, bounded, and does not join navigation blockers', () => {
@@ -79,10 +108,42 @@ test('Arena smashable placement is deterministic, bounded, and does not join nav
   const second = createArenaSmashablePlacements(layout, 24);
   assert.deepEqual(first, second);
   assert.ok(first.length > 0);
+  assert.ok(first.length <= ARENA_SMASHABLE_MAXIMUM);
   assert.ok(first.every((prop) => prop.x > 80 && prop.x < 1740 && prop.y > 80 && prop.y < 1180));
+  assert.ok(first.every((prop, index) => isArenaSmashablePlacementSafe(layout, prop, first.slice(0, index))));
+  assert.ok(first.every((prop) => layout.walls.every((wall) => !rectanglesOverlap(smashableWorldFootprint(prop), wall, 10))));
+  const bombsiteOverlap = { ...first[0], x: layout.bombSites[0].x, y: layout.bombSites[0].y };
+  assert.equal(isArenaSmashablePlacementSafe(layout, bombsiteOverlap), false);
   const system = source('../src/game/arena/ArenaSmashableSystem.ts');
   assert.match(system, /physicsBodies: 0/);
   assert.doesNotMatch(system, /physics\.add|add\.collider|add\.overlap/);
+  assert.match(system, /damageStage = 3/);
+  assert.match(system, /drawDestroyedRemnant/);
+  assert.match(system, /destructionFamily === 'cabinet'/);
+  assert.match(system, /destructionFamily === 'electronics'/);
+  assert.match(system, /destructionFamily === 'power'/);
+  assert.match(system, /MAX_BURSTS = 8/);
+  assert.doesNotMatch(system, /new Phaser\.Geom\.Point/);
+  assert.doesNotMatch(system, /time\.delayedCall|physics\.add/);
+});
+
+test('HEIST uses shared bounded smashables with full-footprint facility placement', () => {
+  for (const seed of [7, 83_117, 194_911, 918_273]) {
+    const layout = generateHeistFacilityLayout(seed);
+    const first = createHeistSmashablePlacements(layout, 30);
+    const second = createHeistSmashablePlacements(layout, 30);
+    assert.deepEqual(first, second);
+    assert.ok(first.length >= HEIST_SMASHABLE_MINIMUM);
+    assert.ok(first.length <= HEIST_SMASHABLE_MAXIMUM);
+    assert.ok(first.every((prop, index) => isHeistSmashablePlacementSafe(layout, prop, first.slice(0, index))));
+    assert.ok(first.every((prop) => layout.wallRects.every((wall) =>
+      !rectanglesOverlap(smashableWorldFootprint(prop), wall, 10))));
+  }
+  const heist = source('../src/game/anomalies/heist/HeistScene.ts');
+  assert.match(heist, /new ArenaSmashableSystem\([\s\S]*?'heist'/);
+  assert.match(heist, /environmentSmashables\?\.damagePoint/);
+  assert.match(heist, /environmentSmashables\?\.damageArea/);
+  assert.match(heist, /environmentSmashables\?\.discardReferences/);
 });
 
 test('HEIST presentation remains bounded while guidance is sparse and utility lighting is distributed', () => {
