@@ -78,6 +78,8 @@ import type { AccountProgressionTier, ModFocusSignalId, RunContractId } from '..
 import { GameplayTelemetryRecorder, type PickupDropSource } from '../telemetry/GameplayTelemetryRecorder.ts';
 import { ReusableObjectPool } from '../performance/ReusableObjectPool.ts';
 import { FramePerformanceMonitor } from '../performance/FramePerformanceMonitor.ts';
+import { arenaCombatWarmupPlan, type ArenaCombatWarmupPlan } from '../performance/ArenaRuntimePreparation.ts';
+import { ArenaLifecycleProfiler } from '../performance/ArenaLifecycleProfiler.ts';
 import { shouldReplaceTurretTarget } from '../performance/Targeting.ts';
 import { ProjectileTrailBatch } from '../performance/ProjectileTrailBatch.ts';
 import { UniformSpatialGrid } from '../performance/UniformSpatialGrid.ts';
@@ -91,6 +93,8 @@ import { PlayerMuzzleFlashVfx } from '../vfx/PlayerMuzzleFlashVfx.ts';
 import { BOMB_EXPLOSION_COSMETIC_DEFINITIONS } from '../cosmetics/BombExplosionCosmeticDefinitions.ts';
 import { resolveProjectileCosmeticPresentation } from '../cosmetics/ProjectileCosmeticPresentation.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
+import { ArenaSmashableSystem } from '../arena/ArenaSmashableSystem.ts';
+import type { ArenaSmashableLoot } from '../arena/ArenaSmashableDefinitions.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { completeFirstRunTeachingRound } from '../tutorial/TutorialProgress.ts';
@@ -286,6 +290,7 @@ interface RoundRuntimeDiagnostics {
   activeTrails: number;
   pickups: number;
   deployables: number;
+  smashableProps: number;
   hazardControllers: number;
   hazardSlots: number;
   arcadeControllers: number;
@@ -312,6 +317,15 @@ interface RoundBoundaryReport {
   heapBytes: number | null;
 }
 
+interface ArenaPreparationReport extends ArenaCombatWarmupPlan {
+  round: number;
+  protocol: RunProtocolId;
+  addedProjectiles: number;
+  addedFxCircles: number;
+  addedTrailSamples: number;
+  durationMs: number;
+}
+
 interface BossDeathSnapshot {
   encounter: BossEncounter;
   x: number;
@@ -326,6 +340,7 @@ interface AnomalySuspensionState {
   clockWasPaused: boolean;
   clockTimeScale: number;
   playerBodyEnabled: boolean;
+  resourceBaseline: AnomalyArenaResourceSnapshot | null;
   camera: {
     count: number;
     x: number;
@@ -339,6 +354,20 @@ interface AnomalySuspensionState {
     alpha: number;
     visible: boolean;
   };
+}
+
+interface AnomalyArenaResourceSnapshot {
+  roundGeneration: number;
+  displayObjects: number;
+  dynamicBodies: number;
+  staticBodies: number;
+  colliders: number;
+  timers: number;
+  tweens: number;
+  activeProjectiles: number;
+  activeFx: number;
+  sceneUpdateListeners: number;
+  resizeListeners: number;
 }
 
 const ROUND_PHASE_LABELS: Record<RoundState, string> = {
@@ -450,6 +479,7 @@ export class ArenaScene extends Phaser.Scene {
   private roundManager!: RoundManager;
   private layout!: ArenaLayout;
   private arenaVisuals: ArenaVisualRenderer | null = null;
+  private arenaSmashables: ArenaSmashableSystem | null = null;
   private supremeConstellation: SupremeConstellationFloor | null = null;
   private pathfinder!: GridPathfinder;
   private bombSites!: BombSiteManager;
@@ -480,6 +510,7 @@ export class ArenaScene extends Phaser.Scene {
   } | null = null;
   /** Exact live-simulation state held while a side anomaly owns the screen. */
   private anomalySuspensionState: AnomalySuspensionState | null = null;
+  private lastAnomalyResourceAudit: { before: AnomalyArenaResourceSnapshot; after: AnomalyArenaResourceSnapshot; failures: string[] } | null = null;
   private bossEncounter: BossEncounter | null = null;
   private supremeFinale: SupremeFinaleController | null = null;
   private supremeFinaleOverlay: SupremeFinaleOverlay | null = null;
@@ -551,6 +582,8 @@ export class ArenaScene extends Phaser.Scene {
   private tutorialClockWasPaused = false;
   private tutorialAimAngle: number | null = null;
   private readonly performanceMonitor = new FramePerformanceMonitor(600);
+  private readonly lifecycleProfiler = new ArenaLifecycleProfiler();
+  private lastArenaPreparation: ArenaPreparationReport | null = null;
   private nextPerformanceTelemetryAt = 0;
   private nextPoolMaintenanceAt = 0;
   private devHazardIgnitionAt = 0;
@@ -820,11 +853,17 @@ export class ArenaScene extends Phaser.Scene {
       this.anomalySuspensionState = null;
     }
     this.anomalyReturnLifecycle.complete(result.sessionId);
+    if (import.meta.env.DEV) this.lifecycleProfiler.beginResume(
+      `heist-return-generation-${this.roundRuntime.generation}`,
+      this.projectilePool.createdCount,
+      this.fxCirclePool.createdCount
+    );
     this.anomalyReturnAwaitingFirstUpdate = true;
     this.anomalyReturnAwaitingFirstPhysicsStep = true;
     this.anomalyReturnAwaitingFirstRender = true;
     this.events.once(Phaser.Scenes.Events.RENDER, this.onFirstArenaRenderAfterAnomaly, this);
     this.validateAnomalyReturnInvariants(pointerRequired && !this.pointerLock?.locked, suspension);
+    this.auditAnomalyReturnResources(suspension?.resourceBaseline ?? null);
     this.traceAnomalyReturn(pointerRequired && !this.pointerLock?.locked
       ? 'restored-awaiting-pointer-capture'
       : 'restored-live');
@@ -973,6 +1012,8 @@ export class ArenaScene extends Phaser.Scene {
         n3onAnomalyReturnSoak?:(cycles?:number)=>boolean;
         n3onRoundLifecycleSoak?:(cycles?:number)=>Record<string, unknown>;
         n3onRoundLifecycleReport?:()=>readonly RoundBoundaryReport[];
+        n3onArenaPreparation?:()=>ArenaPreparationReport|null;
+        n3onArenaPerformanceReport?:()=>ReturnType<ArenaLifecycleProfiler['report']>;
       };
       debugGlobal.forceArenaType=(type)=>{ArenaGenerator.forceArenaType(type);this.createRoundFromDefinition(this.roundManager.currentDefinition());};
       debugGlobal.regenerateArena=()=>this.createRoundFromDefinition(this.roundManager.currentDefinition());
@@ -989,6 +1030,8 @@ export class ArenaScene extends Phaser.Scene {
       debugGlobal.n3onAnomalyReturnSoak=(cycles=10)=>this.startDevAnomalyReturnSoak(cycles);
       debugGlobal.n3onRoundLifecycleSoak=(cycles=20)=>this.beginDevRoundLifecycleSoak(cycles);
       debugGlobal.n3onRoundLifecycleReport=()=>this.roundBoundaryHistory.map((entry)=>structuredClone(entry));
+      debugGlobal.n3onArenaPreparation=()=>this.lastArenaPreparation?structuredClone(this.lastArenaPreparation):null;
+      debugGlobal.n3onArenaPerformanceReport=()=>structuredClone(this.lifecycleProfiler.report());
       debugGlobal.forceSupremeStage=(protocol)=>{
         const stage=getSupremeStage(protocol);
         if(!stage)return false;
@@ -1075,6 +1118,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private initializeStandardRound(def: ReturnType<RoundManager['currentDefinition']>): void {
+    this.prepareCombatRuntime(def.round);
     this.temporaryAmmo.reset();
     this.turretWeaponSync.reset();
     this.grenadeProjectileSequence = 0;
@@ -1089,6 +1133,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.layout = ArenaGenerator.generate(def.seed, def.template, def.round, def.siteCount);
     this.drawProceduralArena(this.layout);
+    this.createArenaSmashables();
     this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 32, this.getBlockers(), ENEMY_NAVIGATION_PADDING);
     this.drawTraversalDebug();
 
@@ -1159,6 +1204,7 @@ export class ArenaScene extends Phaser.Scene {
       (x, y, blastRadius, shouldPlaySound, explosionPalette) => {
         if (shouldPlaySound) this.audio.playSfx('bomblet');
         this.mineExplosionVfx.emitBomblet(x, y, blastRadius, explosionPalette, this.time.now);
+        this.arenaSmashables?.damageArea(x, y, blastRadius, 9999);
         this.fluxCores?.damageArea(x, y, blastRadius, 9999, 'bomblet');
         this.gasHazard?.carveVisualBlast(
           x,
@@ -1481,6 +1527,7 @@ export class ArenaScene extends Phaser.Scene {
       // continue rendering during the short non-interactive Victory hold.
       this.mineExplosionVfx.update(now);
       this.bombExplosionCosmeticVfx.update(now);
+      this.arenaSmashables?.update(now);
     }
 
     if (this.tutorialHardPaused || this.state.state === RoundState.Paused || this.legendaryRevealInProgress || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
@@ -1497,6 +1544,11 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.performanceMonitor.record(delta);
+    if (import.meta.env.DEV) this.lifecycleProfiler.recordFrame(
+      delta,
+      this.projectilePool.createdCount,
+      this.fxCirclePool.createdCount
+    );
     this.updatePerformanceTelemetry(now);
     this.updateDevHazardStress(now);
     this.maintainCombatPools(now);
@@ -1858,6 +1910,51 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.projectileTrails?.destroy();
     this.projectileTrails = new ProjectileTrailBatch(this);
+  }
+
+  private prepareCombatRuntime(round: number): void {
+    const startedAt = performance.now();
+    const plan = arenaCombatWarmupPlan(this.protocol, round, this.particlesEnabled);
+    const addedProjectiles = this.projectilePool.prewarm(plan.projectiles, {
+      x: -10_000,
+      y: -10_000,
+      texture: 'pixel',
+      width: 2,
+      height: 2,
+      tint: COLORS.cyan,
+      rotation: 0,
+      velocityX: 0,
+      velocityY: 0,
+      depth: 10_000,
+      damage: 0,
+      from: 'player',
+      lifeMs: 0,
+      trailColor: COLORS.cyan,
+      telemetryOwner: 'weapon',
+      ammoMode: 'normal'
+    });
+    const addedFxCircles = this.fxCirclePool.prewarm(plan.fxCircles, {
+      x: -10_000,
+      y: -10_000,
+      radius: 1,
+      color: COLORS.cyan,
+      alpha: 0,
+      depth: 10_000
+    });
+    const addedTrailSamples = this.projectileTrails?.prewarm(plan.trailSamples) ?? 0;
+    this.lastArenaPreparation = {
+      ...plan,
+      round,
+      protocol: this.protocol,
+      addedProjectiles,
+      addedFxCircles,
+      addedTrailSamples,
+      durationMs: performance.now() - startedAt
+    };
+    if (import.meta.env.DEV && (addedProjectiles > 0 || addedFxCircles > 0 || addedTrailSamples > 0)) {
+      // eslint-disable-next-line no-console
+      console.debug('[Arena preparation]', this.lastArenaPreparation);
+    }
   }
 
   private obtainProjectile(state: ProjectileSpawn): Projectile {
@@ -3182,6 +3279,10 @@ export class ArenaScene extends Phaser.Scene {
       this.detonateGrenadeRound(projectile, x, y, null, null, directFluxCore);
       return true;
     }
+    if (this.arenaSmashables?.hasTargetAt(x, y, 7)) {
+      this.detonateGrenadeRound(projectile, x, y, null);
+      return true;
+    }
     if (!grenadeProximityCheckDue(
       now,
       projectile.grenadeArmedAt ?? Number.POSITIVE_INFINITY,
@@ -3281,6 +3382,15 @@ export class ArenaScene extends Phaser.Scene {
           this.retireProjectile(p);
           continue;
         }
+      }
+
+      const propHit = p.ammoMode !== 'grenade'
+        && (p.from === 'player' || p.from === 'turret')
+        && this.arenaSmashables?.damagePoint(p.sprite.x, p.sprite.y, p.damage, 5);
+      if (propHit) {
+        this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.trailColor);
+        this.retireProjectile(p);
+        continue;
       }
 
       if (this.hitWall(p.sprite.x, p.sprite.y)) {
@@ -3745,6 +3855,12 @@ export class ArenaScene extends Phaser.Scene {
       this.time.now,
       false
     );
+    this.arenaSmashables?.damageArea(
+      x,
+      y,
+      radius,
+      projectile.damage * TEMPORARY_AMMO_BALANCE.grenade.splashDamageMultiplier
+    );
 
     // The old direct-plus-splash balance is preserved at the grenade's final
     // landing point: one primary target receives the round damage and nearby
@@ -3806,6 +3922,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private playMineExplosion(x: number, y: number, radius: number, mine: Mine): void {
     this.mineExplosionVfx.emit(x, y, radius, mine.explosionPalette, this.time.now);
+    this.arenaSmashables?.damageArea(x, y, radius, mine.damage);
   }
 
   private placeAbility(type: AbilityType, now: number): void {
@@ -5123,6 +5240,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private beginAnomalyTransition(request: AnomalyEntryRequest): void {
     if (request.anomalyId !== 'heist' || !this.anomalyReturnLifecycle.begin(request.sessionId)) return;
+    this.lastAnomalyResourceAudit = null;
     this.anomalySuspensionState = this.captureAnomalySuspensionState();
     this.pendingAnomalyReturn = null;
     this.traceAnomalyReturn('arena-suspension-captured');
@@ -5210,6 +5328,7 @@ export class ArenaScene extends Phaser.Scene {
       clockWasPaused: this.time.paused,
       clockTimeScale: this.time.timeScale,
       playerBodyEnabled: (this.player.body as Phaser.Physics.Arcade.Body | null)?.enable ?? false,
+      resourceBaseline: import.meta.env.DEV ? this.captureAnomalyArenaResources() : null,
       camera: {
         count: this.cameras.cameras.length,
         x: camera.x,
@@ -5246,6 +5365,48 @@ export class ArenaScene extends Phaser.Scene {
     // The Arena was visible at every valid entry. Never carry a malformed or
     // stale hidden flag into the restored world.
     camera.setVisible(true);
+  }
+
+  private captureAnomalyArenaResources(): AnomalyArenaResourceSnapshot {
+    const clock = this.time as Phaser.Time.Clock & {
+      _active?: Phaser.Time.TimerEvent[];
+      _pendingInsertion?: Phaser.Time.TimerEvent[];
+    };
+    return {
+      roundGeneration: this.roundRuntime.generation,
+      displayObjects: this.children?.list.length ?? 0,
+      dynamicBodies: this.physics?.world?.bodies.entries.length ?? 0,
+      staticBodies: this.physics?.world?.staticBodies.entries.length ?? 0,
+      colliders: this.physics?.world?.colliders.getActive().length ?? 0,
+      timers: (clock._active?.length ?? 0) + (clock._pendingInsertion?.length ?? 0),
+      tweens: this.tweens?.getTweens().length ?? 0,
+      activeProjectiles: this.projectilePool?.stats().active ?? 0,
+      activeFx: this.fxCirclePool?.stats().active ?? 0,
+      sceneUpdateListeners: this.events.listenerCount(Phaser.Scenes.Events.UPDATE),
+      resizeListeners: this.scale.listenerCount('resize')
+    };
+  }
+
+  private auditAnomalyReturnResources(before: AnomalyArenaResourceSnapshot | null): void {
+    if (!import.meta.env.DEV || !before) return;
+    const after = this.captureAnomalyArenaResources();
+    const failures: string[] = [];
+    if (after.roundGeneration !== before.roundGeneration) failures.push('round-generation-changed');
+    if (after.dynamicBodies !== before.dynamicBodies) failures.push(`dynamic-bodies:${before.dynamicBodies}->${after.dynamicBodies}`);
+    if (after.staticBodies !== before.staticBodies) failures.push(`static-bodies:${before.staticBodies}->${after.staticBodies}`);
+    if (after.colliders !== before.colliders) failures.push(`colliders:${before.colliders}->${after.colliders}`);
+    if (after.timers > before.timers) failures.push(`timers:${before.timers}->${after.timers}`);
+    if (after.activeProjectiles !== before.activeProjectiles) failures.push(`projectiles:${before.activeProjectiles}->${after.activeProjectiles}`);
+    if (after.activeFx !== before.activeFx) failures.push(`fx:${before.activeFx}->${after.activeFx}`);
+    if (after.sceneUpdateListeners !== before.sceneUpdateListeners) failures.push('scene-update-listeners-changed');
+    if (after.resizeListeners !== before.resizeListeners) failures.push('resize-listeners-changed');
+    if (after.displayObjects > before.displayObjects + 2) failures.push(`display-objects:${before.displayObjects}->${after.displayObjects}`);
+    if (after.tweens > before.tweens + 2) failures.push(`tweens:${before.tweens}->${after.tweens}`);
+    this.lastAnomalyResourceAudit = { before, after, failures };
+    if (failures.length) {
+      // eslint-disable-next-line no-console
+      console.warn('[AnomalyReturn] resource growth detected', this.lastAnomalyResourceAudit);
+    }
   }
 
   private restoreAnomalyClock(suspension: AnomalySuspensionState): void {
@@ -5409,6 +5570,7 @@ export class ArenaScene extends Phaser.Scene {
     return {
       lifecycle: this.anomalyReturnLifecycle.snapshot(),
       devSoakResult: this.devAnomalyReturnSoakResult,
+      resourceAudit: this.lastAnomalyResourceAudit,
       pendingResult: this.pendingAnomalyReturn?.sessionId ?? null,
       scene: {
         active: this.scene.isActive(SceneKeys.Arena),
@@ -5924,6 +6086,27 @@ export class ArenaScene extends Phaser.Scene {
     return type;
   }
 
+  private dropArenaSmashableLoot(type: ArenaSmashableLoot, x: number, y: number): void {
+    const sprite = this.createPickupSprite(type, x, y, GAMEPLAY_PICKUP_COLOR_BY_TYPE[type]);
+    this.pickups.push({
+      type,
+      sprite,
+      expiresAt: this.time.now + PICKUP_BALANCE.lifetimeMs,
+      source: 'arena-smashable'
+    });
+    GameplayTelemetryRecorder.recordPickupDropped(type, 'arena-smashable');
+  }
+
+  private createArenaSmashables(): void {
+    this.arenaSmashables?.destroy();
+    this.arenaSmashables = new ArenaSmashableSystem(
+      this,
+      this.layout.smashables,
+      (type, x, y) => this.dropArenaSmashableLoot(type, x, y),
+      this.particlesEnabled
+    );
+  }
+
   private createPickupSprite(type: PickupType, x: number, y: number, color: number): Phaser.GameObjects.Container {
     const container = this.pickupPresentation.create(type, x, y, color);
     const motionSeed = Math.abs(x * 0.037 + y * 0.053 + type.length * 1.731);
@@ -5984,6 +6167,7 @@ export class ArenaScene extends Phaser.Scene {
       BOMBSITE_EXPLOSION_VISUAL_RADIUS,
       this.time.now
     );
+    this.arenaSmashables?.damageArea(site.x, site.y, BOMBSITE_EXPLOSION_VISUAL_RADIUS, 9999);
     if (bombExplosionCosmeticEffect) {
       this.audio.playSfx(BOMB_EXPLOSION_COSMETIC_DEFINITIONS[bombExplosionCosmeticEffect].sound);
     }
@@ -6206,6 +6390,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private initializeBossRound(payload: RoundFinishedPayload, terminalEncounter: boolean): void {
+    this.prepareCombatRuntime(payload.completedRound);
     this.pendingRoundPayload = payload;
     this.bossRound = payload.completedRound;
     this.bossVictoryHandled = false;
@@ -6231,6 +6416,7 @@ export class ArenaScene extends Phaser.Scene {
     const bossSeed = (payload.completedSeed ^ Math.imul(this.bossRound, 0x6c8e9cf5) ^ 0xb055a11e) >>> 0;
     this.layout = ArenaGenerator.generate(bossSeed, terminalEncounter ? 'open-field' : arenaByBoss[archetype], this.bossRound, 1);
     this.drawProceduralArena(this.layout);
+    this.createArenaSmashables();
     this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 32, this.getBlockers(), ENEMY_NAVIGATION_PADDING);
     this.createOrMovePlayer();
     this.modRuntime.beginRound(1);
@@ -6262,6 +6448,7 @@ export class ArenaScene extends Phaser.Scene {
       (x, y, blastRadius, shouldPlaySound, explosionPalette) => {
         if (shouldPlaySound) this.audio.playSfx('bomblet');
         this.mineExplosionVfx.emitBomblet(x, y, blastRadius, explosionPalette, this.time.now);
+        this.arenaSmashables?.damageArea(x, y, blastRadius, 9999);
         this.fluxCores?.damageArea(x, y, blastRadius, 9999, 'bomblet');
         this.gasHazard?.carveVisualBlast(
           x,
@@ -6475,6 +6662,7 @@ export class ArenaScene extends Phaser.Scene {
       this.cameras.main.shake(135, attack === 'brawler-super' ? 0.004 : 0.0025);
     }
     this.fluxCores?.damageArea(x, y, radius, damage, 'boss');
+    this.arenaSmashables?.damageArea(x, y, radius, damage);
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) <= radius + 12) {
       const hit = this.player.takeDamage(damage);
       GameplayTelemetryRecorder.recordBossAttackIntersection(attack, hit ? damage : 0, !hit);
@@ -8276,11 +8464,19 @@ export class ArenaScene extends Phaser.Scene {
       this.clearRoundCollections();
     }
 
+    const setupStartedAt = performance.now();
     const token = this.roundRuntime.beginStart(kind, label);
     this.hasLiveRoundObjects = true;
     try {
       initialize();
       if (!this.roundRuntime.markActive(token)) throw new Error(`Round generation ${token.generation} failed to activate.`);
+      if (import.meta.env.DEV) this.lifecycleProfiler.beginGeneration(
+        token.generation,
+        label,
+        performance.now() - setupStartedAt,
+        this.projectilePool.createdCount,
+        this.fxCirclePool.createdCount
+      );
     } catch (error) {
       this.endCurrentRoundRuntime('start-failed');
       throw error;
@@ -8296,6 +8492,7 @@ export class ArenaScene extends Phaser.Scene {
     const token = this.roundRuntime.beginEnd(reason);
     if (!token) return;
     const before = this.captureRoundRuntimeDiagnostics();
+    if (import.meta.env.DEV) this.lifecycleProfiler.finishGeneration(reason);
     if (!this.roundRuntime.beginCleanup(token)) return;
 
     try {
@@ -8336,6 +8533,7 @@ export class ArenaScene extends Phaser.Scene {
       activeTrails: this.projectileTrails?.stats().active ?? 0,
       pickups: this.pickups.length + this.modPickups.length,
       deployables: this.fences.length + this.turrets.length + this.mines.length + this.deathMines.length,
+      smashableProps: this.arenaSmashables?.diagnostics().active ?? 0,
       hazardControllers: Number(Boolean(this.laserSecurity)) + Number(Boolean(this.bombletHazard))
         + Number(Boolean(this.gasHazard)) + Number(Boolean(this.fluxCores)),
       hazardSlots: (bomblets?.activeTargets ?? 0) + (gas?.activeCanisters ?? 0)
@@ -8518,9 +8716,12 @@ export class ArenaScene extends Phaser.Scene {
     this.devAnomalyReturnSoak = null;
     this.devAnomalyReturnSoakResult = null;
     this.anomalySuspensionState = null;
+    this.lastAnomalyResourceAudit = null;
     this.retireRoundOwner('infusion-presentation', () => this.clearRoundInfusionEffects());
     this.retireRoundOwner('arena-visuals', () => this.arenaVisuals?.destroy());
     this.arenaVisuals = null;
+    this.retireRoundOwner('arena-smashables', () => this.arenaSmashables?.destroy());
+    this.arenaSmashables = null;
     this.retireRoundOwner('supreme-floor', () => this.supremeConstellation?.destroy());
     this.supremeConstellation = null;
     this.retireRoundOwner('walls', () => this.walls?.clear(true, true));
@@ -8627,6 +8828,7 @@ export class ArenaScene extends Phaser.Scene {
     // while the Arena scene and its plugins are still active.
     const needsFallbackRoundCleanup = this.hasLiveRoundObjects;
     this.hasLiveRoundObjects = false;
+    this.lifecycleProfiler.reset();
     this.roundRuntime.abandon();
     this.arcadeController?.destroy('scene-shutdown');
     this.arcadeController = null;
@@ -8642,6 +8844,7 @@ export class ArenaScene extends Phaser.Scene {
     this.anomalySuspensionState = null;
     this.flushPendingCombatProgress();
     this.arenaVisuals = null;
+    this.arenaSmashables = null;
     this.supremeConstellation = null;
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
@@ -8741,6 +8944,8 @@ export class ArenaScene extends Phaser.Scene {
         n3onAnomalyReturnSoak?:unknown;
         n3onRoundLifecycleSoak?:unknown;
         n3onRoundLifecycleReport?:unknown;
+        n3onArenaPreparation?:unknown;
+        n3onArenaPerformanceReport?:unknown;
       };
       delete debugGlobal.forceArenaType;
       delete debugGlobal.regenerateArena;
@@ -8759,6 +8964,8 @@ export class ArenaScene extends Phaser.Scene {
       delete debugGlobal.n3onAnomalyReturnSoak;
       delete debugGlobal.n3onRoundLifecycleSoak;
       delete debugGlobal.n3onRoundLifecycleReport;
+      delete debugGlobal.n3onArenaPreparation;
+      delete debugGlobal.n3onArenaPerformanceReport;
     }
     this.setMenuCursorMode();
   }

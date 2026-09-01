@@ -46,6 +46,28 @@ export class ReusableObjectPool<T, TState> {
     return item;
   }
 
+  /**
+   * Builds inactive capacity during a controlled loading/setup window. This is
+   * intentionally expressed as a target (rather than an amount) so repeated
+   * round preparation is idempotent and retained high-water capacity is reused.
+   */
+  prewarm(targetOwned: number, createState: TState | ((index: number) => TState)): number {
+    const target = Math.max(0, Math.floor(targetOwned));
+    let added = 0;
+    while (this.owned.size < target) {
+      const state = typeof createState === 'function'
+        ? (createState as (index: number) => TState)(this.owned.size)
+        : createState;
+      const item = this.createItem(state);
+      this.created += 1;
+      this.owned.add(item);
+      this.retireItem(item);
+      this.available.push(item);
+      added += 1;
+    }
+    return added;
+  }
+
   release(item: T): boolean {
     if (!this.active.delete(item)) return false;
     this.retireItem(item);
@@ -116,4 +138,8 @@ export class ReusableObjectPool<T, TState> {
       available: this.available.length
     };
   }
+
+  get createdCount(): number { return this.created; }
+  get activeCount(): number { return this.active.size; }
+  get availableCount(): number { return this.available.length; }
 }

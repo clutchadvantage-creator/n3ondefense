@@ -45,6 +45,16 @@ const createFireNozzle = (scene: Phaser.Scene, placement: HeistTrapPlacement): T
   });
   drawPanelBolts(chassis, -56, -36, 59, 60, 0xb6c5ca, 9);
   drawHazardStripes(chassis, -49, 23, 52, 8, 0xffc857, 0.78, 7);
+  // Integrated fuel reservoir, pressure readout, and hard-line conduits keep
+  // the silhouette readable as authored machinery rather than a loose nozzle.
+  chassis.fillStyle(0x061018, 1).fillRoundedRect(-52, -24, 30, 39, 7);
+  chassis.lineStyle(2, 0x45dff2, 0.72).strokeRoundedRect(-52, -24, 30, 39, 7);
+  chassis.fillStyle(0xff793f, 0.42).fillRoundedRect(-47, -7, 20, 17, 4);
+  chassis.lineStyle(2, 0x748d98, 0.82).beginPath()
+    .moveTo(-22, -16).lineTo(-4, -16).lineTo(4, -8).strokePath();
+  for (let vent = 0; vent < 4; vent += 1) {
+    chassis.fillStyle(0x02050a, 0.88).fillRect(-48 + vent * 7, 17, 4, 2);
+  }
   const pipe = scene.add.rectangle(4, 0, 76, 30, 0x263d48, 1).setStrokeStyle(3, 0x839ca5, 0.9);
   const heatShield = scene.add.polygon(38, 0, [0, -23, 35, -14, 42, 0, 35, 14, 0, 23], 0x111c24, 1)
     .setStrokeStyle(2, 0xff8a3d, 0.78);
@@ -66,6 +76,12 @@ const createSpikeTrap = (scene: Phaser.Scene, placement: HeistTrapPlacement): Tr
   });
   drawHazardStripes(base, -59, -47, 118, 10, 0xffc857, 0.64, 9);
   drawPanelBolts(base, -62, -48, 124, 96, 0x9eb2b8, 12);
+  base.fillStyle(0x07111a, 0.95).fillRoundedRect(-54, 34, 108, 12, 4);
+  base.lineStyle(1.5, 0x54e5f5, 0.48).strokeRoundedRect(-54, 34, 108, 12, 4);
+  for (let piston = -2; piston <= 2; piston += 1) {
+    base.fillStyle(0x314954, 0.92).fillCircle(piston * 22, 38, 4.5);
+    base.lineStyle(1, piston % 2 ? 0xff674f : 0x75efff, 0.72).strokeCircle(piston * 22, 38, 6.5);
+  }
   for (let index = -2; index <= 2; index += 1) {
     base.fillStyle(0x010408, 0.92).fillRoundedRect(index * 22 - 7, -23, 14, 54, 3);
     base.lineStyle(1, 0xff5f4d, 0.3).strokeRoundedRect(index * 22 - 7, -23, 14, 54, 3);
@@ -84,6 +100,11 @@ const createSnagTrap = (scene: Phaser.Scene, placement: HeistTrapPlacement): Tra
     face: 0x151d2a, inset: 0x050912, edge: 0xa757d6, side: 0x02040a, highlight: 0xf2c7ff, depth: 8
   });
   drawPanelBolts(base, -49, -41, 98, 82, 0xb69dc1, 10);
+  base.lineStyle(4, 0x24354c, 0.94).beginPath()
+    .moveTo(-48, 31).lineTo(-24, 31).lineTo(-15, 17)
+    .moveTo(48, 31).lineTo(24, 31).lineTo(15, 17).strokePath();
+  base.lineStyle(1.5, 0x6eeafa, 0.65).strokeCircle(0, 0, 36);
+  base.lineStyle(1.5, 0xff5bd7, 0.48).strokeCircle(0, 0, 43);
   const leftJaw = scene.add.polygon(-32, 0, [-22, -30, 2, -17, 15, 0, 2, 17, -22, 30], 0x26374a, 1)
     .setStrokeStyle(2, 0x67eaff, 0.82);
   const rightJaw = scene.add.polygon(32, 0, [22, -30, -2, -17, -15, 0, -2, 17, 22, 30], 0x34233f, 1)
@@ -217,9 +238,19 @@ export class HeistTrapSystem {
         graphics.fillStyle(spark % 2 ? 0xffc44e : 0xff6840, 0.8 - phase * 0.55)
           .fillCircle(90 + phase * 255, Math.sin(spark * 2.1 + now * 0.01) * (18 + spark * 5), 2.6 - phase * 1.2);
       }
+      for (let plume = 0; plume < 4; plume += 1) {
+        const drift = (now * 0.0018 + plume * 0.29) % 1;
+        graphics.fillStyle(plume % 2 ? 0x552a32 : 0x233745, 0.16 * (1 - drift))
+          .fillEllipse(185 + drift * 155, Math.sin(now * 0.006 + plume * 1.9) * 42, 34 + drift * 25, 18 + drift * 18);
+      }
     } else if (trap.placement.type === 'fire' && trap.state === 'telegraph') {
       graphics.lineStyle(2, telegraph > 0.65 ? 0xff4b32 : 0xffba4d, 0.25 + telegraph * 0.55)
         .lineBetween(78, -44, 312, -44).lineBetween(78, 44, 312, 44);
+      graphics.lineStyle(2, 0xffd56a, 0.24 + telegraph * 0.54)
+        .strokeCircle(-37, -4, 8 + telegraph * 9);
+    } else if (trap.placement.type === 'fire' && trap.state === 'cooldown') {
+      const cool = 1 - Phaser.Math.Clamp(elapsed / timing.cooldown, 0, 1);
+      graphics.lineStyle(3, 0xff6338, 0.46 * cool).lineBetween(65, -15, 88, -15).lineBetween(65, 15, 88, 15);
     }
 
     if (trap.placement.type === 'spike') {
@@ -235,6 +266,10 @@ export class HeistTrapSystem {
         graphics.fillStyle(0xdafcff, 0.74).fillTriangle(x - 4, 18, x, -height, x + 1, 15);
         graphics.lineStyle(1, 0xff5850, 0.62).lineBetween(x - 8, 24, x, -height);
       }
+      if (trap.state === 'telegraph') {
+        graphics.lineStyle(2, telegraph > 0.7 ? 0xff5749 : 0xffc857, 0.28 + telegraph * 0.48)
+          .strokeRoundedRect(-65, -51, 130, 102, 8);
+      }
     }
 
     if (trap.placement.type === 'snag') {
@@ -249,6 +284,14 @@ export class HeistTrapSystem {
             .lineBetween(Math.cos(angle) * 12, Math.sin(angle) * 12,
               Math.cos(angle) * 47, Math.sin(angle) * 47);
         }
+        graphics.lineStyle(1.5, 0xffffff, 0.38).beginPath();
+        for (let node = 0; node < 7; node += 1) {
+          const angle = node * Math.PI * 2 / 7 - now * 0.0014;
+          const nextAngle = angle + Math.PI * 2 / 7;
+          graphics.moveTo(Math.cos(angle) * 34, Math.sin(angle) * 34)
+            .lineTo(Math.cos(nextAngle) * 34, Math.sin(nextAngle) * 34);
+        }
+        graphics.strokePath();
       }
     }
   }

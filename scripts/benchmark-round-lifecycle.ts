@@ -1,4 +1,7 @@
 import { RoundRuntimeLifecycle, type RoundRuntimeKind } from '../src/game/flow/RoundRuntimeLifecycle.ts';
+import { arenaCombatWarmupPlan } from '../src/game/performance/ArenaRuntimePreparation.ts';
+import { ReusableObjectPool } from '../src/game/performance/ReusableObjectPool.ts';
+import type { RunProtocolId } from '../src/game/mods/types.ts';
 
 const MODES = ['normal', 'overdrive-draco', 'supreme-leo'] as const;
 const CYCLES = 20;
@@ -80,3 +83,31 @@ console.log('N3ONDefense deterministic round-lifecycle soak');
 console.table(results);
 if (results.some((result) => result.finalPhase !== 'ready'
   || result.maximumResidue !== 0 || result.staleCallbacks !== 0)) process.exitCode = 1;
+
+const burstScenarios: readonly { protocol: RunProtocolId; round: number; concurrentProjectiles: number }[] = [
+  { protocol: 'normal', round: 1, concurrentProjectiles: 150 },
+  { protocol: 'overdrive-draco', round: 30, concurrentProjectiles: 360 },
+  { protocol: 'supreme-leo', round: 51, concurrentProjectiles: 620 }
+];
+const coldStartResults = burstScenarios.map((scenario) => {
+  const plan = arenaCombatWarmupPlan(scenario.protocol, scenario.round, true);
+  const pool = new ReusableObjectPool(
+    (state: { sequence: number }) => ({ sequence: state.sequence, active: true }),
+    (item, state) => { item.sequence = state.sequence; item.active = true; },
+    (item) => { item.active = false; }
+  );
+  const prewarmed = pool.prewarm(plan.projectiles, (sequence) => ({ sequence }));
+  const createdBeforeCombat = pool.createdCount;
+  const active = Array.from({ length: scenario.concurrentProjectiles }, (_, sequence) => pool.obtain({ sequence }));
+  const combatAllocations = pool.createdCount - createdBeforeCombat;
+  for (const item of active) pool.release(item);
+  const createdBeforeSecondBurst = pool.createdCount;
+  const second = Array.from({ length: scenario.concurrentProjectiles }, (_, sequence) => pool.obtain({ sequence }));
+  const nextRoundAllocations = pool.createdCount - createdBeforeSecondBurst;
+  for (const item of second) pool.release(item);
+  return { ...scenario, reserve: plan.projectiles, prewarmed, combatAllocations, nextRoundAllocations };
+});
+
+console.log('Cold-first-round combat allocation model (capacity, never a gameplay cap)');
+console.table(coldStartResults);
+if (coldStartResults.some((result) => result.nextRoundAllocations !== 0)) process.exitCode = 1;

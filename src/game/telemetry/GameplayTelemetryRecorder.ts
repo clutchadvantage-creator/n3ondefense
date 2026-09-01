@@ -8,7 +8,7 @@ import type { AnomalyMetricEvent } from '../anomalies/types.ts';
 
 export type CombatDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard' | 'bomb' | 'bombSite' | 'splitCurrent' | 'unknown';
 export type PlayerDamageSource = 'enemy-contact' | 'enemy-projectile' | 'enemy-missile' | 'enemy-death-mine' | 'laser' | 'bomblet' | 'gas' | 'bombsite-reactor' | 'boss';
-export type PickupDropSource = 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support' | 'boss-loot' | 'flux-core' | 'arcade-loot';
+export type PickupDropSource = 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support' | 'boss-loot' | 'flux-core' | 'arcade-loot' | 'arena-smashable';
 export type EncounterKind = 'round' | 'boss';
 export type EncounterOutcome = 'completed' | 'playerDead' | 'bombDefused' | 'bossDefeated' | 'quit' | 'replaced';
 export type TelemetryAbility = 'dash' | 'shield' | 'fence' | 'turret' | 'mine';

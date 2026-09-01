@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyExplosionCameraImpulse, type ExplosionImpulseSource } from './ExplosionCameraImpulse.ts';
 
 export type ExplosionPalette = readonly [core: number, primary: number, secondary: number, outer: number];
 
@@ -92,7 +93,7 @@ export class MineExplosionVfx {
     radius: number,
     palette: ExplosionPalette,
     now: number,
-    cameraImpulse = true
+    cameraImpulse: boolean | ExplosionImpulseSource = 'mine'
   ): void {
     this.emitColors(x, y, radius, palette[0], palette[1], palette[2], palette[3], now, cameraImpulse);
   }
@@ -129,7 +130,7 @@ export class MineExplosionVfx {
     secondaryColor: number,
     outerColor: number,
     now: number,
-    cameraImpulse = true
+    cameraImpulse: boolean | ExplosionImpulseSource = 'mine'
   ): void {
     this.emitStyledColors(
       x,
@@ -154,7 +155,7 @@ export class MineExplosionVfx {
     secondaryColor: number,
     outerColor: number,
     now: number,
-    cameraImpulse: boolean,
+    cameraImpulse: boolean | ExplosionImpulseSource,
     visualStyle: typeof EXPLOSION_STYLE_STANDARD | typeof EXPLOSION_STYLE_BOMBLET
   ): void {
     let state = this.states[0];
@@ -184,9 +185,10 @@ export class MineExplosionVfx {
     state.visualStyle = visualStyle;
     this.sequence += 1;
 
-    // force=false prevents rapid mine chains from repeatedly restarting shake.
-    // Bomblets retain their own lighter hazard shake and opt out here.
-    if (cameraImpulse) this.scene.cameras.main.shake(260, 0.008, false);
+    // Grenade rounds explicitly classify as a no-impulse source; mines in the
+    // Arena and HEIST use the same shared impulse instead of scene-local tuning.
+    const impulseSource = cameraImpulse === true ? 'mine' : cameraImpulse === false ? 'none' : cameraImpulse;
+    applyExplosionCameraImpulse(this.scene, impulseSource);
   }
 
   update(now: number): void {

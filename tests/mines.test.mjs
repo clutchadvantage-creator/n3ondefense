@@ -206,6 +206,7 @@ test('player mine explosions use the shared explosion audio and dedicated red-or
   const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   const mine = readFileSync(new URL('../src/game/abilities/Mine.ts', import.meta.url), 'utf8');
   const vfx = readFileSync(new URL('../src/game/vfx/MineExplosionVfx.ts', import.meta.url), 'utf8');
+  const impulse = readFileSync(new URL('../src/game/vfx/ExplosionCameraImpulse.ts', import.meta.url), 'utf8');
   assert.match(arena, /this\.audio\.playSfx\('mine'\)/);
   assert.match(arena, /this\.playMineExplosion\(mine\.sprite\.x, mine\.sprite\.y, mine\.radius, mine\)/);
   assert.match(arena, /private playMineExplosion/);
@@ -221,7 +222,9 @@ test('player mine explosions use the shared explosion audio and dedicated red-or
   assert.match(vfx, /private drawSmokeNebula/);
   assert.match(vfx, /Short, narrow crack traces/);
   assert.match(vfx, /compact plasma afterglow/i);
-  assert.match(vfx, /cameras\.main\.shake\(260, 0\.008, false\)/);
+  assert.match(vfx, /applyExplosionCameraImpulse\(this\.scene, impulseSource\)/);
+  assert.match(impulse, /mine: \{ durationMs: 260, intensity: 0\.008 \}/);
+  assert.match(impulse, /scene\.cameras\.main\.shake\(impulse\.durationMs, impulse\.intensity, false\)/);
 });
 
 test('star death mine explosion reuses every player-mine FX layer with pink-cyan colors', () => {

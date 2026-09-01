@@ -1233,7 +1233,7 @@ export class HeistScene extends Phaser.Scene {
     const radius = TEMPORARY_AMMO_BALANCE.grenade.splashRadius;
     const damage = projectile.damage * TEMPORARY_AMMO_BALANCE.grenade.splashDamageMultiplier;
     this.mineExplosionVfx.emit(projectile.sprite.x, projectile.sprite.y, radius,
-      [0xffffff, 0xffa340, 0xff4e27, 0xff174f], this.time.now);
+      [0xffffff, 0xffa340, 0xff4e27, 0xff174f], this.time.now, 'grenade-round');
     this.coreAudio.playSfx('grenadeShotExplosion');
     const primary = directHit ?? this.findEnemyHit(projectile.sprite.x, projectile.sprite.y);
     if (primary) this.damageEnemy(primary, projectile.damage);

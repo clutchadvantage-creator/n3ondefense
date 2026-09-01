@@ -85,12 +85,40 @@ export interface GeneratedObstacle {
   blocksLineOfSight: boolean;
 }
 
+export type ArenaSmashableKind =
+  | 'supply-locker'
+  | 'vending-unit'
+  | 'server-tower'
+  | 'neon-canister'
+  | 'maintenance-cart'
+  | 'equipment-case'
+  | 'tool-cabinet'
+  | 'battery-rack'
+  | 'drone-dock'
+  | 'containment-bin';
+
+export type ArenaSmashableDurability = 'light' | 'medium' | 'heavy';
+
+export interface ArenaSmashablePlacement {
+  id: string;
+  kind: ArenaSmashableKind;
+  durability: ArenaSmashableDurability;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  accent: number;
+  lootRoll: number;
+}
+
 export interface ArenaLayout {
   seed: number;
   template: ArenaTemplate;
   theme: ArenaTheme;
   walls: RectSpec[];
   obstacles: GeneratedObstacle[];
+  smashables: ArenaSmashablePlacement[];
   playerSpawn: Phaser.Math.Vector2;
   enemySpawns: Phaser.Math.Vector2[];
   bombSites: Phaser.Math.Vector2[];

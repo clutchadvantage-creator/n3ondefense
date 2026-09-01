@@ -10,6 +10,7 @@ import { generateArenaTopology, type PointSpec } from './ArenaTopology.ts';
 import { ArenaHistory, createArenaFingerprint, type ArenaFingerprint } from './ArenaFingerprint.ts';
 import { createsNarrowPassage, repairNarrowPassages } from './ArenaTraversal.ts';
 import { createSafeArenaFallbacks, type SafeArenaFallbackDraft } from './ArenaFallbacks.ts';
+import { createArenaSmashablePlacements } from '../arena/ArenaSmashablePlacement.ts';
 
 const pointClear = (point:PointSpec, rects:RectSpec[], clearance:number):boolean => rects.every((r)=>point.x<r.x-clearance||point.x>r.x+r.w+clearance||point.y<r.y-clearance||point.y>r.y+r.h+clearance);
 const obstacleRect = (obstacle:GeneratedObstacle):RectSpec => ({x:obstacle.x-obstacle.w/2,y:obstacle.y-obstacle.h/2,w:obstacle.w,h:obstacle.h});
@@ -60,7 +61,7 @@ export class ArenaGenerator {
           orientationBias:topology.orientationBias,occupancy:[],similarityScore:0,validation:[]
         };
         const layout:ArenaLayout={
-          seed,template:archetype,theme:ArenaThemeManager.pick(random),walls:topology.walls,obstacles,
+          seed,template:archetype,theme:ArenaThemeManager.pick(random),walls:topology.walls,obstacles,smashables:[],
           playerSpawn:vector(player),enemySpawns:topology.enemySpawns.map(vector),bombSites:selectedSites.map(vector),
           decorativeNeon:this.createDecorations(random,topology.bounds,archetype),generation:placeholder
         };
@@ -86,6 +87,7 @@ export class ArenaGenerator {
           continue;
         }
         fingerprint.similarityRejected=diagnostics.similarityRejected;
+        layout.smashables=createArenaSmashablePlacements(layout,round);
         this.history.add(fingerprint);
         this.debug(layout,round,traversalRepair.widenedPassages>0?`accepted; widened ${traversalRepair.widenedPassages} passage(s)`:'accepted',diagnostics);
         return layout;
@@ -147,7 +149,7 @@ export class ArenaGenerator {
         occupancy:[],similarityScore:0,validation:[]
       };
       const layout:ArenaLayout={
-        seed,template:draft.archetype,theme:ArenaThemeManager.pick(random),walls:draft.walls.map((wall)=>({...wall})),obstacles:[],
+        seed,template:draft.archetype,theme:ArenaThemeManager.pick(random),walls:draft.walls.map((wall)=>({...wall})),obstacles:[],smashables:[],
         playerSpawn:vector(draft.playerSpawn),enemySpawns:draft.enemySpawns.map(vector),bombSites:draft.bombSites.map(vector),
         decorativeNeon:this.createDecorations(random,draft.bounds,draft.archetype),generation:placeholder
       };
@@ -159,6 +161,7 @@ export class ArenaGenerator {
       fingerprint.closestHistoryAge=assessment.closestHistoryAge;
       fingerprint.fallbackUsed=true;
       layout.generation=fingerprint;
+      layout.smashables=createArenaSmashablePlacements(layout,round);
       const score=assessment.score+(assessment.exactPrevious?10:assessment.reject?1:0);
       if(!best||score<best.score)best={layout,fingerprint,score};
       if(!assessment.reject)return layout;

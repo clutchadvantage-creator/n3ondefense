@@ -34,6 +34,17 @@ export class ProjectileTrailBatch {
       .setBlendMode(Phaser.BlendModes.ADD);
   }
 
+  /** Moves the tiny sample allocation cost out of the first live firefight. */
+  prewarm(targetRetained: number): number {
+    const target = Math.max(0, Math.floor(targetRetained));
+    let added = 0;
+    while (this.active.length + this.available.length < target) {
+      this.available.push({ x: 0, y: 0, color: 0, radius: 1, bornAt: 0, expiresAt: 0 });
+      added += 1;
+    }
+    return added;
+  }
+
   beginFrame(now: number): void {
     let writeIndex = 0;
     for (let readIndex = 0; readIndex < this.active.length; readIndex += 1) {

@@ -47,6 +47,7 @@ export interface HeistFacilityRuntime {
     liveAmbientBatches: 1;
     independentAnimationLoops: 1;
     guideMarkerMaximum: number;
+    utilityLightCount: number;
     decalCount: number;
     loops: number;
     deadEnds: number;
@@ -287,13 +288,13 @@ const appendGuideMarkers = (points: readonly HeistLayoutPoint[]): HeistLayoutPoi
     const from = points[index];
     const to = points[index + 1];
     const distance = Math.hypot(to.x - from.x, to.y - from.y);
-    const count = Math.max(1, Math.floor(distance / 58));
+    const count = Math.max(1, Math.floor(distance / 178));
     for (let marker = 1; marker <= count; marker += 1) {
       const t = marker / (count + 1);
       markers.push({ x: Phaser.Math.Linear(from.x, to.x, t), y: Phaser.Math.Linear(from.y, to.y, t) });
     }
   }
-  return markers.slice(0, 96);
+  return markers.slice(0, 28);
 };
 
 export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFacilityRuntime => {
@@ -392,6 +393,16 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
   const vaultDoor = doorVisuals[0].body;
 
   const ambientGraphics = scene.add.graphics().setDepth(4).setBlendMode(Phaser.BlendModes.ADD);
+  const utilityLights = layout.nodes
+    .filter((node, index) => (index + node.row * 3 + node.column) % 3 !== 1)
+    .slice(0, 56)
+    .map((node, index) => ({
+      x: node.x + (index % 2 ? 92 : -92),
+      y: node.y - (index % 3 === 0 ? 124 : 112),
+      color: index % 7 === 0 ? 0xff4dcb : index % 5 === 0 ? 0xffc857 : 0x43edfa,
+      vertical: index % 4 === 0,
+      phase: index * 0.73
+    }));
   let lastAmbientDraw = -1;
   let lastPresentationUpdate = -1_000;
   let escapeGuideActive = false;
@@ -491,7 +502,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     diagnostics: {
       identity: 'heist-maze-facility', seed: layout.seed,
       staticGraphicsBatches: 1, liveAmbientBatches: 1, independentAnimationLoops: 1,
-      guideMarkerMaximum: 96, decalCount: decalPlan.decals.length,
+      guideMarkerMaximum: 28, utilityLightCount: utilityLights.length, decalCount: decalPlan.decals.length,
       loops: layout.diagnostics.loops, deadEnds: layout.diagnostics.deadEnds,
       sourceWallRects: layout.wallRects.length,
       runtimeWallRects: runtimeWallRects.length,
@@ -582,19 +593,27 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       lastAmbientDraw = now;
       ambientGraphics.clear();
       const pulse = 0.5 + Math.sin(now * 0.004) * 0.5;
-      for (let index = 0; index < layout.nodes.length; index += 4) {
-        const node = layout.nodes[index];
-        const color = index % 8 ? 0x43edfa : 0xff4dcb;
-        ambientGraphics.fillStyle(color, 0.12 + pulse * 0.16).fillRect(node.x - 22, node.y - 132, 44, 3);
+      for (let index = 0; index < utilityLights.length; index += 1) {
+        const light = utilityLights[index];
+        const localPulse = 0.5 + Math.sin(now * 0.0022 + light.phase) * 0.5;
+        const width = light.vertical ? 3 : 34;
+        const height = light.vertical ? 24 : 3;
+        ambientGraphics.fillStyle(0x01050a, 0.82)
+          .fillRect(light.x - width * 0.5 - 3, light.y - height * 0.5 - 3, width + 6, height + 6);
+        ambientGraphics.fillStyle(light.color, 0.10 + localPulse * 0.15)
+          .fillRect(light.x - width * 0.5, light.y - height * 0.5, width, height);
+        if (index % 5 === 0) {
+          ambientGraphics.fillStyle(light.color, 0.035 + pulse * 0.025)
+            .fillCircle(light.x, light.y, 18 + localPulse * 5);
+        }
       }
       if (!escapeGuideActive) return;
-      const sequence = Math.floor(now / 115);
+      const sequence = Math.floor(now / 170);
       for (let index = 0; index < guideMarkers.length; index += 1) {
         const marker = guideMarkers[index];
-        const active = (index - sequence + 700) % 7 <= 1;
-        ambientGraphics.fillStyle(active ? 0xbaffdb : 0x46ffad, active ? 0.92 : 0.22)
-          .fillCircle(marker.x, marker.y, active ? 4.2 : 2.6);
-        if (active) ambientGraphics.lineStyle(1, 0x72ffbf, 0.34).strokeCircle(marker.x, marker.y, 8);
+        const active = (index - sequence + 700) % 6 === 0;
+        ambientGraphics.fillStyle(active ? 0xc8ffe5 : 0x46ffad, active ? 0.58 : 0.12)
+          .fillRoundedRect(marker.x - (active ? 5 : 3), marker.y - 1.5, active ? 10 : 6, 3, 1);
       }
     },
     destroy(): void {
