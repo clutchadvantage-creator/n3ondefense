@@ -77,6 +77,7 @@ test('Garage uses existing Mod category validation instead of inventing equip ru
 test('Garage presets restore at most two universal Supreme Mods only with a Supreme protocol', () => {
   const save = createDefaultLocalSave('garage-supreme', 'Garage Supreme');
   save.progress.highestRound = 53;
+  save.progress.regularOverdriveCompleted = true;
   save.protocol.preferred = 'supreme-leo';
   const supremeIds = MOD_DEFINITIONS.filter((entry) => entry.rarity === 'supreme').slice(0, 3).map((entry) => entry.id);
   for (const id of supremeIds) assert.equal(addModDrop(save.mods, id).ok, true);

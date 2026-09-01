@@ -1,5 +1,6 @@
 import { MOD_BALANCE, RUN_PROTOCOLS, isRunProtocolUnlocked } from './modBalance.ts';
 import type { ModRank, RunProtocolId } from './types.ts';
+import { normalizeSelectedNormalStartRound } from '../progression/OperationsConfiguration.ts';
 
 export const splitCurrentSecondaryDamage = (finalKillingHitDamage: number, rank: ModRank, isSecondaryEffect: boolean): number => {
   if (isSecondaryEffect) return 0;
@@ -37,10 +38,11 @@ export const protocolStart = (
   highestRound: number,
   supremeHighestRound = 0,
   normalHighestRound = highestRound,
-  regularOverdriveCompleted = false
+  regularOverdriveCompleted = false,
+  selectedNormalStartRound?: number
 ) => {
   const requested = RUN_PROTOCOLS[protocol];
   const active = isRunProtocolUnlocked(protocol, { highestRound, supremeHighestRound, regularOverdriveCompleted }) ? requested : RUN_PROTOCOLS.normal;
-  const normalCheckpoint = normalHighestRound < 10 ? 1 : Math.max(10, Math.floor(normalHighestRound / 10) * 10);
+  const normalCheckpoint = normalizeSelectedNormalStartRound(selectedNormalStartRound, normalHighestRound);
   return { protocol: active.id, startingRound: active.id === 'normal' ? normalCheckpoint : active.startingRound, scoreMultiplier: active.scoreMultiplier, modDropMultiplier: active.modDropMultiplier, skippedRewards: { credits: 0, coreTokens: 0, mods: 0, kills: 0, score: 0 } } as const;
 };

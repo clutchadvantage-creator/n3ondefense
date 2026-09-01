@@ -10,6 +10,7 @@ export interface GaragePreset {
   savedAt?: string;
   cardSlots: ModLoadoutSlots;
   protocol: RunProtocolId | null;
+  normalStartRound: number | null;
   contract: RunContractId | null;
   modFocus: ModFocusSignalId | null;
 }

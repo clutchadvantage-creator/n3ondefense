@@ -8,8 +8,6 @@ import { SaveSystem } from '../systems/SaveSystem';
 import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton, enableButton, setButtonJiggleTargets } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
-import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, getUnlockedProtocolIds, isRunProtocolUnlocked } from '../mods/modBalance.ts';
-import { protocolStart } from '../mods/ModRules.ts';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_FOCUS_LABELS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
@@ -25,6 +23,7 @@ import { completeFirstRunTeachingRound } from '../tutorial/TutorialProgress.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { createDeploymentConfigurationModal, type DeploymentConfigurationModalOptions } from '../ui/DeploymentConfigurationModal.ts';
 import { setSceneUiModalDepth } from '../input/UiNavigationController.ts';
+import { formatOperationsMode } from '../progression/OperationsConfiguration.ts';
 
 const MAIN_MENU_TIPS = [
   'Shoot through a placed fence to split and multiply your projectiles.',
@@ -50,7 +49,7 @@ const MAIN_MENU_TIPS = [
   'Visit the Operator Garage to inspect equipped Mods, cosmetics, presets, and Overdrive progress.',
   'Configure optional Signals and Contracts from the Operator Garage before deployment.',
   'You can replay the animated splash screen from the Options menu.',
-  'Use the protocol arrows to choose among your unlocked starting tiers.'
+  'Configure deployment mode and starting checkpoints from Operations in the Operator Garage.'
 ] as const;
 
 // Phaser applies the display origin after measuring polygon geometry. Keeping
@@ -130,20 +129,10 @@ export class MainMenuScene extends Phaser.Scene {
         SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress); });
       }
     }
-    const requestedProtocol = profile ? SaveSystem.getPreferredProtocol() : 'normal';
-    const supremeHighestRound = profile ? SaveSystem.getSupremeHighestRound() : 0;
-    const regularOverdriveCompleted = profile ? SaveSystem.hasCompletedRegularOverdrive() : false;
-    const protocol = profile && isRunProtocolUnlocked(requestedProtocol, { highestRound: SaveSystem.getHighestRound(), supremeHighestRound, regularOverdriveCompleted })
-      ? requestedProtocol
-      : 'normal';
-    const protocolDefinition = RUN_PROTOCOLS[protocol];
-    const deploymentStart = protocolStart(
-      protocol,
-      profile ? SaveSystem.getHighestRound() : 0,
-      supremeHighestRound,
-      profile ? SaveSystem.getNormalHighestRound() : 0,
-      regularOverdriveCompleted
-    );
+    const deploymentStart = profile
+      ? SaveSystem.getOperationsConfiguration()
+      : { mode: 'normal' as const, protocol: 'normal' as const, startingRound: 1 };
+    const protocol = deploymentStart.protocol;
     const equippedMods = profile ? new ModRuntime(SaveSystem.getModCollection(), undefined, protocol).snapshot() : [];
     const narrow = width < 1120;
     const short = height < 900;
@@ -158,7 +147,7 @@ export class MainMenuScene extends Phaser.Scene {
         if (!onlineStatus.active) return;
         const labels = {
           connected: 'ONLINE IDENTITY CONNECTED',
-          none: 'ONLINE IDENTITY WILL BE CREATED WHEN YOU DEPLOY ONLINE',
+          none: '',
           expired: 'ONLINE SESSION EXPIRED - DEPLOY ONLINE TO RECOVER',
           unavailable: 'ONLINE SERVICE UNAVAILABLE - LOCAL MODE REMAINS AVAILABLE'
         } as const;
@@ -172,44 +161,24 @@ export class MainMenuScene extends Phaser.Scene {
     const briefingHeight = Math.max(300, Math.min(short ? 600 : 680, height - briefingTop - 18));
     this.createOperativeBriefing(briefingX, briefingTop, briefingWidth, briefingHeight, profile?.name ?? null);
 
-    const unlockedProtocols = profile ? getUnlockedProtocolIds(SaveSystem.getHighestRound(), supremeHighestRound, regularOverdriveCompleted) : ['normal'] as const;
     const protocolY = tiny ? 128 : short ? 177 : 235;
-    const protocolArrowWidth = tiny ? 42 : short ? 50 : 58;
-    const protocolGap = tiny ? 7 : 10;
-    const protocolWidth = Phaser.Math.Clamp(width * (narrow ? 0.35 : 0.21), narrow ? 220 : 340, narrow ? 390 : 410);
+    const protocolWidth = Phaser.Math.Clamp(width * (narrow ? 0.42 : 0.27), narrow ? 260 : 380, narrow ? 440 : 520);
     const protocolHeight = tiny ? 42 : short ? 54 : 68;
-    const protocolArrowOffset = protocolWidth / 2 + protocolGap + protocolArrowWidth / 2;
-    this.add.text(centerX, protocolY - protocolHeight / 2 - (tiny ? 14 : short ? 18 : 22), 'DEPLOYMENT PROTOCOL', {
+    this.add.text(centerX, protocolY - protocolHeight / 2 - (tiny ? 14 : short ? 18 : 22), 'OPERATIONS CONFIGURATION', {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${tiny ? 11 : short ? 14 : 17}px`, color: '#78ddeb', letterSpacing: 2
     }).setOrigin(0.5).setDepth(21);
-
-    const selectProtocol = (direction: 1 | -1): boolean => {
-      if (!profile) return true;
-      const next = cycleUnlockedProtocol(protocol, SaveSystem.getHighestRound(), direction, supremeHighestRound, regularOverdriveCompleted);
-      if (next === protocol && unlockedProtocols.length === 1) {
-        const nextLocked = RUN_PROTOCOL_IDS.find((id) => !isRunProtocolUnlocked(id, { highestRound: SaveSystem.getHighestRound(), supremeHighestRound, regularOverdriveCompleted }));
-        if (nextLocked) onlineStatus.setText(`${RUN_PROTOCOLS[nextLocked].label} UNLOCKS AT ROUND ${RUN_PROTOCOLS[nextLocked].unlockHighestRound}`).setColor('#ffbd85');
-        return false;
+    this.createProtocolChassis(centerX, protocolY, protocolWidth + (tiny ? 16 : 24), protocolHeight + (tiny ? 12 : 18));
+    this.createCommandButton(centerX, protocolY, `${formatOperationsMode(deploymentStart.mode)}\nSTART ROUND ${deploymentStart.startingRound}`, () => {
+      if (!profile) {
+        this.scene.start(SceneKeys.LocalProfiles);
+        return true;
       }
-      const result = SaveSystem.setPreferredProtocol(next);
-      if (result.ok) {
-        this.cameras.main.flash(90, 20, 0, 28, false);
-        this.scene.restart();
-      } else {
-        onlineStatus.setText(result.message ?? 'PROTOCOL LOCKED').setColor('#ffbd85');
-      }
-      return result.ok;
-    };
-
-    this.createProtocolChassis(centerX, protocolY, protocolWidth + protocolArrowWidth * 2 + protocolGap * 4, protocolHeight + (tiny ? 12 : 18));
-    const protocolButton = this.createCommandButton(centerX, protocolY, `${protocolDefinition.label}\nSTART ROUND ${deploymentStart.startingRound}`, () => selectProtocol(1), protocolWidth, protocolHeight, 'protocol', 'menu', tiny ? 13 : short ? 16 : 19);
-    const previousProtocolButton = this.createCommandButton(centerX - protocolArrowOffset, protocolY, '<', () => selectProtocol(-1), protocolArrowWidth, protocolHeight, 'selector', 'menu', tiny ? 16 : 21);
-    const nextProtocolButton = this.createCommandButton(centerX + protocolArrowOffset, protocolY, '>', () => selectProtocol(1), protocolArrowWidth, protocolHeight, 'selector', 'menu', tiny ? 16 : 21);
-    if (profile && unlockedProtocols.length === 1) {
-      protocolButton.setAlpha(0.82);
-      previousProtocolButton.setAlpha(0.82);
-      nextProtocolButton.setAlpha(0.82);
-    }
+      if (!this.allowTeachingMenuAction('garage', onlineStatus)) return false;
+      TutorialEventBus.emit('ui.garageSelected');
+      TutorialEventBus.emit('ui.garageOpened');
+      this.scene.start(SceneKeys.Garage, { returnScene: SceneKeys.MainMenu, openOperations: true });
+      return true;
+    }, protocolWidth, protocolHeight, 'protocol', 'menu', tiny ? 13 : short ? 16 : 19);
 
     const setupSelection = this.getRunSetupSelection();
     const setupCost = getRunSetupCost(setupSelection);

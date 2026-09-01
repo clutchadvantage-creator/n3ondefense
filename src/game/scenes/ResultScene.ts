@@ -5,7 +5,6 @@ import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { RUN_PROTOCOLS, normalizeRunProtocolId } from '../mods/modBalance.ts';
-import { protocolStart } from '../mods/ModRules.ts';
 import { shouldShowInitialDeploymentBriefing } from '../progression/ProgressionMessaging.ts';
 import { SaveSystem } from '../systems/SaveSystem';
 import { GameplayTelemetryRecorder } from '../telemetry/GameplayTelemetryRecorder.ts';
@@ -117,14 +116,8 @@ export class ResultScene extends Phaser.Scene {
           disableButton(replayButton);
           this.deploymentLaunchGate.commit();
           this.registry.remove('round-finished');
-          const protocol = resultProtocol;
-          const deploymentStart = protocolStart(
-            protocol,
-            SaveSystem.getHighestRound(),
-            SaveSystem.getSupremeHighestRound(),
-            SaveSystem.getNormalHighestRound(),
-            SaveSystem.hasCompletedRegularOverdrive()
-          );
+          const deploymentStart = SaveSystem.getOperationsConfiguration();
+          const protocol = deploymentStart.protocol;
           startArenaLoad(this, {
             reason: 'replay-after-fail',
             session: {

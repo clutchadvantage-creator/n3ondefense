@@ -9,6 +9,7 @@ import type { LocalModCollection, ModCardInstance, ModSlot, RunProtocolId } from
 import type { LocalPlayerSave } from '../save/LocalSaveTypes.ts';
 import type { CosmeticOption } from '../types.ts';
 import type { GaragePreset, GaragePresetId, PlayerGarageState } from './types.ts';
+import { resolveOperationsConfiguration, selectOperationsCheckpoint } from '../progression/OperationsConfiguration.ts';
 
 export const GARAGE_PRESET_IDS = ['config-a', 'config-b', 'config-c'] as const satisfies readonly GaragePresetId[];
 export const GARAGE_MOD_SLOTS = ['weapon', 'player', 'defense', 'bombSite', 'wildcard'] as const satisfies readonly ModSlot[];
@@ -35,6 +36,7 @@ const createEmptyPreset = (id: GaragePresetId, index: number): GaragePreset => (
   saved: false,
   cardSlots: createDefaultModLoadout(),
   protocol: null,
+  normalStartRound: null,
   contract: null,
   modFocus: null
 });
@@ -82,6 +84,9 @@ export const normalizeGarageState = (value: unknown): PlayerGarageState => {
         ...(typeof raw.savedAt === 'string' && !Number.isNaN(Date.parse(raw.savedAt)) ? { savedAt: raw.savedAt } : {}),
         cardSlots: normalizeCardSlots(raw.cardSlots),
         protocol: isRunProtocolId(raw.protocol) ? raw.protocol : null,
+        normalStartRound: typeof raw.normalStartRound === 'number' && Number.isFinite(raw.normalStartRound)
+          ? Math.max(1, Math.floor(raw.normalStartRound))
+          : null,
         contract: validContract(raw.contract) ? raw.contract : null,
         modFocus: validFocus(raw.modFocus) ? raw.modFocus : null
       };
@@ -132,7 +137,9 @@ export const saveCurrentGaragePreset = (save: LocalPlayerSave, presetId: GarageP
   preset.saved = true;
   preset.savedAt = now;
   preset.cardSlots = { ...loadout.cardSlots };
-  preset.protocol = save.protocol.preferred;
+  const operations = resolveOperationsConfiguration(save.protocol, save.progress);
+  preset.protocol = operations.protocol;
+  preset.normalStartRound = save.protocol.selectedNormalStartRound;
   preset.contract = save.garage.nextRun.contract;
   preset.modFocus = save.garage.nextRun.modFocus;
   return { ok: true, message: `${preset.name} saved.` };
@@ -149,11 +156,19 @@ export const loadGaragePreset = (save: LocalPlayerSave, presetId: GaragePresetId
   if (!preset?.saved || !loadout) return { ok: false, message: 'That configuration slot is empty.', missingCards: 0, ignoredProtocol: false };
 
   let ignoredProtocol = false;
+  const currentOperations = resolveOperationsConfiguration(save.protocol, save.progress);
   const targetProtocol = preset.protocol && isRunProtocolUnlocked(preset.protocol, save.progress)
     ? preset.protocol
-    : save.protocol.preferred;
+    : currentOperations.protocol;
   if (preset.protocol && targetProtocol !== preset.protocol) ignoredProtocol = true;
-  save.protocol.preferred = targetProtocol;
+  const operationSelection = selectOperationsCheckpoint(
+    save.protocol,
+    save.progress,
+    targetProtocol,
+    targetProtocol === 'normal' ? preset.normalStartRound ?? save.protocol.selectedNormalStartRound : undefined
+  );
+  if (operationSelection.ok && operationSelection.preference) save.protocol = operationSelection.preference;
+  else ignoredProtocol = true;
 
   loadout.slots = createDefaultModLoadout();
   loadout.cardSlots = createDefaultModLoadout();

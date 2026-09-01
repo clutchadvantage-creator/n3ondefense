@@ -34,6 +34,7 @@ import { resolveWeeklyOperationDecks, type WeeklyOperationDecksSnapshot, type We
 import type { ArcadeMetricEvent } from '../arcade/types.ts';
 import { executeCurrencyExchange, type ExchangeCurrency } from '../economy/CurrencyExchange.ts';
 import { walletState, type WalletChangeListener, type WalletSnapshot } from '../economy/WalletState.ts';
+import { resolveOperationsConfiguration, selectOperationsCheckpoint } from '../progression/OperationsConfiguration.ts';
 
 export interface PurchaseResult {
   ok: boolean;
@@ -531,6 +532,24 @@ export class PlayerProfileStore {
     return { ...PlayerProfileStore.getActiveSave().garage.nextRun };
   }
 
+  static getOperationsConfiguration() {
+    const save = PlayerProfileStore.getActiveSave();
+    return resolveOperationsConfiguration(save.protocol, save.progress);
+  }
+
+  static setOperationsCheckpoint(protocol: RunProtocolId, normalStartingRound?: number): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const result = selectOperationsCheckpoint(save.protocol, save.progress, protocol, normalStartingRound);
+    if (!result.ok || !result.preference) return { ok: false, message: result.message };
+    save.protocol = result.preference;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    PlayerProfileStore.save();
+    // Reuse the deployment notification channel as an invalidation signal.
+    // The profile save remains the sole source of Operations truth.
+    publishDeploymentConfigurationChanged(save.garage);
+    return { ok: true, message: result.message };
+  }
+
   static setNextRunSetupSelection(selection: RunSetupSelection): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
     save.garage.nextRun = normalizeRunSetupSelection(selection);
@@ -599,7 +618,7 @@ export class PlayerProfileStore {
 
   static equipMod(slot: ModSlot, modId: string, instanceId?: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
-    const result = equipMod(save.mods, slot, modId, instanceId, save.protocol.preferred);
+    const result = equipMod(save.mods, slot, modId, instanceId, resolveOperationsConfiguration(save.protocol, save.progress).protocol);
     if (result.ok) PlayerProfileStore.save();
     return result;
   }
@@ -784,9 +803,7 @@ export class PlayerProfileStore {
     const save = PlayerProfileStore.getActiveSave();
     const definition = RUN_PROTOCOLS[protocol];
     if (!isRunProtocolUnlocked(protocol, save.progress)) return { ok: false, message: `Reach Round ${definition.unlockHighestRound} in the required progression tier to unlock ${definition.label}.` };
-    save.protocol.preferred = protocol;
-    PlayerProfileStore.save();
-    return { ok: true };
+    return PlayerProfileStore.setOperationsCheckpoint(protocol, protocol === 'normal' ? save.protocol.selectedNormalStartRound : undefined);
   }
 
   static unlockCosmetic(cosmeticKey: string): PurchaseResult {

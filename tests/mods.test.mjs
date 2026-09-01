@@ -639,8 +639,12 @@ test('protocol selection cycles only through unlocked named tiers and saves them
   assert.equal(cycleUnlockedProtocol('overdrive', 13, 1), 'overdrive-orion');
   assert.equal(cycleUnlockedProtocol('overdrive-orion', 13, 1), 'normal');
   assert.equal(cycleUnlockedProtocol('normal', 13, -1), 'overdrive-orion');
-  assert.deepEqual(normalizeProtocolPreference({ preferred: 'overdrive-ares' }), { preferred: 'overdrive-ares' });
-  assert.deepEqual(normalizeProtocolPreference({ preferred: 'unknown-protocol' }), { preferred: 'normal' });
+  assert.deepEqual(normalizeProtocolPreference({ preferred: 'overdrive-ares' }), {
+    preferred: 'overdrive-ares', selectedNormalStartRound: 1
+  });
+  assert.deepEqual(normalizeProtocolPreference({ preferred: 'unknown-protocol' }), {
+    preferred: 'normal', selectedNormalStartRound: 1
+  });
 });
 
 test('mod drops are deterministic and run result fields serialize', () => {

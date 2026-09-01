@@ -6,6 +6,7 @@ import { MOD_INFUSION_BY_ID } from './infusions.ts';
 import { ECONOMY_BALANCE } from '../economy/economyBalance.ts';
 import { countEquippedSupremeMods, isLegendaryModId, isSupremeModId, MAX_EQUIPPED_SUPREME_MODS } from './ModLoadoutRules.ts';
 import { getApplicableRecalibrationSlots, getRecalibrationCandidatePool, getRecalibrationSlots, PLASMA_RECALIBRATION_STAT_RANGES } from './PlasmaRecalibration.ts';
+import { getLegacyNormalStartRound, normalizeSelectedNormalStartRound } from '../progression/OperationsConfiguration.ts';
 
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const MOD_SLOTS: ModSlot[] = ['weapon', 'player', 'defense', 'bombSite', 'wildcard'];
@@ -122,7 +123,11 @@ export const normalizeModCollection = (mods: unknown): LocalModCollection => {
   };
 };
 
-export const normalizeProtocolPreference = (value: unknown): ProtocolPreference => {
-  const candidate = isObject(value) ? value.preferred : value;
-  return { preferred: normalizeRunProtocolId(candidate) };
+export const normalizeProtocolPreference = (value: unknown, normalHighestRound = 0): ProtocolPreference => {
+  const candidate = isObject(value) ? value : { preferred: value };
+  const fallback = getLegacyNormalStartRound(normalHighestRound);
+  return {
+    preferred: normalizeRunProtocolId(candidate.preferred),
+    selectedNormalStartRound: normalizeSelectedNormalStartRound(candidate.selectedNormalStartRound, normalHighestRound, fallback)
+  };
 };

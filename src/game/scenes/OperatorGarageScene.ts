@@ -33,8 +33,8 @@ import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
 import { filterModDatabaseEntries, getModDatabaseEntry, type ModDatabaseStatusFilter } from '../mods/ModDatabaseService.ts';
 import { ModDatabaseViewer } from '../mods/ModDatabaseViewer.ts';
 import { MOD_RARITY_COLORS, createModCardView } from '../mods/ModCardView.ts';
-import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, cycleUnlockedProtocol, isRunProtocolUnlocked } from '../mods/modBalance.ts';
-import type { ModCardInstance, ModCategory, ModRarity, ModSlot, RunProtocolId } from '../mods/types.ts';
+import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, isRunProtocolUnlocked } from '../mods/modBalance.ts';
+import type { ModCardInstance, ModCategory, ModRarity, ModSlot } from '../mods/types.ts';
 import {
   describeRecalibrationSlot,
   formatCalibrationModifier,
@@ -74,13 +74,24 @@ import {
 } from '../garage/EconomyConsoleUi.ts';
 import { getSupremeStage, isSupremeProtocol } from '../progression/SupremeProgression.ts';
 import {
+  formatOperationsMode,
+  getHighestUnlockedNormalCheckpoint,
+  getOperationsCheckpointOptions,
+  getOperationsModeStatuses
+} from '../progression/OperationsConfiguration.ts';
+import type { RunModeFamily } from '../config/modeBalance.ts';
+import {
   configureSceneUiNavigation,
   registerUiFocusable,
   setSceneUiModalDepth
 } from '../input/UiNavigationController.ts';
 import { showConfirmDialog, type LocalModalHandle } from '../utils/localSaveUi.ts';
 
-interface OperatorGarageSceneData { returnScene?: SceneKeyValue; openRunConfiguration?: boolean }
+interface OperatorGarageSceneData {
+  returnScene?: SceneKeyValue;
+  openRunConfiguration?: boolean;
+  openOperations?: boolean;
+}
 
 const LIBRARY_CATEGORIES: Array<'all' | ModCategory> = ['all', 'weapon', 'player', 'defense', 'bombSite', 'utility'];
 const LIBRARY_RARITIES: Array<'all' | ModRarity> = ['all', 'common', 'uncommon', 'rare', 'epic', 'legendary', 'supreme'];
@@ -117,7 +128,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private operatorPreviewRoot: Phaser.GameObjects.Container | null = null;
   private operatorPreviewColorTimer: Phaser.Time.TimerEvent | null = null;
   private operatorPreviewLayout: { rect: GarageRect; compact: boolean } | null = null;
-  private readonly configurationValueTexts = new Map<'contract' | 'signal', Phaser.GameObjects.Text>();
+  private readonly configurationValueTexts = new Map<'operations' | 'contract' | 'signal', Phaser.GameObjects.Text>();
   private configurationFeeText: Phaser.GameObjects.Text | null = null;
   private configurationPersistenceText: Phaser.GameObjects.Text | null = null;
   private readonly walletValueTexts = new Map<ExchangeCurrency, Phaser.GameObjects.Text>();
@@ -310,7 +321,8 @@ export class OperatorGarageScene extends Phaser.Scene {
       this.walletUnsubscribe?.();
       this.walletUnsubscribe = null;
     });
-    if (data?.openRunConfiguration) this.time.delayedCall(0, () => this.showRunConfiguration());
+    if (data?.openOperations) this.time.delayedCall(0, () => this.showOperations());
+    else if (data?.openRunConfiguration) this.time.delayedCall(0, () => this.showRunConfiguration());
   }
 
   private terminalFrame(rect: GarageRect, title: string, color = 0x55efff): Phaser.GameObjects.Container {
@@ -350,15 +362,17 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.configurationValueTexts.clear();
     this.configurationFeeText = null;
     this.configurationPersistenceText = null;
-    const root = this.terminalFrame(rect, 'DEPLOYMENT CONFIGURATION');
+    const root = this.terminalFrame(rect, 'OPERATIONS CONFIGURATION');
     const roomy = !compact && rect.height >= 180;
     const contentScale = roomy ? Phaser.Math.Clamp(rect.width / 400, 1, 1.36) : 1;
-    const highestRound = SaveSystem.getHighestRound();
-    const requested = SaveSystem.getPreferredProtocol();
-    const protocol = isRunProtocolUnlocked(requested, { highestRound, supremeHighestRound: SaveSystem.getSupremeHighestRound(), regularOverdriveCompleted: SaveSystem.hasCompletedRegularOverdrive() }) ? requested : 'normal';
+    const operations = SaveSystem.getOperationsConfiguration();
     const setup = SaveSystem.getNextRunSetupSelection();
     const rows = [
-      { label: 'PROTOCOL', value: RUN_PROTOCOLS[protocol].label, action: () => this.cycleProtocol(protocol) },
+      {
+        label: 'OPERATIONS',
+        value: `${formatOperationsMode(operations.mode)} // START ${operations.startingRound}  [CHANGE]`,
+        action: () => this.showOperations()
+      },
       { label: 'CONTRACT', value: `${setup.contract ? RUN_CONTRACTS[setup.contract].label : 'NO CONTRACT ACTIVE'}  [CHANGE]`, action: () => this.showRunConfiguration() },
       { label: 'SIGNAL', value: `${setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus] : 'NO SIGNAL ACTIVE'}  [CHANGE]`, action: () => this.showRunConfiguration() }
     ];
@@ -373,7 +387,9 @@ export class OperatorGarageScene extends Phaser.Scene {
       const value = this.add.text(roomy ? rect.width - 15 * contentScale : 15, y + (roomy ? 4 * contentScale : 10), row.value, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomy ? Math.round(17 * contentScale) : 10}px`, fontStyle: 'bold', color: '#e4fcff'
       }).setOrigin(roomy ? 1 : 0, 0).setMaxLines(1);
-      if (row.label === 'CONTRACT' || row.label === 'SIGNAL') this.configurationValueTexts.set(row.label.toLowerCase() as 'contract' | 'signal', value);
+      if (row.label === 'OPERATIONS' || row.label === 'CONTRACT' || row.label === 'SIGNAL') {
+        this.configurationValueTexts.set(row.label.toLowerCase() as 'operations' | 'contract' | 'signal', value);
+      }
       hit.on('pointerover', () => {
         hit.setFillStyle(0x17374a, 0.75);
         this.audio.playSfx('menuHover');
@@ -406,7 +422,10 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private refreshConfigurationTerminalState(): void {
+    const operations = SaveSystem.getOperationsConfiguration();
     const setup = SaveSystem.getNextRunSetupSelection();
+    this.configurationValueTexts.get('operations')
+      ?.setText(`${formatOperationsMode(operations.mode)} // START ${operations.startingRound}  [CHANGE]`);
     this.configurationValueTexts.get('contract')?.setText(`${setup.contract ? RUN_CONTRACTS[setup.contract].label : 'NO CONTRACT ACTIVE'}  [CHANGE]`);
     this.configurationValueTexts.get('signal')?.setText(`${setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus] : 'NO SIGNAL ACTIVE'}  [CHANGE]`);
     const cost = getRunSetupCost(setup);
@@ -701,10 +720,218 @@ export class OperatorGarageScene extends Phaser.Scene {
 
   private runConfigurationFocusTarget: string | null = null;
 
+  private showOperations(requestedMode?: RunModeFamily, requestedPage = 0): void {
+    const root = this.createOverlay('OPERATIONS // DEPLOYMENT CONSOLE');
+    const { width, height } = this.scale;
+    const compact = width < 1100 || height < 720;
+    const narrow = width < 760;
+    const current = SaveSystem.getOperationsConfiguration();
+    const progress = {
+      highestRound: SaveSystem.getHighestRound(),
+      normalHighestRound: SaveSystem.getNormalHighestRound(),
+      supremeHighestRound: SaveSystem.getSupremeHighestRound(),
+      regularOverdriveCompleted: SaveSystem.hasCompletedRegularOverdrive(),
+      supremeOverdriveCompleted: SaveSystem.hasCompletedSupremeOverdrive()
+    };
+    const viewedMode = requestedMode ?? current.mode;
+    const modes = getOperationsModeStatuses(progress);
+    const checkpoints = getOperationsCheckpointOptions(viewedMode, {
+      preferred: current.protocol,
+      selectedNormalStartRound: current.mode === 'normal' ? current.startingRound : 1
+    }, progress);
+    const pageSize = compact ? 12 : 15;
+    const pageCount = Math.max(1, Math.ceil(checkpoints.length / pageSize));
+    const page = Phaser.Math.Clamp(Math.floor(requestedPage), 0, pageCount - 1);
+    const visibleCheckpoints = checkpoints.slice(page * pageSize, (page + 1) * pageSize);
+    const safe = narrow ? 14 : compact ? 22 : 34;
+    const modeGap = narrow ? 6 : 12;
+    const modeWidth = Math.min(compact ? 300 : 350, (width - safe * 2 - modeGap * 2) / 3);
+    const modeHeight = compact ? 44 : 58;
+    const modeY = compact ? 104 : 119;
+
+    configureSceneUiNavigation(this, {
+      onBack: this.handleEscape,
+      onPageLeft: () => this.showOperations(viewedMode, Math.max(0, page - 1)),
+      onPageRight: () => this.showOperations(viewedMode, Math.min(pageCount - 1, page + 1))
+    });
+
+    root.add(this.add.text(width / 2, compact ? 68 : 73, 'SELECT MODE // SELECT AN UNLOCKED STARTING CHECKPOINT', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 14 : 18}px`, color: '#9bcad7',
+      fontStyle: 'bold', letterSpacing: 2, align: 'center'
+    }).setOrigin(0.5));
+
+    modes.forEach((status, index) => {
+      const x = width / 2 + (index - 1) * (modeWidth + modeGap);
+      const active = current.mode === status.mode;
+      const viewing = viewedMode === status.mode;
+      const label = `${status.label}${active ? ' // ACTIVE' : status.unlocked ? '' : ' // LOCKED'}`;
+      const button = createButton(this, x, modeY, label, () => {
+        this.status = status.unlocked
+          ? `OPERATIONS VIEW // ${status.label}`
+          : `BLOCKED // ${status.unlockRequirement ?? 'MODE LOCKED'}`;
+        this.showOperations(status.mode, 0);
+        return status.unlocked;
+      }, modeWidth, 'menu', {
+        height: modeHeight,
+        fontSize: narrow ? 11 : compact ? 14 : 17,
+        focusModalDepth: 30,
+        focusDefaultPriority: viewing ? 70 : active ? 50 : 0,
+        focusLabel: `${status.label} ${active ? 'active' : status.unlocked ? 'available' : 'locked'}`,
+        focusGroup: 'operations-mode-tabs'
+      });
+      const backing = button.list[0] as Phaser.GameObjects.Rectangle;
+      backing.setFillStyle(viewing ? 0x103143 : active ? 0x10251f : status.unlocked ? 0x0b1b27 : 0x15111d, 0.98);
+      backing.setStrokeStyle(viewing ? 3 : 2, viewing ? 0x62f4ff : active ? 0x75ffb2 : status.unlocked ? 0x3d8797 : 0x77425f, viewing ? 1 : 0.65);
+      root.add(button);
+    });
+
+    const contentTop = modeY + modeHeight / 2 + (compact ? 15 : 22);
+    const footerY = height - (compact ? 34 : 42);
+    const contentBottom = footerY - (compact ? 33 : 43);
+    const wide = width >= 1100;
+    const summaryWidth = wide ? Math.min(360, width * 0.24) : width - safe * 2;
+    const summaryHeight = wide ? contentBottom - contentTop : compact ? 88 : 108;
+    const summaryX = wide ? width - safe - summaryWidth : safe;
+    const summaryY = wide ? contentTop : contentBottom - summaryHeight;
+    const gridX = safe;
+    const gridWidth = wide ? summaryX - safe - (compact ? 16 : 24) : width - safe * 2;
+    const gridBottom = wide ? contentBottom : summaryY - (compact ? 10 : 14);
+    const gridHeight = Math.max(120, gridBottom - contentTop);
+
+    const gridFrame = this.add.rectangle(gridX, contentTop, gridWidth, gridHeight, 0x06131d, 0.95)
+      .setOrigin(0).setStrokeStyle(2, 0x55efff, 0.48);
+    const gridHeader = this.add.rectangle(gridX + 8, contentTop + 8, gridWidth - 16, compact ? 32 : 40, 0x55efff, 0.075)
+      .setOrigin(0).setStrokeStyle(1, 0x55efff, 0.24);
+    root.add([gridFrame, gridHeader]);
+    root.add(this.add.text(gridX + 22, contentTop + (compact ? 24 : 28), `${formatOperationsMode(viewedMode)} // STARTING CHECKPOINTS`, {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 13 : 17}px`, color: '#70f5ff', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0, 0.5));
+
+    const viewedStatus = modes.find((entry) => entry.mode === viewedMode)!;
+    const clearanceText = viewedMode === 'normal'
+      ? `NORMAL CLEARANCE // ROUND ${progress.normalHighestRound} // HIGHEST CHECKPOINT ${getHighestUnlockedNormalCheckpoint(progress.normalHighestRound)}`
+      : viewedStatus.unlocked
+        ? `${formatOperationsMode(viewedMode)} CLEARANCE // ONLINE`
+        : `LOCKED // ${viewedStatus.unlockRequirement}`;
+    root.add(this.add.text(gridX + gridWidth - 22, contentTop + (compact ? 24 : 28), clearanceText, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : compact ? 11 : 13}px`, color: viewedStatus.unlocked ? '#78ffb2' : '#ff8eaa', fontStyle: 'bold'
+    }).setOrigin(1, 0.5).setMaxLines(1));
+
+    const columns = narrow ? 4 : compact ? 5 : 5;
+    const rows = Math.max(1, Math.ceil(visibleCheckpoints.length / columns));
+    const buttonGap = compact ? 8 : 12;
+    const horizontalPadding = compact ? 20 : 30;
+    const checkpointWidth = (gridWidth - horizontalPadding * 2 - buttonGap * (columns - 1)) / columns;
+    const availableGridHeight = gridHeight - (compact ? 50 : 62);
+    const checkpointHeight = Phaser.Math.Clamp(
+      (availableGridHeight - buttonGap * Math.max(0, rows - 1)) / rows,
+      compact ? 34 : 44,
+      compact ? 58 : 72
+    );
+    const usedHeight = checkpointHeight * rows + buttonGap * Math.max(0, rows - 1);
+    const firstY = contentTop + (compact ? 46 : 55) + Math.max(0, (availableGridHeight - usedHeight) / 2) + checkpointHeight / 2;
+    visibleCheckpoints.forEach((option, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x = gridX + horizontalPadding + checkpointWidth / 2 + column * (checkpointWidth + buttonGap);
+      const y = firstY + row * (checkpointHeight + buttonGap);
+      const checkpointLabel = option.unlocked
+        ? `${option.selected ? 'ACTIVE // ' : ''}ROUND ${option.startingRound}\n${option.label}`
+        : `ROUND ${option.startingRound} // LOCKED\n${option.unlockRequirement ?? ''}`;
+      const button = createButton(this, x, y, checkpointLabel, () => {
+        if (!option.unlocked) {
+          this.status = `BLOCKED // ${option.unlockRequirement ?? 'CHECKPOINT LOCKED'}`;
+          this.showOperations(viewedMode, page);
+          return false;
+        }
+        const result = SaveSystem.setOperationsCheckpoint(
+          option.protocol,
+          option.mode === 'normal' ? option.startingRound : undefined
+        );
+        this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? ''}`;
+        this.refreshConfigurationTerminalState();
+        this.showOperations(viewedMode, page);
+        return result.ok;
+      }, checkpointWidth, 'menu', {
+        height: checkpointHeight,
+        fontSize: narrow ? 9 : compact ? 11 : 14,
+        horizontalPadding: 10,
+        focusModalDepth: 30,
+        focusDefaultPriority: option.selected ? 100 : option.unlocked ? 10 : 0,
+        focusLabel: `${formatOperationsMode(option.mode)} round ${option.startingRound} ${option.selected ? 'active' : option.unlocked ? 'available' : 'locked'}`,
+        focusGroup: 'operations-checkpoint-grid'
+      });
+      const backing = button.list[0] as Phaser.GameObjects.Rectangle;
+      backing.setFillStyle(option.selected ? 0x15382d : option.unlocked ? 0x0b1d29 : 0x16131d, 0.98);
+      backing.setStrokeStyle(option.selected ? 3 : 2, option.selected ? 0x71ffad : option.unlocked ? 0x55efff : 0x74425f, option.selected ? 1 : option.unlocked ? 0.65 : 0.45);
+      button.setAlpha(option.unlocked ? 1 : 0.68);
+      root.add(button);
+    });
+
+    if (pageCount > 1) {
+      const pageY = gridBottom - (compact ? 18 : 22);
+      const pageWidth = compact ? 48 : 58;
+      const previous = createButton(this, gridX + gridWidth / 2 - 82, pageY, '<', () => {
+        this.showOperations(viewedMode, Math.max(0, page - 1));
+        return page > 0;
+      }, pageWidth, 'menu', { height: compact ? 28 : 34, focusModalDepth: 30, focusShortcut: 'page-left' });
+      const next = createButton(this, gridX + gridWidth / 2 + 82, pageY, '>', () => {
+        this.showOperations(viewedMode, Math.min(pageCount - 1, page + 1));
+        return page < pageCount - 1;
+      }, pageWidth, 'menu', { height: compact ? 28 : 34, focusModalDepth: 30, focusShortcut: 'page-right' });
+      root.add([previous, next, this.add.text(gridX + gridWidth / 2, pageY, `PAGE ${page + 1} / ${pageCount}`, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 14}px`, color: '#a9d9e4', fontStyle: 'bold'
+      }).setOrigin(0.5)]);
+    }
+
+    const summaryFrame = this.add.rectangle(summaryX, summaryY, summaryWidth, summaryHeight, 0x09131f, 0.97)
+      .setOrigin(0).setStrokeStyle(2, 0xff5bcf, 0.62);
+    const summaryRail = this.add.rectangle(summaryX + 8, summaryY + 8, summaryWidth - 16, compact ? 30 : 38, 0xff5bcf, 0.08)
+      .setOrigin(0).setStrokeStyle(1, 0xff5bcf, 0.26);
+    root.add([summaryFrame, summaryRail]);
+    root.add(this.add.text(summaryX + summaryWidth / 2, summaryY + (compact ? 23 : 28), 'CURRENT DEPLOYMENT', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 13 : 17}px`, color: '#ff8edb', fontStyle: 'bold', letterSpacing: 1
+    }).setOrigin(0.5));
+    root.add(this.add.text(summaryX + summaryWidth / 2, summaryY + summaryHeight * (wide ? 0.46 : 0.58),
+      `${formatOperationsMode(current.mode)}\nSTART ROUND ${current.startingRound}`, {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${narrow ? 14 : compact ? 17 : 24}px`, color: '#e8fdff',
+        fontStyle: 'bold', align: 'center', lineSpacing: compact ? 2 : 7
+      }).setOrigin(0.5));
+    if (wide) {
+      const setup = SaveSystem.getNextRunSetupSelection();
+      const contract = setup.contract ? RUN_CONTRACTS[setup.contract].label.toUpperCase() : 'NONE';
+      const signal = setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus].toUpperCase() : 'NONE';
+      root.add(this.add.text(summaryX + summaryWidth / 2, summaryY + summaryHeight * 0.72,
+        `CONTRACT // ${contract}\nSIGNAL // ${signal}\n\nSELECTIONS SAVE IMMEDIATELY`, {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 13 : 16}px`, color: '#a8d4df',
+          fontStyle: 'bold', align: 'center', lineSpacing: 5,
+          wordWrap: { width: summaryWidth - 28, useAdvancedWrap: true }
+        }).setOrigin(0.5));
+    }
+
+    const directivesWidth = Math.min(compact ? 260 : 330, width * 0.34);
+    const directives = createButton(this, width / 2, footerY, 'SIGNALS & CONTRACTS', () => {
+      this.showRunConfiguration();
+      return true;
+    }, directivesWidth, 'menu', {
+      height: compact ? 38 : 48,
+      fontSize: compact ? 14 : 17,
+      focusModalDepth: 30,
+      focusLabel: 'Open Signals and Contracts'
+    });
+    root.add(directives);
+    if (this.status) {
+      root.add(this.add.text(safe, footerY, this.status, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 14}px`,
+        color: this.status.startsWith('BLOCKED') ? '#ff91aa' : '#78ffb2', fontStyle: 'bold'
+      }).setOrigin(0, 0.5).setWordWrapWidth(Math.max(130, width / 2 - directivesWidth / 2 - safe - 18), true).setMaxLines(2));
+    }
+  }
+
   private showRunConfiguration(): void {
     const focusTarget = this.runConfigurationFocusTarget;
     this.runConfigurationFocusTarget = null;
-    const root = this.createOverlay('RUN CONFIGURATION // ONE-RUN SETUP');
+    const root = this.createOverlay('OPERATIONS // SIGNALS & CONTRACTS');
     const { width, height } = this.scale;
     const setup = SaveSystem.getNextRunSetupSelection();
     const garageState = SaveSystem.getGarageState();
@@ -1769,7 +1996,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const supremeButton = createButton(this, outerMargin + 30 + familyButtonWidth * 1.5, terminalLayout.switchRowY, 'SUPREME', () => this.showOverdrive('supreme'), familyButtonWidth, 'menu', { height: terminalLayout.switchButtonHeight });
     overdriveButton.setAlpha(this.protocolTerminalFamily === 'overdrive' ? 1 : .58);
     supremeButton.setAlpha(this.protocolTerminalFamily === 'supreme' ? 1 : .58);
-    const instruction = this.add.text(width - outerMargin - 22, terminalLayout.switchRowY, 'SELECT ANY UNLOCKED PROTOCOL', {
+    const instruction = this.add.text(width - outerMargin - 22, terminalLayout.switchRowY, 'VIEW CLEARANCE // CONFIGURE STARTS IN OPERATIONS', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : 12}px`, color: '#75ffb3', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(1, 0.5);
     root.add([overdriveButton, supremeButton, instruction]);
@@ -1861,10 +2088,9 @@ export class OperatorGarageScene extends Phaser.Scene {
           this.audio.playSfx('itemLocked');
           return;
         }
-        const result = SaveSystem.setPreferredProtocol(id);
-        this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? `${definition.label} SELECTED`}`;
-        this.audio.playSfx(result.ok ? 'menu' : 'itemLocked');
-        this.showOverdrive(definition.family === 'supreme' ? 'supreme' : 'overdrive');
+        this.status = `OPERATIONS VIEW // ${definition.label} CLEARANCE CONFIRMED`;
+        this.audio.playSfx('menu');
+        this.showOperations(definition.family === 'supreme' ? 'supreme' : 'overdrive');
       });
       registerUiFocusable(this, hitZone, {
         label: `${definition.label} ${unlocked ? selected ? 'active' : 'unlocked' : 'locked'}`,
@@ -2302,7 +2528,9 @@ export class OperatorGarageScene extends Phaser.Scene {
       root.add(this.add.rectangle(x, y, panelWidth, panelHeight, 0x081622, 0.97).setStrokeStyle(2, preset.saved ? 0x63efff : 0x3d6170, preset.saved ? 0.68 : 0.42));
       root.add(this.add.text(x, 108, preset.name, { fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(panelWidth * 0.08, 14, 20)}px`, color: preset.saved ? '#69f5ff' : '#7798a5' }).setOrigin(0.5));
       const installed = Object.values(preset.cardSlots).filter(Boolean).length;
-      const protocol = preset.protocol ? RUN_PROTOCOLS[preset.protocol].label : 'NO PROTOCOL SAVED';
+      const protocol = preset.protocol
+        ? `${RUN_PROTOCOLS[preset.protocol].label}${preset.protocol === 'normal' && preset.normalStartRound ? ` // START ${preset.normalStartRound}` : ''}`
+        : 'NO PROTOCOL SAVED';
       const contract = preset.contract ? RUN_CONTRACTS[preset.contract].label : 'NO CONTRACT';
       const signal = preset.modFocus ? MOD_FOCUS_LABELS[preset.modFocus] : 'NO SIGNAL';
       root.add(this.add.text(x, 145, preset.saved
@@ -2326,14 +2554,6 @@ export class OperatorGarageScene extends Phaser.Scene {
       if (!preset.saved) disableButton(load);
       root.add(load);
     });
-  }
-
-  private cycleProtocol(current: RunProtocolId): boolean {
-    const next = cycleUnlockedProtocol(current, SaveSystem.getHighestRound(), 1, SaveSystem.getSupremeHighestRound(), SaveSystem.hasCompletedRegularOverdrive());
-    const result = SaveSystem.setPreferredProtocol(next);
-    this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? RUN_PROTOCOLS[next].label}`;
-    this.scene.restart({ returnScene: this.returnScene });
-    return result.ok;
   }
 
   private openCollection(selectedCardId?: string, initialCategory?: 'all' | ModCategory | 'supreme', targetSlot?: ModSlot): void {

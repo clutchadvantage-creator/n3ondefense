@@ -31,7 +31,7 @@ export interface LocalPlayerWallet {
 
 export interface LocalPlayerProgress {
   highestRound: number;
-  /** Highest round completed in Normal; drives ten-round Normal checkpoints. */
+  /** Highest round completed in Normal; drives permanent five-round checkpoint unlocks. */
   normalHighestRound: number;
   /** Highest round completed while a Supreme protocol was active. */
   supremeHighestRound: number;

@@ -131,7 +131,7 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     id: 'progression.garage-loadout', scene: 'garage', title: 'LOADOUT ARRAY', triggerEvent: 'ui.garageSceneOpened', prerequisite: 'progression.garage', contextual: true,
     steps: [
       { id: 'loadout', target: 'garage.loadout', title: 'NEXT DEPLOYMENT LOADOUT', body: 'These five highlighted docks contain the Mods installed for your next deployment. Browse or unequip cards independently by slot.', mode: 'menu', completion: { type: 'manual' } },
-      { id: 'configuration', target: 'garage.configuration', title: 'RUN CONFIGURATION', body: 'This terminal shows the Protocol, Contract, and Signal that will apply to the next run, including their fees and requirements.', mode: 'menu', completion: { type: 'manual' } }
+      { id: 'configuration', target: 'garage.configuration', title: 'OPERATIONS CONFIGURATION', body: 'This terminal opens Operations, where you choose an unlocked mode and starting checkpoint. Contracts, Signals, fees, and progression remain linked to the same next deployment.', mode: 'menu', completion: { type: 'manual' } }
     ]
   },
   {

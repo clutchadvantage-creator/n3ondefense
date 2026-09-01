@@ -203,8 +203,12 @@ export class SaveSystem {
   static deleteModCard(instanceId: string) { return PlayerProfileStore.deleteModCard(instanceId); }
   static infuseModCard(instanceId: string, infusionId: ModInfusionId) { return PlayerProfileStore.infuseModCard(instanceId, infusionId); }
   static removeModInfusion(instanceId: string) { return PlayerProfileStore.removeModInfusion(instanceId); }
-  static getPreferredProtocol(): RunProtocolId { return PlayerProfileStore.getActiveSave().protocol.preferred; }
+  static getPreferredProtocol(): RunProtocolId { return PlayerProfileStore.getOperationsConfiguration().protocol; }
   static setPreferredProtocol(protocol: RunProtocolId) { return PlayerProfileStore.setPreferredProtocol(protocol); }
+  static getOperationsConfiguration() { return PlayerProfileStore.getOperationsConfiguration(); }
+  static setOperationsCheckpoint(protocol: RunProtocolId, normalStartingRound?: number) {
+    return PlayerProfileStore.setOperationsCheckpoint(protocol, normalStartingRound);
+  }
   static getHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.highestRound; }
   static getNormalHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.normalHighestRound; }
   static getSupremeHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.supremeHighestRound; }

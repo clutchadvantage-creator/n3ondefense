@@ -234,6 +234,7 @@ export const createDefaultLocalSave = (profileId: string, profileName: string, s
   const owned = normalizeOwnedCosmetics(source?.cosmetics?.owned);
   const legacyCredits = typeof source?.credits === 'number' ? source.credits : 0;
   const legacyTokens = typeof source?.coreTokens === 'number' ? source.coreTokens : 0;
+  const progress = normalizeProgress(source?.progress);
   const save: LocalPlayerSave = {
     version: CURRENT_SAVE_VERSION,
     profile: {
@@ -254,8 +255,8 @@ export const createDefaultLocalSave = (profileId: string, profileName: string, s
     },
     mods: normalizeModCollection(source?.mods),
     garage: normalizeGarageState(source?.garage),
-    protocol: normalizeProtocolPreference(source?.protocol),
-    progress: normalizeProgress(source?.progress),
+    protocol: normalizeProtocolPreference(source?.protocol, progress.normalHighestRound),
+    progress,
     settings: normalizeSettings(source?.settings),
     tutorials: source?.tutorials ? normalizeTutorialProgress(source.tutorials) : createDefaultTutorialProgress(),
     metadata: {
@@ -354,8 +355,8 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
     };
     current.mods = normalizeModCollection(candidate.mods);
     current.garage = normalizeGarageState(candidate.garage);
-    current.protocol = normalizeProtocolPreference(candidate.protocol);
     current.progress = normalizeProgress(candidate.progress);
+    current.protocol = normalizeProtocolPreference(candidate.protocol, current.progress.normalHighestRound);
     current.settings = normalizeSettings(candidate.settings);
     current.tutorials = normalizeTutorialProgress(candidate.tutorials);
     current.metadata = normalizeMetadata(candidate.metadata, CURRENT_SAVE_VERSION);
@@ -369,7 +370,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
 
   current.mods = normalizeModCollection(current.mods);
   current.garage = normalizeGarageState(current.garage);
-  current.protocol = normalizeProtocolPreference(current.protocol);
+  current.protocol = normalizeProtocolPreference(current.protocol, current.progress?.normalHighestRound ?? 0);
   current.tutorials = normalizeTutorialProgress(current.tutorials);
   // Older profiles that already crossed the bridge and own a Supreme have
   // clearly satisfied the one-time introduction. Never force them a duplicate.
