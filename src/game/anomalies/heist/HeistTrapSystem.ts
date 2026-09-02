@@ -109,11 +109,17 @@ export class HeistTrapSystem {
       .filter((placement) => placement.type === 'fire')
       .map((placement) => ({
         id: placement.id, x: placement.x, y: placement.y, rotation: placement.rotation,
-        kind: 'wall', triggerRadius: 270, initialDelayMs: 900 + placement.x % 1_400
+        kind: 'wall', flameLength: 250, triggerRadius: 330,
+        initialDelayMs: 900 + placement.x % 1_400
       }));
     this.fireSystem = new SharedFireTrapSystem(scene, firePlacements, {
       environment: 'heist', particlesEnabled, damagePerTick: 4.2,
-      maximumConcurrent: 2, onDamagePlayer: (amount) => callbacks.damagePlayer(amount)
+      maximumConcurrent: 2,
+      wallCooldownMs: 4_800,
+      wallSelectionIntervalMs: 900,
+      wallPredictionSeconds: 0.14,
+      wallMaximumLead: 54,
+      onDamagePlayer: (amount) => callbacks.damagePlayer(amount)
     });
     this.traps = [];
     for (const placement of placements) {

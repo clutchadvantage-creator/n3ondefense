@@ -6117,6 +6117,9 @@ export class ArenaScene extends Phaser.Scene {
 
   private createArenaFireTraps(round: number): void {
     this.arenaFireTraps?.destroy();
+    const family = this.currentModeFamily();
+    const familyPressure = family === 'supreme' ? 2 : family === 'overdrive' ? 1 : 0;
+    const roundPressure = Phaser.Math.Clamp((Math.max(1, round) - 1) / 42, 0, 1);
     this.arenaFireTraps = new SharedFireTrapSystem(
       this,
       createArenaFireTrapPlacements(this.layout, round),
@@ -6125,6 +6128,12 @@ export class ArenaScene extends Phaser.Scene {
         particlesEnabled: this.particlesEnabled,
         damagePerTick: 4.2,
         maximumConcurrent: 2,
+        // Infrastructure is visible from early rounds; only how often and how
+        // far ahead a bank selects its lane scales with mode/round pressure.
+        wallCooldownMs: Math.round(6_200 - roundPressure * 1_650 - familyPressure * 360),
+        wallSelectionIntervalMs: Math.round(1_400 - roundPressure * 520 - familyPressure * 145),
+        wallPredictionSeconds: 0.06 + roundPressure * 0.17 + familyPressure * 0.035,
+        wallMaximumLead: 46 + roundPressure * 18 + familyPressure * 4,
         onDamagePlayer: (amount) => {
           if (this.time.now < this.player.dashUntil || this.time.now < this.shieldActiveUntil) return;
           if (this.player.takeDamage(amount)) GameplayTelemetryRecorder.recordPlayerDamage('fire-trap', amount);

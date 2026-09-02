@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager.ts';
-import { drawBeveledTechPlate, drawHazardStripes, drawPanelBolts } from '../rendering/LayeredArtPrimitives.ts';
+import { drawHazardStripes } from '../rendering/LayeredArtPrimitives.ts';
 
 export type SharedFireNozzleKind = 'wall' | 'floor';
-export type SharedFireTrapState = 'idle' | 'telegraph' | 'active' | 'cooldown';
+export type SharedFireTrapState = 'idle' | 'telegraph' | 'ignition' | 'active' | 'cooldown';
 
 export interface SharedFireTrapPlacement {
   id: string;
@@ -13,6 +13,8 @@ export interface SharedFireTrapPlacement {
   kind: SharedFireNozzleKind;
   triggerRadius?: number;
   initialDelayMs?: number;
+  /** Validated distance from the wall face to the first obstruction. */
+  flameLength?: number;
 }
 
 export interface SharedFireTrapTarget {
@@ -38,6 +40,10 @@ export interface SharedFireTrapOptions {
   damagePerTick?: number;
   damageIntervalMs?: number;
   maximumConcurrent?: number;
+  wallCooldownMs?: number;
+  wallSelectionIntervalMs?: number;
+  wallPredictionSeconds?: number;
+  wallMaximumLead?: number;
   antiCamp?: SharedFireAntiCampConfig;
   onDamagePlayer(amount: number): void;
 }
@@ -46,6 +52,7 @@ export interface SharedFireTrapDiagnostics {
   environment: SharedFireTrapOptions['environment'];
   nozzleCount: number;
   wallNozzles: number;
+  wallNozzlePorts: number;
   floorNozzleSlots: number;
   activeNozzles: number;
   maximumConcurrent: number;
@@ -58,7 +65,7 @@ export interface SharedFireTrapDiagnostics {
 interface FireNozzleRuntime {
   placement: SharedFireTrapPlacement;
   root: Phaser.GameObjects.Container;
-  warningLight: Phaser.GameObjects.Arc;
+  warningLights: readonly (Phaser.GameObjects.Arc | Phaser.GameObjects.Ellipse)[];
   state: SharedFireTrapState;
   stateStartedAt: number;
   nextReadyAt: number;
@@ -66,17 +73,19 @@ interface FireNozzleRuntime {
   deployed: boolean;
 }
 
-const FIRE_TIMING = Object.freeze({ telegraph: 980, active: 1_100, cooldown: 3_250 });
+const FIRE_TIMING = Object.freeze({ telegraph: 980, ignition: 140, active: 1_100, cooldown: 3_250 });
 const UPDATE_INTERVAL_MS = 50 as const;
 const WALL_FLAME_START = 62;
 const WALL_FLAME_END = 330;
 const WALL_HALF_WIDTH = 62;
 const FLOOR_DAMAGE_RADIUS = 78;
+const WALL_PORT_OFFSETS = Object.freeze([-18, 0, 18]);
+const WALL_PORT_STAGGER_MS = 60;
 const WALL_FIRE_LAYERS = Object.freeze([
-  { start: 66, end: 324, half: 61, color: 0xd93218, alpha: 0.23 },
-  { start: 66, end: 302, half: 43, color: 0xff6c1f, alpha: 0.62 },
-  { start: 65, end: 262, half: 28, color: 0xffc63b, alpha: 0.86 },
-  { start: 65, end: 190, half: 14, color: 0xffffd2, alpha: 0.96 }
+  { endScale: 1, half: 24, color: 0xd93218, alpha: 0.22 },
+  { endScale: 0.93, half: 18, color: 0xff6c1f, alpha: 0.58 },
+  { endScale: 0.82, half: 12, color: 0xffc63b, alpha: 0.82 },
+  { endScale: 0.58, half: 6, color: 0xffffd2, alpha: 0.96 }
 ]);
 const FLOOR_FIRE_LAYERS = Object.freeze([
   { radius: 71, height: 132, color: 0xd83218, alpha: 0.28 },
@@ -87,29 +96,32 @@ const FLOOR_FIRE_LAYERS = Object.freeze([
 
 const createWallNozzle = (scene: Phaser.Scene, placement: SharedFireTrapPlacement): FireNozzleRuntime => {
   const root = scene.add.container(placement.x, placement.y).setRotation(placement.rotation).setDepth(5.2);
-  const shadow = scene.add.ellipse(-5, 14, 88, 34, 0x000000, 0.62);
-  const chassis = scene.add.graphics();
-  drawBeveledTechPlate(chassis, -62, -42, 80, 84, {
-    face: 0x172b36, inset: 0x09141d, edge: 0x647f8b, side: 0x02070d,
-    highlight: 0xcaf6ff, depth: 8
-  });
-  drawPanelBolts(chassis, -56, -36, 59, 60, 0xb6c5ca, 9);
-  drawHazardStripes(chassis, -49, 23, 52, 8, 0xffc857, 0.78, 7);
-  chassis.fillStyle(0x061018, 1).fillRoundedRect(-52, -24, 30, 39, 7);
-  chassis.lineStyle(2, 0x45dff2, 0.72).strokeRoundedRect(-52, -24, 30, 39, 7);
-  chassis.fillStyle(0xff793f, 0.42).fillRoundedRect(-47, -7, 20, 17, 4);
-  chassis.lineStyle(2, 0x748d98, 0.82).beginPath()
-    .moveTo(-22, -16).lineTo(-4, -16).lineTo(4, -8).strokePath();
-  const pipe = scene.add.rectangle(4, 0, 76, 30, 0x263d48, 1).setStrokeStyle(3, 0x839ca5, 0.9);
-  const shield = scene.add.polygon(38, 0, [0, -23, 35, -14, 42, 0, 35, 14, 0, 23], 0x111c24, 1)
-    .setStrokeStyle(2, 0xff8a3d, 0.78);
-  const barrel = scene.add.rectangle(50, 0, 52, 18, 0x334d58, 1).setStrokeStyle(2, 0xf1fbff, 0.7);
-  const throat = scene.add.ellipse(76, 0, 18, 27, 0x07090b, 1).setStrokeStyle(3, 0xff723b, 0.82);
-  const warningLight = scene.add.circle(-38, -25, 7, 0x31404a, 1).setStrokeStyle(2, 0xccefff, 0.5);
-  root.add([shadow, chassis, pipe, shield, barrel, throat, warningLight]);
+  const housing = scene.add.graphics();
+  // Compact bank: its long axis is tangent to the wall and the local +X axis
+  // points into playable space. Rotation therefore handles all four faces.
+  housing.fillStyle(0x010408, 0.42).fillRoundedRect(-15, -38, 27, 76, 5);
+  housing.fillStyle(0x07131b, 0.98).fillRoundedRect(-12, -35, 23, 70, 4);
+  housing.lineStyle(2, 0x486470, 0.78).strokeRoundedRect(-12, -35, 23, 70, 4);
+  housing.lineStyle(1, 0x9cefff, 0.22).lineBetween(-8, -30, -8, 30);
+  housing.fillStyle(0x172a33, 0.96).fillRect(-3, -31, 11, 62);
+  housing.lineStyle(1.5, 0xff873f, 0.38).lineBetween(8, -31, 8, 31);
+  for (const y of [-30, 30]) {
+    housing.fillStyle(0x9eb3bc, 0.86).fillCircle(-7, y, 2);
+  }
+  // Short conduits, heat tint and scorch lines sell a port installed inside
+  // the wall without growing into a turret silhouette.
+  housing.lineStyle(2, 0x2ecde2, 0.24).beginPath()
+    .moveTo(-12, -24).lineTo(-19, -24).lineTo(-19, 24).lineTo(-12, 24).strokePath();
+  housing.fillStyle(0x9b331d, 0.1).fillRect(8, -28, 7, 56);
+  housing.lineStyle(1.2, 0x1b1110, 0.32)
+    .lineBetween(11, -24, 27, -29).lineBetween(11, 0, 31, 3).lineBetween(11, 24, 25, 30);
+  drawHazardStripes(housing, -10, 31, 18, 4, 0xffb83f, 0.38, 5);
+  const warningLights = WALL_PORT_OFFSETS.map((y) => scene.add.ellipse(4, y, 12, 15, 0x020305, 1)
+    .setStrokeStyle(2, 0x7c939d, 0.72));
+  root.add([housing, ...warningLights]);
   return {
-    placement, root, warningLight, state: 'idle', stateStartedAt: 0,
-    nextReadyAt: placement.initialDelayMs ?? 900, nextDamageAt: 0, deployed: true
+    placement, root, warningLights, state: 'idle', stateStartedAt: 0,
+    nextReadyAt: scene.time.now + (placement.initialDelayMs ?? 900), nextDamageAt: 0, deployed: true
   };
 };
 
@@ -134,7 +146,7 @@ const createFloorNozzle = (scene: Phaser.Scene): FireNozzleRuntime => {
   const warningLight = scene.add.circle(0, 0, 5, 0x31404a, 1).setStrokeStyle(1, 0xffffff, 0.62);
   root.add([art, iris, warningLight]);
   return {
-    placement, root, warningLight, state: 'idle', stateStartedAt: 0,
+    placement, root, warningLights: [warningLight], state: 'idle', stateStartedAt: 0,
     nextReadyAt: 0, nextDamageAt: 0, deployed: false
   };
 };
@@ -152,8 +164,14 @@ export class SharedFireTrapSystem {
   private readonly damagePerTick: number;
   private readonly damageIntervalMs: number;
   private readonly maximumConcurrent: number;
+  private readonly wallCooldownMs: number;
+  private readonly wallSelectionIntervalMs: number;
+  private readonly wallPredictionSeconds: number;
+  private readonly wallMaximumLead: number;
   private readonly floorNozzle: FireNozzleRuntime | null;
   private nextUpdateAt = 0;
+  private nextWallSelectionAt = 0;
+  private lastSelectedWallId = '';
   private campingAnchorX = Number.NaN;
   private campingAnchorY = Number.NaN;
   private campingStartedAt = 0;
@@ -176,30 +194,48 @@ export class SharedFireTrapSystem {
     this.damagePerTick = options.damagePerTick ?? 4.2;
     this.damageIntervalMs = options.damageIntervalMs ?? 260;
     this.maximumConcurrent = Math.max(1, options.maximumConcurrent ?? 2);
+    this.wallCooldownMs = Math.max(FIRE_TIMING.cooldown, options.wallCooldownMs ?? 4_200);
+    this.wallSelectionIntervalMs = Math.max(400, options.wallSelectionIntervalMs ?? 850);
+    this.wallPredictionSeconds = Phaser.Math.Clamp(options.wallPredictionSeconds ?? 0.18, 0, 0.45);
+    this.wallMaximumLead = Math.max(0, options.wallMaximumLead ?? 64);
   }
 
   update(now: number, target: SharedFireTrapTarget, damageMultiplier = 1): void {
     if (now < this.nextUpdateAt) return;
     this.nextUpdateAt = now + UPDATE_INTERVAL_MS;
+    this.smoothedVelocityX += (target.velocityX - this.smoothedVelocityX) * 0.18;
+    this.smoothedVelocityY += (target.velocityY - this.smoothedVelocityY) * 0.18;
     this.updateAntiCamp(now, target);
     let activeCount = 0;
     for (const nozzle of this.nozzles) if (nozzle.state === 'active') activeCount += 1;
+    let reservedCount = activeCount;
+    for (const nozzle of this.nozzles) {
+      if (nozzle.state === 'telegraph' || nozzle.state === 'ignition') reservedCount += 1;
+    }
+    if (reservedCount < this.maximumConcurrent && now >= this.nextWallSelectionAt) {
+      const selected = this.selectWallCandidate(now, target);
+      if (selected) {
+        this.beginTelegraph(selected, now);
+        this.lastSelectedWallId = selected.placement.id;
+      }
+      this.nextWallSelectionAt = now + this.wallSelectionIntervalMs;
+    }
     for (const nozzle of this.nozzles) {
       const dx = target.x - nozzle.placement.x;
       const dy = target.y - nozzle.placement.y;
       const distanceSquared = dx * dx + dy * dy;
-      if (nozzle.deployed && nozzle.placement.kind === 'wall' && nozzle.state === 'idle'
-        && now >= nozzle.nextReadyAt && activeCount < this.maximumConcurrent
-        && distanceSquared <= (nozzle.placement.triggerRadius ?? 270) ** 2) {
-        this.beginTelegraph(nozzle, now);
-      }
       if (nozzle.state === 'telegraph' && now - nozzle.stateStartedAt >= FIRE_TIMING.telegraph
+        && activeCount < this.maximumConcurrent) {
+        nozzle.state = 'ignition';
+        nozzle.stateStartedAt = now;
+        this.audio.playSfx('fireTrap');
+      }
+      if (nozzle.state === 'ignition' && now - nozzle.stateStartedAt >= FIRE_TIMING.ignition
         && activeCount < this.maximumConcurrent) {
         nozzle.state = 'active';
         nozzle.stateStartedAt = now;
         nozzle.nextDamageAt = now;
         activeCount += 1;
-        this.audio.playSfx('fireTrap');
       }
       if (nozzle.state === 'active') {
         const hit = nozzle.placement.kind === 'floor'
@@ -212,7 +248,7 @@ export class SharedFireTrapSystem {
         if (now - nozzle.stateStartedAt >= FIRE_TIMING.active) {
           nozzle.state = 'cooldown';
           nozzle.stateStartedAt = now;
-          nozzle.nextReadyAt = now + FIRE_TIMING.cooldown;
+          nozzle.nextReadyAt = now + (nozzle.placement.kind === 'wall' ? this.wallCooldownMs : FIRE_TIMING.cooldown);
           activeCount = Math.max(0, activeCount - 1);
         }
       } else if (nozzle.state === 'cooldown' && now >= nozzle.nextReadyAt) {
@@ -220,7 +256,7 @@ export class SharedFireTrapSystem {
         nozzle.stateStartedAt = now;
         if (nozzle.placement.kind === 'floor') this.retractFloorNozzle(nozzle);
       }
-      this.updateWarningLight(nozzle, now);
+      this.updateWarningLights(nozzle, now);
     }
     this.drawDynamicLayers(now);
   }
@@ -230,6 +266,7 @@ export class SharedFireTrapSystem {
       environment: this.options.environment,
       nozzleCount: this.nozzles.length,
       wallNozzles: this.nozzles.filter((nozzle) => nozzle.placement.kind === 'wall').length,
+      wallNozzlePorts: this.nozzles.filter((nozzle) => nozzle.placement.kind === 'wall').length * WALL_PORT_OFFSETS.length,
       floorNozzleSlots: this.floorNozzle ? 1 : 0,
       activeNozzles: this.nozzles.filter((nozzle) => nozzle.state === 'active').length,
       maximumConcurrent: this.maximumConcurrent,
@@ -268,8 +305,6 @@ export class SharedFireTrapSystem {
     const config = this.options.antiCamp;
     const nozzle = this.floorNozzle;
     if (!config || !nozzle) return;
-    this.smoothedVelocityX += (target.velocityX - this.smoothedVelocityX) * 0.18;
-    this.smoothedVelocityY += (target.velocityY - this.smoothedVelocityY) * 0.18;
     if (!Number.isFinite(this.campingAnchorX)) {
       this.campingAnchorX = target.x;
       this.campingAnchorY = target.y;
@@ -285,6 +320,11 @@ export class SharedFireTrapSystem {
       return;
     }
     if (nozzle.deployed || now < this.nextAntiCampAt || now - this.campingStartedAt < config.dwellMs) return;
+    let reserved = 0;
+    for (const existing of this.nozzles) {
+      if (existing.state === 'active' || existing.state === 'telegraph' || existing.state === 'ignition') reserved += 1;
+    }
+    if (reserved >= this.maximumConcurrent) return;
     const rawLeadX = this.smoothedVelocityX * config.predictionSeconds;
     const rawLeadY = this.smoothedVelocityY * config.predictionSeconds;
     const leadLength = Math.hypot(rawLeadX, rawLeadY);
@@ -320,22 +360,74 @@ export class SharedFireTrapSystem {
     const sine = Math.sin(nozzle.placement.rotation);
     const localX = dx * cosine + dy * sine;
     const localY = -dx * sine + dy * cosine;
-    return localX >= WALL_FLAME_START && localX <= WALL_FLAME_END && Math.abs(localY) <= WALL_HALF_WIDTH;
+    return localX >= WALL_FLAME_START && localX <= this.wallFlameLength(nozzle) && Math.abs(localY) <= WALL_HALF_WIDTH;
   }
 
-  private updateWarningLight(nozzle: FireNozzleRuntime, now: number): void {
+  private updateWarningLights(nozzle: FireNozzleRuntime, now: number): void {
     if (!nozzle.deployed) return;
     const elapsed = now - nozzle.stateStartedAt;
     const telegraph = nozzle.state === 'telegraph'
       ? Phaser.Math.Clamp(elapsed / FIRE_TIMING.telegraph, 0, 1) : 0;
     const blink = Math.floor(now / Math.max(90, 280 - telegraph * 150)) % 2 === 0;
-    nozzle.warningLight.setFillStyle(nozzle.state === 'active' ? 0xffffff
-      : telegraph > 0.7 ? 0xff3f24 : telegraph > 0 ? 0xffb43d : 0x31404a,
-    nozzle.state === 'idle' ? 0.65 : blink ? 1 : 0.38);
+    for (let port = 0; port < nozzle.warningLights.length; port += 1) {
+      const portTelegraph = Phaser.Math.Clamp(telegraph * 1.18 - port * 0.09, 0, 1);
+      const portActive = (nozzle.state === 'ignition' || nozzle.state === 'active')
+        && elapsed >= port * WALL_PORT_STAGGER_MS;
+      nozzle.warningLights[port].setFillStyle(portActive ? 0xffffe0
+        : portTelegraph > 0.7 ? 0xff3f24 : portTelegraph > 0 ? 0xffa238 : 0x020305,
+      nozzle.state === 'idle' ? 0.82 : blink || portActive ? 1 : 0.46);
+      nozzle.warningLights[port].setStrokeStyle(
+        nozzle.state === 'telegraph' ? 2.4 : 2,
+        portActive ? 0xffffff : portTelegraph > 0 ? 0xff7a32 : 0x637b86,
+        nozzle.state === 'idle' ? 0.58 : 0.92
+      );
+    }
     if (nozzle.placement.kind === 'floor' && nozzle.state === 'telegraph') {
       const deployScale = 0.72 + telegraph * 0.28;
       nozzle.root.setScale(deployScale);
     }
+  }
+
+  /** Selects one relevant bank at a time. Scoring favors the predicted lane,
+   * but current position remains part of the score and changing direction can
+   * always defeat the prediction during the full telegraph window. */
+  private selectWallCandidate(now: number, target: SharedFireTrapTarget): FireNozzleRuntime | null {
+    const rawLeadX = this.smoothedVelocityX * this.wallPredictionSeconds;
+    const rawLeadY = this.smoothedVelocityY * this.wallPredictionSeconds;
+    const leadLength = Math.hypot(rawLeadX, rawLeadY);
+    const leadScale = leadLength > this.wallMaximumLead ? this.wallMaximumLead / leadLength : 1;
+    const predictedX = target.x + rawLeadX * leadScale;
+    const predictedY = target.y + rawLeadY * leadScale;
+    let selected: FireNozzleRuntime | null = null;
+    let selectedScore = Number.POSITIVE_INFINITY;
+    for (const nozzle of this.nozzles) {
+      if (!nozzle.deployed || nozzle.placement.kind !== 'wall' || nozzle.state !== 'idle' || now < nozzle.nextReadyAt) continue;
+      const dx = target.x - nozzle.placement.x;
+      const dy = target.y - nozzle.placement.y;
+      const triggerRadius = nozzle.placement.triggerRadius ?? 300;
+      if (dx * dx + dy * dy > triggerRadius * triggerRadius) continue;
+      const cosine = Math.cos(nozzle.placement.rotation);
+      const sine = Math.sin(nozzle.placement.rotation);
+      const predictedDx = predictedX - nozzle.placement.x;
+      const predictedDy = predictedY - nozzle.placement.y;
+      const localX = predictedDx * cosine + predictedDy * sine;
+      const localY = -predictedDx * sine + predictedDy * cosine;
+      const flameLength = this.wallFlameLength(nozzle);
+      if (localX < 28 || localX > flameLength + 92 || Math.abs(localY) > 168) continue;
+      const laneMiss = Math.max(0, Math.abs(localY) - WALL_HALF_WIDTH);
+      const longitudinalMiss = localX > flameLength ? localX - flameLength : 0;
+      const repeatPenalty = nozzle.placement.id === this.lastSelectedWallId ? 42_000 : 0;
+      const score = laneMiss * laneMiss * 4 + longitudinalMiss * longitudinalMiss * 2
+        + dx * dx * 0.12 + dy * dy * 0.12 + repeatPenalty;
+      if (score >= selectedScore) continue;
+      selected = nozzle;
+      selectedScore = score;
+    }
+    return selected;
+  }
+
+  private wallFlameLength(nozzle: FireNozzleRuntime): number {
+    return Phaser.Math.Clamp(nozzle.placement.flameLength ?? WALL_FLAME_END, 190, WALL_FLAME_END);
   }
 
   private drawDynamicLayers(now: number): void {
@@ -346,8 +438,38 @@ export class SharedFireTrapSystem {
       if (!nozzle.deployed || nozzle.state === 'idle') continue;
       const elapsed = now - nozzle.stateStartedAt;
       if (nozzle.state === 'telegraph') this.drawTelegraph(nozzle, elapsed / FIRE_TIMING.telegraph, now);
+      else if (nozzle.state === 'ignition') this.drawIgnition(nozzle, now, elapsed);
       else if (nozzle.state === 'active') this.drawFire(nozzle, now, index);
-      else this.drawCooldown(nozzle, 1 - elapsed / FIRE_TIMING.cooldown);
+      else this.drawCooldown(nozzle, 1 - elapsed / FIRE_TIMING.cooldown, now, elapsed);
+    }
+  }
+
+  private drawIgnition(nozzle: FireNozzleRuntime, now: number, elapsed: number): void {
+    const progress = Phaser.Math.Clamp(elapsed / FIRE_TIMING.ignition, 0, 1);
+    if (nozzle.placement.kind === 'floor') {
+      const flash = 1 - progress;
+      this.glowGraphics.fillStyle(0xffffff, 0.78 * flash)
+        .fillCircle(nozzle.placement.x, nozzle.placement.y, 18 + progress * 46);
+      this.glowGraphics.lineStyle(4, 0xff9b35, 0.82 * (1 - progress * 0.65))
+        .strokeCircle(nozzle.placement.x, nozzle.placement.y, 28 + progress * 50);
+      return;
+    }
+    const cosine = Math.cos(nozzle.placement.rotation);
+    const sine = Math.sin(nozzle.placement.rotation);
+    for (let port = 0; port < WALL_PORT_OFFSETS.length; port += 1) {
+      const portProgress = Phaser.Math.Clamp((elapsed - port * WALL_PORT_STAGGER_MS) / 80, 0, 1);
+      if (portProgress <= 0) continue;
+      const offset = WALL_PORT_OFFSETS[port];
+      const x = nozzle.placement.x + cosine * (10 + portProgress * 22) - sine * offset;
+      const y = nozzle.placement.y + sine * (10 + portProgress * 22) + cosine * offset;
+      this.glowGraphics.fillStyle(0xffffff, 0.88 * (1 - portProgress * 0.55))
+        .fillCircle(x, y, 6 + portProgress * 12);
+      for (let spark = -1; spark <= 1; spark += 1) {
+        const distance = 12 + ((now * 0.12 + port * 9 + spark * 5) % 20);
+        this.glowGraphics.fillStyle(spark === 0 ? 0xffffff : 0xff9d34, 0.72)
+          .fillCircle(x + cosine * distance - sine * spark * 7,
+            y + sine * distance + cosine * spark * 7, 1.4 + (spark === 0 ? 0.8 : 0));
+      }
     }
   }
 
@@ -371,20 +493,52 @@ export class SharedFireTrapSystem {
     }
     const cosine = Math.cos(nozzle.placement.rotation);
     const sine = Math.sin(nozzle.placement.rotation);
-    for (const side of [-1, 1]) {
-      const x1 = nozzle.placement.x + cosine * 78 - sine * 44 * side;
-      const y1 = nozzle.placement.y + sine * 78 + cosine * 44 * side;
-      const x2 = nozzle.placement.x + cosine * 312 - sine * 44 * side;
-      const y2 = nozzle.placement.y + sine * 312 + cosine * 44 * side;
+    const flameLength = this.wallFlameLength(nozzle);
+    for (let side = -1; side <= 1; side += 2) {
+      const x1 = nozzle.placement.x + cosine * 24 - sine * WALL_HALF_WIDTH * side;
+      const y1 = nozzle.placement.y + sine * 24 + cosine * WALL_HALF_WIDTH * side;
+      const x2 = nozzle.placement.x + cosine * flameLength - sine * WALL_HALF_WIDTH * side;
+      const y2 = nozzle.placement.y + sine * flameLength + cosine * WALL_HALF_WIDTH * side;
       this.glowGraphics.lineStyle(2, color, 0.22 + progress * 0.6).lineBetween(x1, y1, x2, y2);
+    }
+    // Each recessed port wakes in sequence while all three feed one clear,
+    // shared damage lane.
+    for (let port = 0; port < WALL_PORT_OFFSETS.length; port += 1) {
+      const portProgress = Phaser.Math.Clamp(progress * 1.22 - port * 0.11, 0, 1);
+      const offset = WALL_PORT_OFFSETS[port];
+      const x = nozzle.placement.x + cosine * 10 - sine * offset;
+      const y = nozzle.placement.y + sine * 10 + cosine * offset;
+      this.glowGraphics.fillStyle(portProgress > 0.72 ? 0xffffdc : 0xff7b2c, 0.08 + portProgress * 0.32)
+        .fillCircle(x, y, 7 + portProgress * 8);
+      if (portProgress > 0.45) {
+        const sparkDistance = 15 + ((now * 0.09 + port * 11) % 16);
+        this.glowGraphics.fillStyle(0xffc24a, 0.34 + portProgress * 0.42)
+          .fillCircle(x + cosine * sparkDistance - sine * (port - 1) * 3,
+            y + sine * sparkDistance + cosine * (port - 1) * 3, 1.8);
+      }
     }
   }
 
-  private drawCooldown(nozzle: FireNozzleRuntime, remainingValue: number): void {
+  private drawCooldown(nozzle: FireNozzleRuntime, remainingValue: number, now: number, elapsed: number): void {
     const remaining = Phaser.Math.Clamp(remainingValue, 0, 1);
     if (remaining <= 0) return;
     this.glowGraphics.lineStyle(2, 0xff6738, 0.32 * remaining)
       .strokeCircle(nozzle.placement.x, nozzle.placement.y, nozzle.placement.kind === 'floor' ? 34 : 22);
+    if (nozzle.placement.kind !== 'wall' || elapsed > 760) return;
+    const cosine = Math.cos(nozzle.placement.rotation);
+    const sine = Math.sin(nozzle.placement.rotation);
+    const shutdown = 1 - Phaser.Math.Clamp(elapsed / 760, 0, 1);
+    for (let port = 0; port < WALL_PORT_OFFSETS.length; port += 1) {
+      const offset = WALL_PORT_OFFSETS[port];
+      const drift = 18 + (1 - shutdown) * (28 + port * 5);
+      const lateral = Math.sin(now * 0.004 + port * 2.1) * 8;
+      const x = nozzle.placement.x + cosine * drift - sine * (offset + lateral);
+      const y = nozzle.placement.y + sine * drift + cosine * (offset + lateral);
+      this.flameGraphics.fillStyle(port % 2 ? 0x26333a : 0x332326, 0.16 * shutdown)
+        .fillEllipse(x, y, 16 + (1 - shutdown) * 15, 8 + (1 - shutdown) * 9);
+      this.glowGraphics.fillStyle(port % 2 ? 0xff7a2d : 0xffc44c, 0.5 * shutdown)
+        .fillCircle(x + cosine * 5, y + sine * 5, 1.3 + shutdown);
+    }
   }
 
   private drawFire(nozzle: FireNozzleRuntime, now: number, index: number): void {
@@ -396,28 +550,44 @@ export class SharedFireTrapSystem {
     const cosine = Math.cos(nozzle.placement.rotation);
     const sine = Math.sin(nozzle.placement.rotation);
     const turbulence = Math.sin(now * 0.019 + index * 1.7);
-    for (let layer = 0; layer < WALL_FIRE_LAYERS.length; layer += 1) {
-      const spec = WALL_FIRE_LAYERS[layer];
-      const upperY = -spec.half + turbulence * (7 - layer);
-      const lowerX = spec.end - layer * 5;
-      const lowerY = spec.half - turbulence * (5 - layer);
-      this.flameGraphics.fillStyle(spec.color, spec.alpha).fillTriangle(
-        nozzle.placement.x + spec.start * cosine,
-        nozzle.placement.y + spec.start * sine,
-        nozzle.placement.x + spec.end * cosine - upperY * sine,
-        nozzle.placement.y + spec.end * sine + upperY * cosine,
-        nozzle.placement.x + lowerX * cosine - lowerY * sine,
-        nozzle.placement.y + lowerX * sine + lowerY * cosine
-      );
+    const activeElapsed = now - nozzle.stateStartedAt;
+    const flameLength = this.wallFlameLength(nozzle);
+    for (let port = 0; port < WALL_PORT_OFFSETS.length; port += 1) {
+      const portElapsed = activeElapsed - port * WALL_PORT_STAGGER_MS;
+      if (portElapsed < 0) continue;
+      const ignitionRamp = Phaser.Math.Clamp(0.42 + portElapsed / 105, 0, 1);
+      const portOffset = WALL_PORT_OFFSETS[port];
+      for (let layer = 0; layer < WALL_FIRE_LAYERS.length; layer += 1) {
+        const spec = WALL_FIRE_LAYERS[layer];
+        const startX = 9;
+        const endX = Math.max(34, flameLength * spec.endScale * ignitionRamp);
+        const wave = turbulence * (5 - layer) + Math.sin(now * 0.015 + port * 1.8 + layer) * 4;
+        const upperY = portOffset - spec.half + wave;
+        const lowerY = portOffset + spec.half - wave * 0.55;
+        this.flameGraphics.fillStyle(spec.color, spec.alpha * ignitionRamp).fillTriangle(
+          nozzle.placement.x + startX * cosine - portOffset * sine,
+          nozzle.placement.y + startX * sine + portOffset * cosine,
+          nozzle.placement.x + endX * cosine - upperY * sine,
+          nozzle.placement.y + endX * sine + upperY * cosine,
+          nozzle.placement.x + (endX - layer * 4) * cosine - lowerY * sine,
+          nozzle.placement.y + (endX - layer * 4) * sine + lowerY * cosine
+        );
+      }
+      const ignition = Phaser.Math.Clamp(1 - portElapsed / 145, 0, 1);
+      if (ignition > 0) {
+        const ignitionX = nozzle.placement.x + cosine * 14 - sine * portOffset;
+        const ignitionY = nozzle.placement.y + sine * 14 + cosine * portOffset;
+        this.glowGraphics.fillStyle(0xffffff, ignition * 0.82).fillCircle(ignitionX, ignitionY, 7 + ignition * 12);
+      }
     }
     this.glowGraphics.fillStyle(0xffa333, 0.15).fillCircle(
-      nozzle.placement.x + 75 * cosine,
-      nozzle.placement.y + 75 * sine,
+      nozzle.placement.x + 42 * cosine,
+      nozzle.placement.y + 42 * sine,
       54
     );
     for (let tongue = 0; tongue < 5; tongue += 1) {
       const phase = (now * 0.0025 + tongue * 0.197 + index * 0.13) % 1;
-      const localX = 92 + phase * 224;
+      const localX = 42 + phase * Math.max(120, flameLength - 50);
       const localY = Math.sin(now * 0.013 + tongue * 2.1) * (17 + tongue * 6);
       this.flameGraphics.fillStyle(tongue % 2 ? 0xff9b28 : 0xff5124, 0.58 * (1 - phase * 0.7))
         .fillEllipse(
@@ -462,10 +632,11 @@ export class SharedFireTrapSystem {
     sine = 0
   ): void {
     const floor = nozzle.placement.kind === 'floor';
+    const wallLength = floor ? WALL_FLAME_END : this.wallFlameLength(nozzle);
     const sparkCount = this.options.particlesEnabled ? 8 : 4;
     for (let spark = 0; spark < sparkCount; spark += 1) {
       const phase = (now * 0.0027 + spark * 0.157 + index * 0.093) % 1;
-      const localX = 86 + phase * 236;
+      const localX = floor ? 86 + phase * 236 : 28 + phase * Math.max(120, wallLength - 34);
       const localY = Math.sin(spark * 2.17 + now * 0.009) * (18 + spark * 4);
       const pointX = floor ? nozzle.placement.x + localY
         : nozzle.placement.x + localX * cosine - localY * sine;
@@ -477,7 +648,7 @@ export class SharedFireTrapSystem {
     const smokeCount = this.options.particlesEnabled ? 4 : 2;
     for (let smoke = 0; smoke < smokeCount; smoke += 1) {
       const phase = (now * 0.0012 + smoke * 0.283 + index * 0.071) % 1;
-      const localX = 184 + phase * 148;
+      const localX = floor ? 184 + phase * 148 : wallLength * 0.52 + phase * wallLength * 0.42;
       const localY = Math.sin(now * 0.004 + smoke * 2.4) * 45;
       const pointX = floor ? nozzle.placement.x + localY
         : nozzle.placement.x + localX * cosine - localY * sine;
@@ -492,8 +663,8 @@ export class SharedFireTrapSystem {
         .lineBetween(
           nozzle.placement.x + 100 * cosine,
           nozzle.placement.y + 100 * sine,
-          nozzle.placement.x + 306 * cosine - heatEndY * sine,
-          nozzle.placement.y + 306 * sine + heatEndY * cosine
+          nozzle.placement.x + (wallLength - 18) * cosine - heatEndY * sine,
+          nozzle.placement.y + (wallLength - 18) * sine + heatEndY * cosine
         );
     }
   }

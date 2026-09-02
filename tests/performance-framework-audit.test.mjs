@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import { ReusableObjectPool } from '../src/game/performance/ReusableObjectPool.ts';
 import { arenaCombatWarmupPlan } from '../src/game/performance/ArenaRuntimePreparation.ts';
 import { explosionCameraImpulse } from '../src/game/vfx/ExplosionCameraImpulse.ts';
+import { ARENA_ARCHETYPES } from '../src/game/config/arenaGeneration.ts';
+import { generateArenaTopology } from '../src/game/systems/ArenaTopology.ts';
 import {
   ARENA_SMASHABLE_LOOT_TABLE,
   HEIST_SMASHABLE_LOOT_TABLE,
@@ -19,6 +21,7 @@ import { smashableWorldFootprint, rectanglesOverlap } from '../src/game/arena/Sm
 import { generateHeistFacilityLayout } from '../src/game/anomalies/heist/HeistFacilityLayout.ts';
 import {
   createArenaFireTrapPlacements,
+  isArenaFireTrapPlacementSafe,
   resolveArenaFloorFirePlacement
 } from '../src/game/arena/ArenaFireTrapPlacement.ts';
 import {
@@ -115,7 +118,18 @@ test('Arena fire placement is deterministic, bombsite-safe, and shares one bound
     bombSites: [{ x: 1840, y: 1180 }], decorativeNeon: [],
     generation: { bounds: { x: 80, y: 80, w: 2240, h: 1440 } }
   };
-  assert.deepEqual(createArenaFireTrapPlacements(layout, 30), createArenaFireTrapPlacements(layout, 30));
+  const banks = createArenaFireTrapPlacements(layout, 30);
+  assert.deepEqual(banks, createArenaFireTrapPlacements(layout, 30));
+  assert.ok(banks.length >= 6 && banks.length <= 10);
+  assert.ok(banks.every((bank, index) => isArenaFireTrapPlacementSafe(layout, bank, banks.slice(0, index))));
+  assert.ok(banks.every((bank) => bank.flameLength >= 190 && bank.flameLength <= 330));
+  assert.ok(banks.every((bank) => {
+    const laneX = bank.x + Math.cos(bank.rotation) * 46;
+    const laneY = bank.y + Math.sin(bank.rotation) * 46;
+    const bounds = layout.generation.bounds;
+    return laneX > bounds.x && laneX < bounds.x + bounds.w
+      && laneY > bounds.y && laneY < bounds.y + bounds.h;
+  }));
   const floor = resolveArenaFloorFirePlacement(layout, 1040, 780, 3);
   assert.ok(floor);
   assert.ok((floor.x - layout.bombSites[0].x) ** 2 + (floor.y - layout.bombSites[0].y) ** 2 >= 150 ** 2);
@@ -123,12 +137,44 @@ test('Arena fire placement is deterministic, bombsite-safe, and shares one bound
   const arena = source('../src/game/scenes/ArenaScene.ts');
   const heist = source('../src/game/anomalies/heist/HeistTrapSystem.ts');
   assert.match(shared, /dynamicGraphicsBatches: 2/);
+  assert.match(shared, /wallNozzlePorts:/);
+  assert.match(shared, /WALL_PORT_OFFSETS = Object\.freeze\(\[-18, 0, 18\]\)/);
+  assert.match(shared, /WALL_PORT_STAGGER_MS = 60/);
+  assert.match(shared, /'idle' \| 'telegraph' \| 'ignition' \| 'active' \| 'cooldown'/);
+  assert.match(shared, /state = 'ignition'[\s\S]*?playSfx\('fireTrap'\)/);
+  assert.match(shared, /selectWallCandidate/);
+  assert.doesNotMatch(shared, /drawBeveledTechPlate|const barrel =|const shield = scene\.add\.polygon/);
   assert.match(shared, /physicsBodies: 0/);
   assert.match(shared, /independentTimers: 0/);
   assert.match(shared, /this\.audio\.playSfx\('fireTrap'\)/);
   assert.match(arena, /new SharedFireTrapSystem/);
   assert.match(heist, /new SharedFireTrapSystem/);
   assert.doesNotMatch(heist, /createFireNozzle/);
+});
+
+test('distributed fire banks face inward and remain safe across procedural arena archetypes', () => {
+  for (const archetype of ARENA_ARCHETYPES) {
+    for (const seed of [81, 9_127, 77_119]) {
+      const topology = generateArenaTopology(archetype, seed);
+      const layout = {
+        seed, template: archetype,
+        theme: { id: 'test', primary: 0x43edfa, secondary: 0xff4dcb, accent: 0xffffff },
+        walls: topology.walls, obstacles: [], smashables: [],
+        playerSpawn: topology.playerCandidates[0], enemySpawns: topology.enemySpawns,
+        bombSites: topology.objectiveCandidates.slice(0, 3), decorativeNeon: [],
+        generation: { bounds: topology.bounds }
+      };
+      const banks = createArenaFireTrapPlacements(layout, 30);
+      assert.ok(banks.length >= 4 && banks.length <= 10, `${archetype}:${seed}`);
+      assert.ok(banks.every((bank, index) => isArenaFireTrapPlacementSafe(layout, bank, banks.slice(0, index))));
+      assert.ok(banks.every((bank) => {
+        const insideX = bank.x + Math.cos(bank.rotation) * 46;
+        const insideY = bank.y + Math.sin(bank.rotation) * 46;
+        return insideX > topology.bounds.x && insideX < topology.bounds.x + topology.bounds.w
+          && insideY > topology.bounds.y && insideY < topology.bounds.y + topology.bounds.h;
+      }));
+    }
+  }
 });
 
 test('Arena smashable placement is deterministic, bounded, and does not join navigation blockers', () => {
