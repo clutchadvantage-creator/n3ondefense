@@ -62,6 +62,8 @@ export const SFX_DEFINITIONS = [
   { key: 'dataThiefFail', label: 'Data Thief Failure' },
   { key: 'goldenEnemyEvent', label: 'Golden Hunt Event' },
   { key: 'goldenEnemyEventFail', label: 'Golden Hunt Failure' },
+  { key: 'smashableBreak', label: 'Smashable Break' },
+  { key: 'fireTrap', label: 'Fire Trap Ignition' },
   { key: 'bombsiteSkull', label: 'Bombsite Skull Signature' },
   { key: 'bombsiteFlower', label: 'Bombsite Flower Signature' },
   { key: 'bombsiteBats', label: 'Bombsite Bat Signature' },

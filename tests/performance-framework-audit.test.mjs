@@ -18,6 +18,10 @@ import {
 import { smashableWorldFootprint, rectanglesOverlap } from '../src/game/arena/SmashablePlacementGeometry.ts';
 import { generateHeistFacilityLayout } from '../src/game/anomalies/heist/HeistFacilityLayout.ts';
 import {
+  createArenaFireTrapPlacements,
+  resolveArenaFloorFirePlacement
+} from '../src/game/arena/ArenaFireTrapPlacement.ts';
+import {
   createHeistSmashablePlacements,
   HEIST_SMASHABLE_MAXIMUM,
   HEIST_SMASHABLE_MINIMUM,
@@ -63,13 +67,18 @@ test('grenade rounds never request camera shake while dramatic explosives retain
   assert.match(heist, /this\.mineExplosionVfx\.emit\([\s\S]*?'grenade-round'\)/);
 });
 
-test('Arena smashable loot is restrained and excludes premium/progression rewards', () => {
+test('every smashable yields one restrained bonus and progression currencies remain rare', () => {
   const allowed = new Set(['credits', 'health', 'energy', 'coreToken', 'damageBoost', 'speedBoost',
-    'rapidFire', 'ricochet', 'grenadeRounds', 'scattershot']);
+    'rapidFire', 'ricochet', 'grenadeRounds', 'scattershot', 'plasmaChip', 'fluxCore']);
   assert.ok(ARENA_SMASHABLE_LOOT_TABLE.every((entry) => allowed.has(entry.type)));
   assert.ok(HEIST_SMASHABLE_LOOT_TABLE.every((entry) => allowed.has(entry.type)));
-  assert.equal(ARENA_SMASHABLE_LOOT_TABLE.some((entry) => ['plasmaChip', 'fluxCore', 'mod'].includes(entry.type)), false);
-  assert.equal(HEIST_SMASHABLE_LOOT_TABLE.some((entry) => ['plasmaChip', 'fluxCore', 'mod'].includes(entry.type)), false);
+  assert.equal(ARENA_SMASHABLE_LOOT_TABLE.some((entry) => entry.type === 'mod'), false);
+  assert.equal(HEIST_SMASHABLE_LOOT_TABLE.some((entry) => entry.type === 'mod'), false);
+  const arenaCreditWeight = ARENA_SMASHABLE_LOOT_TABLE.find((entry) => entry.type === 'credits').weight;
+  const arenaPremiumWeight = ARENA_SMASHABLE_LOOT_TABLE
+    .filter((entry) => ['plasmaChip', 'fluxCore'].includes(entry.type))
+    .reduce((sum, entry) => sum + entry.weight, 0);
+  assert.ok(arenaCreditWeight > arenaPremiumWeight * 30);
   for (let index = 0; index < 100; index += 1) assert.ok(allowed.has(resolveArenaSmashableLoot(index / 100)));
   const arenaResults = new Set();
   const heistResults = new Set();
@@ -84,6 +93,42 @@ test('Arena smashable loot is restrained and excludes premium/progression reward
   assert.ok(arenaResults.size >= 8);
   assert.ok(heistResults.size >= 8);
   assert.ok(combinations > 0);
+  const system = source('../src/game/arena/ArenaSmashableSystem.ts');
+  assert.doesNotMatch(system, /smashableLootChance/);
+  assert.match(system, /this\.onDestroyed\?\.\(prop\.placement\.x, prop\.placement\.y\)/);
+  assert.match(system, /BURST_LIFETIME_MS = 690/);
+});
+
+test('Arena fire placement is deterministic, bombsite-safe, and shares one bounded runtime with HEIST', () => {
+  const layout = {
+    seed: 99017,
+    template: 'chambers',
+    theme: { id: 'test', primary: 0x43edfa, secondary: 0xff4dcb, accent: 0xffffff },
+    walls: [
+      { x: 400, y: 340, w: 520, h: 50 },
+      { x: 1220, y: 460, w: 50, h: 480 },
+      { x: 520, y: 1080, w: 600, h: 50 }
+    ],
+    obstacles: [], smashables: [],
+    playerSpawn: { x: 300, y: 760 },
+    enemySpawns: [{ x: 2050, y: 260 }],
+    bombSites: [{ x: 1840, y: 1180 }], decorativeNeon: [],
+    generation: { bounds: { x: 80, y: 80, w: 2240, h: 1440 } }
+  };
+  assert.deepEqual(createArenaFireTrapPlacements(layout, 30), createArenaFireTrapPlacements(layout, 30));
+  const floor = resolveArenaFloorFirePlacement(layout, 1040, 780, 3);
+  assert.ok(floor);
+  assert.ok((floor.x - layout.bombSites[0].x) ** 2 + (floor.y - layout.bombSites[0].y) ** 2 >= 150 ** 2);
+  const shared = source('../src/game/hazards/SharedFireTrapSystem.ts');
+  const arena = source('../src/game/scenes/ArenaScene.ts');
+  const heist = source('../src/game/anomalies/heist/HeistTrapSystem.ts');
+  assert.match(shared, /dynamicGraphicsBatches: 2/);
+  assert.match(shared, /physicsBodies: 0/);
+  assert.match(shared, /independentTimers: 0/);
+  assert.match(shared, /this\.audio\.playSfx\('fireTrap'\)/);
+  assert.match(arena, /new SharedFireTrapSystem/);
+  assert.match(heist, /new SharedFireTrapSystem/);
+  assert.doesNotMatch(heist, /createFireNozzle/);
 });
 
 test('Arena smashable placement is deterministic, bounded, and does not join navigation blockers', () => {
@@ -152,6 +197,9 @@ test('HEIST presentation remains bounded while guidance is sparse and utility li
   assert.match(facility, /markers\.slice\(0, 28\)/);
   assert.match(facility, /utilityLights\.length/);
   assert.match(facility, /lastAmbientDraw < 90/);
+  assert.match(facility, /setAlertLighting\(active: boolean\)/);
+  assert.match(facility, /alertLightingActive \? 0 : zoneVisibility\.targetAlpha/);
+  assert.match(facility, /brownoutCycle/);
   assert.match(traps, /this\.nextUpdateAt = now \+ 50/);
   assert.match(traps, /physicsBodies: 0/);
 });

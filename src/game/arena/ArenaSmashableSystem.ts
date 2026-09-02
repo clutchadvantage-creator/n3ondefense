@@ -4,7 +4,6 @@ import {
   ARENA_SMASHABLE_DEFINITIONS,
   ARENA_SMASHABLE_DURABILITY,
   resolveSmashableLootDrops,
-  smashableLootChance,
   type ArenaSmashableDefinition,
   type ArenaSmashableLoot,
   type SmashableDestructionFamily,
@@ -46,7 +45,10 @@ export interface ArenaSmashableDiagnostics {
 
 const DEFINITIONS = new Map(ARENA_SMASHABLE_DEFINITIONS.map((definition) => [definition.kind, definition]));
 const MAX_BURSTS = 8;
-const BURST_LIFETIME_MS = 1_180;
+// The original 1.18 second linear expansion made fragments hover at full
+// travel speed for almost the entire animation. A short impulse plus settle
+// phase reads as a smash without changing the scene clock or physics scale.
+const BURST_LIFETIME_MS = 690;
 
 const rotatedRectangle = (
   graphics: Phaser.GameObjects.Graphics,
@@ -93,7 +95,8 @@ export class ArenaSmashableSystem {
     placements: readonly ArenaSmashablePlacement[],
     private readonly onLoot: (type: ArenaSmashableLoot, x: number, y: number) => void,
     private readonly particlesEnabled: boolean,
-    private readonly environment: SmashableEnvironment = 'arena'
+    private readonly environment: SmashableEnvironment = 'arena',
+    private readonly onDestroyed?: (x: number, y: number) => void
   ) {
     this.destructionGraphics = scene.add.graphics().setDepth(13.55);
     this.destructionGlowGraphics = scene.add.graphics().setDepth(13.6).setBlendMode(Phaser.BlendModes.ADD);
@@ -222,7 +225,7 @@ export class ArenaSmashableSystem {
     prop.damageStage = 3;
     this.drawProp(prop);
     this.beginBurst(prop);
-    if (prop.placement.lootRoll >= smashableLootChance(prop.definition, this.environment)) return;
+    this.onDestroyed?.(prop.placement.x, prop.placement.y);
     const lootRoll = (prop.placement.lootRoll * 3.731 + prop.placement.x * 0.00031
       + prop.placement.y * 0.00017 + 0.173) % 1;
     const drops = resolveSmashableLootDrops(this.environment, lootRoll);
@@ -249,31 +252,35 @@ export class ArenaSmashableSystem {
 
   private drawDestructionBurst(burst: DestructionBurst, progress: number): void {
     const fade = (1 - progress) ** 1.45;
-    const ballistic = progress * progress;
+    const impulse = 1 - (1 - progress) ** 3.4;
+    const arc = Math.sin(Math.min(1, progress / 0.72) * Math.PI);
+    const settle = Math.max(0, (progress - 0.64) / 0.36);
     const fragmentCount = this.particlesEnabled ? 13 : 8;
     const spreadMultiplier = burst.family === 'power' ? 1.22 : burst.family === 'cabinet' ? 0.92 : 1;
-    const spread = (18 + progress * 82) * spreadMultiplier;
+    const spread = (12 + impulse * 88) * spreadMultiplier;
     const glow = this.destructionGlowGraphics;
     const debris = this.destructionGraphics;
 
-    glow.lineStyle(2.8 * fade, burst.accent, 0.78 * fade).strokeCircle(burst.x, burst.y, 10 + progress * 54);
-    glow.fillStyle(burst.accent, 0.12 * fade).fillCircle(burst.x, burst.y, 15 + progress * 38);
+    const flash = Math.max(0, 1 - progress * 7);
+    glow.fillStyle(0xffffff, 0.82 * flash).fillCircle(burst.x, burst.y, 8 + impulse * 24);
+    glow.lineStyle(2.8 * fade, burst.accent, 0.78 * fade).strokeCircle(burst.x, burst.y, 10 + impulse * 54);
+    glow.fillStyle(burst.accent, (0.12 + flash * 0.18) * fade).fillCircle(burst.x, burst.y, 15 + impulse * 38);
     const smokeCount = this.particlesEnabled ? 5 : 3;
     for (let index = 0; index < smokeCount; index += 1) {
       const angle = burst.phase + index * 2.17;
-      const drift = progress * (18 + index * 5);
+      const drift = impulse * (18 + index * 5);
       debris.fillStyle(index % 2 ? 0x16202b : 0x273443, 0.24 * fade)
         .fillCircle(burst.x + Math.cos(angle) * drift,
-          burst.y - progress * (20 + index * 6) + Math.sin(angle) * 5,
-          7 + progress * (8 + index));
+          burst.y - impulse * (20 + index * 6) + Math.sin(angle) * 5,
+          7 + impulse * (8 + index));
     }
 
     for (let index = 0; index < fragmentCount; index += 1) {
       const angle = burst.phase + index * Math.PI * 2 / fragmentCount;
       const distance = spread * (0.68 + index % 4 * 0.11);
       const px = burst.x + Math.cos(angle) * distance;
-      const py = burst.y + Math.sin(angle) * distance + ballistic * 34;
-      const fragmentAngle = angle + progress * (index % 2 ? 5.4 : -4.7);
+      const py = burst.y + Math.sin(angle) * distance - arc * (17 + index % 4 * 5) + settle * settle * 34;
+      const fragmentAngle = angle + impulse * (index % 2 ? 5.4 : -4.7);
       if (burst.family === 'cabinet') {
         const largePanel = index < 2;
         rotatedRectangle(debris, px, py, largePanel ? burst.width * 0.38 : 7 + index % 3 * 3,
@@ -295,6 +302,12 @@ export class ArenaSmashableSystem {
           fragmentAngle, index % 3 === 0 ? 0xa9c6cf : 0x203846, 0.88 * fade);
         if (index % 4 === 0) debris.fillStyle(0x05090d, 0.9 * fade).fillCircle(px, py, 4.5);
       }
+    }
+
+    if (progress > 0.48) {
+      const floorFade = Math.sin(Math.min(1, (progress - 0.48) / 0.52) * Math.PI) * 0.26;
+      debris.fillStyle(0x788995, floorFade).fillEllipse(burst.x, burst.y + burst.height * 0.42,
+        burst.width * (0.72 + settle * 0.8), 8 + settle * 8);
     }
 
     const sparkCount = this.particlesEnabled ? 7 : 4;

@@ -106,7 +106,7 @@ test('Anomaly and HEIST sounds follow authoritative feed, portal, door, alarm, p
   const manager = source('../src/game/systems/AudioManager.ts');
   for (const filename of [
     'portalpowerupsound.mp3', 'portalidlesound.mp3', 'portalenterexitsound.mp3',
-    'heistdoorsound.mp3', 'alarmsound.mp3'
+    'heistdoorsound.mp3', 'alarmsound.mp3', 'heistanomalysound.mp3'
   ]) assert.ok(existsSync(new URL(`../public/assets/audio/soundeffects/${filename}`, import.meta.url)), filename);
   assert.match(hooks, /case 'essence-absorption':[\s\S]*?restartAnomalyPortalPower\(\)/);
   assert.match(hooks, /case 'portal-idle':[\s\S]*?startAnomalyPortalIdle\(\)/);
@@ -118,6 +118,10 @@ test('Anomaly and HEIST sounds follow authoritative feed, portal, door, alarm, p
   assert.match(heist, /ready && !this\.extractionPortalIdleStarted/);
   assert.match(manager, /pauseEventPresentationLoops/);
   assert.match(manager, /resumeEventPresentationLoops/);
+  assert.match(heist, /coreAudio\.enterHeistMusic\(\)/);
+  assert.match(heist, /coreAudio\.exitHeistMusic\(\)/);
+  assert.match(manager, /enterHeistMusic[\s\S]*?musicAudio\?\.pause\(\)[\s\S]*?heistMusicAudio/);
+  assert.match(manager, /exitHeistMusic[\s\S]*?heistMusicAudio\?\.pause\(\)[\s\S]*?musicAudio\.play\(\)/);
   assert.match(manager, /stopAnomalySfx/);
   assert.match(manager, /private anomalyPortalPowerAudio: HTMLAudioElement \| null = null/);
   assert.match(manager, /restartAnomalyPortalPower[\s\S]*?audio\.pause\(\)[\s\S]*?audio\.currentTime = 0[\s\S]*?audio\.play\(\)/);

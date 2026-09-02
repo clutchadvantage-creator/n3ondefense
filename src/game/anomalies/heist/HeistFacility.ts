@@ -60,6 +60,7 @@ export interface HeistFacilityRuntime {
     visibilityZones: number;
   };
   setVaultDoorOpen(open: boolean): void;
+  setAlertLighting(active: boolean): void;
   setEscapeRoute(active: boolean): void;
   activateEscapeGuide(playerX: number, playerY: number): void;
   isInsideVault(x: number, y: number, padding?: number): boolean;
@@ -406,6 +407,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
   let lastAmbientDraw = -1;
   let lastPresentationUpdate = -1_000;
   let escapeGuideActive = false;
+  let alertLightingActive = false;
   let guideMarkers: HeistLayoutPoint[] = [];
   let cachedTargetNodeId = '';
   const cachedTargetNext = new Map<string, string>();
@@ -513,6 +515,12 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       visibilityZones: visibilityLayers.length
     },
     setVaultDoorOpen: setDoorsOpen,
+    setAlertLighting(active: boolean): void {
+      if (alertLightingActive === active) return;
+      alertLightingActive = active;
+      if (active) zoneVisibility.targetAlpha.fill(0);
+      else zoneVisibility.invalidate();
+    },
     setEscapeRoute(active: boolean): void {
       escapeGuideActive = active;
       if (!active) guideMarkers = [];
@@ -557,15 +565,16 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       return result;
     },
     isPresentationOpenArea(): boolean {
-      return zoneVisibility.isOpenArea();
+      return alertLightingActive || zoneVisibility.isOpenArea();
     },
     update(now: number, playerX: number, playerY: number): void {
       if (now - lastPresentationUpdate >= 32) {
         lastPresentationUpdate = now;
-        zoneVisibility.revealAt(playerX, playerY, doorsOpen);
+        if (!alertLightingActive) zoneVisibility.revealAt(playerX, playerY, doorsOpen);
         for (let index = 0; index < visibilityLayers.length; index += 1) {
           const layer = visibilityLayers[index];
-          layer.setAlpha(Phaser.Math.Linear(layer.alpha, zoneVisibility.targetAlpha[index], 0.24));
+          const targetAlpha = alertLightingActive ? 0 : zoneVisibility.targetAlpha[index];
+          layer.setAlpha(Phaser.Math.Linear(layer.alpha, targetAlpha, alertLightingActive ? 0.32 : 0.24));
         }
         for (let index = 0; index < wallVisuals.length; index += 1) {
           const visual = wallVisuals[index];
@@ -592,18 +601,24 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       if (now - lastAmbientDraw < 90) return;
       lastAmbientDraw = now;
       ambientGraphics.clear();
-      const pulse = 0.5 + Math.sin(now * 0.004) * 0.5;
+      const pulse = alertLightingActive ? 0.88 + Math.sin(now * 0.0014) * 0.12
+        : 0.5 + Math.sin(now * 0.0011) * 0.5;
       for (let index = 0; index < utilityLights.length; index += 1) {
         const light = utilityLights[index];
-        const localPulse = 0.5 + Math.sin(now * 0.0022 + light.phase) * 0.5;
+        // Infiltration banks breathe slowly and independently, with a rare
+        // short brownout. Alert mode is stable, bright, and combat-readable.
+        const brownoutCycle = (now + index * 1_337) % (6_800 + index % 5 * 430);
+        const brownout = !alertLightingActive && brownoutCycle < 170;
+        const localPulse = alertLightingActive ? 0.9 + Math.sin(now * 0.0015 + light.phase) * 0.1
+          : brownout ? 0.08 : 0.32 + Math.sin(now * 0.00072 + light.phase) * 0.22;
         const width = light.vertical ? 3 : 34;
         const height = light.vertical ? 24 : 3;
         ambientGraphics.fillStyle(0x01050a, 0.82)
           .fillRect(light.x - width * 0.5 - 3, light.y - height * 0.5 - 3, width + 6, height + 6);
-        ambientGraphics.fillStyle(light.color, 0.10 + localPulse * 0.15)
+        ambientGraphics.fillStyle(light.color, (alertLightingActive ? 0.28 : 0.08) + localPulse * (alertLightingActive ? 0.28 : 0.18))
           .fillRect(light.x - width * 0.5, light.y - height * 0.5, width, height);
         if (index % 5 === 0) {
-          ambientGraphics.fillStyle(light.color, 0.035 + pulse * 0.025)
+          ambientGraphics.fillStyle(light.color, (alertLightingActive ? 0.07 : 0.025) + pulse * (alertLightingActive ? 0.055 : 0.025))
             .fillCircle(light.x, light.y, 18 + localPulse * 5);
         }
       }

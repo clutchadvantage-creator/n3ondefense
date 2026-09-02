@@ -36,6 +36,8 @@ const PRESENTATION_SFX_SOURCES = {
   dataThiefFail: 'soundeffects/datatheiffail.mp3',
   goldenEnemyEvent: 'soundeffects/goldenenemyevent.mp3',
   goldenEnemyEventFail: 'soundeffects/goldenemyeventfail.mp3',
+  smashableBreak: 'soundeffects/smashablessound.mp3',
+  fireTrap: 'soundeffects/firetrapsound.mp3',
   bombsiteSkull: 'soundeffects/skullbombsite.mp3',
   bombsiteFlower: 'soundeffects/flowerbombsite.mp3',
   bombsiteBats: 'soundeffects/batbombsite.mp3',
@@ -71,6 +73,8 @@ const PRESENTATION_SFX_POOL_SIZES: Record<PresentationSfxName, number> = {
   dataThiefFail: 1,
   goldenEnemyEvent: 1,
   goldenEnemyEventFail: 1,
+  smashableBreak: 4,
+  fireTrap: 3,
   bombsiteSkull: 2,
   bombsiteFlower: 2,
   bombsiteBats: 2,
@@ -97,6 +101,8 @@ const PRESENTATION_SFX_MIN_INTERVAL_MS: Record<PresentationSfxName, number> = {
   dataThiefFail: 750,
   goldenEnemyEvent: 750,
   goldenEnemyEventFail: 750,
+  smashableBreak: 42,
+  fireTrap: 110,
   bombsiteSkull: 80,
   bombsiteFlower: 80,
   bombsiteBats: 80,
@@ -143,6 +149,9 @@ export class AudioManager {
   private musicAudio: HTMLAudioElement | null = null;
   private playlistIndex = 0;
   private musicStarted = false;
+  private heistMusicAudio: HTMLAudioElement | null = null;
+  private heistMusicRequested = false;
+  private resumeArenaMusicAfterHeist = false;
   private readonly shotSfxPool: HTMLAudioElement[] = [];
   private readonly boostSfxPool: HTMLAudioElement[] = [];
   private readonly enemyDeathSfxPool: HTMLAudioElement[] = [];
@@ -175,6 +184,7 @@ export class AudioManager {
     overloadEvent: [], supplyDropEvent: [], anomalyPortalTransit: [], heistDoor: [],
     dataThiefEntrance: [], dataThiefFail: [],
     goldenEnemyEvent: [], goldenEnemyEventFail: [],
+    smashableBreak: [], fireTrap: [],
     bombsiteSkull: [], bombsiteFlower: [], bombsiteBats: [], bombsiteWitch: []
   };
   private readonly presentationSfxCursors: Record<PresentationSfxName, number> = {
@@ -184,6 +194,7 @@ export class AudioManager {
     overloadEvent: 0, supplyDropEvent: 0, anomalyPortalTransit: 0, heistDoor: 0,
     dataThiefEntrance: 0, dataThiefFail: 0,
     goldenEnemyEvent: 0, goldenEnemyEventFail: 0,
+    smashableBreak: 0, fireTrap: 0,
     bombsiteSkull: 0, bombsiteFlower: 0, bombsiteBats: 0, bombsiteWitch: 0
   };
   private readonly lastPresentationSfxAt: Record<PresentationSfxName, number> = {
@@ -195,6 +206,7 @@ export class AudioManager {
     anomalyPortalTransit: -Infinity, heistDoor: -Infinity,
     dataThiefEntrance: -Infinity, dataThiefFail: -Infinity,
     goldenEnemyEvent: -Infinity, goldenEnemyEventFail: -Infinity,
+    smashableBreak: -Infinity, fireTrap: -Infinity,
     bombsiteSkull: -Infinity, bombsiteFlower: -Infinity, bombsiteBats: -Infinity, bombsiteWitch: -Infinity
   };
   private runStartSfx: HTMLAudioElement | null = null;
@@ -428,6 +440,40 @@ export class AudioManager {
     this.heistAlarmAudio.loop = true;
     this.heistAlarmAudio.volume = this.getSfxVolume('heistAlarm');
     this.heistAlarmAudio.load();
+    this.heistMusicAudio = new Audio(audioAssetUrl('soundeffects/heistanomalysound.mp3'));
+    this.heistMusicAudio.preload = 'auto';
+    this.heistMusicAudio.loop = true;
+    this.heistMusicAudio.volume = this.clampVolume(this.getVolume('music'));
+    this.heistMusicAudio.load();
+  }
+
+  /** HEIST owns a single dedicated music voice. The current playlist element
+   * remains mounted and retains its playhead while the anomaly is active. */
+  enterHeistMusic(): void {
+    if (this.heistMusicRequested) return;
+    this.heistMusicRequested = true;
+    this.resumeArenaMusicAfterHeist = Boolean(this.musicAudio && this.musicStarted && !this.musicAudio.paused);
+    this.musicAudio?.pause();
+    const audio = this.heistMusicAudio;
+    if (!audio) return;
+    try { audio.currentTime = 0; } catch { /* Metadata can still be loading. */ }
+    audio.volume = this.clampVolume(this.getVolume('music'));
+    void audio.play().catch(() => undefined);
+  }
+
+  exitHeistMusic(): void {
+    if (!this.heistMusicRequested && !this.heistMusicAudio) return;
+    this.heistMusicRequested = false;
+    this.heistMusicAudio?.pause();
+    if (this.heistMusicAudio) {
+      try { this.heistMusicAudio.currentTime = 0; } catch { /* Seeking is optional. */ }
+    }
+    const shouldResume = this.resumeArenaMusicAfterHeist;
+    this.resumeArenaMusicAfterHeist = false;
+    if (!shouldResume || !this.musicAudio) return;
+    this.musicStarted = true;
+    this.musicAudio.volume = this.clampVolume(this.getVolume('music'));
+    void this.musicAudio.play().catch(() => { this.musicStarted = false; });
   }
 
   private startDedicatedLoop(audio: HTMLAudioElement | null, sound: AudioSfxName): void {
@@ -526,6 +572,7 @@ export class AudioManager {
   pauseEventPresentationLoops(): void {
     this.anomalyPortalIdleAudio?.pause();
     this.heistAlarmAudio?.pause();
+    this.heistMusicAudio?.pause();
     if (this.activeArcadeLoop) this.presentationSfxPools[this.activeArcadeLoop][0]?.pause();
   }
 
@@ -537,6 +584,10 @@ export class AudioManager {
     };
     if (this.anomalyPortalIdleRequested) resume(this.anomalyPortalIdleAudio, 'anomalyPortalIdle');
     if (this.heistAlarmRequested) resume(this.heistAlarmAudio, 'heistAlarm');
+    if (this.heistMusicRequested && this.heistMusicAudio?.paused) {
+      this.heistMusicAudio.volume = this.clampVolume(this.getVolume('music'));
+      void this.heistMusicAudio.play().catch(() => undefined);
+    }
     if (this.activeArcadeLoop) resume(this.presentationSfxPools[this.activeArcadeLoop][0] ?? null, this.activeArcadeLoop);
   }
 
@@ -1085,6 +1136,7 @@ export class AudioManager {
   nextMusicTrack(): void {
     this.advancePlaylist();
     this.mountTrack(this.getCurrentTrackUrl());
+    if (this.heistMusicRequested) return;
     this.musicStarted = true;
     void this.musicAudio?.play().catch(() => {
       this.musicStarted = false;
@@ -1094,6 +1146,7 @@ export class AudioManager {
   previousMusicTrack(): void {
     this.playlistIndex = (this.playlistIndex - 1 + this.playlist.length) % this.playlist.length;
     this.mountTrack(this.getCurrentTrackUrl());
+    if (this.heistMusicRequested) return;
     this.musicStarted = true;
     void this.musicAudio?.play().catch(() => {
       this.musicStarted = false;
@@ -1101,7 +1154,9 @@ export class AudioManager {
   }
 
   isMusicPlaying(): boolean {
-    return Boolean(this.musicAudio && !this.musicAudio.paused && this.musicStarted);
+    return this.heistMusicRequested
+      ? Boolean(this.heistMusicAudio && !this.heistMusicAudio.paused)
+      : Boolean(this.musicAudio && !this.musicAudio.paused && this.musicStarted);
   }
 
   /** DEV/lifecycle diagnostics only; no playback state is mutated here. */
@@ -1135,6 +1190,7 @@ export class AudioManager {
     }
 
     this.refreshMix();
+    if (this.heistMusicRequested) return;
     if (this.musicStarted && !this.musicAudio?.paused) return;
 
     this.musicStarted = true;
@@ -1148,6 +1204,7 @@ export class AudioManager {
     if (this.musicAudio) {
       this.musicAudio.volume = this.clampVolume(this.getVolume('music'));
     }
+    if (this.heistMusicAudio) this.heistMusicAudio.volume = this.clampVolume(this.getVolume('music'));
 
     for (const shot of this.shotSfxPool) {
       shot.volume = this.getSfxVolume('shot');
@@ -1382,6 +1439,8 @@ export class AudioManager {
       case 'dataThiefFail':
       case 'goldenEnemyEvent':
       case 'goldenEnemyEventFail':
+      case 'smashableBreak':
+      case 'fireTrap':
       case 'bombsiteSkull':
       case 'bombsiteFlower':
       case 'bombsiteBats':

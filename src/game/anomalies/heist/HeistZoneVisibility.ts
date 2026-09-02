@@ -107,6 +107,10 @@ export class HeistZoneVisibility {
     return this.currentIndex === this.vaultIndex || this.currentDegree >= 3;
   }
 
+  invalidate(): void {
+    this.currentIndex = -1;
+  }
+
   private zoneIndexAt(x: number, y: number): number {
     const vault = this.layout.vaultBounds;
     if (x >= vault.x && x <= vault.x + vault.w && y >= vault.y && y <= vault.y + vault.h) return this.vaultIndex;

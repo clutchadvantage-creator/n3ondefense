@@ -284,6 +284,8 @@ export class HeistScene extends Phaser.Scene {
     const devCreateStartedAt = import.meta.env.DEV ? performance.now() : 0;
     this.resetSessionState();
     this.session = data;
+    this.coreAudio.enterHeistMusic();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     const settings = SaveSystem.get().settings;
     this.aimSettings = normalizeAimSettings(settings.aim);
     this.resolveProjectileCosmetics();
@@ -328,7 +330,7 @@ export class HeistScene extends Phaser.Scene {
       damagePlayer: (amount) => this.damagePlayer(amount),
       snarePlayer: (until) => { this.movementSnaredUntil = Math.max(this.movementSnaredUntil, until); },
       playSfx: (name) => this.coreAudio.playSfx(name)
-    });
+    }, settings.particles);
     this.spawnInfiltrationPatrols();
     this.crosshair = this.add.graphics().setDepth(20_050);
     this.input.setDefaultCursor('none');
@@ -371,7 +373,6 @@ export class HeistScene extends Phaser.Scene {
         ...this.createDevPerformanceSnapshot()
       });
     }
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     if (import.meta.env.DEV && data.dev?.instantReturn) {
       this.events.once(Phaser.Scenes.Events.POST_UPDATE, this.onDevInstantReturn, this);
     }
@@ -603,8 +604,10 @@ export class HeistScene extends Phaser.Scene {
     this.lootPickups.update(now, dt, this.player.x, this.player.y, this.player.stats.pickupRadius,
       pickupField.attractionRadius, pickupField.pullSpeed,
       (reward, x, y) => this.collectLoot(reward, x, y));
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body | null;
     this.trapSystem.update(now, this.player.x, this.player.y,
-      getProtocolModeBalance(this.session.protocol).hazardDamageMultiplier);
+      getProtocolModeBalance(this.session.protocol).hazardDamageMultiplier,
+      playerBody?.velocity.x ?? 0, playerBody?.velocity.y ?? 0);
     this.updateMission(now);
     this.updateEscapeReinforcements(now);
     profiler?.mark('pickupsHazardsMission');
@@ -793,14 +796,17 @@ export class HeistScene extends Phaser.Scene {
       placements,
       (type, x, y) => this.dropEnvironmentSmashableLoot(type, x, y),
       SaveSystem.get().settings.particles,
-      'heist'
+      'heist',
+      () => this.coreAudio.playSfx('smashableBreak')
     );
   }
 
   private dropEnvironmentSmashableLoot(type: ArenaSmashableLoot, x: number, y: number): void {
     const provisionalReward: HeistContainerReward | undefined = type === 'credits'
       ? { kind: 'credits', amount: PICKUP_BALANCE.credits }
-      : type === 'coreToken' ? { kind: 'coreTokens', amount: 1 } : undefined;
+      : type === 'coreToken' ? { kind: 'coreTokens', amount: 1 }
+        : type === 'plasmaChip' ? { kind: 'plasmaChips', amount: 1 }
+          : type === 'fluxCore' ? { kind: 'fluxCores', amount: 1 } : undefined;
     const root = this.pickupPresentation.create(type, x, y, GAMEPLAY_PICKUP_COLOR_BY_TYPE[type]).setDepth(8);
     root.setScale(0.72);
     this.tweens.add({ targets: root, scale: 1, duration: 180, ease: 'Back.Out' });
@@ -1584,6 +1590,7 @@ export class HeistScene extends Phaser.Scene {
   private startAmbush(): void {
     if (this.phase === 'egress-ready' || this.phase === 'escape' || this.returning) return;
     this.setPhase('egress-ready');
+    this.facility.setAlertLighting(true);
     this.audio.play('ambush-trigger');
     this.audio.play('warning-state');
     this.emitMetric('anomaly_ambush_started');
@@ -2486,6 +2493,7 @@ export class HeistScene extends Phaser.Scene {
       }
     };
     safely('anomaly-audio', () => this.audio.stopAll());
+    safely('heist-music', () => this.coreAudio.exitHeistMusic());
     safely('low-health-audio', () => this.coreAudio.setLowHealthWarning(false));
     safely('input-controller', () => this.inputController?.destroy());
     this.pauseMenu = null;
@@ -2506,6 +2514,7 @@ export class HeistScene extends Phaser.Scene {
     safely('fx-pool-references', () => this.fxCirclePool?.discardReferences());
     safely('loot-pickup-references', () => this.lootPickups?.discardReferences());
     safely('smashable-references', () => this.environmentSmashables?.discardReferences());
+    safely('trap-references', () => this.trapSystem?.discardReferences());
     this.environmentSmashables = null;
     this.enemies.length = 0;
     this.separationSubject = null;

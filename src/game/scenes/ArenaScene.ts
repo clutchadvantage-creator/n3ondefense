@@ -95,6 +95,8 @@ import { resolveProjectileCosmeticPresentation } from '../cosmetics/ProjectileCo
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
 import { ArenaSmashableSystem } from '../arena/ArenaSmashableSystem.ts';
 import type { ArenaSmashableLoot } from '../arena/ArenaSmashableDefinitions.ts';
+import { createArenaFireTrapPlacements, resolveArenaFloorFirePlacement } from '../arena/ArenaFireTrapPlacement.ts';
+import { SharedFireTrapSystem } from '../hazards/SharedFireTrapSystem.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { completeFirstRunTeachingRound } from '../tutorial/TutorialProgress.ts';
@@ -480,6 +482,7 @@ export class ArenaScene extends Phaser.Scene {
   private layout!: ArenaLayout;
   private arenaVisuals: ArenaVisualRenderer | null = null;
   private arenaSmashables: ArenaSmashableSystem | null = null;
+  private arenaFireTraps: SharedFireTrapSystem | null = null;
   private supremeConstellation: SupremeConstellationFloor | null = null;
   private pathfinder!: GridPathfinder;
   private bombSites!: BombSiteManager;
@@ -1134,6 +1137,7 @@ export class ArenaScene extends Phaser.Scene {
     this.layout = ArenaGenerator.generate(def.seed, def.template, def.round, def.siteCount);
     this.drawProceduralArena(this.layout);
     this.createArenaSmashables();
+    this.createArenaFireTraps(def.round);
     this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 32, this.getBlockers(), ENEMY_NAVIGATION_PADDING);
     this.drawTraversalDebug();
 
@@ -1580,6 +1584,7 @@ export class ArenaScene extends Phaser.Scene {
       if (this.bossFlowPhase === 'combat') {
         const bossHazardTargets = this.getHazardDamageTargets();
         const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
+        this.updateArenaFireTraps(now);
         this.gasHazard?.update(
           now,
           this.player,
@@ -1637,6 +1642,7 @@ export class ArenaScene extends Phaser.Scene {
       );
     }
     const hazardTargets = this.getHazardDamageTargets();
+    this.updateArenaFireTraps(now);
     this.gasHazard?.update(
       now,
       this.player,
@@ -6103,8 +6109,47 @@ export class ArenaScene extends Phaser.Scene {
       this,
       this.layout.smashables,
       (type, x, y) => this.dropArenaSmashableLoot(type, x, y),
-      this.particlesEnabled
+      this.particlesEnabled,
+      'arena',
+      () => this.audio.playSfx('smashableBreak')
     );
+  }
+
+  private createArenaFireTraps(round: number): void {
+    this.arenaFireTraps?.destroy();
+    this.arenaFireTraps = new SharedFireTrapSystem(
+      this,
+      createArenaFireTrapPlacements(this.layout, round),
+      {
+        environment: 'arena',
+        particlesEnabled: this.particlesEnabled,
+        damagePerTick: 4.2,
+        maximumConcurrent: 2,
+        onDamagePlayer: (amount) => {
+          if (this.time.now < this.player.dashUntil || this.time.now < this.shieldActiveUntil) return;
+          if (this.player.takeDamage(amount)) GameplayTelemetryRecorder.recordPlayerDamage('fire-trap', amount);
+        },
+        antiCamp: {
+          dwellMs: 6_500,
+          regionRadius: 108,
+          redeployCooldownMs: 11_500,
+          predictionSeconds: 0.32,
+          maximumLead: 78,
+          resolvePlacement: (x, y, sequence) => resolveArenaFloorFirePlacement(this.layout, x, y, sequence)
+        }
+      }
+    );
+  }
+
+  private updateArenaFireTraps(now: number): void {
+    if (!this.arenaFireTraps) return;
+    const body = this.player.body as Phaser.Physics.Arcade.Body | null;
+    this.arenaFireTraps.update(now, {
+      x: this.player.x,
+      y: this.player.y,
+      velocityX: body?.velocity.x ?? 0,
+      velocityY: body?.velocity.y ?? 0
+    }, this.currentModeBalance().hazardDamageMultiplier);
   }
 
   private createPickupSprite(type: PickupType, x: number, y: number, color: number): Phaser.GameObjects.Container {
@@ -6417,6 +6462,7 @@ export class ArenaScene extends Phaser.Scene {
     this.layout = ArenaGenerator.generate(bossSeed, terminalEncounter ? 'open-field' : arenaByBoss[archetype], this.bossRound, 1);
     this.drawProceduralArena(this.layout);
     this.createArenaSmashables();
+    this.createArenaFireTraps(this.bossRound);
     this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 32, this.getBlockers(), ENEMY_NAVIGATION_PADDING);
     this.createOrMovePlayer();
     this.modRuntime.beginRound(1);
@@ -8722,6 +8768,8 @@ export class ArenaScene extends Phaser.Scene {
     this.arenaVisuals = null;
     this.retireRoundOwner('arena-smashables', () => this.arenaSmashables?.destroy());
     this.arenaSmashables = null;
+    this.retireRoundOwner('arena-fire-traps', () => this.arenaFireTraps?.destroy());
+    this.arenaFireTraps = null;
     this.retireRoundOwner('supreme-floor', () => this.supremeConstellation?.destroy());
     this.supremeConstellation = null;
     this.retireRoundOwner('walls', () => this.walls?.clear(true, true));
@@ -8845,6 +8893,7 @@ export class ArenaScene extends Phaser.Scene {
     this.flushPendingCombatProgress();
     this.arenaVisuals = null;
     this.arenaSmashables = null;
+    this.arenaFireTraps = null;
     this.supremeConstellation = null;
     this.audio.stopPlantingLoop();
     this.audio.stopDisarmLoop();
@@ -8902,6 +8951,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bombletHazard = null;
     this.gasHazard = null;
     this.fluxCores = null;
+    this.arenaFireTraps = null;
     this.bossEncounter = null;
     this.supremeFinale = null;
     this.supremeFinaleOverlay = null;
