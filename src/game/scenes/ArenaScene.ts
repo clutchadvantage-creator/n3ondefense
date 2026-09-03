@@ -305,6 +305,9 @@ interface RoundRuntimeDiagnostics {
   bossHudObjects: number;
   queuedSpawns: number;
   roundAudioLoops: number;
+  roundAudioVoices: number;
+  roundAudioTones: number;
+  cleanupFailures: number;
 }
 
 interface RoundBoundaryReport {
@@ -326,6 +329,9 @@ interface ArenaPreparationReport extends ArenaCombatWarmupPlan {
   addedProjectiles: number;
   addedFxCircles: number;
   addedTrailSamples: number;
+  trimmedProjectiles: number;
+  trimmedFxCircles: number;
+  trimmedTrailSamples: number;
   durationMs: number;
 }
 
@@ -406,6 +412,7 @@ export class ArenaScene extends Phaser.Scene {
   /** One authoritative generation gate owns both ordinary and boss rounds. */
   private readonly roundRuntime = new RoundRuntimeLifecycle();
   private readonly roundBoundaryHistory: RoundBoundaryReport[] = [];
+  private readonly roundCleanupFailures: string[] = [];
   private devRoundLifecycleSoakRemaining = 0;
   /**
    * Phaser reuses the ArenaScene instance after it has been stopped. Scene
@@ -588,6 +595,7 @@ export class ArenaScene extends Phaser.Scene {
   private readonly performanceMonitor = new FramePerformanceMonitor(600);
   private readonly lifecycleProfiler = new ArenaLifecycleProfiler();
   private lastArenaPreparation: ArenaPreparationReport | null = null;
+  private lastCapacityCompaction = { projectiles: 0, fxCircles: 0, trailSamples: 0 };
   private nextPerformanceTelemetryAt = 0;
   private nextPoolMaintenanceAt = 0;
   private devHazardIgnitionAt = 0;
@@ -1118,7 +1126,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private createRoundFromDefinition(def: ReturnType<RoundManager['currentDefinition']>): void {
-    this.startRoundRuntime('round', `round-${def.round}`, () => this.initializeStandardRound(def));
+    this.startRoundRuntime('round', `round-${def.round}`, def.round, () => this.initializeStandardRound(def));
   }
 
   private initializeStandardRound(def: ReturnType<RoundManager['currentDefinition']>): void {
@@ -1956,9 +1964,20 @@ export class ArenaScene extends Phaser.Scene {
       addedProjectiles,
       addedFxCircles,
       addedTrailSamples,
+      trimmedProjectiles: this.lastCapacityCompaction.projectiles,
+      trimmedFxCircles: this.lastCapacityCompaction.fxCircles,
+      trimmedTrailSamples: this.lastCapacityCompaction.trailSamples,
       durationMs: performance.now() - startedAt
     };
-    if (import.meta.env.DEV && (addedProjectiles > 0 || addedFxCircles > 0 || addedTrailSamples > 0)) {
+    this.lastCapacityCompaction = { projectiles: 0, fxCircles: 0, trailSamples: 0 };
+    if (import.meta.env.DEV && (
+      addedProjectiles > 0
+      || addedFxCircles > 0
+      || addedTrailSamples > 0
+      || this.lastArenaPreparation.trimmedProjectiles > 0
+      || this.lastArenaPreparation.trimmedFxCircles > 0
+      || this.lastArenaPreparation.trimmedTrailSamples > 0
+    )) {
       // eslint-disable-next-line no-console
       console.debug('[Arena preparation]', this.lastArenaPreparation);
     }
@@ -6439,9 +6458,13 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private beginBossFight(payload: RoundFinishedPayload, terminalEncounter = false): void {
-    this.startRoundRuntime('boss', `${terminalEncounter ? 'supreme-finale' : 'boss'}-${payload.completedRound}`, () => {
-      this.initializeBossRound(payload, terminalEncounter);
-    });
+    this.startRoundRuntime('boss',
+      `${terminalEncounter ? 'supreme-finale' : 'boss'}-${payload.completedRound}`,
+      payload.completedRound,
+      () => {
+        this.initializeBossRound(payload, terminalEncounter);
+      }
+    );
   }
 
   private initializeBossRound(payload: RoundFinishedPayload, terminalEncounter: boolean): void {
@@ -8510,7 +8533,7 @@ export class ArenaScene extends Phaser.Scene {
    * in their initializer; ownership, generation, replacement, and failure
    * handling are identical.
    */
-  private startRoundRuntime(kind: RoundRuntimeKind, label: string, initialize: () => void): void {
+  private startRoundRuntime(kind: RoundRuntimeKind, label: string, round: number, initialize: () => void): void {
     if (this.roundRuntime.hasRuntime || this.hasLiveRoundObjects) {
       this.endCurrentRoundRuntime('replace');
     } else {
@@ -8519,6 +8542,13 @@ export class ArenaScene extends Phaser.Scene {
       // our plain references before beginning the new generation.
       this.clearRoundCollections();
     }
+
+    // A burst can grow the projectile/FX pools into the thousands. Keeping
+    // those dormant Phaser objects through an in-scene round -> boss swap
+    // makes every later render/physics pass traverse a stale high-water mark.
+    // Retain exactly the upcoming runtime's warm reserve; this is capacity,
+    // never a projectile/effect gameplay cap.
+    this.compactCombatCapacityForRound(round);
 
     const setupStartedAt = performance.now();
     const token = this.roundRuntime.beginStart(kind, label);
@@ -8547,18 +8577,13 @@ export class ArenaScene extends Phaser.Scene {
   private endCurrentRoundRuntime(reason: RoundRuntimeEndReason): void {
     const token = this.roundRuntime.beginEnd(reason);
     if (!token) return;
+    this.roundCleanupFailures.length = 0;
     const before = this.captureRoundRuntimeDiagnostics();
     if (import.meta.env.DEV) this.lifecycleProfiler.finishGeneration(reason);
     if (!this.roundRuntime.beginCleanup(token)) return;
 
     try {
-      this.audio.stopPlantingLoop();
-      this.audio.stopDisarmLoop();
-      this.audio.stopSecurityLaserLoop();
-      this.audio.stopFluxCoreLoop();
-      this.audio.stopLowHealthWarning();
-      this.audio.stopArcadeEventSfx();
-      this.audio.stopAnomalySfx();
+      this.audio.stopRoundScopedAudio();
       this.clearGameplayInput();
       this.retireRoundOwnedResources();
     } finally {
@@ -8578,6 +8603,7 @@ export class ArenaScene extends Phaser.Scene {
     };
     const gas = this.gasHazard?.diagnostics();
     const bomblets = this.bombletHazard?.diagnostics();
+    const audio = this.audio.roundAudioDiagnostics();
     const activeColliders = this.physics?.world?.colliders?.getActive?.().filter((collider) => collider.active).length ?? 0;
     return {
       enemies: this.enemies.length,
@@ -8603,8 +8629,23 @@ export class ArenaScene extends Phaser.Scene {
       bossHudObjects: Number(Boolean(this.bossIntroOverlay)) + Number(Boolean(this.supremeFinaleOverlay))
         + Number(Boolean(this.supremeVictorySequence)) + Number(Boolean(this.bossNextFightButton)),
       queuedSpawns: this.bossSequenceTimers.length + this.bossLootLaunchesPending,
-      roundAudioLoops: this.audio.roundLoopDiagnostics().activeCount
+      roundAudioLoops: audio.requestedLoops,
+      roundAudioVoices: audio.activeVoices,
+      roundAudioTones: audio.activeTones,
+      cleanupFailures: this.roundCleanupFailures.length
     };
+  }
+
+  private compactCombatCapacityForRound(round: number): void {
+    if (!this.projectilePool || !this.fxCirclePool || !this.projectileTrails) return;
+    const reserve = arenaCombatWarmupPlan(this.protocol, round, this.particlesEnabled);
+    const projectiles = this.projectilePool.trimAvailable(
+      reserve.projectiles,
+      (projectile) => this.destroyPooledProjectile(projectile)
+    );
+    const fxCircles = this.fxCirclePool.trimAvailable(reserve.fxCircles, (circle) => circle.destroy());
+    const trailSamples = this.projectileTrails.trimRetained(reserve.trailSamples);
+    this.lastCapacityCompaction = { projectiles, fxCircles, trailSamples };
   }
 
   private validateRoundRuntimeCleanup(
@@ -8748,8 +8789,11 @@ export class ArenaScene extends Phaser.Scene {
     this.navState = new WeakMap<Enemy, NavState>();
     this.patrolTargets = new WeakMap<Enemy, PatrolPoint>();
     this.enemySeparationGrid.clear();
+    this.enemyColliders.clear();
     this.separationSubject = null;
     this.defuseCandidateDistanceSquared = new WeakMap<Enemy, number>();
+    this.nextPerformanceTelemetryAt = 0;
+    this.nextPoolMaintenanceAt = 0;
   }
 
   private retireRoundOwnedResources(): void {
@@ -8870,12 +8914,14 @@ export class ArenaScene extends Phaser.Scene {
       retire();
     } catch (error) {
       // Continue retiring other owners so one already-disposed Phaser object
-      // cannot strand the rest of an encounter. DEV diagnostics keep the
-      // owning subsystem visible instead of silently swallowing the failure.
-      if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
-        console.error(`[ROUND LIFECYCLE] ${owner} cleanup failed`, error);
-      }
+      // cannot strand the rest of an encounter. Diagnostics keep the owning
+      // subsystem visible instead of silently swallowing the failure.
+      this.roundCleanupFailures.push(owner);
+      // A failed owner retirement can explain production-only cross-round
+      // slowdown, so keep this visible outside DEV instead of silently losing
+      // the only actionable subsystem name.
+      // eslint-disable-next-line no-console
+      console.error(`[ROUND LIFECYCLE] ${owner} cleanup failed`, error);
     }
   }
 
@@ -8905,11 +8951,9 @@ export class ArenaScene extends Phaser.Scene {
     this.arenaSmashables = null;
     this.arenaFireTraps = null;
     this.supremeConstellation = null;
-    this.audio.stopPlantingLoop();
-    this.audio.stopDisarmLoop();
-    this.audio.stopSecurityLaserLoop();
-    this.audio.stopFluxCoreLoop();
-    this.audio.stopLowHealthWarning();
+    // External Scene stops still receive the same hard audio boundary as an
+    // ordinary/boss transition. Arena sleep for HEIST does not emit SHUTDOWN.
+    this.audio.stopRoundScopedAudio();
     this.modAcquisitionPresenter?.destroy();
     this.modAcquisitionPresenter = null;
     this.tutorialDirector?.destroy();

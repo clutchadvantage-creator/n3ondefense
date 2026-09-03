@@ -127,6 +127,13 @@ const PICKUP_SFX_SOURCES = {
 type PickupSfxName = keyof typeof PICKUP_SFX_SOURCES;
 const PICKUP_SFX_NAMES = Object.keys(PICKUP_SFX_SOURCES) as PickupSfxName[];
 
+export interface RoundAudioDiagnostics {
+  activeCount: number;
+  activeVoices: number;
+  activeTones: number;
+  requestedLoops: number;
+}
+
 export class AudioManager {
   private static instance: AudioManager | null = null;
   private readonly context: AudioContext;
@@ -250,6 +257,10 @@ export class AudioManager {
   private cachedMusicVolume = DEFAULT_AUDIO_VOLUME * DEFAULT_AUDIO_VOLUME;
   private cachedSfxVolume = DEFAULT_AUDIO_VOLUME * DEFAULT_AUDIO_VOLUME;
   private readonly cachedSoundVolumes = {} as Record<AudioSfxName, number>;
+  /** WebAudio tones are outside Phaser's clock just like HTMLAudioElement
+   * voices. Track them so an encounter boundary can retire them immediately
+   * instead of waiting for their scheduled stop time. */
+  private readonly activeSfxTones = new Map<OscillatorNode, GainNode>();
 
   private clampVolume(value: number): number {
     return Math.max(0, Math.min(1, value));
@@ -350,14 +361,7 @@ export class AudioManager {
   }
 
   private playBoostSfx(): void {
-    const fallbackOneShot = (): void => {
-      const direct = new Audio(audioAssetUrl('soundeffects/boostsound.mp3'));
-      direct.preload = 'auto';
-      direct.volume = this.getSfxVolume('boost');
-      void direct.play().catch(() => {
-        this.beep('sfx', 350, 90, 0.05, 'boost');
-      });
-    };
+    const fallbackOneShot = (): void => this.beep('sfx', 350, 90, 0.05, 'boost');
 
     if (this.boostSfxPool.length === 0) {
       fallbackOneShot();
@@ -1272,8 +1276,161 @@ export class AudioManager {
 
     osc.connect(g);
     g.connect(this.context.destination);
+    if (kind === 'sfx') {
+      this.activeSfxTones.set(osc, g);
+      osc.addEventListener('ended', () => {
+        this.activeSfxTones.delete(osc);
+        osc.disconnect();
+        g.disconnect();
+      }, { once: true });
+    }
     osc.start();
     osc.stop(this.context.currentTime + durationMs / 1000 + 0.02);
+  }
+
+  private stopAudioVoice(audio: HTMLAudioElement | null): void {
+    if (!audio) return;
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Seeking is optional while metadata is unavailable.
+    }
+  }
+
+  private stopAudioPool(pool: readonly HTMLAudioElement[], clearLoop = false): void {
+    for (const audio of pool) {
+      if (clearLoop) audio.loop = false;
+      this.stopAudioVoice(audio);
+    }
+  }
+
+  /**
+   * Hard encounter-audio boundary used by Arena's one authoritative runtime
+   * teardown. Music and menu feedback are deliberately not owned by a round.
+   *
+   * HEIST cleanup opts into preserving the portal-transit bridge while still
+   * retiring every world-owned combat/hazard voice before Arena wakes.
+   */
+  stopRoundScopedAudio(options: { preserveAnomalyTransit?: boolean } = {}): void {
+    this.stopPlantingLoop();
+    this.stopDisarmLoop();
+    this.stopSecurityLaserLoop();
+    this.stopFluxCoreLoop();
+    this.stopLowHealthWarning();
+    this.stopArcadeEventSfx();
+    this.stopAnomalySfx();
+
+    for (const pool of [
+      this.shotSfxPool,
+      this.boostSfxPool,
+      this.enemyDeathSfxPool,
+      this.playerDeathSfxPool,
+      this.bombletSfxPool,
+      this.hitDamageSfxPool
+    ]) this.stopAudioPool(pool);
+    for (const name of PICKUP_SFX_NAMES) {
+      this.stopAudioPool(this.pickupSfxPools[name]);
+      this.pickupSfxCursors[name] = 0;
+    }
+    for (const name of Object.keys(this.abilityFeedbackSfxPools) as AbilityFeedbackSfxName[]) {
+      this.stopAudioPool(this.abilityFeedbackSfxPools[name]);
+      this.abilityFeedbackSfxCursors[name] = 0;
+    }
+    for (const name of Object.keys(this.presentationSfxPools) as PresentationSfxName[]) {
+      if (options.preserveAnomalyTransit && name === 'anomalyPortalTransit') continue;
+      this.stopAudioPool(this.presentationSfxPools[name], true);
+      this.presentationSfxCursors[name] = 0;
+      this.lastPresentationSfxAt[name] = -Infinity;
+    }
+
+    for (const audio of [
+      this.runStartSfx,
+      this.lasersOffSfx,
+      this.gasSfx,
+      this.shieldActivationSfx,
+      this.shieldDeactivationSfx,
+      this.modCollectionSfx,
+      this.legendaryModSfx,
+      this.anomalyPortalPowerAudio,
+      this.anomalyPortalIdleAudio,
+      this.heistAlarmAudio,
+      this.heistMusicAudio
+    ]) this.stopAudioVoice(audio);
+    this.anomalyPortalIdleRequested = false;
+    this.heistAlarmRequested = false;
+    this.heistMusicRequested = false;
+    this.resumeArenaMusicAfterHeist = false;
+    this.activeArcadeLoop = null;
+
+    for (const [oscillator, gain] of [...this.activeSfxTones]) {
+      try {
+        gain.gain.cancelScheduledValues(this.context.currentTime);
+        gain.gain.setValueAtTime(0, this.context.currentTime);
+        oscillator.stop();
+      } catch {
+        // The oscillator may already have reached its scheduled stop.
+      }
+    }
+    this.activeSfxTones.clear();
+
+    this.shotSfxCursor = 0;
+    this.boostSfxCursor = 0;
+    this.enemyDeathSfxCursor = 0;
+    this.playerDeathSfxCursor = 0;
+    this.bombletSfxCursor = 0;
+    this.hitDamageSfxCursor = 0;
+    this.lastEnemyDeathSfxAt = -Infinity;
+    this.lastHitDamageSfxAt = -Infinity;
+    this.lastUnavailableSfxAt = -Infinity;
+  }
+
+  /** Actual browser voices/tone nodes still active for encounter-owned audio.
+   * Unlike roundLoopDiagnostics this catches short pooled clips such as fire
+   * traps, explosions, boss attacks, pickups, and weapon fire. */
+  roundAudioDiagnostics(): Readonly<RoundAudioDiagnostics> {
+    const pools: readonly (readonly HTMLAudioElement[])[] = [
+      this.shotSfxPool,
+      this.boostSfxPool,
+      this.enemyDeathSfxPool,
+      this.playerDeathSfxPool,
+      this.bombletSfxPool,
+      this.hitDamageSfxPool,
+      ...PICKUP_SFX_NAMES.map((name) => this.pickupSfxPools[name]),
+      ...Object.values(this.abilityFeedbackSfxPools),
+      ...Object.values(this.presentationSfxPools)
+    ];
+    const dedicated = [
+      this.runStartSfx,
+      this.securityLaserAudio,
+      this.lasersOffSfx,
+      this.gasSfx,
+      this.fluxCoreAudio,
+      this.shieldActivationSfx,
+      this.shieldDeactivationSfx,
+      this.modCollectionSfx,
+      this.legendaryModSfx,
+      this.lowHealthSfx,
+      this.anomalyPortalIdleAudio,
+      this.anomalyPortalPowerAudio,
+      this.heistAlarmAudio,
+      this.heistMusicAudio,
+      this.plantingAudio,
+      this.disarmAudio
+    ];
+    let activeVoices = 0;
+    for (const pool of pools) {
+      for (const audio of pool) if (!audio.paused && !audio.ended) activeVoices += 1;
+    }
+    for (const audio of dedicated) if (audio && !audio.paused && !audio.ended) activeVoices += 1;
+    const activeTones = this.activeSfxTones.size;
+    const requestedLoops = this.roundLoopDiagnostics().activeCount;
+    return {
+      activeCount: activeVoices + activeTones,
+      activeVoices,
+      activeTones,
+      requestedLoops
+    };
   }
 
   /** Keeps one electrical loop alive only while the operative is near a Flux Core. */

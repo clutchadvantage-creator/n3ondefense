@@ -5,6 +5,9 @@ import { performance } from 'node:perf_hooks';
 import { RoundRuntimeLifecycle } from '../src/game/flow/RoundRuntimeLifecycle.ts';
 
 const arenaSource = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
+const audioSource = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
+const heistSource = readFileSync(new URL('../src/game/anomalies/heist/HeistScene.ts', import.meta.url), 'utf8');
+const trailSource = readFileSync(new URL('../src/game/performance/ProjectileTrailBatch.ts', import.meta.url), 'utf8');
 
 const MODES = ['normal', 'overdrive-draco', 'supreme-leo'];
 const PATTERN = ['round', 'round', 'round', 'round', 'boss', 'round', 'round', 'round', 'round', 'boss'];
@@ -86,4 +89,41 @@ test('Arena centralizes ordinary and boss creation and clears every Phaser timer
   assert.match(arenaSource, /this\.projectilePool\.releaseAll\(\)/);
   assert.match(arenaSource, /this\.fxCirclePool\.releaseAll\(\)/);
   assert.match(arenaSource, /n3onRoundLifecycleSoak/);
+});
+
+test('round boundaries stop actual browser voices and compact dormant high-water capacity', () => {
+  const endGate = arenaSource.slice(
+    arenaSource.indexOf('private endCurrentRoundRuntime('),
+    arenaSource.indexOf('private captureRoundRuntimeDiagnostics(')
+  );
+  assert.match(endGate, /this\.audio\.stopRoundScopedAudio\(\)/);
+  assert.match(endGate, /this\.retireRoundOwnedResources\(\)/);
+  assert.match(audioSource, /stopRoundScopedAudio\(options:/);
+  assert.match(audioSource, /Object\.keys\(this\.presentationSfxPools\)/);
+  assert.match(audioSource, /this\.activeSfxTones\.clear\(\)/);
+  assert.match(audioSource, /roundAudioDiagnostics\(\)/);
+  assert.match(arenaSource, /roundAudioVoices: audio\.activeVoices/);
+  assert.match(arenaSource, /roundAudioTones: audio\.activeTones/);
+
+  const startGate = arenaSource.slice(
+    arenaSource.indexOf('private startRoundRuntime('),
+    arenaSource.indexOf('private endCurrentRoundRuntime(')
+  );
+  assert.match(startGate, /this\.compactCombatCapacityForRound\(round\)/);
+  assert.match(arenaSource, /projectilePool\.trimAvailable\([\s\S]*?reserve\.projectiles/);
+  assert.match(arenaSource, /fxCirclePool\.trimAvailable\(reserve\.fxCircles/);
+  assert.match(arenaSource, /projectileTrails\.trimRetained\(reserve\.trailSamples\)/);
+  assert.match(trailSource, /trimRetained\(maxRetained: number\)/);
+});
+
+test('HEIST keeps the working portal bridge while retiring anomaly-world audio', () => {
+  assert.match(
+    heistSource,
+    /exitHeistMusic\(\)[\s\S]*?stopRoundScopedAudio\(\{ preserveAnomalyTransit: true \}\)/
+  );
+  const anomalyHandoff = arenaSource.slice(
+    arenaSource.indexOf('private readonly onAnomalyReturn'),
+    arenaSource.indexOf('constructor()')
+  );
+  assert.doesNotMatch(anomalyHandoff, /endCurrentRoundRuntime|startRoundRuntime/);
 });

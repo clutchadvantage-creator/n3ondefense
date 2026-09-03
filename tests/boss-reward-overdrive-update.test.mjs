@@ -93,7 +93,8 @@ test('boss and Supreme handoffs retire the live encounter before changing scenes
   );
   assert.match(handoff, /this\.retireRoundOwnedResources\(\)/);
   assert.match(handoff, /this\.validateRoundRuntimeCleanup\(/);
-  assert.match(handoff, /this\.audio\.stopSecurityLaserLoop\(\)/);
+  assert.match(handoff, /this\.audio\.stopRoundScopedAudio\(\)/);
+  assert.match(audioSource, /stopRoundScopedAudio\([\s\S]*?this\.stopSecurityLaserLoop\(\)/);
   const completed = arenaSource.slice(
     arenaSource.indexOf('private presentCompletedRound'),
     arenaSource.indexOf('private beginBossFight')

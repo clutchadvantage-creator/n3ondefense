@@ -19,6 +19,8 @@ interface SimulatedRoundResources {
   colliders: number;
   poolActive: number;
   listeners: number;
+  audioVoices: number;
+  audioToneNodes: number;
 }
 
 const createWorkload = (kind: RoundRuntimeKind, cycle: number): SimulatedRoundResources => ({
@@ -33,7 +35,9 @@ const createWorkload = (kind: RoundRuntimeKind, cycle: number): SimulatedRoundRe
   tweens: 96,
   colliders: kind === 'boss' ? 44 : 490,
   poolActive: kind === 'boss' ? 6200 : 4466,
-  listeners: kind === 'boss' ? 8 : 14
+  listeners: kind === 'boss' ? 8 : 14,
+  audioVoices: kind === 'boss' ? 18 : 32,
+  audioToneNodes: 4
 });
 
 const zeroResources = (resources: SimulatedRoundResources): void => {
@@ -101,13 +105,33 @@ const coldStartResults = burstScenarios.map((scenario) => {
   const active = Array.from({ length: scenario.concurrentProjectiles }, (_, sequence) => pool.obtain({ sequence }));
   const combatAllocations = pool.createdCount - createdBeforeCombat;
   for (const item of active) pool.release(item);
+  // Simulate a fence-split burst well above the ordinary warm reserve, then
+  // prove the encounter boundary drops dormant high-water capacity without
+  // imposing a live gameplay cap.
+  const spike = Array.from(
+    { length: scenario.concurrentProjectiles * 5 },
+    (_, sequence) => pool.obtain({ sequence: scenario.concurrentProjectiles + sequence })
+  );
+  for (const item of spike) pool.release(item);
+  const trimmedAtBoundary = pool.trimAvailable(plan.projectiles, () => undefined);
+  const retainedAfterBoundary = pool.availableCount;
   const createdBeforeSecondBurst = pool.createdCount;
   const second = Array.from({ length: scenario.concurrentProjectiles }, (_, sequence) => pool.obtain({ sequence }));
   const nextRoundAllocations = pool.createdCount - createdBeforeSecondBurst;
   for (const item of second) pool.release(item);
-  return { ...scenario, reserve: plan.projectiles, prewarmed, combatAllocations, nextRoundAllocations };
+  return {
+    ...scenario,
+    reserve: plan.projectiles,
+    prewarmed,
+    combatAllocations,
+    trimmedAtBoundary,
+    retainedAfterBoundary,
+    nextRoundAllocations
+  };
 });
 
 console.log('Cold-first-round combat allocation model (capacity, never a gameplay cap)');
 console.table(coldStartResults);
-if (coldStartResults.some((result) => result.nextRoundAllocations !== 0)) process.exitCode = 1;
+if (coldStartResults.some((result) => result.nextRoundAllocations !== 0
+  || result.retainedAfterBoundary !== result.reserve
+  || result.trimmedAtBoundary <= 0)) process.exitCode = 1;

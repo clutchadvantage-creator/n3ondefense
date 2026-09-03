@@ -2497,6 +2497,10 @@ export class HeistScene extends Phaser.Scene {
     };
     safely('anomaly-audio', () => this.audio.stopAll());
     safely('heist-music', () => this.coreAudio.exitHeistMusic());
+    // HEIST is a separate world owner. Retire its weapon, hazard, pickup and
+    // fire-trap voices before the preserved Arena wakes, while deliberately
+    // allowing the short portal transit bridge to finish.
+    safely('world-audio', () => this.coreAudio.stopRoundScopedAudio({ preserveAnomalyTransit: true }));
     safely('low-health-audio', () => this.coreAudio.setLowHealthWarning(false));
     safely('input-controller', () => this.inputController?.destroy());
     this.pauseMenu = null;

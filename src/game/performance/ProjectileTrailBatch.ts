@@ -117,6 +117,16 @@ export class ProjectileTrailBatch {
     this.graphics.clear();
   }
 
+  /** Drops only dormant high-water samples at an encounter boundary. Trail
+   * behavior is unchanged and the next runtime still prewarms its calculated
+   * reserve before combat becomes active. */
+  trimRetained(maxRetained: number): number {
+    const target = Math.max(0, Math.floor(maxRetained) - this.active.length);
+    const before = this.available.length;
+    if (before > target) this.available.length = target;
+    return before - this.available.length;
+  }
+
   stats(): ProjectileTrailBatchStats {
     return {
       active: this.active.length,
