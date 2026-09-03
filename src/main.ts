@@ -19,4 +19,8 @@ app.innerHTML = `
 
 installMenuAudio();
 installUiNavigation(document.querySelector<HTMLElement>('#game-ui-root')!);
-new Phaser.Game(createGameConfig('phaser-game'));
+const game = new Phaser.Game(createGameConfig('phaser-game'));
+
+if (import.meta.env.DEV) {
+  (globalThis as typeof globalThis & { n3onGame?: Phaser.Game }).n3onGame = game;
+}

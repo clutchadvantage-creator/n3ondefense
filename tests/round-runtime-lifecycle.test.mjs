@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { RoundRuntimeLifecycle } from '../src/game/flow/RoundRuntimeLifecycle.ts';
+import { EncounterResourceRegistry } from '../src/game/flow/EncounterResourceRegistry.ts';
 
 const arenaSource = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
 const audioSource = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
@@ -12,13 +13,13 @@ const trailSource = readFileSync(new URL('../src/game/performance/ProjectileTrai
 const MODES = ['normal', 'overdrive-draco', 'supreme-leo'];
 const PATTERN = ['round', 'round', 'round', 'round', 'boss', 'round', 'round', 'round', 'round', 'boss'];
 
-test('one lifecycle gate safely runs 20 encounter transitions in every mode', () => {
+test('one lifecycle gate safely runs 100 encounter transitions in every mode', () => {
   for (const mode of MODES) {
     const lifecycle = new RoundRuntimeLifecycle();
     const durations = [];
     let staleExecutions = 0;
 
-    for (let index = 0; index < 20; index += 1) {
+    for (let index = 0; index < 100; index += 1) {
       const kind = PATTERN[index % PATTERN.length];
       const startedAt = performance.now();
       const token = lifecycle.beginStart(kind, `${mode}-${kind}-${index + 1}`);
@@ -40,9 +41,17 @@ test('one lifecycle gate safely runs 20 encounter transitions in every mode', ()
         activePoolSlots: kind === 'boss' ? 6200 : 4466
       };
       const deferredFromThisGeneration = lifecycle.guard(token.generation, () => { staleExecutions += 1; });
+      let handoffExecutions = 0;
+      const rewardHandoff = lifecycle.guardHandoff(token.generation, () => { handoffExecutions += 1; });
 
-      const ending = lifecycle.beginEnd('completed');
+      const ending = lifecycle.requestEnd('completed');
       assert.deepEqual(ending, token);
+      assert.equal(lifecycle.phase, 'end-requested');
+      deferredFromThisGeneration();
+      assert.equal(staleExecutions, 0);
+      rewardHandoff();
+      assert.equal(handoffExecutions, 1);
+      assert.equal(lifecycle.beginRewardFlow(token), true);
       assert.equal(lifecycle.beginCleanup(token), true);
       for (const key of Object.keys(resources)) resources[key] = 0;
       assert.equal(lifecycle.finishCleanup(token), true);
@@ -55,13 +64,31 @@ test('one lifecycle gate safely runs 20 encounter transitions in every mode', ()
       durations.push(performance.now() - startedAt);
     }
 
-    assert.equal(lifecycle.generation, 20);
-    const firstHalf = durations.slice(0, 10).reduce((sum, value) => sum + value, 0);
-    const secondHalf = durations.slice(10).reduce((sum, value) => sum + value, 0);
+    assert.equal(lifecycle.generation, 100);
+    const firstHalf = durations.slice(0, 50).reduce((sum, value) => sum + value, 0);
+    const secondHalf = durations.slice(50).reduce((sum, value) => sum + value, 0);
     // This is lifecycle-control overhead, not a rendering FPS benchmark. It
     // catches accidental generation-sized scans or retained ledger growth.
     assert.ok(secondHalf < firstHalf * 20 + 5, `${mode} lifecycle overhead grew unexpectedly`);
   }
+});
+
+test('encounter ownership retires deferred work and reports stale owners', () => {
+  const registry = new EncounterResourceRegistry();
+  const retired = [];
+  const first = {};
+  const second = {};
+  registry.begin('arena-normal-round-10');
+  registry.track(first, 'scene-clock', 'gameplay-timer', () => retired.push('first'));
+  registry.begin('arena-normal-boss-10');
+  registry.track(second, 'scene-clock', 'handoff-timer', () => retired.push('second'));
+  assert.equal(registry.snapshot().stale, 1);
+  assert.equal(registry.retire('arena-normal-round-10'), 1);
+  assert.deepEqual(retired, ['first']);
+  assert.equal(registry.snapshot().stale, 0);
+  assert.equal(registry.retire(), 1);
+  assert.deepEqual(retired, ['first', 'second']);
+  assert.equal(registry.snapshot().current, 0);
 });
 
 test('duplicate start/end calls cannot race or advance a generation twice', () => {
@@ -86,6 +113,10 @@ test('Arena centralizes ordinary and boss creation and clears every Phaser timer
   assert.match(arenaSource, /clock\._pendingInsertion/);
   assert.match(arenaSource, /clock\._pendingRemoval/);
   assert.match(arenaSource, /this\.tweens\.killAll\(\)/);
+  assert.match(arenaSource, /this\.settleEncounterRemovalQueues\(\)/);
+  assert.match(arenaSource, /unclaimed-encounter-display/);
+  assert.match(arenaSource, /requestEnd\('completed'\)/);
+  assert.match(arenaSource, /guardHandoff/);
   assert.match(arenaSource, /this\.projectilePool\.releaseAll\(\)/);
   assert.match(arenaSource, /this\.fxCirclePool\.releaseAll\(\)/);
   assert.match(arenaSource, /n3onRoundLifecycleSoak/);

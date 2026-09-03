@@ -20,6 +20,7 @@
     "performance:hazards": "node --experimental-strip-types scripts/benchmark-hazard-overlap.ts",
     "performance:heist": "node --experimental-strip-types scripts/benchmark-heist-runtime.ts",
     "performance:round-lifecycle": "node --experimental-strip-types scripts/benchmark-round-lifecycle.ts",
+    "performance:round-lifecycle:live": "node scripts/dev-cdp-eval.mjs 9225 --file scripts/benchmark-live-round-lifecycle.browser.js",
     "preview": "vite preview"
   },
   "devDependencies": {

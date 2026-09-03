@@ -132,6 +132,8 @@ export interface RoundAudioDiagnostics {
   activeVoices: number;
   activeTones: number;
   requestedLoops: number;
+  pooledVoices: number;
+  dedicatedVoices: number;
 }
 
 export class AudioManager {
@@ -1429,7 +1431,9 @@ export class AudioManager {
       activeCount: activeVoices + activeTones,
       activeVoices,
       activeTones,
-      requestedLoops
+      requestedLoops,
+      pooledVoices: pools.reduce((sum, pool) => sum + pool.length, 0),
+      dedicatedVoices: dedicated.reduce((sum, audio) => sum + Number(Boolean(audio)), 0)
     };
   }
 

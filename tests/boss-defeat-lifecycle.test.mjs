@@ -25,7 +25,8 @@ test('boss defeat claims one authoritative combat-to-destruction transition befo
 test('fatal-hit callbacks defer destructive cleanup until active combat iterators unwind', () => {
   const complete = methodBody(arenaSource, 'private completeBossFight()', 'private handleSupremeBossDefeated');
   const destruction = methodBody(arenaSource, 'private beginBossDestruction', 'private retireActiveBossProjectiles');
-  assert.match(complete, /this\.scheduleRoundDelayedCall\(0, \(\) => this\.beginBossDestruction\(snapshot\)\)/);
+  assert.match(complete, /this\.scheduleRoundHandoffCall\(0, \(\) => this\.beginBossDestruction\(snapshot\)\)/);
+  assert.match(complete, /this\.roundRuntime\.requestEnd\('completed'\)/);
   assert.doesNotMatch(complete, /laserSecurity\?\.destroy|bombletHazard\?\.destroy|retireActiveBossProjectiles/);
   assert.match(destruction, /this\.bossEncounter !== snapshot\.encounter/);
   assert.match(destruction, /retireActiveBossProjectiles\(\)/);

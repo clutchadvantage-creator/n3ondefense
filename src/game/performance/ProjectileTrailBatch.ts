@@ -135,6 +135,10 @@ export class ProjectileTrailBatch {
     };
   }
 
+  ownsDisplayObject(object: unknown): boolean {
+    return object === this.graphics;
+  }
+
   destroy(): void {
     this.active.length = 0;
     this.available.length = 0;

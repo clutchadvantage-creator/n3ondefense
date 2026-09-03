@@ -4,7 +4,7 @@ import { ReusableObjectPool } from '../src/game/performance/ReusableObjectPool.t
 import type { RunProtocolId } from '../src/game/mods/types.ts';
 
 const MODES = ['normal', 'overdrive-draco', 'supreme-leo'] as const;
-const CYCLES = 20;
+const CYCLES = 100;
 
 interface SimulatedRoundResources {
   enemies: number;
@@ -51,6 +51,7 @@ for (const mode of MODES) {
   let maximumResidue = 0;
   let firstFiveMs = 0;
   let lastFiveMs = 0;
+  let rewardHandoffs = 0;
 
   for (let cycle = 1; cycle <= CYCLES; cycle += 1) {
     const kind: RoundRuntimeKind = cycle % 5 === 0 ? 'boss' : 'round';
@@ -59,8 +60,11 @@ for (const mode of MODES) {
     lifecycle.markActive(token);
     const resources = createWorkload(kind, cycle);
     const stale = lifecycle.guard(token.generation, () => { staleCallbacks += 1; });
-    const ending = lifecycle.beginEnd('soak-transition');
-    if (!ending || !lifecycle.beginCleanup(ending)) throw new Error(`${mode} cycle ${cycle} failed to enter cleanup`);
+    const rewardHandoff = lifecycle.guardHandoff(token.generation, () => { rewardHandoffs += 1; });
+    const ending = lifecycle.requestEnd('soak-transition');
+    if (!ending || !lifecycle.beginRewardFlow(ending)) throw new Error(`${mode} cycle ${cycle} failed to enter rewards`);
+    rewardHandoff();
+    if (!lifecycle.beginCleanup(ending)) throw new Error(`${mode} cycle ${cycle} failed to enter cleanup`);
     zeroResources(resources);
     lifecycle.finishCleanup(ending);
     stale();
@@ -78,6 +82,7 @@ for (const mode of MODES) {
     finalPhase: lifecycle.phase,
     maximumResidue,
     staleCallbacks,
+    rewardHandoffs,
     firstFiveControlMs: Number(firstFiveMs.toFixed(4)),
     lastFiveControlMs: Number(lastFiveMs.toFixed(4))
   });
@@ -86,7 +91,8 @@ for (const mode of MODES) {
 console.log('N3ONDefense deterministic round-lifecycle soak');
 console.table(results);
 if (results.some((result) => result.finalPhase !== 'ready'
-  || result.maximumResidue !== 0 || result.staleCallbacks !== 0)) process.exitCode = 1;
+  || result.maximumResidue !== 0 || result.staleCallbacks !== 0
+  || result.rewardHandoffs !== CYCLES)) process.exitCode = 1;
 
 const burstScenarios: readonly { protocol: RunProtocolId; round: number; concurrentProjectiles: number }[] = [
   { protocol: 'normal', round: 1, concurrentProjectiles: 150 },
@@ -119,6 +125,18 @@ const coldStartResults = burstScenarios.map((scenario) => {
   const second = Array.from({ length: scenario.concurrentProjectiles }, (_, sequence) => pool.obtain({ sequence }));
   const nextRoundAllocations = pool.createdCount - createdBeforeSecondBurst;
   for (const item of second) pool.release(item);
+  const createdBeforePlateau = pool.createdCount;
+  let maximumRetainedAcross100Boundaries = 0;
+  for (let transition = 0; transition < 100; transition += 1) {
+    const encounter = Array.from(
+      { length: scenario.concurrentProjectiles },
+      (_, sequence) => pool.obtain({ sequence: transition * scenario.concurrentProjectiles + sequence })
+    );
+    for (const item of encounter) pool.release(item);
+    pool.trimAvailable(plan.projectiles, () => undefined);
+    maximumRetainedAcross100Boundaries = Math.max(maximumRetainedAcross100Boundaries, pool.availableCount);
+  }
+  const allocationsAcross100WarmBoundaries = pool.createdCount - createdBeforePlateau;
   return {
     ...scenario,
     reserve: plan.projectiles,
@@ -126,7 +144,9 @@ const coldStartResults = burstScenarios.map((scenario) => {
     combatAllocations,
     trimmedAtBoundary,
     retainedAfterBoundary,
-    nextRoundAllocations
+    nextRoundAllocations,
+    maximumRetainedAcross100Boundaries,
+    allocationsAcross100WarmBoundaries
   };
 });
 
@@ -134,4 +154,6 @@ console.log('Cold-first-round combat allocation model (capacity, never a gamepla
 console.table(coldStartResults);
 if (coldStartResults.some((result) => result.nextRoundAllocations !== 0
   || result.retainedAfterBoundary !== result.reserve
+  || result.maximumRetainedAcross100Boundaries !== result.reserve
+  || result.allocationsAcross100WarmBoundaries !== 0
   || result.trimmedAtBoundary <= 0)) process.exitCode = 1;
