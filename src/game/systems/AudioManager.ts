@@ -1262,6 +1262,11 @@ export class AudioManager {
     this.pauseMusic();
   }
 
+  /** Resume the existing mixer from the trusted deployment gesture. */
+  resumeFromUserGesture(): void {
+    if (this.context.state === 'suspended') void this.context.resume().catch(() => undefined);
+  }
+
   beep(kind: 'music' | 'sfx', frequency: number, durationMs: number, gain = 0.04, sound?: AudioSfxName): void {
     if (this.context.state === 'suspended') {
       this.context.resume().catch(() => undefined);

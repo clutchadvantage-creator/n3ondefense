@@ -10,6 +10,7 @@ import { createPremiumOperativeFrameSvgDataUri } from '../../ui/stores/PremiumOp
 import { createBaseOperativeFrameSvgDataUri } from '../../ui/stores/BaseOperativeFrameSvg.ts';
 import { createDetailedEnemyRobotTextures } from '../enemies/EnemyArtTextures.ts';
 import { createDetailedBossTextures } from '../bosses/BossArtTextures.ts';
+import { createMechanicalDebrisTextures } from '../vfx/MechanicalDestructionVfx.ts';
 import { createMineFrameSvgDataUri } from '../cosmetics/MineFrameArt.ts';
 import {
   createPremiumProjectileShapeSvgDataUri,
@@ -69,6 +70,8 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xffffff, 1);
     g.fillRect(0, 0, 8, 8);
     g.generateTexture('pixel', 8, 8);
+
+    createMechanicalDebrisTextures(g);
 
     g.clear();
     g.fillStyle(COLORS.panel, 1);

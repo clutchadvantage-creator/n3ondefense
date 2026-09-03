@@ -5,7 +5,7 @@ import { getCosmeticById } from '../../data/cosmetics';
 import { COLORS, WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { OBJECTIVE_CONFIG } from '../config/gameplay';
 import { ABILITY_BALANCE, ENEMY_BALANCE, OBJECTIVE_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, REWARD_BALANCE, TANK_HOMING_MISSILE_BALANCE, WEAPON_BALANCE, getConcurrentSpawnPressure, getDefuseAssigneeCount, getDifficultyCurve, getSpawnCadenceMultiplier, getSpawnProfile } from '../config/balance';
-import { RunTransitionManager } from '../flow/RunTransitionManager';
+import { RunTransitionManager, type ArenaTransitionReason } from '../flow/RunTransitionManager';
 import { RoundRuntimeLifecycle, type RoundRuntimeKind, type RoundRuntimeToken } from '../flow/RoundRuntimeLifecycle.ts';
 import { EncounterResourceRegistry } from '../flow/EncounterResourceRegistry.ts';
 import { SceneKeys } from '../flow/SceneKeys';
@@ -47,7 +47,7 @@ import { startArenaLoad } from '../utils/runFlow';
 import { createButton } from '../utils/ui';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
 import { GameplayPointerLock } from '../input/GameplayPointerLock';
-import { configureSceneUiNavigation } from '../input/UiNavigationController.ts';
+import { configureSceneUiNavigation, getUiInputPresentation } from '../input/UiNavigationController.ts';
 import { PlayerInput } from '../input/PlayerInput.ts';
 import type { InputDevice } from '../input/ActionInput.ts';
 import { MineSalvoInput, type MineSalvoInputResolution } from '../input/MineSalvoInput.ts';
@@ -92,6 +92,8 @@ import { BombExplosionCosmeticVfx } from '../cosmetics/BombExplosionCosmeticVfx.
 import { resolveMineFrameAppearance } from '../cosmetics/MineFrameAppearance.ts';
 import { OperativeShieldEffect } from '../vfx/OperativeShieldEffect.ts';
 import { PlayerMuzzleFlashVfx } from '../vfx/PlayerMuzzleFlashVfx.ts';
+import { MechanicalDestructionVfx } from '../vfx/MechanicalDestructionVfx.ts';
+import { ArenaStartupPresentation, type ArenaStartupPresentationKind } from '../ui/ArenaStartupPresentation.ts';
 import { BOMB_EXPLOSION_COSMETIC_DEFINITIONS } from '../cosmetics/BombExplosionCosmeticDefinitions.ts';
 import { resolveProjectileCosmeticPresentation } from '../cosmetics/ProjectileCosmeticPresentation.ts';
 import { ArenaVisualRenderer } from '../arena/ArenaVisualRenderer.ts';
@@ -292,6 +294,11 @@ interface RoundRuntimeDiagnostics {
   activeProjectilePool: number;
   activeFxPool: number;
   activeTrails: number;
+  activeMechanicalFragments: number;
+  activeMechanicalBursts: number;
+  peakMechanicalFragments: number;
+  destructionAllocationMisses: number;
+  destructionEffectsDegraded: number;
   pickups: number;
   deployables: number;
   smashableProps: number;
@@ -365,14 +372,18 @@ interface ArenaPreparationReport extends ArenaCombatWarmupPlan {
   addedProjectiles: number;
   addedFxCircles: number;
   addedTrailSamples: number;
+  addedDestructionFragments: number;
   trimmedProjectiles: number;
   trimmedFxCircles: number;
   trimmedTrailSamples: number;
+  trimmedDestructionFragments: number;
   durationMs: number;
+  presentationDurationMs: number;
 }
 
 interface BossDeathSnapshot {
   encounter: BossEncounter;
+  archetype: BossArchetype;
   x: number;
   y: number;
   color: number;
@@ -478,10 +489,15 @@ export class ArenaScene extends Phaser.Scene {
   private fxCirclePool!: ReusableObjectPool<Phaser.GameObjects.Arc, FxCircleSpawn>;
   private readonly pooledProjectileDisplayObjects = new Set<Phaser.GameObjects.GameObject>();
   private projectileTrails: ProjectileTrailBatch | null = null;
+  private mechanicalDestructionVfx!: MechanicalDestructionVfx;
   private muzzleFlashVfx!: PlayerMuzzleFlashVfx;
   private boostVisual!: BoostVisualSystem;
   private mineExplosionVfx!: MineExplosionVfx;
   private bombExplosionCosmeticVfx!: BombExplosionCosmeticVfx;
+  private startupPresentation: ArenaStartupPresentation | null = null;
+  private pendingRoundActivation: { token: RoundRuntimeToken; label: string; setupDurationMs: number } | null = null;
+  private nextStartupPresentationKind: ArenaStartupPresentationKind | null = null;
+  private transitionReason: ArenaTransitionReason = 'startup';
   private readonly temporaryAmmo = new TemporaryAmmoModeController();
   private readonly turretWeaponSync = new TurretWeaponSyncController();
   private grenadeProjectileSequence = 0;
@@ -642,7 +658,7 @@ export class ArenaScene extends Phaser.Scene {
   private readonly performanceMonitor = new FramePerformanceMonitor(600);
   private readonly lifecycleProfiler = new ArenaLifecycleProfiler();
   private lastArenaPreparation: ArenaPreparationReport | null = null;
-  private lastCapacityCompaction = { projectiles: 0, fxCircles: 0, trailSamples: 0 };
+  private lastCapacityCompaction = { projectiles: 0, fxCircles: 0, trailSamples: 0, destructionFragments: 0 };
   private nextPerformanceTelemetryAt = 0;
   private nextPoolMaintenanceAt = 0;
   private devHazardIgnitionAt = 0;
@@ -938,12 +954,15 @@ export class ArenaScene extends Phaser.Scene {
     super(SceneKeys.Arena);
   }
 
-  create(data?: ArenaSessionState | { session?: ArenaSessionState }): void {
+  create(data?: ArenaSessionState | { session?: ArenaSessionState; transitionReason?: ArenaTransitionReason }): void {
     RunTransitionManager.markStep(this, 'arena-create-enter');
     this.cameras.main.setBackgroundColor(COLORS.bg);
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
+    const wrapper = data && typeof data === 'object' ? data as { transitionReason?: ArenaTransitionReason } : undefined;
+    this.transitionReason = wrapper?.transitionReason ?? 'startup';
+    this.nextStartupPresentationKind = this.transitionReason === 'continue-next-round' ? 'round' : 'deployment';
     const sessionFromData = this.parseSessionData(this.extractSessionData(data));
     const sessionFromRegistry = this.registry.get('arena-session') as ArenaSessionState | undefined;
     const session = sessionFromData ?? sessionFromRegistry;
@@ -1004,7 +1023,6 @@ export class ArenaScene extends Phaser.Scene {
     this.createCrosshair();
     try {
       this.createRoundFromDefinition(this.roundManager.currentDefinition());
-      RunTransitionManager.markArenaStarted(this);
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('ArenaScene create failed', error);
@@ -1044,9 +1062,7 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.aimSettings = normalizeAimSettings(SaveSystem.get().settings.aim);
     this.pointerLock.setSensitivity(this.aimSettings.mouseSensitivity);
-    this.pointerLockInitialGate = true;
-    this.pauseForPointerLock('initial');
-    this.pointerLock.showInitial();
+    this.beginPendingStartupPresentation();
     if(import.meta.env.DEV){
       const debugGlobal=globalThis as typeof globalThis&{
         forceArenaType?:(type:ArenaTemplate|null)=>void;
@@ -1167,7 +1183,7 @@ export class ArenaScene extends Phaser.Scene {
     };
   }
 
-  private extractSessionData(data: ArenaSessionState | { session?: ArenaSessionState } | undefined): ArenaSessionState | undefined {
+  private extractSessionData(data: ArenaSessionState | { session?: ArenaSessionState; transitionReason?: ArenaTransitionReason } | undefined): ArenaSessionState | undefined {
     if (!data || typeof data !== 'object') return undefined;
     const wrapper = data as { session?: ArenaSessionState };
     if (wrapper.session) return wrapper.session;
@@ -1175,6 +1191,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private createRoundFromDefinition(def: ReturnType<RoundManager['currentDefinition']>): void {
+    this.nextStartupPresentationKind ??= 'round';
     this.startRoundRuntime('round', `arena-${this.protocol}-round-${def.round}`, def.round, () => this.initializeStandardRound(def));
   }
 
@@ -1533,6 +1550,7 @@ export class ArenaScene extends Phaser.Scene {
     // Presentation cleanup must run before any pause/victory early return so a
     // damage flash can never strand the Operative in TintFill white.
     this.player.updatePresentation(now);
+    this.startupPresentation?.update(now);
     if (import.meta.env.DEV && this.roundRuntime.phase === 'active') {
       const activeFor = now - this.activeCheckpointStartedAt;
       if (!this.activeCheckpointOneSecondCaptured && activeFor >= 1_000) {
@@ -1557,6 +1575,8 @@ export class ArenaScene extends Phaser.Scene {
     const dt = delta / 1000;
     const inputContext = this.tutorialHardPaused
       ? 'tutorial'
+      : this.startupPresentation
+        ? 'modal'
       : this.legendaryRevealInProgress
         ? 'modal'
         : this.state.state === RoundState.Paused
@@ -1608,6 +1628,10 @@ export class ArenaScene extends Phaser.Scene {
       this.mineExplosionVfx.update(now);
       this.bombExplosionCosmeticVfx.update(now);
       this.arenaSmashables?.update(now);
+    }
+    if (!this.tutorialHardPaused && !this.legendaryRevealInProgress
+      && (this.state.state !== RoundState.Paused || this.bossFlowPhase === 'destruction')) {
+      this.mechanicalDestructionVfx?.update(now, delta);
     }
 
     if (this.tutorialHardPaused || this.state.state === RoundState.Paused || this.legendaryRevealInProgress || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
@@ -2050,6 +2074,10 @@ export class ArenaScene extends Phaser.Scene {
         circle.setActive(false).setVisible(false).setPosition(-10_000, -10_000).setDepth(10_000);
       }
     );
+    this.mechanicalDestructionVfx = new MechanicalDestructionVfx(this, {
+      obtain: (state) => this.fxCirclePool.obtain(state),
+      release: (circle) => { this.fxCirclePool.release(circle); }
+    }, this.particlesEnabled);
     this.projectileTrails?.destroy();
     this.projectileTrails = new ProjectileTrailBatch(this);
   }
@@ -2084,6 +2112,7 @@ export class ArenaScene extends Phaser.Scene {
       depth: 10_000
     });
     const addedTrailSamples = this.projectileTrails?.prewarm(plan.trailSamples) ?? 0;
+    const addedDestructionFragments = this.mechanicalDestructionVfx.prewarm(plan.destructionFragments);
     this.lastArenaPreparation = {
       ...plan,
       round,
@@ -2091,19 +2120,24 @@ export class ArenaScene extends Phaser.Scene {
       addedProjectiles,
       addedFxCircles,
       addedTrailSamples,
+      addedDestructionFragments,
       trimmedProjectiles: this.lastCapacityCompaction.projectiles,
       trimmedFxCircles: this.lastCapacityCompaction.fxCircles,
       trimmedTrailSamples: this.lastCapacityCompaction.trailSamples,
-      durationMs: performance.now() - startedAt
+      trimmedDestructionFragments: this.lastCapacityCompaction.destructionFragments,
+      durationMs: performance.now() - startedAt,
+      presentationDurationMs: 0
     };
-    this.lastCapacityCompaction = { projectiles: 0, fxCircles: 0, trailSamples: 0 };
+    this.lastCapacityCompaction = { projectiles: 0, fxCircles: 0, trailSamples: 0, destructionFragments: 0 };
     if (import.meta.env.DEV && (
       addedProjectiles > 0
       || addedFxCircles > 0
       || addedTrailSamples > 0
+      || addedDestructionFragments > 0
       || this.lastArenaPreparation.trimmedProjectiles > 0
       || this.lastArenaPreparation.trimmedFxCircles > 0
       || this.lastArenaPreparation.trimmedTrailSamples > 0
+      || this.lastArenaPreparation.trimmedDestructionFragments > 0
     )) {
       // eslint-disable-next-line no-console
       console.debug('[Arena preparation]', this.lastArenaPreparation);
@@ -5091,7 +5125,7 @@ export class ArenaScene extends Phaser.Scene {
 
     if (this.modRuntime.hasInfusion('ghost-echoes')) this.playEnemyGhostEcho(enemy);
     if (this.modRuntime.hasInfusion('arcade-pop')) this.playArcadePop(enemy.x, enemy.y);
-    this.createDeathExplosion(enemy.x, enemy.y, enemy.stats.color);
+    this.mechanicalDestructionVfx.emitEnemy(enemy.stats.type, enemy.x, enemy.y, enemy.stats.color, this.time.now);
 
     if (enemy.stats.type === 'star') {
       const hostileMine = new Mine(
@@ -5395,6 +5429,10 @@ export class ArenaScene extends Phaser.Scene {
 
   private beginAnomalyTransition(request: AnomalyEntryRequest): void {
     if (request.anomalyId !== 'heist' || !this.anomalyReturnLifecycle.begin(request.sessionId)) return;
+    // Cosmetic debris does not belong to the suspended gameplay snapshot.
+    // Retire it before capturing the anomaly baseline; portal/session state is
+    // otherwise left entirely to the existing authoritative handoff.
+    this.mechanicalDestructionVfx.reset();
     this.lastAnomalyResourceAudit = null;
     this.anomalySuspensionState = this.captureAnomalySuspensionState();
     this.pendingAnomalyReturn = null;
@@ -6199,37 +6237,8 @@ export class ArenaScene extends Phaser.Scene {
     };
   }
 
-  private createDeathExplosion(x: number, y: number, color: number, playerDeath = false): void {
-    const scale = playerDeath ? 1.25 : 1;
-    const flash = this.add.circle(x, y, 10 * scale, 0xffffff, 0.95).setDepth(10);
-    const core = this.add.circle(x, y, 15 * scale, color, 0.78).setDepth(9);
-    const ring = this.add.circle(x, y, 18 * scale, color, 0.16)
-      .setStrokeStyle(3, color, 0.95)
-      .setDepth(8);
-
-    this.tweens.add({ targets: flash, radius: 25 * scale, alpha: 0, duration: 110, onComplete: () => flash.destroy() });
-    this.tweens.add({ targets: core, radius: 40 * scale, alpha: 0, duration: 220, ease: 'Quad.easeOut', onComplete: () => core.destroy() });
-    this.tweens.add({ targets: ring, radius: 55 * scale, alpha: 0, duration: 320, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
-
-    if (!this.particlesEnabled) return;
-    const shardCount = playerDeath ? 12 : 7;
-    for (let i = 0; i < shardCount; i += 1) {
-      const angle = (Math.PI * 2 * i) / shardCount + Phaser.Math.FloatBetween(-0.18, 0.18);
-      const distance = Phaser.Math.Between(28, playerDeath ? 68 : 48);
-      const shard = this.add.rectangle(x, y, playerDeath ? 8 : 6, 2, i % 3 === 0 ? 0xffffff : color, 0.95)
-        .setRotation(angle)
-        .setDepth(10);
-      this.tweens.add({
-        targets: shard,
-        x: x + Math.cos(angle) * distance,
-        y: y + Math.sin(angle) * distance,
-        alpha: 0,
-        scaleX: 0.35,
-        duration: Phaser.Math.Between(220, 360),
-        ease: 'Quad.easeOut',
-        onComplete: () => shard.destroy()
-      });
-    }
+  private createDeathExplosion(x: number, y: number, color: number): void {
+    this.mechanicalDestructionVfx.emitPlayer(x, y, color, this.time.now);
   }
 
   private dropPickup(x: number, y: number): PickupType {
@@ -7060,7 +7069,7 @@ export class ArenaScene extends Phaser.Scene {
       credits: 0,
       coreTokens: 0
     });
-    this.createDeathExplosion(enemy.x, enemy.y, enemy.stats.color);
+    this.mechanicalDestructionVfx.emitEnemy(enemy.stats.type, enemy.x, enemy.y, enemy.stats.color, this.time.now);
     this.destroyEnemyColliders(enemy);
     enemy.destroy();
   }
@@ -7100,6 +7109,7 @@ export class ArenaScene extends Phaser.Scene {
     const encounter = this.bossEncounter;
     const snapshot: BossDeathSnapshot = {
       encounter,
+      archetype: encounter.archetype,
       x: encounter.boss.x,
       y: encounter.boss.y,
       color: BOSS_ARCHETYPES[encounter.archetype].color
@@ -7124,7 +7134,9 @@ export class ArenaScene extends Phaser.Scene {
     if (!encounter) return;
     GameplayTelemetryRecorder.recordBossDefeated();
     this.audio.playSfx('bomblet');
-    this.createDeathExplosion(encounter.boss.x, encounter.boss.y, BOSS_ARCHETYPES[archetype].color, true);
+    this.mechanicalDestructionVfx.emitBossStage(
+      archetype, encounter.boss.x, encounter.boss.y, BOSS_ARCHETYPES[archetype].color, this.time.now, true
+    );
     this.cameras.main.shake(360, 0.006);
     this.cameras.main.flash(180, 150, 240, 255);
     encounter.boss.setVisible(false).setActive(false);
@@ -7242,7 +7254,14 @@ export class ArenaScene extends Phaser.Scene {
         const angle = index * Math.PI * 0.62 + this.time.now * 0.001;
         const distance = 18 + index * 8;
         this.audio.playSfx('bomblet');
-        this.createDeathExplosion(snapshot.x + Math.cos(angle) * distance, snapshot.y + Math.sin(angle) * distance, index % 2 === 0 ? snapshot.color : 0xffffff, index >= 2);
+        this.mechanicalDestructionVfx.emitBossStage(
+          snapshot.archetype,
+          snapshot.x + Math.cos(angle) * distance,
+          snapshot.y + Math.sin(angle) * distance,
+          index % 2 === 0 ? snapshot.color : 0xffffff,
+          this.time.now,
+          false
+        );
         this.cameras.main.shake(120 + index * 18, 0.0022 + index * 0.0006);
       });
       this.bossSequenceTimers.push(timer);
@@ -7250,7 +7269,9 @@ export class ArenaScene extends Phaser.Scene {
     this.bossSequenceTimers.push(this.scheduleRoundHandoffCall(1120, () => {
       if (this.bossFlowPhase !== 'destruction' || this.bossEncounter !== snapshot.encounter) return;
       this.audio.playSfx('bomblet');
-      this.createDeathExplosion(snapshot.x, snapshot.y, snapshot.color, true);
+      this.mechanicalDestructionVfx.emitBossStage(
+        snapshot.archetype, snapshot.x, snapshot.y, snapshot.color, this.time.now, true
+      );
       this.cameras.main.flash(360, 255, 230, 190);
       this.cameras.main.shake(480, 0.008);
       snapshot.encounter.boss.setVisible(false).setActive(false);
@@ -7505,7 +7526,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bombExplosionCosmeticVfx.reset();
     if (reason === 'playerDead') {
       this.audio.playSfx('playerDeath');
-      this.createDeathExplosion(this.player.x, this.player.y, SaveSystem.getOperativeFrameAppearance(this.time.now).primaryColor, true);
+      this.createDeathExplosion(this.player.x, this.player.y, SaveSystem.getOperativeFrameAppearance(this.time.now).primaryColor);
       this.player.setVisible(false);
     }
     this.boostVisual.reset();
@@ -8038,12 +8059,16 @@ export class ArenaScene extends Phaser.Scene {
     const trails = this.projectileTrails?.stats();
     const bomblets = this.bombletHazard?.diagnostics();
     const gas = this.gasHazard?.diagnostics();
+    const destruction = this.mechanicalDestructionVfx.stats();
     this.performanceTelemetry.setText(
       `PERF DEV (F6)  avg ${frames.averageMs.toFixed(1)}ms  p95 ${frames.p95Ms.toFixed(1)}ms  max ${frames.maximumMs.toFixed(1)}ms\n`
       + `>33ms ${frames.framesOver33Ms}/${frames.samples}  >50ms ${frames.framesOver50Ms}/${frames.samples}\n`
       + `Enemies ${this.enemies.length}  Projectiles ${this.projectiles.length}  Missiles ${this.homingMissiles.length}\n`
       + `Projectile pool new ${projectiles.created} reuse ${projectiles.reused} free ${projectiles.available}\n`
       + `FX pool new ${fx.created} reuse ${fx.reused} active ${fx.active} free ${fx.available}\n`
+      + `Mechanical debris ${destruction.activeFragments}/${destruction.fragmentCapacity}`
+      + ` peak ${destruction.peakFragments} reuse ${destruction.fragmentPool.reused}`
+      + ` degraded ${destruction.degradedEffects} misses ${destruction.allocationMisses}\n`
       + `Hazards B ${bomblets?.activeTargets ?? 0}/${bomblets?.pooledTargets ?? 0}`
       + `  G ${gas?.activeCanisters ?? 0}/${gas?.pooledCanisters ?? 0}`
       + ` impact ${gas?.activeImpacts ?? 0} ignite ${gas?.activeIgnitions ?? 0}`
@@ -8271,6 +8296,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private handleSystemInput(): void {
+    if (this.startupPresentation || this.pendingRoundActivation) return;
     if (this.pointerLockInitialGate
       && this.playerInput.activeDevice === 'gamepad'
       && this.playerInput.meaningfulGamepadInput) {
@@ -8316,6 +8342,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private pauseForLegendaryModReveal(rarity: ModRarity): void {
+    this.mechanicalDestructionVfx.reset();
     this.legendaryRevealInProgress = true;
     this.legendaryRevealRequiresAcknowledgement = rarity === 'supreme';
     this.legendaryRevealPointerWasLocked = Boolean(this.pointerLock?.locked);
@@ -8714,6 +8741,8 @@ export class ArenaScene extends Phaser.Scene {
    * handling are identical.
    */
   private startRoundRuntime(kind: RoundRuntimeKind, label: string, round: number, initialize: () => void): void {
+    const startupKind = kind === 'round' ? this.nextStartupPresentationKind : null;
+    if (kind === 'round') this.nextStartupPresentationKind = null;
     if (this.roundRuntime.hasRuntime || this.hasLiveRoundObjects) {
       this.endCurrentRoundRuntime('replace');
     } else {
@@ -8738,23 +8767,81 @@ export class ArenaScene extends Phaser.Scene {
     try {
       this.encounterInitializationCount += 1;
       initialize();
-      if (!this.roundRuntime.markActive(token)) throw new Error(`Round generation ${token.generation} failed to activate.`);
-      this.activeCheckpointStartedAt = this.time.now;
-      this.activeCheckpointOneSecondCaptured = false;
-      this.activeCheckpointFiveSecondsCaptured = false;
       this.captureEncounterCheckpoint('G_INITIALIZED');
-      this.captureEncounterCheckpoint('A_ACTIVE');
-      if (import.meta.env.DEV) this.lifecycleProfiler.beginGeneration(
-        token.generation,
-        label,
-        performance.now() - setupStartedAt,
-        this.projectilePool.createdCount,
-        this.fxCirclePool.createdCount
-      );
+      const setupDurationMs = performance.now() - setupStartedAt;
+      if (startupKind) {
+        // The existing RoundRuntimeLifecycle remains the only authority. The
+        // presentation runs while it is in `starting`; no gameplay callback
+        // can advance until activatePendingRoundRuntime marks this token active.
+        this.physics.pause();
+        this.pendingRoundActivation = { token, label, setupDurationMs };
+        this.beginPendingStartupPresentation(startupKind);
+      } else {
+        this.activateRoundRuntime(token, label, setupDurationMs);
+      }
     } catch (error) {
       this.endCurrentRoundRuntime('start-failed');
       throw error;
     }
+  }
+
+  private beginPendingStartupPresentation(kind?: ArenaStartupPresentationKind): void {
+    if (!this.pendingRoundActivation || !this.player || !this.hud || this.startupPresentation) return;
+    const presentationKind = kind ?? (this.transitionReason === 'continue-next-round' ? 'round' : 'deployment');
+    this.physics.pause();
+    this.clearGameplayInput();
+    this.crosshair?.setVisible(false);
+    this.startupPresentation = new ArenaStartupPresentation(
+      this,
+      presentationKind,
+      this.player,
+      this.hud,
+      this.bombSites ?? null,
+      () => {
+        const presentationStats = this.startupPresentation?.stats();
+        if (presentationStats && this.lastArenaPreparation) {
+          this.lastArenaPreparation.presentationDurationMs = presentationStats.durationMs;
+        }
+        this.startupPresentation = null;
+        const pending = this.pendingRoundActivation;
+        if (!pending) return;
+        this.pendingRoundActivation = null;
+        this.activateRoundRuntime(pending.token, pending.label, pending.setupDurationMs);
+        if (RunTransitionManager.snapshot(this).transitionInProgress) {
+          RunTransitionManager.markArenaStarted(this);
+        }
+        this.audio.playSfx('beep');
+
+        const gamepad = getUiInputPresentation().device === 'gamepad';
+        if (gamepad || this.pointerLock?.locked) {
+          this.pointerLockInitialGate = false;
+          this.pointerLock?.hidePrompt();
+          this.setGameplayCursorMode();
+          this.crosshair?.setVisible(true);
+          this.physics.resume();
+          this.tutorialDirector?.startEligible();
+        } else {
+          this.pointerLockInitialGate = true;
+          this.pauseForPointerLock('initial');
+          this.pointerLock?.showInitial();
+        }
+      }
+    );
+  }
+
+  private activateRoundRuntime(token: RoundRuntimeToken, label: string, setupDurationMs: number): void {
+    if (!this.roundRuntime.markActive(token)) throw new Error(`Round generation ${token.generation} failed to activate.`);
+    this.activeCheckpointStartedAt = this.time.now;
+    this.activeCheckpointOneSecondCaptured = false;
+    this.activeCheckpointFiveSecondsCaptured = false;
+    this.captureEncounterCheckpoint('A_ACTIVE');
+    if (import.meta.env.DEV) this.lifecycleProfiler.beginGeneration(
+      token.generation,
+      label,
+      setupDurationMs,
+      this.projectilePool.createdCount,
+      this.fxCirclePool.createdCount
+    );
   }
 
   /**
@@ -8819,6 +8906,7 @@ export class ArenaScene extends Phaser.Scene {
     const projectilePool = this.projectilePool?.stats();
     const fxPool = this.fxCirclePool?.stats();
     const trailPool = this.projectileTrails?.stats();
+    const destruction = this.mechanicalDestructionVfx?.stats();
     return {
       enemies: this.enemies.length,
       bossControllers: Number(Boolean(this.bossEncounter)) + Number(Boolean(this.supremeFinale)),
@@ -8827,6 +8915,11 @@ export class ArenaScene extends Phaser.Scene {
       activeProjectilePool: this.projectilePool?.stats().active ?? 0,
       activeFxPool: this.fxCirclePool?.stats().active ?? 0,
       activeTrails: this.projectileTrails?.stats().active ?? 0,
+      activeMechanicalFragments: destruction?.activeFragments ?? 0,
+      activeMechanicalBursts: destruction?.activeBursts ?? 0,
+      peakMechanicalFragments: destruction?.peakFragments ?? 0,
+      destructionAllocationMisses: destruction?.allocationMisses ?? 0,
+      destructionEffectsDegraded: destruction?.degradedEffects ?? 0,
       pickups: this.pickups.length + this.modPickups.length,
       deployables: this.fences.length + this.turrets.length + this.mines.length + this.deathMines.length,
       smashableProps: this.arenaSmashables?.diagnostics().active ?? 0,
@@ -8903,7 +8996,8 @@ export class ArenaScene extends Phaser.Scene {
     );
     const fxCircles = this.fxCirclePool.trimAvailable(reserve.fxCircles, (circle) => circle.destroy());
     const trailSamples = this.projectileTrails.trimRetained(reserve.trailSamples);
-    this.lastCapacityCompaction = { projectiles, fxCircles, trailSamples };
+    const destructionFragments = this.mechanicalDestructionVfx?.trimRetained(reserve.destructionFragments) ?? 0;
+    this.lastCapacityCompaction = { projectiles, fxCircles, trailSamples, destructionFragments };
   }
 
   private validateRoundRuntimeCleanup(
@@ -8918,7 +9012,7 @@ export class ArenaScene extends Phaser.Scene {
     };
     for (const key of [
       'enemies', 'bossControllers', 'bossSupportEnemies', 'projectiles', 'activeProjectilePool',
-      'activeFxPool', 'activeTrails', 'pickups', 'deployables', 'smashableProps',
+      'activeFxPool', 'activeTrails', 'activeMechanicalFragments', 'activeMechanicalBursts', 'pickups', 'deployables', 'smashableProps',
       'hazardControllers', 'hazardSlots', 'arcadeControllers', 'anomalyControllers',
       'timers', 'tweens', 'colliders', 'colliderCapacity', 'staticBodies', 'pendingPhysicsBodies', 'infusionEffects',
       'bossHudObjects', 'queuedSpawns', 'roundAudioLoops', 'roundAudioVoices',
@@ -9035,6 +9129,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private clearRoundCollections(): void {
+    this.pendingRoundActivation = null;
     this.bossSequenceTimers.length = 0;
     this.bossNextFightButton?.destroy();
     this.bossNextFightButton = null;
@@ -9097,6 +9192,9 @@ export class ArenaScene extends Phaser.Scene {
       this.cancelAllRoundTimers();
       this.tweens.killAll();
     });
+    this.retireRoundOwner('startup-presentation', () => this.startupPresentation?.destroy());
+    this.startupPresentation = null;
+    this.pendingRoundActivation = null;
     this.retireRoundOwner('arcade-controller', () => this.arcadeController?.destroy('replaced'));
     this.arcadeController = null;
     this.retireRoundOwner('anomaly-controller', () => this.anomalyController?.destroy('round-ended'));
@@ -9166,6 +9264,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bossWallCollider = null;
     this.retireRoundOwner('projectile-pools', () => {
       for (const projectile of this.projectiles) this.retireProjectile(projectile);
+      this.mechanicalDestructionVfx?.reset();
       this.projectilePool.releaseAll();
       this.fxCirclePool.releaseAll();
     });
@@ -9207,6 +9306,7 @@ export class ArenaScene extends Phaser.Scene {
           && !this.pooledProjectileDisplayObjects.has(obj)
           && !this.projectilePool.owns(obj)
           && !this.fxCirclePool.owns(obj)
+          && !this.mechanicalDestructionVfx?.ownsDisplayObject(obj)
           && !this.projectileTrails?.ownsDisplayObject(obj))
         .forEach((obj) => obj.destroy());
     });
@@ -9249,6 +9349,8 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.roundRuntime.abandon();
     this.encounterResources.clearAfterFrameworkShutdown();
+    this.startupPresentation = null;
+    this.pendingRoundActivation = null;
     this.arcadeController?.destroy('scene-shutdown');
     this.arcadeController = null;
     this.anomalyController?.destroy('scene-shutdown');
@@ -9338,6 +9440,7 @@ export class ArenaScene extends Phaser.Scene {
     // over a potentially enormous boss-fight high-water pool.
     this.projectilePool?.discardReferences();
     this.fxCirclePool?.discardReferences();
+    this.mechanicalDestructionVfx?.discardReferences();
     this.pooledProjectileDisplayObjects.clear();
     this.projectileTrails?.destroy();
     this.projectileTrails = null;

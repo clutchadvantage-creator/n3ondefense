@@ -274,6 +274,18 @@ export class Hud {
   private objectiveAccent = CYAN;
   private settings: HudSettings = { ...DEFAULT_HUD_SETTINGS };
 
+  setStartupPresentationProgress(progress: number): void {
+    const value = Phaser.Math.Clamp(progress, 0, 1);
+    const stepped = value < 0.22 && Math.floor(value * 60) % 4 === 0 ? value * 0.45 : value;
+    this.root.setAlpha(stepped).setY((1 - value) * -10);
+    this.radarFrame.setRotation((1 - value) * -0.32);
+  }
+
+  finishStartupPresentation(): void {
+    this.root.setAlpha(1).setY(0);
+    this.radarFrame.setRotation(0);
+  }
+
   constructor(scene: Phaser.Scene, settings: HudSettings = DEFAULT_HUD_SETTINGS) {
     this.scene = scene;
     this.settings = normalizeHudSettings(settings);

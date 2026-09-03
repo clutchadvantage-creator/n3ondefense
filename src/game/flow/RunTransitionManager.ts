@@ -96,6 +96,21 @@ export class RunTransitionManager {
     RunTransitionManager.log(scene, step, RunTransitionManager.reason, undefined);
   }
 
+  /** User confirmation may intentionally remain open indefinitely. */
+  static awaitUserConfirmation(scene: Phaser.Scene): void {
+    RunTransitionManager.targetScene = SceneKeys.Loading;
+    RunTransitionManager.lastStep = 'awaiting-user-deploy-confirmation';
+    RunTransitionManager.clearWatchdog();
+    RunTransitionManager.log(scene, RunTransitionManager.lastStep, RunTransitionManager.reason, undefined);
+  }
+
+  static resumeAfterUserConfirmation(scene: Phaser.Scene): void {
+    if (!RunTransitionManager.inProgress) return;
+    RunTransitionManager.lastStep = 'deployment-confirmed';
+    RunTransitionManager.startWatchdog(scene);
+    RunTransitionManager.log(scene, RunTransitionManager.lastStep, RunTransitionManager.reason, undefined);
+  }
+
   static markArenaStarted(scene: Phaser.Scene): void {
     RunTransitionManager.inProgress = false;
     RunTransitionManager.targetScene = SceneKeys.Arena;

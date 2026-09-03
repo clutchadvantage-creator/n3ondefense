@@ -112,6 +112,30 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     this.refreshVisuals(theme);
   }
 
+  setStartupPresentationProgress(progress: number): void {
+    const value = Phaser.Math.Clamp(progress, 0, 1);
+    for (let index = 0; index < this.sites.length; index += 1) {
+      const site = this.sites[index];
+      const local = Phaser.Math.Clamp((value - index * 0.08) / 0.72, 0, 1);
+      site.ring.setAlpha(local);
+      site.label.setAlpha(local);
+      const effect = this.ambientEffects.get(site.id);
+      effect?.root.setAlpha(local);
+      if (local < 1) effect?.ringPulse.pause();
+    }
+  }
+
+  finishStartupPresentation(): void {
+    if (this.theme) this.refreshVisuals(this.theme);
+    for (const site of this.sites) {
+      site.ring.setAlpha(1);
+      site.label.setAlpha(1);
+      const effect = this.ambientEffects.get(site.id);
+      effect?.root.setAlpha(1);
+      if (site.state !== BombSiteState.Destroyed && effect?.ringPulse.isPaused()) effect.ringPulse.resume();
+    }
+  }
+
   updateAmbient(playerX: number, playerY: number, now: number, particlesEnabled: boolean): void {
     for (const site of this.sites) {
       const effect = this.ambientEffects.get(site.id);

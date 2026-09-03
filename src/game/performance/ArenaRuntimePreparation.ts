@@ -4,6 +4,7 @@ export interface ArenaCombatWarmupPlan {
   projectiles: number;
   fxCircles: number;
   trailSamples: number;
+  destructionFragments: number;
 }
 
 /**
@@ -26,6 +27,7 @@ export const arenaCombatWarmupPlan = (
   return {
     projectiles,
     fxCircles: Math.min(256, fxBase + Math.floor(safeRound / 10) * 12),
-    trailSamples: Math.min(1024, Math.max(320, Math.floor(projectiles * 1.35)))
+    trailSamples: Math.min(1024, Math.max(320, Math.floor(projectiles * 1.35))),
+    destructionFragments: particlesEnabled ? (supreme ? 144 : overdrive ? 112 : 80) : 24
   };
 };
