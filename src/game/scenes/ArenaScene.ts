@@ -35,6 +35,7 @@ import { GasHazardSystem } from '../systems/GasHazardSystem';
 import { FluxCoreSystem, type FluxCoreCombatTarget } from '../systems/FluxCoreSystem';
 import { FLUX_CORE_BALANCE } from '../config/fluxCores';
 import { GAS_HAZARD_BALANCE } from '../config/gasHazards';
+import { getFireHazardDamageProfile } from '../config/fireHazards.ts';
 import type { HazardDamageTarget } from '../config/hazardScaling';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossRewards, getBossTier, isBossRound, selectBossArchetype, type BossArchetype } from '../config/bossBalance';
 import { BossEncounter, type BossAttackKind, type BossProjectileSpec } from '../bosses/BossEncounter';
@@ -6126,7 +6127,7 @@ export class ArenaScene extends Phaser.Scene {
       {
         environment: 'arena',
         particlesEnabled: this.particlesEnabled,
-        damagePerTick: 4.2,
+        damageProfile: getFireHazardDamageProfile(round, this.protocol),
         maximumConcurrent: 2,
         // Infrastructure is visible from early rounds; only how often and how
         // far ahead a bank selects its lane scales with mode/round pressure.
@@ -6158,7 +6159,7 @@ export class ArenaScene extends Phaser.Scene {
       y: this.player.y,
       velocityX: body?.velocity.x ?? 0,
       velocityY: body?.velocity.y ?? 0
-    }, this.currentModeBalance().hazardDamageMultiplier);
+    });
   }
 
   private createPickupSprite(type: PickupType, x: number, y: number, color: number): Phaser.GameObjects.Container {

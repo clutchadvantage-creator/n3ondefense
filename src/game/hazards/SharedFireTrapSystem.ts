@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager.ts';
 import { drawHazardStripes } from '../rendering/LayeredArtPrimitives.ts';
+import type { FireHazardDamageProfile } from '../config/fireHazards.ts';
 
 export type SharedFireNozzleKind = 'wall' | 'floor';
 export type SharedFireTrapState = 'idle' | 'telegraph' | 'ignition' | 'active' | 'cooldown';
@@ -37,8 +38,7 @@ export interface SharedFireAntiCampConfig {
 export interface SharedFireTrapOptions {
   environment: 'arena' | 'heist' | 'anomaly';
   particlesEnabled: boolean;
-  damagePerTick?: number;
-  damageIntervalMs?: number;
+  damageProfile: FireHazardDamageProfile;
   maximumConcurrent?: number;
   wallCooldownMs?: number;
   wallSelectionIntervalMs?: number;
@@ -57,6 +57,9 @@ export interface SharedFireTrapDiagnostics {
   activeNozzles: number;
   maximumConcurrent: number;
   updateIntervalMs: 50;
+  damagePerPulse: number;
+  damagePulseIntervalMs: number;
+  damagePerSecond: number;
   dynamicGraphicsBatches: 2;
   physicsBodies: 0;
   independentTimers: 0;
@@ -69,7 +72,8 @@ interface FireNozzleRuntime {
   state: SharedFireTrapState;
   stateStartedAt: number;
   nextReadyAt: number;
-  nextDamageAt: number;
+  damageContactStartedAt: number;
+  damagePulsesDelivered: number;
   deployed: boolean;
 }
 
@@ -121,7 +125,8 @@ const createWallNozzle = (scene: Phaser.Scene, placement: SharedFireTrapPlacemen
   root.add([housing, ...warningLights]);
   return {
     placement, root, warningLights, state: 'idle', stateStartedAt: 0,
-    nextReadyAt: scene.time.now + (placement.initialDelayMs ?? 900), nextDamageAt: 0, deployed: true
+    nextReadyAt: scene.time.now + (placement.initialDelayMs ?? 900),
+    damageContactStartedAt: 0, damagePulsesDelivered: 0, deployed: true
   };
 };
 
@@ -147,7 +152,7 @@ const createFloorNozzle = (scene: Phaser.Scene): FireNozzleRuntime => {
   root.add([art, iris, warningLight]);
   return {
     placement, root, warningLights: [warningLight], state: 'idle', stateStartedAt: 0,
-    nextReadyAt: 0, nextDamageAt: 0, deployed: false
+    nextReadyAt: 0, damageContactStartedAt: 0, damagePulsesDelivered: 0, deployed: false
   };
 };
 
@@ -161,8 +166,7 @@ export class SharedFireTrapSystem {
   private readonly flameGraphics: Phaser.GameObjects.Graphics;
   private readonly glowGraphics: Phaser.GameObjects.Graphics;
   private readonly audio = AudioManager.get();
-  private readonly damagePerTick: number;
-  private readonly damageIntervalMs: number;
+  private readonly damageProfile: FireHazardDamageProfile;
   private readonly maximumConcurrent: number;
   private readonly wallCooldownMs: number;
   private readonly wallSelectionIntervalMs: number;
@@ -191,8 +195,7 @@ export class SharedFireTrapSystem {
     if (this.floorNozzle) this.nozzles.push(this.floorNozzle);
     this.flameGraphics = scene.add.graphics().setDepth(8.62);
     this.glowGraphics = scene.add.graphics().setDepth(8.66).setBlendMode(Phaser.BlendModes.ADD);
-    this.damagePerTick = options.damagePerTick ?? 4.2;
-    this.damageIntervalMs = options.damageIntervalMs ?? 260;
+    this.damageProfile = options.damageProfile;
     this.maximumConcurrent = Math.max(1, options.maximumConcurrent ?? 2);
     this.wallCooldownMs = Math.max(FIRE_TIMING.cooldown, options.wallCooldownMs ?? 4_200);
     this.wallSelectionIntervalMs = Math.max(400, options.wallSelectionIntervalMs ?? 850);
@@ -200,7 +203,7 @@ export class SharedFireTrapSystem {
     this.wallMaximumLead = Math.max(0, options.wallMaximumLead ?? 64);
   }
 
-  update(now: number, target: SharedFireTrapTarget, damageMultiplier = 1): void {
+  update(now: number, target: SharedFireTrapTarget): void {
     if (now < this.nextUpdateAt) return;
     this.nextUpdateAt = now + UPDATE_INTERVAL_MS;
     this.smoothedVelocityX += (target.velocityX - this.smoothedVelocityX) * 0.18;
@@ -234,16 +237,29 @@ export class SharedFireTrapSystem {
         && activeCount < this.maximumConcurrent) {
         nozzle.state = 'active';
         nozzle.stateStartedAt = now;
-        nozzle.nextDamageAt = now;
+        nozzle.damageContactStartedAt = 0;
+        nozzle.damagePulsesDelivered = 0;
         activeCount += 1;
       }
       if (nozzle.state === 'active') {
         const hit = nozzle.placement.kind === 'floor'
           ? distanceSquared <= FLOOR_DAMAGE_RADIUS * FLOOR_DAMAGE_RADIUS
           : this.wallFlameContains(nozzle, target.x, target.y);
-        if (hit && now >= nozzle.nextDamageAt) {
-          nozzle.nextDamageAt = now + this.damageIntervalMs;
-          this.options.onDamagePlayer(this.damagePerTick * Math.max(0, damageMultiplier));
+        if (hit) {
+          if (nozzle.damagePulsesDelivered === 0) nozzle.damageContactStartedAt = now;
+          const duePulses = 1 + Math.floor(
+            Math.max(0, now - nozzle.damageContactStartedAt) / this.damageProfile.pulseIntervalMs
+          );
+          if (duePulses > nozzle.damagePulsesDelivered) {
+            const newlyDue = duePulses - nozzle.damagePulsesDelivered;
+            nozzle.damagePulsesDelivered = duePulses;
+            this.options.onDamagePlayer(this.damageProfile.damagePerPulse * newlyDue);
+          }
+        } else {
+          // Re-entry starts a new exposure and never inherits overdue pulses
+          // accumulated while the operative was outside the flame region.
+          nozzle.damageContactStartedAt = 0;
+          nozzle.damagePulsesDelivered = 0;
         }
         if (now - nozzle.stateStartedAt >= FIRE_TIMING.active) {
           nozzle.state = 'cooldown';
@@ -271,6 +287,9 @@ export class SharedFireTrapSystem {
       activeNozzles: this.nozzles.filter((nozzle) => nozzle.state === 'active').length,
       maximumConcurrent: this.maximumConcurrent,
       updateIntervalMs: UPDATE_INTERVAL_MS,
+      damagePerPulse: this.damageProfile.damagePerPulse,
+      damagePulseIntervalMs: this.damageProfile.pulseIntervalMs,
+      damagePerSecond: this.damageProfile.damagePerSecond,
       dynamicGraphicsBatches: 2,
       physicsBodies: 0,
       independentTimers: 0
@@ -291,7 +310,8 @@ export class SharedFireTrapSystem {
   private beginTelegraph(nozzle: FireNozzleRuntime, now: number): void {
     nozzle.state = 'telegraph';
     nozzle.stateStartedAt = now;
-    nozzle.nextDamageAt = 0;
+    nozzle.damageContactStartedAt = 0;
+    nozzle.damagePulsesDelivered = 0;
   }
 
   private retractFloorNozzle(nozzle: FireNozzleRuntime): void {

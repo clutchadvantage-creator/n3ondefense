@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { drawBeveledTechPlate, drawHazardStripes, drawPanelBolts } from '../../rendering/LayeredArtPrimitives.ts';
 import { SharedFireTrapSystem, type SharedFireTrapPlacement } from '../../hazards/SharedFireTrapSystem.ts';
+import { getFireHazardDamageProfile } from '../../config/fireHazards.ts';
+import type { RunProtocolId } from '../../mods/types.ts';
 import type { HeistTrapPlacement } from './HeistFacilityLayout.ts';
 
 type MechanicalTrapType = 'spike' | 'snag';
@@ -21,6 +23,11 @@ export interface HeistTrapCallbacks {
   damagePlayer(amount: number): void;
   snarePlayer(until: number): void;
   playSfx(name: 'mine' | 'unavailable'): void;
+}
+
+export interface HeistTrapDifficultyContext {
+  round: number;
+  protocol: RunProtocolId;
 }
 
 export interface HeistTrapSystemDiagnostics {
@@ -102,6 +109,7 @@ export class HeistTrapSystem {
   constructor(
     scene: Phaser.Scene,
     placements: readonly HeistTrapPlacement[],
+    difficulty: HeistTrapDifficultyContext,
     private readonly callbacks: HeistTrapCallbacks,
     particlesEnabled = true
   ) {
@@ -113,7 +121,8 @@ export class HeistTrapSystem {
         initialDelayMs: 900 + placement.x % 1_400
       }));
     this.fireSystem = new SharedFireTrapSystem(scene, firePlacements, {
-      environment: 'heist', particlesEnabled, damagePerTick: 4.2,
+      environment: 'heist', particlesEnabled,
+      damageProfile: getFireHazardDamageProfile(difficulty.round, difficulty.protocol),
       maximumConcurrent: 2,
       wallCooldownMs: 4_800,
       wallSelectionIntervalMs: 900,
@@ -149,7 +158,7 @@ export class HeistTrapSystem {
     velocityX = 0, velocityY = 0): void {
     this.snaredX = playerX;
     this.snaredY = playerY;
-    this.fireSystem.update(now, { x: playerX, y: playerY, velocityX, velocityY }, hazardDamageMultiplier);
+    this.fireSystem.update(now, { x: playerX, y: playerY, velocityX, velocityY });
     if (now < this.nextUpdateAt) return;
     this.nextUpdateAt = now + 50;
     for (const trap of this.traps) this.updateTrap(trap, now, playerX, playerY, hazardDamageMultiplier);

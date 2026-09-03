@@ -327,6 +327,9 @@ export class HeistScene extends Phaser.Scene {
     this.createHud();
     this.createSupportPickups();
     this.trapSystem = new HeistTrapSystem(this, this.facility.trapPlacements, {
+      round: data.round,
+      protocol: data.protocol
+    }, {
       damagePlayer: (amount) => this.damagePlayer(amount),
       snarePlayer: (until) => { this.movementSnaredUntil = Math.max(this.movementSnaredUntil, until); },
       playSfx: (name) => this.coreAudio.playSfx(name)
