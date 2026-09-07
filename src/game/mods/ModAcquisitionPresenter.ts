@@ -46,7 +46,7 @@ export class ModAcquisitionPresenter {
   }
 
   isBusy(): boolean {
-    return this.active !== null || this.queue.length > 0;
+    return this.active !== null || this.queue.length > 0 || this.leadInTimer !== null;
   }
 
   whenIdle(callback: () => void): void {
@@ -226,7 +226,13 @@ export class ModAcquisitionPresenter {
 
   private completeActive(): void {
     this.active = null;
-    this.presentNext();
+    // Finish the outgoing reveal Scene stop/resume queue before launching the
+    // same Scene key for another premium card. Phaser otherwise ignores that
+    // launch because the previous reveal is still active inside this callback.
+    this.leadInTimer = this.scene.time.delayedCall(0, () => {
+      this.leadInTimer = null;
+      this.presentNext();
+    });
   }
 
   private flushIdleCallbacks(): void {

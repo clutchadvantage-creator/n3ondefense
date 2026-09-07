@@ -22,6 +22,7 @@
     "performance:round-lifecycle": "node --experimental-strip-types scripts/benchmark-round-lifecycle.ts",
     "performance:destruction": "node --experimental-strip-types scripts/benchmark-mechanical-destruction.ts",
     "performance:round-lifecycle:live": "node scripts/dev-cdp-eval.mjs 9225 --file scripts/benchmark-live-round-lifecycle.browser.js",
+    "performance:mixed:live": "node scripts/run-mixed-session.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

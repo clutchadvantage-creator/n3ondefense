@@ -114,3 +114,59 @@ export class HeistWallPointIndex {
     return (cellX + 32768) * 65536 + cellY + 32768;
   }
 }
+
+/** Partition the occupied wall union into disjoint rectangles. Long runs own
+ * junctions first; branches terminate flush at that run instead of crossing
+ * through it. This preserves door openings and every walkable route. */
+export const normalizeHeistWallJunctions = (rects: readonly RectSpec[]): RectSpec[] => {
+  const ordered = mergeAxisAlignedHeistWalls(rects).sort((a, b) => b.w*b.h-a.w*a.h);
+  const result: RectSpec[] = [];
+  for (const rect of ordered) {
+    let pieces = [rect];
+    for (const occupied of result) {
+      const next: RectSpec[] = [];
+      for (const piece of pieces) {
+        const left = Math.max(piece.x, occupied.x), right = Math.min(piece.x+piece.w, occupied.x+occupied.w);
+        const top = Math.max(piece.y, occupied.y), bottom = Math.min(piece.y+piece.h, occupied.y+occupied.h);
+        if (right <= left || bottom <= top) { next.push(piece); continue; }
+        if (top > piece.y) next.push({ x: piece.x, y: piece.y, w: piece.w, h: top-piece.y });
+        if (bottom < piece.y+piece.h) next.push({ x: piece.x, y: bottom, w: piece.w, h: piece.y+piece.h-bottom });
+        if (left > piece.x) next.push({ x: piece.x, y: top, w: left-piece.x, h: bottom-top });
+        if (right < piece.x+piece.w) next.push({ x: right, y: top, w: piece.x+piece.w-right, h: bottom-top });
+      }
+      pieces = next;
+      if (!pieces.length) break;
+    }
+    result.push(...pieces);
+  }
+  return mergeAxisAlignedHeistWalls(result);
+};
+
+export interface HeistWallEdge { side: 'north' | 'south' | 'east' | 'west'; x: number; y: number; length: number; }
+
+/** Only exposed union edges receive dimensional facades. An internal seam at
+ * an L/T/four-way junction is neither a visual wall face nor a collider edge. */
+export const exposedHeistWallEdges = (rect: RectSpec, walls: readonly RectSpec[]): HeistWallEdge[] => {
+  const edges: HeistWallEdge[] = [];
+  for (const side of ['north', 'south', 'east', 'west'] as const) {
+    const horizontal = side === 'north' || side === 'south';
+    const coordinate = side === 'north' ? rect.y : side === 'south' ? rect.y+rect.h : side === 'west' ? rect.x : rect.x+rect.w;
+    let spans = [[horizontal ? rect.x : rect.y, horizontal ? rect.x+rect.w : rect.y+rect.h]];
+    for (const other of walls) {
+      if (other === rect) continue;
+      const touching = side === 'north' ? other.y+other.h === coordinate : side === 'south' ? other.y === coordinate
+        : side === 'west' ? other.x+other.w === coordinate : other.x === coordinate;
+      if (!touching) continue;
+      const start = horizontal ? other.x : other.y, end = start+(horizontal ? other.w : other.h);
+      const next: number[][] = [];
+      for (const [a,b] of spans) {
+        if (end <= a || start >= b) next.push([a,b]);
+        else { if (start>a) next.push([a,start]); if (end<b) next.push([end,b]); }
+      }
+      spans = next;
+    }
+    for (const [start,end] of spans) edges.push({ side, x: horizontal ? start : coordinate,
+      y: horizontal ? coordinate : start, length: end-start });
+  }
+  return edges;
+};

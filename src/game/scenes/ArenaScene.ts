@@ -25,7 +25,7 @@ import { AudioManager } from '../systems/AudioManager';
 import { BombSiteManager } from '../systems/BombSiteManager';
 import { GameStateMachine } from '../systems/GameStateMachine';
 import { GridPathfinder, type PathPoint } from '../systems/GridPathfinder';
-import { Hud } from '../systems/Hud';
+import { Hud, HUD_RADAR_RANGE } from '../systems/Hud';
 import type { HudAbilitySlot, HudPayload, HudRadarContact } from '../systems/Hud';
 import { RoundManager } from '../systems/RoundManager';
 import { SaveSystem } from '../systems/SaveSystem';
@@ -85,7 +85,6 @@ import { ArenaLifecycleProfiler } from '../performance/ArenaLifecycleProfiler.ts
 import { shouldReplaceTurretTarget } from '../performance/Targeting.ts';
 import { ProjectileTrailBatch } from '../performance/ProjectileTrailBatch.ts';
 import { UniformSpatialGrid } from '../performance/UniformSpatialGrid.ts';
-import { resolveSweptCircleMotion } from '../physics/SweptCircleCollision.ts';
 import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
 import { MineExplosionVfx } from '../vfx/MineExplosionVfx.ts';
 import { BombExplosionCosmeticVfx } from '../cosmetics/BombExplosionCosmeticVfx.ts';
@@ -730,7 +729,7 @@ export class ArenaScene extends Phaser.Scene {
       { id: 'mine', keybind: 'R', icon: '✹', label: 'MINE', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.mine.cooldownMs, selected: false, hasEnergy: true, underLimit: true, count: 0, capacity: ABILITY_BALANCE.mine.maxActive },
       { id: 'shield', keybind: 'MMB', icon: '◉', label: 'SHIELD', cooldownMs: 0, cooldownDurationMs: ABILITY_BALANCE.shield.cooldownMs, active: false, selected: false, hasEnergy: true, underLimit: true, count: 0, capacity: null }
     ],
-    radarRange: 900,
+    radarRange: HUD_RADAR_RANGE,
     radarContacts: this.hudRadarContacts
   };
 
@@ -906,6 +905,13 @@ export class ArenaScene extends Phaser.Scene {
       this.time.now + HEIST_BALANCE.safeReturnInvulnerabilityMs
     );
     if (result.inputDevice) this.playerInput.adoptDevice(result.inputDevice);
+    // Settings can change in HEIST Options while this exact Arena sleeps.
+    const currentSettings = SaveSystem.get().settings;
+    this.hud.applySettings(currentSettings.hud);
+    this.refreshAbilityBindings();
+    this.aimSettings = normalizeAimSettings(currentSettings.aim);
+    this.pointerLock?.setSensitivity(this.aimSettings.mouseSensitivity);
+    this.crosshairValid = null;
     this.refreshHudWallet();
     this.showBanner(result.success
       ? 'HEIST COMPLETE // HAUL COMMITTED'
@@ -1647,7 +1653,6 @@ export class ArenaScene extends Phaser.Scene {
       if (this.bossFlowPhase === 'loot-collection') {
         this.refreshAimWorldPoint();
         this.updatePrismCosmetics(now);
-        this.resolvePlayerDashWallCollision(now, delta);
         this.updatePlayerMovement(now);
         this.updatePickups(now, dt);
         this.updateModPickups(now, dt);
@@ -1682,7 +1687,6 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.recordEnergyRegeneration(requestedRegeneration, this.player.energy - energyBeforeRegeneration);
     this.refreshAimWorldPoint();
     this.updatePrismCosmetics(now);
-    this.resolvePlayerDashWallCollision(now, delta);
     this.updatePlayerMovement(now);
     this.updatePlayerShooting(now);
     this.muzzleFlashVfx.update(now);
@@ -1946,6 +1950,7 @@ export class ArenaScene extends Phaser.Scene {
       const sprite = projectile.sprite;
       const body = sprite.body as Phaser.Physics.Arcade.Body | null;
       if (body) {
+        if (!body.enable) this.physics.world.add(body);
         body.enable = true;
         body.reset(state.x, state.y);
         body.setVelocity(state.velocityX, state.velocityY);
@@ -2030,6 +2035,9 @@ export class ArenaScene extends Phaser.Scene {
         if (body) {
           body.stop();
           body.enable = false;
+          // Disabled bodies otherwise remain in Arcade's per-step body scans
+          // and dynamic-tree rebuilds for the pool's entire high-water mark.
+          this.physics.world.remove(body);
         }
         projectile.sprite.setActive(false).setVisible(false).setPosition(-10_000, -10_000).setDepth(10_000);
         projectile.crossedFences?.clear();
@@ -2238,42 +2246,6 @@ export class ArenaScene extends Phaser.Scene {
     }
     if (this.playerInput.pressed('shield')) this.activateShield(now);
     this.updateHoloAfterimage(now);
-  }
-
-  /**
-   * Arcade Physics resolves ordinary movement through the existing collider.
-   * During a high-speed dash, however, a thin wall can be crossed completely
-   * between discrete physics samples. Sweep the real 12px gameplay body from
-   * its previous physics center to its current center and retain tangential
-   * velocity so diagonal impacts slide instead of making boost feel sticky.
-   */
-  private resolvePlayerDashWallCollision(now: number, deltaMs: number): void {
-    const body = this.player.body as Phaser.Physics.Arcade.Body | null;
-    if (!body || this.wallRects.length === 0 || now - Math.max(0, deltaMs) >= this.player.dashUntil) return;
-    const startX = body.prev.x + body.halfWidth;
-    const startY = body.prev.y + body.halfHeight;
-    const endX = body.center.x;
-    const endY = body.center.y;
-    const dx = endX - startX;
-    const dy = endY - startY;
-    if (dx * dx + dy * dy < 1) return;
-
-    const radius = body.isCircle ? body.radius : Math.max(body.halfWidth, body.halfHeight);
-    const resolved = resolveSweptCircleMotion(startX, startY, endX, endY, radius, this.wallRects);
-    if (!resolved.hit) return;
-
-    const bodyOffsetX = body.center.x - this.player.x;
-    const bodyOffsetY = body.center.y - this.player.y;
-    this.player.setPosition(resolved.x - bodyOffsetX, resolved.y - bodyOffsetY);
-    body.updateFromGameObject();
-    body.prev.copy(body.position);
-    body.prevFrame.copy(body.position);
-
-    let velocityX = body.velocity.x;
-    let velocityY = body.velocity.y;
-    if (resolved.normalX !== 0 && velocityX * resolved.normalX < 0) velocityX = 0;
-    if (resolved.normalY !== 0 && velocityY * resolved.normalY < 0) velocityY = 0;
-    body.setVelocity(velocityX, velocityY);
   }
 
   private updateHoloAfterimage(now: number): void {
@@ -7592,7 +7564,9 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
     this.modAcquisitionPresenter.whenIdle(this.roundRuntime.guardHandoff(generation, () => {
-      if (!this.scene.isActive()) return;
+      // The reveal emits completion before its queued Arena resume. A paused
+      // owner still owns this handoff; its Clock resumes on the next frame.
+      if (!this.scene.isActive() && !this.scene.isPaused()) return;
       this.scheduleRoundHandoffCall(150, guardedCallback);
     }));
   }
@@ -9020,8 +8994,8 @@ export class ArenaScene extends Phaser.Scene {
       'cleanupFailures'
     ] as const) requireZero(key);
     // The retained player body is the only enabled dynamic body permitted at
-    // quiescence. Dormant projectile bodies remain disabled in the calculated
-    // warm pool and are intentionally represented by dynamicBodies/capacity.
+    // quiescence. Dormant projectile bodies remain disabled in the warm pool
+    // but are removed from Arcade World; pool capacity reports them separately.
     if (residue.activeDynamicBodies > 1) detail.activeDynamicBodies = residue.activeDynamicBodies;
     if (!Object.keys(detail).length) return;
     // eslint-disable-next-line no-console

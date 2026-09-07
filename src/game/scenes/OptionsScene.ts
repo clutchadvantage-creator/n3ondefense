@@ -1040,6 +1040,7 @@ export class OptionsScene extends Phaser.Scene {
     }
     if (this.resumePausedSceneOnEsc && this.scene.isPaused(this.returnScene)) {
       this.scene.resume(this.returnScene);
+      this.scene.get(this.returnScene).events.emit('resume-from-options');
       this.scene.stop();
       return;
     }

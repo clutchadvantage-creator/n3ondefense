@@ -7,12 +7,12 @@ const expression = process.argv[3] === '--file'
 if (!expression) throw new Error('Pass a Runtime.evaluate expression.');
 
 const targets = await fetch(`http://127.0.0.1:${port}/json/list`).then((response) => response.json());
-const target = targets.find((candidate) => candidate.type === 'page');
+const target = targets.find((candidate) => candidate.type === 'page' && /^http:\/\/(127\.0\.0\.1|localhost):/.test(candidate.url));
 if (!target?.webSocketDebuggerUrl) throw new Error('No debuggable page found.');
 
 const socket = new WebSocket(target.webSocketDebuggerUrl);
 const response = await new Promise((resolve, reject) => {
-  const timeout = setTimeout(() => reject(new Error('CDP evaluation timed out.')), 60_000);
+  const timeout = setTimeout(() => reject(new Error('CDP evaluation timed out.')), Number(process.env.N3ON_CDP_TIMEOUT_MS ?? 60_000));
   socket.addEventListener('open', () => socket.send(JSON.stringify({
     id: 1,
     method: 'Runtime.evaluate',
@@ -28,3 +28,4 @@ const response = await new Promise((resolve, reject) => {
 });
 socket.close();
 console.log(JSON.stringify(response, null, 2));
+if (response.error || response.result?.exceptionDetails) process.exitCode = 1;

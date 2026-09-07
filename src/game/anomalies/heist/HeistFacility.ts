@@ -21,7 +21,7 @@ import {
   type HeistTrapPlacement,
   type HeistVaultDoorSpec
 } from './HeistFacilityLayout.ts';
-import { HeistWallPointIndex, mergeAxisAlignedHeistWalls } from './HeistWallRuntime.ts';
+import { HeistWallPointIndex, normalizeHeistWallJunctions, exposedHeistWallEdges } from './HeistWallRuntime.ts';
 import {
   HEIST_ZONE_ALPHA,
   HeistZoneVisibility,
@@ -300,7 +300,7 @@ const appendGuideMarkers = (points: readonly HeistLayoutPoint[]): HeistLayoutPoi
 
 export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFacilityRuntime => {
   const layout = generateHeistFacilityLayout(seed);
-  const runtimeWallRects = mergeAxisAlignedHeistWalls(layout.wallRects);
+  const runtimeWallRects = normalizeHeistWallJunctions(layout.wallRects);
   const wallPointIndex = new HeistWallPointIndex(runtimeWallRects);
   ensureFacilityTextures(scene);
   const staticVisuals: Phaser.GameObjects.GameObject[] = [];
@@ -333,15 +333,15 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       ? HEIST_WALL_FACADE_TEXTURES.verticalMagenta : HEIST_WALL_FACADE_TEXTURES.verticalCyan;
     const cap = scene.add.image(rect.x - HEIST_WALL_PROJECTION_X, rect.y - HEIST_WALL_PROJECTION_Y, texture)
       .setOrigin(0).setDisplaySize(rect.w, rect.h).setDepth(HEIST_WALL_CAP_DEPTH);
-    const frontFacade = scene.add.tileSprite(rect.x - HEIST_WALL_PROJECTION_X,
-      rect.y + rect.h - HEIST_WALL_PROJECTION_Y,
-      rect.w + HEIST_WALL_PROJECTION_X, HEIST_WALL_PROJECTION_Y, frontFacadeTexture)
-      .setOrigin(0).setDepth(HEIST_WALL_FACE_DEPTH);
-    const facades = [frontFacade];
-    if (!horizontal) facades.push(scene.add.tileSprite(rect.x + rect.w - HEIST_WALL_PROJECTION_X,
-      rect.y - HEIST_WALL_PROJECTION_Y,
-      HEIST_WALL_PROJECTION_X, rect.h + HEIST_WALL_PROJECTION_Y, sideFacadeTexture)
-      .setOrigin(0).setDepth(HEIST_WALL_FACE_DEPTH + 0.02));
+    const facades: Phaser.GameObjects.TileSprite[] = [];
+    for (const edge of exposedHeistWallEdges(rect, runtimeWallRects)) {
+      if (edge.side === 'south') facades.push(scene.add.tileSprite(edge.x - HEIST_WALL_PROJECTION_X,
+        edge.y - HEIST_WALL_PROJECTION_Y, edge.length, HEIST_WALL_PROJECTION_Y, frontFacadeTexture)
+        .setOrigin(0).setDepth(HEIST_WALL_FACE_DEPTH));
+      if (edge.side === 'east') facades.push(scene.add.tileSprite(edge.x - HEIST_WALL_PROJECTION_X,
+        edge.y - HEIST_WALL_PROJECTION_Y, HEIST_WALL_PROJECTION_X, edge.length, sideFacadeTexture)
+        .setOrigin(0).setDepth(HEIST_WALL_FACE_DEPTH + 0.02));
+    }
     wallVisuals.push({ rect, cap, facades });
     staticVisuals.push(cap, ...facades);
   }

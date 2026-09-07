@@ -28,6 +28,8 @@ export interface PhysicalLootPlanOptions {
   /** Keeps large Credit awards readable without creating hundreds of objects. */
   maximumCreditBundles?: number;
   minimumCreditBundles?: number;
+  /** Fungible currencies use exact denominations; timed powerups stay individual. */
+  maximumStackableBundles?: number;
   seed?: number;
 }
 
@@ -67,16 +69,22 @@ export const createPhysicalLootPlan = (
       }
       continue;
     }
-    if (reward.kind === 'mod') {
+    if (reward.kind === 'mod' || reward.kind === 'grenade-rounds' || reward.kind === 'scattershot-rounds') {
+      // Ammo pickups activate timed powerups; their collectors do not consume
+      // an amount. Bundling those would change the number of activations.
       for (let index = 0; index < amount; index += 1) {
-        flattened.push({ kind: reward.kind, pickupType: null, amount: 1 });
+        flattened.push({ kind: reward.kind, pickupType: pickupTypeFor(reward.kind), amount: 1 });
       }
       continue;
     }
 
     const pickupType = pickupTypeFor(reward.kind);
-    for (let index = 0; index < amount; index += 1) {
-      flattened.push({ kind: reward.kind, pickupType, amount: 1 });
+    const bundles = Math.min(amount, Math.max(1, Math.floor(options.maximumStackableBundles ?? 8)));
+    let remaining = amount;
+    for (let index = 0; index < bundles; index += 1) {
+      const bundleAmount = Math.ceil(remaining / (bundles - index));
+      remaining -= bundleAmount;
+      flattened.push({ kind: reward.kind, pickupType, amount: bundleAmount });
     }
   }
 
@@ -90,4 +98,3 @@ export const createPhysicalLootPlan = (
     distance: 74 + index % 4 * 24 + Math.floor(index / 4) * 9
   }));
 };
-

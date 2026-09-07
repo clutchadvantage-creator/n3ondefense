@@ -56,7 +56,8 @@ test('HEIST 2.5D presentation keeps cached walls and bounded graph occlusion', (
   const facility = source('../src/game/anomalies/heist/HeistFacility.ts');
   assert.match(facility, /HEIST_WALL_PROJECTION_Y/);
   assert.match(facility, /HEIST_WALL_FACADE_TEXTURES/);
-  assert.match(facility, /scene\.add\.tileSprite\(rect\.x - HEIST_WALL_PROJECTION_X/);
+  assert.match(facility, /scene\.add\.tileSprite\(edge\.x - HEIST_WALL_PROJECTION_X/);
+  assert.match(facility, /exposedHeistWallEdges\(rect, runtimeWallRects\)/);
   assert.match(facility, /new HeistZoneVisibility\(layout\)/);
   assert.match(facility, /visibilityLayers = layout\.nodes\.map/);
   assert.match(facility, /foreground \? 0\.34 : 1/);

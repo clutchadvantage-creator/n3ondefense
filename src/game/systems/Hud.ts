@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { calculateHudLayout, formatHudCountdown, type HudRect, type HudScreenLayout } from './hudLayout.ts';
 import { DEFAULT_HUD_SETTINGS, glowMultiplier, normalizeHudSettings, type HudSettings } from '../config/interfaceSettings.ts';
 
+export const HUD_RADAR_RANGE = 900;
+
 export interface HudAbilitySlot {
   id: 'fence' | 'turret' | 'mine' | 'shield';
   keybind: string;
@@ -273,16 +275,35 @@ export class Hud {
   private scaleFactor = 1;
   private objectiveAccent = CYAN;
   private settings: HudSettings = { ...DEFAULT_HUD_SETTINGS };
+  private startupOffsetY = 0;
+  private destroyed = false;
+
+  // Scroll factor zero removes camera translation, but Phaser still applies
+  // camera zoom. Cancel that transform at the shared HUD root so the saved
+  // layout is in screen pixels in both Arena and the HEIST chase camera.
+  private readonly syncScreenTransform = (): void => {
+    const camera = this.scene.cameras.main;
+    if (this.destroyed || !camera || !this.root.scene) return;
+    const zoomX = camera.zoomX || 1, zoomY = camera.zoomY || 1;
+    this.root.setScale(1 / zoomX, 1 / zoomY).setPosition(
+      camera.width * camera.originX * (1 - 1 / zoomX),
+      camera.height * camera.originY * (1 - 1 / zoomY) + this.startupOffsetY / zoomY
+    );
+  };
 
   setStartupPresentationProgress(progress: number): void {
     const value = Phaser.Math.Clamp(progress, 0, 1);
     const stepped = value < 0.22 && Math.floor(value * 60) % 4 === 0 ? value * 0.45 : value;
-    this.root.setAlpha(stepped).setY((1 - value) * -10);
+    this.startupOffsetY = (1 - value) * -10;
+    this.root.setAlpha(stepped);
+    this.syncScreenTransform();
     this.radarFrame.setRotation((1 - value) * -0.32);
   }
 
   finishStartupPresentation(): void {
-    this.root.setAlpha(1).setY(0);
+    this.startupOffsetY = 0;
+    this.root.setAlpha(1);
+    this.syncScreenTransform();
     this.radarFrame.setRotation(0);
   }
 
@@ -379,6 +400,9 @@ export class Hud {
 
     this.applySettings(this.settings);
     this.scene.scale.on('resize', this.onResize, this);
+    this.scene.events.on(Phaser.Scenes.Events.PRE_RENDER, this.syncScreenTransform, this);
+    this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
+    this.syncScreenTransform();
   }
 
   private createText(text: string, size: number, color: string, family = 'Orbitron, sans-serif'): Phaser.GameObjects.Text {
@@ -506,6 +530,12 @@ export class Hud {
 
   private onResize(size: Phaser.Structs.Size): void {
     this.layout(size.width, size.height);
+    this.syncScreenTransform();
+  }
+
+  /** Encounter objective annotations share the player's screen-space transform. */
+  attachOverlay(...objects: Phaser.GameObjects.GameObject[]): void {
+    this.root.add(objects);
   }
 
   applySettings(settings: HudSettings): void {
@@ -1040,7 +1070,18 @@ export class Hud {
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
     this.scene.scale.off('resize', this.onResize, this);
+    this.scene.events.off(Phaser.Scenes.Events.PRE_RENDER, this.syncScreenTransform, this);
+    this.scene.events.off(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
+    // Framework shutdown can destroy the DisplayList/TweenManager first.
+    // Always detach external listeners; never revisit dead presentation nodes.
+    if (!this.root.scene) {
+      this.abilitySlots.clear(); this.resourceVisuals.clear(); this.buffVisuals.length = 0;
+      this.lowHealthPulse = null; this.defusePulse = null;
+      return;
+    }
     this.lowHealthPulse?.remove();
     this.lowHealthPulse = null;
     this.defusePulse?.remove();
@@ -1051,5 +1092,6 @@ export class Hud {
       this.scene.tweens.killTweensOf([visual.icon, visual.value, visual.delta]);
     }
     this.root.destroy(true);
+    this.abilitySlots.clear(); this.resourceVisuals.clear(); this.buffVisuals.length = 0;
   }
 }

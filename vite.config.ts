@@ -4,7 +4,7 @@ export const n3onViteConfig: UserConfig = {
   server: {
     watch: {
       // Some Windows setups lock active audio files and crash chokidar with EBUSY.
-      ignored: ['**/public/assets/audio/**']
+      ignored: ['**/public/assets/audio/**', '**/.soak-browser/**', '**/artifacts/**']
     }
   },
   build: {

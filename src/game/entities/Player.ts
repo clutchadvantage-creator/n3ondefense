@@ -4,6 +4,7 @@ import { PLAYER_BALANCE, WEAPON_BALANCE } from '../config/balance';
 import { applyOperativeSpeedMultipliers } from '../mods/ModRules.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
 import { stackedPickupMultiplier } from '../player/OverdriveRules.ts';
+import { SweptPlayerBody } from '../physics/SweptPlayerBody.ts';
 import {
   OperativeAppearanceController,
   type OperativeAppearanceResolver
@@ -57,7 +58,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       setTintFill: (color) => { this.setTintFill(color); }
     }, () => ({ textureKey: this.texture.key, tint: null }));
     scene.add.existing(this);
-    scene.physics.add.existing(this);
+    this.body = new SweptPlayerBody(scene.physics.world, this);
+    scene.physics.world.add(this.body);
     if (texture.startsWith('player-premium-')) {
       // Premium artwork may be wide or tall, but every frame retains the
       // exact same centered 12px gameplay collision radius.

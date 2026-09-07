@@ -19,7 +19,7 @@ import { resolveFenceSplitStage } from '../../abilities/FenceSplitRules.ts';
 import { getCosmeticById } from '../../../data/cosmetics.ts';
 import { SaveSystem } from '../../systems/SaveSystem.ts';
 import { AudioManager } from '../../systems/AudioManager.ts';
-import { Hud, type HudPayload, type HudRadarContact } from '../../systems/Hud.ts';
+import { Hud, HUD_RADAR_RANGE, type HudPayload, type HudRadarContact } from '../../systems/Hud.ts';
 import { BoostVisualSystem, type BoostFxCircleSpawn } from '../../systems/BoostVisualSystem.ts';
 import { SeededRandom } from '../../systems/SeededRandom.ts';
 import { selectEnemyPickup } from '../../player/PickupDropTable.ts';
@@ -342,6 +342,7 @@ export class HeistScene extends Phaser.Scene {
     this.announce('ANOMALY TRANSIT COMPLETE', 'HEIST // SECURITY FACILITY 07');
     this.cameras.main.fadeIn(540, 208, 255, 255);
     this.scale.on('resize', this.handleResize, this);
+    this.events.on('resume-from-options', this.onResumeFromOptions, this);
     if (import.meta.env.DEV) {
       const debug = globalThis as typeof globalThis & {
         forceHeistAmbush?: () => void;
@@ -449,6 +450,7 @@ export class HeistScene extends Phaser.Scene {
     const configureProjectile = (projectile: HeistProjectile, state: HeistProjectileSpawn): void => {
       const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
       if (body) {
+        if (!body.enable) this.physics.world.add(body);
         body.enable = true;
         body.reset(state.previousX, state.previousY);
         body.setVelocity(state.velocityX, state.velocityY);
@@ -522,7 +524,7 @@ export class HeistScene extends Phaser.Scene {
       configureProjectile,
       (projectile) => {
         const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
-        if (body) { body.stop(); body.enable = false; }
+        if (body) { body.stop(); body.enable = false; this.physics.world.remove(body); }
         projectile.sprite.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
         projectile.crossedFences.clear();
         projectile.sprite.setOrigin(0.5);
@@ -561,7 +563,9 @@ export class HeistScene extends Phaser.Scene {
     const dt = Math.min(delta, 100) / 1000;
     this.elapsedMs += Math.min(delta, 250);
     this.player.updatePresentation(now);
-    this.inputController.update(this.manuallyPaused || this.inputCapturePaused ? 'paused' : 'gameplay');
+    if (this.inputController.update(this.manuallyPaused || this.inputCapturePaused ? 'paused' : 'gameplay')) {
+      this.refreshHudInputPrompts();
+    }
     if (this.inputController.pressed('pause')) {
       if (this.manuallyPaused) this.resumeHeist();
       else this.pauseHeist();
@@ -750,6 +754,8 @@ export class HeistScene extends Phaser.Scene {
       fontFamily: 'Orbitron, sans-serif', fontSize: '32px', color: '#ff63dc', align: 'center',
       stroke: '#02050a', strokeThickness: 9
     }).setOrigin(0.5).setScrollFactor(0).setDepth(20_100).setAlpha(0);
+    this.hud.attachOverlay(this.titleText, this.objectiveText, this.lootText, this.promptText, this.announcementText);
+    this.handleResize(this.scale.gameSize);
   }
 
   private createHudPayload(): void {
@@ -775,7 +781,7 @@ export class HeistScene extends Phaser.Scene {
         slot('mine', 'MINE', this.inputController.prompt('mine', compactBindingLabel(bindings.mine))),
         slot('shield', 'SHIELD', this.inputController.prompt('shield', compactBindingLabel(bindings.shield)))
       ],
-      radarRange: 700, radarContacts: this.hudRadarContacts
+      radarRange: HUD_RADAR_RANGE, radarContacts: this.hudRadarContacts
     };
     this.hud.update(this.hudPayload);
   }
@@ -810,6 +816,11 @@ export class HeistScene extends Phaser.Scene {
       : type === 'coreToken' ? { kind: 'coreTokens', amount: 1 }
         : type === 'plasmaChip' ? { kind: 'plasmaChips', amount: 1 }
           : type === 'fluxCore' ? { kind: 'fluxCores', amount: 1 } : undefined;
+    if (provisionalReward) {
+      this.lootPickups.spawn(x, y, provisionalReward, 3_000 + this.enemyLootSequence++);
+      this.audio.play('loot-spawn');
+      return;
+    }
     const root = this.pickupPresentation.create(type, x, y, GAMEPLAY_PICKUP_COLOR_BY_TYPE[type]).setDepth(8);
     root.setScale(0.72);
     this.tweens.add({ targets: root, scale: 1, duration: 180, ease: 'Back.Out' });
@@ -1688,8 +1699,14 @@ export class HeistScene extends Phaser.Scene {
       this.miniBossEncountered = true;
     }
     this.enemies.push(enemy);
-    this.physics.add.collider(enemy, this.facility.walls);
-    this.physics.add.collider(enemy, this.facility.vaultDoors);
+    const wallCollider = this.physics.add.collider(enemy, this.facility.walls);
+    const doorCollider = this.physics.add.collider(enemy, this.facility.vaultDoors);
+    enemy.once(Phaser.GameObjects.Events.DESTROY, () => {
+      // Bodies do not own Phaser colliders. Retire the pair at enemy death,
+      // instead of iterating dead enemy overlaps for the rest of the HEIST.
+      if (wallCollider.world) wallCollider.destroy();
+      if (doorCollider.world) doorCollider.destroy();
+    });
   }
 
   private openExtraction(): void {
@@ -2107,9 +2124,13 @@ export class HeistScene extends Phaser.Scene {
   private readonly handleResize = (size: Phaser.Structs.Size): void => {
     const width = size.width;
     const height = size.height;
-    this.titleText?.setX(width * 0.5);
-    this.objectiveText?.setX(width * 0.5);
-    this.lootText?.setX(width - 18);
+    const objectiveBounds = this.hud?.getTutorialTargetBounds('objective');
+    const statsBounds = this.hud?.getTutorialTargetBounds('stats');
+    const objectiveBottom = objectiveBounds ? objectiveBounds.y + objectiveBounds.height : 120;
+    const statsBottom = statsBounds ? statsBounds.y + statsBounds.height : 124;
+    this.titleText?.setPosition(width * 0.5, objectiveBottom + 12);
+    this.objectiveText?.setPosition(width * 0.5, objectiveBottom + 36);
+    this.lootText?.setPosition(width - 18, statsBottom + 12);
     this.promptText?.setPosition(width * 0.5, height - 48);
     this.announcementText?.setPosition(width * 0.5, height * 0.32);
     this.devPerformanceOverlay?.setX(width - 14);
@@ -2170,6 +2191,23 @@ export class HeistScene extends Phaser.Scene {
     }
     this.session.inputBridge.showResume('CLICK TO RESUME HEIST');
     this.session.inputBridge.requestLock();
+  }
+
+  private readonly onResumeFromOptions = (): void => {
+    const settings = SaveSystem.get().settings;
+    this.hud.applySettings(settings.hud);
+    this.handleResize(this.scale.gameSize);
+    this.aimSettings = normalizeAimSettings(settings.aim);
+    this.inputController.refresh(settings.abilityBindings, normalizeControllerSettings(settings.controller));
+    this.refreshHudInputPrompts();
+    this.resumeHeist();
+  };
+
+  private refreshHudInputPrompts(): void {
+    const bindings = SaveSystem.get().settings.abilityBindings;
+    for (const slot of this.hudPayload.abilities) {
+      slot.keybind = this.inputController.prompt(slot.id, compactBindingLabel(bindings[slot.id]));
+    }
   }
 
   private updateInputCapture(): void {
@@ -2460,6 +2498,7 @@ export class HeistScene extends Phaser.Scene {
         containers: this.containers.length,
         smashables: this.environmentSmashables?.diagnostics() ?? null,
         pickups: this.pickups.length,
+        physicalLoot: this.lootPickups.diagnostics(),
         mines: this.mines.length,
         fences: this.fences.length,
         turrets: this.turrets.length,
@@ -2516,6 +2555,8 @@ export class HeistScene extends Phaser.Scene {
     this.cameraPresentation = null;
     this.shieldVisual = null;
     safely('resize-listener', () => this.scale.off('resize', this.handleResize, this));
+    safely('options-listener', () => this.events.off('resume-from-options', this.onResumeFromOptions, this));
+    // Hud owns its SHUTDOWN listener, including external resize detachment.
     this.projectiles.length = 0;
     safely('projectile-pool-references', () => this.projectilePool?.discardReferences());
     safely('fx-pool-references', () => this.fxCirclePool?.discardReferences());

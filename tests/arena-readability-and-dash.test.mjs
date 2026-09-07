@@ -71,8 +71,23 @@ test('arena presentation uses illustrated graffiti, dimensional walls, hazard bl
   assert.match(renderer, /sand/i);
   assert.match(theme, /maximumSpectatorLights: 320/);
   assert.match(theme, /random\.int\(260, NEON_CITY_VISUAL_THEME\.maximumSpectatorLights\)/);
-  assert.match(arena, /resolvePlayerDashWallCollision/);
-  assert.match(arena, /body\.prev/);
-  assert.match(arena, /this\.wallRects/);
-  assert.match(arena, /body\.updateFromGameObject\(\)/);
+  const player = readFileSync(new URL('../src/game/entities/Player.ts', import.meta.url), 'utf8');
+  assert.match(player, /new SweptPlayerBody/);
+  assert.doesNotMatch(arena, /resolvePlayerDashWallCollision/);
+});
+
+test('simultaneous entry at a rectangle corner cannot reflect the remaining dash backwards', () => {
+  const result = resolveSweptCircleMotion(50, 50, 200, 200, 12, [{x:100,y:100,w:20,h:20}]);
+  assert.ok(result.x > 87 && result.x < 88);
+  assert.ok(result.y > 87 && result.y < 88);
+});
+
+test('repeated boosted motion slides along joined walls without crossing a seam', () => {
+  const walls = [{x:100,y:0,w:20,h:100}, {x:100,y:100,w:20,h:2000}];
+  let position = {x:87.65,y:20};
+  for (let frame = 0; frame < 100; frame++) {
+    position = resolveSweptCircleMotion(position.x, position.y, position.x+900, position.y+14, 12, walls);
+    assert.ok(position.x < 88 && position.x > 86);
+  }
+  assert.ok(position.y > 1300);
 });

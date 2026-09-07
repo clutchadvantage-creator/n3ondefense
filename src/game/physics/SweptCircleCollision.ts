@@ -88,7 +88,7 @@ const nearestHit = (
 /**
  * Sweeps a circular body through the existing static wall rectangles. Two
  * bounded passes preserve a tangential slide at corners without adding a new
- * physics system or performing work outside the short dash window.
+ * physics system. Player body integration also uses this for boosted walking.
  */
 export const resolveSweptCircleMotion = (
   startX: number,
@@ -123,11 +123,10 @@ export const resolveSweptCircleMotion = (
     const untraveled = Math.max(0, 1 - hit.time);
     let slideX = remainingX * untraveled;
     let slideY = remainingY * untraveled;
-    const intoSurface = slideX * hit.normalX + slideY * hit.normalY;
-    if (intoSurface < 0) {
-      slideX -= intoSurface * hit.normalX;
-      slideY -= intoSurface * hit.normalY;
-    }
+    // Simultaneous slab entry reports two perpendicular constraints, not a
+    // unit diagonal normal. Project each blocked axis independently.
+    if (slideX * hit.normalX < 0) slideX = 0;
+    if (slideY * hit.normalY < 0) slideY = 0;
     if (hit.normalX !== 0) normalX = hit.normalX;
     if (hit.normalY !== 0) normalY = hit.normalY;
     remainingX = slideX;

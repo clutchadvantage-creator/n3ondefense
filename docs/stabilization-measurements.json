@@ -1,0 +1,241 @@
+{
+  "input": "artifacts/mixed-soak-after.json",
+  "passed": true,
+  "failures": [],
+  "coverage": {
+    "ordinaryRound": 32,
+    "arcadeEvent": 16,
+    "roundFinished": 32,
+    "loading": 31,
+    "boss": 8,
+    "bossLoot": 8,
+    "modReveal": 19,
+    "heistEntry": 8,
+    "heistOptionsResize": 8,
+    "physicalHeistLoot": 8,
+    "heistReturn": 8
+  },
+  "boundaries": 40,
+  "durationSeconds": 619.628,
+  "quiescent": {
+    "count": 32,
+    "resize": {
+      "min": 21,
+      "max": 21
+    },
+    "game": {
+      "min": 19,
+      "max": 19
+    },
+    "window": {
+      "min": 18,
+      "max": 18
+    },
+    "document": {
+      "min": 14,
+      "max": 14
+    }
+  },
+  "heistLooseLoot": {
+    "min": 20,
+    "max": 20
+  },
+  "boundaryRanges": {
+    "displayObjects": {
+      "min": 1064,
+      "max": 1084
+    },
+    "updateListObjects": {
+      "min": 19,
+      "max": 93
+    },
+    "dynamicBodies": {
+      "min": 1,
+      "max": 1
+    },
+    "activeDynamicBodies": {
+      "min": 1,
+      "max": 1
+    },
+    "staticBodies": {
+      "min": 0,
+      "max": 0
+    },
+    "pendingPhysicsBodies": {
+      "min": 0,
+      "max": 0
+    },
+    "colliderCapacity": {
+      "min": 0,
+      "max": 0
+    },
+    "timers": {
+      "min": 0,
+      "max": 0
+    },
+    "tweens": {
+      "min": 0,
+      "max": 0
+    },
+    "projectilePoolCapacity": {
+      "min": 680,
+      "max": 700
+    },
+    "fxPoolCapacity": {
+      "min": 236,
+      "max": 236
+    },
+    "trailCapacity": {
+      "min": 918,
+      "max": 945
+    },
+    "activeMechanicalFragments": {
+      "min": 0,
+      "max": 0
+    },
+    "activeMechanicalBursts": {
+      "min": 0,
+      "max": 0
+    },
+    "hudInstances": {
+      "min": 0,
+      "max": 0
+    },
+    "staleEncounterOwners": {
+      "min": 0,
+      "max": 0
+    },
+    "roundAudioVoices": {
+      "min": 0,
+      "max": 0
+    },
+    "bossControllers": {
+      "min": 0,
+      "max": 0
+    },
+    "hazardControllers": {
+      "min": 0,
+      "max": 0
+    },
+    "arcadeControllers": {
+      "min": 0,
+      "max": 0
+    },
+    "anomalyControllers": {
+      "min": 0,
+      "max": 0
+    },
+    "bossHudObjects": {
+      "min": 0,
+      "max": 0
+    },
+    "premiumRevealScenes": {
+      "min": 0,
+      "max": 0
+    },
+    "roundAudioLoops": {
+      "min": 0,
+      "max": 0
+    },
+    "roundAudioTones": {
+      "min": 0,
+      "max": 0
+    },
+    "pooledAudioVoices": {
+      "min": 166,
+      "max": 166
+    },
+    "sceneEventListeners": {
+      "min": 59,
+      "max": 59
+    },
+    "gameEventListeners": {
+      "min": 20,
+      "max": 21
+    }
+  },
+  "earlyPerformance": {
+    "samples": 8,
+    "meanFrameMs": 21.923,
+    "meanUpdateMs": 0.757,
+    "meanP95FrameMs": 22.301,
+    "meanP95UpdateMs": 1.075
+  },
+  "latePerformance": {
+    "samples": 8,
+    "meanFrameMs": 22.28,
+    "meanUpdateMs": 0.809,
+    "meanP95FrameMs": 23.338,
+    "meanP95UpdateMs": 1.138
+  },
+  "matchedRounds": [
+    {
+      "round": 54,
+      "early": {
+        "samples": 2,
+        "meanFrameMs": 28.552,
+        "meanUpdateMs": 0.764,
+        "meanP95FrameMs": 29.175,
+        "meanP95UpdateMs": 1.1
+      },
+      "late": {
+        "samples": 2,
+        "meanFrameMs": 28.877,
+        "meanUpdateMs": 0.856,
+        "meanP95FrameMs": 30.835,
+        "meanP95UpdateMs": 1.25
+      }
+    },
+    {
+      "round": 55,
+      "early": {
+        "samples": 2,
+        "meanFrameMs": 22.475,
+        "meanUpdateMs": 0.716,
+        "meanP95FrameMs": 22.51,
+        "meanP95UpdateMs": 1
+      },
+      "late": {
+        "samples": 2,
+        "meanFrameMs": 24.13,
+        "meanUpdateMs": 0.825,
+        "meanP95FrameMs": 25.83,
+        "meanP95UpdateMs": 1.15
+      }
+    },
+    {
+      "round": 56,
+      "early": {
+        "samples": 2,
+        "meanFrameMs": 17.054,
+        "meanUpdateMs": 0.749,
+        "meanP95FrameMs": 17.51,
+        "meanP95UpdateMs": 1.1
+      },
+      "late": {
+        "samples": 2,
+        "meanFrameMs": 17.033,
+        "meanUpdateMs": 0.802,
+        "meanP95FrameMs": 16.68,
+        "meanP95UpdateMs": 1.1
+      }
+    },
+    {
+      "round": 57,
+      "early": {
+        "samples": 2,
+        "meanFrameMs": 19.612,
+        "meanUpdateMs": 0.8,
+        "meanP95FrameMs": 20.01,
+        "meanP95UpdateMs": 1.1
+      },
+      "late": {
+        "samples": 2,
+        "meanFrameMs": 19.077,
+        "meanUpdateMs": 0.753,
+        "meanP95FrameMs": 20.005,
+        "meanP95UpdateMs": 1.05
+      }
+    }
+  ]
+}
