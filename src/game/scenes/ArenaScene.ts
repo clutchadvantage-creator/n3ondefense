@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { grenadeTouchesSmashable } from '../arena/SmashableCombatQuery.ts';
+import { followGameplayPlayer, GAMEPLAY_CAMERA_ZOOM, GAMEPLAY_CAMERA_FOLLOW_LERP } from '../systems/GameplayCamera.ts';
 import { starterWeapon } from '../../data/weapons';
 import { getUpgradeEffect, getUpgradeLevel } from '../../data/upgrades';
 import { getCosmeticById } from '../../data/cosmetics';
@@ -866,7 +868,7 @@ export class ArenaScene extends Phaser.Scene {
     // Stop removes HEIST from rendering, while this explicit ordering prevents
     // any unrelated surviving overlay scene from remaining above the world.
     this.scene.bringToTop(SceneKeys.Arena);
-    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+    this.cameras.main.startFollow(this.player, true, GAMEPLAY_CAMERA_FOLLOW_LERP, GAMEPLAY_CAMERA_FOLLOW_LERP);
     if (result.success) this.commitAnomalyLoot(result);
     this.anomalyController?.resolveReturn();
     if (result.playerState) {
@@ -1438,8 +1440,7 @@ export class ArenaScene extends Phaser.Scene {
       this.player.permanentModSpeedMultiplier = this.modRuntime.permanentMoveSpeedMultiplier();
       this.player.setAppearanceResolver((timeMs) => SaveSystem.getOperativeFrameAppearance(timeMs));
       this.player.restoreOperativeAppearance(this.time.now, true);
-      this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-      this.cameras.main.setZoom(0.9);
+      followGameplayPlayer(this.cameras.main, this.player);
     } else {
       this.player.setPosition(this.layout.playerSpawn.x, this.layout.playerSpawn.y);
       this.player.setVelocity(0, 0);
@@ -3440,7 +3441,7 @@ export class ArenaScene extends Phaser.Scene {
       this.detonateGrenadeRound(projectile, x, y, null, null, directFluxCore);
       return true;
     }
-    if (this.arenaSmashables?.hasTargetAt(x, y, 7)) {
+    if (grenadeTouchesSmashable(x, y, false, this.arenaSmashables)) {
       this.detonateGrenadeRound(projectile, x, y, null);
       return true;
     }
@@ -3470,8 +3471,12 @@ export class ArenaScene extends Phaser.Scene {
       y,
       TEMPORARY_AMMO_BALANCE.grenade.interactiveProximityFuseRadius
     );
-    if (!nearbyFluxCore) return false;
-    this.detonateGrenadeRound(projectile, x, y, null, null, nearbyFluxCore);
+    if (nearbyFluxCore) {
+      this.detonateGrenadeRound(projectile, x, y, null, null, nearbyFluxCore);
+      return true;
+    }
+    if (!grenadeTouchesSmashable(x, y, true, this.arenaSmashables)) return false;
+    this.detonateGrenadeRound(projectile, x, y, null);
     return true;
   }
 
@@ -5519,13 +5524,13 @@ export class ArenaScene extends Phaser.Scene {
     if (saved) {
       camera.setViewport(saved.x, saved.y, saved.width, saved.height);
       camera.setScroll(saved.scrollX, saved.scrollY);
-      camera.setZoom(Number.isFinite(saved.zoom) && saved.zoom > 0 ? saved.zoom : 0.9);
+      camera.setZoom(Number.isFinite(saved.zoom) && saved.zoom > 0 ? saved.zoom : GAMEPLAY_CAMERA_ZOOM);
       camera.setRotation(Number.isFinite(saved.rotation) ? saved.rotation : 0);
       camera.setAlpha(Number.isFinite(saved.alpha) && saved.alpha > 0 ? saved.alpha : 1);
       camera.setVisible(saved.visible);
     } else {
       camera.setViewport(0, 0, this.scale.width, this.scale.height);
-      camera.setZoom(0.9).setRotation(0).setAlpha(1).setVisible(true);
+      camera.setZoom(GAMEPLAY_CAMERA_ZOOM).setRotation(0).setAlpha(1).setVisible(true);
     }
     // The Arena was visible at every valid entry. Never carry a malformed or
     // stale hidden flag into the restored world.

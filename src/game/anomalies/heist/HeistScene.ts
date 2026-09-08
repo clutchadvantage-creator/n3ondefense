@@ -64,7 +64,8 @@ import { HeistRewardService, type HeistContainerReward } from './HeistRewardServ
 import { HeistLootPickupSystem } from './HeistLootPickupSystem.ts';
 import { HeistTrapSystem } from './HeistTrapSystem.ts';
 import { HeistPerformanceProfiler } from './HeistPerformanceProfiler.ts';
-import { HeistCameraPresentation } from './HeistCameraPresentation.ts';
+import { followGameplayPlayer } from '../../systems/GameplayCamera.ts';
+import { circleTouchesSmashable, grenadeTouchesSmashable, type SmashableCombatQuery } from '../../arena/SmashableCombatQuery.ts';
 import { ArenaSmashableSystem } from '../../arena/ArenaSmashableSystem.ts';
 import type { ArenaSmashableLoot } from '../../arena/ArenaSmashableDefinitions.ts';
 import { createHeistSmashablePlacements } from './HeistSmashablePlacement.ts';
@@ -149,7 +150,6 @@ export class HeistScene extends Phaser.Scene {
   private player!: Player;
   private inputController!: PlayerInput;
   private facility!: HeistFacilityRuntime;
-  private cameraPresentation: HeistCameraPresentation | null = null;
   private trapSystem!: HeistTrapSystem;
   private random!: SeededRandom;
   private rewards!: HeistRewardService;
@@ -169,6 +169,14 @@ export class HeistScene extends Phaser.Scene {
   private mineExplosionVfx!: MineExplosionVfx;
   private environmentSmashables: ArenaSmashableSystem | null = null;
   private containers: HeistContainer[] = [];
+  private readonly containerCombatTargets: SmashableCombatQuery = {
+    hasTargetAt: (x, y, padding) => this.findContainerHit(x, y, padding) !== null,
+    hasTargetInRadius: (x, y, radius) => this.phase === 'looting' && this.containers.some(
+      (container) => !container.opened && circleTouchesSmashable(
+        x, y, radius, container.root.x, container.root.y, 76, 60
+      )
+    )
+  };
   private pickups: HeistPickup[] = [];
   private fences: Fence[] = [];
   private turrets: Turret[] = [];
@@ -573,7 +581,6 @@ export class HeistScene extends Phaser.Scene {
     this.updateInputCapture();
     profiler?.mark('presentationInput');
     this.facility.update(now, this.player.x, this.player.y);
-    this.cameraPresentation?.update(delta, this.facility.isPresentationOpenArea());
     this.extractionPortal?.update(now);
     this.updateCrosshair();
     this.mineExplosionVfx.update(now);
@@ -667,11 +674,7 @@ export class HeistScene extends Phaser.Scene {
     if (source.tint !== null) this.player.setTint(source.tint);
     this.physics.add.collider(this.player, this.facility.walls);
     this.physics.add.collider(this.player, this.facility.vaultDoors);
-    this.cameraPresentation = new HeistCameraPresentation(
-      this.cameras.main,
-      this.player,
-      this.facility.layout.vaultBounds
-    );
+    followGameplayPlayer(this.cameras.main, this.player);
   }
 
   private createVaultContainers(): void {
@@ -1140,9 +1143,14 @@ export class HeistScene extends Phaser.Scene {
   }
 
   private detonateGrenadeForNearbyTarget(projectile: HeistProjectile, now: number): boolean {
+    const { x, y } = projectile.sprite;
     const directEnemy = this.findGrenadeEnemy(projectile.sprite.x, projectile.sprite.y, false);
     if (directEnemy) {
       this.detonateGrenade(projectile, directEnemy);
+      return true;
+    }
+    if (grenadeTouchesSmashable(x, y, false, this.environmentSmashables, this.containerCombatTargets)) {
+      this.detonateGrenade(projectile);
       return true;
     }
     if (!grenadeProximityCheckDue(
@@ -1153,8 +1161,8 @@ export class HeistScene extends Phaser.Scene {
 
     projectile.grenadeNextProximityCheckAt = nextGrenadeProximityCheckAt(now);
     const nearbyEnemy = this.findGrenadeEnemy(projectile.sprite.x, projectile.sprite.y, true);
-    if (!nearbyEnemy) return false;
-    this.detonateGrenade(projectile, nearbyEnemy);
+    if (!nearbyEnemy && !grenadeTouchesSmashable(x, y, true, this.environmentSmashables, this.containerCombatTargets)) return false;
+    this.detonateGrenade(projectile, nearbyEnemy ?? undefined);
     return true;
   }
 
@@ -1301,6 +1309,13 @@ export class HeistScene extends Phaser.Scene {
     if (primary) this.damageEnemy(primary, projectile.damage);
     const container = this.findContainerHit(projectile.sprite.x, projectile.sprite.y);
     if (container) this.damageContainer(container, projectile.damage);
+    if (this.phase === 'looting') {
+      for (const target of this.containers) {
+        if (target === container || target.opened) continue;
+        if (circleTouchesSmashable(projectile.sprite.x, projectile.sprite.y, radius,
+          target.root.x, target.root.y, 76, 60)) this.damageContainer(target, damage);
+      }
+    }
     this.environmentSmashables?.damageArea(projectile.sprite.x, projectile.sprite.y, radius, damage);
     this.grenadeSplashX = projectile.sprite.x;
     this.grenadeSplashY = projectile.sprite.y;
@@ -2255,9 +2270,9 @@ export class HeistScene extends Phaser.Scene {
     return this.facility.containsWallPoint(x, y);
   }
 
-  private findContainerHit(x: number, y: number): HeistContainer | null {
+  private findContainerHit(x: number, y: number, padding = 0): HeistContainer | null {
     if (this.phase !== 'looting') return null;
-    return this.containers.find((container) => !container.opened && Math.abs(x - container.root.x) <= 38 && Math.abs(y - container.root.y) <= 30) ?? null;
+    return this.containers.find((container) => !container.opened && Math.abs(x - container.root.x) <= 38 + padding && Math.abs(y - container.root.y) <= 30 + padding) ?? null;
   }
 
   private findEnemyHit(x: number, y: number): Enemy | null {
@@ -2552,7 +2567,6 @@ export class HeistScene extends Phaser.Scene {
       this.events.off(Phaser.Scenes.Events.UPDATE, this.onDevPhysicsUpdateComplete, this);
     });
     this.extractionPortal = null;
-    this.cameraPresentation = null;
     this.shieldVisual = null;
     safely('resize-listener', () => this.scale.off('resize', this.handleResize, this));
     safely('options-listener', () => this.events.off('resume-from-options', this.onResumeFromOptions, this));

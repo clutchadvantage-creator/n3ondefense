@@ -52,7 +52,9 @@ export class ArenaLifecycleProfiler {
   }
 
   recordFrame(deltaMs: number, projectilesCreated: number, fxCreated: number): void {
-    this.record(this.active, deltaMs, projectilesCreated, fxCreated, 600);
+    // Keep the last 600 frames for the entire encounter, not just its first
+    // ten seconds. Allocation deltas still cover the complete generation.
+    this.record(this.active, deltaMs, projectilesCreated, fxCreated, Number.POSITIVE_INFINITY);
     if (!this.resume) return;
     this.record(this.resume, deltaMs, projectilesCreated, fxCreated, 180);
     if (this.resume.frames >= 180) this.finishResume();

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants.ts';
 import type { ArenaLayout, GeneratedObstacle, RectSpec } from '../types.ts';
 import { SeededRandom } from '../systems/SeededRandom.ts';
+import { bakeStaticGraphics } from '../rendering/bakeStaticGraphics.ts';
 import {
   drawBeveledTechPlate,
   drawHazardStripes,
@@ -46,6 +47,8 @@ interface VenueScreenSpec {
 export interface ArenaVisualDiagnostics {
   staticLayer: 'cached-render-texture';
   staticSourceObjectsAfterBake: 0;
+  cachedWallCount: number;
+  liveWallGraphics: 0;
   liveAnimatedObjects: number;
   independentAnimationLoops: 1;
   venueScreenCount: number;
@@ -65,10 +68,10 @@ export class ArenaVisualRenderer {
 
   constructor(private readonly scene: Phaser.Scene, private readonly layout: ArenaLayout) {
     this.plan = createArenaDressingPlan(layout);
-    const bakeTimeMs = this.drawBackdropAndBeachStadium();
+    let bakeTimeMs = this.drawBackdropAndBeachStadium();
     this.drawArchetypeMotif();
     this.drawContainmentPerimeter();
-    this.drawWalls();
+    bakeTimeMs += this.drawWalls();
     this.drawObstacles();
     this.drawDistrictDressing();
     const ambientBatchCount = this.createAmbientEnvironmentBatches();
@@ -76,6 +79,8 @@ export class ArenaVisualRenderer {
     this.diagnostics = {
       staticLayer: 'cached-render-texture',
       staticSourceObjectsAfterBake: 0,
+      cachedWallCount: layout.walls.length,
+      liveWallGraphics: 0,
       liveAnimatedObjects: this.ambientPulseTargets.length,
       independentAnimationLoops: 1,
       venueScreenCount: this.plan.venueScreenCount,
@@ -978,14 +983,28 @@ export class ArenaVisualRenderer {
     g.lineStyle(1, this.layout.theme.secondary, 0.3);
     g.strokeRect(bounds.x - 16, bounds.y - 16, bounds.w + 32, bounds.h + 32);
 
+    // All perimeter nodes share one small texture. Replaying
+    // their filled circles was roughly 1 ms of renderer CPU every frame.
+    let nodeTexture: Phaser.Textures.Texture | undefined;
+    const addNode = (x: number, y: number): void => {
+      if (!nodeTexture) {
+        const source = this.scene.make.graphics({ x: 0, y: 0 }, false);
+        this.drawPerimeterNode(source, 0, 0);
+        const node = this.keep(this.scene.add.existing(bakeStaticGraphics(this.scene, source, { x: -9, y: -9, w: 18, h: 18 }))
+          .setPosition(x - 9, y - 9).setDepth(1));
+        nodeTexture = node.texture;
+      } else {
+        this.keep(this.scene.add.image(x - 9, y - 9, nodeTexture).setOrigin(0).setDisplaySize(18, 18).setDepth(1));
+      }
+    };
     const nodeSpacing = 180;
     for (let x = bounds.x + 80; x < bounds.x + bounds.w - 50; x += nodeSpacing) {
-      this.drawPerimeterNode(g, x, bounds.y - 11);
-      this.drawPerimeterNode(g, x, bounds.y + bounds.h + 11);
+      addNode(x, bounds.y - 11);
+      addNode(x, bounds.y + bounds.h + 11);
     }
     for (let y = bounds.y + 80; y < bounds.y + bounds.h - 50; y += nodeSpacing) {
-      this.drawPerimeterNode(g, bounds.x - 11, y);
-      this.drawPerimeterNode(g, bounds.x + bounds.w + 11, y);
+      addNode(bounds.x - 11, y);
+      addNode(bounds.x + bounds.w + 11, y);
     }
   }
 
@@ -998,14 +1017,25 @@ export class ArenaVisualRenderer {
     g.fillCircle(x, y, 2);
   }
 
-  private drawWalls(): void {
-    const g = this.keep(this.scene.add.graphics().setDepth(2));
+  private drawWalls(): number {
+    const startedAt = performance.now();
+    const g = this.scene.make.graphics({ x: 0, y: 0 }, false);
     const nodeSet = new Set(this.plan.animatedNodeIndices);
     for (let index = 0; index < this.layout.walls.length; index += 1) {
       const wall = this.layout.walls[index];
       this.drawWallModule(g, wall, index);
       if (nodeSet.has(index)) this.createWallNode(wall, index);
     }
+    // Dense layouts otherwise replay and triangulate every bevel/bolt each
+    // frame. Keep the exact artwork and depth, with live nodes above the bake.
+    const cachedWalls = this.keep(this.scene.add.renderTexture(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
+      .setOrigin(0).setDepth(2));
+    cachedWalls.draw(g);
+    g.destroy();
+    if (import.meta.env.DEV) {
+      console.assert(!g.scene && !this.scene.children.exists(g), 'Static wall Graphics survived baking');
+    }
+    return performance.now() - startedAt;
   }
 
   private drawWallModule(g: Phaser.GameObjects.Graphics, wall: RectSpec, index: number): void {
@@ -1089,9 +1119,16 @@ export class ArenaVisualRenderer {
   }
 
   private drawObstacles(): void {
-    const g = this.keep(this.scene.add.graphics().setDepth(3));
     for (let index = 0; index < this.layout.obstacles.length; index += 1) {
-      this.drawObstacleModule(g, this.layout.obstacles[index], index);
+      const obstacle = this.layout.obstacles[index];
+      const g = this.scene.make.graphics({ x: 0, y: 0 }, false);
+      this.drawObstacleModule(g, { ...obstacle, x: 0, y: 0 }, index);
+      // Include the full contact shadow and extruded face, without allocating
+      // another world-sized layer for a handful of small blockers.
+      const bounds = { x: -obstacle.w * 0.58 - 12, y: -obstacle.h * 0.5 - 12,
+        w: obstacle.w * 1.16 + 28, h: obstacle.h * 1.17 + 32 };
+      const cached = bakeStaticGraphics(this.scene, g, bounds);
+      this.keep(this.scene.add.existing(cached).setPosition(obstacle.x + cached.x, obstacle.y + cached.y).setDepth(3));
     }
   }
 
@@ -1207,13 +1244,13 @@ export class ArenaVisualRenderer {
   }
 
   /**
-   * Three Graphics batches cover all live environment ambience. Their alpha is
+   * Three batches cover all live environment ambience. Their alpha is
    * driven by the same tween as wall and venue indicators, so environmental
    * polish remains one bounded animation loop regardless of arena complexity.
    */
   private createAmbientEnvironmentBatches(): number {
     const bounds = this.layout.generation.bounds;
-    const batches: Phaser.GameObjects.Graphics[] = [];
+    const batches: Phaser.GameObjects.GameObject[] = [];
 
     const water = this.keep(this.scene.add.graphics().setDepth(-3.8).setBlendMode(Phaser.BlendModes.ADD));
     for (let index = 0; index < 12; index += 1) {
@@ -1234,12 +1271,26 @@ export class ArenaVisualRenderer {
     }
     batches.push(water);
 
-    const venue = this.keep(this.scene.add.graphics().setDepth(-2.55).setBlendMode(Phaser.BlendModes.ADD));
+    const venue = this.keep(this.scene.add.container(0, 0).setDepth(-2.55));
+    const barTextures = new Map<number, Phaser.Textures.Texture>();
+    const addBar = (x: number, y: number, color: number): void => {
+      const texture = barTextures.get(color);
+      if (texture) {
+        venue.add(this.scene.add.image(x - 1, y - 1, texture).setOrigin(0).setDisplaySize(26, 4).setBlendMode(Phaser.BlendModes.ADD));
+      } else {
+        const source = this.scene.make.graphics({ x: 0, y: 0 }, false);
+        source.fillStyle(color, 0.16).fillRoundedRect(0, 0, 24, 2, 1);
+        const bar = bakeStaticGraphics(this.scene, source, { x: -1, y: -1, w: 26, h: 4 });
+        bar.setPosition(x - 1, y - 1).setBlendMode(Phaser.BlendModes.ADD);
+        venue.add(bar);
+        barTextures.set(color, bar.texture);
+      }
+    };
     for (let index = 0; index < 10; index += 1) {
       const x = bounds.x + 36 + index * Math.max(46, (bounds.w - 72) / 10);
       const color = index % 2 ? this.layout.theme.primary : this.layout.theme.secondary;
-      venue.fillStyle(color, 0.16).fillRoundedRect(x, bounds.y - 7, 24, 2, 1);
-      venue.fillRoundedRect(x, bounds.y + bounds.h + 5, 24, 2, 1);
+      addBar(x, bounds.y - 7, color);
+      addBar(x, bounds.y + bounds.h + 5, color);
     }
     batches.push(venue);
 

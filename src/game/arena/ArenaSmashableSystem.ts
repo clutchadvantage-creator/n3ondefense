@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { ArenaSmashablePlacement } from '../types.ts';
+import type { SmashableCombatQuery } from './SmashableCombatQuery.ts';
 import {
   ARENA_SMASHABLE_DEFINITIONS,
   ARENA_SMASHABLE_DURABILITY,
@@ -83,7 +84,7 @@ const rotatedRectangle = (
  * happen only at thresholds, and all breakup animation uses two fixed batched
  * Graphics layers with eight reusable burst records.
  */
-export class ArenaSmashableSystem {
+export class ArenaSmashableSystem implements SmashableCombatQuery {
   private readonly props: SmashableRuntime[] = [];
   private readonly destructionGraphics: Phaser.GameObjects.Graphics;
   private readonly destructionGlowGraphics: Phaser.GameObjects.Graphics;
@@ -122,6 +123,15 @@ export class ArenaSmashableSystem {
 
   hasTargetAt(x: number, y: number, padding = 0): boolean {
     return this.props.some((prop) => prop.active && this.contains(prop, x, y, padding));
+  }
+
+  hasTargetInRadius(x: number, y: number, radius: number): boolean {
+    // Use the same forgiving footprint as damageArea, including rotated props.
+    return this.props.some((prop) => {
+      const dx = prop.placement.x - x, dy = prop.placement.y - y;
+      const reach = radius + Math.max(prop.placement.width, prop.placement.height) * 0.5;
+      return prop.active && dx * dx + dy * dy <= reach * reach;
+    });
   }
 
   damagePoint(x: number, y: number, damage: number, padding = 4): boolean {

@@ -371,11 +371,13 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     }).setOrigin(0.5).setDepth(2));
 
   const decalPlan = createEnvironmentDecalPlan('heist', layout.seed, layout.wallRects, 18);
-  for (const decal of decalPlan.decals) textObjects.push(createEnvironmentDecalText(scene, {
+  // The shared factory makes off-display bake sources. HEIST keeps its decals
+  // live, so register them for rendering and DisplayList-owned shutdown.
+  for (const decal of decalPlan.decals) textObjects.push(scene.add.existing(createEnvironmentDecalText(scene, {
     ...decal,
     x: decal.x - HEIST_WALL_PROJECTION_X,
     y: decal.y - HEIST_WALL_PROJECTION_Y
-  }).setDepth(HEIST_WALL_CAP_DEPTH + 0.2));
+  })).setDepth(HEIST_WALL_CAP_DEPTH + 0.2));
 
   const zoneVisibility = new HeistZoneVisibility(layout);
   const visibilityLayers = layout.nodes.map((node) => {

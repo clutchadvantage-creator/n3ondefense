@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { followGameplayPlayer, GAMEPLAY_CAMERA_ZOOM } from '../src/game/systems/GameplayCamera.ts';
 import { generateHeistFacilityLayout } from '../src/game/anomalies/heist/HeistFacilityLayout.ts';
 import {
   HEIST_ZONE_ALPHA,
@@ -39,17 +40,19 @@ test('HEIST visibility reuses its alpha buffer and vault zone matches the genera
   assert.deepEqual(heistVisibilityZoneRect(layout, vaultNode), layout.vaultBounds);
 });
 
-test('HEIST chase camera is isolated and synchronizes transforms before world-space aiming', () => {
-  const camera = source('../src/game/anomalies/heist/HeistCameraPresentation.ts');
+test('Arena and HEIST share stable native gameplay follow without movement or room zoom', () => {
   const scene = source('../src/game/anomalies/heist/HeistScene.ts');
   const arena = source('../src/game/scenes/ArenaScene.ts');
-  assert.match(camera, /camera\.stopFollow\(\)/);
-  assert.match(camera, /camera\.setScroll/);
-  assert.match(camera, /camera\.preRender\(\)/);
-  assert.match(scene, /cameraPresentation\?\.update\(delta/);
-  assert.ok(scene.indexOf('cameraPresentation?.update(delta') < scene.indexOf('this.updateCrosshair()'));
+  const calls = [];
+  const camera = { setZoom: (...args) => calls.push(['zoom', ...args]), startFollow: (...args) => calls.push(['follow', ...args]) };
+  const player = { x: 0, y: 0 };
+  followGameplayPlayer(camera, player);
+  assert.deepEqual(calls, [['zoom', GAMEPLAY_CAMERA_ZOOM], ['follow', player, true, 0.08, 0.08]]);
+  assert.equal(GAMEPLAY_CAMERA_ZOOM, 0.9);
+  assert.match(scene, /followGameplayPlayer\(this.cameras.main, this.player\)/);
+  assert.match(arena, /followGameplayPlayer\(this.cameras.main, this.player\)/);
+  assert.doesNotMatch(scene, /cameraPresentation|setZoom|zoomTo/);
   assert.match(scene, /positionToCamera\(this\.cameras\.main\)/);
-  assert.doesNotMatch(arena, /HeistCameraPresentation/);
 });
 
 test('HEIST 2.5D presentation keeps cached walls and bounded graph occlusion', () => {

@@ -1,0 +1,604 @@
+{
+  "lifetime": {
+    "startedAt": "2026-09-08T12:58:00.999Z",
+    "finishedAt": "2026-09-08T12:58:14.559Z",
+    "errors": [],
+    "cases": [
+      {
+        "label": "0/open-field",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 28,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/islands",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 13,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/split",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/fortress",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/ring",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/canyon",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/maze",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 17,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/chambers",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/asymmetric-clusters",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/perimeter",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/crossroads",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 14,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/open-field",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 28,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/islands",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 13,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/split",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/fortress",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/ring",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/canyon",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/maze",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 17,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/chambers",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/asymmetric-clusters",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/perimeter",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/crossroads",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 14,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/open-field",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 28,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/islands",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 13,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/split",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/fortress",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/ring",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/canyon",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/maze",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 17,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/chambers",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/asymmetric-clusters",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/perimeter",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/crossroads",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 14,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      }
+    ]
+  },
+  "art": {
+    "startedAt": "2026-09-08T12:57:30.835Z",
+    "finishedAt": "2026-09-08T12:57:54.211Z",
+    "errors": [],
+    "cases": [
+      {
+        "label": "arena/30/open-field/550055/zoom-1",
+        "template": "open-field",
+        "zoom": 1,
+        "meanChannelDifference": 0.11468792161422811,
+        "changedFraction": 0.0054527997048234534,
+        "severeFraction": 0.0017155739171269484,
+        "maxChannelDifference": 100
+      },
+      {
+        "label": "arena/30/open-field/550055/zoom-0.9",
+        "template": "open-field",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.16336316778103266,
+        "changedFraction": 0.00751638006216597,
+        "severeFraction": 0.0021076052684541246,
+        "maxChannelDifference": 161
+      },
+      {
+        "label": "arena/30/open-field/550055/zoom-0.65",
+        "template": "open-field",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.14069662783157047,
+        "changedFraction": 0.006039798519644894,
+        "severeFraction": 0.002054495851875042,
+        "maxChannelDifference": 140
+      },
+      {
+        "label": "arena/148/crossroads/81337/zoom-1",
+        "template": "islands",
+        "zoom": 1,
+        "meanChannelDifference": 0.017897174579037993,
+        "changedFraction": 0.0012620474518660971,
+        "severeFraction": 0.00006289273015944006,
+        "maxChannelDifference": 82
+      },
+      {
+        "label": "arena/148/crossroads/81337/zoom-0.9",
+        "template": "islands",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.016034618022168056,
+        "changedFraction": 0.0011236834455153292,
+        "severeFraction": 0.00005939868959502672,
+        "maxChannelDifference": 92
+      },
+      {
+        "label": "arena/148/crossroads/81337/zoom-0.65",
+        "template": "islands",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.05662931304367271,
+        "changedFraction": 0.002692507658936917,
+        "severeFraction": 0.0007323509023010353,
+        "maxChannelDifference": 128
+      },
+      {
+        "label": "arena/30/split/81337/zoom-1",
+        "template": "split",
+        "zoom": 1,
+        "meanChannelDifference": 0.03333501047280425,
+        "changedFraction": 0.0014996422102462042,
+        "severeFraction": 0.00028371609383036296,
+        "maxChannelDifference": 94
+      },
+      {
+        "label": "arena/30/split/81337/zoom-0.9",
+        "template": "split",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.055920255745134435,
+        "changedFraction": 0.0025506496120217357,
+        "severeFraction": 0.00065757843422259,
+        "maxChannelDifference": 133
+      },
+      {
+        "label": "arena/30/split/81337/zoom-0.65",
+        "template": "split",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.06941633682923738,
+        "changedFraction": 0.00320683043001856,
+        "severeFraction": 0.0008651244437487422,
+        "maxChannelDifference": 155
+      },
+      {
+        "label": "arena/1/fortress/17/zoom-1",
+        "template": "fortress",
+        "zoom": 1,
+        "meanChannelDifference": 0.04382132501472156,
+        "changedFraction": 0.002552047228247501,
+        "severeFraction": 0.00029839106420089895,
+        "maxChannelDifference": 100
+      },
+      {
+        "label": "arena/1/fortress/17/zoom-0.9",
+        "template": "fortress",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.07791151412151434,
+        "changedFraction": 0.0038741921778215078,
+        "severeFraction": 0.0009888134797289743,
+        "maxChannelDifference": 134
+      },
+      {
+        "label": "arena/1/fortress/17/zoom-0.65",
+        "template": "fortress",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.0974213048890479,
+        "changedFraction": 0.0044136720409669265,
+        "severeFraction": 0.001508027907600796,
+        "maxChannelDifference": 164
+      },
+      {
+        "label": "arena/1/ring/81337/zoom-1",
+        "template": "ring",
+        "zoom": 1,
+        "meanChannelDifference": 0.03820779944393509,
+        "changedFraction": 0.0021502325633399673,
+        "severeFraction": 0.0002683423153469443,
+        "maxChannelDifference": 92
+      },
+      {
+        "label": "arena/1/ring/81337/zoom-0.9",
+        "template": "ring",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.05593958943625752,
+        "changedFraction": 0.0030600807263132003,
+        "severeFraction": 0.0005562512578546032,
+        "maxChannelDifference": 181
+      },
+      {
+        "label": "arena/1/ring/81337/zoom-0.65",
+        "template": "ring",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.07933219101500481,
+        "changedFraction": 0.004161402312216284,
+        "severeFraction": 0.0011369607996600996,
+        "maxChannelDifference": 179
+      },
+      {
+        "label": "arena/30/canyon/550055/zoom-1",
+        "template": "canyon",
+        "zoom": 1,
+        "meanChannelDifference": 0.014559201159835118,
+        "changedFraction": 0.0009224267090051208,
+        "severeFraction": 0.0000831581654330374,
+        "maxChannelDifference": 93
+      },
+      {
+        "label": "arena/30/canyon/550055/zoom-0.9",
+        "template": "canyon",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.042327273269378414,
+        "changedFraction": 0.0024947449629911223,
+        "severeFraction": 0.00040740512981059506,
+        "maxChannelDifference": 127
+      },
+      {
+        "label": "arena/30/canyon/550055/zoom-0.65",
+        "template": "canyon",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.05307237974909994,
+        "changedFraction": 0.002833666897739216,
+        "severeFraction": 0.0006519879693195286,
+        "maxChannelDifference": 127
+      },
+      {
+        "label": "arena/30/maze/550055/zoom-1",
+        "template": "maze",
+        "zoom": 1,
+        "meanChannelDifference": 0.03482021064871755,
+        "changedFraction": 0.0021145933495829512,
+        "severeFraction": 0.00027113754779847495,
+        "maxChannelDifference": 100
+      },
+      {
+        "label": "arena/30/maze/550055/zoom-0.9",
+        "template": "maze",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.05924821291471932,
+        "changedFraction": 0.003447220420850198,
+        "severeFraction": 0.0005688298038864912,
+        "maxChannelDifference": 113
+      },
+      {
+        "label": "arena/30/maze/550055/zoom-0.65",
+        "template": "maze",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.0604881314430108,
+        "changedFraction": 0.0028707037277219973,
+        "severeFraction": 0.0007617008430421074,
+        "maxChannelDifference": 166
+      },
+      {
+        "label": "arena/1/chambers/17/zoom-1",
+        "template": "chambers",
+        "zoom": 1,
+        "meanChannelDifference": 0.02622277443592209,
+        "changedFraction": 0.0011865761756747692,
+        "severeFraction": 0.00023689595026722422,
+        "maxChannelDifference": 110
+      },
+      {
+        "label": "arena/1/chambers/17/zoom-0.9",
+        "template": "chambers",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.051372179610456405,
+        "changedFraction": 0.002342404794382701,
+        "severeFraction": 0.0007316520941881527,
+        "maxChannelDifference": 167
+      },
+      {
+        "label": "arena/1/chambers/17/zoom-0.65",
+        "template": "chambers",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.07328027982140328,
+        "changedFraction": 0.0038203839531295424,
+        "severeFraction": 0.001211733267738545,
+        "maxChannelDifference": 147
+      },
+      {
+        "label": "arena/1/asymmetric-clusters/17/zoom-1",
+        "template": "asymmetric-clusters",
+        "zoom": 1,
+        "meanChannelDifference": 0.04089238727759267,
+        "changedFraction": 0.0023556821485274716,
+        "severeFraction": 0.00026205304233100024,
+        "maxChannelDifference": 100
+      },
+      {
+        "label": "arena/1/asymmetric-clusters/17/zoom-0.9",
+        "template": "asymmetric-clusters",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.05393750419284868,
+        "changedFraction": 0.003094322323844451,
+        "severeFraction": 0.0005401786712583019,
+        "maxChannelDifference": 140
+      },
+      {
+        "label": "arena/1/asymmetric-clusters/17/zoom-0.65",
+        "template": "asymmetric-clusters",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.06341077990712374,
+        "changedFraction": 0.003232686330195219,
+        "severeFraction": 0.0006925188398667233,
+        "maxChannelDifference": 128
+      },
+      {
+        "label": "arena/148/perimeter/81337/zoom-1",
+        "template": "perimeter",
+        "zoom": 1,
+        "meanChannelDifference": 0.02869212937081181,
+        "changedFraction": 0.001995795970392898,
+        "severeFraction": 0.00007966412486862407,
+        "maxChannelDifference": 99
+      },
+      {
+        "label": "arena/148/perimeter/81337/zoom-0.9",
+        "template": "perimeter",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.04880033281901056,
+        "changedFraction": 0.002802220532659496,
+        "severeFraction": 0.0004164896352780697,
+        "maxChannelDifference": 148
+      },
+      {
+        "label": "arena/148/perimeter/81337/zoom-0.65",
+        "template": "perimeter",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.06093513569921808,
+        "changedFraction": 0.0029245119524139627,
+        "severeFraction": 0.0007700865403966994,
+        "maxChannelDifference": 168
+      },
+      {
+        "label": "arena/30/crossroads/81337/zoom-1",
+        "template": "crossroads",
+        "zoom": 1,
+        "meanChannelDifference": 0.006479348822648091,
+        "changedFraction": 0.0005716250363380219,
+        "severeFraction": 0.00001607258659630135,
+        "maxChannelDifference": 67
+      },
+      {
+        "label": "arena/30/crossroads/81337/zoom-0.9",
+        "template": "crossroads",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.012567132166044262,
+        "changedFraction": 0.0010034884500995103,
+        "severeFraction": 0.000053109416579082715,
+        "maxChannelDifference": 88
+      },
+      {
+        "label": "arena/30/crossroads/81337/zoom-0.65",
+        "template": "crossroads",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.04143582705337776,
+        "changedFraction": 0.0025883852501174,
+        "severeFraction": 0.00038154922963393634,
+        "maxChannelDifference": 116
+      },
+      {
+        "label": "authored/hub-spoke/81337/zoom-1",
+        "template": "hub-spoke",
+        "zoom": 1,
+        "meanChannelDifference": 0.018554287141185326,
+        "changedFraction": 0.0015890896486951856,
+        "severeFraction": 0.000039832062434312034,
+        "maxChannelDifference": 75
+      },
+      {
+        "label": "authored/hub-spoke/81337/zoom-0.9",
+        "template": "hub-spoke",
+        "zoom": 0.9,
+        "meanChannelDifference": 0.016868761972912334,
+        "changedFraction": 0.0015213052617455668,
+        "severeFraction": 0.000027952324515306692,
+        "maxChannelDifference": 84
+      },
+      {
+        "label": "authored/hub-spoke/81337/zoom-0.65",
+        "template": "hub-spoke",
+        "zoom": 0.65,
+        "meanChannelDifference": 0.028885233346005054,
+        "changedFraction": 0.0020370256490529755,
+        "severeFraction": 0.00019985912028444285,
+        "maxChannelDifference": 131
+      }
+    ]
+  }
+}

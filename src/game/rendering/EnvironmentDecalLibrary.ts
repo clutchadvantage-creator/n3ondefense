@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import type { RectSpec } from '../types.ts';
 import { SeededRandom } from '../systems/SeededRandom.ts';
+import { bakeStaticGraphics } from './bakeStaticGraphics.ts';
 
 export type EnvironmentIdentity = 'arena' | 'heist';
 export type EnvironmentDecalFinish = 'paint' | 'stencil' | 'warning' | 'emissive';
@@ -192,6 +193,11 @@ export const createEnvironmentGraffitiArt = (
       letterSpacing: 0
     }
   }, false).setOrigin(0.5).setAngle(((spec.surfaceIndex % 3) - 1) * 2);
-  root.add([paint, tag]);
+  // Only the unchanged paint is baked. Keep the tag's text resolution and the
+  // container's rotation/opacity, with its existing owner retiring both.
+  const cachedPaint = bakeStaticGraphics(scene, paint, {
+    x: -width * 0.5 - 16, y: -height * 0.5 - 16, w: width + 32, h: height + 40
+  });
+  root.add([cachedPaint, tag]);
   return root;
 };

@@ -1,5 +1,7 @@
 # N3ONDefense stabilization — September 7, 2026
 
+Follow-ups: [Round 68 investigation](round-68-investigation.md), [rounds 68 through 148 and the Centaurus ending](endgame-validation.md), and [layout performance across the game](layout-performance-audit.md). The measurements below describe the earlier stabilization pass.
+
 The stabilization preserves `RoundRuntimeLifecycle`, `EncounterResourceRegistry`, generation guards, prewarm, pool maintenance, boss flow, anomaly suspension/return, and the existing SceneManager transitions. No balance, enemy cap, hazard, reward roll, save schema, trail quality, or ordinary visual-quality setting was reduced.
 
 Two browser runs each completed 32 ordinary rounds and 40 round/boss lifecycle boundaries without reloading during either run. The final-code run took 619.628 seconds and included 16 arcade events, eight bosses and physical boss-loot collections, eight HEIST visits and returns, 19 premium Mod reveals, 32 Round Finished presentations, and 31 Loading transitions. Both runs passed the resource and performance analyzer. The final-code measurements below include the ammo activation and input-prompt corrections.
