@@ -15,7 +15,7 @@ test('game-world cached art generators share boot-time dimensional primitives', 
   for (const consumer of [enemies, bosses, gas]) {
     assert.match(consumer, /LayeredArtPrimitives/);
     assert.match(consumer, /drawLayeredPanel/);
-    assert.match(consumer, /drawBakedShadow/);
+    assert.match(consumer, consumer === enemies ? /fillCircle\(36,\s*36/ : /drawBakedShadow/);
   }
   assert.doesNotMatch(helpers, /scene\.add|tweens|physics/);
 });

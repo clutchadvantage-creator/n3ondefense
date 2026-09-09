@@ -1,3 +1,4 @@
+import { shakeGameplayCamera } from '../vfx/GameplayCameraShake.ts';
 import Phaser from 'phaser';
 import { BOMBLET_HAZARD_BALANCE } from '../config/bombletHazards';
 import type { Player } from '../entities/Player';
@@ -360,7 +361,7 @@ export class BombletHazardSystem {
       target.explosionPalette
     );
     // Do not force-restart an in-progress shake when staggered bomblets overlap.
-    this.scene.cameras.main.shake(config.cameraShakeDurationMs, config.cameraShakeIntensity, false);
+    shakeGameplayCamera(this.scene, config.cameraShakeDurationMs, config.cameraShakeIntensity, false);
     target.marker.setAlpha(0);
     target.bomb.setAlpha(0);
 

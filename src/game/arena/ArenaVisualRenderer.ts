@@ -11,6 +11,7 @@ import {
 } from '../rendering/LayeredArtPrimitives.ts';
 import {
   createEnvironmentDecalPlan,
+  createArenaFloorDecalPlan,
   createEnvironmentGraffitiArt
 } from '../rendering/EnvironmentDecalLibrary.ts';
 import {
@@ -126,9 +127,22 @@ export class ArenaVisualRenderer {
     const cachedLayer = this.keep(this.scene.add.renderTexture(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
       .setOrigin(0)
       .setDepth(-4));
-    cachedLayer.draw([graphics, ...labels]);
-    graphics.destroy();
-    for (const label of labels) label.destroy();
+    // The dense, unchanged stadium paths cost ~113 ms to triangulate in
+    // WebGL during setup. Rasterize them with Canvas' native path renderer,
+    // then copy into the same private RenderTexture. This changes only the
+    // one-time bake; the live quad, depth, and encounter ownership stay intact.
+    const scratchKey = `arena-stadium-setup-${Phaser.Utils.String.UUID()}`;
+    let stamp: Phaser.GameObjects.Image | undefined;
+    try {
+      graphics.generateTexture(scratchKey, WORLD_WIDTH, WORLD_HEIGHT);
+      stamp = this.scene.make.image({ x: 0, y: 0, key: scratchKey }, false).setOrigin(0);
+      cachedLayer.draw([stamp, ...labels]);
+    } finally {
+      stamp?.destroy();
+      this.scene.textures.remove(scratchKey);
+      graphics.destroy();
+      for (const label of labels) label.destroy();
+    }
 
     this.createVenueBeacons(bounds);
     const bakeTimeMs = performance.now() - startedAt;
@@ -164,6 +178,21 @@ export class ArenaVisualRenderer {
     graphics.fillRect(rightWaterX, 0, rightWaterWidth * 0.58, WORLD_HEIGHT);
     graphics.fillStyle(0x16708c, 0.14).fillRect(Math.max(0, leftWaterWidth - 20), 0, 20, WORLD_HEIGHT);
     graphics.fillRect(rightWaterX, 0, Math.min(20, rightWaterWidth), WORLD_HEIGHT);
+    // Broken reflections and shore bollards stay in the existing one-time bake.
+    // Their spacing follows the venue, leaving the playable bounds untouched.
+    for (let y = 108, lamp = 0; y < WORLD_HEIGHT; y += 188, lamp += 1) {
+      const accent = lamp % 2 ? this.layout.theme.secondary : this.layout.theme.primary;
+      for (const [shore, waterWidth, direction] of [[leftShore, leftWaterWidth, -1], [rightShore, rightWaterWidth, 1]]) {
+        if (waterWidth < 18) continue;
+        const beach = direction < 0 ? leftBeachWidth : rightBeachWidth;
+        for (let ripple = 0; ripple < 6; ripple += 1) {
+          const distance = Math.min(waterWidth - 6, 8 + ripple * 5);
+          const x = shore + direction * (beach + distance);
+          graphics.fillStyle(accent, 0.12 - ripple * 0.015)
+            .fillRoundedRect(x - 2, y - 8 + (ripple % 2) * 3, 4, 18 + ripple * 3, 2);
+        }
+      }
+    }
     for (let y = 12, wave = 0; y < WORLD_HEIGHT; y += 31, wave += 1) {
       const drift = (wave % 4) * 4;
       graphics.lineStyle(wave % 3 === 0 ? 2 : 1, wave % 2 ? 0x69e5f1 : 0x239db7, wave % 3 === 0 ? 0.18 : 0.1);
@@ -219,6 +248,15 @@ export class ArenaVisualRenderer {
       graphics.lineStyle(1, tile % 2 ? this.layout.theme.primary : this.layout.theme.secondary, 0.22);
       graphics.lineBetween(leftPromenadeX + 2, y + tileHeight - 2, leftShore - 2, y + tileHeight - 2);
       graphics.lineBetween(rightPromenadeX + 2, y + tileHeight - 2, rightPromenadeX + rightPromenadeWidth - 2, y + tileHeight - 2);
+    }
+    for (let y = 108, lamp = 0; y < WORLD_HEIGHT; y += 188, lamp += 1) {
+      const accent = lamp % 2 ? this.layout.theme.secondary : this.layout.theme.primary;
+      for (const x of [leftPromenadeX + leftPromenadeWidth * 0.5, rightPromenadeX + rightPromenadeWidth * 0.5]) {
+        graphics.fillStyle(0x010710, 0.55).fillEllipse(x + 3, y + 7, 12, 7);
+        graphics.fillStyle(0x355064, 1).fillRoundedRect(x - 3, y - 8, 6, 16, 2);
+        graphics.fillStyle(accent, 0.14).fillCircle(x, y - 7, 9);
+        graphics.fillStyle(accent, 0.92).fillRect(x - 3, y - 8, 6, 3);
+      }
     }
 
     // Small foam patches suggest moving surf without any repeated long lines.
@@ -677,8 +715,14 @@ export class ArenaVisualRenderer {
         face: 0x101b29, inset: 0x020811, edge: advertisement.accent,
         side: 0x010309, highlight: 0xc8fbff, depth: 5
       });
-      graphics.fillStyle(0x071725, 1).fillRoundedRect(x + 5, y + 5, screenWidth - 15, screenHeight - 15, 3);
-      graphics.lineStyle(1, advertisement.accent, 0.48).strokeRoundedRect(x + 6, y + 6, screenWidth - 17, screenHeight - 17, 3);
+      graphics.fillStyle(0x030b16, 1).fillRoundedRect(x + 4, y + 4, screenWidth - 8, screenHeight - 8, 3);
+      graphics.fillStyle(advertisement.accent, 0.16).fillPoints([
+        { x: x + 5, y: y + 4 }, { x: x + 43, y: y + 4 },
+        { x: x + 34, y: y + screenHeight - 4 }, { x: x + 5, y: y + screenHeight - 4 }
+      ], true);
+      graphics.lineStyle(1, advertisement.accent, 0.65).lineBetween(x + 41, y + 8, x + 34, y + screenHeight - 8);
+      graphics.fillStyle(advertisement.accent, 0.9).fillRect(x + 46, y + screenHeight - 6, screenWidth - 57, 2);
+      graphics.fillStyle(0xe0faff, 0.78).fillRect(x + screenWidth - 14, y + 5, 7, 2);
       for (let scanY = y + 10; scanY < y + screenHeight - 9; scanY += 6) {
         graphics.fillStyle(advertisement.accent, 0.035).fillRect(x + 9, scanY, screenWidth - 23, 1);
       }
@@ -763,31 +807,35 @@ export class ArenaVisualRenderer {
       }, false).setOrigin(0.5).setAlpha(0.72));
     }
     for (const screen of screens) {
-      labels.push(this.scene.make.text({
+      const brand = this.scene.make.text({
         x: screen.x + 45,
-        y: screen.y + 8,
+        y: screen.y + 7,
         text: screen.brand,
         style: {
           fontFamily: 'Orbitron, sans-serif',
-          fontSize: '10px',
+          fontSize: screen.height >= 44 ? '12px' : '10px',
           color: colorCss(screen.accent),
           fontStyle: 'bold',
           stroke: '#010308',
           strokeThickness: 2
         }
-      }, false));
-      labels.push(this.scene.make.text({
+      }, false).setResolution(2);
+      brand.setScale(Math.min(1, (screen.width - 53) / brand.width));
+      labels.push(brand);
+      const slogan = this.scene.make.text({
         x: screen.x + 45,
-        y: screen.y + screen.height - 15,
+        y: screen.y + screen.height - 18,
         text: screen.slogan,
         style: {
           fontFamily: 'Rajdhani, sans-serif',
-          fontSize: '8px',
+          fontSize: '9px',
           color: '#d9fbff',
           stroke: '#010308',
           strokeThickness: 2
         }
-      }, false).setAlpha(0.78));
+      }, false).setResolution(2).setAlpha(0.88);
+      slogan.setScale(Math.min(1, (screen.width - 53) / slogan.width));
+      labels.push(slogan);
     }
     return labels;
   }
@@ -1237,8 +1285,11 @@ export class ArenaVisualRenderer {
     }).setAlpha(0.62);
     labelRoot.add([title, sector]);
 
+    const floorDecals = createArenaFloorDecalPlan(this.layout, this.plan.panelWidth, this.plan.panelHeight);
+    const floorRoot = this.keep(this.scene.add.container(0, 0).setDepth(-2.9));
+    for (const decal of floorDecals) floorRoot.add(createEnvironmentGraffitiArt(this.scene, decal));
     const decalPlan = createEnvironmentDecalPlan(
-      'arena', this.plan.decalSeed, this.layout.walls, this.plan.environmentDecalCount
+      'arena', this.plan.decalSeed, this.layout.walls, this.plan.environmentDecalCount - floorDecals.length
     );
     for (const decal of decalPlan.decals) labelRoot.add(createEnvironmentGraffitiArt(this.scene, decal));
   }

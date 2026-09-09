@@ -6,6 +6,9 @@ export interface SweptCircleResolution {
   y: number;
   normalX: number;
   normalY: number;
+  /** Full requested displacement projected onto curved contact tangents. */
+  tangentX?: number;
+  tangentY?: number;
 }
 
 interface SegmentHit {
@@ -78,9 +81,47 @@ const nearestHit = (
 ): SegmentHit | null => {
   let nearest: SegmentHit | null = null;
   for (const rect of rects) {
-    const hit = segmentExpandedRectHit(startX, startY, deltaX, deltaY, radius, rect);
+    const hit = segmentCircleRectHit(startX, startY, deltaX, deltaY, radius, rect);
     if (!hit || (nearest && hit.time >= nearest.time)) continue;
     nearest = hit;
+  }
+  return nearest;
+};
+
+/** The expanded box is a broad phase only. Its square corner regions are
+ * outside the circular player's actual footprint and otherwise snag a clear
+ * route by up to radius * (sqrt(2) - 1). Side hits retain the fast slab path;
+ * only corner candidates pay for a swept point/circle intersection. */
+const segmentCircleRectHit = (
+  startX: number, startY: number, deltaX: number, deltaY: number, radius: number, rect: RectSpec
+): SegmentHit | null => {
+  const broad = segmentExpandedRectHit(startX, startY, deltaX, deltaY, radius, rect);
+  const right = rect.x + rect.w, bottom = rect.y + rect.h;
+  if (!broad && (startX < rect.x-radius || startX > right+radius || startY < rect.y-radius || startY > bottom+radius)) return null;
+  const gapX = Math.max(rect.x-startX, 0, startX-right), gapY = Math.max(rect.y-startY, 0, startY-bottom);
+  // Arcade still resolves a player that starts physically embedded.
+  if (gapX*gapX + gapY*gapY < radius*radius - AXIS_EPSILON) return null;
+  if (broad) {
+    const x = startX + deltaX*broad.time, y = startY + deltaY*broad.time;
+    if ((broad.normalX !== 0 && y >= rect.y && y <= bottom)
+      || (broad.normalY !== 0 && x >= rect.x && x <= right)) return broad;
+  }
+  const speedSquared = deltaX*deltaX + deltaY*deltaY;
+  if (speedSquared <= AXIS_EPSILON || radius <= 0) return broad;
+  let nearest: SegmentHit | null = null;
+  for (let corner = 0; corner < 4; corner++) {
+    const east = (corner & 1) !== 0, south = (corner & 2) !== 0;
+    const cx = east ? right : rect.x, cy = south ? bottom : rect.y;
+    const dx = startX-cx, dy = startY-cy;
+    const dot = dx*deltaX + dy*deltaY;
+    const discriminant = dot*dot - speedSquared*(dx*dx + dy*dy - radius*radius);
+    if (discriminant < 0) continue;
+    const time = (-dot - Math.sqrt(discriminant)) / speedSquared;
+    if (time < -AXIS_EPSILON || time > 1 || (nearest && time >= nearest.time)) continue;
+    const nx = (dx + deltaX*time)/radius, ny = (dy + deltaY*time)/radius;
+    if ((east ? nx < -AXIS_EPSILON : nx > AXIS_EPSILON) || (south ? ny < -AXIS_EPSILON : ny > AXIS_EPSILON)) continue;
+    if (deltaX*nx + deltaY*ny >= -AXIS_EPSILON) continue;
+    nearest = { time: Math.max(0,time), normalX: nx, normalY: ny };
   }
   return nearest;
 };
@@ -105,6 +146,9 @@ export const resolveSweptCircleMotion = (
   let normalX = 0;
   let normalY = 0;
   let collided = false;
+  let curvedContact = false;
+  let tangentX = remainingX;
+  let tangentY = remainingY;
 
   for (let iteration = 0; iteration < 2; iteration += 1) {
     const hit = nearestHit(x, y, remainingX, remainingY, radius, rects);
@@ -123,10 +167,20 @@ export const resolveSweptCircleMotion = (
     const untraveled = Math.max(0, 1 - hit.time);
     let slideX = remainingX * untraveled;
     let slideY = remainingY * untraveled;
-    // Simultaneous slab entry reports two perpendicular constraints, not a
-    // unit diagonal normal. Project each blocked axis independently.
-    if (slideX * hit.normalX < 0) slideX = 0;
-    if (slideY * hit.normalY < 0) slideY = 0;
+    const curved = hit.normalX !== 0 && hit.normalY !== 0
+      && hit.normalX*hit.normalX + hit.normalY*hit.normalY < 1.000_001;
+    if (curved) {
+      curvedContact = true;
+      const into = Math.min(0, slideX*hit.normalX + slideY*hit.normalY);
+      slideX -= hit.normalX*into; slideY -= hit.normalY*into;
+      const tangentInto = Math.min(0, tangentX*hit.normalX + tangentY*hit.normalY);
+      tangentX -= hit.normalX*tangentInto; tangentY -= hit.normalY*tangentInto;
+    } else {
+      if (slideX * hit.normalX < 0) slideX = 0;
+      if (slideY * hit.normalY < 0) slideY = 0;
+      if (tangentX * hit.normalX < 0) tangentX = 0;
+      if (tangentY * hit.normalY < 0) tangentY = 0;
+    }
     if (hit.normalX !== 0) normalX = hit.normalX;
     if (hit.normalY !== 0) normalY = hit.normalY;
     remainingX = slideX;
@@ -134,5 +188,6 @@ export const resolveSweptCircleMotion = (
     if (remainingX * remainingX + remainingY * remainingY <= AXIS_EPSILON) break;
   }
 
-  return { hit: collided, x, y, normalX, normalY };
+  return curvedContact ? { hit: collided, x, y, normalX, normalY, tangentX, tangentY }
+    : { hit: collided, x, y, normalX, normalY };
 };

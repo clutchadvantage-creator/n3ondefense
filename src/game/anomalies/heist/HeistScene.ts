@@ -1336,6 +1336,7 @@ export class HeistScene extends Phaser.Scene {
       const enemy = this.enemies[index];
       if (!enemy.active || enemy.hp <= 0) { this.removeEnemy(enemy, index); continue; }
       enemy.updateDamageFlash(now);
+      enemy.updateMechanicalPresentation(now);
       const navigationTarget = this.facility.navigationTarget(
         enemy.x,
         enemy.y,
@@ -2327,7 +2328,7 @@ export class HeistScene extends Phaser.Scene {
           onComplete: () => callout.destroy() });
       }
       if (this.modRuntime.hasInfusion('ghost-echoes')) {
-        const echo = this.add.image(enemy.x, enemy.y, enemy.texture.key).setTint(color).setAlpha(0.28)
+        const echo = this.add.image(enemy.x, enemy.y, enemy.texture.key, enemy.frame.name).setTint(color).setAlpha(0.28)
           .setScale(enemy.scaleX).setRotation(enemy.rotation).setDepth(7);
         this.tweens.add({ targets: echo, y: echo.y - 40, alpha: 0, scaleX: echo.scaleX * 1.18,
           scaleY: echo.scaleY * 1.18, duration: 620, onComplete: () => echo.destroy() });
@@ -2581,6 +2582,7 @@ export class HeistScene extends Phaser.Scene {
     this.enemies.length = 0;
     this.separationSubject = null;
     this.enemySpatialGrid.clear();
+    this.hudRadarContacts.length = 0;
     this.containers.length = 0;
     this.pickups.length = 0;
     this.fences.length = 0;

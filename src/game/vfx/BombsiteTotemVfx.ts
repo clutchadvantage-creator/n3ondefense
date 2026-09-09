@@ -1,3 +1,4 @@
+import { shakeGameplayCamera } from './GameplayCameraShake.ts';
 import Phaser from 'phaser';
 
 export type BombsiteTotemEffectKind = 'push' | 'damage' | 'control' | 'electric' | 'support';
@@ -410,7 +411,7 @@ export class BombsiteTotemVfx {
     slot.fissureBranches.setVisible(true).setAlpha(1);
     slot.debris.setVisible(true).setAlpha(1);
     slot.lastDebrisFrame = -1;
-    this.scene.cameras.main.shake(105, 0.0018, false);
+    shakeGameplayCamera(this.scene, 105, 0.0018, false);
   }
 
   private updatePoweredRig(slot: TotemSlot, now: number, impactElapsed: number): void {

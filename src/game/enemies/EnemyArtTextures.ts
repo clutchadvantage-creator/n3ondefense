@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ENEMY_ROBOT_FRAMES } from './EnemyRobotFrames.ts';
 import type { EnemyType } from '../types.ts';
-import { drawBakedShadow, drawLayeredPanel, drawMechanicalRivets } from '../rendering/LayeredArtPrimitives.ts';
+import { drawLayeredPanel, drawMechanicalRivets } from '../rendering/LayeredArtPrimitives.ts';
 
 const SIZE = 72;
 const OUTLINE = 0x05080e;
@@ -54,10 +54,12 @@ const lens = (graphics: Phaser.GameObjects.Graphics, x: number, y: number, radiu
 };
 
 const start = (graphics: Phaser.GameObjects.Graphics): void => {
-  graphics.clear();
   graphics.fillStyle(0x000000, 0).fillRect(0, 0, SIZE, SIZE);
-  // Baked shadow keeps depth inexpensive: one sprite remains one draw object.
-  drawBakedShadow(graphics, 38, 59, 48, 15, 0.38);
+  // The old offset ellipse orbited the chassis as its sprite rotated. A soft
+  // centered contact footprint is rotationally stable and stays one sprite.
+  graphics.fillStyle(0x01050a,.09).fillCircle(36,36,27);
+  graphics.fillStyle(0x01050a,.12).fillCircle(36,36,24);
+  graphics.fillStyle(0x01050a,.15).fillCircle(36,36,20);
 };
 
 const applyColorPass = (g: Phaser.GameObjects.Graphics, type: EnemyType): void => {
@@ -87,7 +89,12 @@ const applyColorPass = (g: Phaser.GameObjects.Graphics, type: EnemyType): void =
 };
 
 const finish = (graphics: Phaser.GameObjects.Graphics, type: EnemyType): void => {
-  graphics.generateTexture(ENEMY_ROBOT_FRAMES[type].textureKey, SIZE, SIZE);
+  const key = ENEMY_ROBOT_FRAMES[type].textureKey;
+  graphics.generateTexture(key, SIZE * 4, SIZE);
+  const texture = graphics.scene.textures.get(key);
+  texture.get('__BASE').setSize(SIZE,SIZE,0,0);
+  for(let frame=0;frame<4;frame++) texture.add(frame,0,frame*SIZE,0,SIZE,SIZE);
+  texture.firstFrame = '0';
 };
 
 const drawGrunt = (g: Phaser.GameObjects.Graphics): void => {
@@ -137,11 +144,12 @@ const drawDefuser = (g: Phaser.GameObjects.Graphics): void => {
   rivets(g, [{ x: 23, y: 18 }, { x: 47, y: 18 }, { x: 18, y: 35 }, { x: 51, y: 35 }]);
 };
 
-const drawTank = (g: Phaser.GameObjects.Graphics): void => {
+const drawTank = (g: Phaser.GameObjects.Graphics, phase = 0): void => {
   polygon(g, [{ x: 5, y: 14 }, { x: 20, y: 10 }, { x: 20, y: 59 }, { x: 5, y: 55 }], 0x788492, OUTLINE, 2.3);
   polygon(g, [{ x: 52, y: 10 }, { x: 67, y: 14 }, { x: 67, y: 55 }, { x: 52, y: 59 }], 0x4c5866, OUTLINE, 2.3);
   g.lineStyle(2, DEEP, 1);
-  for (const y of [19, 28, 37, 46, 54]) {
+  for (let tread = 0; tread < 5; tread++) {
+    const y = 16 + (tread*9 + phase*2.25) % 45;
     g.lineBetween(8, y, 17, y - 2);
     g.lineBetween(55, y - 2, 64, y);
   }
@@ -199,12 +207,11 @@ const drawStar = (g: Phaser.GameObjects.Graphics): void => {
 };
 
 /**
- * Generates one cached, high-resolution sprite per enemy family. The extra
- * facets, shadow, panel lines and hardware are baked into the texture, so the
- * visual pass adds no per-enemy display objects or update-loop work.
+ * Four compact mechanical poses share one texture per family. Runtime only
+ * selects a frame; there are no added enemy objects, path draws, or tweens.
  */
 export const createDetailedEnemyRobotTextures = (graphics: Phaser.GameObjects.Graphics): void => {
-  const drawers: Record<EnemyType, (graphics: Phaser.GameObjects.Graphics) => void> = {
+  const drawers: Record<EnemyType, (graphics: Phaser.GameObjects.Graphics, phase: number) => void> = {
     grunt: drawGrunt,
     shooter: drawShooter,
     defuser: drawDefuser,
@@ -213,9 +220,18 @@ export const createDetailedEnemyRobotTextures = (graphics: Phaser.GameObjects.Gr
     star: drawStar
   };
   (Object.keys(drawers) as EnemyType[]).forEach((type) => {
-    start(graphics);
-    drawers[type](graphics);
-    applyColorPass(graphics, type);
+    graphics.clear();
+    for(let phase=0;phase<4;phase++) {
+      graphics.save().translateCanvas(phase*SIZE,0);
+      start(graphics);
+      const hover = type === 'defuser' || type === 'disruptor' || type === 'star';
+      const offset = (phase === 1 ? -1 : phase === 3 ? 1 : 0) * (hover ? 1.2 : .4);
+      graphics.save().translateCanvas(0,offset);
+      drawers[type](graphics,phase);
+      applyColorPass(graphics,type);
+      graphics.fillStyle(ENEMY_ART_PALETTES[type].sensor,.25+phase*.12).fillRect(30,33,4+phase*2,1);
+      graphics.restore().restore();
+    }
     finish(graphics, type);
   });
 };

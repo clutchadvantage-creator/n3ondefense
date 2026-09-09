@@ -1,5 +1,3 @@
-import type Phaser from 'phaser';
-
 export type ExplosionImpulseSource = 'mine' | 'bombsite' | 'bomblet' | 'boss-artillery' | 'grenade-round' | 'none';
 
 export interface ExplosionCameraImpulse {
@@ -17,11 +15,3 @@ const IMPULSES: Readonly<Partial<Record<ExplosionImpulseSource, ExplosionCameraI
 export const explosionCameraImpulse = (source: ExplosionImpulseSource): ExplosionCameraImpulse | null => (
   IMPULSES[source] ?? null
 );
-
-export const applyExplosionCameraImpulse = (scene: Phaser.Scene, source: ExplosionImpulseSource): boolean => {
-  const impulse = explosionCameraImpulse(source);
-  if (!impulse) return false;
-  // force=false keeps rapid chains from repeatedly restarting the same shake.
-  scene.cameras.main.shake(impulse.durationMs, impulse.intensity, false);
-  return true;
-};

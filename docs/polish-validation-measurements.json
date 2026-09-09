@@ -1,0 +1,3688 @@
+{
+  "normal": {
+    "options": {
+      "startRound": 1,
+      "protocol": "normal",
+      "heists": true,
+      "rounds": 12,
+      "sampleMs": 8000,
+      "primePressure": true,
+      "sustainedMs": 15000,
+      "sustainedRounds": [
+        1,
+        16,
+        32
+      ],
+      "enhanced": true,
+      "heistEvery": 8,
+      "fullHeistTraversal": false,
+      "menuEvery": 4,
+      "bossSampleMs": 5000,
+      "arcadeIds": [
+        "golden-hunt",
+        "mini-boss",
+        "neon-circuit",
+        "hot-package",
+        "packet-snatcher",
+        "redline"
+      ]
+    },
+    "passed": true,
+    "failures": [],
+    "durationSeconds": 222.928,
+    "startedAt": "2026-09-08T23:03:28.507Z",
+    "finishedAt": "2026-09-08T23:07:11.435Z",
+    "gameplayChecks": 171,
+    "coverage": {
+      "armedBomb": 12,
+      "deployables": 12,
+      "hazardOverlap": 12,
+      "specialAmmo": 12,
+      "assistedDefuserKill": 87,
+      "ordinaryRound": 12,
+      "arenaPauseOptionsStore": 3,
+      "arcadeEvent": 6,
+      "arcade/golden-hunt": 1,
+      "roundFinished": 12,
+      "diskProgressionVerified": 12,
+      "loading": 11,
+      "smashableDestruction": 10,
+      "heistEntry": 2,
+      "heistOptionsResize": 2,
+      "grenadeContainer": 14,
+      "physicalHeistLoot": 2,
+      "modReveal": 4,
+      "heistReturn": 2,
+      "arcade/mini-boss": 1,
+      "arcade/neon-circuit": 1,
+      "boss": 2,
+      "bossLoot": 44,
+      "arcade/hot-package": 1,
+      "arcade/packet-snatcher": 1,
+      "arcade/redline": 1
+    },
+    "boundaries": 14,
+    "quiescent": {
+      "count": 12,
+      "resize": {
+        "min": 21,
+        "max": 21
+      },
+      "game": {
+        "min": 21,
+        "max": 21
+      },
+      "window": {
+        "min": 18,
+        "max": 18
+      },
+      "document": {
+        "min": 14,
+        "max": 14
+      }
+    },
+    "earlyPerformance": {
+      "samples": 4,
+      "meanFrameMs": 16.787,
+      "meanUpdateMs": 0.921,
+      "meanP95FrameMs": 16.68,
+      "meanP95UpdateMs": 1.375
+    },
+    "latePerformance": {
+      "samples": 4,
+      "meanFrameMs": 16.956,
+      "meanUpdateMs": 0.95,
+      "meanP95FrameMs": 17.51,
+      "meanP95UpdateMs": 1.375
+    },
+    "rounds": [
+      {
+        "round": 1,
+        "frameMs": 16.743,
+        "p95Ms": 16.68,
+        "updateMs": 0.908
+      },
+      {
+        "round": 2,
+        "frameMs": 16.791,
+        "p95Ms": 16.68,
+        "updateMs": 0.888
+      },
+      {
+        "round": 3,
+        "frameMs": 16.791,
+        "p95Ms": 16.68,
+        "updateMs": 0.858
+      },
+      {
+        "round": 4,
+        "frameMs": 16.823,
+        "p95Ms": 16.68,
+        "updateMs": 1.03
+      },
+      {
+        "round": 5,
+        "frameMs": 17.031,
+        "p95Ms": 18.34,
+        "updateMs": 0.947
+      },
+      {
+        "round": 6,
+        "frameMs": 16.854,
+        "p95Ms": 16.68,
+        "updateMs": 0.917
+      },
+      {
+        "round": 7,
+        "frameMs": 16.823,
+        "p95Ms": 16.68,
+        "updateMs": 0.938
+      },
+      {
+        "round": 8,
+        "frameMs": 16.854,
+        "p95Ms": 16.68,
+        "updateMs": 0.915
+      },
+      {
+        "round": 9,
+        "frameMs": 16.826,
+        "p95Ms": 16.68,
+        "updateMs": 0.982
+      },
+      {
+        "round": 10,
+        "frameMs": 16.893,
+        "p95Ms": 16.68,
+        "updateMs": 0.954
+      },
+      {
+        "round": 11,
+        "frameMs": 17.252,
+        "p95Ms": 20,
+        "updateMs": 0.949
+      },
+      {
+        "round": 12,
+        "frameMs": 16.854,
+        "p95Ms": 16.68,
+        "updateMs": 0.917
+      }
+    ],
+    "sustained": [
+      {
+        "round": 1,
+        "firstFrameMs": 16.884885654885416,
+        "lateFrameMs": 16.66642222222253,
+        "firstUpdateMs": 1.0074844072861384,
+        "lateUpdateMs": 0.8551111117998759
+      }
+    ],
+    "continuousFrames": {
+      "phases": [
+        {
+          "phase": "arena/active/PrePlant",
+          "frames": 2,
+          "meanMs": 14.55,
+          "p95Ms": 17,
+          "maxMs": 16.5
+        },
+        {
+          "phase": "arena/active/Defense",
+          "frames": 5833,
+          "meanMs": 16.695,
+          "p95Ms": 17,
+          "maxMs": 43.2
+        },
+        {
+          "phase": "arena/active/Defusing",
+          "frames": 1495,
+          "meanMs": 16.702,
+          "p95Ms": 17,
+          "maxMs": 44.2
+        },
+        {
+          "phase": "arena/active/Paused",
+          "frames": 45,
+          "meanMs": 16.598,
+          "p95Ms": 17,
+          "maxMs": 17.2
+        },
+        {
+          "phase": "options",
+          "frames": 58,
+          "meanMs": 17.441,
+          "p95Ms": 30,
+          "maxMs": 54.8
+        },
+        {
+          "phase": "upgrades",
+          "frames": 63,
+          "meanMs": 16.9,
+          "p95Ms": 19,
+          "maxMs": 31.9
+        },
+        {
+          "phase": "arcade/golden-hunt",
+          "frames": 120,
+          "meanMs": 16.614,
+          "p95Ms": 17,
+          "maxMs": 16.9
+        },
+        {
+          "phase": "arena/rewarding/Defense",
+          "frames": 1708,
+          "meanMs": 16.619,
+          "p95Ms": 17,
+          "maxMs": 18.7
+        },
+        {
+          "phase": "round-finished",
+          "frames": 94,
+          "meanMs": 15.751,
+          "p95Ms": 22,
+          "maxMs": 27.7
+        },
+        {
+          "phase": "loading",
+          "frames": 139,
+          "meanMs": 16.603,
+          "p95Ms": 17,
+          "maxMs": 16.9
+        },
+        {
+          "phase": "anomaly-heist",
+          "frames": 990,
+          "meanMs": 16.742,
+          "p95Ms": 17,
+          "maxMs": 82.3
+        },
+        {
+          "phase": "legendary-mod-reveal",
+          "frames": 587,
+          "meanMs": 16.665,
+          "p95Ms": 17,
+          "maxMs": 17.7
+        },
+        {
+          "phase": "arcade/mini-boss",
+          "frames": 119,
+          "meanMs": 16.748,
+          "p95Ms": 17,
+          "maxMs": 34.5
+        },
+        {
+          "phase": "arcade/neon-circuit",
+          "frames": 119,
+          "meanMs": 16.666,
+          "p95Ms": 17,
+          "maxMs": 16.9
+        },
+        {
+          "phase": "arena/boss/intro",
+          "frames": 73,
+          "meanMs": 16.301,
+          "p95Ms": 17,
+          "maxMs": 18.8
+        },
+        {
+          "phase": "arena/boss/combat",
+          "frames": 599,
+          "meanMs": 16.666,
+          "p95Ms": 17,
+          "maxMs": 17
+        },
+        {
+          "phase": "arena/boss/destruction",
+          "frames": 136,
+          "meanMs": 16.667,
+          "p95Ms": 17,
+          "maxMs": 17
+        },
+        {
+          "phase": "arena/boss/loot-collection",
+          "frames": 267,
+          "meanMs": 16.667,
+          "p95Ms": 17,
+          "maxMs": 24.9
+        },
+        {
+          "phase": "arena/boss/transitioning",
+          "frames": 42,
+          "meanMs": 16.371,
+          "p95Ms": 17,
+          "maxMs": 16.8
+        },
+        {
+          "phase": "arcade/hot-package",
+          "frames": 120,
+          "meanMs": 16.659,
+          "p95Ms": 17,
+          "maxMs": 16.9
+        },
+        {
+          "phase": "arcade/packet-snatcher",
+          "frames": 120,
+          "meanMs": 16.667,
+          "p95Ms": 17,
+          "maxMs": 16.9
+        },
+        {
+          "phase": "arena/rewarding/Defusing",
+          "frames": 190,
+          "meanMs": 16.626,
+          "p95Ms": 17,
+          "maxMs": 16.9
+        },
+        {
+          "phase": "arcade/redline",
+          "frames": 120,
+          "meanMs": 16.667,
+          "p95Ms": 17,
+          "maxMs": 16.9
+        }
+      ],
+      "transitions": [
+        {
+          "from": "menu+garage",
+          "to": "arena/starting/PrePlant",
+          "ms": 173.7
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/PrePlant",
+          "ms": 13
+        },
+        {
+          "from": "arena/active/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 20.1
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Paused",
+          "ms": 18.3
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Paused",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "options",
+          "ms": 52.5
+        },
+        {
+          "from": "options",
+          "to": "arena/active/Defense",
+          "ms": 17.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Paused",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "upgrades",
+          "ms": 19.9
+        },
+        {
+          "from": "upgrades",
+          "to": "arena/active/Defense",
+          "ms": 16.1
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arcade/golden-hunt",
+          "ms": 22.8
+        },
+        {
+          "from": "arcade/golden-hunt",
+          "to": "arena/active/Defusing",
+          "ms": 17.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 19.4
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 26.8
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 318.1
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 16.6
+        },
+        {
+          "from": "loading",
+          "to": "arena/active/PrePlant",
+          "ms": 90.4
+        },
+        {
+          "from": "arena/active/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 14.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 20.6
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 20.4
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 17
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 16.6
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 91.4
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 15.2
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "anomaly-heist",
+          "ms": 113
+        },
+        {
+          "from": "anomaly-heist",
+          "to": "options",
+          "ms": 44.3
+        },
+        {
+          "from": "options",
+          "to": "anomaly-heist",
+          "ms": 19.5
+        },
+        {
+          "from": "anomaly-heist",
+          "to": "arena/active/Defense",
+          "ms": 57.4
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "legendary-mod-reveal",
+          "ms": 17.7
+        },
+        {
+          "from": "legendary-mod-reveal",
+          "to": "arena/active/Defense",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 18.9
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 30.2
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 14.7
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 16.7
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 103.2
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 13.4
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 17.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arcade/mini-boss",
+          "ms": 23.7
+        },
+        {
+          "from": "arcade/mini-boss",
+          "to": "arena/active/Defense",
+          "ms": 22.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 20.8
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 22.9
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 66.5
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 16.6
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 120.9
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 14.2
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 17.8
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 17.5
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Paused",
+          "ms": 18.2
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "arena/active/Defense",
+          "ms": 16.4
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Paused",
+          "ms": 18.1
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "options",
+          "ms": 38.9
+        },
+        {
+          "from": "options",
+          "to": "arena/active/Defense",
+          "ms": 18.9
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Paused",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "upgrades",
+          "ms": 17.3
+        },
+        {
+          "from": "upgrades",
+          "to": "arena/active/Defense",
+          "ms": 15.4
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arcade/neon-circuit",
+          "ms": 16.7
+        },
+        {
+          "from": "arcade/neon-circuit",
+          "to": "arena/active/Defense",
+          "ms": 26.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 27.2
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/boss/intro",
+          "ms": 155.7
+        },
+        {
+          "from": "arena/boss/intro",
+          "to": "arena/boss/combat",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/boss/combat",
+          "to": "arena/boss/destruction",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/boss/destruction",
+          "to": "arena/boss/loot-collection",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/boss/loot-collection",
+          "to": "legendary-mod-reveal",
+          "ms": 16.6
+        },
+        {
+          "from": "legendary-mod-reveal",
+          "to": "arena/boss/loot-collection",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/boss/loot-collection",
+          "to": "arena/boss/transitioning",
+          "ms": 27.4
+        },
+        {
+          "from": "arena/boss/transitioning",
+          "to": "arena/ready/Victory",
+          "ms": 22
+        },
+        {
+          "from": "arena/ready/Victory",
+          "to": "round-finished",
+          "ms": 18
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 9.3
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 118.3
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 15.9
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 26.5
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 26.2
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 27.5
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 16.6
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 108
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 13.2
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 12.8
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 28.2
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 26.9
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 61.9
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 13.2
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 128.8
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 10.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arcade/hot-package",
+          "ms": 17.5
+        },
+        {
+          "from": "arcade/hot-package",
+          "to": "arena/active/Defense",
+          "ms": 18.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 21.3
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 21.5
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 74.5
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 8.4
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 98.7
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 12.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Paused",
+          "ms": 17.2
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "arena/active/Defusing",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Paused",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "options",
+          "ms": 44
+        },
+        {
+          "from": "options",
+          "to": "arena/active/Defusing",
+          "ms": 21.4
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Paused",
+          "ms": 15.7
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "upgrades",
+          "ms": 17.9
+        },
+        {
+          "from": "upgrades",
+          "to": "arena/active/Defusing",
+          "ms": 16
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arcade/packet-snatcher",
+          "ms": 16.7
+        },
+        {
+          "from": "arcade/packet-snatcher",
+          "to": "arena/active/Defense",
+          "ms": 22.5
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 24.7
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 25.3
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 83
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 9.7
+        },
+        {
+          "from": "loading",
+          "to": "arena/active/PrePlant",
+          "ms": 108.6
+        },
+        {
+          "from": "arena/active/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 12
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 32.9
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/boss/intro",
+          "ms": 138.1
+        },
+        {
+          "from": "arena/boss/intro",
+          "to": "arena/boss/combat",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/boss/combat",
+          "to": "arena/boss/destruction",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/boss/destruction",
+          "to": "arena/boss/loot-collection",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/boss/loot-collection",
+          "to": "legendary-mod-reveal",
+          "ms": 16.7
+        },
+        {
+          "from": "legendary-mod-reveal",
+          "to": "arena/boss/loot-collection",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/boss/loot-collection",
+          "to": "arena/boss/transitioning",
+          "ms": 18.2
+        },
+        {
+          "from": "arena/boss/transitioning",
+          "to": "arena/ready/Victory",
+          "ms": 27.4
+        },
+        {
+          "from": "arena/ready/Victory",
+          "to": "round-finished",
+          "ms": 12.7
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 11.7
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 119.3
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "anomaly-heist",
+          "ms": 166.7
+        },
+        {
+          "from": "anomaly-heist",
+          "to": "options",
+          "ms": 46.4
+        },
+        {
+          "from": "options",
+          "to": "anomaly-heist",
+          "ms": 21.1
+        },
+        {
+          "from": "anomaly-heist",
+          "to": "arena/active/Defense",
+          "ms": 53
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "legendary-mod-reveal",
+          "ms": 16.7
+        },
+        {
+          "from": "legendary-mod-reveal",
+          "to": "arena/active/Defusing",
+          "ms": 16.4
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/rewarding/Defusing",
+          "ms": 24.4
+        },
+        {
+          "from": "arena/rewarding/Defusing",
+          "to": "arena/ready/Defusing",
+          "ms": 26.5
+        },
+        {
+          "from": "arena/ready/Defusing",
+          "to": "round-finished",
+          "ms": 18.8
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 11.4
+        },
+        {
+          "from": "loading",
+          "to": "arena/active/PrePlant",
+          "ms": 125.2
+        },
+        {
+          "from": "arena/active/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 11.9
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arcade/redline",
+          "ms": 16.7
+        },
+        {
+          "from": "arcade/redline",
+          "to": "arena/active/Defense",
+          "ms": 23.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 23.7
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 28.6
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 62.6
+        }
+      ]
+    },
+    "inclusiveSetupCosts": {
+      "JSON.stringify": {
+        "calls": 359,
+        "totalMs": 31.7,
+        "maxMs": 4.7,
+        "meanMs": 0.088
+      },
+      "storage.write": {
+        "calls": 398,
+        "totalMs": 8.1,
+        "maxMs": 0.3,
+        "meanMs": 0.02
+      },
+      "profile.save": {
+        "calls": 95,
+        "totalMs": 271.5,
+        "maxMs": 3.7,
+        "meanMs": 2.858
+      },
+      "setup.createCombatPools": {
+        "calls": 12,
+        "totalMs": 0.9,
+        "maxMs": 0.2,
+        "meanMs": 0.075
+      },
+      "setup.createCombatPresentationSystems": {
+        "calls": 26,
+        "totalMs": 0.6,
+        "maxMs": 0.1,
+        "meanMs": 0.023
+      },
+      "setup.prepareCombatRuntime": {
+        "calls": 14,
+        "totalMs": 34.7,
+        "maxMs": 4.5,
+        "meanMs": 2.479
+      },
+      "setup.drawProceduralArena": {
+        "calls": 14,
+        "totalMs": 916,
+        "maxMs": 106.8,
+        "meanMs": 65.429
+      },
+      "setup.createHudLayer": {
+        "calls": 14,
+        "totalMs": 115.3,
+        "maxMs": 18.6,
+        "meanMs": 8.236
+      },
+      "setup.initializeStandardRound": {
+        "calls": 12,
+        "totalMs": 1237.8,
+        "maxMs": 142.9,
+        "meanMs": 103.15
+      },
+      "setup.startRoundRuntime": {
+        "calls": 14,
+        "totalMs": 1522.7,
+        "maxMs": 147.2,
+        "meanMs": 108.764
+      },
+      "setup.create": {
+        "calls": 12,
+        "totalMs": 1256.5,
+        "maxMs": 147.7,
+        "meanMs": 104.708
+      },
+      "setup.completeRound": {
+        "calls": 12,
+        "totalMs": 162.7,
+        "maxMs": 17.6,
+        "meanMs": 13.558
+      },
+      "setup.endCurrentRoundRuntime": {
+        "calls": 14,
+        "totalMs": 308.9,
+        "maxMs": 26.6,
+        "meanMs": 22.064
+      },
+      "setup.initializeBossRound": {
+        "calls": 2,
+        "totalMs": 227.8,
+        "maxMs": 122.3,
+        "meanMs": 113.9
+      }
+    }
+  },
+  "late": {
+    "options": {
+      "startRound": 137,
+      "protocol": "supreme-gemini",
+      "heists": true,
+      "rounds": 12,
+      "sampleMs": 10000,
+      "primePressure": true,
+      "initialHighestRound": 136,
+      "sustainedMs": 20000,
+      "sustainedRounds": [
+        137,
+        148
+      ],
+      "enhanced": true,
+      "heistEvery": 8,
+      "fullHeistTraversal": false,
+      "menuEvery": 4,
+      "bossSampleMs": 10000,
+      "arcadeSampleMs": 8000,
+      "arcadeIds": [
+        "golden-hunt",
+        "mini-boss",
+        "neon-circuit",
+        "hot-package",
+        "packet-snatcher",
+        "redline"
+      ],
+      "finishCampaign": true
+    },
+    "passed": true,
+    "failures": [],
+    "durationSeconds": 484.777,
+    "startedAt": "2026-09-08T23:07:23.123Z",
+    "finishedAt": "2026-09-08T23:15:27.900Z",
+    "gameplayChecks": 194,
+    "coverage": {
+      "armedBomb": 13,
+      "deployables": 13,
+      "hazardOverlap": 13,
+      "specialAmmo": 13,
+      "smashableDestruction": 13,
+      "assistedDefuserKill": 395,
+      "ordinaryRound": 12,
+      "arenaPauseOptionsStore": 3,
+      "arcadeEvent": 6,
+      "arcade/golden-hunt": 1,
+      "roundFinished": 12,
+      "diskProgressionVerified": 13,
+      "loading": 11,
+      "heistEntry": 2,
+      "heistOptionsResize": 2,
+      "grenadeContainer": 13,
+      "physicalHeistLoot": 2,
+      "modReveal": 5,
+      "heistReturn": 2,
+      "arcade/mini-boss": 1,
+      "boss": 2,
+      "bossLoot": 2,
+      "arcade/neon-circuit": 1,
+      "arcade/hot-package": 1,
+      "arcade/packet-snatcher": 1,
+      "arcade/redline": 1,
+      "terminalBoss": 1,
+      "victoryCredits": 1,
+      "terminalDebrief": 1,
+      "terminalGarageReturn": 1
+    },
+    "boundaries": 16,
+    "quiescent": {
+      "count": 13,
+      "resize": {
+        "min": 21,
+        "max": 21
+      },
+      "game": {
+        "min": 21,
+        "max": 21
+      },
+      "window": {
+        "min": 18,
+        "max": 18
+      },
+      "document": {
+        "min": 14,
+        "max": 14
+      }
+    },
+    "earlyPerformance": {
+      "samples": 4,
+      "meanFrameMs": 17.113,
+      "meanUpdateMs": 1.05,
+      "meanP95FrameMs": 19.17,
+      "meanP95UpdateMs": 1.55
+    },
+    "latePerformance": {
+      "samples": 4,
+      "meanFrameMs": 17.209,
+      "meanUpdateMs": 1.002,
+      "meanP95FrameMs": 19.173,
+      "meanP95UpdateMs": 1.45
+    },
+    "rounds": [
+      {
+        "round": 137,
+        "frameMs": 17.079,
+        "p95Ms": 20,
+        "updateMs": 1.015
+      },
+      {
+        "round": 138,
+        "frameMs": 17.008,
+        "p95Ms": 18.34,
+        "updateMs": 1.091
+      },
+      {
+        "round": 139,
+        "frameMs": 17.485,
+        "p95Ms": 20.01,
+        "updateMs": 1.045
+      },
+      {
+        "round": 140,
+        "frameMs": 16.878,
+        "p95Ms": 18.33,
+        "updateMs": 1.051
+      },
+      {
+        "round": 141,
+        "frameMs": 17.068,
+        "p95Ms": 18.34,
+        "updateMs": 1.011
+      },
+      {
+        "round": 142,
+        "frameMs": 16.819,
+        "p95Ms": 16.68,
+        "updateMs": 1.011
+      },
+      {
+        "round": 143,
+        "frameMs": 17.068,
+        "p95Ms": 20,
+        "updateMs": 1.045
+      },
+      {
+        "round": 144,
+        "frameMs": 17.28,
+        "p95Ms": 20.01,
+        "updateMs": 1.104
+      },
+      {
+        "round": 145,
+        "frameMs": 18.003,
+        "p95Ms": 23.33,
+        "updateMs": 1.044
+      },
+      {
+        "round": 146,
+        "frameMs": 16.844,
+        "p95Ms": 16.68,
+        "updateMs": 1.032
+      },
+      {
+        "round": 147,
+        "frameMs": 16.989,
+        "p95Ms": 18.34,
+        "updateMs": 0.987
+      },
+      {
+        "round": 148,
+        "frameMs": 17,
+        "p95Ms": 18.34,
+        "updateMs": 0.945
+      }
+    ],
+    "sustained": [
+      {
+        "round": 137,
+        "firstFrameMs": 17.40461937716218,
+        "lateFrameMs": 16.920270727580675,
+        "firstUpdateMs": 1.1676470655883473,
+        "lateUpdateMs": 0.9406937352695239
+      },
+      {
+        "round": 148,
+        "firstFrameMs": 17.246672354948807,
+        "lateFrameMs": 16.877443037974803,
+        "firstUpdateMs": 1.005460748493468,
+        "lateUpdateMs": 0.9150210937870202
+      }
+    ],
+    "continuousFrames": {
+      "phases": [
+        {
+          "phase": "arena/active/PrePlant",
+          "frames": 239,
+          "meanMs": 16.623,
+          "p95Ms": 17,
+          "maxMs": 19.7
+        },
+        {
+          "phase": "arena/active/Defense",
+          "frames": 10177,
+          "meanMs": 16.898,
+          "p95Ms": 19,
+          "maxMs": 57.2
+        },
+        {
+          "phase": "arena/active/Defusing",
+          "frames": 2506,
+          "meanMs": 16.954,
+          "p95Ms": 20,
+          "maxMs": 39.6
+        },
+        {
+          "phase": "arena/active/Paused",
+          "frames": 44,
+          "meanMs": 16.936,
+          "p95Ms": 19,
+          "maxMs": 19.3
+        },
+        {
+          "phase": "options",
+          "frames": 53,
+          "meanMs": 17.725,
+          "p95Ms": 20,
+          "maxMs": 51.8
+        },
+        {
+          "phase": "upgrades",
+          "frames": 65,
+          "meanMs": 17.657,
+          "p95Ms": 19,
+          "maxMs": 43.4
+        },
+        {
+          "phase": "arcade/golden-hunt",
+          "frames": 18,
+          "meanMs": 16.928,
+          "p95Ms": 22,
+          "maxMs": 21.3
+        },
+        {
+          "phase": "arena/rewarding/PrePlant",
+          "frames": 570,
+          "meanMs": 16.639,
+          "p95Ms": 17,
+          "maxMs": 18.8
+        },
+        {
+          "phase": "round-finished",
+          "frames": 103,
+          "meanMs": 16.161,
+          "p95Ms": 27,
+          "maxMs": 40.2
+        },
+        {
+          "phase": "loading",
+          "frames": 194,
+          "meanMs": 16.515,
+          "p95Ms": 17,
+          "maxMs": 17
+        },
+        {
+          "phase": "arena/rewarding/Defense",
+          "frames": 911,
+          "meanMs": 16.606,
+          "p95Ms": 17,
+          "maxMs": 17.5
+        },
+        {
+          "phase": "anomaly-heist",
+          "frames": 981,
+          "meanMs": 16.722,
+          "p95Ms": 18,
+          "maxMs": 46.9
+        },
+        {
+          "phase": "legendary-mod-reveal",
+          "frames": 723,
+          "meanMs": 16.666,
+          "p95Ms": 17,
+          "maxMs": 17
+        },
+        {
+          "phase": "arcade/mini-boss",
+          "frames": 480,
+          "meanMs": 16.684,
+          "p95Ms": 17,
+          "maxMs": 20.3
+        },
+        {
+          "phase": "arena/boss/intro",
+          "frames": 108,
+          "meanMs": 16.485,
+          "p95Ms": 17,
+          "maxMs": 16.9
+        },
+        {
+          "phase": "arena/boss/combat",
+          "frames": 7238,
+          "meanMs": 16.669,
+          "p95Ms": 17,
+          "maxMs": 33.9
+        },
+        {
+          "phase": "arena/boss/destruction",
+          "frames": 136,
+          "meanMs": 16.668,
+          "p95Ms": 17,
+          "maxMs": 16.9
+        },
+        {
+          "phase": "arena/boss/loot-collection",
+          "frames": 269,
+          "meanMs": 16.647,
+          "p95Ms": 17,
+          "maxMs": 24.3
+        },
+        {
+          "phase": "arena/boss/transitioning",
+          "frames": 40,
+          "meanMs": 16.482,
+          "p95Ms": 17,
+          "maxMs": 16.9
+        },
+        {
+          "phase": "arcade/neon-circuit",
+          "frames": 478,
+          "meanMs": 16.735,
+          "p95Ms": 18,
+          "maxMs": 18.8
+        },
+        {
+          "phase": "arena/rewarding/Defusing",
+          "frames": 575,
+          "meanMs": 16.636,
+          "p95Ms": 17,
+          "maxMs": 17.4
+        },
+        {
+          "phase": "arcade/hot-package",
+          "frames": 479,
+          "meanMs": 16.666,
+          "p95Ms": 17,
+          "maxMs": 18
+        },
+        {
+          "phase": "arcade/packet-snatcher",
+          "frames": 478,
+          "meanMs": 16.715,
+          "p95Ms": 18,
+          "maxMs": 32.2
+        },
+        {
+          "phase": "arcade/redline",
+          "frames": 480,
+          "meanMs": 16.662,
+          "p95Ms": 17,
+          "maxMs": 17
+        },
+        {
+          "phase": "arena/credits",
+          "frames": 1079,
+          "meanMs": 16.666,
+          "p95Ms": 17,
+          "maxMs": 29.8
+        },
+        {
+          "phase": "garage",
+          "frames": 61,
+          "meanMs": 16.669,
+          "p95Ms": 17,
+          "maxMs": 17.1
+        }
+      ],
+      "transitions": [
+        {
+          "from": "round-finished",
+          "to": "arena/starting/PrePlant",
+          "ms": 138.9
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/PrePlant",
+          "ms": 10.6
+        },
+        {
+          "from": "arena/active/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 19.1
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 17.9
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 22.2
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 17.1
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 17
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 18.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Paused",
+          "ms": 22.8
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Paused",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "options",
+          "ms": 41.1
+        },
+        {
+          "from": "options",
+          "to": "arena/active/Defusing",
+          "ms": 23.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Paused",
+          "ms": 15.2
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "upgrades",
+          "ms": 19.4
+        },
+        {
+          "from": "upgrades",
+          "to": "arena/active/Defusing",
+          "ms": 16
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arcade/golden-hunt",
+          "ms": 16.4
+        },
+        {
+          "from": "arcade/golden-hunt",
+          "to": "arena/active/Defense",
+          "ms": 21.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/PrePlant",
+          "ms": 11.5
+        },
+        {
+          "from": "arena/active/PrePlant",
+          "to": "arena/rewarding/PrePlant",
+          "ms": 24.5
+        },
+        {
+          "from": "arena/rewarding/PrePlant",
+          "to": "arena/ready/PrePlant",
+          "ms": 30.9
+        },
+        {
+          "from": "arena/ready/PrePlant",
+          "to": "round-finished",
+          "ms": 94.7
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 16.6
+        },
+        {
+          "from": "loading",
+          "to": "arena/active/PrePlant",
+          "ms": 154.6
+        },
+        {
+          "from": "arena/active/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 14.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 17.8
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 17
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 23.9
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 27.6
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 36.3
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 10.9
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 120.4
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 17
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 20.2
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "anomaly-heist",
+          "ms": 146.3
+        },
+        {
+          "from": "anomaly-heist",
+          "to": "options",
+          "ms": 46.8
+        },
+        {
+          "from": "options",
+          "to": "anomaly-heist",
+          "ms": 25.3
+        },
+        {
+          "from": "anomaly-heist",
+          "to": "arena/active/Defense",
+          "ms": 51.3
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "legendary-mod-reveal",
+          "ms": 17.1
+        },
+        {
+          "from": "legendary-mod-reveal",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 26
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 22.1
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 14.6
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 9.3
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 116
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 18.1
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 17.8
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 19.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arcade/mini-boss",
+          "ms": 24.3
+        },
+        {
+          "from": "arcade/mini-boss",
+          "to": "arena/active/Defense",
+          "ms": 27.9
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 26.9
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/boss/intro",
+          "ms": 121
+        },
+        {
+          "from": "arena/boss/intro",
+          "to": "arena/boss/combat",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/boss/combat",
+          "to": "arena/boss/destruction",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/boss/destruction",
+          "to": "arena/boss/loot-collection",
+          "ms": 18.2
+        },
+        {
+          "from": "arena/boss/loot-collection",
+          "to": "legendary-mod-reveal",
+          "ms": 16.6
+        },
+        {
+          "from": "legendary-mod-reveal",
+          "to": "arena/boss/loot-collection",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/boss/loot-collection",
+          "to": "legendary-mod-reveal",
+          "ms": 16.7
+        },
+        {
+          "from": "legendary-mod-reveal",
+          "to": "arena/boss/loot-collection",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/boss/loot-collection",
+          "to": "arena/boss/transitioning",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/boss/transitioning",
+          "to": "arena/ready/Victory",
+          "ms": 27.2
+        },
+        {
+          "from": "arena/ready/Victory",
+          "to": "round-finished",
+          "ms": 14.5
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 16.7
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 134.9
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 17.3
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 15.4
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 20.2
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 18.5
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 18.9
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 17.1
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Paused",
+          "ms": 20.1
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "arena/active/Defusing",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Paused",
+          "ms": 18
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "options",
+          "ms": 83.2
+        },
+        {
+          "from": "options",
+          "to": "arena/active/Defusing",
+          "ms": 22.9
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Paused",
+          "ms": 18.7
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "upgrades",
+          "ms": 19.8
+        },
+        {
+          "from": "upgrades",
+          "to": "arena/active/Defusing",
+          "ms": 15.9
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arcade/neon-circuit",
+          "ms": 17.3
+        },
+        {
+          "from": "arcade/neon-circuit",
+          "to": "arena/active/Defense",
+          "ms": 19.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/rewarding/Defusing",
+          "ms": 19.2
+        },
+        {
+          "from": "arena/rewarding/Defusing",
+          "to": "arena/ready/Defusing",
+          "ms": 30.8
+        },
+        {
+          "from": "arena/ready/Defusing",
+          "to": "round-finished",
+          "ms": 86.9
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 8.6
+        },
+        {
+          "from": "loading",
+          "to": "arena/active/PrePlant",
+          "ms": 116
+        },
+        {
+          "from": "arena/active/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 12.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 17.2
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 23.3
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 33
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 39
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 18.2
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 135.5
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 20.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 17
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 17.4
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 24.6
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 24.4
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 72
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 10.3
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 114
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 13.3
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arcade/hot-package",
+          "ms": 16.7
+        },
+        {
+          "from": "arcade/hot-package",
+          "to": "arena/active/Defense",
+          "ms": 25.3
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 22.3
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 23.8
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 92
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 15
+        },
+        {
+          "from": "loading",
+          "to": "arena/active/PrePlant",
+          "ms": 127.6
+        },
+        {
+          "from": "arena/active/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 12.4
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 23.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 17
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Paused",
+          "ms": 24.7
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "arena/active/Defense",
+          "ms": 17.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Paused",
+          "ms": 21.3
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "options",
+          "ms": 88.2
+        },
+        {
+          "from": "options",
+          "to": "arena/active/Defense",
+          "ms": 24.9
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Paused",
+          "ms": 19.7
+        },
+        {
+          "from": "arena/active/Paused",
+          "to": "upgrades",
+          "ms": 23.1
+        },
+        {
+          "from": "upgrades",
+          "to": "arena/active/Defense",
+          "ms": 17.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arcade/packet-snatcher",
+          "ms": 21.7
+        },
+        {
+          "from": "arcade/packet-snatcher",
+          "to": "arena/active/Defense",
+          "ms": 22.8
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/rewarding/Defusing",
+          "ms": 22.7
+        },
+        {
+          "from": "arena/rewarding/Defusing",
+          "to": "arena/boss/intro",
+          "ms": 172.4
+        },
+        {
+          "from": "arena/boss/intro",
+          "to": "arena/boss/combat",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/boss/combat",
+          "to": "arena/boss/destruction",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/boss/destruction",
+          "to": "arena/boss/loot-collection",
+          "ms": 20.3
+        },
+        {
+          "from": "arena/boss/loot-collection",
+          "to": "legendary-mod-reveal",
+          "ms": 16.8
+        },
+        {
+          "from": "legendary-mod-reveal",
+          "to": "arena/boss/loot-collection",
+          "ms": 16.9
+        },
+        {
+          "from": "arena/boss/loot-collection",
+          "to": "arena/boss/transitioning",
+          "ms": 24
+        },
+        {
+          "from": "arena/boss/transitioning",
+          "to": "arena/ready/Victory",
+          "ms": 31.9
+        },
+        {
+          "from": "arena/ready/Victory",
+          "to": "round-finished",
+          "ms": 13.8
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 13.3
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 125
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 17.4
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/rewarding/Defense",
+          "ms": 24.8
+        },
+        {
+          "from": "arena/rewarding/Defense",
+          "to": "arena/ready/Defense",
+          "ms": 25.8
+        },
+        {
+          "from": "arena/ready/Defense",
+          "to": "round-finished",
+          "ms": 38
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 13.8
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 110.2
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 13.1
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 13.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 19.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 19.3
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 22.4
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "anomaly-heist",
+          "ms": 140.3
+        },
+        {
+          "from": "anomaly-heist",
+          "to": "options",
+          "ms": 45.5
+        },
+        {
+          "from": "options",
+          "to": "anomaly-heist",
+          "ms": 19.8
+        },
+        {
+          "from": "anomaly-heist",
+          "to": "arena/active/Defusing",
+          "ms": 50.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "legendary-mod-reveal",
+          "ms": 16.8
+        },
+        {
+          "from": "legendary-mod-reveal",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/rewarding/Defusing",
+          "ms": 25.7
+        },
+        {
+          "from": "arena/rewarding/Defusing",
+          "to": "arena/ready/Defusing",
+          "ms": 20
+        },
+        {
+          "from": "arena/ready/Defusing",
+          "to": "round-finished",
+          "ms": 15
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 16.9
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 132.4
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 13.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 18.4
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 17.1
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.8
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arcade/redline",
+          "ms": 18.7
+        },
+        {
+          "from": "arcade/redline",
+          "to": "arena/active/Defense",
+          "ms": 18.5
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/PrePlant",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/PrePlant",
+          "to": "arena/rewarding/PrePlant",
+          "ms": 18.1
+        },
+        {
+          "from": "arena/rewarding/PrePlant",
+          "to": "arena/ready/PrePlant",
+          "ms": 26.2
+        },
+        {
+          "from": "arena/ready/PrePlant",
+          "to": "round-finished",
+          "ms": 107
+        },
+        {
+          "from": "round-finished",
+          "to": "loading",
+          "ms": 16.6
+        },
+        {
+          "from": "loading",
+          "to": "arena/starting/PrePlant",
+          "ms": 138
+        },
+        {
+          "from": "arena/starting/PrePlant",
+          "to": "arena/active/Defense",
+          "ms": 14.4
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 18.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 17.9
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.9
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.5
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/Defusing",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defusing",
+          "to": "arena/active/Defense",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/active/Defense",
+          "to": "arena/active/PrePlant",
+          "ms": 16.6
+        },
+        {
+          "from": "arena/active/PrePlant",
+          "to": "arena/rewarding/PrePlant",
+          "ms": 33.6
+        },
+        {
+          "from": "arena/rewarding/PrePlant",
+          "to": "arena/boss/intro",
+          "ms": 143
+        },
+        {
+          "from": "arena/boss/intro",
+          "to": "arena/boss/combat",
+          "ms": 16.4
+        },
+        {
+          "from": "arena/boss/combat",
+          "to": "arena/boss/destruction",
+          "ms": 16.7
+        },
+        {
+          "from": "arena/boss/destruction",
+          "to": "arena/credits",
+          "ms": 33.4
+        },
+        {
+          "from": "arena/credits",
+          "to": "arena/ready/Victory",
+          "ms": 28.7
+        },
+        {
+          "from": "arena/ready/Victory",
+          "to": "round-finished",
+          "ms": 54.7
+        },
+        {
+          "from": "round-finished",
+          "to": "garage",
+          "ms": 16.7
+        }
+      ]
+    },
+    "inclusiveSetupCosts": {
+      "JSON.stringify": {
+        "calls": 432,
+        "totalMs": 55.4,
+        "maxMs": 7.3,
+        "meanMs": 0.128
+      },
+      "storage.write": {
+        "calls": 479,
+        "totalMs": 13.1,
+        "maxMs": 0.4,
+        "meanMs": 0.027
+      },
+      "profile.save": {
+        "calls": 113,
+        "totalMs": 275.8,
+        "maxMs": 3.4,
+        "meanMs": 2.441
+      },
+      "setup.createCombatPools": {
+        "calls": 13,
+        "totalMs": 0.3,
+        "maxMs": 0.1,
+        "meanMs": 0.023
+      },
+      "setup.createCombatPresentationSystems": {
+        "calls": 29,
+        "totalMs": 1.2,
+        "maxMs": 0.2,
+        "meanMs": 0.041
+      },
+      "setup.prepareCombatRuntime": {
+        "calls": 16,
+        "totalMs": 89.5,
+        "maxMs": 8.3,
+        "meanMs": 5.594
+      },
+      "setup.drawProceduralArena": {
+        "calls": 16,
+        "totalMs": 1048.9,
+        "maxMs": 108.5,
+        "meanMs": 65.556
+      },
+      "setup.createHudLayer": {
+        "calls": 16,
+        "totalMs": 109.5,
+        "maxMs": 8.5,
+        "meanMs": 6.844
+      },
+      "setup.initializeStandardRound": {
+        "calls": 13,
+        "totalMs": 1489,
+        "maxMs": 141.6,
+        "meanMs": 114.538
+      },
+      "setup.startRoundRuntime": {
+        "calls": 16,
+        "totalMs": 1906.5,
+        "maxMs": 163.3,
+        "meanMs": 119.156
+      },
+      "setup.create": {
+        "calls": 13,
+        "totalMs": 1506.5,
+        "maxMs": 143.3,
+        "meanMs": 115.885
+      },
+      "setup.completeRound": {
+        "calls": 13,
+        "totalMs": 154.2,
+        "maxMs": 15.5,
+        "meanMs": 11.862
+      },
+      "setup.endCurrentRoundRuntime": {
+        "calls": 16,
+        "totalMs": 373.2,
+        "maxMs": 29.1,
+        "meanMs": 23.325
+      },
+      "setup.initializeBossRound": {
+        "calls": 3,
+        "totalMs": 339.6,
+        "maxMs": 141.9,
+        "meanMs": 113.2
+      }
+    },
+    "finale": {
+      "checks": [
+        {
+          "ok": true,
+          "label": "Centaurus unlocked by saved round 148"
+        },
+        {
+          "ok": true,
+          "label": "Completion remains false before the terminal encounter"
+        },
+        {
+          "ok": true,
+          "label": "Final protocol starts at level 100"
+        },
+        {
+          "ok": true,
+          "label": "centaurus-ordinary records sustained active frames"
+        },
+        {
+          "ok": true,
+          "label": "All three real boss encounters started"
+        },
+        {
+          "ok": true,
+          "label": "Finale enters combat"
+        },
+        {
+          "ok": true,
+          "label": "three-boss-1 records sustained active frames"
+        },
+        {
+          "ok": true,
+          "label": "three-boss-2 records sustained active frames"
+        },
+        {
+          "ok": true,
+          "label": "three-boss-3 records sustained active frames"
+        },
+        {
+          "ok": true,
+          "label": "All three bosses active throughout the 60-second pressure sample"
+        },
+        {
+          "ok": true,
+          "label": "Fatal damage retires exactly one boss",
+          "boss": "artillery",
+          "remaining": 2
+        },
+        {
+          "ok": true,
+          "label": "Partial boss clear cannot persist campaign completion",
+          "defeated": 1
+        },
+        {
+          "ok": true,
+          "label": "2-boss-remaining records sustained active frames"
+        },
+        {
+          "ok": true,
+          "label": "Fatal damage retires exactly one boss",
+          "boss": "storm-mage",
+          "remaining": 1
+        },
+        {
+          "ok": true,
+          "label": "Partial boss clear cannot persist campaign completion",
+          "defeated": 2
+        },
+        {
+          "ok": true,
+          "label": "1-boss-remaining records sustained active frames"
+        },
+        {
+          "ok": true,
+          "label": "Fatal damage retires exactly one boss",
+          "boss": "void-brawler",
+          "remaining": 0
+        },
+        {
+          "ok": true,
+          "label": "All three deaths persist completion before credits end"
+        },
+        {
+          "ok": true,
+          "label": "Debrief records the complete terminal victory"
+        },
+        {
+          "ok": true,
+          "label": "Terminal debrief offers completion routes"
+        },
+        {
+          "ok": true,
+          "label": "Terminal completion preserves higher endless progress"
+        },
+        {
+          "ok": true,
+          "label": "Completed run session cleared"
+        },
+        {
+          "ok": true,
+          "label": "Completion survives the actual Garage return action"
+        },
+        {
+          "ok": true,
+          "label": "Gameplay and debrief retired after Garage return"
+        }
+      ],
+      "samples": [
+        {
+          "label": "centaurus-ordinary",
+          "durationMs": 40000,
+          "frames": {
+            "n": 2393,
+            "mean": 16.793949017969254,
+            "p95": 16.680000000074507,
+            "p99": 19.990000000037252,
+            "max": 30.009999999962748
+          },
+          "rawFrames": {
+            "n": 2392,
+            "mean": 16.751630434822477,
+            "p95": 17.40000009536743,
+            "p99": 19.200000047683716,
+            "max": 30.899999856948853
+          },
+          "update": {
+            "n": 2393,
+            "mean": 0.9374843279387828,
+            "p95": 1.3999998569488525,
+            "p99": 1.8000001907348633,
+            "max": 11.400000095367432
+          },
+          "remainingBosses": null
+        },
+        {
+          "label": "three-boss-1",
+          "durationMs": 20000,
+          "frames": {
+            "n": 1202,
+            "mean": 16.66647254575697,
+            "p95": 16.679999999888242,
+            "p99": 16.680000000074507,
+            "max": 16.680000000074507
+          },
+          "rawFrames": {
+            "n": 1201,
+            "mean": 16.66652789342215,
+            "p95": 16.800000190734863,
+            "p99": 16.90000009536743,
+            "max": 17.100000143051147
+          },
+          "update": {
+            "n": 1202,
+            "mean": 0.713227953569663,
+            "p95": 1,
+            "p99": 1.2000000476837158,
+            "max": 2.9000000953674316
+          },
+          "remainingBosses": 3
+        },
+        {
+          "label": "three-boss-2",
+          "durationMs": 20000,
+          "frames": {
+            "n": 1202,
+            "mean": 16.666505823626892,
+            "p95": 16.679999999888242,
+            "p99": 16.680000000074507,
+            "max": 16.680000000074507
+          },
+          "rawFrames": {
+            "n": 1201,
+            "mean": 16.66652789342215,
+            "p95": 16.800000190734863,
+            "p99": 16.90000009536743,
+            "max": 17
+          },
+          "update": {
+            "n": 1202,
+            "mean": 0.6896838622164607,
+            "p95": 1,
+            "p99": 1.1000001430511475,
+            "max": 1.4000000953674316
+          },
+          "remainingBosses": 3
+        },
+        {
+          "label": "three-boss-3",
+          "durationMs": 20000,
+          "frames": {
+            "n": 1204,
+            "mean": 16.6803322259133,
+            "p95": 16.679999999888242,
+            "p99": 16.680000000074507,
+            "max": 18.340000000037254
+          },
+          "rawFrames": {
+            "n": 1203,
+            "mean": 16.68029925175141,
+            "p95": 16.800000190734863,
+            "p99": 17,
+            "max": 33.90000009536743
+          },
+          "update": {
+            "n": 1204,
+            "mean": 0.7234219245340341,
+            "p95": 1,
+            "p99": 1.2000000476837158,
+            "max": 1.7000000476837158
+          },
+          "remainingBosses": 3
+        },
+        {
+          "label": "2-boss-remaining",
+          "durationMs": 20000,
+          "frames": {
+            "n": 1206,
+            "mean": 16.666459369817623,
+            "p95": 16.679999999888242,
+            "p99": 16.680000000074507,
+            "max": 16.69000000003725
+          },
+          "rawFrames": {
+            "n": 1205,
+            "mean": 16.66655601663708,
+            "p95": 16.800000190734863,
+            "p99": 16.90000009536743,
+            "max": 21.899999856948853
+          },
+          "update": {
+            "n": 1206,
+            "mean": 0.6973466070532601,
+            "p95": 1,
+            "p99": 1.0999999046325684,
+            "max": 1.5
+          },
+          "remainingBosses": 2
+        },
+        {
+          "label": "1-boss-remaining",
+          "durationMs": 20000,
+          "frames": {
+            "n": 1202,
+            "mean": 16.6664475873541,
+            "p95": 16.679999999888242,
+            "p99": 16.680000000074507,
+            "max": 16.680000000074507
+          },
+          "rawFrames": {
+            "n": 1201,
+            "mean": 16.66652789342215,
+            "p95": 16.899999856948853,
+            "p99": 16.90000009536743,
+            "max": 17
+          },
+          "update": {
+            "n": 1202,
+            "mean": 0.6396006661127887,
+            "p95": 0.9000000953674316,
+            "p99": 1.0999999046325684,
+            "max": 1.4000000953674316
+          },
+          "remainingBosses": 1
+        }
+      ],
+      "highestRound": 148,
+      "completed": true
+    }
+  },
+  "navigation": {
+    "running": false,
+    "cases": [
+      {
+        "ok": true,
+        "label": "camera shake is controller focusable"
+      },
+      {
+        "ok": true,
+        "label": "controller toggles camera shake off"
+      },
+      {
+        "ok": true,
+        "label": "disabled setting suppresses authored camera motion"
+      },
+      {
+        "ok": true,
+        "label": "volume slider is controller focusable"
+      },
+      {
+        "ok": true,
+        "label": "in-run Switch Profile cannot replace the deployment profile"
+      },
+      {
+        "ok": true,
+        "label": "in-run Import Save cannot replace the deployment profile"
+      },
+      {
+        "ok": true,
+        "label": "in-run Restore Backup cannot replace the deployment profile"
+      },
+      {
+        "ok": true,
+        "label": "in-run Reset Progress cannot replace the deployment profile"
+      },
+      {
+        "ok": true,
+        "label": "Options returns to the same live Arena"
+      },
+      {
+        "ok": true,
+        "label": "Options controls persist to disk on return"
+      },
+      {
+        "ok": true,
+        "label": "camera setting survives Options reopen"
+      },
+      {
+        "ok": true,
+        "label": "re-enabling camera shake restores authored effect"
+      },
+      {
+        "ok": true,
+        "label": "HEIST portal starts"
+      },
+      {
+        "ok": true,
+        "label": "HEIST entry accepted"
+      },
+      {
+        "ok": true,
+        "label": "Splash preserves HEIST resume route"
+      },
+      {
+        "ok": true,
+        "label": "HEIST resumes without restarting its world"
+      },
+      {
+        "ok": true,
+        "label": "quit confirmation preserves paused run before approval"
+      },
+      {
+        "ok": true,
+        "label": "controller Back cancels quit and keeps Options"
+      },
+      {
+        "ok": true,
+        "label": "arena retires on Options quit",
+        "detail": 8
+      },
+      {
+        "ok": true,
+        "label": "anomaly-heist retires on Options quit",
+        "detail": 8
+      },
+      {
+        "ok": true,
+        "label": "quit clears deployment session"
+      },
+      {
+        "ok": true,
+        "label": "quit retires Arena and HEIST Text canvases"
+      },
+      {
+        "ok": true,
+        "label": "garage has controller controls"
+      },
+      {
+        "ok": true,
+        "label": "garage accepts controller Back"
+      },
+      {
+        "ok": true,
+        "label": "options has controller controls"
+      },
+      {
+        "ok": true,
+        "label": "options accepts controller Back"
+      },
+      {
+        "ok": true,
+        "label": "mods has controller controls"
+      },
+      {
+        "ok": true,
+        "label": "mods accepts controller Back"
+      },
+      {
+        "ok": true,
+        "label": "upgrades has controller controls"
+      },
+      {
+        "ok": true,
+        "label": "upgrades accepts controller Back"
+      },
+      {
+        "ok": true,
+        "label": "cosmetics has controller controls"
+      },
+      {
+        "ok": true,
+        "label": "cosmetics accepts controller Back"
+      },
+      {
+        "ok": true,
+        "label": "leaderboards has controller controls"
+      },
+      {
+        "ok": true,
+        "label": "leaderboards accepts controller Back"
+      }
+    ],
+    "errors": [],
+    "startedAt": "2026-09-08T18:34:50.583Z",
+    "finishedAt": "2026-09-08T18:34:56.621Z"
+  },
+  "screens": {
+    "running": false,
+    "cases": [
+      {
+        "ok": true,
+        "label": "garage opens"
+      },
+      {
+        "ok": true,
+        "label": "Garage owned-card dossier is controller focusable"
+      },
+      {
+        "ok": true,
+        "label": "Garage displays the owned Mod description"
+      },
+      {
+        "ok": true,
+        "label": "dossier Back returns within Garage"
+      },
+      {
+        "ok": true,
+        "label": "mods opens"
+      },
+      {
+        "ok": true,
+        "label": "Mod Collection displays owned cards and details"
+      },
+      {
+        "ok": true,
+        "label": "Mod Collection restores Garage route"
+      },
+      {
+        "ok": true,
+        "label": "options opens"
+      },
+      {
+        "ok": true,
+        "label": "Options audio available at 1280x720"
+      },
+      {
+        "ok": true,
+        "label": "Options gameplay available at 1280x720"
+      },
+      {
+        "ok": true,
+        "label": "Options interface available at 1280x720"
+      },
+      {
+        "ok": true,
+        "label": "Options profile available at 1280x720"
+      },
+      {
+        "ok": true,
+        "label": "Options system available at 1280x720"
+      },
+      {
+        "ok": true,
+        "label": "camera setting scrolls into view at 1280x720"
+      },
+      {
+        "ok": true,
+        "label": "options opens"
+      },
+      {
+        "ok": true,
+        "label": "Options audio available at 960x600"
+      },
+      {
+        "ok": true,
+        "label": "Options gameplay available at 960x600"
+      },
+      {
+        "ok": true,
+        "label": "Options interface available at 960x600"
+      },
+      {
+        "ok": true,
+        "label": "Options profile available at 960x600"
+      },
+      {
+        "ok": true,
+        "label": "Options system available at 960x600"
+      },
+      {
+        "ok": true,
+        "label": "camera setting scrolls into view at 960x600"
+      },
+      {
+        "ok": true,
+        "label": "local-profiles opens"
+      },
+      {
+        "ok": true,
+        "label": "selected local profile can continue"
+      },
+      {
+        "ok": true,
+        "label": "local profile Continue restores Main Menu"
+      },
+      {
+        "ok": true,
+        "label": "Main Menu presents local deployment"
+      },
+      {
+        "ok": true,
+        "label": "Main Menu presents online deployment"
+      }
+    ],
+    "errors": [],
+    "startedAt": "2026-09-08T23:02:20.477Z",
+    "finishedAt": "2026-09-08T23:02:23.906Z"
+  },
+  "lifetime": {
+    "running": false,
+    "cases": [
+      {
+        "label": "0/open-field",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 28,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/islands",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 14,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/split",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 22,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/fortress",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/ring",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/canyon",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/maze",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 17,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/chambers",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/asymmetric-clusters",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/perimeter",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "0/crossroads",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 14,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/open-field",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 28,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/islands",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 14,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/split",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 22,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/fortress",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/ring",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/canyon",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/maze",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 17,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/chambers",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/asymmetric-clusters",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/perimeter",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "1/crossroads",
+        "mode": "scene-shutdown",
+        "privateGpuTextures": 14,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/open-field",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 28,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/islands",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 14,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/split",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 22,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/fortress",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/ring",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 20,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/canyon",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/maze",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 17,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/chambers",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/asymmetric-clusters",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 19,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/perimeter",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 18,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      },
+      {
+        "label": "2/crossroads",
+        "mode": "encounter-destroy",
+        "privateGpuTextures": 14,
+        "retained": 0,
+        "canvasOwners": 0,
+        "roots": 0
+      }
+    ],
+    "errors": [],
+    "startedAt": "2026-09-08T23:01:50.837Z",
+    "current": "2/crossroads",
+    "finishedAt": "2026-09-08T23:02:01.040Z"
+  },
+  "debriefSetup": {
+    "running": false,
+    "cases": [
+      {
+        "repeat": 0,
+        "createMs": 11.300000190734863,
+        "frameMaxMs": 17.09999990463257,
+        "frameMeanMs": 16.455813951270525,
+        "canvasOwners": 0,
+        "retiredObjects": 0
+      },
+      {
+        "repeat": 1,
+        "createMs": 5.1000001430511475,
+        "frameMaxMs": 16.800000190734863,
+        "frameMeanMs": 16.659523810659135,
+        "canvasOwners": 0,
+        "retiredObjects": 0
+      },
+      {
+        "repeat": 2,
+        "createMs": 4.1000001430511475,
+        "frameMaxMs": 16.899999856948853,
+        "frameMeanMs": 16.659523810659135,
+        "canvasOwners": 0,
+        "retiredObjects": 0
+      },
+      {
+        "repeat": 3,
+        "createMs": 4.400000095367432,
+        "frameMaxMs": 16.800000190734863,
+        "frameMeanMs": 16.654761904761905,
+        "canvasOwners": 0,
+        "retiredObjects": 0
+      },
+      {
+        "repeat": 4,
+        "createMs": 4.299999952316284,
+        "frameMaxMs": 16.899999856948853,
+        "frameMeanMs": 16.657142860548838,
+        "canvasOwners": 0,
+        "retiredObjects": 0
+      }
+    ],
+    "errors": [],
+    "startedAt": "2026-09-08T23:16:30.425Z",
+    "finishedAt": "2026-09-08T23:16:34.671Z"
+  },
+  "reload": {
+    "reloaded": true,
+    "verifiedAt": "2026-09-08T23:16:11.490Z",
+    "profileId": "83298635-e475-452f-ab10-bf9eed2991f4",
+    "highest": 148,
+    "completed": true,
+    "screenShake": false,
+    "diskScreenShake": false
+  }
+}

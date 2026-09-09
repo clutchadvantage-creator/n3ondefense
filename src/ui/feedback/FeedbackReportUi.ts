@@ -3,11 +3,13 @@ import { GAME_VERSION } from '../../game/config/version';
 
 export interface FeedbackReportHandle {
   open(): void;
+  isOpen(): boolean;
   destroy(): void;
 }
 
 interface FeedbackReportOptions {
   showLaunchButton?: boolean;
+  onClose?: () => void;
 }
 
 const REPORT_EMAIL = 'runtwerkx.dev@gmail.com';
@@ -26,6 +28,7 @@ export const mountFeedbackReportUi = (root: HTMLElement, options: FeedbackReport
     backdrop?.remove();
     backdrop = null;
     if (launchButton.isConnected) launchButton.focus();
+    options.onClose?.();
   };
 
   const open = (): void => {
@@ -114,6 +117,7 @@ export const mountFeedbackReportUi = (root: HTMLElement, options: FeedbackReport
   launchButton.addEventListener('click', open);
   return {
     open,
+    isOpen: () => backdrop !== null,
     destroy: () => {
       backdrop?.remove();
       backdrop = null;

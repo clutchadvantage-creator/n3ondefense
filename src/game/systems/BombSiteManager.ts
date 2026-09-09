@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { ArenaTheme, BombSiteRuntime, ObjectiveMode } from '../types';
 import { BombSiteState } from '../types';
 import { drawMechanicalRivets } from '../rendering/LayeredArtPrimitives.ts';
+import { bakeStaticGraphics } from '../rendering/bakeStaticGraphics.ts';
 
 interface ArmedSiteEffect {
   electricity: Phaser.GameObjects.Graphics;
@@ -20,13 +21,13 @@ interface ArmedSiteEffect {
 interface AmbientSiteEffect {
   root: Phaser.GameObjects.Container;
   color: number;
-  platform: Phaser.GameObjects.Graphics;
+  platform: Phaser.GameObjects.RenderTexture;
   halo: Phaser.GameObjects.Arc;
   statusRing: Phaser.GameObjects.Arc;
   coreLight: Phaser.GameObjects.Arc;
-  sweep: Phaser.GameObjects.Graphics;
-  rotor: Phaser.GameObjects.Graphics;
-  bomb: Phaser.GameObjects.Graphics;
+  sweep: Phaser.GameObjects.Container;
+  rotor: Phaser.GameObjects.Container;
+  bomb: Phaser.GameObjects.Container;
   identifier: Phaser.GameObjects.Text;
   stateReadout: Phaser.GameObjects.Text;
   leftMast: Phaser.GameObjects.Rectangle;
@@ -355,11 +356,22 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
       const angle = -Math.PI / 8 + pointIndex * Math.PI / 4;
       return { x: Math.cos(angle) * 91, y: Math.sin(angle) * 91 };
     });
-    const undersidePoints = basePoints.map((point) => ({ x: point.x + 7, y: point.y + 10 }));
+    const undersidePoints = basePoints.map((point) => ({ x: point.x + 7, y: point.y + 15 }));
     const insetPoints = basePoints.map((point) => ({ x: point.x * 0.86, y: point.y * 0.86 - 2 }));
     platform.fillStyle(0x000000, 0.46).fillEllipse(8, 13, 205, 76);
     platform.fillStyle(0x01040a, 0.98).fillPoints(undersidePoints, true);
     platform.lineStyle(2, 0x142d3b, 0.78).strokePoints(undersidePoints, true);
+    for(let face=1;face<4;face++) {
+      platform.fillStyle(face===2?0x183343:0x102431,1).fillPoints([
+        basePoints[face],basePoints[face+1],undersidePoints[face+1],undersidePoints[face]
+      ],true);
+      const a=undersidePoints[face],b=undersidePoints[face+1];
+      platform.lineStyle(2,color,.55).lineBetween(a.x,a.y-4,b.x,b.y-4);
+      for(let slot=1;slot<5;slot++) {
+        const t=slot/5,x=a.x+(b.x-a.x)*t,y=a.y+(b.y-a.y)*t;
+        platform.lineStyle(2,0x020810,.9).lineBetween(x,y-7,x-2,y-12);
+      }
+    }
     platform.fillStyle(0x0b1722, 1);
     platform.fillPoints(basePoints, true);
     platform.lineStyle(3, color, 0.58);
@@ -402,7 +414,7 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
 
     const halo = this.scene.add.circle(0, 0, 60, color, 0.04).setStrokeStyle(1, color, 0.28);
     const statusRing = this.scene.add.circle(0, 0, 45, color, 0.018).setStrokeStyle(2, color, 0.46);
-    const coreLight = this.scene.add.circle(0, 3, 5, color, 0.72).setStrokeStyle(1, 0xffffff, 0.7);
+    const coreLight = this.scene.add.circle(0, -8, 5, color, 0.72).setStrokeStyle(1, 0xffffff, 0.7);
 
     const sweep = this.scene.add.graphics();
     sweep.lineStyle(1, color, 0.3);
@@ -423,20 +435,21 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
     rotor.fillCircle(-34, 0, 2);
 
     const bomb = this.scene.add.graphics();
-    bomb.fillStyle(0x07131d, 0.96);
-    bomb.lineStyle(2, color, 1);
-    bomb.fillCircle(0, 3, 13);
-    bomb.strokeCircle(0, 3, 13);
-    bomb.fillStyle(color, 0.95);
-    bomb.fillCircle(-4, 0, 3);
-    bomb.lineStyle(3, color, 0.95);
-    bomb.beginPath();
-    bomb.moveTo(7, -8);
-    bomb.lineTo(11, -14);
-    bomb.lineTo(16, -12);
-    bomb.strokePath();
-    bomb.fillStyle(0xffffff, 0.95);
-    bomb.fillCircle(18, -13, 2);
+    bomb.fillStyle(0x01050b,.55).fillEllipse(3,13,51,23);
+    bomb.fillStyle(0x122937,1).fillPoints([{x:-18,y:-25},{x:10,y:-29},{x:21,y:-18},{x:18,y:12},{x:1,y:20},{x:-18,y:11}],true);
+    bomb.lineStyle(2,0x456575,1).strokePoints([{x:-18,y:-25},{x:10,y:-29},{x:21,y:-18},{x:18,y:12},{x:1,y:20},{x:-18,y:11}],true);
+    bomb.fillStyle(0x2b4656,1).fillPoints([{x:-18,y:-25},{x:10,y:-29},{x:21,y:-18},{x:0,y:-12}],true);
+    bomb.fillStyle(0x06111d,1).fillPoints([{x:0,y:-12},{x:21,y:-18},{x:18,y:12},{x:1,y:20}],true);
+    bomb.lineStyle(1,0xc9eaf1,.6).lineBetween(-16,-24,9,-28);
+    for(const x of [-12,-6,7,13]) {
+      bomb.fillStyle(color,.32).fillRect(x,-16,3,21);
+      bomb.fillStyle(color,.88).fillRect(x,-11,2,13);
+    }
+    bomb.fillStyle(0x01070e,1).fillCircle(0,-8,8);
+    bomb.lineStyle(2,color,.9).strokeCircle(0,-8,8);
+    bomb.fillStyle(0xd6fcff,.8).fillRect(-11,10,7,2).fillRect(6,8,5,2);
+    bomb.fillStyle(0x354e60,1).fillRoundedRect(-5,-36,12,8,2);
+    bomb.fillStyle(color,.9).fillRect(-2,-34,6,2);
 
     const identifier = this.scene.add.text(0, 29, letter, {
       fontFamily: 'Orbitron, sans-serif',
@@ -463,9 +476,15 @@ export class BombSiteManager extends Phaser.Events.EventEmitter {
       this.scene!.add.circle(0, 0, particleIndex % 3 === 0 ? 2.5 : 1.5, color, 0.55)
     );
 
-    root.add([platform, halo, statusRing, sweep, rotor, bomb, coreLight, identifier, stateReadout, leftMast, rightMast, leftBase, rightBase, leftTip, rightTip, ...particles]);
+    const platformArt=bakeStaticGraphics(this.scene,platform,{x:-112,y:-104,w:232,h:228});
+    // Preserve the original local pivot and animation scale independently of
+    // each 2x cache's top-left bounds and half-scale texture.
+    const sweepArt=this.scene.add.container(0,0,[bakeStaticGraphics(this.scene,sweep,{x:-76,y:-76,w:152,h:152})]);
+    const rotorArt=this.scene.add.container(0,0,[bakeStaticGraphics(this.scene,rotor,{x:-39,y:-39,w:78,h:78})]);
+    const bombArt=this.scene.add.container(0,0,[bakeStaticGraphics(this.scene,bomb,{x:-30,y:-44,w:62,h:78})]);
+    root.add([platformArt, halo, statusRing, sweepArt, rotorArt, bombArt, coreLight, identifier, stateReadout, leftMast, rightMast, leftBase, rightBase, leftTip, rightTip, ...particles]);
     this.ambientEffects.set(siteId, {
-      root, color, platform, halo, statusRing, coreLight, sweep, rotor, bomb, identifier, stateReadout,
+      root, color, platform:platformArt, halo, statusRing, coreLight, sweep:sweepArt, rotor:rotorArt, bomb:bombArt, identifier, stateReadout,
       leftMast, rightMast, leftTip, rightTip, particles, ringPulse,
       phase: index * 1.37
     });

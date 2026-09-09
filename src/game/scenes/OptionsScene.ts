@@ -4,8 +4,8 @@ import { ABILITY_ACTIONS, DEFAULT_ABILITY_BINDINGS, RESERVED_ABILITY_BINDINGS, b
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
 import { SaveSystem } from '../systems/SaveSystem';
-import { pickJsonFile, showConfirmDialog, showInfoModal } from '../utils/localSaveUi';
-import { createButton, playButtonJiggle } from '../utils/ui';
+import { pickJsonFile, showConfirmDialog, showInfoModal, type LocalModalHandle } from '../utils/localSaveUi';
+import { createButton, disableButton, playButtonJiggle } from '../utils/ui';
 import { getGameUiRoot } from '../../ui/getGameUiRoot';
 import { mountFeedbackReportUi, type FeedbackReportHandle } from '../../ui/feedback/FeedbackReportUi';
 import {
@@ -41,6 +41,11 @@ interface OptionsSceneData {
   returnScene?: SceneKeyValue;
   resumeGameplay?: boolean;
   resumePausedScene?: boolean;
+  presentation?: {
+    tab: OptionsTabId;
+    scroll: Partial<Record<OptionsTabId, number>>;
+    confirmQuit: boolean;
+  };
 }
 
 interface OptionsViewport {
@@ -93,6 +98,7 @@ export class OptionsScene extends Phaser.Scene {
   private resumePausedSceneOnEsc = false;
   private settingsPersistTimer: Phaser.Time.TimerEvent | null = null;
   private feedbackReportUi: FeedbackReportHandle | null = null;
+  private quitConfirmation: LocalModalHandle | null = null;
   private cancelBindingCapture: (() => void) | null = null;
   private activeTab: OptionsTabId = 'audio';
   private readonly tabContainers = new Map<OptionsTabId, Phaser.GameObjects.Container>();
@@ -106,6 +112,29 @@ export class OptionsScene extends Phaser.Scene {
   private scrollLabel: Phaser.GameObjects.Text | null = null;
   private scrollTrackTop = 0;
   private scrollTrackRange = 0;
+  private resizeTimer: Phaser.Time.TimerEvent | null = null;
+  private resizePending = false;
+
+  private readonly handleOptionsResize = (): void => {
+    this.resizePending = true;
+    this.resizeTimer?.remove();
+    this.resizeTimer = null;
+    // The responsive DOM report owns an unsent draft. Reflow the Phaser UI
+    // when it closes, preserving that draft throughout a window resize.
+    if (this.feedbackReportUi?.isOpen()) return;
+    this.resizeTimer = this.time.delayedCall(120, () => {
+      this.resizeTimer = null;
+      if (this.feedbackReportUi?.isOpen()) return;
+      const scroll: Partial<Record<OptionsTabId, number>> = {};
+      for (const [tab, state] of this.scrollStates) scroll[tab] = state.max > 0 ? state.offset / state.max : 0;
+      this.scene.restart({
+        returnScene: this.returnScene,
+        resumeGameplay: this.resumeGameplayOnEsc,
+        resumePausedScene: this.resumePausedSceneOnEsc,
+        presentation: { tab: this.activeTab, scroll, confirmQuit: this.quitConfirmation !== null }
+      } satisfies OptionsSceneData);
+    });
+  };
 
   private readonly handleOptionsWheel = (
     pointer: Phaser.Input.Pointer,
@@ -130,6 +159,7 @@ export class OptionsScene extends Phaser.Scene {
     this.resumeGameplayOnEsc = data?.resumeGameplay === true;
     this.resumePausedSceneOnEsc = data?.resumePausedScene === true;
     this.resetTransientUiState();
+    this.resizePending = false;
     configureSceneUiNavigation(this, {
       onBack: () => this.handleEscReturn(),
       onTabLeft: () => this.cycleOptionsTab(-1),
@@ -152,8 +182,13 @@ export class OptionsScene extends Phaser.Scene {
       height: Math.max(260, contentBottom - contentTop)
     };
 
-    this.feedbackReportUi = mountFeedbackReportUi(getGameUiRoot(), { showLaunchButton: false });
+    this.feedbackReportUi = mountFeedbackReportUi(getGameUiRoot(), {
+      showLaunchButton: false,
+      onClose: () => { if (this.resizePending) this.handleOptionsResize(); }
+    });
     this.createBackground(width, height, centerX);
+    createButton(this, safeX + 48, height < 650 ? 30 : 36, 'BACK', () => this.handleEscReturn(), 96)
+      .setDepth(130);
     this.createContentViewport();
     this.createTabBar(centerX, contentWidth, height);
 
@@ -170,7 +205,11 @@ export class OptionsScene extends Phaser.Scene {
     this.createInterfaceTab(this.requireTab('interface'), save);
     this.createProfileTab(this.requireTab('profile'));
     this.createSystemTab(this.requireTab('system'));
-    this.selectTab('audio');
+    for (const [tab, state] of this.scrollStates) {
+      state.offset = Phaser.Math.Clamp(data?.presentation?.scroll[tab] ?? 0, 0, 1) * state.max;
+    }
+    this.selectTab(data?.presentation?.tab ?? 'audio');
+    if (data?.presentation?.confirmQuit) this.returnToMainMenu();
 
     this.input.keyboard?.on('keydown-ESC', this.handleEscReturn, this);
     this.input.keyboard?.on('keydown-UP', this.handleScrollUp);
@@ -178,6 +217,7 @@ export class OptionsScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-PAGE_UP', this.handlePageUp);
     this.input.keyboard?.on('keydown-PAGE_DOWN', this.handlePageDown);
     this.input.on('wheel', this.handleOptionsWheel);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.handleOptionsResize);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownOptions, this);
   }
 
@@ -212,6 +252,16 @@ export class OptionsScene extends Phaser.Scene {
     this.add.rectangle(left + width * 0.5, top + height * 0.5, width, height, 0x08121e, 0.9)
       .setStrokeStyle(2, 0x39dff4, 0.58).setDepth(2);
     this.add.rectangle(left + width * 0.5, top + 3, width - 8, 2, 0xff5bcf, 0.38).setDepth(3);
+    const frame = this.add.graphics().setDepth(3);
+    frame.lineStyle(1, 0x41647b, 0.5).strokeRect(left + 7, top + 7, width - 14, height - 14);
+    for (const x of [left, left + width]) {
+      const inward = x === left ? 1 : -1;
+      for (const y of [top, top + height]) {
+        const vertical = y === top ? 1 : -1;
+        frame.lineStyle(2, 0xa8f6ff, 0.8).lineBetween(x + inward * 3, y, x + inward * 21, y);
+        frame.lineBetween(x, y + vertical * 3, x, y + vertical * 15);
+      }
+    }
     this.contentMaskShape = this.make.graphics({ x: 0, y: 0 });
     this.contentMaskShape.fillStyle(0xffffff, 1).fillRect(left + 3, top + 3, width - 6, height - 6);
     this.contentMask = this.contentMaskShape.createGeometryMask();
@@ -612,7 +662,19 @@ export class OptionsScene extends Phaser.Scene {
     container.add(this.add.text(centerX, panelTop + panelHeight - 21, 'Critical health, objective, and cooldown warnings remain readable at every presentation level.', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#789baa', align: 'center'
     }).setOrigin(0.5));
-    this.configureTabScrolling('interface', container, panelTop + panelHeight + 18);
+    const shakeY = panelTop + panelHeight + 38;
+    let screenShake = save.settings.screenShake;
+    const shake = this.addTabButton(container, centerX, shakeY, `CAMERA SHAKE: ${screenShake ? 'ON' : 'OFF'}`, () => {
+      screenShake = !screenShake;
+      SaveSystem.setSettings({ screenShake });
+      (shake.getByName('button-label') as Phaser.GameObjects.Text).setText(`CAMERA SHAKE: ${screenShake ? 'ON' : 'OFF'}`);
+      this.scheduleSettingsPersist();
+    }, 300);
+    this.registerScrollTarget('interface', shake, shakeY, 22);
+    container.add(this.add.text(centerX, shakeY + 29, 'Explosion and impact motion. Attack warnings and effects remain visible.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#9fc7d5', align: 'center'
+    }).setOrigin(0.5));
+    this.configureTabScrolling('interface', container, shakeY + 58);
   }
 
   private createProfileTab(container: Phaser.GameObjects.Container): void {
@@ -644,12 +706,16 @@ export class OptionsScene extends Phaser.Scene {
     const rightX = centerX + (buttonWidth + buttonGap) * 0.5;
     const buttonStartY = panelTop + (storageMessage ? 132 : 112);
     this.addTabButton(container, leftX, buttonStartY, 'Local Save Info', () => this.showLocalSaveInfo(), buttonWidth);
-    this.addTabButton(container, rightX, buttonStartY, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), buttonWidth);
+    const switchProfile = this.addTabButton(container, rightX, buttonStartY, 'Switch Profile', () => this.scene.start(SceneKeys.LocalProfiles), buttonWidth);
     this.addTabButton(container, leftX, buttonStartY + 52, 'Export Save', () => { void SaveSystem.exportActiveProfile(); }, buttonWidth);
-    this.addTabButton(container, rightX, buttonStartY + 52, 'Import Save', () => { void this.importSave(); }, buttonWidth);
-    this.addTabButton(container, leftX, buttonStartY + 104, 'Restore Backup', () => this.restoreBackup(), buttonWidth);
-    this.addTabButton(container, rightX, buttonStartY + 104, 'Reset Progress', () => this.resetProgress(), buttonWidth);
-    container.add(this.add.text(centerX, panelTop + panelHeight - 26, 'Settings and progression are saved to this browser-local profile.', {
+    const importSave = this.addTabButton(container, rightX, buttonStartY + 52, 'Import Save', () => { void this.importSave(); }, buttonWidth);
+    const restore = this.addTabButton(container, leftX, buttonStartY + 104, 'Restore Backup', () => this.restoreBackup(), buttonWidth);
+    const reset = this.addTabButton(container, rightX, buttonStartY + 104, 'Reset Progress', () => this.resetProgress(), buttonWidth);
+    const inRun = this.hasPreservedGameplay();
+    if (inRun) for (const button of [switchProfile, importSave, restore, reset]) disableButton(button);
+    container.add(this.add.text(centerX, panelTop + panelHeight - 26, inRun
+      ? 'Return to Main Menu before switching or replacing a profile.'
+      : 'Settings and progression are saved to this browser-local profile.', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#9fcbe0'
     }).setOrigin(0.5));
   }
@@ -668,13 +734,14 @@ export class OptionsScene extends Phaser.Scene {
         replay: true,
         returnScene: this.returnScene,
         resumeGameplay: this.resumeGameplayOnEsc,
+        resumePausedScene: this.resumePausedSceneOnEsc,
         returnToOptions: this.returnScene !== SceneKeys.Arena
       });
       this.scene.bringToTop(SceneKeys.Splash);
       this.scene.stop();
     }, 310);
     this.addTabButton(container, centerX, centerY - 4, 'Suggestions / Bug Reports', () => this.feedbackReportUi?.open(), 310);
-    this.addTabButton(container, centerX, centerY + 48, 'Back to Main Menu', () => this.scene.start(SceneKeys.MainMenu), 310);
+    this.addTabButton(container, centerX, centerY + 48, 'Back to Main Menu', () => this.returnToMainMenu(), 310);
     container.add(this.add.text(centerX, centerY + 104, 'ESC returns to the screen that opened Options.', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#718f9c'
     }).setOrigin(0.5));
@@ -864,6 +931,12 @@ export class OptionsScene extends Phaser.Scene {
         AudioManager.get().playSfx('menu');
         this.beginBindingCapture(action, bindings, valueLabels, status);
       });
+      registerUiFocusable(this, hit, {
+        id: `options:gameplay:binding:${action}`,
+        label: `${label.toUpperCase()} BINDING`,
+        activate: () => this.beginBindingCapture(action, bindings, valueLabels, status),
+        scroll: (amount) => this.scrollActiveTab(amount)
+      });
       container.add([actionLabel, background, value, hit]);
       this.registerScrollTarget('gameplay', hit, y, 16);
     });
@@ -1032,6 +1105,12 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   private handleEscReturn(): void {
+    if (this.quitConfirmation) {
+      this.quitConfirmation.destroy();
+      this.quitConfirmation = null;
+      return;
+    }
+    if (this.cancelBindingCapture) { this.cancelBindingCapture(); return; }
     if (this.returnScene === SceneKeys.Arena) {
       this.scene.resume(SceneKeys.Arena);
       if (this.resumeGameplayOnEsc) this.scene.get(SceneKeys.Arena).events.emit('resume-from-options');
@@ -1045,6 +1124,24 @@ export class OptionsScene extends Phaser.Scene {
       return;
     }
     this.scene.start(this.returnScene);
+  }
+
+  private hasPreservedGameplay(): boolean {
+    return [SceneKeys.Arena, SceneKeys.Heist].some(key =>
+      this.scene.isActive(key) || this.scene.isPaused(key) || this.scene.isSleeping(key));
+  }
+
+  private returnToMainMenu(): void {
+    if (!this.hasPreservedGameplay()) { this.scene.start(SceneKeys.MainMenu); return; }
+    if (this.quitConfirmation) return;
+    this.quitConfirmation = showConfirmDialog(this, 'End this deployment?', 'Collected resources remain saved. This deployment will end.', 'End Deployment', () => {
+      // Use Arena's existing quit/save/retirement path, even while it sleeps
+      // behind HEIST. Queue Arena shutdown first so HEIST's shutdown fallback
+      // cannot wake a deployment that the player has explicitly ended.
+      this.scene.get(SceneKeys.Arena).events.emit('quit-from-options');
+      this.scene.stop(SceneKeys.Heist);
+      this.scene.stop();
+    }, 'Cancel', () => { this.quitConfirmation = null; });
   }
 
   private createRangeSlider(
@@ -1364,6 +1461,11 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   private shutdownOptions(): void {
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.handleOptionsResize);
+    this.resizeTimer?.remove();
+    this.resizeTimer = null;
+    this.quitConfirmation?.destroy();
+    this.quitConfirmation = null;
     this.settingsPersistTimer?.remove();
     this.settingsPersistTimer = null;
     this.feedbackReportUi?.destroy();

@@ -1,3 +1,4 @@
+import { shakeGameplayCamera } from '../../vfx/GameplayCameraShake.ts';
 import { SeededRandom } from '../../systems/SeededRandom.ts';
 import { HotPackageVisualController, type HotPackageQuality as PackageQuality } from '../visuals/HotPackageVisualController.ts';
 import type {
@@ -107,7 +108,7 @@ export class HotPackageEvent implements ArcadeEvent {
     }
     if (activeElapsedMs >= this.landedAt && !this.landedCueSent) {
       this.landedCueSent = true;
-      this.context.scene.cameras.main.shake(130, 0.0023);
+      shakeGameplayCamera(this.context.scene, 130, 0.0023);
       this.context.playArcadeCue('hot-package-impact');
     }
     if (activeElapsedMs < this.landedAt) {

@@ -13,6 +13,8 @@
       for(let cycle=0;cycle<3;cycle++)for(const candidate of selected){
         if(!scene.sys.isActive()){game.scene.start(scene.scene.key);await wait(100);}
         const visuals=new ArenaVisualRenderer(scene,candidate.layout);
+        if(Object.keys(game.textures.list).some(key=>key.startsWith('arena-stadium-setup-')))
+          throw new Error('Temporary stadium canvas survived setup');
         scene.cameras.main.setBounds(0,0,2400,1600).setZoom(.9).centerOn(1200,800);await wait(100);
         const handles=new Set();
         const visit=o=>{const handle=o.type==='RenderTexture'?o.texture.getWebGLTexture()?.webGLTexture:null;

@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import type { RectSpec } from '../types.ts';
+import type { ArenaLayout, RectSpec } from '../types.ts';
 import { SeededRandom } from '../systems/SeededRandom.ts';
 import { bakeStaticGraphics } from './bakeStaticGraphics.ts';
 
@@ -19,6 +19,7 @@ export interface EnvironmentDecalSpec {
   motif: EnvironmentGraffitiMotif;
   dripCount: number;
   surfaceIndex: number;
+  placement?: 'wall' | 'floor';
 }
 
 export interface EnvironmentDecalPlan {
@@ -37,7 +38,6 @@ const HEIST_TAGS = [
   'CONTAIN', 'AUTHORIZED ONLY', 'DO NOT OPEN', 'COLD VAULT'
 ] as const;
 
-const PAINT_COLORS = [0x6eb6bd, 0xa9749b, 0xb7a479, 0x5d8d78, 0x8591a3] as const;
 const EMISSIVE_COLORS = [0x4deeff, 0xff51c8, 0x8cff9b, 0xffc857] as const;
 const GRAFFITI_MOTIFS: readonly EnvironmentGraffitiMotif[] = ['tag', 'warning-eye', 'glitch-face', 'bolt', 'arrow'];
 
@@ -72,8 +72,8 @@ export const createEnvironmentDecalPlan = (
       y: surface.y + surface.h * 0.5,
       rotation: horizontal ? random.float(-0.035, 0.035) : Math.PI * 0.5 + random.float(-0.025, 0.025),
       text,
-      color: finish === 'emissive' ? random.pick(EMISSIVE_COLORS) : random.pick(PAINT_COLORS),
-      alpha: finish === 'emissive' ? 0.64 : finish === 'warning' ? 0.52 : random.float(0.3, 0.48),
+      color: random.pick(EMISSIVE_COLORS),
+      alpha: finish === 'emissive' ? 0.64 : finish === 'warning' ? 0.52 : random.float(0.38, 0.5),
       fontSize,
       finish,
       motif: random.pick(GRAFFITI_MOTIFS),
@@ -82,6 +82,41 @@ export const createEnvironmentDecalPlan = (
     });
   }
   return { identity, maximumDecals, decals };
+};
+
+/** Selected complete floor panels, with clear space around objectives and
+ * spawns. These marks use part of the existing decal allowance. They never
+ * influence generation, traversal, physics, or placement legality. */
+export const createArenaFloorDecalPlan = (
+  layout: ArenaLayout, panelWidth: number, panelHeight: number, maximumDecals = 2
+): EnvironmentDecalSpec[] => {
+  const bounds = layout.generation.bounds;
+  const blockers: RectSpec[] = [...layout.walls, ...layout.obstacles.map(o => ({ x: o.x - o.w / 2, y: o.y - o.h / 2, w: o.w, h: o.h })),
+    ...layout.smashables.map(o => {
+      const diameter = Math.hypot(o.width, o.height);
+      return { x: o.x - diameter / 2, y: o.y - diameter / 2, w: diameter, h: diameter };
+    })];
+  const candidates: { x: number; y: number; index: number }[] = [];
+  let index = 0;
+  for (let y = bounds.y + panelHeight; y + panelHeight < bounds.y + bounds.h; y += panelHeight) {
+    for (let x = bounds.x + panelWidth; x + panelWidth < bounds.x + bounds.w; x += panelWidth) {
+      const center = { x: x + panelWidth / 2, y: y + panelHeight / 2, index: index++ };
+      if (blockers.some(b => x < b.x + b.w + 20 && x + panelWidth > b.x - 20 && y < b.y + b.h + 20 && y + panelHeight > b.y - 20)) continue;
+      if ([layout.playerSpawn, ...layout.bombSites, ...layout.enemySpawns].some(p => Math.hypot(p.x - center.x, p.y - center.y) < 230)) continue;
+      candidates.push(center);
+    }
+  }
+  const random = new SeededRandom((layout.seed ^ 0x5041494e) >>> 0);
+  const decals: EnvironmentDecalSpec[] = [];
+  for (const candidate of random.shuffle(candidates)) {
+    if (decals.length >= Math.max(0, Math.min(2, maximumDecals))) break;
+    if (decals.some(d => Math.hypot(d.x - candidate.x, d.y - candidate.y) < 480)) continue;
+    decals.push({ x: candidate.x, y: candidate.y, rotation: -0.035, text: random.pick(['GRID GHOST', 'LIVE//WIRE', 'VOID CREW']),
+      color: random.pick([0x4deeff, 0xff51c8, 0x8cff9b]), alpha: 0.3, fontSize: 12,
+      finish: 'emissive', motif: random.pick(['bolt', 'warning-eye', 'glitch-face'] as const),
+      dripCount: 0, surfaceIndex: candidate.index, placement: 'floor' });
+  }
+  return decals;
 };
 
 export const createEnvironmentDecalText = (
@@ -120,6 +155,16 @@ export const createEnvironmentGraffitiArt = (
     .setAlpha(Math.min(0.88, spec.alpha + 0.16));
   const paint = scene.make.graphics({ x: 0, y: 0 }, false);
   const dark = spec.finish === 'emissive' ? 0x04030b : 0x071018;
+
+  // A broad low-opacity light spill and a sharp secondary-color underline
+  // read as neon pigment. Both are part of the existing small texture bake.
+  const secondary = spec.color === 0xff51c8 ? 0x4deeff : 0xff51c8;
+  paint.lineStyle(9, spec.color, 0.1);
+  paint.lineBetween(-width * 0.43, height * 0.25, width * 0.45, -height * 0.18);
+  paint.lineStyle(2, secondary, 0.6);
+  paint.lineBetween(-width * 0.25, height * 0.4, width * 0.34, height * 0.25);
+  paint.lineStyle(1, 0xe5ffff, 0.72);
+  paint.lineBetween(width * 0.35, height * 0.25, width * 0.44, height * 0.2);
 
   // Irregular sprayed backing and overspray dots keep the mark organic.
   paint.lineStyle(Math.max(5, spec.fontSize * 0.56), dark, 0.56);
@@ -190,10 +235,11 @@ export const createEnvironmentGraffitiArt = (
       color: `#${spec.color.toString(16).padStart(6, '0')}`,
       stroke: `#${dark.toString(16).padStart(6, '0')}`,
       strokeThickness: spec.finish === 'emissive' ? 4 : 3,
-      letterSpacing: 0
+      letterSpacing: 0,
+      shadow: { color: `#${spec.color.toString(16).padStart(6, '0')}`, blur: 5, fill: true, stroke: false }
     }
-  }, false).setOrigin(0.5).setAngle(((spec.surfaceIndex % 3) - 1) * 2);
-  // Only the unchanged paint is baked. Keep the tag's text resolution and the
+  }, false).setPadding(6).setResolution(2).setOrigin(0.5).setAngle(((spec.surfaceIndex % 3) - 1) * 2);
+  // Paint remains baked. Keep the tag's text resolution and the
   // container's rotation/opacity, with its existing owner retiring both.
   const cachedPaint = bakeStaticGraphics(scene, paint, {
     x: -width * 0.5 - 16, y: -height * 0.5 - 16, w: width + 32, h: height + 40

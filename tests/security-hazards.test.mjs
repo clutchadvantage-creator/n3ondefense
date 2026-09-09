@@ -168,7 +168,7 @@ test('bomblet detonations apply a restrained non-restarting camera shake', () =>
   assert.ok(BOMBLET_HAZARD_BALANCE.cameraShakeDurationMs > 0);
   assert.ok(BOMBLET_HAZARD_BALANCE.cameraShakeIntensity > 0);
   assert.ok(BOMBLET_HAZARD_BALANCE.cameraShakeIntensity < 0.01);
-  assert.match(bomblets, /cameras\.main\.shake\(config\.cameraShakeDurationMs, config\.cameraShakeIntensity, false\)/);
+  assert.match(bomblets, /shakeGameplayCamera\(this\.scene, config\.cameraShakeDurationMs, config\.cameraShakeIntensity, false\)/);
 });
 
 test('bomblets share the bounded mine nebula renderer without temporary blast objects', () => {

@@ -78,8 +78,9 @@ test('arena presentation uses illustrated graffiti, dimensional walls, hazard bl
 
 test('simultaneous entry at a rectangle corner cannot reflect the remaining dash backwards', () => {
   const result = resolveSweptCircleMotion(50, 50, 200, 200, 12, [{x:100,y:100,w:20,h:20}]);
-  assert.ok(result.x > 87 && result.x < 88);
-  assert.ok(result.y > 87 && result.y < 88);
+  assert.ok(result.x > 91 && result.x < 92);
+  assert.ok(result.y > 91 && result.y < 92);
+  assert.ok(Math.hypot(100-result.x, 100-result.y) >= 12);
 });
 
 test('repeated boosted motion slides along joined walls without crossing a seam', () => {

@@ -224,7 +224,8 @@ test('player mine explosions use the shared explosion audio and dedicated red-or
   assert.match(vfx, /compact plasma afterglow/i);
   assert.match(vfx, /applyExplosionCameraImpulse\(this\.scene, impulseSource\)/);
   assert.match(impulse, /mine: \{ durationMs: 260, intensity: 0\.008 \}/);
-  assert.match(impulse, /scene\.cameras\.main\.shake\(impulse\.durationMs, impulse\.intensity, false\)/);
+  const shake = readFileSync(new URL('../src/game/vfx/GameplayCameraShake.ts', import.meta.url), 'utf8');
+  assert.match(shake, /shakeGameplayCamera\(scene, impulse\.durationMs, impulse\.intensity, false\)/);
 });
 
 test('star death mine explosion reuses every player-mine FX layer with pink-cyan colors', () => {

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { drawBeveledTechPlate, drawHazardStripes, drawPanelBolts } from '../../rendering/LayeredArtPrimitives.ts';
+import { drawBeveledTechPlate, drawPanelBolts } from '../../rendering/LayeredArtPrimitives.ts';
+import { bakeStaticGraphics } from '../../rendering/bakeStaticGraphics.ts';
 import { SharedFireTrapSystem, type SharedFireTrapPlacement } from '../../hazards/SharedFireTrapSystem.ts';
 import { getFireHazardDamageProfile } from '../../config/fireHazards.ts';
 import type { RunProtocolId } from '../../mods/types.ts';
@@ -17,6 +18,8 @@ interface TrapRuntime {
   stateStartedAt: number;
   nextReadyAt: number;
   damageApplied: boolean;
+  leftJaw?: Phaser.GameObjects.Polygon;
+  rightJaw?: Phaser.GameObjects.Polygon;
 }
 
 export interface HeistTrapCallbacks {
@@ -51,21 +54,18 @@ const createSpikeTrap = (scene: Phaser.Scene, placement: MechanicalPlacement): T
   const root = scene.add.container(placement.x, placement.y).setRotation(placement.rotation).setDepth(4);
   const base = scene.add.graphics();
   drawBeveledTechPlate(base, -72, -58, 144, 116, {
-    face: 0x101e28, inset: 0x030810, edge: 0x5d7d88, side: 0x010408,
-    highlight: 0xc7f8ff, depth: 8
+    face: 0x0a1924, inset: 0x07131d, edge: 0x263b48, side: 0x040b12,
+    highlight: 0x47606c, depth: 2
   });
-  drawHazardStripes(base, -59, -47, 118, 10, 0xffc857, 0.64, 9);
-  drawPanelBolts(base, -62, -48, 124, 96, 0x9eb2b8, 12);
-  base.fillStyle(0x07111a, 0.95).fillRoundedRect(-54, 34, 108, 12, 4);
-  base.lineStyle(1.5, 0x54e5f5, 0.48).strokeRoundedRect(-54, 34, 108, 12, 4);
+  drawPanelBolts(base, -62, -48, 124, 96, 0x425662, 12);
+  base.lineStyle(1, 0x1e3441, .8).lineBetween(-62,34,62,34);
   for (let index = -2; index <= 2; index += 1) {
-    base.fillStyle(0x314954, 0.92).fillCircle(index * 22, 38, 4.5);
-    base.lineStyle(1, index % 2 ? 0xff674f : 0x75efff, 0.72).strokeCircle(index * 22, 38, 6.5);
-    base.fillStyle(0x010408, 0.92).fillRoundedRect(index * 22 - 7, -23, 14, 54, 3);
+    base.fillStyle(0x040c14, .9).fillRoundedRect(index * 22 - 2, -28, 4, 54, 1);
+    base.lineStyle(1, 0x233a46, .5).lineBetween(index*22+3,-28,index*22+3,26);
   }
-  const warningLight = scene.add.circle(0, 42, 6, 0x293840, 1).setStrokeStyle(2, 0xffc857, 0.55);
-  const dynamic = scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-  root.add([base, warningLight, dynamic]);
+  const warningLight = scene.add.circle(0, 42, 3, 0x293840, 1);
+  const dynamic = scene.add.graphics();
+  root.add([bakeStaticGraphics(scene,base,{x:-80,y:-66,w:160,h:134}), warningLight, dynamic]);
   return { placement, root, dynamic, warningLight, state: 'idle', stateStartedAt: 0,
     nextReadyAt: 1_200 + placement.y % 1_200, damageApplied: false };
 };
@@ -84,15 +84,17 @@ const createSnagTrap = (scene: Phaser.Scene, placement: MechanicalPlacement): Tr
   base.lineStyle(1.5, 0x6eeafa, 0.65).strokeCircle(0, 0, 36);
   base.lineStyle(1.5, 0xff5bd7, 0.48).strokeCircle(0, 0, 43);
   const leftJaw = scene.add.polygon(-32, 0, [-22, -30, 2, -17, 15, 0, 2, 17, -22, 30], 0x26374a, 1)
-    .setStrokeStyle(2, 0x67eaff, 0.82);
+    .setOrigin(0, 0).setStrokeStyle(2, 0x67eaff, 0.82);
   const rightJaw = scene.add.polygon(32, 0, [22, -30, -2, -17, -15, 0, -2, 17, 22, 30], 0x34233f, 1)
-    .setStrokeStyle(2, 0xff5bd7, 0.82);
+    .setOrigin(0, 0).setStrokeStyle(2, 0xff5bd7, 0.82);
+  // These vertices are authored around (0, 0). Phaser's default half-size
+  // origin would shift both jaws above/left of their mechanical anchors.
   const core = scene.add.circle(0, 0, 13, 0x070913, 1).setStrokeStyle(3, 0xcf77ff, 0.88);
   const warningLight = scene.add.circle(0, 0, 5, 0x4b3559, 1).setStrokeStyle(1, 0xffffff, 0.72);
   const dynamic = scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-  root.add([base, leftJaw, rightJaw, core, warningLight, dynamic]);
+  root.add([bakeStaticGraphics(scene,base,{x:-68,y:-60,w:146,h:130}), leftJaw, rightJaw, core, warningLight, dynamic]);
   return { placement, root, dynamic, warningLight, state: 'idle', stateStartedAt: 0,
-    nextReadyAt: 1_500 + placement.x % 1_600, damageApplied: false };
+    nextReadyAt: 1_500 + placement.x % 1_600, damageApplied: false, leftJaw, rightJaw };
 };
 
 /** HEIST retains its spike/snare machinery here while fire is delegated to
@@ -226,10 +228,13 @@ export class HeistTrapSystem {
       : telegraph > 0.72 ? 0xff3f31 : telegraph > 0.35 ? 0xff923d : telegraph > 0 ? 0xffd45c : 0x31404a,
     trap.state === 'idle' ? 0.65 : blink ? 1 : 0.42);
     if (trap.placement.type === 'spike') {
+      // A closed floor shutter has no exposed blades. The full existing
+      // warning window announces the dangerous area before extension.
+      if (trap.state === 'idle' || trap.state === 'cooldown') return;
       const extension = trap.state === 'active'
         ? 1 - Math.abs(Phaser.Math.Clamp(elapsed / timing.active, 0, 1) * 2 - 1) * 0.12
-        : telegraph * 0.16;
-      for (let index = -2; index <= 2; index += 1) {
+        : 0;
+      for (let index = -2; extension > 0 && index <= 2; index += 1) {
         const x = index * 22;
         const height = 18 + extension * (54 + Math.abs(index) * 5);
         graphics.fillStyle(0x02060a, 0.7).fillTriangle(x - 10, 28, x + 12, 28, x + 4, -height + 7);
@@ -237,10 +242,23 @@ export class HeistTrapSystem {
           .fillTriangle(x - 8, 24, x + 8, 24, x, -height);
         graphics.fillStyle(0xdafcff, 0.74).fillTriangle(x - 4, 18, x, -height, x + 1, 15);
       }
-      if (trap.state === 'telegraph') graphics.lineStyle(2, telegraph > 0.7 ? 0xff5749 : 0xffc857,
-        0.28 + telegraph * 0.48).strokeRoundedRect(-65, -51, 130, 102, 8);
+      if (trap.state === 'telegraph') {
+        graphics.fillStyle(0xff953e,.035+telegraph*.07).fillCircle(0,0,86);
+        graphics.lineStyle(2, telegraph > 0.7 ? 0xff5749 : 0xffc857,
+          0.42 + telegraph * 0.48).strokeCircle(0,0,86);
+        graphics.lineStyle(3,0xffd178,.9).beginPath().arc(0,0,78,-Math.PI/2,-Math.PI/2+telegraph*Math.PI*2).strokePath();
+        for(let index=-2;index<=2;index++) graphics.lineStyle(1,0xff9451,telegraph*.8)
+          .lineBetween(index*22,-26,index*22,26);
+      }
     } else {
       const active = trap.state === 'active';
+      const closure = active ? 1 : telegraph*.6;
+      trap.leftJaw?.setX(-32+closure*23).setAngle(-closure*8);
+      trap.rightJaw?.setX(32-closure*23).setAngle(closure*8);
+      if(trap.state==='telegraph') {
+        graphics.lineStyle(2,0xcc8aff,.45+telegraph*.45).strokeCircle(0,0,82);
+        graphics.lineStyle(3,0xffa7e9,.8).beginPath().arc(0,0,75,-Math.PI/2,-Math.PI/2+telegraph*Math.PI*2).strokePath();
+      }
       const radius = active ? 28 + Math.sin(now * 0.018) * 5 : 12 + telegraph * 16;
       graphics.lineStyle(active ? 4 : 2, 0xb65cff, active ? 0.88 : 0.28 + telegraph * 0.5)
         .strokeCircle(0, 0, radius);
@@ -261,5 +279,12 @@ export class HeistTrapSystem {
       .strokeEllipse(this.snaredX, this.snaredY, 58 + pulse * 10, 34 + pulse * 5);
     this.restraintOverlay.lineStyle(3, 0xff5bd8, 0.64 + (1 - pulse) * 0.28)
       .strokeEllipse(this.snaredX, this.snaredY, 38 + pulse * 6, 62 + pulse * 8);
+    for(let side=0;side<4;side++) {
+      const angle=side*Math.PI/2+Math.PI/4;
+      const x=this.snaredX+Math.cos(angle)*36,y=this.snaredY+Math.sin(angle)*30;
+      this.restraintOverlay.lineStyle(2,side%2?0xf098eb:0x8df4ff,.8)
+        .lineBetween(x,y,this.snaredX+Math.cos(angle)*19,this.snaredY+Math.sin(angle)*14);
+      this.restraintOverlay.fillStyle(0xcbf9ff,.7).fillRect(x-3,y-3,6,6);
+    }
   }
 }

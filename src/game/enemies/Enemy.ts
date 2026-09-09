@@ -34,6 +34,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private damageFlashUntil = 0;
   private damageFlashActive = false;
   private visualTintOverride: number | null = null;
+  private mechanicalDistance = 0;
+  private mechanicalFrame = 0;
+  private lastMechanicalAt = -1;
 
   get hazardRadius(): number {
     return this.stats.size * 0.45;
@@ -79,6 +82,24 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (!this.damageFlashActive || now < this.damageFlashUntil) return;
     this.damageFlashActive = false;
     if (this.active) this.restoreVisualPalette();
+  }
+
+  updateMechanicalPresentation(now: number): void {
+    if (!this.active || now === this.lastMechanicalAt || now < this.disabledUntil || !this.texture.has('3')) return;
+    this.lastMechanicalAt = now;
+    const body = this.body as Phaser.Physics.Arcade.Body | null;
+    const distance = body ? Math.hypot(body.deltaX(),body.deltaY()) : 0;
+    const moving = distance > .05;
+    this.mechanicalDistance += moving ? Math.min(16,distance) : 0;
+    const tracked = this.stats.type === 'tank';
+    const frame = moving ? Math.floor(this.mechanicalDistance / 6) % 4
+      : tracked ? this.mechanicalFrame : Math.floor((now + this.stats.size*37) / 190) % 4;
+    if(frame !== this.mechanicalFrame) {
+      this.mechanicalFrame = frame;
+      // Every frame has identical dimensions/origin; physics, facing, tint,
+      // hit flashes, and special encounter stats retain their existing owners.
+      this.setFrame(frame);
+    }
   }
 
   /** Used by special encounters without permanently destroying the authored palette. */

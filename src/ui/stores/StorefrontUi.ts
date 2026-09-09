@@ -242,7 +242,7 @@ export class StorefrontUi {
       back.className = 'store-back';
       back.dataset.controllerFocusId = 'store-main-menu';
       back.dataset.controllerGroup = 'store-header-actions';
-      back.textContent = 'MAIN MENU';
+      back.textContent = 'BACK TO MAIN MENU';
       back.addEventListener('click', this.options.onBack);
       actions.append(back);
     }

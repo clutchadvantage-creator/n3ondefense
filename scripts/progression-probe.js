@@ -32,6 +32,10 @@ export async function createProgressionProbe(game, report) {
   restores.push(()=>Storage.prototype.setItem=setItem);
   for(const key of ['preRender','render','postRender'])wrap(game.renderer,key,`renderer.${key}`);
   const arena=game.scene.getScene('arena');
+  // Inclusive setup/transition timings, outside steady combat hot paths.
+  for (const key of ['create', 'startRoundRuntime', 'initializeStandardRound', 'initializeBossRound',
+    'drawProceduralArena', 'prepareCombatRuntime', 'createHudLayer', 'createCombatPools',
+    'createCombatPresentationSystems', 'endCurrentRoundRuntime', 'completeRound']) wrap(arena,key,`setup.${key}`);
   for(const key of ['updateEnemies','updateProjectiles','updateHud','updatePickups','updateModPickups','updateTurrets','updateMines',
     'updateHazards','updateDefusers','updatePlayerShooting','createRoundFromDefinition','endCurrentRoundRuntime','completeRound'])wrap(arena,key,`arena.${key}`);
   // Arcade World.update contains the first fixed step inline; step alone only

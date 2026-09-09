@@ -1,5 +1,6 @@
 import type { RectSpec } from '../../types.ts';
 import { SeededRandom } from '../../systems/SeededRandom.ts';
+import { findHeistWallMount } from './HeistRoomPlan.ts';
 
 export const HEIST_WORLD = { width: 5200, height: 3320 } as const;
 
@@ -333,7 +334,8 @@ const createTrapPlacements = (
   nodes: readonly HeistLayoutNode[],
   edges: readonly (readonly [string, string])[],
   excluded: ReadonlySet<string>,
-  random: SeededRandom
+  random: SeededRandom,
+  wallRects: readonly RectSpec[]
 ): HeistTrapPlacement[] => {
   const adjacency = adjacencyFor(nodes, edges);
   const candidates = shuffle(nodes.filter((node) => node.kind === 'facility' && !excluded.has(node.id)), random);
@@ -347,13 +349,15 @@ const createTrapPlacements = (
     const rotation = type === 'fire'
       ? (degree <= 1 || random.next() < 0.5 ? 0 : Math.PI * 0.5)
       : random.next() < 0.5 ? 0 : Math.PI * 0.5;
+    const mount = type === 'fire' ? findHeistWallMount({ wallRects }, node) : null;
+    if (type === 'fire' && !mount) continue;
     traps.push({
       id: `trap-${type}-${traps.length}`,
       type,
       nodeId: node.id,
-      x: node.x + (type === 'fire' ? Math.cos(rotation + Math.PI) * 118 : 0),
-      y: node.y + (type === 'fire' ? Math.sin(rotation + Math.PI) * 102 : 0),
-      rotation
+      x: mount?.x ?? node.x,
+      y: mount?.y ?? node.y,
+      rotation: mount?.rotation ?? rotation
     });
   }
   return traps;
@@ -418,7 +422,7 @@ const createLayoutAttempt = (seed: number, attempt: number): HeistFacilityLayout
     ...vaultDoors.map((door) => door.approachNodeId),
     ...entryPathIds.slice(0, 2)
   ]);
-  const trapPlacements = createTrapPlacements(nodes, edges, excludedTrapNodes, random);
+  const trapPlacements = createTrapPlacements(nodes, edges, excludedTrapNodes, random, wallRects);
   const trapNodes = new Set(trapPlacements.map((trap) => trap.nodeId));
   const supportCandidates = shuffle(facilityNodes.filter((node) => !trapNodes.has(node.id)
     && node.id !== entry.id && node.id !== extraction.id

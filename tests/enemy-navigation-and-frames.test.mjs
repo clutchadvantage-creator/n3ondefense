@@ -27,7 +27,7 @@ test('robot frames are generated once in Boot with authored multi-color palettes
   assert.match(enemySource, /setDisplaySize\(visualSize, visualSize\)/);
   assert.match(bootSource, /createDetailedEnemyRobotTextures\(g\)/);
   assert.match(artSource, /const SIZE = 72/);
-  assert.match(artSource, /Baked shadow keeps depth inexpensive/);
+  assert.match(artSource, /fillCircle\(36,\s*36/);
   assert.match(artSource, /drawGrunt/);
   assert.match(artSource, /drawShooter/);
   assert.match(artSource, /drawDefuser/);

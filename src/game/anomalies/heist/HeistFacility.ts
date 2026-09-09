@@ -22,6 +22,8 @@ import {
   type HeistVaultDoorSpec
 } from './HeistFacilityLayout.ts';
 import { HeistWallPointIndex, normalizeHeistWallJunctions, exposedHeistWallEdges } from './HeistWallRuntime.ts';
+import { createHeistRoomPlan } from './HeistRoomPlan.ts';
+import { createHeistRoomDetails } from './HeistFacilityDetails.ts';
 import {
   HEIST_ZONE_ALPHA,
   HeistZoneVisibility,
@@ -58,6 +60,7 @@ export interface HeistFacilityRuntime {
     wallIndexMaximumCandidates: number;
     staticTextureObjects: number;
     visibilityZones: number;
+    detailedRooms: number;
   };
   setVaultDoorOpen(open: boolean): void;
   setAlertLighting(active: boolean): void;
@@ -75,7 +78,7 @@ export interface HeistFacilityRuntime {
 
 interface WallVisual {
   rect: RectSpec;
-  cap: Phaser.GameObjects.Image;
+  cap: Phaser.GameObjects.TileSprite;
   facades: Phaser.GameObjects.TileSprite[];
 }
 
@@ -331,8 +334,12 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       ? HEIST_WALL_FACADE_TEXTURES.horizontalMagenta : HEIST_WALL_FACADE_TEXTURES.horizontalCyan;
     const sideFacadeTexture = magenta
       ? HEIST_WALL_FACADE_TEXTURES.verticalMagenta : HEIST_WALL_FACADE_TEXTURES.verticalCyan;
-    const cap = scene.add.image(rect.x - HEIST_WALL_PROJECTION_X, rect.y - HEIST_WALL_PROJECTION_Y, texture)
-      .setOrigin(0).setDisplaySize(rect.w, rect.h).setDepth(HEIST_WALL_CAP_DEPTH);
+    // The grounded footing makes the authoritative wall footprint visible.
+    // Repeating cap modules keep long merged runs from stretching hardware.
+    const footing = scene.add.rectangle(rect.x, rect.y, rect.w, rect.h, 0x142630)
+      .setOrigin(0).setDepth(.4);
+    const cap = scene.add.tileSprite(rect.x - HEIST_WALL_PROJECTION_X, rect.y - HEIST_WALL_PROJECTION_Y, rect.w, rect.h, texture)
+      .setOrigin(0).setDepth(HEIST_WALL_CAP_DEPTH);
     const facades: Phaser.GameObjects.TileSprite[] = [];
     for (const edge of exposedHeistWallEdges(rect, runtimeWallRects)) {
       if (edge.side === 'south') facades.push(scene.add.tileSprite(edge.x - HEIST_WALL_PROJECTION_X,
@@ -343,7 +350,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
         .setOrigin(0).setDepth(HEIST_WALL_FACE_DEPTH + 0.02));
     }
     wallVisuals.push({ rect, cap, facades });
-    staticVisuals.push(cap, ...facades);
+    staticVisuals.push(footing, cap, ...facades);
   }
 
   const vault = layout.vaultBounds;
@@ -356,14 +363,10 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
   drawHazardStripes(vaultGraphics, vault.x + 70, vault.y + vault.h - 80, vault.w - 140, 12, 0xff4f77, 0.52, 13);
   staticVisuals.push(vaultGraphics);
 
-  const textObjects = layout.nodes.filter((node) => node.kind === 'facility'
-    && (node.column + node.row * 2) % 11 === 0).slice(0, 12).map((node, index) => scene.add.text(
-      node.x - 128, node.y - 122,
-      index % 3 === 0 ? `RESEARCH SECTOR // ${String(index + 1).padStart(2, '0')}`
-        : index % 3 === 1 ? `SECURITY GRID // ${String.fromCharCode(65 + index % 6)}`
-          : `MAINTENANCE ACCESS // ${String(index + 3).padStart(2, '0')}`,
-      { fontFamily: 'Orbitron, sans-serif', fontSize: '13px', color: index % 2 ? '#8b416f' : '#39788d', letterSpacing: 1 }
-    ).setDepth(2));
+  const rooms = createHeistRoomPlan(layout);
+  const details = createHeistRoomDetails(scene, rooms, HEIST_WALL_PROJECTION_X, HEIST_WALL_PROJECTION_Y);
+  staticVisuals.push(...details.visuals);
+  const textObjects = details.labels;
   textObjects.push(scene.add.text(vault.x + vault.w * 0.5, vault.y + 112,
     'CENTRAL VAULT // PROVISIONAL ASSET STORAGE', {
       fontFamily: 'Orbitron, sans-serif', fontSize: '21px', color: '#ff6ed8', letterSpacing: 2,
@@ -514,7 +517,8 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       wallIndexBuckets: wallPointIndex.diagnostics.bucketCount,
       wallIndexMaximumCandidates: wallPointIndex.diagnostics.maximumCandidatesPerBucket,
       staticTextureObjects: staticVisuals.length,
-      visibilityZones: visibilityLayers.length
+      visibilityZones: visibilityLayers.length,
+      detailedRooms: rooms.length
     },
     setVaultDoorOpen: setDoorsOpen,
     setAlertLighting(active: boolean): void {

@@ -1,3 +1,4 @@
+import { shakeGameplayCamera } from '../../vfx/GameplayCameraShake.ts';
 import Phaser from 'phaser';
 import { RedlineVisualController } from '../visuals/RedlineVisualController.ts';
 import type {
@@ -106,7 +107,7 @@ export class RedlineEvent implements ArcadeEvent {
         protocol: this.context.protocol, elapsedMs: activeElapsedMs - this.startedAt,
         progress: 3, target: 3, success: true
       });
-      this.context.scene.cameras.main.shake(170, 0.0032);
+      shakeGameplayCamera(this.context.scene, 170, 0.0032);
       this.context.scene.cameras.main.flash(120, 70, 210, 255, false);
       this.visuals?.beginSuccess(activeElapsedMs);
       this.context.playArcadeCue('redline-rupture');

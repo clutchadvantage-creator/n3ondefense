@@ -73,7 +73,9 @@ test('stadium static detail and advertising are baked once instead of replaying 
 
   assert.match(source, /scene\.make\.graphics\(\{ x: 0, y: 0 \}, false\)/);
   assert.match(source, /scene\.add\.renderTexture\(0, 0, WORLD_WIDTH, WORLD_HEIGHT\)/);
-  assert.match(source, /cachedLayer\.draw\(\[graphics, \.\.\.labels\]\)/);
+  assert.match(source, /graphics\.generateTexture\(scratchKey, WORLD_WIDTH, WORLD_HEIGHT\)/);
+  assert.match(source, /cachedLayer\.draw\(\[stamp, \.\.\.labels\]\)/);
+  assert.match(source, /textures\.remove\(scratchKey\)/);
   assert.match(source, /graphics\.destroy\(\)/);
   assert.match(source, /staticSourceObjectsAfterBake: 0/);
   assert.match(source, /independentAnimationLoops: 1/);

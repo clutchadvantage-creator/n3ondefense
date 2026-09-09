@@ -46,8 +46,12 @@ export class SweptPlayerBody extends Phaser.Physics.Arcade.Body {
     this.newVelocity.set(this.position.x - this.prev.x, this.position.y - this.prev.y);
     this._dx = this.newVelocity.x;
     this._dy = this.newVelocity.y;
-    if (result.normalX && this.velocity.x * result.normalX < 0) this.velocity.x = 0;
-    if (result.normalY && this.velocity.y * result.normalY < 0) this.velocity.y = 0;
+    if (result.tangentX !== undefined && result.tangentY !== undefined) {
+      this.velocity.set(result.tangentX / delta, result.tangentY / delta);
+    } else {
+      if (result.normalX && this.velocity.x * result.normalX < 0) this.velocity.x = 0;
+      if (result.normalY && this.velocity.y * result.normalY < 0) this.velocity.y = 0;
+    }
     this.updateCenter();
     this.angle = Math.atan2(this.velocity.y, this.velocity.x);
     this.speed = this.velocity.length();

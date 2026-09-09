@@ -1,5 +1,7 @@
 # Layout performance audit
 
+Follow-up: the [presentation and transition audit](polish-and-transition-audit.md) measures the next setup-cost reduction and targeted graffiti, navigation, and settings refinements. The measurements below remain the baseline for that pass.
+
 This extends the [round 68 investigation](round-68-investigation.md) and [endgame validation](endgame-validation.md) to the shared layout renderer, early and middle progression, and noncombat screens. The completed layout sweep reduced average Arena layout renderer CPU from **3.251 to 0.420 ms per frame**, about **87%**, without changing accepted geometry, combat budgets, or the authored art commands. Both live mixed-gameplay runs and the Centaurus ending passed validation. Brief initialization hitches remain and are quantified below.
 
 ## Cause and correction

@@ -62,7 +62,7 @@ test('both Store scenes validate return data before rendering a secondary return
 
 test('active-run Store removes Main Menu from both DOM and controller focus instead of disabling it', () => {
   const ui = readFileSync(new URL('../src/ui/stores/StorefrontUi.ts', import.meta.url), 'utf8');
-  assert.match(ui, /if \(this\.options\.onBack\) \{[\s\S]*?back\.textContent = 'MAIN MENU'/);
+  assert.match(ui, /if \(this\.options\.onBack\) \{[\s\S]*?back\.textContent = 'BACK TO MAIN MENU'/);
   assert.match(ui, /onBack\?\(\): void/);
   assert.doesNotMatch(ui, /back\.disabled\s*=/);
 });

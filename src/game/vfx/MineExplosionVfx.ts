@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { applyExplosionCameraImpulse, type ExplosionImpulseSource } from './ExplosionCameraImpulse.ts';
+import type { ExplosionImpulseSource } from './ExplosionCameraImpulse.ts';
+import { applyExplosionCameraImpulse } from './GameplayCameraShake.ts';
 
 export type ExplosionPalette = readonly [core: number, primary: number, secondary: number, outer: number];
 

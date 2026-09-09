@@ -1,3 +1,4 @@
+import { shakeGameplayCamera } from '../vfx/GameplayCameraShake.ts';
 import Phaser from 'phaser';
 import { grenadeTouchesSmashable } from '../arena/SmashableCombatQuery.ts';
 import { followGameplayPlayer, GAMEPLAY_CAMERA_ZOOM, GAMEPLAY_CAMERA_FOLLOW_LERP } from '../systems/GameplayCamera.ts';
@@ -1061,6 +1062,7 @@ export class ArenaScene extends Phaser.Scene {
     this.events.on('return-from-mod-collection', this.onReturnFromModCollection);
     this.events.on('return-from-store', this.onReturnFromStore);
     this.events.on('quit-from-store', this.onQuitFromStore);
+    this.events.on('quit-from-options', this.onQuitFromStore);
     this.events.on('anomaly-return', this.onAnomalyReturn);
     this.events.on(Phaser.Scenes.Events.WAKE, this.onArenaWoken);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
@@ -2642,6 +2644,7 @@ export class ArenaScene extends Phaser.Scene {
     for (const enemy of this.enemies) {
       if (!enemy.active || enemy.isDead()) continue;
       enemy.updateDamageFlash(now);
+      enemy.updateMechanicalPresentation(now);
 
       if (enemy.getData('arcadeMovementControlled')) {
         gasHazard?.carveVisualTunnel(
@@ -6336,7 +6339,7 @@ export class ArenaScene extends Phaser.Scene {
     // `bomb` is routed through AudioManager's same pooled bomblet recording
     // used by mines, while retaining the player's independent Explosion slider.
     this.audio.playSfx('bomb');
-    this.cameras.main.shake(760, 0.02);
+    shakeGameplayCamera(this, 760, 0.02);
     this.physics.world.timeScale = 0.35;
     this.mineExplosionVfx.emitColors(
       site.x,
@@ -6860,7 +6863,7 @@ export class ArenaScene extends Phaser.Scene {
       );
     }
     if (attack === 'brawler-pounce' || attack === 'brawler-super' || attack === 'artillery-strike') {
-      this.cameras.main.shake(135, attack === 'brawler-super' ? 0.004 : 0.0025);
+      shakeGameplayCamera(this, 135, attack === 'brawler-super' ? 0.004 : 0.0025);
     }
     this.fluxCores?.damageArea(x, y, radius, damage, 'boss');
     this.arenaSmashables?.damageArea(x, y, radius, damage);
@@ -6984,6 +6987,7 @@ export class ArenaScene extends Phaser.Scene {
     for (const enemy of this.bossSupportEnemies) {
       if (!enemy.active || enemy.isDead()) continue;
       enemy.updateDamageFlash(now);
+      enemy.updateMechanicalPresentation(now);
       this.gasHazard?.carveVisualTunnel(enemy.x, enemy.y, GAS_HAZARD_BALANCE.enemyTunnelRadius);
 
       const target = this.getSecondaryTurretTarget(enemy, now);
@@ -7114,7 +7118,7 @@ export class ArenaScene extends Phaser.Scene {
     this.mechanicalDestructionVfx.emitBossStage(
       archetype, encounter.boss.x, encounter.boss.y, BOSS_ARCHETYPES[archetype].color, this.time.now, true
     );
-    this.cameras.main.shake(360, 0.006);
+    shakeGameplayCamera(this, 360, 0.006);
     this.cameras.main.flash(180, 150, 240, 255);
     encounter.boss.setVisible(false).setActive(false);
     this.showBanner(remaining > 0
@@ -7239,7 +7243,7 @@ export class ArenaScene extends Phaser.Scene {
           this.time.now,
           false
         );
-        this.cameras.main.shake(120 + index * 18, 0.0022 + index * 0.0006);
+        shakeGameplayCamera(this, 120 + index * 18, 0.0022 + index * 0.0006);
       });
       this.bossSequenceTimers.push(timer);
     }
@@ -7250,7 +7254,7 @@ export class ArenaScene extends Phaser.Scene {
         snapshot.archetype, snapshot.x, snapshot.y, snapshot.color, this.time.now, true
       );
       this.cameras.main.flash(360, 255, 230, 190);
-      this.cameras.main.shake(480, 0.008);
+      shakeGameplayCamera(this, 480, 0.008);
       snapshot.encounter.boss.setVisible(false).setActive(false);
       this.beginBossLootCollection(snapshot.x, snapshot.y);
     }));
@@ -9364,6 +9368,7 @@ export class ArenaScene extends Phaser.Scene {
     this.events.off('return-from-mod-collection', this.onReturnFromModCollection);
     this.events.off('return-from-store', this.onReturnFromStore);
     this.events.off('quit-from-store', this.onQuitFromStore);
+    this.events.off('quit-from-options', this.onQuitFromStore);
     this.events.off('anomaly-return', this.onAnomalyReturn);
     this.events.off(Phaser.Scenes.Events.WAKE, this.onArenaWoken);
     this.events.off(Phaser.Scenes.Events.RENDER, this.onFirstArenaRenderAfterAnomaly, this);

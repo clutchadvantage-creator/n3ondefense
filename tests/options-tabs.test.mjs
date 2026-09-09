@@ -18,7 +18,7 @@ test('Options uses five data-driven tabs and defaults every scene opening to Aud
     ['AUDIO', 'GAMEPLAY', 'INTERFACE', 'PROFILE', 'SYSTEM']
   );
   assert.match(options, /private activeTab: OptionsTabId = 'audio'/);
-  assert.match(options, /this\.resetTransientUiState\(\)[\s\S]*?this\.selectTab\('audio'\)/);
+  assert.match(options, /this\.resetTransientUiState\(\)[\s\S]*?this\.selectTab\(data\?\.presentation\?\.tab \?\? 'audio'\)/);
   assert.doesNotMatch(options, /setSettings\(\{[^}]*activeTab/);
 });
 
@@ -82,7 +82,7 @@ test('button jiggle is profile-backed and the keybind reset occupies the empty f
 });
 
 test('feedback dialog can be launched from System without mounting its old floating button', () => {
-  assert.match(options, /mountFeedbackReportUi\(getGameUiRoot\(\), \{ showLaunchButton: false \}\)/);
+  assert.match(options, /mountFeedbackReportUi\(getGameUiRoot\(\), \{\s*showLaunchButton: false,/);
   assert.match(feedback, /export interface FeedbackReportHandle \{[\s\S]*?open\(\): void/);
   assert.match(feedback, /if \(options\.showLaunchButton !== false\) root\.append\(launchButton\)/);
   assert.match(feedback, /return \{[\s\S]*?open,[\s\S]*?destroy:/);

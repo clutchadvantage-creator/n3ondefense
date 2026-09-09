@@ -2,6 +2,8 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {dirname} from 'node:path';
 const output=process.argv[2]??'artifacts/layout-audit.json';
 const port=Number(process.env.N3ON_CDP_PORT??9225);
+const cpuRate=Number(process.env.N3ON_CPU_RATE??1);
+if(!Number.isFinite(cpuRate)||cpuRate<1||cpuRate>20)throw new Error('N3ON_CPU_RATE must be between 1 and 20');
 const targets=await fetch(`http://127.0.0.1:${port}/json/list`).then(r=>r.json());
 const target=targets.find(t=>t.type==='page'&&/^http:\/\/(localhost|127\.0\.0\.1):/.test(t.url));
 if(!target)throw new Error('Isolated DEV browser required');
@@ -23,9 +25,11 @@ socket.addEventListener('message',event=>{
   if(message.method==='Runtime.bindingCalled'&&message.params.name==='__n3onSaveLayoutCheckpoint')
     writes=writes.then(()=>writeFile(output.replace(/\.json$/,'.partial.json'),message.params.payload)).catch(e=>writeError=e);
 });
+let cpuApplied=false;
 try{
   if(await evaluate(`Boolean(globalThis.__n3onLayoutAudit?.running||globalThis.__n3onMixedSoak?.running)`))
     throw new Error('Another browser fixture is still running');
+  if(cpuRate!==1){await call('Emulation.setCPUThrottlingRate',{rate:cpuRate});cpuApplied=true;}
   await call('Runtime.addBinding',{name:'__n3onSaveLayoutCheckpoint'});
   await evaluate(`globalThis.__n3onLayoutAuditOptions=${JSON.stringify(JSON.parse(process.env.N3ON_LAYOUT_OPTIONS??'{}'))}`);
   console.log(await evaluate(await readFile(new URL(process.argv[3]??'./benchmark-layout-costs.browser.js',import.meta.url),'utf8')));
@@ -35,7 +39,11 @@ try{
     console.log(JSON.stringify(state));
   }while(state.running);
   const report=await evaluate(`(({promise,...report})=>report)(__n3onLayoutAudit)`);
+  report.cpuThrottleRate=cpuRate;
   await writes;if(writeError)throw writeError;
   await writeFile(output,JSON.stringify(report,null,2)+'\n');
   if(report.errors.length)process.exitCode=1;
-}finally{socket.close();}
+}finally{
+  try{if(cpuApplied)await call('Emulation.setCPUThrottlingRate',{rate:1});}
+  finally{socket.close();}
+}

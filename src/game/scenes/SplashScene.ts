@@ -10,6 +10,7 @@ interface SplashSceneData {
   replay?: boolean;
   returnScene?: SceneKeyValue;
   resumeGameplay?: boolean;
+  resumePausedScene?: boolean;
   returnToOptions?: boolean;
 }
 
@@ -162,7 +163,8 @@ export class SplashScene extends Phaser.Scene {
         if (data?.returnToOptions === true) {
           this.scene.start(SceneKeys.Options, {
             returnScene: returnScene === SceneKeys.Arena ? SceneKeys.MainMenu : returnScene,
-            resumeGameplay: false
+            resumeGameplay: false,
+            resumePausedScene: data.resumePausedScene === true
           });
           return;
         }
