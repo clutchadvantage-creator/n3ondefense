@@ -12,7 +12,7 @@ A separate comparison of **100 seeds** preserved accepted seeds, maze nodes and 
 
 Existing side chambers now receive five facility identities: coolant exchange, signal relay, security control, bonded storage, and maintenance. Twenty-four selected chambers receive quiet floor schematics, room labels, equipment codes, and wall instrumentation. Placement favors side branches and avoids trap rooms, entry, extraction, and vault approaches. Raised fixtures fit inside the existing wall footprint; walkable floor details are flat. The 100-seed test checks deterministic placement and fixture containment. No new rooms, blockers, loot allowance, or maze routes were necessary.
 
-Wall caps now repeat their industrial panel texture at its authored pitch instead of stretching vents and hardware across long merged runs. Ground-level footings make the collision footprint easier to read beneath the existing projected upper walls. Existing exposed-edge facades, foreground fading, visibility zones, and colder lighting remain. Room details use ten fixed shared textures and the existing facility owner. This brings clearer purpose and landmarks to the facility without filling the movement lanes with props.
+Wall caps now repeat their industrial panel texture at its authored pitch instead of stretching vents and hardware across long merged runs. Cropped Images share the four cap textures; partial panels end at the projected wall bounds. This avoids a private repeat texture per wall while preserving foreground fading and the existing destruction owner. Ground-level footings make the collision footprint easier to read beneath the existing projected upper walls. Their solid rectangles share one Graphics batch, using direct rectangle commands without path triangulation or a world-sized texture. Existing exposed-edge facades, foreground fading, visibility zones, and colder lighting remain. Room details use ten fixed shared textures and the existing facility owner. This brings clearer purpose and landmarks to the facility without filling the movement lanes with props.
 
 ## Hazards and combat presentation
 
@@ -36,28 +36,69 @@ Main Menu/mode selection, Garage, stores, Mod Collection, profiles, leaderboards
 
 ## Rendering, setup, and resources
 
-The matched sweep uses a 1552 × 903 headless Edge viewport, DPR 1, WebGL, and normal 0.9 gameplay zoom. Edge reports an NVIDIA GeForce RTX 5070 through ANGLE/Direct3D11. Its fresh baseline avoids comparing a different viewport against the preceding pass. All **128 comparisons passed**: 108 generated Arena layouts across rounds 1/30/148, three authored hub-spoke drafts, nine HEIST views, and eight menu screens. Arena layout JSON remained identical. Authored drafts cover hub-spoke artwork and are not represented as accepted generated layouts.
+The sweep uses a 1552 × 903 headless Edge viewport, DPR 1, WebGL, and normal 0.9 gameplay zoom. Edge reports an NVIDIA GeForce RTX 5070 through ANGLE/Direct3D11. The original paired sweep ran on Edge 152 on September 9. Edge had updated to 153 when validation resumed on September 13; the final comparison therefore includes a browser change and does not isolate code cost alone.
 
-| Measurement | Before | After |
-| --- | ---: | ---: |
-| Arena layout renderer CPU, mean | 0.427 ms/frame | 0.453 ms/frame |
-| Arena visual setup, full sweep mean | 51.956 ms | 65.462 ms |
-| Focused 12-case visual setup, including round 68 | 62.483 ms | 68.625 ms |
-| HEIST view renderer CPU, observed range | 1.028–1.321 ms/frame | 1.218–1.550 ms/frame |
+All **128 unique layout/view comparisons pass after the focused HEIST correction**: 108 generated Arena layouts across rounds 1/30/148, three authored hub-spoke drafts, nine HEIST views, and eight menu screens. Arena layout JSON remained identical. Authored drafts cover hub-spoke artwork and are not represented as accepted generated layouts.
 
-The new artwork is not cost-free. Arena's maximum measured layout renderer cost was 0.678 ms/frame, and its full-sweep maximum setup was 102.8 ms. The focused comparison attributes most additional setup to the stadium bake; lettering also costs more. Baseline and detailed setup timings include diagnostic wrappers and should not be mixed with the full-sweep timings. These remain small repeated rendering costs, but HEIST's richer caps and room details add measurable renderer CPU. Raw frame comparisons passed the existing budget; renderer CPU is not total frame time or a GPU timer measurement.
+The September 13 full sweep initially passed 127/128 comparisons. HEIST seed 17's entry view measured 1.597 ms of renderer CPU against its unchanged 1.486 ms allowance. The new individual footing rectangles contributed about 0.14 ms/frame. Combining them into one rectangle batch reduced that component to about 0.025 ms/frame in the nine-view follow-up, which passed every existing renderer and raw-frame budget. The final comparison retains the unchanged Arena/menu measurements from the full sweep and explicitly identifies the nine replacement HEIST samples. The failed sweep remains in the raw evidence; thresholds were not relaxed.
 
-The existing Arena small-art texture allowance passed. A separate six-cycle HEIST/trap/two-bombsite fixture alternated explicit destruction and Phaser shutdown. It verified that **4,251 previously live private GPU textures** were invalid after retirement, with zero scene roots and zero Text canvas owners. Shared texture count stayed at 102 after each cycle. The fixture's maximum live private texture area was 11,035,152 pixels, approximately **42.1 MiB of RGBA pixel storage**, including pre-existing HEIST tile surfaces. This is neither an incremental allocation measurement nor total/peak GPU memory. The five room floor/cabinet texture pairs add approximately 1.06 MiB of shared RGBA pixels; the enemy frames add approximately 0.36 MiB over their previous single frames.
+| Measurement | Baseline, Edge 152 | Initial artwork pass, Edge 152 | September 13 validation, Edge 153 |
+| --- | ---: | ---: | ---: |
+| Arena layout renderer CPU, mean | 0.427 ms/frame | 0.453 ms/frame | 0.510 ms/frame |
+| Arena visual setup, full sweep mean | 51.956 ms | 65.462 ms | 70.784 ms |
+| HEIST view renderer CPU, observed range | 1.028–1.321 ms/frame | 1.218–1.550 ms/frame | 1.383–1.542 ms/frame |
+
+The new artwork is not cost-free. September 13's maximum Arena layout renderer CPU was 0.757 ms/frame and its maximum setup was 183.2 ms. Arena rendering code did not change between the two after sweeps. The earlier focused 12-case setup diagnosis, including round 68, averaged **62.483 → 68.625 ms**, attributing most added CPU to the stadium bake and lettering. Those instrumented timings should not be mixed with full-sweep setup timings. The final HEIST follow-up constructed its three facilities in 141.7, 65.7, and 64.4 ms, including first-use work in the first case. Raw frame comparisons pass; renderer CPU is not total frame time or a GPU timer measurement.
+
+The existing Arena small-art texture allowance passed. A separate six-cycle HEIST/trap/two-bombsite fixture alternated explicit destruction and Phaser shutdown. It verified that **2,866 previously live private GPU textures** were invalid after retirement, with zero scene roots and zero Text canvas owners. Shared texture count stayed at 102 after each cycle. The cap correction removed 230–232 private repeat textures per facility, approximately 14.4–14.5 MiB of duplicate RGBA pixels. It adds roughly one shared-texture Image per wall on average; a seed-550055 check verified that all 469 panels cover exactly the 231 projected wall rectangles without overhang. The fixture's maximum live private texture area was 7,238,160 pixels, approximately **27.6 MiB of RGBA pixel storage**, including pre-existing HEIST tile surfaces. This is neither an incremental allocation measurement nor total/peak GPU memory. The five room floor/cabinet texture pairs add approximately 1.06 MiB of shared RGBA pixels; the enemy frames add approximately 0.36 MiB over their previous single frames.
 
 WebGL screenshots were reviewed before/after for wall surfaces, room fixtures, trap states, shadow position at four headings, bombsite depth, shore details, ad lettering, and compact Options. The changes intentionally alter artwork; this pass makes no pixel-parity claim. [Layout measurements](quality-layout-measurements.json) retain every paired case. [Validation measurements](quality-validation-measurements.json) retain fixture options, checks, timing summaries, and resource results. Raw screenshots and browser traces remain ignored local artifacts.
 
 ## Gameplay validation
 
-The corrected normal fixture completed rounds 1–12 in **222.2 seconds**, passing **172 gameplay assertions**, 14 retirement boundaries, and 12 disk-save comparisons. It exercised all six Arcade events, two HEIST returns, three Pause/Options/Store cycles, two bosses, physical rewards, and four Mod reveals. The first and last four ordinary encounters averaged 16.903 and 17.052 ms in smoothed Phaser deltas. Twelve quiescent checkpoints retained zero Arena/HEIST Text canvases, with resize/game/window/document listener counts fixed at 21/21/18/14.
+Both fixtures use seed 550055, five rank-three Mods, ordinary pressure limits, armed bombs, deployables, special ammunition, and overlapping hazards. Invulnerability, replenished placement energy, assisted defuser kills, accelerated event/boss outcomes, and assisted HEIST traversal are test controls. The late fixture creates a separate profile with the regular Overdrive prerequisite and Supreme highest round 136, then completes 137–148 before Centaurus. These are assisted runtime checks, not unassisted clears or a new consecutive round-68-to-148 soak. Round 68 is covered by the setup diagnosis and preceding investigations; corridor movement has separate real-body coverage.
 
-An earlier 12-round attempt failed retirement validation because HEIST retained its last radar-contact entries. Those records are preserved as `artifacts/quality-mixed-normal-radar-retention.json` and its summary, and are excluded from qualification. The correction clears that scratch array in the existing shutdown callback. The corrected run verified zero retained radar entries at every checkpoint. The analyzer was not relaxed.
+The corrected normal fixture completed rounds 1–12 in **222.6 seconds**, passing **171 gameplay assertions**, 14 retirement boundaries, and 12 disk-save comparisons. It exercised all six Arcade events, two HEIST returns, three Pause/Options/Store cycles, two bosses, physical rewards, and four Mod reveals. The first and last four ordinary encounters averaged 16.940 and 17.026 ms in smoothed Phaser deltas. Twelve quiescent checkpoints retained zero Arena/HEIST Text canvases, with resize/game/window/document listener counts fixed at 21/21/18/14.
 
-The final Supreme 137–148/Centaurus run is still being validated. Its final results and reload verification will be recorded here before this pass is marked complete.
+An earlier 12-round attempt failed retirement validation because HEIST retained its last radar-contact entries. Those records are preserved as `artifacts/quality-mixed-normal-radar-retention.json` and its summary, and are excluded from qualification. The correction clears that scratch array in the existing shutdown callback. The corrected run verified zero retained radar entries at every checkpoint. The analyzer was not relaxed. The September 13 normal run includes the shared cap textures and precedes only the final footing-batch correction; the final behavior/lifetime fixture and ending run exercise that correction.
+
+The final-code Supreme fixture completed **rounds 137–148 and Centaurus in 484.2 seconds**, passing **194 gameplay assertions, 24 finale assertions, 16 retirement boundaries, and 13 disk-save comparisons**. It exercised all six Arcade events, two HEIST returns, three Pause/Options/Store cycles, two ordinary bosses, and 6 Mod reveals. The first and last four ordinary encounter means were 17.233 and 17.267 ms in smoothed Phaser deltas. Each Arcade event supplied approximately eight seconds of continuous frames.
+
+| Sustained ending sample | Raw mean frame interval | Raw p95 interval |
+| --- | ---: | ---: |
+| Centaurus ordinary, 40 seconds | 16.722 ms | 16.9 ms |
+| Three bosses, first 20 seconds | 16.736 ms | 16.9 ms |
+| Three bosses, second 20 seconds | 16.680 ms | 16.9 ms |
+| Three bosses, third 20 seconds | 16.763 ms | 17.4 ms |
+| Two bosses remaining, 20 seconds | 16.708 ms | 16.9 ms |
+| One boss remaining, 20 seconds | 16.666 ms | 16.9 ms |
+
+All three bosses stayed alive and active during the full 60-second sample, with player fire withheld. Completion stayed false after the first two deaths and persisted after the third. Credits, terminal debrief, the actual Garage return, and an independent browser reload preserved completion and Supreme highest round 148. The camera-shake preference was changed through Options and survived reload in both normalized settings and disk storage.
+
+| Continuous late gameplay phase | Raw mean interval | Histogram p95 | Longest interval |
+| --- | ---: | ---: | ---: |
+| Defense | 16.835 ms | 19 ms | 36.2 ms |
+| Defusing | 17.023 ms | 20 ms | 40.5 ms |
+| HEIST | 16.653 ms | 17 ms | 29.5 ms |
+| Boss combat | 16.703 ms | 17 ms | 41.6 ms |
+
+All sustained gameplay budgets passed, including the 20 ms raw mean and 34 ms raw p95 limits for phases with at least 120 frames. Histogram percentiles round upward to whole milliseconds. Individual hitches and synchronous transitions remain:
+
+| Observed transition maximum | Normal run | Late run |
+| --- | ---: | ---: |
+| Initial scene to Arena | 271.9 ms | 263.2 ms |
+| Loading to Arena | 193.1 ms | 228.6 ms |
+| Encounter to boss introduction | 204.0 ms | 207.1 ms |
+| HEIST entry | 222.5 ms | 215.3 ms |
+| HEIST return | 91.4 ms | 88.6 ms |
+| Options return to Arena | 29.2 ms | 32.7 ms |
+| Debrief entry | 33.6 ms | 30.8 ms |
+
+These are observed raw frame maxima, not guaranteed latency ceilings or isolated setup CPU. The September 13 browser build differs from the preceding pass, so these timings do not establish a causal before/after transition improvement. Reducing duplicate cap textures does not eliminate synchronous initialization.
+
+Together, the two recorded runs cover **24 ordinary rounds plus Centaurus, 365 gameplay assertions, 24 finale assertions, 30 encounter retirements, and 25 disk-save comparisons**. All 25 quiescent checkpoints retained zero Arena/HEIST Text canvas owners and zero HEIST radar contacts, with resize/game/window/document listener counts fixed at 21/21/18/14. The extra game listener belongs to the continuous frame recorder and is removed when the fixture ends.
+
+Raw evidence: [normal gameplay](../artifacts/quality-mixed-normal.json), [normal analysis](../artifacts/quality-mixed-normal.summary.json), [late gameplay](../artifacts/quality-mixed-late.json), [late analysis](../artifacts/quality-mixed-late.summary.json), and [reload verification](../artifacts/quality-save-reload.json). The earlier same-browser layout capture is [preserved separately](../artifacts/quality-layout-after-tiles.json).
 
 ## Remaining debt and limits
 
@@ -84,6 +125,8 @@ node scripts/run-layout-audit.mjs artifacts/quality-options-resize.json ./audit-
 node scripts/run-layout-audit.mjs artifacts/quality-menu-flows.json ./audit-menu-flows.browser.js
 node scripts/run-layout-audit.mjs artifacts/quality-screen-details.json ./audit-screen-details.browser.js
 ```
+
+To regenerate the recorded comparison that combines the full sweep with the focused correction, use `node scripts/analyze-quality-layouts.mjs artifacts/quality-heist-footings-after.json`. A fresh full sweep of the current code can use the analyzer without that argument. The compact report identifies every source and retains the superseded HEIST results.
 
 The paired analyzer requires the preserved `artifacts/quality-layout-before.json`. The 100-seed baseline comparison uses `node --experimental-strip-types scripts/verify-quality-geometry.mjs` and the preserved original layout module under `artifacts/quality-baseline/`; this is a local historical comparison, not a build prerequisite. Current movement, hazard, enemy, resource, and UI fixtures run against the current code without that historical source.
 

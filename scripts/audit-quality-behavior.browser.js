@@ -22,6 +22,14 @@
         report.cases.push({ label, png });
       };
       facility = createHeistFacility(scene, 550055);
+      const caps = scene.children.list.filter(o => /^heist-runtime-wall-[hv]-/.test(o.texture?.key));
+      check(caps.length > facility.wallRects.length && caps.every(o => o.type === 'Image' && o.isCropped),
+        'wall caps repeat shared images without private tile textures', { panels: caps.length, walls: facility.wallRects.length });
+      const capArea = caps.reduce((sum,o) => sum + o._crop.width * o._crop.height, 0);
+      const wallArea = facility.wallRects.reduce((sum,r) => sum + r.w * r.h, 0);
+      check(capArea === wallArea && caps.every(o => facility.wallRects.some(r =>
+        o.x >= r.x-14 && o.y >= r.y-58 && o.x+o._crop.width <= r.x-14+r.w && o.y+o._crop.height <= r.y-58+r.h)),
+        'cropped wall panels cover the projected wall area without overhang', { capArea, wallArea });
       let now = 0;
       for (const role of ['coolant','relay','security','freight','service']) {
         const room = createHeistRoomPlan(facility.layout).find(r => r.role.id === role);

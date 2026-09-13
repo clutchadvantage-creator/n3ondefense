@@ -5,12 +5,12 @@ import { AnomalyHudView } from './AnomalyHudView.ts';
 import { AnomalyPortalVisual } from './AnomalyPortalVisual.ts';
 import { createSilentAnomalyAudioHooks, type AnomalyAudioHooks } from './AnomalyAudioHooks.ts';
 import {
-  ANOMALY_ENTRY_COSTS,
   ANOMALY_SCHEDULING,
   ANOMALY_BY_ID,
   getEligibleAnomalies
 } from './AnomalyRegistry.ts';
 import type { AnomalyDefinition, AnomalyId, AnomalyRuntimeContext, AnomalyState } from './types.ts';
+import { ANOMALY_ENTRY_PRICING, isValidAnomalyEntryCost, normalizeAnomalyEntryCost, rollAnomalyEntryCost } from './AnomalyPricing.ts';
 
 export interface AnomalyControllerOptions {
   enabled: boolean;
@@ -35,7 +35,7 @@ export class AnomalyController {
   private transitionStartedAt = 0;
   private charge = 0;
   private chargeTarget = 1;
-  private cost = 0;
+  private cost: number = ANOMALY_ENTRY_PRICING.defaultCost;
   private forcedCost: number | null = null;
   private completedThisRound = false;
   private destroyed = false;
@@ -154,8 +154,7 @@ export class AnomalyController {
   }
 
   setForcedCost(cost: number | null): void {
-    this.forcedCost = cost === null ? null : ANOMALY_ENTRY_COSTS.reduce((best, candidate) =>
-      Math.abs(candidate - cost) < Math.abs(best - cost) ? candidate : best, ANOMALY_ENTRY_COSTS[0]);
+    this.forcedCost = cost === null ? null : normalizeAnomalyEntryCost(cost);
   }
 
   resolveReturn(): void {
@@ -211,7 +210,7 @@ export class AnomalyController {
     if (this.stateValue !== 'charging' || !this.definition || !this.visual) return;
     this.stateValue = 'portal-ready';
     this.portalReadyAt = this.context.scene.time.now;
-    this.cost = this.forcedCost ?? ANOMALY_ENTRY_COSTS[Math.floor(this.random.next() * ANOMALY_ENTRY_COSTS.length)];
+    this.cost = this.forcedCost ?? rollAnomalyEntryCost(this.random.next());
     this.visual.transformToPortal();
     this.audio.play('portal-rupture');
     this.hud.show(this.definition.displayName, `${this.definition.description}\nENTRY COST // ${this.cost} FLUX CORES`, 0xff5bd8, 5600);
@@ -223,6 +222,7 @@ export class AnomalyController {
 
   private tryEnter(options: { bypassCost?: boolean; source?: 'dev-hotkey' } = {}): boolean {
     if (this.stateValue !== 'portal-ready' || !this.definition || !this.visual || !this.visual.readyForInteraction) return false;
+    if (!isValidAnomalyEntryCost(this.cost)) return false;
     if (!options.bypassCost
       && (this.context.availableFluxCores() < this.cost || !this.context.spendFluxCores(this.cost))) {
       this.hud.show('ACCESS DENIED', `INSUFFICIENT FLUX CORES // ${this.context.availableFluxCores()} / ${this.cost}`, 0xff5f7c, 1800);

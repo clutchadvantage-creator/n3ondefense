@@ -70,7 +70,7 @@ test('HEIST keeps a separate industrial identity and bounded facility presentati
   assert.match(facility, /createHeistRoomPlan/);
   assert.match(facility, /drawBeveledTechPlate/);
   assert.match(facility, /drawHazardStripes/);
-  assert.match(facility, /staticGraphicsBatches: 1/);
+  assert.match(facility, /staticGraphicsBatches: 2/);
   assert.match(facility, /liveAmbientBatches: 1/);
   assert.doesNotMatch(facility, /beach|stadium|palm|ocean/i);
 });

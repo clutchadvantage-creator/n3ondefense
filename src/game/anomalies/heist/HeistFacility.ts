@@ -45,7 +45,7 @@ export interface HeistFacilityRuntime {
   diagnostics: {
     identity: 'heist-maze-facility';
     seed: number;
-    staticGraphicsBatches: 1;
+    staticGraphicsBatches: 2;
     liveAmbientBatches: 1;
     independentAnimationLoops: 1;
     guideMarkerMaximum: number;
@@ -78,7 +78,7 @@ export interface HeistFacilityRuntime {
 
 interface WallVisual {
   rect: RectSpec;
-  cap: Phaser.GameObjects.TileSprite;
+  caps: Phaser.GameObjects.Image[];
   facades: Phaser.GameObjects.TileSprite[];
 }
 
@@ -322,6 +322,10 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     HEIST_LAYOUT_GRID.rows * HEIST_LAYOUT_GRID.cellHeight,
     HEIST_FLOOR_TEXTURE
   ).setOrigin(0).setDepth(0.1));
+  // Solid rectangles share one transform and draw batch. FILL_RECT uses the
+  // renderer's quad path; these commands require no path triangulation.
+  const footings = scene.add.graphics().setDepth(.4).fillStyle(0x142630, 1);
+  staticVisuals.push(footings);
   const wallVisuals: WallVisual[] = [];
   for (let index = 0; index < runtimeWallRects.length; index += 1) {
     const rect = runtimeWallRects[index];
@@ -336,10 +340,18 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       ? HEIST_WALL_FACADE_TEXTURES.verticalMagenta : HEIST_WALL_FACADE_TEXTURES.verticalCyan;
     // The grounded footing makes the authoritative wall footprint visible.
     // Repeating cap modules keep long merged runs from stretching hardware.
-    const footing = scene.add.rectangle(rect.x, rect.y, rect.w, rect.h, 0x142630)
-      .setOrigin(0).setDepth(.4);
-    const cap = scene.add.tileSprite(rect.x - HEIST_WALL_PROJECTION_X, rect.y - HEIST_WALL_PROJECTION_Y, rect.w, rect.h, texture)
-      .setOrigin(0).setDepth(HEIST_WALL_CAP_DEPTH);
+    footings.fillRect(rect.x, rect.y, rect.w, rect.h);
+    // Share the authored cap texture. TileSprite creates a private repeat
+    // texture for every wall, even when every cap uses the same four panels.
+    const caps: Phaser.GameObjects.Image[] = [];
+    const frame = scene.textures.getFrame(texture);
+    for (let y = 0; y < rect.h; y += frame.height) {
+      for (let x = 0; x < rect.w; x += frame.width) {
+        caps.push(scene.add.image(rect.x - HEIST_WALL_PROJECTION_X + x, rect.y - HEIST_WALL_PROJECTION_Y + y, texture)
+          .setOrigin(0).setDepth(HEIST_WALL_CAP_DEPTH)
+          .setCrop(0, 0, Math.min(frame.width, rect.w - x), Math.min(frame.height, rect.h - y)));
+      }
+    }
     const facades: Phaser.GameObjects.TileSprite[] = [];
     for (const edge of exposedHeistWallEdges(rect, runtimeWallRects)) {
       if (edge.side === 'south') facades.push(scene.add.tileSprite(edge.x - HEIST_WALL_PROJECTION_X,
@@ -349,8 +361,8 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
         edge.y - HEIST_WALL_PROJECTION_Y, HEIST_WALL_PROJECTION_X, edge.length, sideFacadeTexture)
         .setOrigin(0).setDepth(HEIST_WALL_FACE_DEPTH + 0.02));
     }
-    wallVisuals.push({ rect, cap, facades });
-    staticVisuals.push(footing, cap, ...facades);
+    wallVisuals.push({ rect, caps, facades });
+    staticVisuals.push(...caps, ...facades);
   }
 
   const vault = layout.vaultBounds;
@@ -508,7 +520,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     trapPlacements: layout.trapPlacements,
     diagnostics: {
       identity: 'heist-maze-facility', seed: layout.seed,
-      staticGraphicsBatches: 1, liveAmbientBatches: 1, independentAnimationLoops: 1,
+      staticGraphicsBatches: 2, liveAmbientBatches: 1, independentAnimationLoops: 1,
       guideMarkerMaximum: 28, utilityLightCount: utilityLights.length, decalCount: decalPlan.decals.length,
       loops: layout.diagnostics.loops, deadEnds: layout.diagnostics.deadEnds,
       sourceWallRects: layout.wallRects.length,
@@ -597,7 +609,8 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
             && rect.y + rect.h >= playerY - 18;
           const targetCapAlpha = foreground ? 0.34 : 1;
           const targetFaceAlpha = foreground ? 0.18 : 1;
-          visual.cap.setAlpha(Phaser.Math.Linear(visual.cap.alpha, targetCapAlpha, 0.3));
+          const capAlpha = Phaser.Math.Linear(visual.caps[0].alpha, targetCapAlpha, 0.3);
+          for (const cap of visual.caps) cap.setAlpha(capAlpha);
           for (let facadeIndex = 0; facadeIndex < visual.facades.length; facadeIndex += 1) {
             const facade = visual.facades[facadeIndex];
             facade.setAlpha(Phaser.Math.Linear(facade.alpha, targetFaceAlpha, 0.3));

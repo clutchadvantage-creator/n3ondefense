@@ -1,7 +1,7 @@
 import type { AnomalyDefinition, AnomalyId } from './types.ts';
 import type { RunProtocolId } from '../mods/types.ts';
 
-export const ANOMALY_ENTRY_COSTS = [100, 125, 150, 175, 200, 225, 250] as const;
+export { ANOMALY_ENTRY_COSTS } from './AnomalyPricing.ts';
 
 export const ANOMALY_SCHEDULING = {
   minimumOpportunityMs: 72_000,

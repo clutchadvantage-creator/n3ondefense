@@ -2,6 +2,8 @@
 
 This completed pass follows the [layout performance audit](layout-performance-audit.md). Arena visual setup averaged 60.2% less CPU time across the matched layout sweep, while sustained gameplay and the Centaurus ending passed validation. It protects the preceding pass's small RenderTexture caches, round ownership, pool preparation, native camera follow, collision geometry, combat density, and progression. The work is targeted refinement of the existing game.
 
+The subsequent [facility, presentation, and usability audit](facility-and-presentation-audit.md) records HEIST corner clearance, facility and hazard refinements, robotic motion, Options resizing, and renewed ending validation. It also documents remaining initialization hitches and the browser-version change between measurement sessions.
+
 ## Findings and changes
 
 - **Setup latency:** inclusive setup instrumentation isolated the dominant cost to WebGL triangulation of the static stadium artwork. Twelve matched setup cases averaged 139.8 ms, with 113.0 ms inside the backdrop bake. A detailed follow-up attributed 81.7 ms to filled-path processing. Text creation averaged only 1.4–2.4 ms, so prewarming fonts would not address the main hitch.

@@ -6,6 +6,9 @@ for (const name of ['normal', 'late']) {
   const raw = await read(`artifacts/quality-mixed-${name}.json`);
   const summary = await read(`artifacts/quality-mixed-${name}.summary.json`);
   if (!summary.passed || raw.running || raw.errors.length) throw new Error(`${name} gameplay validation failed`);
+  const durationSeconds = (Date.parse(raw.finishedAt) - Date.parse(raw.startedAt)) / 1000;
+  if (Math.abs(summary.durationSeconds - durationSeconds) > .01 || summary.gameplayChecks !== raw.gameplayChecks.length)
+    throw new Error(`${name} analysis does not match the current raw run`);
   const costs = {};
   for (const phase of Object.values(summary.phaseCosts)) for (const [key, value] of Object.entries(phase)) {
     if (!key.startsWith('setup.') && !['profile.save', 'storage.write', 'JSON.stringify'].includes(key)) continue;
@@ -28,6 +31,21 @@ for (const [key, file] of Object.entries({ navigation: 'quality-menu-flows', scr
     ? { ...c, blockedCorners: c.blockedCorners.length, blockedCorridors: c.blockedCorridors.length, examples: c.blockedCorners.slice(0,3) }
     : c) };
 }
+const tileBehavior = await read('artifacts/quality-behavior-tiles.json');
+const resourceCycles = value => value.cases.filter(c => /releases private textures/.test(c.label)).map(c => c.detail);
+report.wallCapResources = {
+  before: resourceCycles(tileBehavior), after: resourceCycles(report.behavior),
+  beforeSource: 'artifacts/quality-behavior-tiles.json', afterSource: 'artifacts/quality-behavior.json',
+  note: 'Cropped Images replace private TileSprite cap textures. Counts include existing facades; pixel areas are RGBA storage, not total GPU memory.'
+};
+report.layoutValidation = await read('docs/quality-layout-measurements.json');
+if (!report.layoutValidation.passed) throw new Error('Layout validation failed');
+const initialLayout = await read('artifacts/quality-layout-after-tiles.json');
+if (initialLayout.running || initialLayout.errors.length || initialLayout.cases.length !== 128)
+  throw new Error('Initial same-browser layout sweep is incomplete');
+report.initialLayoutSweep = { environment: initialLayout.environment, startedAt: initialLayout.startedAt,
+  source: 'artifacts/quality-layout-after-tiles.json',
+  rows: initialLayout.cases.map(c => ({ label: c.label, kind: c.kind, setupMs: round(c.setupMs), rendererMs: round(c.render.mean), rawFrameMs: round(c.raw.mean) })) };
 report.reload = await read('artifacts/quality-save-reload.json');
 if (!report.reload.reloaded || !report.reload.completed || report.reload.highest !== 148 || report.reload.screenShake !== false)
   throw new Error('Completion/settings reload failed');

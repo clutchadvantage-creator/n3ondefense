@@ -5,6 +5,7 @@ import type { RunProtocolId } from '../../mods/types.ts';
 import { isSupremeProtocol } from '../../progression/SupremeProgression.ts';
 import type { PendingAnomalyLoot } from '../types.ts';
 import { HEIST_REWARD_TABLE } from './HeistConfig.ts';
+import { ANOMALY_ENTRY_PRICING, normalizeAnomalyEntryCost } from '../AnomalyPricing.ts';
 
 export type HeistContainerReward =
   | { kind: 'credits'; amount: number }
@@ -28,11 +29,11 @@ export class HeistRewardService {
   private readonly entryCost: number;
   private containerSequence = 0;
 
-  constructor(seed: number, round: number, protocol: RunProtocolId, entryCost = 150) {
+  constructor(seed: number, round: number, protocol: RunProtocolId, entryCost: number = ANOMALY_ENTRY_PRICING.defaultCost) {
     this.seed = seed;
     this.round = round;
     this.protocol = protocol;
-    this.entryCost = Math.max(0, Math.floor(entryCost));
+    this.entryCost = normalizeAnomalyEntryCost(entryCost);
     this.random = new SeededRandom((seed ^ Math.imul(round, 0x45d9f3b) ^ 0x4e1a57) >>> 0);
   }
 
