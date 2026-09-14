@@ -13,9 +13,10 @@ export const MECHANICAL_DEBRIS_TEXTURES = [
   'mechanical-circuit'
 ] as const;
 
-type MechanicalDebrisTexture = typeof MECHANICAL_DEBRIS_TEXTURES[number];
+type MechanicalDebrisTexture = typeof MECHANICAL_DEBRIS_TEXTURES[number] | 'mechanical-spark' | 'mechanical-smoke' | 'mechanical-arc';
 
 interface DebrisSpawn {
+  effect?: 'spark' | 'smoke' | 'arc';
   x: number;
   y: number;
   color: number;
@@ -78,10 +79,10 @@ const MAX_FRAGMENTS = 168;
 const MAX_BURSTS = 96;
 
 const fragmentCountForEnemy = (type: EnemyType): number => {
-  if (type === 'tank') return 7;
-  if (type === 'shooter' || type === 'disruptor') return 5;
-  if (type === 'star') return 6;
-  return type === 'grunt' ? 3 : 4;
+  if (type === 'tank' || type === 'drone') return 8;
+  if (type === 'shooter' || type === 'disruptor') return 6;
+  if (type === 'star') return 7;
+  return type === 'grunt' ? 4 : 5;
 };
 
 const profileForBoss = (archetype: BossArchetype): readonly MechanicalDebrisTexture[] => {
@@ -136,6 +137,20 @@ export const createMechanicalDebrisTextures = (graphics: Phaser.GameObjects.Grap
   graphics.lineBetween(6, 6, 6, 12);
   graphics.lineBetween(6, 12, 13, 12);
   graphics.generateTexture('mechanical-circuit', 18, 18);
+
+  begin();
+  graphics.fillStyle(0xffffff, .15).fillRoundedRect(0, 5, 28, 6, 3);
+  graphics.fillStyle(0xffffff, .8).fillRect(3, 7, 23, 2);
+  graphics.fillStyle(0xffffff, 1).fillRect(19, 6, 6, 4);
+  graphics.generateTexture('mechanical-spark', 28, 16);
+  begin();
+  graphics.clear();
+  for (let r = 22; r >= 4; r -= 3) graphics.fillStyle(0xffffff, .035).fillCircle(24, 24, r);
+  graphics.generateTexture('mechanical-smoke', 48, 48);
+  begin();
+  graphics.clear().lineStyle(4, 0xffffff, .15).lineBetween(2, 14, 12, 7).lineBetween(12, 7, 17, 18).lineBetween(17, 18, 29, 8);
+  graphics.lineStyle(1, 0xffffff, 1).lineBetween(2, 14, 12, 7).lineBetween(12, 7, 17, 18).lineBetween(17, 18, 29, 8);
+  graphics.generateTexture('mechanical-arc', 32, 26);
 };
 
 /**
@@ -191,6 +206,7 @@ export class MechanicalDestructionVfx {
     this.emitCoreBurst(x, y, color, now, type === 'tank' ? 1.18 : 1);
     if (!this.particlesEnabled) return;
     this.emitFragments(fragmentCountForEnemy(type), x, y, color, now, 'enemy', undefined, type === 'tank' ? 1.25 : 1);
+    this.emitAccents(x, y, now);
   }
 
   emitBossStage(archetype: BossArchetype, x: number, y: number, color: number, now: number, final = false): void {
@@ -211,6 +227,15 @@ export class MechanicalDestructionVfx {
       const age = now - slot.bornAt;
       if (age >= slot.lifetimeMs || !slot.sprite.active) {
         this.pool.release(slot);
+        continue;
+      }
+      if (slot.effect) {
+        const life = Math.max(0, age / slot.lifetimeMs);
+        slot.sprite.x += slot.velocityX * dt; slot.sprite.y += slot.groundVelocityY * dt;
+        if (slot.effect === 'smoke') slot.sprite.setScale(slot.scale * (1 + life * 1.5)).setAlpha(.55 * (1 - life));
+        else if (slot.effect === 'arc') slot.sprite.setAlpha((1 - life) * (Math.sin(age * .075) > -.2 ? .8 : .08));
+        else slot.sprite.setAlpha(1 - life).setScale(slot.scale * (1 - life * .4), slot.scale);
+        this.fragments[write++] = slot;
         continue;
       }
       slot.sprite.x += slot.velocityX * dt;
@@ -394,14 +419,32 @@ export class MechanicalDestructionVfx {
     this.peakFragments = Math.max(this.peakFragments, this.fragments.length);
   }
 
+  private emitAccents(x: number, y: number, now: number): void {
+    const count = Math.min(MAX_FRAGMENTS - this.fragments.length, resolveMechanicalFragmentBudget(4, this.fragments.length, MAX_FRAGMENTS).count);
+    for (let i = 0; i < count; i++) {
+      const effect = i < 2 ? 'spark' : i === 2 ? 'smoke' : 'arc';
+      const angle = (this.sequence++ * 2.399963229728653) % TAU;
+      const slot = this.pool.obtain({ effect, x, y, texture: `mechanical-${effect}`, color: effect === 'smoke' ? 0x667786 : 0xb8efff,
+        scale: effect === 'smoke' ? .55 : .65, velocityX: effect === 'spark' ? Math.cos(angle) * 220 : 0,
+        groundVelocityY: effect === 'spark' ? Math.sin(angle) * 220 : effect === 'smoke' ? -18 : 0,
+        liftVelocity: 0, angularVelocity: 0, lifetimeMs: effect === 'smoke' ? 430 : effect === 'arc' ? 240 : 180,
+        bornAt: now, priority: 'enemy' });
+      slot.sprite.setRotation(effect === 'smoke' ? 0 : angle);
+      this.fragments.push(slot);
+    }
+    this.peakFragments = Math.max(this.peakFragments, this.fragments.length);
+  }
+
   private resetFragment(slot: DebrisSlot, state: DebrisSpawn): DebrisSlot {
     Object.assign(slot, state);
+    slot.effect = state.effect;
     slot.groundY = state.y;
     slot.height = 0;
     slot.bounceCount = 0;
     slot.sprite.setTexture(state.texture).setPosition(state.x, state.y).setTint(state.color)
       .setScale(state.scale).setAlpha(1).setRotation(0).setDepth(12)
       .setActive(true).setVisible(true);
+    slot.sprite.setBlendMode(state.effect && state.effect !== 'smoke' ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL);
     return slot;
   }
 }

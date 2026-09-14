@@ -6,7 +6,7 @@
  * combat/drop pipeline for the selected protocol family.
  */
 import type { RunProtocolId } from '../mods/types.ts';
-import { getSupremeStage } from '../progression/SupremeProgression.ts';
+import { getSupremeStage, SUPREME_ENEMY_HEALTH_TUNING } from '../progression/SupremeProgression.ts';
 
 export type RunModeFamily = 'normal' | 'overdrive' | 'supreme';
 
@@ -82,7 +82,7 @@ export const MODE_BALANCE: Record<RunModeFamily, ModeBalanceDefinition> = {
   // The baseline is Supreme Leo. A selected Supreme protocol resolves to its
   // exact stage below; this fallback keeps family-only boss helpers valid.
   supreme: {
-    enemyHealthMultiplier: 1.35,
+    enemyHealthMultiplier: 1.35 * SUPREME_ENEMY_HEALTH_TUNING,
     enemyDamageMultiplier: 1.22,
     enemySpeedMultiplier: 1.04,
     hazardDamageMultiplier: 1.25,

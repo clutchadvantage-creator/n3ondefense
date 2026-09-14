@@ -1,7 +1,7 @@
 import { shakeGameplayCamera } from '../vfx/GameplayCameraShake.ts';
 import Phaser from 'phaser';
 import { FlyingDrone } from '../enemies/drone/FlyingDrone.ts';
-import { DRONE_VARIANTS, type DroneVariant } from '../enemies/drone/DroneFlight.ts';
+import type { DroneVariant } from '../enemies/drone/DroneFlight.ts';
 import { grenadeTouchesSmashable } from '../arena/SmashableCombatQuery.ts';
 import { followGameplayPlayer, GAMEPLAY_CAMERA_ZOOM, GAMEPLAY_CAMERA_FOLLOW_LERP } from '../systems/GameplayCamera.ts';
 import { starterWeapon } from '../../data/weapons';
@@ -455,6 +455,7 @@ const BOMBSITE_EXPLOSION_VISUAL_RADIUS = 520;
 export class ArenaScene extends Phaser.Scene {
   private readonly state = new GameStateMachine(RoundState.PrePlant);
   private readonly audio = AudioManager.get();
+  private readonly stopDroneAudio = (): void => this.audio.stopDroneAudio();
 
   private player!: Player;
   private hud!: Hud;
@@ -1069,6 +1070,9 @@ export class ArenaScene extends Phaser.Scene {
     this.events.on('quit-from-options', this.onQuitFromStore);
     this.events.on('anomaly-return', this.onAnomalyReturn);
     this.events.on(Phaser.Scenes.Events.WAKE, this.onArenaWoken);
+    this.events.on(Phaser.Scenes.Events.PAUSE, this.stopDroneAudio);
+    this.events.on(Phaser.Scenes.Events.SLEEP, this.stopDroneAudio);
+    this.game.events.on(Phaser.Core.Events.BLUR, this.stopDroneAudio);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.pointerLock = new GameplayPointerLock(this.game, {
       onLocked: () => { if (!this.anomalyReturnLifecycle.blocksExternalPause) this.resumeFromPointerLock(); },
@@ -1631,6 +1635,9 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.setLowHealthWarning(gameplayCanSoundLowHealth
       && this.player.hp > 0
       && this.player.hp <= this.player.stats.maxHealth * 0.25);
+    if (gameplayCanSoundLowHealth && this.roundRuntime.phase === 'active' && !this.anomalyController?.blocksArenaGameplay)
+      this.audio.updateDroneAudio(now, this.enemies, this.player.x, this.player.y);
+    else this.audio.stopDroneAudio();
 
     const cosmeticEffectsCanAdvance = !this.tutorialHardPaused
       && this.state.state !== RoundState.Paused
@@ -2583,7 +2590,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const stats = {
       ...base,
-      color: type === 'drone' ? DRONE_VARIANTS[droneVariant].color ?? base.color : base.color,
+      color: base.color,
       hp: Math.round(applyEnemyHealthMode(
         base.hp * (1 + (curve.healthMultiplier - 1) * phaseScale) * (getContract(this.contract)?.enemyHealthMultiplier ?? 1),
         this.protocol
@@ -2599,6 +2606,7 @@ export class ArenaScene extends Phaser.Scene {
     const enemy = type === 'drone'
       ? new FlyingDrone(this, spawn.x, spawn.y, stats, this.enemyNavigationSequence++, droneVariant)
       : new Enemy(this, spawn.x, spawn.y, enemyTexture, stats);
+    if (enemy.airborne) enemy.once(Phaser.GameObjects.Events.DESTROY, () => this.audio.releaseDroneAudio(enemy));
     enemy.telemetrySpawnedAtActiveMs = GameplayTelemetryRecorder.recordEnemySpawn(type, stats.hp);
     if (type === 'tank') {
       enemy.lastShotMs = this.time.now - TANK_HOMING_MISSILE_BALANCE.cooldownMs * 0.35;
@@ -5133,6 +5141,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private killEnemy(enemy: Enemy): void {
+    this.audio.releaseDroneAudio(enemy);
     if (this.tutorialDirector?.awaits('combat.enemyKilled')) TutorialEventBus.emit('combat.enemyKilled', { type: enemy.stats.type });
     this.arcadeController?.handleGameplayEvent({ type: 'enemy-killed', enemy });
     this.anomalyController?.handleEnemyKilled(enemy.x, enemy.y);
@@ -9457,6 +9466,9 @@ export class ArenaScene extends Phaser.Scene {
     this.events.off('quit-from-options', this.onQuitFromStore);
     this.events.off('anomaly-return', this.onAnomalyReturn);
     this.events.off(Phaser.Scenes.Events.WAKE, this.onArenaWoken);
+    this.events.off(Phaser.Scenes.Events.PAUSE, this.stopDroneAudio);
+    this.events.off(Phaser.Scenes.Events.SLEEP, this.stopDroneAudio);
+    this.game.events.off(Phaser.Core.Events.BLUR, this.stopDroneAudio);
     this.events.off(Phaser.Scenes.Events.RENDER, this.onFirstArenaRenderAfterAnomaly, this);
     if (this.roundHudLive) {
       this.hud?.destroy();

@@ -268,7 +268,17 @@ export const createDetailedEnemyRobotTextures = (graphics: Phaser.GameObjects.Gr
       graphics.save().translateCanvas(phase * SIZE, 0);
       start(graphics);
       graphics.translateCanvas(0, (phase === 1 ? -1 : phase === 3 ? 1 : 0) * 1.2);
-      drawDrone(graphics, phase, DRONE_VARIANTS[variant].color);
+      drawDrone(graphics, phase);
+      // Physical warning lamps alternate; armor, fan accents and sensor retain
+      // the standard chassis palette. Both lamps and glow are cached in the atlas.
+      for (const [index, x] of [25, 47].entries()) {
+        graphics.fillStyle(0x03070e, 1).fillRoundedRect(x - 3, 34, 6, 9, 2);
+        graphics.lineStyle(1, 0x91a7b8, 1).strokeRoundedRect(x - 3, 34, 6, 9, 2);
+        const lit = (phase < 2 ? 0 : 1) === index;
+        graphics.fillStyle(0xff294d, lit ? .22 : .025).fillCircle(x, 38, 5);
+        graphics.fillStyle(lit ? 0xff304e : 0x6b1729, 1).fillCircle(x, 38, 2);
+        if (lit) graphics.fillStyle(0xffd8df, 1).fillCircle(x - .5, 37.5, .8);
+      }
       graphics.restore();
     }
     finish(graphics, 'drone', DRONE_VARIANTS[variant].texture);

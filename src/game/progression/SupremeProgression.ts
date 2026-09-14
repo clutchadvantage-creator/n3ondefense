@@ -46,8 +46,9 @@ export const SUPREME_CONSTELLATIONS: Readonly<Record<string, ConstellationDefini
   centaurus: { key: 'centaurus', points: [{ x: .12, y: .22 }, { x: .3, y: .38 }, { x: .5, y: .34, major: true }, { x: .67, y: .18 }, { x: .61, y: .58 }, { x: .82, y: .74, major: true }, { x: .42, y: .82 }, { x: .22, y: .68 }], connections: [[0,1],[1,2],[2,3],[2,4],[4,5],[4,6],[6,7],[7,1]] }
 });
 
+export const SUPREME_ENEMY_HEALTH_TUNING = 1.08;
 const makeDifficulty = (index: number): ModeBalanceDefinition => ({
-  enemyHealthMultiplier: 1.35 + index * 0.08,
+  enemyHealthMultiplier: (1.35 + index * 0.08) * SUPREME_ENEMY_HEALTH_TUNING,
   enemyDamageMultiplier: 1.22 + index * 0.046,
   enemySpeedMultiplier: 1.04 + index * 0.01,
   hazardDamageMultiplier: 1.25 + index * 0.05,

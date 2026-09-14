@@ -1,6 +1,7 @@
 import { SaveSystem } from './SaveSystem';
 import { DEFAULT_AUDIO_VOLUME, SFX_DEFINITIONS, type AudioSfxName } from '../config/audio';
 import { publicAssetUrl } from '../utils/assetUrl';
+import { DroneAudioPool, type DroneAudioOwner } from './DroneAudioPool';
 
 const audioAssetUrl = (path: string): string => publicAssetUrl(`assets/audio/${path}`);
 const BOMBLET_SFX_POOL_SIZE = 8;
@@ -139,6 +140,7 @@ export interface RoundAudioDiagnostics {
 export class AudioManager {
   private static instance: AudioManager | null = null;
   private readonly context: AudioContext;
+  private readonly droneAudio: DroneAudioPool;
   private readonly playlist = [
     'music/Arc Grid SiegeV1.mp3',
     'music/Arc Grid SiegeV3.mp3',
@@ -270,6 +272,7 @@ export class AudioManager {
 
   private constructor() {
     this.context = new AudioContext();
+    this.droneAudio = new DroneAudioPool(this.context, audioAssetUrl('soundeffects/dronesound.mp3'));
     this.shufflePlaylist();
     this.refreshVolumeCache();
     this.initShotSfxPool();
@@ -1058,8 +1061,16 @@ export class AudioManager {
       }
     }
 
-    // Never interrupt an active kill sound. If all voices are occupied, this
-    // kill is intentionally folded into the existing burst.
+    // bang.mp3 has a short impact followed by a long, nearly silent tail.
+    // Reclaim only a tail, preserving fresh impacts and the four-voice ceiling.
+    if (availableIndex < 0) {
+      let oldest = .35;
+      for (let index = 0; index < this.enemyDeathSfxPool.length; index++) {
+        if (this.enemyDeathSfxPool[index].currentTime > oldest) {
+          oldest = this.enemyDeathSfxPool[index].currentTime; availableIndex = index;
+        }
+      }
+    }
     if (availableIndex < 0) return;
 
     const audio = this.enemyDeathSfxPool[availableIndex];
@@ -1320,6 +1331,7 @@ export class AudioManager {
    * retiring every world-owned combat/hazard voice before Arena wakes.
    */
   stopRoundScopedAudio(options: { preserveAnomalyTransit?: boolean } = {}): void {
+    this.stopDroneAudio();
     this.stopPlantingLoop();
     this.stopDisarmLoop();
     this.stopSecurityLaserLoop();
@@ -1430,6 +1442,7 @@ export class AudioManager {
       for (const audio of pool) if (!audio.paused && !audio.ended) activeVoices += 1;
     }
     for (const audio of dedicated) if (audio && !audio.paused && !audio.ended) activeVoices += 1;
+    activeVoices += this.droneAudio.stats().active;
     const activeTones = this.activeSfxTones.size;
     const requestedLoops = this.roundLoopDiagnostics().activeCount;
     return {
@@ -1437,10 +1450,17 @@ export class AudioManager {
       activeVoices,
       activeTones,
       requestedLoops,
-      pooledVoices: pools.reduce((sum, pool) => sum + pool.length, 0),
+      pooledVoices: pools.reduce((sum, pool) => sum + pool.length, 0) + this.droneAudio.stats().capacity,
       dedicatedVoices: dedicated.reduce((sum, audio) => sum + Number(Boolean(audio)), 0)
     };
   }
+
+  updateDroneAudio(now: number, enemies: readonly DroneAudioOwner[], x: number, y: number, rotation = 0): void {
+    this.droneAudio.update(now, enemies, x, y, this.getSfxVolume(), rotation);
+  }
+  releaseDroneAudio(owner: DroneAudioOwner): void { this.droneAudio.release(owner); }
+  stopDroneAudio(): void { this.droneAudio.stop(); }
+  droneAudioDiagnostics() { return this.droneAudio.stats(); }
 
   /** Keeps one electrical loop alive only while the operative is near a Flux Core. */
   setFluxCoreProximity(strength: number): void {

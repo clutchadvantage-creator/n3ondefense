@@ -97,7 +97,7 @@ test('operative shield is a reusable layered energy field with bounded crackle g
   assert.doesNotMatch(arena, /private shieldOrb: Phaser\.GameObjects\.Arc/);
 });
 
-test('enemy death audio caps concurrent voices without interrupting active clips', () => {
+test('enemy death audio caps concurrent voices and preserves fresh impacts while reclaiming quiet tails', () => {
   const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
   assert.match(audio, /ENEMY_DEATH_SFX_MAX_CONCURRENT = 4/);
   assert.match(audio, /ENEMY_DEATH_SFX_MIN_INTERVAL_MS = 45/);
@@ -105,6 +105,7 @@ test('enemy death audio caps concurrent voices without interrupting active clips
   assert.match(audio, /now - this\.lastEnemyDeathSfxAt < ENEMY_DEATH_SFX_MIN_INTERVAL_MS/);
   assert.match(audio, /candidate\.paused \|\| candidate\.ended/);
   assert.match(audio, /if \(availableIndex < 0\) return/);
+  assert.match(audio, /let oldest = \.35/);
 
   const enemyPlayback = audio.match(/private playEnemyDeathSfx\(\): void \{[\s\S]*?\n  \}\n\n  private playPlayerDeathSfx/)?.[0] ?? '';
   assert.doesNotMatch(enemyPlayback, /\.pause\(\)/);

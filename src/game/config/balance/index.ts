@@ -39,7 +39,7 @@ export const WEAPON_BALANCE = {
 } as const;
 
 export const ENEMY_BALANCE = {
-  drone: { hp: 72, speed: 145, damage: 8, attackCooldownMs: 2300, attackRange: 560, weight: 2.5, unlockRound: 1, credits: 6, tokens: 0, color: 0x59e5ff, size: 32 },
+  drone: { hp: 140, speed: 167, damage: 8, attackCooldownMs: 2300, attackRange: 560, weight: 2.5, unlockRound: 1, credits: 6, tokens: 0, color: 0x59e5ff, size: 32 },
   grunt: { hp: 40, speed: 116, damage: 9, attackCooldownMs: 500, attackRange: 26, weight: 1, unlockRound: 1, credits: 3, tokens: 0, color: 0xff5f7c, size: 24 },
   shooter: { hp: 50, speed: 86, damage: 9, attackCooldownMs: 1450, attackRange: 230, weight: 1.5, unlockRound: 1, credits: 4, tokens: 0, color: 0xff9f4d, size: 24 },
   defuser: { hp: 58, speed: 88, damage: 6, attackCooldownMs: 650, attackRange: 26, weight: 2.25, unlockRound: 1, credits: 6, tokens: 0, color: 0x85f9ff, size: 26 },
