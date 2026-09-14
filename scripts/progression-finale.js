@@ -36,7 +36,8 @@ export async function exerciseProgressionFinale({game,report,probe,exercises,ses
   let weight=arena.enemies.reduce((sum,e)=>sum+ENEMY_BALANCE[e.stats.type].weight,0);
   const types=['grunt','shooter','tank','disruptor','star'];
   for(let n=arena.enemies.length;n<Math.round(pressure.activeCountCap*multiplier);n++) {
-    const type=types[n%types.length],cost=ENEMY_BALANCE[type].weight;
+    const droneCap=report.options.includeDrones?getSpawnProfile(arena.roundManager.round,0,arena.currentModeFamily()).droneCountCap:0;
+            const type=n<droneCap?'drone':types[n%types.length], cost=ENEMY_BALANCE[type].weight;
     if(weight+cost>pressure.activeWeightCap*multiplier)break;
     arena.spawnEnemy(type,false);weight+=cost;
   }

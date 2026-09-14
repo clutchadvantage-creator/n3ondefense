@@ -1,7 +1,7 @@
 import { shakeGameplayCamera } from '../vfx/GameplayCameraShake.ts';
 import Phaser from 'phaser';
 import { FlyingDrone } from '../enemies/drone/FlyingDrone.ts';
-import type { DroneVariant } from '../enemies/drone/DroneFlight.ts';
+import { DRONE_VARIANTS, type DroneVariant } from '../enemies/drone/DroneFlight.ts';
 import { grenadeTouchesSmashable } from '../arena/SmashableCombatQuery.ts';
 import { followGameplayPlayer, GAMEPLAY_CAMERA_ZOOM, GAMEPLAY_CAMERA_FOLLOW_LERP } from '../systems/GameplayCamera.ts';
 import { starterWeapon } from '../../data/weapons';
@@ -2583,6 +2583,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const stats = {
       ...base,
+      color: type === 'drone' ? DRONE_VARIANTS[droneVariant].color ?? base.color : base.color,
       hp: Math.round(applyEnemyHealthMode(
         base.hp * (1 + (curve.healthMultiplier - 1) * phaseScale) * (getContract(this.contract)?.enemyHealthMultiplier ?? 1),
         this.protocol

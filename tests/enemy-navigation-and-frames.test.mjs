@@ -39,7 +39,7 @@ test('robot frames are generated once in Boot with authored multi-color palettes
   for (const type of Object.keys(ENEMY_ROBOT_FRAMES)) {
     assert.match(artSource, new RegExp(`${type}: \\{ primary: 0x[0-9a-f]+, secondary: 0x[0-9a-f]+, accent: 0x[0-9a-f]+, sensor: 0x[0-9a-f]+ \\}`));
   }
-  assert.equal((artSource.match(/generateTexture\(/g) ?? []).length, 1, 'shared cache path generates each registered chassis');
+  assert.equal((artSource.match(/generateTexture\(/g) ?? []).length, 2, 'shared chassis atlas generator plus one reusable target marker');
   assert.doesNotMatch(enemySource, /scene\.add\.graphics|scene\.add\.container/);
 });
 

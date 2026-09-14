@@ -1,11 +1,14 @@
 import type { RectSpec } from '../../types.ts';
-
-export interface DroneFlightState { x: number; y: number; vx: number; vy: number }
+export interface DroneFlightState {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+}
 /** A movement strategy only: no scene, weapons, health, drops, or event ownership. */
 export interface DroneMovement {
   update(state: DroneFlightState, targetX: number, targetY: number, speed: number, bounds: RectSpec, dt: number): void;
 }
-
 export class ArenaDroneStrafe implements DroneMovement {
   private elapsed: number;
   private readonly direction: number;
@@ -31,22 +34,27 @@ export class ArenaDroneStrafe implements DroneMovement {
     s.vy += (vy * scale - s.vy) * blend;
     s.x = Math.max(b.x + 24, Math.min(b.x + b.w - 24, s.x));
     s.y = Math.max(b.y + 24, Math.min(b.y + b.h - 24, s.y));
-    if (s.x <= b.x + 24) s.vx = Math.max(0, s.vx);
-    if (s.x >= b.x + b.w - 24) s.vx = Math.min(0, s.vx);
-    if (s.y <= b.y + 24) s.vy = Math.max(0, s.vy);
-    if (s.y >= b.y + b.h - 24) s.vy = Math.min(0, s.vy);
+    if (s.x <= b.x + 24)
+      s.vx = Math.max(0, s.vx);
+    if (s.x >= b.x + b.w - 24)
+      s.vx = Math.min(0, s.vx);
+    if (s.y <= b.y + 24)
+      s.vy = Math.max(0, s.vy);
+    if (s.y >= b.y + b.h - 24)
+      s.vy = Math.min(0, s.vy);
   }
 }
-
 /** At most one shot per update; suspended or slow frames never dump a backlog. */
 export class DroneBurstWeapon {
   private remaining = 0;
   private nextAt = 900;
   private aim = 0;
   update(elapsedMs: number, angle: number, inRange: boolean, cadenceMs: number, fire: (angle: number) => void): void {
-    if (elapsedMs < this.nextAt) return;
+    if (elapsedMs < this.nextAt)
+      return;
     if (this.remaining === 0) {
-      if (!inRange) return;
+      if (!inRange)
+        return;
       this.remaining = 3;
       this.aim = angle;
     }
@@ -55,10 +63,9 @@ export class DroneBurstWeapon {
     this.nextAt = elapsedMs + (this.remaining ? 170 : Math.max(1100, cadenceMs));
   }
 }
-
 export type DroneVariant = 'standard' | 'redline' | 'target';
 export const DRONE_VARIANTS = {
-  standard: { speed: 1, color: null, lifetimeMs: Infinity },
-  redline: { speed: 1.06, color: 0xff8cbd, lifetimeMs: Infinity },
-  target: { speed: 1.2, color: 0xff496c, lifetimeMs: 11000 }
+  standard: { speed: 1, color: null, texture: 'enemy-drone', lifetimeMs: Infinity },
+  redline: { speed: 1.06, color: 0xff8cbd, texture: 'enemy-drone-redline', lifetimeMs: Infinity },
+  target: { speed: 1.2, color: 0xff496c, texture: 'enemy-drone-priority', lifetimeMs: 11000 }
 } as const;

@@ -178,7 +178,8 @@
           let weight = arena.enemies.reduce((n,e)=>n+ENEMY_BALANCE[e.stats.type].weight,0);
           const types = ['grunt','shooter','grunt','tank','disruptor','star'];
           for(let n=arena.enemies.length;n<countCap;n++) {
-            const type=types[n%types.length], cost=ENEMY_BALANCE[type].weight;
+            const droneCap=options.includeDrones?getSpawnProfile(arena.roundManager.round,0,arena.currentModeFamily()).droneCountCap:0;
+            const type=n<droneCap?'drone':types[n%types.length], cost=ENEMY_BALANCE[type].weight;
             if(weight+cost>pressure.activeWeightCap*multiplier) break;
             arena.spawnEnemy(type,false); weight+=cost;
           }

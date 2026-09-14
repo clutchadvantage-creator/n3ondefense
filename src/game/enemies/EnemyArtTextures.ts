@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { DRONE_VARIANTS } from './drone/DroneFlight.ts';
 import { ENEMY_ROBOT_FRAMES } from './EnemyRobotFrames.ts';
 import type { EnemyType } from '../types.ts';
 import { drawLayeredPanel, drawMechanicalRivets } from '../rendering/LayeredArtPrimitives.ts';
@@ -90,8 +91,7 @@ const applyColorPass = (g: Phaser.GameObjects.Graphics, type: EnemyType): void =
   g.fillStyle(palette.sensor, 1).fillCircle(35, type === 'grunt' ? 48 : type === 'shooter' ? 38 : type === 'defuser' ? 38 : type === 'tank' ? 51 : type === 'star' ? 34 : 36, 2.1);
 };
 
-const finish = (graphics: Phaser.GameObjects.Graphics, type: EnemyType): void => {
-  const key = ENEMY_ROBOT_FRAMES[type].textureKey;
+const finish = (graphics: Phaser.GameObjects.Graphics, type: EnemyType, key = ENEMY_ROBOT_FRAMES[type].textureKey): void => {
   graphics.generateTexture(key, SIZE * 4, SIZE);
   const texture = graphics.scene.textures.get(key);
   texture.get('__BASE').setSize(SIZE,SIZE,0,0);
@@ -194,7 +194,7 @@ const drawDisruptor = (g: Phaser.GameObjects.Graphics): void => {
   rivets(g, [{ x: 22, y: 35 }, { x: 48, y: 35 }, { x: 35, y: 49 }]);
 };
 
-const drawDrone = (g: Phaser.GameObjects.Graphics, phase: number): void => {
+const drawDrone = (g: Phaser.GameObjects.Graphics, phase: number, illumination = 0x59e5ff): void => {
   g.lineStyle(7, OUTLINE, 1).lineBetween(16,16,56,56).lineBetween(56,16,16,56);
   g.lineStyle(4, SIDE, 1).lineBetween(16,16,56,56).lineBetween(56,16,16,56);
   for (const [x,y] of [[16,16],[56,16],[16,56],[56,56]]) {
@@ -206,13 +206,13 @@ const drawDrone = (g: Phaser.GameObjects.Graphics, phase: number): void => {
       const a=phase*Math.PI/6+blade*Math.PI*2/3;
       g.lineStyle(2.5,0x91b6c5,.85).lineBetween(x,y,x+Math.cos(a)*6.5,y+Math.sin(a)*6.5);
     }
-    g.fillStyle(0x59e5ff,1).fillCircle(x,y,2);
-    g.lineStyle(1.5,0x59e5ff,.85).beginPath().arc(x,y,12,-.6,.5).strokePath();
+    g.fillStyle(illumination,1).fillCircle(x,y,2);
+    g.lineStyle(2,illumination,1).beginPath().arc(x,y,12,-.8,.8).strokePath();
   }
   polygon(g,[{x:27,y:22},{x:44,y:22},{x:48,y:35},{x:43,y:48},{x:28,y:48},{x:24,y:35}],0x304c6d);
   polygon(g,[{x:28,y:23},{x:43,y:23},{x:44,y:30},{x:27,y:30}],0x9cbdce);
   g.fillStyle(0x071322,1).fillRoundedRect(28,32,15,10,2);
-  g.fillStyle(0x59e5ff,1).fillRect(30,34,11,3);
+  g.fillStyle(illumination,1).fillRect(30,34,11,3);
   g.fillStyle(0xffae55,1).fillRect(27,44,4,2).fillRect(40,44,4,2);
   rivets(g,[{x:28,y:26},{x:42,y:26},{x:29,y:45},{x:42,y:45}]);
 };
@@ -260,6 +260,19 @@ export const createDetailedEnemyRobotTextures = (graphics: Phaser.GameObjects.Gr
     }
     finish(graphics, type);
   });
+  // Variant illumination is baked through the same chassis drawing commands.
+  // Whole-sprite tinting made the target's cyan sensor muddy and hid armor detail.
+  for (const variant of ['redline', 'target'] as const) {
+    graphics.clear();
+    for (let phase = 0; phase < 4; phase++) {
+      graphics.save().translateCanvas(phase * SIZE, 0);
+      start(graphics);
+      graphics.translateCanvas(0, (phase === 1 ? -1 : phase === 3 ? 1 : 0) * 1.2);
+      drawDrone(graphics, phase, DRONE_VARIANTS[variant].color);
+      graphics.restore();
+    }
+    finish(graphics, 'drone', DRONE_VARIANTS[variant].texture);
+  }
   graphics.clear().lineStyle(2, 0xff4667, .95);
   for (const [x,y,sx,sy] of [[5,5,1,1],[67,5,-1,1],[5,67,1,-1],[67,67,-1,-1]]) {
     graphics.lineBetween(x,y,x+sx*12,y).lineBetween(x,y,x,y+sy*12);
