@@ -63,7 +63,8 @@ test('controller confirmation is edge-triggered and currency exchange retains it
   const navigation = source('src/game/input/UiNavigationController.ts');
   const garage = source('src/game/scenes/OperatorGarageScene.ts');
   assert.match(navigation, /this\.states\.pressed\('confirm'\)/);
-  assert.doesNotMatch(navigation, /this\.states\.held\('confirm'\)/);
+  assert.match(navigation, /repeatable/);
+  assert.match(navigation, /heldActivation/);
   assert.match(garage, /this\.time\.now < this\.exchangeConfirmLockedUntil/);
   assert.match(garage, /this\.exchangeConfirmLockedUntil = this\.time\.now \+ 450/);
 });

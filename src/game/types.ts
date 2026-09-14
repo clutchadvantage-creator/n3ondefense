@@ -17,7 +17,7 @@ export enum RoundState {
   Paused = 'Paused'
 }
 
-export type EnemyType = 'grunt' | 'shooter' | 'defuser' | 'tank' | 'disruptor' | 'star';
+export type EnemyType = 'grunt' | 'shooter' | 'defuser' | 'tank' | 'disruptor' | 'star' | 'drone';
 export type PickupType = 'health' | 'energy' | 'damageBoost' | 'speedBoost' | 'rapidFire' | 'ricochet' | 'grenadeRounds' | 'scattershot' | 'credits' | 'coreToken' | 'plasmaChip' | 'fluxCore';
 export type AbilityType = 'fence' | 'turret' | 'mine';
 

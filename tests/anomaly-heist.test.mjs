@@ -14,7 +14,7 @@ import { AnomalyReturnLifecycle } from '../src/game/anomalies/AnomalyReturnLifec
 const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 test('Anomaly registry keeps the first event data-driven and entry prices on the exact approved table', () => {
-  assert.deepEqual([...ANOMALY_ENTRY_COSTS], [100, 125, 150, 175, 200, 225, 250]);
+  assert.deepEqual([...ANOMALY_ENTRY_COSTS], Array.from({ length: 56 }, (_, i) => 35 + i));
   assert.equal(ANOMALY_DEFINITIONS.length, 1);
   assert.equal(ANOMALY_DEFINITIONS[0].id, 'heist');
   assert.ok(ANOMALY_SCHEDULING.cooldownMs > ANOMALY_SCHEDULING.maximumOpportunityMs);
@@ -32,17 +32,17 @@ test('HEIST rewards accumulate in an isolated pending container without mutating
 });
 
 test('HEIST vault starts with a premium currency and Mod floor before weighted extras', () => {
-  const rewards = new HeistRewardService(417, 30, 'overdrive-phoenix', 150);
+  const rewards = new HeistRewardService(417, 30, 'overdrive-phoenix', 90);
   const firstFour = Array.from({ length: 4 }, () => rewards.rollContainer());
   assert.deepEqual(firstFour.map((reward) => reward.kind), ['credits', 'plasmaChips', 'coreTokens', 'mod']);
-  assert.ok(firstFour[0].amount >= 200_000);
-  assert.ok(firstFour[1].amount >= 119, 'guaranteed Plasma should fund approximately one engineering roll');
-  assert.ok(firstFour[2].amount >= 42);
+  assert.ok(firstFour[0].amount >= 190_000);
+  assert.ok(firstFour[1].amount >= 104, 'the guaranteed Plasma floor follows the actual entry investment');
+  assert.ok(firstFour[2].amount >= 37);
   assert.ok(firstFour[3].modId);
 });
 
 test('HEIST reward scaling improves with entry risk but never guarantees a full Flux refund', () => {
-  for (const cost of [100, 150, 200]) {
+  for (const cost of [35, 60, 90]) {
     let fullRefunds = 0;
     let plasma = 0;
     let flux = 0;
@@ -55,7 +55,7 @@ test('HEIST reward scaling improves with entry risk but never guarantees a full 
       flux += loot.fluxCores;
       if (loot.fluxCores >= cost) fullRefunds += 1;
     }
-    assert.ok(plasma / 1_000 >= 120);
+    assert.ok(plasma / 1_000 >= 90);
     assert.ok(flux / 1_000 > 5, 'Flux recovery should be meaningful across successful expeditions');
     assert.ok(fullRefunds < 25, 'the entry fee must remain real rather than an automatic refund');
   }

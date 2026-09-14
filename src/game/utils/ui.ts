@@ -4,6 +4,7 @@ import { AudioManager } from '../systems/AudioManager';
 import type { AudioSfxName } from '../config/audio';
 import { readButtonJiggleIntensity } from '../../ui/buttonJiggle';
 import { registerUiFocusable } from '../input/UiNavigationController.ts';
+import { bindButtonPointerRepeat } from '../input/ButtonPointerRepeat.ts';
 
 export type ButtonJiggleTarget = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform;
 
@@ -79,6 +80,7 @@ export interface ButtonPresentationOptions {
   focusShortcut?: 'page-left' | 'page-right' | 'tab-left' | 'tab-right';
   focusLabel?: string;
   focusGroup?: string;
+  holdRepeat?: boolean;
 }
 
 export const createButton = (
@@ -132,6 +134,12 @@ export const createButton = (
     return accepted;
   };
   hit.on('pointerdown', activate);
+  const setHeld = (held: boolean): void => {
+    if (!bg.scene) return;
+    bg.setFillStyle(held ? 0x234253 : 0x121a2b, 0.95);
+    button.setData('uiHeld', held);
+  };
+  if (presentation.holdRepeat) bindButtonPointerRepeat(scene, button, hit, () => state.enabled, onClick, setHeld);
 
   const normalizedLabel = (presentation.focusLabel ?? text).replace(/\s+/g, ' ').trim();
   // Unicode escapes keep this source encoding-independent while still
@@ -141,6 +149,8 @@ export const createButton = (
   registerUiFocusable(scene, button, {
     label: normalizedLabel,
     activate,
+    repeatable: presentation.holdRepeat,
+    setHeld: presentation.holdRepeat ? setHeld : undefined,
     disabled: () => !state.enabled,
     modalDepth: presentation.focusModalDepth,
     defaultPriority: presentation.focusDefaultPriority ?? (/^(?:deploy|start|continue|resume|ready|engage|next fight)/i.test(normalizedLabel) ? 30 : 0),

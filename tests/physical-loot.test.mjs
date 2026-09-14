@@ -59,6 +59,6 @@ test('ordinary enemy value remains an automatic kill reward while random pickups
   assert.match(enemyKill, /this\.roundCredits \+= enemyCredits/);
   assert.match(enemyKill, /this\.roundCoreTokens \+= enemyCoreTokens/);
   assert.match(enemyKill, /Math\.random\(\) < pickupChance/);
-  assert.match(enemyKill, /this\.dropPickup\(enemy\.x, enemy\.y\)/);
+  assert.match(enemyKill, /this\.dropPickup\(lootOrigin\.x, lootOrigin\.y\)/);
   assert.doesNotMatch(enemyKill, /this\.spawnPhysicalLootBurst\(/);
 });

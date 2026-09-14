@@ -54,7 +54,8 @@ import type { CosmeticOption } from '../types.ts';
 import { createModCollectionButton, createModCollectionFrame, createModOperationStatusConsole, getModCollectionFrameHeaderHeight } from '../ui/ModCollectionUi.ts';
 import type { ModOperationStatusTone } from '../mods/ModOperationStatus.ts';
 import { createRunConfigurationConsole } from '../ui/RunConfigurationConsoleUi.ts';
-import { createButton, disableButton } from '../utils/ui.ts';
+import { createButton, disableButton, enableButton } from '../utils/ui.ts';
+import { adjustExchangeAmount, type ExchangeAmountAction } from '../economy/ExchangeAmountControl.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
@@ -160,6 +161,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private exchangeSource: ExchangeCurrency = 'credits';
   private exchangeTarget: ExchangeCurrency = 'coreTokens';
   private exchangeAmount = 200;
+  private exchangeInitialBatch = true;
   private exchangeConfirmLockedUntil = 0;
   private exchangeConfirmationArmed = true;
   private economyConsoleTabIndex = 0;
@@ -2193,7 +2195,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     const short = rect.height < 440;
     const rate = getCurrencyExchangeRate(this.exchangeSource, this.exchangeTarget)!;
     if (this.exchangeAmount <= 0 || this.exchangeAmount % rate.sourceUnits !== 0) this.exchangeAmount = rate.sourceUnits;
-    const quote = quoteCurrencyExchange(analytics.wallet, this.exchangeSource, this.exchangeTarget, this.exchangeAmount);
+    this.exchangeAmount = Math.max(rate.sourceUnits, Math.min(this.exchangeAmount, getMaximumExchangeSpend(analytics.wallet, this.exchangeSource, this.exchangeTarget)));
+    let quote = quoteCurrencyExchange(analytics.wallet, this.exchangeSource, this.exchangeTarget, this.exchangeAmount);
     const cycleCurrency = (role: 'source' | 'target'): void => {
       const current = role === 'source' ? this.exchangeSource : this.exchangeTarget;
       let index = EXCHANGE_CURRENCIES.indexOf(current);
@@ -2202,6 +2205,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       if (role === 'source') this.exchangeSource = EXCHANGE_CURRENCIES[index];
       else this.exchangeTarget = EXCHANGE_CURRENCIES[index];
       this.exchangeAmount = getCurrencyExchangeRate(this.exchangeSource, this.exchangeTarget)?.sourceUnits ?? 1;
+      this.exchangeInitialBatch = true;
       this.exchangeConfirmationArmed = true; this.status = ''; this.showCurrencyExchange();
     };
     const innerWidth = rect.width - 34;
@@ -2223,6 +2227,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     root.add(createButton(this, rect.x + rect.width / 2, accountY, 'SWAP', () => {
       [this.exchangeSource, this.exchangeTarget] = [this.exchangeTarget, this.exchangeSource];
       this.exchangeAmount = getCurrencyExchangeRate(this.exchangeSource, this.exchangeTarget)?.sourceUnits ?? 1;
+      this.exchangeInitialBatch = true;
       this.exchangeConfirmationArmed = true; this.status = ''; this.showCurrencyExchange();
     }, compact ? 56 : 66, 'menu', { height: compact ? 32 : 38, fontSize: compact ? 11 : 13, focusModalDepth: 30 }));
     const routePulse = this.add.circle(rect.x + 17 + halfWidth, accountY + (compact ? 34 : 42), 3, 0x7ffff2, 0.86);
@@ -2232,37 +2237,48 @@ export class OperatorGarageScene extends Phaser.Scene {
 
     const amountY = rect.y + (compact ? 142 : 159);
     root.add(this.add.text(rect.x + rect.width / 2, amountY, 'SOURCE AMOUNT', { fontFamily: ECONOMY_FONT, fontSize: `${compact ? 12 : 15}px`, color: '#9dbdc8', fontStyle: 'bold' }).setOrigin(0.5));
-    root.add(this.add.text(rect.x + rect.width / 2, amountY + 17, this.exchangeAmount.toLocaleString(), {
+    const amountText = this.add.text(rect.x + rect.width / 2, amountY + 17, this.exchangeAmount.toLocaleString(), {
       fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 23 : 32}px`, color: Phaser.Display.Color.IntegerToColor(EXCHANGE_CURRENCY_COLORS[this.exchangeSource]).rgba, fontStyle: 'bold'
-    }).setOrigin(0.5, 0));
-    const maxSpend = getMaximumExchangeSpend(analytics.wallet, this.exchangeSource, this.exchangeTarget);
-    const actions: Array<{ label: string; amount: () => number }> = [
-      { label: '-STEP', amount: () => Math.max(rate.sourceUnits, this.exchangeAmount - rate.sourceUnits) },
-      { label: '+STEP', amount: () => this.exchangeAmount + rate.sourceUnits },
-      { label: 'x5', amount: () => rate.sourceUnits * 5 }, { label: 'x10', amount: () => rate.sourceUnits * 10 },
-      { label: 'MAX', amount: () => maxSpend || rate.sourceUnits }
+    }).setOrigin(0.5, 0).setName('exchange-amount');
+    root.add(amountText);
+    const actions: Array<{ label: string; action: ExchangeAmountAction }> = [
+      { label: '-STEP', action: 'decrease' }, { label: '+STEP', action: 'increase' },
+      { label: 'x5', action: 'five' }, { label: 'x10', action: 'ten' }, { label: 'MAX', action: 'maximum' }
     ];
     const actionGap = 5;
     const actionWidth = (rect.width - 34 - actionGap * 4) / 5;
-    actions.forEach((action, index) => root.add(createButton(this, rect.x + 17 + actionWidth / 2 + index * (actionWidth + actionGap), amountY + (compact ? 65 : 78), action.label, () => {
-      this.exchangeAmount = action.amount(); this.exchangeConfirmationArmed = true; this.status = ''; this.showCurrencyExchange();
-    }, actionWidth, 'menu', { height: compact ? 30 : 36, fontSize: compact ? 10 : 13, focusModalDepth: 30, focusGroup: 'currency-exchange-amounts' })));
+    const amountButtons = actions.map((action, index) => {
+      const button = createButton(this, rect.x + 17 + actionWidth / 2 + index * (actionWidth + actionGap), amountY + (compact ? 65 : 78), action.label, () => {
+        this.exchangeAmount = adjustExchangeAmount(SaveSystem.getWalletSnapshot(), this.exchangeSource, this.exchangeTarget,
+          this.exchangeAmount, action.action, this.exchangeInitialBatch);
+        this.exchangeInitialBatch = false;
+        this.exchangeConfirmationArmed = true; this.status = '';
+        refreshQuote();
+      }, actionWidth, 'menu', { height: compact ? 30 : 36, fontSize: compact ? 10 : 13, focusModalDepth: 30,
+        focusGroup: 'currency-exchange-amounts', holdRepeat: index < 2 });
+      root.add(button); return button;
+    });
 
     const previewTop = amountY + (compact ? 91 : 113);
-    panel.add(this.add.rectangle(17, previewTop - rect.y, rect.width - 34, short ? 52 : compact ? 98 : 121, quote.ok ? 0x113039 : 0x37131e, 0.88).setOrigin(0).setStrokeStyle(1, quote.ok ? 0x62efff : 0xff6f89, 0.52));
+    const previewBacking = this.add.rectangle(17, previewTop - rect.y, rect.width - 34, short ? 52 : compact ? 98 : 121, quote.ok ? 0x113039 : 0x37131e, 0.88).setOrigin(0).setStrokeStyle(1, quote.ok ? 0x62efff : 0xff6f89, 0.52);
+    panel.add(previewBacking);
     const spent = quote.ok ? quote.spent : 0; const received = quote.ok ? quote.received : 0;
     const sourceAfter = analytics.wallet[this.exchangeSource] - spent;
     const targetAfter = analytics.wallet[this.exchangeTarget] + received;
-    root.add(this.add.text(rect.x + rect.width / 2, previewTop + 10, quote.ok
+    const quoteText = this.add.text(rect.x + rect.width / 2, previewTop + 10, quote.ok
       ? `${spent.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeSource]}  >>  ${received.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeTarget]}`
-      : quote.message.toUpperCase(), { fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 13 : 17}px`, color: quote.ok ? '#efffff' : '#ff9bae', fontStyle: 'bold', align: 'center' }).setOrigin(0.5));
+      : quote.message.toUpperCase(), { fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 13 : 17}px`, color: quote.ok ? '#efffff' : '#ff9bae', fontStyle: 'bold', align: 'center' }).setOrigin(0.5).setName('exchange-quote');
+    root.add(quoteText);
+    let sourcePost: Phaser.GameObjects.Text | undefined, targetPost: Phaser.GameObjects.Text | undefined;
     if (!short) {
-      root.add(this.add.text(rect.x + 27, previewTop + (compact ? 40 : 49), `SOURCE POST-TRADE\n${analytics.wallet[this.exchangeSource].toLocaleString()}  ->  ${sourceAfter.toLocaleString()}\n-${spent.toLocaleString()}`, {
+      sourcePost = this.add.text(rect.x + 27, previewTop + (compact ? 40 : 49), `SOURCE POST-TRADE\n${analytics.wallet[this.exchangeSource].toLocaleString()}  ->  ${sourceAfter.toLocaleString()}\n-${spent.toLocaleString()}`, {
         fontFamily: ECONOMY_FONT, fontSize: `${compact ? 11 : 14}px`, color: '#ff9caf', fontStyle: 'bold', lineSpacing: 2
-      }));
-      root.add(this.add.text(rect.x + rect.width - 27, previewTop + (compact ? 40 : 49), `TARGET POST-TRADE\n${analytics.wallet[this.exchangeTarget].toLocaleString()}  ->  ${targetAfter.toLocaleString()}\n+${received.toLocaleString()}`, {
+      });
+      root.add(sourcePost);
+      targetPost = this.add.text(rect.x + rect.width - 27, previewTop + (compact ? 40 : 49), `TARGET POST-TRADE\n${analytics.wallet[this.exchangeTarget].toLocaleString()}  ->  ${targetAfter.toLocaleString()}\n+${received.toLocaleString()}`, {
         fontFamily: ECONOMY_FONT, fontSize: `${compact ? 11 : 14}px`, color: '#83ffb9', fontStyle: 'bold', align: 'right', lineSpacing: 2
-      }).setOrigin(1, 0));
+      }).setOrigin(1, 0);
+      root.add(targetPost);
     }
     const confirmY = Math.min(rect.y + rect.height - (compact ? 42 : 49), previewTop + (short ? 75 : compact ? 129 : 158));
     const confirm = createButton(this, rect.x + rect.width / 2, confirmY, quote.ok
@@ -2276,9 +2292,32 @@ export class OperatorGarageScene extends Phaser.Scene {
     }, Math.min(rect.width - 42, compact ? 280 : 340), 'menu', { height: compact ? 38 : 46, fontSize: compact ? 13 : 16, focusModalDepth: 30, focusDefaultPriority: 50 });
     if (!quote.ok || !this.exchangeConfirmationArmed) disableButton(confirm);
     root.add(confirm);
-    root.add(this.add.text(rect.x + rect.width / 2, rect.y + rect.height - 18, this.status || `FIXED RATE // ${rate.sourceUnits.toLocaleString()}:${rate.targetUnits.toLocaleString()} // LOSSY ROUTING`, {
+    const statusText = this.add.text(rect.x + rect.width / 2, rect.y + rect.height - 18, this.status || `FIXED RATE // ${rate.sourceUnits.toLocaleString()}:${rate.targetUnits.toLocaleString()} // LOSSY ROUTING`, {
       fontFamily: ECONOMY_FONT, fontSize: `${compact ? 11 : 13}px`, color: this.status.startsWith('BLOCKED') ? '#ff91a4' : this.status ? '#76ffad' : '#8baab5', fontStyle: 'bold'
-    }).setOrigin(0.5));
+    }).setOrigin(0.5);
+    root.add(statusText);
+    const refreshQuote = (): void => {
+      const wallet = SaveSystem.getWalletSnapshot();
+      this.exchangeAmount = Math.max(rate.sourceUnits, Math.min(this.exchangeAmount, getMaximumExchangeSpend(wallet, this.exchangeSource, this.exchangeTarget)));
+      quote = quoteCurrencyExchange(wallet, this.exchangeSource, this.exchangeTarget, this.exchangeAmount);
+      amountText.setText(this.exchangeAmount.toLocaleString());
+      quoteText.setText(quote.ok ? `${quote.spent.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeSource]}  >>  ${quote.received.toLocaleString()} ${EXCHANGE_CURRENCY_LABELS[this.exchangeTarget]}` : quote.message.toUpperCase())
+        .setColor(quote.ok ? '#efffff' : '#ff9bae');
+      previewBacking.setFillStyle(quote.ok ? 0x113039 : 0x37131e, 0.88).setStrokeStyle(1, quote.ok ? 0x62efff : 0xff6f89, .52);
+      sourcePost?.setText(`SOURCE POST-TRADE\n${wallet[this.exchangeSource].toLocaleString()}  ->  ${(wallet[this.exchangeSource]-quote.spent).toLocaleString()}\n-${quote.spent.toLocaleString()}`);
+      targetPost?.setText(`TARGET POST-TRADE\n${wallet[this.exchangeTarget].toLocaleString()}  ->  ${(wallet[this.exchangeTarget]+quote.received).toLocaleString()}\n+${quote.received.toLocaleString()}`);
+      statusText.setText(this.status || `${quote.batches.toLocaleString()} BATCHES // MAX ${quote.maximumSpend.toLocaleString()}`);
+      (confirm.getByName('button-label') as Phaser.GameObjects.Text).setText(quote.ok ? this.exchangeConfirmationArmed ? 'CONFIRM SECURE EXCHANGE' : 'ADJUST TO EXCHANGE AGAIN' : 'EXCHANGE UNAVAILABLE');
+      (quote.ok && this.exchangeConfirmationArmed ? enableButton : disableButton)(confirm);
+      amountButtons.forEach((button,index) => {
+        const canAdjust = quote.maximumSpend >= rate.sourceUnits
+          && (index === 0 ? this.exchangeAmount > rate.sourceUnits : this.exchangeAmount < quote.maximumSpend);
+        (canAdjust ? enableButton : disableButton)(button);
+      });
+    };
+    refreshQuote();
+    const unsubscribeQuote = SaveSystem.subscribeWalletChanges(refreshQuote, false);
+    root.once(Phaser.GameObjects.Events.DESTROY, unsubscribeQuote);
   }
 
   private renderPortfolioAnalytics(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, rect: EconomyConsoleRect, compact: boolean): void {

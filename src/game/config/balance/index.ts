@@ -1,4 +1,4 @@
-export type BalanceEnemyType = 'grunt' | 'shooter' | 'defuser' | 'tank' | 'disruptor' | 'star';
+export type BalanceEnemyType = 'grunt' | 'shooter' | 'defuser' | 'tank' | 'disruptor' | 'star' | 'drone';
 
 export const PLAYER_BALANCE = {
   maxHealth: 130,
@@ -39,6 +39,7 @@ export const WEAPON_BALANCE = {
 } as const;
 
 export const ENEMY_BALANCE = {
+  drone: { hp: 72, speed: 145, damage: 8, attackCooldownMs: 2300, attackRange: 560, weight: 2.5, unlockRound: 1, credits: 6, tokens: 0, color: 0x59e5ff, size: 32 },
   grunt: { hp: 40, speed: 116, damage: 9, attackCooldownMs: 500, attackRange: 26, weight: 1, unlockRound: 1, credits: 3, tokens: 0, color: 0xff5f7c, size: 24 },
   shooter: { hp: 50, speed: 86, damage: 9, attackCooldownMs: 1450, attackRange: 230, weight: 1.5, unlockRound: 1, credits: 4, tokens: 0, color: 0xff9f4d, size: 24 },
   defuser: { hp: 58, speed: 88, damage: 6, attackCooldownMs: 650, attackRange: 26, weight: 2.25, unlockRound: 1, credits: 6, tokens: 0, color: 0x85f9ff, size: 26 },
@@ -151,6 +152,7 @@ export interface SpawnProfile {
   activeCountCap: number;
   activeWeightCap: number;
   specialSpacingMs: number;
+  droneCountCap: number;
   composition: Record<BalanceEnemyType, number>;
 }
 
@@ -163,10 +165,12 @@ export const getConcurrentSpawnPressure = (profile: SpawnProfile, activeBombCoun
   };
 };
 
-export const getSpawnProfile = (round: number, destroyedSites = 0): SpawnProfile => {
+export const getSpawnProfile = (round: number, destroyedSites = 0, family: 'normal' | 'overdrive' | 'supreme' = 'normal'): SpawnProfile => {
   const r = Math.max(1, Math.floor(round));
   const late = Math.max(0, r - 5);
+  const droneStage = Math.min(2, Math.floor((r - 1) / 10));
   const composition: Record<BalanceEnemyType, number> = {
+    drone: family === 'normal' ? 0 : (family === 'supreme' ? .10 : .045) + droneStage * .035,
     grunt: Math.max(0.32, 0.72 - (r - 1) * 0.035),
     shooter: r === 1 ? 0.12 : Math.min(0.24, 0.13 + r * 0.012),
     defuser: r === 1 ? 0.16 : Math.min(0.16, 0.1 + r * 0.006),
@@ -185,6 +189,7 @@ export const getSpawnProfile = (round: number, destroyedSites = 0): SpawnProfile
     activeCountCap: Math.min(26, 7 + Math.floor((r - 1) * 1.35) + destroyedSites),
     activeWeightCap: Math.min(39, 8 + (r - 1) * 2 + destroyedSites * 1.5),
     specialSpacingMs: Math.max(6500, 13_000 - (r - 1) * 500),
+    droneCountCap: family === 'normal' ? 0 : (family === 'supreme' ? 2 : 1) + droneStage,
     composition
   };
 };

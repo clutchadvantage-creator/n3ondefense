@@ -18,7 +18,7 @@ test('operative-only hit-damage audio is pooled, throttled, and excluded from ev
   assert.match(audio, /now - this\.lastHitDamageSfxAt < HIT_DAMAGE_SFX_MIN_INTERVAL_MS/);
   assert.match(audio, /case 'hit':[\s\S]*?this\.beep\('sfx', 180, 50, 0\.06, name\)/);
   assert.match(audio, /case 'playerDamage':[\s\S]*?this\.playHitDamageSfx\(\)/);
-  assert.match(player, /if \(this\.hp < previousHp\) AudioManager\.get\(\)\.playSfx\('playerDamage'\)/);
+  assert.match(player, /if \(this\.hp < previousHp\)[^\n]*AudioManager\.get\(\)\.playSfx\('playerDamage'\)/);
   assert.doesNotMatch(enemy, /AudioManager|playSfx/);
   assert.doesNotMatch(boss, /AudioManager|playSfx/);
   assert.doesNotMatch(turret, /AudioManager|playSfx/);

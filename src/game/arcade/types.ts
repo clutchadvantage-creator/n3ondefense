@@ -64,6 +64,7 @@ export interface ArcadeMetricEvent {
   reason?: ArcadeStopReason;
   rewardKind?: ArcadeRewardKind;
   rewardAmount?: number;
+  redline?: import('./events/RedlineMomentum.ts').RedlineResult;
 }
 
 export type ArcadeGameplayEvent =
@@ -124,6 +125,7 @@ export interface ArcadeGrantedReward {
 
 export interface ArcadeEnemySpawnRequest {
   type: EnemyType;
+  droneVariant?: import('../enemies/drone/DroneFlight.ts').DroneVariant;
   x: number;
   y: number;
 }
@@ -143,6 +145,7 @@ export interface ArcadeRuntimeContext {
   findCheckpointPoints(count: number): Array<{ x: number; y: number }>;
   spawnEnemy(request: ArcadeEnemySpawnRequest): Enemy | null;
   removeEnemy(enemy: Enemy): void;
+  retireRedlineProjectiles(): void;
   fireBossProjectile(spec: BossProjectileSpec): void;
   applyBossAreaDamage(x: number, y: number, radius: number, damage: number, attack: BossAttackKind): void;
   retireBossProjectiles(): void;

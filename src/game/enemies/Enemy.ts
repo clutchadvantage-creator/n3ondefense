@@ -38,6 +38,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private mechanicalFrame = 0;
   private lastMechanicalAt = -1;
 
+  get airborne(): boolean { return this.stats.type === 'drone'; }
+
   get hazardRadius(): number {
     return this.stats.size * 0.45;
   }
@@ -92,7 +94,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const moving = distance > .05;
     this.mechanicalDistance += moving ? Math.min(16,distance) : 0;
     const tracked = this.stats.type === 'tank';
-    const frame = moving ? Math.floor(this.mechanicalDistance / 6) % 4
+    const frame = this.airborne ? Math.floor(now / 65) % 4 : moving ? Math.floor(this.mechanicalDistance / 6) % 4
       : tracked ? this.mechanicalFrame : Math.floor((now + this.stats.size*37) / 190) % 4;
     if(frame !== this.mechanicalFrame) {
       this.mechanicalFrame = frame;
@@ -124,6 +126,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 }
 
 export const baseEnemyStats: Record<EnemyType, EnemyStats> = {
+  drone: { type: 'drone', hp: ENEMY_BALANCE.drone.hp, speed: ENEMY_BALANCE.drone.speed, damage: ENEMY_BALANCE.drone.damage, color: ENEMY_BALANCE.drone.color, size: ENEMY_BALANCE.drone.size, valueCredits: ENEMY_BALANCE.drone.credits, valueCoreTokens: ENEMY_BALANCE.drone.tokens },
   grunt: { type: 'grunt', hp: ENEMY_BALANCE.grunt.hp, speed: ENEMY_BALANCE.grunt.speed, damage: ENEMY_BALANCE.grunt.damage, color: ENEMY_BALANCE.grunt.color, size: ENEMY_BALANCE.grunt.size, valueCredits: ENEMY_BALANCE.grunt.credits, valueCoreTokens: ENEMY_BALANCE.grunt.tokens },
   shooter: { type: 'shooter', hp: ENEMY_BALANCE.shooter.hp, speed: ENEMY_BALANCE.shooter.speed, damage: ENEMY_BALANCE.shooter.damage, color: ENEMY_BALANCE.shooter.color, size: ENEMY_BALANCE.shooter.size, valueCredits: ENEMY_BALANCE.shooter.credits, valueCoreTokens: ENEMY_BALANCE.shooter.tokens },
   defuser: { type: 'defuser', hp: ENEMY_BALANCE.defuser.hp, speed: ENEMY_BALANCE.defuser.speed, damage: ENEMY_BALANCE.defuser.damage, color: ENEMY_BALANCE.defuser.color, size: ENEMY_BALANCE.defuser.size, valueCredits: ENEMY_BALANCE.defuser.credits, valueCoreTokens: ENEMY_BALANCE.defuser.tokens },

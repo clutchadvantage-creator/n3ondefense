@@ -61,6 +61,7 @@ import type {
 import { HEIST_BALANCE, HEIST_WORLD } from './HeistConfig.ts';
 import { createHeistFacility, type HeistFacilityRuntime } from './HeistFacility.ts';
 import { HeistRewardService, type HeistContainerReward } from './HeistRewardService.ts';
+import { isValidAnomalyEntryCost } from '../AnomalyPricing.ts';
 import { HeistLootPickupSystem } from './HeistLootPickupSystem.ts';
 import { HeistTrapSystem } from './HeistTrapSystem.ts';
 import { HeistPerformanceProfiler } from './HeistPerformanceProfiler.ts';
@@ -138,7 +139,8 @@ interface HeistPickup {
 const isSessionData = (value: unknown): value is HeistSessionData => {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<HeistSessionData>;
-  return candidate.anomalyId === 'heist' && typeof candidate.sessionId === 'string' && !!candidate.player && !!candidate.abilities;
+  return candidate.anomalyId === 'heist' && typeof candidate.sessionId === 'string'
+    && isValidAnomalyEntryCost(candidate.cost) && !!candidate.player && !!candidate.abilities;
 };
 
 const emptyLoot = (): PendingAnomalyLoot => ({ credits: 0, coreTokens: 0, plasmaChips: 0, fluxCores: 0, modIds: [] });

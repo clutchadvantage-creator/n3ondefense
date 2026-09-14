@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { ENEMY_ROBOT_FRAMES } from '../src/game/enemies/EnemyRobotFrames.ts';
 
 test('every enemy role owns a distinct robot chassis while retaining its established texture key', () => {
-  const types = ['grunt', 'shooter', 'defuser', 'tank', 'disruptor', 'star'];
+  const types = ['grunt', 'shooter', 'defuser', 'tank', 'disruptor', 'star', 'drone'];
   assert.deepEqual(Object.keys(ENEMY_ROBOT_FRAMES).sort(), [...types].sort());
   assert.equal(new Set(types.map((type) => ENEMY_ROBOT_FRAMES[type].chassis)).size, types.length);
   assert.equal(new Set(types.map((type) => ENEMY_ROBOT_FRAMES[type].textureKey)).size, types.length);
@@ -16,6 +16,7 @@ test('robot frames are generated once in Boot with authored multi-color palettes
   const enemySource = readFileSync(new URL('../src/game/enemies/Enemy.ts', import.meta.url), 'utf8');
   const artSource = readFileSync(new URL('../src/game/enemies/EnemyArtTextures.ts', import.meta.url), 'utf8');
   for (const type of Object.keys(ENEMY_ROBOT_FRAMES)) {
+    if(type === 'drone') { assert.match(artSource, /drone: drawDrone/); continue; }
     assert.match(bootSource, new RegExp(`createEnemyRobot\\('${type}'`));
   }
   assert.match(enemySource, /restoreVisualPalette\(\)/);

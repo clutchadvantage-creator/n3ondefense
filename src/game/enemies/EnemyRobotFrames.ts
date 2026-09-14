@@ -6,7 +6,8 @@ export type EnemyRobotChassis =
   | 'engineer'
   | 'juggernaut'
   | 'jammer'
-  | 'sentinel';
+  | 'sentinel'
+  | 'quadrotor';
 
 export interface EnemyRobotFrameDefinition {
   textureKey: string;
@@ -18,6 +19,7 @@ export interface EnemyRobotFrameDefinition {
  * authoritative enemy balance entry and is applied as a runtime tint.
  */
 export const ENEMY_ROBOT_FRAMES: Record<EnemyType, EnemyRobotFrameDefinition> = {
+  drone: { textureKey: 'enemy-drone', chassis: 'quadrotor' },
   grunt: { textureKey: 'enemy-grunt', chassis: 'striker' },
   shooter: { textureKey: 'enemy-shooter', chassis: 'gunner' },
   defuser: { textureKey: 'enemy-defuser', chassis: 'engineer' },

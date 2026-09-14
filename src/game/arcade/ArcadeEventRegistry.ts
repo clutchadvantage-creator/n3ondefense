@@ -85,7 +85,7 @@ export const ARCADE_EVENT_DEFINITIONS: readonly ArcadeEventDefinition[] = [
   {
     id: 'redline',
     displayName: 'REDLINE',
-    description: 'Hold the unstable override node for physical loot.',
+    description: 'Move. Dash. Chain kills. Push RPM into the red for better loot.',
     weight: 0.84,
     minimumRound: 4,
     durationMs: 52_000,

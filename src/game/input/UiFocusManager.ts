@@ -11,6 +11,8 @@ export interface UiFocusableControl {
   id: string;
   getRect(): UiFocusRect;
   activate(): unknown;
+  repeatable?: boolean;
+  setHeld?(held: boolean): void;
   setFocused(focused: boolean): void;
   isVisible?(): boolean;
   isDisabled?(): boolean;

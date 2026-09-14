@@ -23,6 +23,7 @@ export interface EnemyArtPalette {
 
 /** Authored palettes preserve role recognition without flattening the chassis to one tint. */
 export const ENEMY_ART_PALETTES: Record<EnemyType, EnemyArtPalette> = {
+  drone: { primary: 0x59e5ff, secondary: 0x354c79, accent: 0xffae55, sensor: 0xffffff },
   grunt: { primary: 0xff416d, secondary: 0x792b85, accent: 0xffa04f, sensor: 0x70f6ff },
   shooter: { primary: 0xff8a36, secondary: 0xb33167, accent: 0xffdf5a, sensor: 0x67efff },
   defuser: { primary: 0x45e7ff, secondary: 0x2874c8, accent: 0x75ffb2, sensor: 0xfff06a },
@@ -64,6 +65,7 @@ const start = (graphics: Phaser.GameObjects.Graphics): void => {
 
 const applyColorPass = (g: Phaser.GameObjects.Graphics, type: EnemyType): void => {
   const palette = ENEMY_ART_PALETTES[type];
+  if (type === 'drone') return;
   if (type === 'grunt') {
     polygon(g, [{ x: 20, y: 23 }, { x: 35, y: 15 }, { x: 47, y: 22 }, { x: 35, y: 28 }], palette.primary, OUTLINE, 1.1, 0.92);
     polygon(g, [{ x: 23, y: 42 }, { x: 46, y: 42 }, { x: 41, y: 53 }, { x: 29, y: 53 }], palette.secondary, OUTLINE, 1.1, 0.9);
@@ -192,6 +194,29 @@ const drawDisruptor = (g: Phaser.GameObjects.Graphics): void => {
   rivets(g, [{ x: 22, y: 35 }, { x: 48, y: 35 }, { x: 35, y: 49 }]);
 };
 
+const drawDrone = (g: Phaser.GameObjects.Graphics, phase: number): void => {
+  g.lineStyle(7, OUTLINE, 1).lineBetween(16,16,56,56).lineBetween(56,16,16,56);
+  g.lineStyle(4, SIDE, 1).lineBetween(16,16,56,56).lineBetween(56,16,16,56);
+  for (const [x,y] of [[16,16],[56,16],[16,56],[56,56]]) {
+    g.fillStyle(0x080e19,1).fillCircle(x+1,y+2,13);
+    g.fillStyle(0x647993,1).fillCircle(x,y,12);
+    g.lineStyle(1.5,0xbdd6e4,1).strokeCircle(x,y,11);
+    g.fillStyle(0x101c2c,1).fillCircle(x,y,8);
+    for(let blade=0;blade<3;blade++) {
+      const a=phase*Math.PI/6+blade*Math.PI*2/3;
+      g.lineStyle(2.5,0x91b6c5,.85).lineBetween(x,y,x+Math.cos(a)*6.5,y+Math.sin(a)*6.5);
+    }
+    g.fillStyle(0x59e5ff,1).fillCircle(x,y,2);
+    g.lineStyle(1.5,0x59e5ff,.85).beginPath().arc(x,y,12,-.6,.5).strokePath();
+  }
+  polygon(g,[{x:27,y:22},{x:44,y:22},{x:48,y:35},{x:43,y:48},{x:28,y:48},{x:24,y:35}],0x304c6d);
+  polygon(g,[{x:28,y:23},{x:43,y:23},{x:44,y:30},{x:27,y:30}],0x9cbdce);
+  g.fillStyle(0x071322,1).fillRoundedRect(28,32,15,10,2);
+  g.fillStyle(0x59e5ff,1).fillRect(30,34,11,3);
+  g.fillStyle(0xffae55,1).fillRect(27,44,4,2).fillRect(40,44,4,2);
+  rivets(g,[{x:28,y:26},{x:42,y:26},{x:29,y:45},{x:42,y:45}]);
+};
+
 const drawStar = (g: Phaser.GameObjects.Graphics): void => {
   for (let index = 0; index < 8; index += 1) {
     radialBlade(g, -Math.PI / 2 + index * Math.PI / 4, 15, index % 2 === 0 ? 32 : 27, 4.2);
@@ -212,6 +237,7 @@ const drawStar = (g: Phaser.GameObjects.Graphics): void => {
  */
 export const createDetailedEnemyRobotTextures = (graphics: Phaser.GameObjects.Graphics): void => {
   const drawers: Record<EnemyType, (graphics: Phaser.GameObjects.Graphics, phase: number) => void> = {
+    drone: drawDrone,
     grunt: drawGrunt,
     shooter: drawShooter,
     defuser: drawDefuser,
@@ -224,7 +250,7 @@ export const createDetailedEnemyRobotTextures = (graphics: Phaser.GameObjects.Gr
     for(let phase=0;phase<4;phase++) {
       graphics.save().translateCanvas(phase*SIZE,0);
       start(graphics);
-      const hover = type === 'defuser' || type === 'disruptor' || type === 'star';
+      const hover = type === 'drone' || type === 'defuser' || type === 'disruptor' || type === 'star';
       const offset = (phase === 1 ? -1 : phase === 3 ? 1 : 0) * (hover ? 1.2 : .4);
       graphics.save().translateCanvas(0,offset);
       drawers[type](graphics,phase);
@@ -234,4 +260,9 @@ export const createDetailedEnemyRobotTextures = (graphics: Phaser.GameObjects.Gr
     }
     finish(graphics, type);
   });
+  graphics.clear().lineStyle(2, 0xff4667, .95);
+  for (const [x,y,sx,sy] of [[5,5,1,1],[67,5,-1,1],[5,67,1,-1],[67,67,-1,-1]]) {
+    graphics.lineBetween(x,y,x+sx*12,y).lineBetween(x,y,x,y+sy*12);
+  }
+  graphics.generateTexture('enemy-drone-target',72,72);
 };

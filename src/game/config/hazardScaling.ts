@@ -5,6 +5,7 @@ export const HAZARD_DAMAGE_SCALING = {
 
 export interface HazardDamageTarget {
   active: boolean;
+  airborne?: boolean;
   x: number;
   y: number;
   hazardRadius: number;

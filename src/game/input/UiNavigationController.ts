@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { BUTTON_REPEAT } from './ButtonPointerRepeat.ts';
 import { DEFAULT_CONTROLLER_SETTINGS, normalizeControllerSettings } from '../config/controllerSettings.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
 import { SaveSystem } from '../systems/SaveSystem.ts';
@@ -27,6 +28,8 @@ export interface UiFocusableOptions {
   id?: string;
   label?: string;
   activate?: () => unknown;
+  repeatable?: boolean;
+  setHeld?: (held: boolean) => void;
   disabled?: () => boolean;
   locked?: () => boolean;
   visible?: () => boolean;
@@ -145,6 +148,8 @@ class PhaserNavigationLayer implements NavigationLayer {
       id,
       getRect: () => this.targetRect(target),
       activate: options.activate ?? (() => target.emit('pointerdown')),
+      repeatable: options.repeatable,
+      setHeld: options.setHeld,
       setFocused: (focused) => {
         if (focused) PHASER_FOCUS_MEMORY.set(this.id, label);
       },
@@ -465,6 +470,13 @@ export class UiNavigationController {
   private readonly states = new ActionStateBuffer();
   private readonly navigationRepeat = new UiInputRepeater<UiFocusDirection>();
   private readonly sliderRepeat = new UiInputRepeater<'left' | 'right'>();
+  private readonly activationRepeat = new UiInputRepeater<'hold'>();
+  private heldActivation: UiFocusableControl | null = null;
+  private readonly resetActivationHold = (): void => {
+    this.heldActivation?.setHeld?.(false);
+    this.heldActivation = null;
+    this.activationRepeat.reset();
+  };
   private readonly layers: NavigationLayer[] = [];
   private readonly gamepads: (BrowserGamepadLike | null)[] = [];
   private device: InputDevice = 'keyboardMouse';
@@ -479,6 +491,7 @@ export class UiNavigationController {
     window.addEventListener('pointermove', this.onPointerMove, { passive: true });
     window.addEventListener('pointerdown', this.onPointerDown, { passive: true });
     window.addEventListener('keydown', this.onKeyDown, { capture: true });
+    window.addEventListener('blur', this.resetActivationHold);
     requestAnimationFrame(this.tick);
   }
 
@@ -538,7 +551,7 @@ export class UiNavigationController {
     const layer = this.activeLayer();
     for (const candidate of this.layers) candidate.drawFocus(now, this.device === 'gamepad' && candidate === layer);
     this.updateHints(layer);
-    if (!layer || this.device !== 'gamepad') return;
+    if (!layer || this.device !== 'gamepad' || !document.hasFocus()) { this.resetActivationHold(); return; }
     const direction = this.heldDirection(pad.uiNavigateX, pad.uiNavigateY, pad.uiAxisX, pad.uiAxisY);
     const hasUiAction = Boolean(direction)
       || this.states.pressed('confirm') || this.states.pressed('cancel')
@@ -560,9 +573,21 @@ export class UiNavigationController {
     }
 
     if (this.states.pressed('confirm')) {
+      this.resetActivationHold();
+      const control = layer.manager.current;
       const result = layer.manager.activate();
+      if (result === 'activated' && control?.repeatable && layer.manager.current === control) {
+        this.heldActivation = control;
+        this.activationRepeat.update('hold', now, BUTTON_REPEAT);
+        control.setHeld?.(true);
+      }
       if (result === 'blocked' || result === 'missing') AudioManager.get().playSfx('itemLocked');
       else if (layer.id.startsWith('dom:')) AudioManager.get().playSfx('menu');
+    }
+    if (this.heldActivation) {
+      const control = this.heldActivation;
+      if (!this.states.held('confirm') || control !== layer.manager.current || control.isDisabled?.() || control.isLocked?.()) this.resetActivationHold();
+      else if (this.activationRepeat.update('hold', now, BUTTON_REPEAT)) control.activate();
     }
     if (this.states.pressed('cancel')) {
       if (layer.back()) AudioManager.get().playSfx('menu');

@@ -1,20 +1,9 @@
-import { shakeGameplayCamera } from '../../vfx/GameplayCameraShake.ts';
-import Phaser from 'phaser';
 import { RedlineVisualController } from '../visuals/RedlineVisualController.ts';
-import type {
-  ArcadeEvent,
-  ArcadeEventDefinition,
-  ArcadeEventOutcome,
-  ArcadeGameplayEvent,
-  ArcadeRewardProfile,
-  ArcadeRuntimeContext,
-  ArcadeStopReason
-} from '../types.ts';
+import { RedlineMomentum, REDLINE_REWARD_TIERS, type RedlineResult } from './RedlineMomentum.ts';
+import { DRONE_VARIANTS } from '../../enemies/drone/DroneFlight.ts';
+import type { Enemy } from '../../enemies/Enemy.ts';
+import type { ArcadeEvent, ArcadeEventDefinition, ArcadeEventOutcome, ArcadeGameplayEvent, ArcadeRewardProfile, ArcadeRuntimeContext, ArcadeStopReason } from '../types.ts';
 
-const ACTIVATION_RADIUS = 118;
-const REQUIRED_MS = 9_000;
-const DECAY_RATE = 0.24;
-const RUPTURE_HOLD_MS = 680;
 const REDLINE_REWARDS: ArcadeRewardProfile = {
   kind: 'random-pool',
   options: [
@@ -30,120 +19,114 @@ const REDLINE_REWARDS: ArcadeRewardProfile = {
 
 export class RedlineEvent implements ArcadeEvent {
   readonly id = 'redline' as const;
+  readonly momentum = new RedlineMomentum();
   private visuals: RedlineVisualController | null = null;
+  private readonly owned = new Map<Enemy, number>();
   private startedAt = 0;
-  private progressMs = 0;
-  private stage = 0;
-  private origin = { x: 0, y: 0 };
-  private nextVisualAt = 0;
-  private bonusRoll = false;
-  private overloadAt = 0;
-  private failureAt = 0;
+  private lastX = 0;
+  private lastY = 0;
+  private lastDash = 0;
+  private damageRevision = 0;
+  private nextDroneAt = 0;
+  private nextTargetAt = 0;
+  private highestStage = 0;
+  private terminalAt: number | null = null;
+  private result: RedlineResult | null = null;
 
-  constructor(
-    private readonly context: ArcadeRuntimeContext,
-    private readonly definition: ArcadeEventDefinition
-  ) {}
+  constructor(private readonly context: ArcadeRuntimeContext, private readonly definition: ArcadeEventDefinition) {}
 
-  start(activeElapsedMs: number): boolean {
-    const point = this.context.findSpawnPoints(1, 230)[0];
-    if (!point) return false;
-    this.startedAt = activeElapsedMs;
-    this.origin = point;
-    this.bonusRoll = ((this.context.seed ^ Math.imul(this.context.round, 0x9e3779b1) ^ 0x6ed11e) >>> 0) % 100 < 28;
-    this.visuals = new RedlineVisualController(this.context.scene, {
-      x: point.x,
-      y: point.y,
-      radius: ACTIVATION_RADIUS,
-      particlesEnabled: this.context.particlesEnabled
-    });
+  start(now: number): boolean {
+    this.startedAt=now;
+    this.lastX=this.context.player.x;this.lastY=this.context.player.y;
+    this.lastDash=this.context.player.lastDashMs;this.damageRevision=this.context.player.damageRevision;
+    this.nextDroneAt=now+3000;this.nextTargetAt=now+6000;
+    this.visuals=new RedlineVisualController(this.context.scene);
     this.context.playArcadeCue('redline-boot');
     return true;
   }
 
-  update(activeElapsedMs: number, deltaMs: number): ArcadeEventOutcome | null {
-    if (this.failureAt > 0) {
-      this.refreshVisuals(activeElapsedMs, false, 0);
-      return activeElapsedMs - this.failureAt >= RUPTURE_HOLD_MS
-        ? { success: false, reason: 'timeout' }
-        : null;
+  update(now: number, deltaMs: number): ArcadeEventOutcome | null {
+    const remaining=Math.max(0,this.definition.durationMs-(now-this.startedAt));
+    if(this.terminalAt!==null) {
+      this.visuals?.update(now,this.momentum,0,now-this.terminalAt,this.result!);
+      return now-this.terminalAt>=3300?{success:true,reason:'success'}:null;
     }
-    if (this.overloadAt > 0) {
-      this.refreshVisuals(activeElapsedMs, true, 0);
-      return activeElapsedMs - this.overloadAt >= RUPTURE_HOLD_MS
-        ? { success: true, reason: 'success' }
-        : null;
-    }
-    const remainingMs = Math.max(0, this.definition.durationMs - (activeElapsedMs - this.startedAt));
-    if (remainingMs <= 0) {
-      this.failureAt = activeElapsedMs;
-      this.visuals?.beginFailure(activeElapsedMs);
-      this.context.playArcadeCue('redline-failed');
-      return null;
-    }
-    const dx = this.context.player.x - this.origin.x;
-    const dy = this.context.player.y - this.origin.y;
-    const inside = dx * dx + dy * dy <= ACTIVATION_RADIUS * ACTIVATION_RADIUS;
-    this.progressMs = Phaser.Math.Clamp(
-      this.progressMs + (inside ? Math.min(deltaMs, 250) : -Math.min(deltaMs, 250) * DECAY_RATE),
-      0,
-      REQUIRED_MS
-    );
-    const nextStage = this.progressMs >= REQUIRED_MS ? 3 : this.progressMs >= REQUIRED_MS * 0.66 ? 2 : this.progressMs >= REQUIRED_MS * 0.33 ? 1 : 0;
-    if (nextStage > this.stage) {
-      this.stage = nextStage;
-      this.context.emitMetric({
-        name: 'redline_stage_reached', eventId: this.id, round: this.context.round,
-        protocol: this.context.protocol, elapsedMs: activeElapsedMs - this.startedAt,
-        progress: this.stage, target: 3
-      });
-      this.context.scene.cameras.main.flash(75, 40 + this.stage * 20, 170, 230, false);
-      this.context.playArcadeCue('redline-stage');
-    }
-    if (this.progressMs >= REQUIRED_MS) {
-      this.overloadAt = activeElapsedMs;
-      this.context.emitMetric({
-        name: 'redline_completed', eventId: this.id, round: this.context.round,
-        protocol: this.context.protocol, elapsedMs: activeElapsedMs - this.startedAt,
-        progress: 3, target: 3, success: true
-      });
-      shakeGameplayCamera(this.context.scene, 170, 0.0032);
-      this.context.scene.cameras.main.flash(120, 70, 210, 255, false);
-      this.visuals?.beginSuccess(activeElapsedMs);
+    if(remaining===0) {
+      this.terminalAt=now;this.result=this.momentum.result();
+      this.retirePressure();
+      this.visuals?.announce('REDLINE TERMINATED',now);
       this.context.playArcadeCue('redline-rupture');
+      this.context.emitMetric({name:'redline_completed',eventId:this.id,round:this.context.round,protocol:this.context.protocol,elapsedMs:now-this.startedAt,success:true,redline:this.result});
+      this.visuals?.update(now,this.momentum,0,0,this.result);
       return null;
     }
-    this.refreshVisuals(activeElapsedMs, inside, remainingMs);
+    const p=this.context.player;
+    const distance=Math.hypot(p.x-this.lastX,p.y-this.lastY);
+    const movement=deltaMs>0?distance/(Math.max(1,p.speed)*deltaMs/1000):0;
+    this.momentum.update(deltaMs,movement,p.lastDashMs!==this.lastDash,p.damageRevision!==this.damageRevision);
+    this.lastX=p.x;this.lastY=p.y;this.lastDash=p.lastDashMs;this.damageRevision=p.damageRevision;
+    const stage=this.momentum.stage;
+    if(stage>this.highestStage) {
+      this.highestStage=stage;
+      this.context.playArcadeCue('redline-stage');
+      if(stage===3)this.visuals?.announce('CRITICAL REDLINE / ENERGY OVERCLOCK',now);
+      this.context.emitMetric({name:'redline_stage_reached',eventId:this.id,round:this.context.round,protocol:this.context.protocol,elapsedMs:now-this.startedAt,progress:stage,target:3});
+    }
+    // A small additive reservoir benefit, only during active Critical updates. No stat mutation.
+    if(stage===3&&p.energy<p.energyStats.max)p.energy=Math.min(p.energyStats.max,p.energy+Math.min(deltaMs,250)/1000*1.5);
+    for(const [enemy,expiresAt] of this.owned) {
+      if(!enemy.active) {this.owned.delete(enemy);continue;}
+      if(now>=expiresAt&&!enemy.isDead()) {this.context.removeEnemy(enemy);this.owned.delete(enemy);}
+    }
+    if(stage>=1&&now>=this.nextDroneAt) {
+      this.nextDroneAt=now+[12000,9000,5500,3500][stage];
+      if(this.owned.size<stage)this.spawnDrone(now,false);
+    }
+    if(stage>=2&&now>=this.nextTargetAt) {
+      this.nextTargetAt=now+(stage===3?8000:13000);
+      const hasTarget=Array.from(this.owned.keys()).some(e=>e.getData('redlineTarget')&&e.active);
+      if(!hasTarget&&this.owned.size<stage+1)this.spawnDrone(now,true);
+    }
+    this.visuals?.update(now,this.momentum,remaining);
     return null;
   }
 
-  handleGameplayEvent(_event: ArcadeGameplayEvent): ArcadeEventOutcome | null { return null; }
+  handleGameplayEvent(event: ArcadeGameplayEvent, now: number): ArcadeEventOutcome | null {
+    if(event.type!=='enemy-killed'||this.terminalAt!==null)return null;
+    const priority=this.owned.has(event.enemy)&&Boolean(event.enemy.getData('redlineTarget'));
+    this.owned.delete(event.enemy);
+    this.momentum.kill(priority);
+    if(priority) {this.visuals?.announce('TARGET DESTROYED / +20 RPM / CHAIN EXTENDED',now);this.context.playArcadeCue('redline-stage');}
+    return null;
+  }
 
-  objectiveText(activeElapsedMs: number): string {
-    if (this.overloadAt > 0) return 'REDLINE // CRITICAL RUPTURE';
-    const remaining = Math.max(0, this.definition.durationMs - (activeElapsedMs - this.startedAt));
-    return `REDLINE // OVERLOAD ${Math.round(this.progressMs / REQUIRED_MS * 100)}% // ${(remaining / 1000).toFixed(1)}s`;
+  objectiveText(now: number): string {
+    return this.terminalAt!==null?'REDLINE // COMPLETE':
+      'REDLINE // MOVE + DASH + CHAIN KILLS // '+Math.ceil(Math.max(0,this.definition.durationMs-now+this.startedAt)/1000)+'s';
   }
 
   rewardPlan() {
-    return { origin: this.origin, rolls: this.bonusRoll ? 3 : 2, profile: REDLINE_REWARDS };
+    const result=this.result??this.momentum.result(), tier=REDLINE_REWARD_TIERS[result.rank];
+    const options=REDLINE_REWARDS.options.filter(o=>result.rank!=='D'||o.kind==='credits').map(o=>({...o,
+      baseAmount:o.baseAmount===undefined?undefined:o.baseAmount*tier.amountMultiplier,
+      amountPerRound:o.amountPerRound===undefined?undefined:o.amountPerRound*tier.amountMultiplier}));
+    return {origin:{x:this.context.player.x,y:this.context.player.y},rolls:tier.rolls,profile:{kind:'random-pool' as const,options}};
   }
 
-  cleanup(_reason: ArcadeStopReason): void {
-    this.visuals?.destroy();
-    this.visuals = null;
+  cleanup(_reason: ArcadeStopReason): void { this.retirePressure();this.visuals?.destroy();this.visuals=null; }
+
+  private spawnDrone(now: number, target: boolean): void {
+    const enemy=this.context.spawnEnemy({type:'drone',x:this.context.player.x,y:this.context.player.y,droneVariant:target?'target':'redline'});
+    if(!enemy)return;
+    enemy.setData('n3onArcadeEvent',this.id);
+    enemy.setData('redlineTarget',target);
+    this.owned.set(enemy,target?now+DRONE_VARIANTS.target.lifetimeMs:Infinity);
+    if(target)this.visuals?.announce('REDLINE TARGET DETECTED',now);
   }
 
-  private refreshVisuals(activeElapsedMs: number, inside: boolean, remainingMs: number): void {
-    if (activeElapsedMs < this.nextVisualAt) return;
-    this.nextVisualAt = activeElapsedMs + 42;
-    this.visuals?.update(
-      activeElapsedMs,
-      this.startedAt,
-      Math.min(1, this.progressMs / REQUIRED_MS),
-      this.stage,
-      inside,
-      remainingMs
-    );
+  private retirePressure(): void {
+    for(const enemy of this.owned.keys())if(enemy.active)this.context.removeEnemy(enemy);
+    this.owned.clear();
+    this.context.retireRedlineProjectiles();
   }
 }

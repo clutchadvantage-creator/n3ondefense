@@ -93,16 +93,14 @@ test('Supply Drop uses validated dimensional clearance and a bounded premium lan
   assert.match(visual, /this\.root\.destroy\(true\)/);
 });
 
-test('Overload presentation derives dimensional power feedback from authoritative progress', () => {
-  const event = source('../src/game/arcade/events/RedlineEvent.ts');
-  const visual = source('../src/game/arcade/visuals/RedlineVisualController.ts');
-  assert.match(event, /this\.progressMs \/ REQUIRED_MS/);
-  assert.match(visual, /const quarter = Math\.min\(4, Math\.floor\(progress \* 4/);
-  assert.match(visual, /energyColumn/);
-  assert.match(visual, /hologramBands/);
-  assert.match(visual, /const contactPower = inside \? 1 : 0\.34/);
-  assert.match(visual, /this\.terminal === 'success'/);
-  assert.match(visual, /this\.terminal === 'failure'/);
+test('Redline presentation reads authoritative RPM and owns only its cached HUD', () => {
+  const event=source('../src/game/arcade/events/RedlineEvent.ts');
+  const visual=source('../src/game/arcade/visuals/RedlineVisualController.ts');
+  assert.match(event,/new RedlineMomentum/);
+  assert.match(visual,/bakeStaticGraphics/);
+  assert.match(visual,/model.rpm/);
+  assert.match(visual,/this.root.destroy/);
+  assert.doesNotMatch(event,/ACTIVATION_RADIUS|progressMs|REQUIRED_MS/);
 });
 
 test('Arcade reward rolls stay side-effect free until the complete plan is physically spawned', () => {
@@ -162,10 +160,7 @@ test('new Arcade events keep distinct objectives, bounded timing, physical rewar
   assert.match(packetSnatcher, /n3onArcadeSuppressBaseLoot/);
 
   const redline = source('../src/game/arcade/events/RedlineEvent.ts');
-  assert.match(redline, /const REQUIRED_MS = 9_000/);
-  assert.match(redline, /const DECAY_RATE = 0\.24/);
   assert.match(redline, /redline_stage_reached/);
-  assert.match(redline, /rolls: this\.bonusRoll \? 3 : 2/);
   assert.doesNotMatch(redline, /speedBoost|rapidFire|energyRegen|cooldown|damageBoost/);
 
   for (const eventSource of [hotPackage, packetSnatcher, redline]) {
@@ -187,7 +182,6 @@ test('new Arcade events delegate presentation to distinct bounded visual control
   assert.match(redlineEvent, /new RedlineVisualController/);
   assert.match(hotVisual, /orbital pod presentation/);
   assert.match(packetVisual, /moving data-heist presentation/);
-  assert.match(redlineVisual, /unstable override reactor/);
   assert.doesNotMatch(hotVisual, /physics\.add|scene\.time\.addEvent|scene\.events\.on/);
   assert.doesNotMatch(packetVisual, /physics\.add|scene\.time\.addEvent|scene\.events\.on/);
   assert.doesNotMatch(redlineVisual, /physics\.add|scene\.time\.addEvent|scene\.events\.on/);
@@ -203,8 +197,7 @@ test('Arcade event VFX expose activation, live progress, urgency, terminal feedb
 
   assert.match(hotEvent, /const LANDING_MS = 1_350/);
   assert.match(packetVisual, /elapsed \/ 1_050/);
-  assert.match(redlineVisual, /elapsed \/ 980/);
-  for (const visual of [hotVisual, packetVisual, redlineVisual]) {
+  for (const visual of [hotVisual, packetVisual]) {
     assert.match(visual, /remainingMs/);
     assert.match(visual, /beginSuccess/);
     assert.match(visual, /beginFailure/);
@@ -214,13 +207,11 @@ test('Arcade event VFX expose activation, live progress, urgency, terminal feedb
   assert.match(hotVisual, /captureProgress/);
   assert.match(packetVisual, /healthFraction/);
   assert.match(packetVisual, /Float32Array\(TRAIL_SAMPLES\)/);
-  assert.match(redlineVisual, /drawSegmentedRing[\s\S]*?progress/);
   assert.match(hotEvent, /this\.nextVisualAt = activeElapsedMs \+ 42/);
   assert.match(packetEvent, /this\.nextVisualAt = activeElapsedMs \+ 42/);
-  assert.match(redlineEvent, /this\.nextVisualAt = activeElapsedMs \+ 42/);
 });
 
-test('Arcade VFX polish leaves mechanics and economy constants unchanged while adding isolated audio hooks', () => {
+test('Other Arcade mechanics and isolated audio hooks remain intact after Redline rework', () => {
   const hot = source('../src/game/arcade/events/HotPackageEvent.ts');
   const packet = source('../src/game/arcade/events/PacketSnatcherEvent.ts');
   const redline = source('../src/game/arcade/events/RedlineEvent.ts');
@@ -231,9 +222,6 @@ test('Arcade VFX polish leaves mechanics and economy constants unchanged while a
   assert.match(hot, /const CAPTURE_RADIUS = 112/);
   assert.match(packet, /const THIEF_SPEED_MULTIPLIER = 1\.72/);
   assert.match(packet, /thief\.hp \*= 2\.2/);
-  assert.match(redline, /const ACTIVATION_RADIUS = 118/);
-  assert.match(redline, /const REQUIRED_MS = 9_000/);
-  assert.match(redline, /const DECAY_RATE = 0\.24/);
   for (const cue of ['hot-package-impact', 'packet-snatcher-alert', 'redline-rupture']) {
     assert.match(types, new RegExp(`'${cue}'`));
   }

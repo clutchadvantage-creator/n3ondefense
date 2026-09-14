@@ -28,6 +28,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   heat = 0;
   invulnUntil = 0;
   lastDashMs = -9_999;
+  damageRevision = 0;
   dashUntil = 0;
   private readonly appearanceController: OperativeAppearanceController;
   permanentModSpeedMultiplier = 1;
@@ -150,7 +151,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (now < this.invulnUntil) return false;
     const previousHp = this.hp;
     this.hp = Math.max(0, this.hp - amount);
-    if (this.hp < previousHp) AudioManager.get().playSfx('playerDamage');
+    if (this.hp < previousHp) { this.damageRevision++; AudioManager.get().playSfx('playerDamage'); }
     this.invulnUntil = now + this.stats.invulnMs;
     this.appearanceController.beginDamageFlash(now, 90);
     return true;

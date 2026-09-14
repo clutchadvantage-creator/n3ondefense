@@ -129,7 +129,7 @@ export class LaserSecuritySystem {
     }
     const enemyDamagePerSecond = getScaledHazardDamage(config.enemyDamagePerSecond, this.round, config.maximumEnemyDamagePerSecond);
     for (const target of targets) {
-      if (target.active && this.touchesAnySegment(target.x, target.y, config.collisionRadius + target.hazardRadius, segmentCount)) {
+      if (target.active && !target.airborne && this.touchesAnySegment(target.x, target.y, config.collisionRadius + target.hazardRadius, segmentCount)) {
         target.takeDamage(enemyDamagePerSecond * dt, 'hazard');
       }
     }

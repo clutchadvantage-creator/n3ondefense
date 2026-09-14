@@ -1,5 +1,7 @@
 import { shakeGameplayCamera } from '../vfx/GameplayCameraShake.ts';
 import Phaser from 'phaser';
+import { FlyingDrone } from '../enemies/drone/FlyingDrone.ts';
+import type { DroneVariant } from '../enemies/drone/DroneFlight.ts';
 import { grenadeTouchesSmashable } from '../arena/SmashableCombatQuery.ts';
 import { followGameplayPlayer, GAMEPLAY_CAMERA_ZOOM, GAMEPLAY_CAMERA_FOLLOW_LERP } from '../systems/GameplayCamera.ts';
 import { starterWeapon } from '../../data/weapons';
@@ -24,6 +26,7 @@ import { baseEnemyStats, Enemy } from '../enemies/Enemy';
 import { getTankHomingMissileSpeed, steerTankHomingMissile } from '../enemies/HomingMissile.ts';
 import { ENEMY_ROBOT_FRAMES } from '../enemies/EnemyRobotFrames.ts';
 import { BombSiteState, RoundState, type AbilityType, type ArenaLayout, type ArenaReward, type ArenaSessionState, type ArenaTemplate, type BombSiteRuntime, type EnemyType, type PickupType, type RectSpec, type RoundFinishedPayload } from '../types';
+import { isValidAnomalyEntryCost } from '../anomalies/AnomalyPricing.ts';
 import { AudioManager } from '../systems/AudioManager';
 import { BombSiteManager } from '../systems/BombSiteManager';
 import { GameStateMachine } from '../systems/GameStateMachine';
@@ -181,6 +184,7 @@ interface Projectile {
   grenadeArmedAt?: number;
   grenadeNextProximityCheckAt?: number;
   grenadeDetonated?: boolean;
+  redlineOwned?: boolean;
   nativePalette?: boolean;
   emissiveColor?: number;
 }
@@ -797,7 +801,7 @@ export class ArenaScene extends Phaser.Scene {
   private separationSubject: Enemy | null = null;
   private readonly applySeparationNeighbor = (neighbor: Enemy): void => {
     const enemy = this.separationSubject;
-    if (!enemy || neighbor === enemy || !neighbor.active || neighbor.isDead()) return;
+    if (!enemy || neighbor === enemy || neighbor.airborne !== enemy.airborne || !neighbor.active || neighbor.isDead()) return;
     const dx = enemy.x - neighbor.x;
     const dy = enemy.y - neighbor.y;
     const distanceSquared = dx * dx + dy * dy;
@@ -2156,7 +2160,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private obtainProjectile(state: ProjectileSpawn): Projectile {
-    return this.projectilePool.obtain(state);
+    const projectile = this.projectilePool.obtain(state);
+    projectile.redlineOwned = false;
+    return projectile;
   }
 
   private retireProjectile(projectile: Projectile): void {
@@ -2465,7 +2471,7 @@ export class ArenaScene extends Phaser.Scene {
     const level = this.roundManager.round;
     const destroyed = this.bombSites.destroyedCount();
 
-    const profile = getSpawnProfile(level, destroyed);
+    const profile = getSpawnProfile(level, destroyed, this.currentModeFamily());
     const activeSites = this.bombSites.getActiveBombSites();
     const oldestPlantTime = activeSites.reduce((oldest, site) => Math.min(oldest, site.plantedAt), Number.POSITIVE_INFINITY);
     const elapsedMs = Number.isFinite(oldestPlantTime) ? now - oldestPlantTime : 0;
@@ -2490,7 +2496,7 @@ export class ArenaScene extends Phaser.Scene {
     if (now < this.nextSpawnAt) return;
     this.nextSpawnAt = now + cadenceMs;
     const standardEnemyCount = this.enemies.reduce(
-      (count, enemy) => count + (enemy.getData('n3onArcadeEvent') ? 0 : 1),
+      (count, enemy) => count + (enemy.getData('n3onArcadeEvent') && !enemy.airborne ? 0 : 1),
       0
     );
     if (standardEnemyCount >= activeCountCap) {
@@ -2504,7 +2510,7 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
     const activeWeight = this.enemies.reduce(
-      (sum, enemy) => sum + (enemy.getData('n3onArcadeEvent') ? 0 : ENEMY_BALANCE[enemy.stats.type].weight),
+      (sum, enemy) => sum + (enemy.getData('n3onArcadeEvent') && !enemy.airborne ? 0 : ENEMY_BALANCE[enemy.stats.type].weight),
       0
     );
     if (activeWeight + ENEMY_BALANCE[type].weight > activeWeightCap) {
@@ -2549,6 +2555,7 @@ export class ArenaScene extends Phaser.Scene {
           && now - this.lastDefuserSpawnAt >= OBJECTIVE_BALANCE.defuserSpawnSpacingMs;
       }
       if (type === 'disruptor' && activeCount(type) >= (this.roundManager.round < 10 ? 1 : 2)) return false;
+      if (type === 'drone' && activeCount(type) >= profile.droneCountCap) return false;
       if (type === 'star' && activeCount(type) >= 1) return false;
       if ((type === 'tank' || type === 'disruptor' || type === 'star') && now - this.lastSpecialSpawnAt < profile.specialSpacingMs) return false;
       return true;
@@ -2568,9 +2575,9 @@ export class ArenaScene extends Phaser.Scene {
     return candidates[candidates.length - 1];
   }
 
-  private spawnEnemy(type: EnemyType, defensePhase: boolean, explicitSpawn?: { x: number; y: number }): Enemy {
+  private spawnEnemy(type: EnemyType, defensePhase: boolean, explicitSpawn?: { x: number; y: number }, droneVariant: DroneVariant = 'standard'): Enemy {
     const base = baseEnemyStats[type];
-    const spawn = explicitSpawn ?? Phaser.Utils.Array.GetRandom(this.layout.enemySpawns);
+    const spawn = type === 'drone' ? this.findDroneEntrance() : explicitSpawn ?? Phaser.Utils.Array.GetRandom(this.layout.enemySpawns);
     const curve = getDifficultyCurve(this.roundManager.round, this.bombSites.destroyedCount());
     const phaseScale = defensePhase ? 1 : 0.9;
 
@@ -2588,7 +2595,9 @@ export class ArenaScene extends Phaser.Scene {
     };
 
     const enemyTexture = ENEMY_ROBOT_FRAMES[type].textureKey;
-    const enemy = new Enemy(this, spawn.x, spawn.y, enemyTexture, stats);
+    const enemy = type === 'drone'
+      ? new FlyingDrone(this, spawn.x, spawn.y, stats, this.enemyNavigationSequence++, droneVariant)
+      : new Enemy(this, spawn.x, spawn.y, enemyTexture, stats);
     enemy.telemetrySpawnedAtActiveMs = GameplayTelemetryRecorder.recordEnemySpawn(type, stats.hp);
     if (type === 'tank') {
       enemy.lastShotMs = this.time.now - TANK_HOMING_MISSILE_BALANCE.cooldownMs * 0.35;
@@ -2601,6 +2610,10 @@ export class ArenaScene extends Phaser.Scene {
       // shadow looking like a detached slab after the art pass.
       enemy.setBlendMode(Phaser.BlendModes.NORMAL);
       enemy.setAngularVelocity(52);
+    }
+    if (enemy.airborne) {
+      this.enemies.push(enemy);
+      return enemy;
     }
     const wallCollider = this.physics.add.collider(enemy, this.walls);
     const playerCollider = this.physics.add.collider(enemy, this.player, () => {
@@ -2633,6 +2646,54 @@ export class ArenaScene extends Phaser.Scene {
     return enemy;
   }
 
+  private findDroneEntrance(): { x: number; y: number } {
+    const b = this.layout.generation.bounds;
+    let x = b.x + 30, y = b.y + 30;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const side = (this.enemyNavigationSequence + attempt) % 4;
+      const fraction = .12 + Math.random() * .76;
+      x = side < 2 ? b.x + (side ? b.w - 30 : 30) : b.x + b.w * fraction;
+      y = side < 2 ? b.y + b.h * fraction : b.y + (side === 2 ? 30 : b.h - 30);
+      if (Math.hypot(x - this.player.x, y - this.player.y) >= 360) break;
+    }
+    return { x, y };
+  }
+
+  private findDroneLootGround(x: number, y: number): { x: number; y: number } {
+    if (!this.hitWall(x, y) && !this.isNearBombSite(x, y, 42)) return { x, y };
+    const b = this.layout.generation.bounds;
+    // Only on a death, bounded expanding rings find ground beside even thick structures.
+    for (let radius = 40; radius <= 400; radius += 40) for (let i = 0; i < 12; i++) {
+      const px = Phaser.Math.Clamp(x + Math.cos(i * Math.PI / 6) * radius, b.x + 36, b.x + b.w - 36);
+      const py = Phaser.Math.Clamp(y + Math.sin(i * Math.PI / 6) * radius, b.y + 36, b.y + b.h - 36);
+      if (!this.hitWall(px, py) && !this.isNearBombSite(px, py, 42)) return { x: px, y: py };
+    }
+    return { x: this.player.x, y: this.player.y };
+  }
+
+  private firingDrone: FlyingDrone | null = null;
+  private readonly fireDroneShot = (angle: number): void => {
+    const drone = this.firingDrone;
+    if (!drone) return;
+    const speed = 345 * Math.min(1.25, this.currentModeBalance().enemySpeedMultiplier);
+    GameplayTelemetryRecorder.recordProjectileFired('enemy');
+    const projectile = this.obtainProjectile({
+      x: drone.x, y: drone.y, texture: 'projectile-boss-cannon', width: 15, height: 6,
+      tint: drone.variant === 'target' ? 0xff496c : 0x59e5ff, rotation: angle,
+      velocityX: Math.cos(angle) * speed, velocityY: Math.sin(angle) * speed, depth: 10,
+      damage: drone.stats.damage, from: 'enemy', lifeMs: 2000, trailColor: 0x59e5ff, telemetryOwner: 'enemy'
+    });
+    projectile.redlineOwned = drone.getData('n3onArcadeEvent') === 'redline';
+    this.projectiles.push(projectile);
+  };
+
+  private updateDrone(drone: FlyingDrone, now: number, dt: number): void {
+    this.firingDrone = drone;
+    drone.updateFlight(now, dt, this.player.x, this.player.y, this.layout.generation.bounds,
+      getModeSpawnCadence(ENEMY_BALANCE.drone.attackCooldownMs, this.protocol), this.fireDroneShot);
+    this.firingDrone = null;
+  }
+
   private updateEnemies(now: number, dt: number): void {
     const activeSites = this.bombSites.getActiveBombSites();
     const gasHazard = this.gasHazard?.visualGasActive ? this.gasHazard : null;
@@ -2646,6 +2707,7 @@ export class ArenaScene extends Phaser.Scene {
       enemy.updateDamageFlash(now);
       enemy.updateMechanicalPresentation(now);
 
+      if (enemy instanceof FlyingDrone) { this.updateDrone(enemy, now, dt); continue; }
       if (enemy.getData('arcadeMovementControlled')) {
         gasHazard?.carveVisualTunnel(
           enemy.x,
@@ -2762,7 +2824,7 @@ export class ArenaScene extends Phaser.Scene {
     const candidates = this.defuseCandidateBuffer;
     candidates.length = 0;
     for (const enemy of this.enemies) {
-      if (!enemy.active || enemy.isDead() || enemy.getData('arcadeMovementControlled') || now < enemy.defuseInterruptedUntil) continue;
+      if (!enemy.active || enemy.isDead() || enemy.airborne || enemy.getData('arcadeMovementControlled') || now < enemy.defuseInterruptedUntil) continue;
       let nearestDistanceSquared = Number.POSITIVE_INFINITY;
       for (const site of activeSites) {
         const dx = enemy.x - site.x;
@@ -4374,6 +4436,7 @@ export class ArenaScene extends Phaser.Scene {
       let trigger = bossInRange || Boolean(this.fluxCores?.hasCoreWithin(mine.sprite.x, mine.sprite.y, mine.radius));
       if (!trigger) {
         for (const enemy of this.enemies) {
+          if (enemy.airborne) continue;
           const dx = enemy.x - mine.sprite.x;
           const dy = enemy.y - mine.sprite.y;
           if (dx * dx + dy * dy <= radiusSquared) {
@@ -4400,6 +4463,7 @@ export class ArenaScene extends Phaser.Scene {
       this.fluxCores?.damageArea(mine.sprite.x, mine.sprite.y, mine.radius, mine.damage, 'mine');
       this.playMineExplosion(mine.sprite.x, mine.sprite.y, mine.radius, mine);
       for (const e of this.enemies) {
+        if (e.airborne) continue;
         const dx = e.x - mine.sprite.x;
         const dy = e.y - mine.sprite.y;
         const distanceSquared = dx * dx + dy * dy;
@@ -4431,6 +4495,7 @@ export class ArenaScene extends Phaser.Scene {
       const effectiveDps = fence.dps * fieldDamage;
       this.fluxCores?.damageAlongSegment(fence.x1, fence.y1, fence.x2, fence.y2, 11, effectiveDps * dt);
       for (const enemy of this.enemies) {
+        if (enemy.airborne) continue;
         const d = this.distancePointToSegment(
           enemy.x,
           enemy.y,
@@ -4742,6 +4807,7 @@ export class ArenaScene extends Phaser.Scene {
     const pullRadius = MOD_BALANCE.magneticPayload.pullRadius[rank];
     const pullStrength = MOD_BALANCE.magneticPayload.pullStrength[rank];
     for (const enemy of this.enemies) {
+      if (enemy.airborne) continue;
       const dx = mine.sprite.x - enemy.x;
       const dy = mine.sprite.y - enemy.y;
       const distanceSquared = dx * dx + dy * dy;
@@ -5096,12 +5162,13 @@ export class ArenaScene extends Phaser.Scene {
       coreTokens: enemyCoreTokens
     });
 
+    const lootOrigin = enemy.airborne ? this.findDroneLootGround(enemy.x, enemy.y) : enemy;
     if (!suppressBaseLoot) {
-      this.tryAwardMod(enemy.stats.type === 'star' ? 'eliteEnemy' : 'normalEnemy', false, enemy.x, enemy.y);
+      this.tryAwardMod(enemy.stats.type === 'star' ? 'eliteEnemy' : 'normalEnemy', false, lootOrigin.x, lootOrigin.y);
     }
 
     const pickupChance = Math.min(1, PICKUP_BALANCE.enemyDropChance * this.modRuntime.multiplier('enemyPickupChance'));
-    if (!suppressBaseLoot && Math.random() < pickupChance) this.dropPickup(enemy.x, enemy.y);
+    if (!suppressBaseLoot && Math.random() < pickupChance) this.dropPickup(lootOrigin.x, lootOrigin.y);
 
     if (this.modRuntime.hasInfusion('ghost-echoes')) this.playEnemyGhostEcho(enemy);
     if (this.modRuntime.hasInfusion('arcade-pop')) this.playArcadePop(enemy.x, enemy.y);
@@ -5298,8 +5365,24 @@ export class ArenaScene extends Phaser.Scene {
       findSpawnPoints: (count, minimumPlayerDistance, clearance) =>
         this.findArcadeSpawnPoints(count, minimumPlayerDistance, seed, clearance),
       findCheckpointPoints: (count) => this.findArcadeCheckpointPoints(count, seed),
-      spawnEnemy: ({ type, x, y }) => this.spawnEnemy(type, this.bombSites.activeBombCount() > 0, { x, y }),
+      spawnEnemy: ({ type, x, y, droneVariant }) => {
+        if (type === 'drone') {
+          const pressure = getConcurrentSpawnPressure(getSpawnProfile(this.roundManager.round, this.bombSites.destroyedCount()), this.bombSites.activeBombCount());
+          const multiplier = this.currentModeBalance().activePressureMultiplier;
+          if (this.enemies.length >= Math.round(pressure.activeCountCap * multiplier)
+            || this.enemies.reduce((sum, e) => sum + ENEMY_BALANCE[e.stats.type].weight, 0) + ENEMY_BALANCE.drone.weight > pressure.activeWeightCap * multiplier) return null;
+        }
+        return this.spawnEnemy(type, this.bombSites.activeBombCount() > 0, { x, y }, droneVariant);
+      },
       removeEnemy: (enemy) => this.removeArcadeEnemy(enemy),
+      retireRedlineProjectiles: () => {
+        let write = 0;
+        for (const p of this.projectiles) {
+          if (p.redlineOwned) this.retireProjectile(p);
+          else this.projectiles[write++] = p;
+        }
+        this.projectiles.length = write;
+      },
       fireBossProjectile: (spec) => this.spawnBossProjectile(spec),
       applyBossAreaDamage: (x, y, radius, damage, attack) => this.applyBossAreaDamage(x, y, radius, damage, attack),
       retireBossProjectiles: () => this.retireActiveBossProjectiles(),
@@ -5397,7 +5480,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private spendAnomalyEntryCost(amount: number): boolean {
-    const cost = Math.max(0, Math.floor(amount));
+    if (!isValidAnomalyEntryCost(amount)) return false;
+    const cost = amount;
     const fromRound = Math.min(this.roundFluxCores, cost);
     const fromWallet = cost - fromRound;
     if (this.hudWalletFluxCores < fromWallet) return false;
@@ -5408,6 +5492,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private beginAnomalyTransition(request: AnomalyEntryRequest): void {
+    if (!isValidAnomalyEntryCost(request.cost)) return;
     if (request.anomalyId !== 'heist' || !this.anomalyReturnLifecycle.begin(request.sessionId)) return;
     // Cosmetic debris does not belong to the suspended gameplay snapshot.
     // Retire it before capturing the anomaly baseline; portal/session state is
