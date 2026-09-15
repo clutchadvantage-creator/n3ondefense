@@ -90,6 +90,8 @@ export class AnomalyController {
           this.hud.show('ANOMALY // HEIST', `${this.context.interactionPrompt()} ENTER // ${this.cost} FLUX CORES`, 0xff5bd8);
           if (this.context.isInteractPressed()) this.tryEnter();
         }
+      } else {
+        this.hud.show('ANOMALY AVAILABLE', `${this.definition?.displayName ?? 'HEIST'} // ${this.cost} FLUX CORES`, 0xff5bd8);
       }
       return;
     }
@@ -125,7 +127,7 @@ export class AnomalyController {
       protocol: this.context.protocol, elapsedMs: this.elapsedMs - this.spawnedAt,
       progress: Math.min(this.charge, this.chargeTarget), target: this.chargeTarget
     });
-    this.hud.show('ANOMALY SIGNAL CHARGING', `${Math.min(this.charge, this.chargeTarget)} / ${this.chargeTarget} HOSTILE ENERGY`, 0x63f7ff, 850);
+    this.hud.show('ANOMALY SIGNAL CHARGING', `${Math.min(this.charge, this.chargeTarget)} / ${this.chargeTarget} HOSTILE ENERGY`, 0x63f7ff);
     if (this.charge >= this.chargeTarget) this.openPortal();
   }
 
@@ -198,6 +200,7 @@ export class AnomalyController {
     this.chargeTarget = Math.min(definition.chargeMaximum, Math.ceil(definition.chargeBase + this.context.round * definition.chargePerRound));
     this.visual = new AnomalyPortalVisual(this.context.scene, location.x, location.y, this.options.particlesEnabled);
     this.audio.play('anomaly-spawn');
+    this.hud.show('ANOMALY SIGNAL CHARGING', `0 / ${this.chargeTarget} HOSTILE ENERGY`, 0x63f7ff);
     this.hud.show('ANOMALOUS ENERGY DETECTED', `FEED THE SPHERE // ELIMINATE ${this.chargeTarget} HOSTILES`, 0x63f7ff, 3600);
     this.context.emitMetric({
       name: 'anomaly_spawned', anomalyId: definition.id, round: this.context.round,
@@ -213,6 +216,7 @@ export class AnomalyController {
     this.cost = this.forcedCost ?? rollAnomalyEntryCost(this.random.next());
     this.visual.transformToPortal();
     this.audio.play('portal-rupture');
+    this.hud.show('ANOMALY AVAILABLE', `HEIST // ${this.cost} FLUX CORES`, 0xff5bd8);
     this.hud.show(this.definition.displayName, `${this.definition.description}\nENTRY COST // ${this.cost} FLUX CORES`, 0xff5bd8, 5600);
     this.context.emitMetric({
       name: 'anomaly_portal_opened', anomalyId: this.definition.id, round: this.context.round,

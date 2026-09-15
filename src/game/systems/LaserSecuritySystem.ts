@@ -1,3 +1,4 @@
+import { HudInformationSystem } from '../ui/HudInformationSystem.ts';
 import Phaser from 'phaser';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { LASER_HAZARD_BALANCE } from '../config/laserHazards';
@@ -49,13 +50,7 @@ export class LaserSecuritySystem {
   ) {
     this.createdAt = scene.time.now;
     this.graphics = scene.add.graphics().setDepth(6).setBlendMode(Phaser.BlendModes.ADD);
-    this.warningText = scene.add.text(scene.scale.width * 0.5, 192, '', {
-      fontFamily: 'Orbitron, sans-serif',
-      fontSize: '17px',
-      color: '#ff9fe6',
-      stroke: '#050812',
-      strokeThickness: 5
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1050).setAlpha(0);
+    this.warningText = HudInformationSystem.forScene(scene).createTacticalText('laser', '#ff9fe6');
   }
 
   update(

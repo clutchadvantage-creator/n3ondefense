@@ -93,12 +93,12 @@ test('Supply Drop uses validated dimensional clearance and a bounded premium lan
   assert.match(visual, /this\.root\.destroy\(true\)/);
 });
 
-test('Redline presentation reads authoritative RPM and owns only its cached HUD', () => {
+test('Redline shares authoritative RPM with the common panel and owns only its edge effects', () => {
   const event=source('../src/game/arcade/events/RedlineEvent.ts');
   const visual=source('../src/game/arcade/visuals/RedlineVisualController.ts');
   assert.match(event,/new RedlineMomentum/);
-  assert.match(visual,/bakeStaticGraphics/);
-  assert.match(visual,/model.rpm/);
+  assert.match(visual,/HudInformationSystem/);
+  assert.match(event,/Math.round\(this.momentum.rpm\)/);
   assert.match(visual,/this.root.destroy/);
   assert.doesNotMatch(event,/ACTIVATION_RADIUS|progressMs|REQUIRED_MS/);
 });

@@ -81,7 +81,7 @@ test('Arcade and anomaly environment props share the layered world presentation 
   const hotPackage = source('../src/game/arcade/visuals/HotPackageVisualController.ts');
   const portal = source('../src/game/anomalies/AnomalyPortalVisual.ts');
   assert.match(primitives, /drawLayeredArcadeSocket/);
-  assert.match(redline, /bakeStaticGraphics/);
+  assert.match(redline, /HudInformationSystem/);
   assert.match(hotPackage, /drawLayeredArcadeSocket/);
   assert.match(portal, /this\.anchor/);
   assert.match(portal, /drawMechanicalRivets/);

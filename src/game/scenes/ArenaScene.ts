@@ -1,3 +1,6 @@
+import { HudInformationSystem } from '../ui/HudInformationSystem.ts';
+import { WeeklyCompletionTracker } from '../progression/WeeklyCompletionTracker.ts';
+import type { WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import { shakeGameplayCamera } from '../vfx/GameplayCameraShake.ts';
 import Phaser from 'phaser';
 import { FlyingDrone } from '../enemies/drone/FlyingDrone.ts';
@@ -459,7 +462,11 @@ export class ArenaScene extends Phaser.Scene {
 
   private player!: Player;
   private hud!: Hud;
-  private bannerText!: Phaser.GameObjects.Text;
+  private hudInformation!: HudInformationSystem;
+  private modBannerText!: Phaser.GameObjects.Text;
+  private weeklyObservationState?: WeeklyOperationsState;
+  private weeklyCompletionTracker: WeeklyCompletionTracker | null = null;
+  private nextWeeklyCheckAt = 0;
 
   private walls!: Phaser.Physics.Arcade.StaticGroup;
   private wallRects: RectSpec[] = [];
@@ -840,6 +847,7 @@ export class ArenaScene extends Phaser.Scene {
     this.crosshairValid = null;
     this.pointerLock?.setSensitivity(this.aimSettings.mouseSensitivity);
     this.hud?.applySettings(settings.hud);
+    this.hudInformation?.applySettings(settings.hud);
     this.resumeGameplay();
   };
   private readonly onReturnFromModCollection = (): void => {
@@ -916,6 +924,7 @@ export class ArenaScene extends Phaser.Scene {
     // Settings can change in HEIST Options while this exact Arena sleeps.
     const currentSettings = SaveSystem.get().settings;
     this.hud.applySettings(currentSettings.hud);
+    this.hudInformation?.applySettings(currentSettings.hud);
     this.refreshAbilityBindings();
     this.aimSettings = normalizeAimSettings(currentSettings.aim);
     this.pointerLock?.setSensitivity(this.aimSettings.mouseSensitivity);
@@ -1265,7 +1274,7 @@ export class ArenaScene extends Phaser.Scene {
         if (hit) GameplayTelemetryRecorder.recordPlayerDamage('bombsite-reactor', amount);
         return hit;
       },
-      announce: (message) => this.showBanner(message),
+      announce: (message) => this.showModBanner(message),
       playCue: (cue) => {
         if (cue === 'heavy') this.audio.playSfx('bomblet');
         else if (cue === 'warning') this.audio.playSfx('defuseAlarm');
@@ -1483,20 +1492,23 @@ export class ArenaScene extends Phaser.Scene {
     }
     if (this.roundHudLive) {
       this.hud.destroy();
-      this.bannerText.destroy();
+      this.hudInformation.destroy();
+      this.modBannerText.destroy();
       this.siteActionText.destroy();
     }
 
     this.hud = new Hud(this, SaveSystem.get().settings.hud);
 
-    this.bannerText = this.add.text(this.scale.width * 0.5, 148, '', {
-      fontFamily: 'Orbitron, sans-serif',
-      fontSize: '36px',
-      color: '#74f5ff',
-      align: 'center',
-      stroke: '#091321',
-      strokeThickness: 8
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1100).setAlpha(0);
+    this.hudInformation = HudInformationSystem.forScene(this);
+    this.hudInformation.applySettings(SaveSystem.get().settings.hud);
+    const weekly = SaveSystem.previewWeeklyOperations();
+    this.weeklyObservationState = weekly.state;
+    this.weeklyCompletionTracker = new WeeklyCompletionTracker(weekly.snapshot);
+    this.nextWeeklyCheckAt = 0;
+    this.modBannerText = this.add.text(this.scale.width * .5, 148, '', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: '36px', color: '#74f5ff', align: 'center',
+      stroke: '#091321', strokeThickness: 8
+    }).setOrigin(.5).setScrollFactor(0).setDepth(1100).setAlpha(0);
 
     this.siteActionText = this.add.text(this.scale.width * 0.5, this.scale.height - 46, '', {
       fontFamily: 'Rajdhani, sans-serif',
@@ -1626,6 +1638,9 @@ export class ArenaScene extends Phaser.Scene {
       this.activateDevPerformanceStressScenario();
       return;
     }
+
+    this.hudInformation?.update(delta, this.tutorialHardPaused || this.legendaryRevealInProgress || this.state.state === RoundState.Paused);
+    if (this.state.state !== RoundState.Paused) this.updateWeeklyCompletion(now);
 
     const gameplayCanSoundLowHealth = !this.tutorialHardPaused
       && !this.legendaryRevealInProgress
@@ -8640,21 +8655,30 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private showBanner(text: string): void {
-    this.bannerText.setText(text).setAlpha(0).setY(148);
-    this.tweens.add({
-      targets: this.bannerText,
-      alpha: { from: 0, to: 1 },
-      y: 174,
-      duration: 260,
-      yoyo: true,
-      hold: 800
-    });
+    const [heading, ...detail] = text.split('\n');
+    this.hudInformation?.notify({ category: 'system', heading, message: detail.join(' // '), priority: 1 });
+  }
+
+  /** Mod combat callouts keep the existing presentation, outside the non-Mod queue. */
+  private showModBanner(text: string): void {
+    this.modBannerText.setText(text).setAlpha(0).setY(148);
+    this.tweens.add({ targets: this.modBannerText, alpha: { from: 0, to: 1 }, y: 174,
+      duration: 260, yoyo: true, hold: 800 });
+  }
+
+  private updateWeeklyCompletion(now: number): void {
+    if (!this.weeklyCompletionTracker || now < this.nextWeeklyCheckAt) return;
+    this.nextWeeklyCheckAt = now + 250;
+    const result = SaveSystem.previewWeeklyOperations(this.pendingProgressEnemyKills, this.pendingProgressBombSites,
+      this.protocol, this.weeklyObservationState);
+    this.weeklyObservationState = result.state;
+    this.weeklyCompletionTracker.update(result.snapshot, notice => this.hudInformation.notify(notice));
   }
 
   private handleResize(size: Phaser.Structs.Size): void {
     const width = size.width;
     const height = size.height;
-    this.bannerText.setPosition(width * 0.5, this.bannerText.y);
+    this.modBannerText?.setX(width * .5);
     this.siteActionText.setPosition(width * 0.5, height - 46);
     this.bossEncounter?.resize(width);
     this.supremeFinale?.resize(width);
@@ -9363,7 +9387,8 @@ export class ArenaScene extends Phaser.Scene {
     this.retireRoundOwner('encounter-hud', () => {
       if (!this.roundHudLive) return;
       this.hud.destroy();
-      this.bannerText.destroy();
+      this.hudInformation.destroy();
+      this.modBannerText.destroy();
       this.siteActionText.destroy();
       this.roundHudLive = false;
     });
@@ -9473,7 +9498,8 @@ export class ArenaScene extends Phaser.Scene {
     if (this.roundHudLive) {
       this.hud?.destroy();
       this.siteActionText?.destroy();
-      this.bannerText?.destroy();
+      this.hudInformation?.destroy();
+      this.modBannerText?.destroy();
       this.roundHudLive = false;
     }
     this.crosshair?.destroy();

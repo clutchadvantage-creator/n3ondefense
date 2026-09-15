@@ -180,8 +180,8 @@ test('HEIST facility and shared Arcade HUD use bounded dimensional presentation 
   assert.match(facility, /warning strips/i);
   assert.match(heist, /lockHousing/);
   assert.match(heist, /sparkArc/);
-  assert.match(arcadeHud, /objectiveChassis/);
-  assert.match(arcadeHud, /leftRail/);
+  assert.match(arcadeHud, /setEventState\('arcade'/);
+  assert.match(arcadeHud, /this\.information\.notify/);
 });
 
 test('Arena owns ordered HEIST stop, Arena wake, and WAKE-bound restoration', () => {

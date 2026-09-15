@@ -35,6 +35,7 @@ test('HUD and reticle settings clamp malformed imported values and preserve vali
   assert.deepEqual(normalizeHudSettings({
     scale: 99, panelOpacity: -2, backgroundOpacity: 0.63, glow: 'high', animation: 'reduced', edgePosition: -4, textScale: 0.1
   }), {
+    tacticalInformation: true, tacticalTextSize: 'medium',
     scale: 1.4, panelOpacity: 0.2, backgroundOpacity: 0.63, glow: 'high', animation: 'reduced', edgePosition: 0, textScale: 0.85
   });
   assert.deepEqual(normalizeAimSettings({

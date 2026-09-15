@@ -1,3 +1,4 @@
+import { HudInformationSystem } from '../../ui/HudInformationSystem.ts';
 import Phaser from 'phaser';
 import { ABILITY_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, WEAPON_BALANCE, getDifficultyCurve } from '../../config/balance/index.ts';
 import { COLORS } from '../../config/constants.ts';
@@ -189,11 +190,9 @@ export class HeistScene extends Phaser.Scene {
   private hudPayload!: HudPayload;
   private readonly hudBuffs: string[] = [];
   private readonly hudRadarContacts: HudRadarContact[] = [];
-  private titleText!: Phaser.GameObjects.Text;
-  private objectiveText!: Phaser.GameObjects.Text;
   private lootText!: Phaser.GameObjects.Text;
   private promptText!: Phaser.GameObjects.Text;
-  private announcementText!: Phaser.GameObjects.Text;
+  private hudInformation!: HudInformationSystem;
   private crosshair!: Phaser.GameObjects.Graphics;
   private shieldVisual: OperativeShieldEffect | null = null;
   private nextPlayerShotAt = 0;
@@ -566,6 +565,7 @@ export class HeistScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    this.hudInformation?.update(delta, this.manuallyPaused || this.inputCapturePaused);
     if (this.returning) return;
     const profiler = import.meta.env.DEV ? this.performanceProfiler : null;
     profiler?.beginFrame(delta);
@@ -740,13 +740,6 @@ export class HeistScene extends Phaser.Scene {
     const width = this.scale.width;
     this.hud = new Hud(this, SaveSystem.get().settings.hud);
     this.createHudPayload();
-    this.titleText = this.add.text(width * 0.5, 132, 'ANOMALY // HEIST', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: '#ff63dc', stroke: '#030912', strokeThickness: 5
-    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(20_000);
-    this.objectiveText = this.add.text(width * 0.5, 156, 'INFILTRATE THE VAULT', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#8ef9ff', backgroundColor: '#06121de6',
-      padding: { x: 14, y: 6 }
-    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(20_000);
     this.lootText = this.add.text(width - 18, 136, '', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#ffe16d', align: 'right', backgroundColor: '#06121de6',
       padding: { x: 10, y: 6 }
@@ -755,11 +748,9 @@ export class HeistScene extends Phaser.Scene {
       fontFamily: 'Orbitron, sans-serif', fontSize: '20px', color: '#ffffff', backgroundColor: '#0a1525e8',
       padding: { x: 18, y: 10 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(20_000).setVisible(false);
-    this.announcementText = this.add.text(width * 0.5, this.scale.height * 0.32, '', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '32px', color: '#ff63dc', align: 'center',
-      stroke: '#02050a', strokeThickness: 9
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(20_100).setAlpha(0);
-    this.hud.attachOverlay(this.titleText, this.objectiveText, this.lootText, this.promptText, this.announcementText);
+    this.hudInformation = HudInformationSystem.forScene(this);
+    this.hudInformation.applySettings(SaveSystem.get().settings.hud);
+    this.hud.attachOverlay(this.lootText, this.promptText);
     this.handleResize(this.scale.gameSize);
   }
 
@@ -2071,7 +2062,7 @@ export class HeistScene extends Phaser.Scene {
           : this.phase === 'egress-ready' ? 'CROSS THE VAULT THRESHOLD // ARM EXTRACTION CLOCK'
             : this.phase === 'escape' ? `EXTRACT // ${Math.max(0, Math.ceil((this.escapeDeadline - now) / 1000))}s // ${this.enemies.length} HOSTILES`
             : 'ARENA LINK RESTORING';
-    this.objectiveText.setText(objective);
+    this.hudInformation.setEventState('anomaly', 'HEIST', objective, 'anomaly');
     this.hudBuffs.length = 0;
     const appendBuff = (label: string, until: number): void => {
       if (until > now) this.hudBuffs.push(`${label} ${Math.ceil((until - now) / 1000)}s`);
@@ -2134,23 +2125,16 @@ export class HeistScene extends Phaser.Scene {
   }
 
   private announce(title: string, detail: string): void {
-    this.announcementText.setText(`${title}\n${detail}`).setAlpha(0).setScale(0.92);
-    this.tweens.killTweensOf(this.announcementText);
-    this.tweens.add({ targets: this.announcementText, alpha: 1, scale: 1, duration: 180, yoyo: true, hold: 1050 });
+    this.hudInformation.notify({ category: title.includes('FAILED') || title.includes('LOST') ? 'failure' : 'anomaly', heading: title, message: detail, priority: 2 });
   }
 
   private readonly handleResize = (size: Phaser.Structs.Size): void => {
     const width = size.width;
     const height = size.height;
-    const objectiveBounds = this.hud?.getTutorialTargetBounds('objective');
     const statsBounds = this.hud?.getTutorialTargetBounds('stats');
-    const objectiveBottom = objectiveBounds ? objectiveBounds.y + objectiveBounds.height : 120;
     const statsBottom = statsBounds ? statsBounds.y + statsBounds.height : 124;
-    this.titleText?.setPosition(width * 0.5, objectiveBottom + 12);
-    this.objectiveText?.setPosition(width * 0.5, objectiveBottom + 36);
     this.lootText?.setPosition(width - 18, statsBottom + 12);
     this.promptText?.setPosition(width * 0.5, height - 48);
-    this.announcementText?.setPosition(width * 0.5, height * 0.32);
     this.devPerformanceOverlay?.setX(width - 14);
   };
 
@@ -2214,6 +2198,7 @@ export class HeistScene extends Phaser.Scene {
   private readonly onResumeFromOptions = (): void => {
     const settings = SaveSystem.get().settings;
     this.hud.applySettings(settings.hud);
+    this.hudInformation?.applySettings(settings.hud);
     this.handleResize(this.scale.gameSize);
     this.aimSettings = normalizeAimSettings(settings.aim);
     this.inputController.refresh(settings.abilityBindings, normalizeControllerSettings(settings.controller));

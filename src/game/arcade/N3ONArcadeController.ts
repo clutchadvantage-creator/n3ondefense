@@ -191,7 +191,8 @@ export class N3ONArcadeController {
         rolls: 1
       };
       const rewards = this.rewards.spawn(definition.id, definition, plan, () => this.random.next());
-      rewardLabel = rewards.length === 1 ? rewards[0].label : `${rewards.length} PHYSICAL DROPS DEPLOYED`;
+      const systemRewards = rewards.filter(reward => reward.kind !== 'mod');
+      rewardLabel = systemRewards.length === 1 ? systemRewards[0].label : systemRewards.length > 1 ? `${systemRewards.length} SYSTEM REWARDS DEPLOYED` : '';
       for (const reward of rewards) {
         this.context.emitMetric({
           name: 'arcade_reward_rolled', eventId: definition.id, round: this.context.round,

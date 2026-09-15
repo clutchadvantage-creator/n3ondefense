@@ -1,5 +1,6 @@
 import { getCosmeticById, getCosmeticDisplayColor, isPrismCosmetic, resolveOperativeFrameAppearance } from '../../data/cosmetics';
 import { PlayerProfileStore } from '../state/PlayerProfileStore';
+import { resolveWeeklyOperationDecks, type WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import type { CosmeticOption, GameSaveData } from '../types';
 import type { OnlineProgressSnapshot } from '../../online/onlineTypes';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
@@ -13,6 +14,16 @@ import type { WalletChangeListener, WalletSnapshot } from '../economy/WalletStat
 import type { ModStatChangeListener } from '../mods/ModStatEvents.ts';
 
 export class SaveSystem {
+  /** Read-only live progress projection. Reward collection remains with getWeeklyOperations. */
+  static previewWeeklyOperations(enemies = 0, sites = 0, protocol: RunProtocolId = 'normal', state?: WeeklyOperationsState) {
+    const save = PlayerProfileStore.getActiveSave();
+    const progress = { ...save.progress, enemiesDestroyed: save.progress.enemiesDestroyed + enemies,
+      bombSitesDestroyed: save.progress.bombSitesDestroyed + sites };
+    const overdrive = { ...save.progress.overdriveWeeklyProgress };
+    if (protocol !== 'normal') { overdrive.enemiesDestroyed += enemies; overdrive.bombSitesDestroyed += sites; }
+    return resolveWeeklyOperationDecks(progress, overdrive, state ?? save.progress.weeklyOperations);
+  }
+
   static getWalletSnapshot(): WalletSnapshot {
     return PlayerProfileStore.getWalletSnapshot();
   }

@@ -1,5 +1,5 @@
 import { RedlineVisualController } from '../visuals/RedlineVisualController.ts';
-import { RedlineMomentum, REDLINE_REWARD_TIERS, type RedlineResult } from './RedlineMomentum.ts';
+import { RedlineMomentum, REDLINE_REWARD_TIERS, REDLINE_STATES, type RedlineResult } from './RedlineMomentum.ts';
 import { DRONE_VARIANTS } from '../../enemies/drone/DroneFlight.ts';
 import type { Enemy } from '../../enemies/Enemy.ts';
 import type { ArcadeEvent, ArcadeEventDefinition, ArcadeEventOutcome, ArcadeGameplayEvent, ArcadeRewardProfile, ArcadeRuntimeContext, ArcadeStopReason } from '../types.ts';
@@ -116,7 +116,8 @@ export class RedlineEvent implements ArcadeEvent {
   }
   objectiveText(now: number): string {
     return this.terminalAt !== null ? 'REDLINE // COMPLETE' :
-      'REDLINE // MOVE + DASH + CHAIN KILLS // ' + Math.ceil(Math.max(0, this.definition.durationMs - now + this.startedAt) / 1000) + 's';
+      'REDLINE // ' + Math.round(this.momentum.rpm) + '% RPM / ' + REDLINE_STATES[this.momentum.stage] + ' x' + this.momentum.multiplier
+      + ' / ' + Math.floor(this.momentum.score).toLocaleString() + ' PTS / ' + Math.ceil(Math.max(0, this.definition.durationMs - now + this.startedAt) / 1000) + 's';
   }
   rewardPlan() {
     const result = this.result ?? this.momentum.result(), tier = REDLINE_REWARD_TIERS[result.rank];

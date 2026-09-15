@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { HudInformationSystem } from '../ui/HudInformationSystem.ts';
 import { FLUX_CORE_BALANCE, getFluxCoreCapacity, getFluxCoreHealth } from '../config/fluxCores';
 import type { Player } from '../entities/Player';
 import type { ArenaTheme, RectSpec } from '../types';
@@ -67,7 +68,6 @@ export class FluxCoreSystem {
   private lasersOnlineSince = 0;
   private laserSuppressedUntil = 0;
   private recoveryAlarmPlayed = false;
-  private announcementUntil = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -89,13 +89,7 @@ export class FluxCoreSystem {
       FLUX_CORE_BALANCE.initialSpawnMinMs,
       FLUX_CORE_BALANCE.initialSpawnMaxMs
     );
-    this.warningText = scene.add.text(scene.scale.width * 0.5, 276, '', {
-      fontFamily: 'Orbitron, sans-serif',
-      fontSize: '16px',
-      color: '#80fff0',
-      stroke: '#050812',
-      strokeThickness: 5
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1050).setAlpha(0);
+    this.warningText = HudInformationSystem.forScene(scene).createTacticalText('flux', '#80fff0');
   }
 
   get activeCount(): number {
@@ -284,9 +278,9 @@ export class FluxCoreSystem {
     this.rememberSpawnLocation(point.x, point.y);
     this.nextCoreId += 1;
     this.spawnedCoreCount += 1;
-    this.warningText.setText(`FLUX DEPLOYMENT // ${this.spawnedCoreCount} / ${this.plannedCoreCount}`);
-    this.warningText.setAlpha(0.72);
-    this.announcementUntil = now + 1900;
+    if (this.spawnedCoreCount === 1) HudInformationSystem.forScene(this.scene).notify({
+      category: 'system', heading: 'FLUX CORES DEPLOYED', message: 'Breach cores to disable the security lasers.', key: 'flux-deployment'
+    });
 
     if (this.spawnedCoreCount >= this.plannedCoreCount) {
       this.cyclePhase = 'engaged';
@@ -463,7 +457,7 @@ export class FluxCoreSystem {
         : 0.7);
       return;
     }
-    if (now >= this.announcementUntil) this.warningText.setAlpha(0);
+    this.warningText.setAlpha(0);
   }
 
   private applyDamage(index: number, damage: number, _source: FluxCoreDamageSource): void {

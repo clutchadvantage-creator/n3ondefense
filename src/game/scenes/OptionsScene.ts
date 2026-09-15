@@ -655,6 +655,8 @@ export class OptionsScene extends Phaser.Scene {
       edgePosition.setValue?.(hud.edgePosition);
       glow.setValue(hud.glow);
       animation.setValue(hud.animation);
+      tacticalSize.setValue(hud.tacticalTextSize);
+      (tactical.getByName('button-label') as Phaser.GameObjects.Text).setText(`TACTICAL INFORMATION: ${hud.tacticalInformation ? 'ON' : 'OFF'}`);
       commitHud();
       SaveSystem.persist();
     }, Phaser.Math.Clamp(innerWidth * 0.36, 195, 270));
@@ -674,7 +676,21 @@ export class OptionsScene extends Phaser.Scene {
     container.add(this.add.text(centerX, shakeY + 29, 'Explosion and impact motion. Attack warnings and effects remain visible.', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#9fc7d5', align: 'center'
     }).setOrigin(0.5));
-    this.configureTabScrolling('interface', container, shakeY + 58);
+    const tacticalY = shakeY + 92;
+    const tactical = this.addTabButton(container, centerX, tacticalY, `TACTICAL INFORMATION: ${hud.tacticalInformation ? 'ON' : 'OFF'}`, () => {
+      hud = { ...hud, tacticalInformation: !hud.tacticalInformation }; commitHud();
+      (tactical.getByName('button-label') as Phaser.GameObjects.Text).setText(`TACTICAL INFORMATION: ${hud.tacticalInformation ? 'ON' : 'OFF'}`);
+    }, Math.min(390, innerWidth - 24));
+    this.registerScrollTarget('interface', tactical, tacticalY, 22);
+    const tacticalSize = this.createCycleSelector(container, 'interface', controlLeft, tacticalY + 52, controlWidth,
+      'TACTICAL TEXT SIZE', ['small', 'medium', 'large'] as const, hud.tacticalTextSize, value => {
+        hud = { ...hud, tacticalTextSize: value }; commitHud();
+      });
+    container.add(this.add.text(centerX, tacticalY + 91, 'Auxiliary hazard timers only. Health, objectives, weapons and entry prompts stay visible.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#9fc7d5', align: 'center',
+      wordWrap: { width: innerWidth - 32, useAdvancedWrap: true }
+    }).setOrigin(.5));
+    this.configureTabScrolling('interface', container, tacticalY + 130);
   }
 
   private createProfileTab(container: Phaser.GameObjects.Container): void {

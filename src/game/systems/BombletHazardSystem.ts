@@ -1,3 +1,4 @@
+import { HudInformationSystem } from '../ui/HudInformationSystem.ts';
 import { shakeGameplayCamera } from '../vfx/GameplayCameraShake.ts';
 import Phaser from 'phaser';
 import { BOMBLET_HAZARD_BALANCE } from '../config/bombletHazards';
@@ -53,13 +54,7 @@ export class BombletHazardSystem {
   ) {
     this.random = new SeededRandom((seed ^ Math.imul(round + 17, 0x9e3779b1) ^ 0xb04b1e7) >>> 0);
     this.nextStrikeAt = scene.time.now + BOMBLET_HAZARD_BALANCE.initialDelayMs + this.random.int(0, 1200);
-    this.warningText = scene.add.text(scene.scale.width * 0.5, 220, '', {
-      fontFamily: 'Orbitron, sans-serif',
-      fontSize: '17px',
-      color: '#ffd27a',
-      stroke: '#050812',
-      strokeThickness: 5
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1050).setAlpha(0);
+    this.warningText = HudInformationSystem.forScene(scene).createTacticalText('bomblet', '#ffd27a');
     this.targetPool = Array.from(
       { length: BOMBLET_HAZARD_BALANCE.maximumBomblets },
       () => this.createTargetSlot()

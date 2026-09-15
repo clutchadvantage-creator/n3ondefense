@@ -1,3 +1,4 @@
+import { HudInformationSystem } from '../ui/HudInformationSystem.ts';
 import Phaser from 'phaser';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { GAS_HAZARD_BALANCE, getGasExposureDamage } from '../config/gasHazards';
@@ -123,13 +124,7 @@ export class GasHazardSystem {
       { length: GAS_HAZARD_BALANCE.maximumCanisters },
       () => this.createCanisterSlot()
     );
-    this.warningText = scene.add.text(scene.scale.width * 0.5, 248, '', {
-      fontFamily: 'Orbitron, sans-serif',
-      fontSize: '17px',
-      color: '#8cff73',
-      stroke: '#041008',
-      strokeThickness: 5
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1050).setAlpha(0);
+    this.warningText = HudInformationSystem.forScene(scene).createTacticalText('gas', '#8cff73');
   }
 
   get active(): boolean {

@@ -4,6 +4,8 @@ export type ReticleStyle = 'original' | 'split-cross' | 'triad' | 'cyber-ring';
 export type ReticleColor = 'cyan' | 'magenta' | 'green' | 'gold' | 'white' | 'red';
 
 export interface HudSettings {
+  tacticalInformation: boolean;
+  tacticalTextSize: 'small' | 'medium' | 'large';
   scale: number;
   panelOpacity: number;
   backgroundOpacity: number;
@@ -28,6 +30,8 @@ export interface AimSettings {
 }
 
 export const DEFAULT_HUD_SETTINGS: Readonly<HudSettings> = {
+  tacticalInformation: true,
+  tacticalTextSize: 'medium',
   scale: 1,
   panelOpacity: 1,
   backgroundOpacity: 1,
@@ -87,6 +91,8 @@ export function normalizeHudSettings(value: unknown): HudSettings {
       ? 1 - source.edgeMargin / 36
       : DEFAULT_HUD_SETTINGS.edgePosition;
   return {
+    tacticalInformation: typeof source.tacticalInformation === 'boolean' ? source.tacticalInformation : true,
+    tacticalTextSize: enumValue(source.tacticalTextSize, ['small', 'medium', 'large'] as const, 'medium'),
     scale: clamp(finite(source.scale, DEFAULT_HUD_SETTINGS.scale), 0.75, 1.4),
     panelOpacity: clamp(finite(source.panelOpacity, DEFAULT_HUD_SETTINGS.panelOpacity), 0.2, 1),
     backgroundOpacity: clamp(finite(source.backgroundOpacity, DEFAULT_HUD_SETTINGS.backgroundOpacity), 0.2, 1),
