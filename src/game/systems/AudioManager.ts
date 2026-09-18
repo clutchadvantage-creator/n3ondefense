@@ -2,6 +2,9 @@ import { SaveSystem } from './SaveSystem';
 import { DEFAULT_AUDIO_VOLUME, SFX_DEFINITIONS, type AudioSfxName } from '../config/audio';
 import { publicAssetUrl } from '../utils/assetUrl';
 import { DroneAudioPool, type DroneAudioOwner } from './DroneAudioPool';
+import type Phaser from 'phaser';
+import { RunTransitionManager } from '../flow/RunTransitionManager';
+import { SceneKeys } from '../flow/SceneKeys';
 
 const audioAssetUrl = (path: string): string => publicAssetUrl(`assets/audio/${path}`);
 const BOMBLET_SFX_POOL_SIZE = 8;
@@ -157,6 +160,20 @@ export class AudioManager {
     'music/NeonSwampRiotV2.mp3',
     'music/NeonTokyoNights.mp3'
   ].map(audioAssetUrl);
+  private readonly menuPlaylist = [
+    'music/Neon Serenity.mp3',
+    'music/Neon Dub Pulse.mp3'
+  ].map(audioAssetUrl);
+  private menuMusicAudio: HTMLAudioElement | null = null;
+  private menuPlaylistIndex = 0;
+  private musicContext: 'silent' | 'menu' | 'gameplay' = 'silent';
+  private musicLifecycleCleanup: (() => void) | null = null;
+  private musicRetryPending = false;
+  private musicPlayPending: HTMLAudioElement | null = null;
+  private musicPlaybackGeneration = 0;
+  private musicFadeAudio: HTMLAudioElement | null = null;
+  private musicFadeStartedAt = 0;
+  private musicErrorCount = 0;
   private musicAudio: HTMLAudioElement | null = null;
   private playlistIndex = 0;
   private musicStarted = false;
@@ -460,8 +477,13 @@ export class AudioManager {
    * remains mounted and retains its playhead while the anomaly is active. */
   enterHeistMusic(): void {
     if (this.heistMusicRequested) return;
+    this.menuMusicAudio?.pause();
+    this.musicFadeAudio = null;
     this.heistMusicRequested = true;
-    this.resumeArenaMusicAfterHeist = Boolean(this.musicAudio && this.musicStarted && !this.musicAudio.paused);
+    this.resumeArenaMusicAfterHeist = this.musicContext === 'gameplay'
+      && Boolean(this.musicAudio && (this.musicStarted || this.musicPlayPending === this.musicAudio));
+    this.musicPlaybackGeneration++;
+    this.musicPlayPending = null;
     this.musicAudio?.pause();
     const audio = this.heistMusicAudio;
     if (!audio) return;
@@ -479,10 +501,8 @@ export class AudioManager {
     }
     const shouldResume = this.resumeArenaMusicAfterHeist;
     this.resumeArenaMusicAfterHeist = false;
-    if (!shouldResume || !this.musicAudio) return;
-    this.musicStarted = true;
-    this.musicAudio.volume = this.clampVolume(this.getVolume('music'));
-    void this.musicAudio.play().catch(() => { this.musicStarted = false; });
+    if (!shouldResume || !this.musicAudio || this.musicContext !== 'gameplay') return;
+    this.startMusicLoop();
   }
 
   private startDedicatedLoop(audio: HTMLAudioElement | null, sound: AudioSfxName): void {
@@ -786,6 +806,7 @@ export class AudioManager {
   }
 
   private playMenuSfx(name: 'menuHover' | 'menu' | 'itemLocked'): void {
+    if (name !== 'menuHover') this.resumeFromUserGesture();
     if (name === 'menuHover') {
       const now = performance.now();
       if (now - this.lastMenuHoverSfxAt < MENU_HOVER_SFX_MIN_INTERVAL_MS) return;
@@ -1112,9 +1133,114 @@ export class AudioManager {
     audio.preload = 'auto';
     audio.loop = false;
     audio.volume = this.clampVolume(this.getVolume('music'));
-    audio.addEventListener('ended', () => this.nextTrack());
-    audio.addEventListener('error', () => this.nextTrack());
+    audio.addEventListener('ended', () => {
+      if (this.musicAudio !== audio || this.musicContext !== 'gameplay' || this.heistMusicRequested) return;
+      this.musicErrorCount = 0;
+      this.nextTrack();
+    });
+    audio.addEventListener('error', () => {
+      if (this.musicAudio !== audio || this.musicContext !== 'gameplay' || this.heistMusicRequested) return;
+      // Stop after one failed deck instead of cycling missing assets forever.
+      if (++this.musicErrorCount < this.playlist.length) this.nextTrack();
+    });
     this.musicAudio = audio;
+  }
+
+  private mountMenuTrack(): void {
+    if (this.menuMusicAudio) {
+      this.menuMusicAudio.pause();
+      this.menuMusicAudio.removeAttribute('src');
+      this.menuMusicAudio.load();
+    }
+    const audio = new Audio(this.menuPlaylist[this.menuPlaylistIndex]);
+    audio.preload = 'auto';
+    audio.loop = false;
+    this.menuMusicAudio = audio;
+    audio.addEventListener('ended', () => {
+      if (this.menuMusicAudio !== audio || this.musicContext !== 'menu') return;
+      this.musicErrorCount = 0;
+      this.nextMusicTrack();
+    });
+    audio.addEventListener('error', () => {
+      if (this.menuMusicAudio !== audio || this.musicContext !== 'menu') return;
+      if (++this.musicErrorCount < this.menuPlaylist.length) this.nextMusicTrack();
+    });
+  }
+
+  /** One game-owned observer, independent of which menu happens to be visible.
+   * Paused/sleeping worlds and pending deployments still own the run soundtrack. */
+  bindMusicLifecycle(game: Phaser.Game): void {
+    this.musicLifecycleCleanup?.();
+    let foreground = '';
+    const update = (): void => {
+      let nextForeground = '';
+      for (const scene of game.scene.scenes) {
+        if (scene.sys.isActive() && scene.sys.settings.key !== SceneKeys.Boot) nextForeground = scene.sys.settings.key;
+      }
+      if (foreground !== nextForeground) {
+        foreground = nextForeground;
+        this.refreshMix();
+      }
+      const next = RunTransitionManager.hasActiveRun(game) ? 'gameplay' : foreground ? 'menu' : 'silent';
+      if (next !== this.musicContext) {
+        this.musicContext = next;
+        this.musicErrorCount = 0;
+        this.musicRetryPending = false;
+        this.musicPlaybackGeneration++;
+        this.musicPlayPending = null;
+        this.musicFadeAudio = null;
+        // Pause before starting the replacement: never overlap music voices.
+        if (next !== 'menu') this.menuMusicAudio?.pause();
+        if (next !== 'gameplay') {
+          this.musicAudio?.pause();
+          this.musicStarted = false;
+          this.exitHeistMusic();
+        }
+        this.startMusicLoop();
+      }
+      this.updateMusicFade();
+    };
+    const gesture = (): void => { update(); this.resumeFromUserGesture(); };
+    game.events.on('poststep', update);
+    document.addEventListener('pointerdown', gesture, true);
+    document.addEventListener('keydown', gesture, true);
+    const cleanup = (): void => {
+      game.events.off('poststep', update);
+      game.events.off('destroy', cleanup);
+      document.removeEventListener('pointerdown', gesture, true);
+      document.removeEventListener('keydown', gesture, true);
+      this.musicContext = 'silent';
+      this.pauseMusic();
+      this.exitHeistMusic();
+      this.musicLifecycleCleanup = null;
+    };
+    game.events.once('destroy', cleanup);
+    this.musicLifecycleCleanup = cleanup;
+  }
+
+  private currentPlaylistAudio(): HTMLAudioElement | null {
+    return this.musicContext === 'menu' ? this.menuMusicAudio : this.musicContext === 'gameplay' ? this.musicAudio : null;
+  }
+
+  private updateMusicFade(): void {
+    const audio = this.currentPlaylistAudio();
+    if (!audio || audio.paused || this.heistMusicRequested) return;
+    const fadeIn = audio === this.musicFadeAudio ? Math.min(1, (performance.now() - this.musicFadeStartedAt) / 250) : 1;
+    const fadeOut = Number.isFinite(audio.duration) ? Math.min(1, Math.max(0, (audio.duration - audio.currentTime) / .25)) : 1;
+    audio.volume = this.clampVolume(this.getVolume('music') * Math.min(fadeIn, fadeOut));
+    if (fadeIn === 1) this.musicFadeAudio = null;
+  }
+
+  musicDiagnostics() {
+    return {
+      context: this.musicContext,
+      menuTrack: this.menuPlaylistIndex,
+      menuTime: this.menuMusicAudio?.currentTime ?? 0,
+      retryPending: this.musicRetryPending,
+      voices: [this.menuMusicAudio, this.musicAudio, this.heistMusicAudio].filter(Boolean).map(audio => ({
+        src: audio!.src, playing: !audio!.paused && !audio!.ended, time: audio!.currentTime, volume: audio!.volume
+      }))
+    };
   }
 
   private shufflePlaylist(avoidFirst?: string): void {
@@ -1138,7 +1264,7 @@ export class AudioManager {
   private nextTrack(): void {
     this.advancePlaylist();
     this.mountTrack(this.getCurrentTrackUrl());
-    void this.musicAudio?.play().catch(() => undefined);
+    this.startMusicLoop();
   }
 
   playMusic(): void {
@@ -1146,34 +1272,43 @@ export class AudioManager {
   }
 
   pauseMusic(): void {
+    this.musicPlaybackGeneration++;
+    this.musicPlayPending = null;
     this.musicAudio?.pause();
+    this.menuMusicAudio?.pause();
+    this.musicRetryPending = false;
+    this.musicFadeAudio = null;
     this.musicStarted = false;
   }
 
   nextMusicTrack(): void {
+    if (this.musicContext === 'menu') {
+      this.menuPlaylistIndex = (this.menuPlaylistIndex + 1) % this.menuPlaylist.length;
+      this.mountMenuTrack();
+      this.startMusicLoop();
+      return;
+    }
     this.advancePlaylist();
     this.mountTrack(this.getCurrentTrackUrl());
-    if (this.heistMusicRequested) return;
-    this.musicStarted = true;
-    void this.musicAudio?.play().catch(() => {
-      this.musicStarted = false;
-    });
+    this.startMusicLoop();
   }
 
   previousMusicTrack(): void {
+    if (this.musicContext === 'menu') {
+      this.menuPlaylistIndex = (this.menuPlaylistIndex - 1 + this.menuPlaylist.length) % this.menuPlaylist.length;
+      this.mountMenuTrack();
+      this.startMusicLoop();
+      return;
+    }
     this.playlistIndex = (this.playlistIndex - 1 + this.playlist.length) % this.playlist.length;
     this.mountTrack(this.getCurrentTrackUrl());
-    if (this.heistMusicRequested) return;
-    this.musicStarted = true;
-    void this.musicAudio?.play().catch(() => {
-      this.musicStarted = false;
-    });
+    this.startMusicLoop();
   }
 
   isMusicPlaying(): boolean {
     return this.heistMusicRequested
       ? Boolean(this.heistMusicAudio && !this.heistMusicAudio.paused)
-      : Boolean(this.musicAudio && !this.musicAudio.paused && this.musicStarted);
+      : Boolean(this.currentPlaylistAudio() && !this.currentPlaylistAudio()!.paused);
   }
 
   /** DEV/lifecycle diagnostics only; no playback state is mutated here. */
@@ -1202,18 +1337,31 @@ export class AudioManager {
   }
 
   startMusicLoop(): void {
-    if (!this.musicAudio) {
+    if (this.musicContext === 'silent' || this.heistMusicRequested) return;
+    if (this.musicContext === 'menu' && !this.menuMusicAudio) this.mountMenuTrack();
+    if (this.musicContext === 'gameplay' && !this.musicAudio) {
       this.mountTrack(this.getCurrentTrackUrl());
     }
-
     this.refreshMix();
-    if (this.heistMusicRequested) return;
-    if (this.musicStarted && !this.musicAudio?.paused) return;
-
-    this.musicStarted = true;
-    void this.musicAudio?.play().catch(() => {
+    const audio = this.currentPlaylistAudio();
+    if (!audio || !audio.paused || this.musicPlayPending === audio) return;
+    if (audio === this.menuMusicAudio) this.musicAudio?.pause();
+    else this.menuMusicAudio?.pause();
+    this.musicPlayPending = audio;
+    const generation = ++this.musicPlaybackGeneration;
+    this.musicRetryPending = false;
+    audio.volume = 0;
+    void audio.play().then(() => {
+      if (this.currentPlaylistAudio() !== audio || this.heistMusicRequested) { audio.pause(); return; }
+      if (generation !== this.musicPlaybackGeneration) return;
+      this.musicStarted = audio === this.musicAudio;
+      this.musicFadeAudio = audio;
+      this.musicFadeStartedAt = performance.now();
+    }).catch(error => {
+      if (generation !== this.musicPlaybackGeneration || this.currentPlaylistAudio() !== audio) return;
       this.musicStarted = false;
-    });
+      this.musicRetryPending = error?.name === 'NotAllowedError';
+    }).finally(() => { if (generation === this.musicPlaybackGeneration) this.musicPlayPending = null; });
   }
 
   refreshMix(): void {
@@ -1222,6 +1370,8 @@ export class AudioManager {
       this.musicAudio.volume = this.clampVolume(this.getVolume('music'));
     }
     if (this.heistMusicAudio) this.heistMusicAudio.volume = this.clampVolume(this.getVolume('music'));
+    if (this.menuMusicAudio) this.menuMusicAudio.volume = this.clampVolume(this.getVolume('music'));
+    this.updateMusicFade();
 
     for (const shot of this.shotSfxPool) {
       shot.volume = this.getSfxVolume('shot');
@@ -1276,6 +1426,7 @@ export class AudioManager {
   /** Resume the existing mixer from the trusted deployment gesture. */
   resumeFromUserGesture(): void {
     if (this.context.state === 'suspended') void this.context.resume().catch(() => undefined);
+    if (this.musicRetryPending) this.startMusicLoop();
   }
 
   beep(kind: 'music' | 'sfx', frequency: number, durationMs: number, gain = 0.04, sound?: AudioSfxName): void {

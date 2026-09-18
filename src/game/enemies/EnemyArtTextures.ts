@@ -231,6 +231,15 @@ const drawStar = (g: Phaser.GameObjects.Graphics): void => {
   rivets(g, [{ x: 35, y: 18 }, { x: 51, y: 34 }, { x: 35, y: 51 }, { x: 19, y: 34 }]);
 };
 
+/** Reuse the authored tank paths for a large, separately baked menu portrait. */
+export const drawProfileEnemyArtwork = (graphics: Phaser.GameObjects.Graphics): void => {
+  graphics.save().scaleCanvas(8, 8);
+  start(graphics);
+  drawTank(graphics);
+  applyColorPass(graphics, 'tank');
+  graphics.restore();
+};
+
 /**
  * Four compact mechanical poses share one texture per family. Runtime only
  * selects a frame; there are no added enemy objects, path draws, or tweens.

@@ -44,7 +44,6 @@ export class SplashScene extends Phaser.Scene {
     // flag true, so every replay must explicitly reset its input gate and camera FX.
     this.skipped = false;
     this.cameras.main.resetFX();
-    this.audio.startMusicLoop();
 
     const replay = data?.replay === true;
     const returnScene = data?.returnScene ?? SceneKeys.MainMenu;
@@ -146,12 +145,13 @@ export class SplashScene extends Phaser.Scene {
 
     const skip = (): void => {
       if (this.skipped) return;
+      this.audio.resumeFromUserGesture();
       this.skipped = true;
       sessionStorage.setItem(SPLASH_SESSION_KEY, '1');
       this.cameras.main.fadeOut(260, 0, 0, 0);
       this.time.delayedCall(280, () => {
         if (!replay) {
-          this.scene.start(SceneKeys.LocalProfiles);
+          this.scene.start(SceneKeys.ProfileLoading);
           return;
         }
         if (returnScene === SceneKeys.Arena && this.scene.isPaused(SceneKeys.Arena)) {

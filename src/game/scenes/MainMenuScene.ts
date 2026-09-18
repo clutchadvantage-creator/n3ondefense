@@ -3,7 +3,6 @@ import mainMenuBackgroundUrl from '../../assets/mainmenubackground.png';
 import { GAME_TAGLINE, GAME_TITLE, OBJECTIVE_CONFIG } from '../config/gameplay';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
-import { AudioManager } from '../systems/AudioManager';
 import { SaveSystem } from '../systems/SaveSystem';
 import { startArenaLoad } from '../utils/runFlow';
 import { createButton, disableButton, enableButton, setButtonJiggleTargets } from '../utils/ui';
@@ -80,7 +79,6 @@ interface MainMenuLaunchData {
 }
 
 export class MainMenuScene extends Phaser.Scene {
-  private readonly audio = AudioManager.get();
   private tutorialDirector: TutorialDirector | null = null;
   private operationDeck: WeeklyOperationDeck = 'regular';
   private readonly deploymentLaunchGate = new DeploymentLaunchGate();
@@ -111,7 +109,6 @@ export class MainMenuScene extends Phaser.Scene {
     this.runConfigurationReadout = null;
     this.runConfigurationAccent = null;
     this.runConfigurationText = null;
-    this.audio.startMusicLoop();
     const { width, height } = this.scale;
     if (this.scene.isActive(SceneKeys.Arena) || this.scene.isPaused(SceneKeys.Arena)) this.scene.stop(SceneKeys.Arena);
     this.registry.remove('arena-session');

@@ -121,7 +121,7 @@ test('Anomaly and HEIST sounds follow authoritative feed, portal, door, alarm, p
   assert.match(heist, /coreAudio\.enterHeistMusic\(\)/);
   assert.match(heist, /coreAudio\.exitHeistMusic\(\)/);
   assert.match(manager, /enterHeistMusic[\s\S]*?musicAudio\?\.pause\(\)[\s\S]*?heistMusicAudio/);
-  assert.match(manager, /exitHeistMusic[\s\S]*?heistMusicAudio\?\.pause\(\)[\s\S]*?musicAudio\.play\(\)/);
+  assert.match(manager, /exitHeistMusic[\s\S]*?heistMusicAudio\?\.pause\(\)[\s\S]*?this\.startMusicLoop\(\)/);
   assert.match(manager, /stopAnomalySfx/);
   assert.match(manager, /private anomalyPortalPowerAudio: HTMLAudioElement \| null = null/);
   assert.match(manager, /restartAnomalyPortalPower[\s\S]*?audio\.pause\(\)[\s\S]*?audio\.currentTime = 0[\s\S]*?audio\.play\(\)/);

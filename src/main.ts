@@ -3,6 +3,7 @@ import './style.css';
 import { createGameConfig } from './game/config/gameConfig';
 import { installMenuAudio } from './ui/installMenuAudio';
 import { installUiNavigation } from './game/input/UiNavigationController.ts';
+import { AudioManager } from './game/systems/AudioManager';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -20,6 +21,7 @@ app.innerHTML = `
 installMenuAudio();
 installUiNavigation(document.querySelector<HTMLElement>('#game-ui-root')!);
 const game = new Phaser.Game(createGameConfig('phaser-game'));
+AudioManager.get().bindMusicLifecycle(game);
 
 if (import.meta.env.DEV) {
   (globalThis as typeof globalThis & { n3onGame?: Phaser.Game }).n3onGame = game;

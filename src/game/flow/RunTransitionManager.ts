@@ -40,6 +40,17 @@ export class RunTransitionManager {
   private static lastError = '';
   private static watchdogId: number | null = null;
 
+  /** Retained worlds and result screens keep run ownership even under menu UI. */
+  static hasActiveRun(game: Phaser.Game): boolean {
+    if (RunTransitionManager.inProgress || game.registry.has('arena-session')) return true;
+    return game.scene.scenes.some(scene => {
+      const key = scene.sys.settings.key;
+      const runScene = key === SceneKeys.Arena || key === SceneKeys.Heist || key === SceneKeys.Loading
+        || key === SceneKeys.Results || key === SceneKeys.RoundFinished;
+      return runScene && (scene.sys.isActive() || scene.sys.isPaused() || scene.sys.isSleeping());
+    });
+  }
+
   static requestArenaTransition(scene: Phaser.Scene, request: ArenaTransitionRequest): boolean {
     const session = RunTransitionManager.validateSession(request.session);
     if (request.session && !session) {

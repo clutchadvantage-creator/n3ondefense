@@ -198,7 +198,6 @@ export class OperatorGarageScene extends Phaser.Scene {
       onBack: this.handleEscape,
       onScroll: (amount) => this.libraryViewer?.scrollBy(amount)
     });
-    this.audio.startMusicLoop();
     const { width, height } = this.scale;
     const layout = calculateGarageLayout(width, height);
     this.tutorialTargets.clear();

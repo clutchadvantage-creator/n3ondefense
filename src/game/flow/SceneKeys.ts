@@ -1,6 +1,7 @@
 export const SceneKeys = {
   Boot: 'boot',
   Splash: 'splash',
+  ProfileLoading: 'profile-loading',
   Leaderboards: 'leaderboards',
   OnlineLeaderboards: 'online-leaderboards',
   LocalProfiles: 'local-profiles',
@@ -22,6 +23,7 @@ export const SceneKeys = {
 export const SceneStatusOrder = [
   SceneKeys.Boot,
   SceneKeys.Splash,
+  SceneKeys.ProfileLoading,
   SceneKeys.Leaderboards,
   SceneKeys.OnlineLeaderboards,
   SceneKeys.LocalProfiles,

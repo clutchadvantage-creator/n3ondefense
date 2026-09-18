@@ -129,7 +129,7 @@ export class HudInformationSystem {
       const fade = this.eventStates.size || !this.queue.active ? 1 : Math.min(1, age / 180, (notice.durationMs! - age) / 260);
       this.panel.setAlpha(Math.max(0, fade)).setY(this.panelY + (1 - fade) * (age < 180 ? 8 : -8));
     }
-    const safeWidth = this.scene.scale.height < 720 ? (this.scene.scale.width - 72) / 2 : Math.min(760, this.scene.scale.width - 48);
+    const safeWidth = this.scene.scale.height < 720 ? (this.scene.scale.width - 96) / 2 : Math.min(760, this.scene.scale.width - 48);
     for (const { text } of this.rows.values()) {
       // Countdown content can change width without rebuilding the layout or allocating a view.
       const scale = Math.min(1, safeWidth / Math.max(1, text.width));

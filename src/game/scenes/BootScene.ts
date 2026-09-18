@@ -470,7 +470,7 @@ export class BootScene extends Phaser.Scene {
       graphics.fillStyle(recess, 1).fillCircle(24, 24, 2);
     });
 
-    const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, heistModule, legendaryRevealModule, supremeMilestoneModule, upgradeModule, cosmeticModule, modModule, garageModule, resultModule, optionsModule, roundFinishedModule, loadingModule] = await Promise.all([
+    const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, heistModule, legendaryRevealModule, supremeMilestoneModule, upgradeModule, cosmeticModule, modModule, garageModule, resultModule, optionsModule, roundFinishedModule, loadingModule, profileLoadingModule] = await Promise.all([
       import('./SplashScene'),
       import('./LeaderboardsScene'),
       import('./OnlineLeaderboardsScene'),
@@ -487,10 +487,12 @@ export class BootScene extends Phaser.Scene {
       import('./ResultScene'),
       import('./OptionsScene'),
       import('./RoundFinishedScene'),
-      import('./LoadingScene')
+      import('./LoadingScene'),
+      import('./ProfileLoadingScene')
     ]);
 
     this.scene.add(SceneKeys.Splash, splashModule.SplashScene, false);
+    this.scene.add(SceneKeys.ProfileLoading, profileLoadingModule.ProfileLoadingScene, false);
     this.scene.add(SceneKeys.Leaderboards, leaderboardModule.LeaderboardsScene, false);
     this.scene.add(SceneKeys.OnlineLeaderboards, onlineLeaderboardModule.OnlineLeaderboardsScene, false);
     this.scene.add(SceneKeys.LocalProfiles, profileModule.LocalProfileScene, false);

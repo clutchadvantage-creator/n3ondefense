@@ -24,7 +24,7 @@ test('Options supplies an explicit splash replay return route without mutating f
 
 test('a replayed splash is topmost, resumes a paused Arena, or reopens Options for menu routes', () => {
   assert.match(splash, /if \(replay\) this\.scene\.bringToTop\(\)/);
-  assert.match(splash, /if \(!replay\) \{[\s\S]*?this\.scene\.start\(SceneKeys\.LocalProfiles\)/);
+  assert.match(splash, /if \(!replay\) \{[\s\S]*?this\.scene\.start\(SceneKeys\.ProfileLoading\)/);
   assert.match(splash, /returnScene === SceneKeys\.Arena && this\.scene\.isPaused\(SceneKeys\.Arena\)/);
   assert.match(splash, /this\.scene\.resume\(SceneKeys\.Arena\)/);
   assert.match(splash, /events\.emit\('resume-from-options'\)/);

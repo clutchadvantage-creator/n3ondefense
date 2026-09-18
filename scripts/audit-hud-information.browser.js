@@ -17,7 +17,8 @@
       const { PlayerProfileStore } = await import(liveModule('/src/game/state/PlayerProfileStore.ts'));
       const { WeeklyCompletionTracker } = await import('/src/game/progression/WeeklyCompletionTracker.ts');
       const { TUTORIAL_SEQUENCES } = await import('/src/game/tutorial/TutorialRegistry.ts');
-      SaveSystem.createProfile('HUD information ' + Date.now().toString().slice(-6));
+      const profile = SaveSystem.createProfile('HUD audit ' + Date.now().toString().slice(-6));
+      check(profile.ok, 'Isolated HUD test profile created', profile);
       SaveSystem.setSettings({ hud: { ...SaveSystem.get().settings.hud, tacticalInformation: true, tacticalTextSize: 'medium' } });
       SaveSystem.updateTutorialProgress(p => { p.firstRunStage = 'complete'; p.firstRunWelcomePending = false; p.completedSequences = TUTORIAL_SEQUENCES.map(s => s.id); });
       SaveSystem.getWeeklyOperations();

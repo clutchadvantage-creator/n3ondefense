@@ -117,7 +117,7 @@ test('new music uses a reshuffled non-repeating deck and low-health warning uses
   assert.match(arena, /this\.audio\.stopLowHealthWarning\(\)/);
 });
 
-test('every gameplay music file on disk is registered exactly once in the shuffled playlist', () => {
+test('every music file on disk is registered exactly once across the menu and gameplay playlists', () => {
   const audio = readFileSync(new URL('../src/game/systems/AudioManager.ts', import.meta.url), 'utf8');
   const files = readdirSync(new URL('../public/assets/audio/music/', import.meta.url))
     .filter((file) => file.toLowerCase().endsWith('.mp3'))
@@ -125,6 +125,10 @@ test('every gameplay music file on disk is registered exactly once in the shuffl
   const registered = [...audio.matchAll(/'music\/([^']+\.mp3)'/g)].map((match) => match[1]).sort();
   assert.deepEqual(registered, files);
   assert.equal(new Set(registered).size, registered.length);
+  const gameplay = audio.match(/private readonly playlist = \[([\s\S]*?)\]\.map/)?.[1];
+  const menu = audio.match(/private readonly menuPlaylist = \[([\s\S]*?)\]\.map/)?.[1];
+  assert.doesNotMatch(gameplay, /Neon Serenity|Neon Dub Pulse/);
+  assert.deepEqual([...menu.matchAll(/'music\/([^']+)'/g)].map(m => m[1]), ['Neon Serenity.mp3', 'Neon Dub Pulse.mp3']);
 });
 
 test('shared Phaser buttons use normal audio for accepted actions and locked audio when disabled or rejected', () => {
