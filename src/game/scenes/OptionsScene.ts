@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { SFX_DEFINITIONS, type AudioSfxName } from '../config/audio';
+import { SFX_DEFINITIONS, SFX_CATEGORIES, type AudioSfxName } from '../config/audio';
 import { ABILITY_ACTIONS, DEFAULT_ABILITY_BINDINGS, RESERVED_ABILITY_BINDINGS, bindingForKeyboardEvent, bindingForMouseButton, bindingLabel, type AbilityAction, type InputBinding } from '../config/controls';
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
@@ -93,6 +93,9 @@ const OPTIONS_TABS: readonly OptionsTabDefinition[] = [
 ] as const;
 
 export class OptionsScene extends Phaser.Scene {
+  private readonly expandedAudioCategories = new Set<string>();
+  private audioGlobalPanel?: Phaser.GameObjects.Container;
+  private audioCategoryTop = 0;
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
   private resumeGameplayOnEsc = false;
   private resumePausedSceneOnEsc = false;
@@ -317,62 +320,74 @@ export class OptionsScene extends Phaser.Scene {
     const innerWidth = innerRight - innerLeft;
     let y = top + 30;
 
-    this.addSectionHeader(container, centerX, y, 'GLOBAL AUDIO', 'PRIMARY MIXER');
+    const global = this.add.container(0, 0);
+    this.audioGlobalPanel = global;
+    container.add(global);
+    global.add(this.add.rectangle(centerX, top + 129, width, 258, 0x08131f, 1));
+    this.addSectionHeader(global, centerX, y, 'GLOBAL AUDIO', 'PRIMARY MIXER');
     const globalPanelTop = y + 25;
     const globalPanelHeight = 164;
-    container.add(this.add.rectangle(centerX, globalPanelTop + globalPanelHeight * 0.5, innerWidth, globalPanelHeight, 0x0b1725, 0.88)
+    global.add(this.add.rectangle(centerX, globalPanelTop + globalPanelHeight * 0.5, innerWidth, globalPanelHeight, 0x0b1725, 0.88)
       .setStrokeStyle(1, 0x3a9db2, 0.48));
     const globalLabelX = innerLeft + 22;
     const globalTrackWidth = Phaser.Math.Clamp(innerWidth * 0.42, 180, 390);
     const globalTrackX = innerRight - globalTrackWidth * 0.5 - 54;
-    this.createSlider(container, globalLabelX, globalTrackX, globalPanelTop + 34, 'MASTER VOLUME', save.settings.masterVolume, globalTrackWidth, (value) => {
+    this.createSlider(global, globalLabelX, globalTrackX, globalPanelTop + 34, 'MASTER VOLUME', save.settings.masterVolume, globalTrackWidth, (value) => {
       SaveSystem.setSettings({ masterVolume: value });
       this.scheduleSettingsPersist();
     }, Math.max(130, globalTrackX - globalTrackWidth * 0.5 - globalLabelX - 18));
-    this.createSlider(container, globalLabelX, globalTrackX, globalPanelTop + 80, 'MUSIC VOLUME', save.settings.musicVolume, globalTrackWidth, (value) => {
+    this.createSlider(global, globalLabelX, globalTrackX, globalPanelTop + 80, 'MUSIC VOLUME', save.settings.musicVolume, globalTrackWidth, (value) => {
       SaveSystem.setSettings({ musicVolume: value });
       this.scheduleSettingsPersist();
     }, Math.max(130, globalTrackX - globalTrackWidth * 0.5 - globalLabelX - 18));
-    this.createSlider(container, globalLabelX, globalTrackX, globalPanelTop + 126, 'SFX VOLUME', save.settings.sfxVolume, globalTrackWidth, (value) => {
+    this.createSlider(global, globalLabelX, globalTrackX, globalPanelTop + 126, 'SFX VOLUME', save.settings.sfxVolume, globalTrackWidth, (value) => {
       SaveSystem.setSettings({ sfxVolume: value });
       this.scheduleSettingsPersist();
     }, Math.max(130, globalTrackX - globalTrackWidth * 0.5 - globalLabelX - 18));
 
     y = globalPanelTop + globalPanelHeight + 34;
-    this.addSectionHeader(container, centerX, y, 'INDIVIDUAL SOUNDS', `${SFX_DEFINITIONS.length} MIX CHANNELS`);
+    this.addSectionHeader(global, centerX, y, 'INDIVIDUAL SOUNDS', `${SFX_DEFINITIONS.length} MIX CHANNELS`);
     const twoColumns = width >= 780;
     const columnGap = twoColumns ? 34 : 0;
     const columnCount = twoColumns ? 2 : 1;
     const columnWidth = (innerWidth - columnGap * (columnCount - 1)) / columnCount;
-    const rowCount = Math.ceil(SFX_DEFINITIONS.length / columnCount);
-    const rowGap = 43;
-    const soundsTop = y + 28;
-    const soundsPanelHeight = rowCount * rowGap + 28;
-    container.add(this.add.rectangle(centerX, soundsTop + soundsPanelHeight * 0.5, innerWidth, soundsPanelHeight, 0x091522, 0.84)
-      .setStrokeStyle(1, 0x315c70, 0.55));
-
-    SFX_DEFINITIONS.forEach((definition, index) => {
-      const column = Math.floor(index / rowCount);
-      const row = index % rowCount;
-      const columnLeft = innerLeft + column * (columnWidth + columnGap);
-      const trackWidth = Phaser.Math.Clamp(columnWidth * (twoColumns ? 0.36 : 0.46), 130, 210);
-      const trackX = columnLeft + columnWidth - trackWidth * 0.5 - 42;
-      const labelX = columnLeft + 15;
-      const labelWidth = Math.max(100, trackX - trackWidth * 0.5 - labelX - 12);
-      this.createSlider(
-        container,
-        labelX,
-        trackX,
-        soundsTop + 25 + row * rowGap,
-        definition.label.toUpperCase(),
-        save.settings.soundVolumes[definition.key],
-        trackWidth,
-        (value) => this.updateSoundVolume(definition.key, value),
-        labelWidth
-      );
-    });
-
-    const contentBottom = soundsTop + soundsPanelHeight + 18;
+    y += 44;
+    this.audioCategoryTop = y - 24;
+    for (const category of SFX_CATEGORIES) {
+      const expanded = this.expandedAudioCategories.has(category.id);
+      const header = this.addTabButton(container, centerX, y,
+        `${expanded ? '−' : '+'}  ${category.label.toUpperCase()}  (${category.keys.length})`, () => {
+          const offset = this.scrollStates.get('audio')?.offset ?? 0;
+          if (expanded) this.expandedAudioCategories.delete(category.id);
+          else this.expandedAudioCategories.add(category.id);
+          container.removeAll(true);
+          this.scrollStates.delete('audio');
+          this.createAudioTab(container, SaveSystem.get());
+          const state = this.scrollStates.get('audio')!;
+          state.offset = Math.min(offset, state.max);
+          this.selectTab('audio');
+        }, innerWidth);
+      this.registerScrollTarget('audio', header, y, 22);
+      y += 46;
+      if (!expanded) continue;
+      const definitions = category.keys.map(key => SFX_DEFINITIONS.find(definition => definition.key === key)!);
+      const rowCount = Math.ceil(definitions.length / columnCount);
+      definitions.forEach((definition, index) => {
+        const column = index % columnCount;
+        const row = Math.floor(index / columnCount);
+        const columnLeft = innerLeft + column * (columnWidth + columnGap);
+        const trackWidth = Phaser.Math.Clamp(columnWidth * (twoColumns ? 0.36 : 0.46), 130, 210);
+        const trackX = columnLeft + columnWidth - trackWidth * 0.5 - 42;
+        const labelX = columnLeft + 15;
+        this.createSlider(container, labelX, trackX, y + row * 43,
+          definition.label.toUpperCase(), save.settings.soundVolumes[definition.key], trackWidth,
+          value => this.updateSoundVolume(definition.key, value),
+          Math.max(100, trackX - trackWidth * 0.5 - labelX - 12));
+      });
+      y += rowCount * 43 + 12;
+    }
+    const contentBottom = y + 18;
+    container.bringToTop(global);
     this.configureTabScrolling('audio', container, contentBottom);
   }
 
@@ -872,6 +887,7 @@ export class OptionsScene extends Phaser.Scene {
     const state = this.scrollStates.get(tab);
     if (!state) return;
     state.container.y = -state.offset;
+    if (tab === 'audio') this.audioGlobalPanel?.setY(state.offset);
     if (tab === this.activeTab && this.scrollThumb) {
       const trackHeight = Math.max(120, this.viewport.height - 28);
       const thumbHeight = Math.max(46, trackHeight * (this.viewport.height / Math.max(this.viewport.height, state.contentHeight)));
@@ -881,9 +897,10 @@ export class OptionsScene extends Phaser.Scene {
       this.scrollThumb.y = this.scrollTrackTop + thumbHeight * 0.5 + this.scrollTrackRange * ratio;
     }
     for (const entry of state.targets) {
-      const visibleY = entry.centerY - state.offset;
+      const pinned = tab === 'audio' && entry.centerY < this.audioCategoryTop;
+      const visibleY = entry.centerY - (pinned ? 0 : state.offset);
       const enabled = this.activeTab === tab
-        && visibleY - entry.halfHeight >= this.viewport.top + 3
+        && visibleY - entry.halfHeight >= (tab === 'audio' && !pinned ? this.audioCategoryTop : this.viewport.top) + 3
         && visibleY + entry.halfHeight <= this.viewport.bottom - 3;
       this.setGameObjectInputEnabled(entry.target, enabled);
     }

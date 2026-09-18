@@ -8,6 +8,7 @@ export const SFX_DEFINITIONS = [
   { key: 'playerDamage', label: 'Player Damage' },
   { key: 'lowHealth', label: 'Low Health Warning' },
   { key: 'enemyDeath', label: 'Enemy Death' },
+  { key: 'droneFlight', label: 'Drone Flight / Rotors' },
   { key: 'playerDeath', label: 'Player Death' },
   { key: 'place', label: 'Ability Place' },
   { key: 'placeTurret', label: 'Turret Placement' },
@@ -75,6 +76,19 @@ export const SFX_DEFINITIONS = [
 ] as const;
 
 export type AudioSfxName = typeof SFX_DEFINITIONS[number]['key'];
+
+/** Every mixer channel belongs to exactly one presentation group. Keys remain
+ * unchanged so existing per-sound preferences survive the reorganization. */
+export const SFX_CATEGORIES = [
+  { id: 'combat', label: 'Weapons & Combat', keys: ['shot', 'hit', 'mine', 'bomblet', 'bomb', 'grenadeShotExplosion', 'smashableBreak'] },
+  { id: 'operative', label: 'Operative & Abilities', keys: ['boost', 'shieldOn', 'shieldOff', 'planting', 'playerDamage', 'lowHealth', 'playerDeath', 'place', 'placeTurret', 'electricFence', 'placeMine', 'unavailable'] },
+  { id: 'enemies', label: 'Enemies & Bosses', keys: ['enemyDeath', 'droneFlight', 'totemEntrance', 'totemPulse', 'miniBossSpawn', 'bossArtilleryExplosion', 'sentryBossAttack', 'mageBossLargeAttack', 'mageBossMagicAttack', 'brawlerBossChargeAttack'] },
+  { id: 'hazards', label: 'Arena Hazards', keys: ['securityLaser', 'beep', 'defuseAlarm', 'disarm', 'gas', 'gasCanImpact', 'gasFizz', 'lasersOff', 'fireTrap'] },
+  { id: 'rewards', label: 'Pickups & Rewards', keys: ['pickup', 'healthPickup', 'energyPickup', 'damageBoostPickup', 'speedPickup', 'fireRatePickup', 'creditPickup', 'coreTokenPickup', 'fluxCorePickup', 'ricochetPickup', 'grenadeRoundsPickup', 'scattershotPickup', 'modPickup', 'fluxCore', 'modCollection', 'legendaryMod'] },
+  { id: 'arcade', label: 'Arcade Events', keys: ['circuitGate', 'overloadEvent', 'supplyDropEvent', 'dataThiefEntrance', 'dataThiefFail', 'goldenEnemyEvent', 'goldenEnemyEventFail'] },
+  { id: 'anomalies', label: 'Anomalies', keys: ['anomalyPortalPower', 'anomalyPortalIdle', 'anomalyPortalTransit', 'heistDoor', 'heistAlarm'] },
+  { id: 'interface', label: 'Interface & Cosmetics', keys: ['bombsiteSkull', 'bombsiteFlower', 'bombsiteBats', 'bombsiteWitch', 'menuHover', 'menu', 'itemLocked', 'runStart'] }
+] as const satisfies readonly { id: string; label: string; keys: readonly AudioSfxName[] }[];
 
 export const DEFAULT_AUDIO_VOLUME = 0.25;
 

@@ -23,6 +23,7 @@ interface TrapRuntime {
 }
 
 export interface HeistTrapCallbacks {
+  isPlayerAlive?(): boolean;
   damagePlayer(amount: number): void;
   snarePlayer(until: number): void;
   playSfx(name: 'mine' | 'unavailable'): void;
@@ -124,6 +125,7 @@ export class HeistTrapSystem {
       }));
     this.fireSystem = new SharedFireTrapSystem(scene, firePlacements, {
       environment: 'heist', particlesEnabled,
+      isPlayerAlive: callbacks.isPlayerAlive,
       damageProfile: getFireHazardDamageProfile(difficulty.round, difficulty.protocol),
       maximumConcurrent: 2,
       wallCooldownMs: 4_800,

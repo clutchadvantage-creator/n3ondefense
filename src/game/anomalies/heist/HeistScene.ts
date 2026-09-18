@@ -26,6 +26,7 @@ import { SeededRandom } from '../../systems/SeededRandom.ts';
 import { selectEnemyPickup } from '../../player/PickupDropTable.ts';
 import { ReusableObjectPool } from '../../performance/ReusableObjectPool.ts';
 import { UniformSpatialGrid } from '../../performance/UniformSpatialGrid.ts';
+import { ProjectileImpactVfx } from '../../vfx/ProjectileImpactVfx.ts';
 import { ProjectileTrailBatch } from '../../performance/ProjectileTrailBatch.ts';
 import { MineExplosionVfx } from '../../vfx/MineExplosionVfx.ts';
 import { OperativeShieldEffect } from '../../vfx/OperativeShieldEffect.ts';
@@ -167,6 +168,7 @@ export class HeistScene extends Phaser.Scene {
   private projectilePool!: ReusableObjectPool<HeistProjectile, HeistProjectileSpawn>;
   private fxCirclePool!: ReusableObjectPool<Phaser.GameObjects.Arc, BoostFxCircleSpawn>;
   private projectileTrails!: ProjectileTrailBatch;
+  private projectileImpactVfx!: ProjectileImpactVfx;
   private muzzleFlashVfx!: PlayerMuzzleFlashVfx;
   private boostVisual!: BoostVisualSystem;
   private mineExplosionVfx!: MineExplosionVfx;
@@ -299,6 +301,7 @@ export class HeistScene extends Phaser.Scene {
     this.aimSettings = normalizeAimSettings(settings.aim);
     this.resolveProjectileCosmetics();
     this.createCombatPools();
+    this.projectileImpactVfx = new ProjectileImpactVfx(this, settings.particles);
     this.muzzleFlashVfx = new PlayerMuzzleFlashVfx(this, settings.particles);
     this.boostVisual = new BoostVisualSystem(
       this,
@@ -339,6 +342,7 @@ export class HeistScene extends Phaser.Scene {
       round: data.round,
       protocol: data.protocol
     }, {
+      isPlayerAlive: () => this.player.active && !this.player.isDead(),
       damagePlayer: (amount) => this.damagePlayer(amount),
       snarePlayer: (until) => { this.movementSnaredUntil = Math.max(this.movementSnaredUntil, until); },
       playSfx: (name) => this.coreAudio.playSfx(name)
@@ -593,6 +597,7 @@ export class HeistScene extends Phaser.Scene {
     if (this.inputCapturePaused || this.manuallyPaused) {
       this.player.setVelocity(0, 0);
       this.muzzleFlashVfx.reset();
+      this.projectileImpactVfx.reset();
       this.updateHud(now);
       profiler?.mark('hudMaintenance');
       profiler?.finishFrame();
@@ -603,6 +608,7 @@ export class HeistScene extends Phaser.Scene {
     this.updatePlayerMovement(now);
     this.updatePlayerCombat(now);
     this.muzzleFlashVfx.update(now);
+    this.projectileImpactVfx.update(now);
     this.updateAbilities(now);
     this.facility.prepareNavigationTarget(this.player.x, this.player.y);
     profiler?.mark('playerCombatAndMods');
@@ -1173,6 +1179,11 @@ export class HeistScene extends Phaser.Scene {
     return this.consumeGrenadeBounce(projectile, now) ? 2 : 1;
   }
 
+  private emitProjectileImpact(projectile: HeistProjectile): void {
+    this.projectileImpactVfx.emit(projectile.sprite.x, projectile.sprite.y,
+      projectile.sprite.rotation, projectile.trailColor, this.time.now);
+  }
+
   private updateProjectiles(now: number, delta: number): void {
     this.projectileTrails.beginFrame(now);
     for (let index = this.projectiles.length - 1; index >= 0; index -= 1) {
@@ -1217,6 +1228,7 @@ export class HeistScene extends Phaser.Scene {
         projectile.nextTrailAt = now + 34;
       }
       if (this.pointBlocked(projectile.sprite.x, projectile.sprite.y)) {
+        if (projectile.owner !== 'enemy' && projectile.ammoMode !== 'grenade') this.emitProjectileImpact(projectile);
         if (projectile.ammoMode === 'grenade' && projectile.owner !== 'enemy') {
           const bounce = this.bounceGrenadeFromWall(projectile, now);
           if (bounce === 1) continue;
@@ -1246,17 +1258,20 @@ export class HeistScene extends Phaser.Scene {
           ? false
           : this.environmentSmashables?.damagePoint(projectile.sprite.x, projectile.sprite.y, projectile.damage, 5);
         if (smashedProp) {
+          this.emitProjectileImpact(projectile);
           this.retireProjectile(projectile, index);
           continue;
         }
         const container = projectile.ammoMode === 'grenade' ? null : this.findContainerHit(projectile.sprite.x, projectile.sprite.y);
         if (container) {
+          this.emitProjectileImpact(projectile);
           this.damageContainer(container, projectile.damage);
           this.retireProjectile(projectile, index);
           continue;
         }
         const enemy = projectile.ammoMode === 'grenade' ? null : this.findEnemyHit(projectile.sprite.x, projectile.sprite.y);
         if (enemy) {
+          this.emitProjectileImpact(projectile);
           this.damageEnemy(enemy, projectile.damage);
           if (projectile.ammoMode === 'grenade') this.detonateGrenade(projectile, enemy);
           this.retireProjectile(projectile, index);

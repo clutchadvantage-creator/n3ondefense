@@ -9,9 +9,13 @@ import { applyHazardDamageMode, type RunModeFamily } from './modeBalance.ts';
  * readable hit cadence without wasting alternate pulses or spamming feedback.
  */
 export const FIRE_HAZARD_BALANCE = Object.freeze({
-  playerDamagePerPulse: 8,
-  maximumPlayerDamagePerPulse: 12.8,
-  damagePulseIntervalMs: 520
+  playerDamagePerPulse: 12,
+  maximumPlayerDamagePerPulse: 19.2,
+  damagePulseIntervalMs: 520,
+  activeDurationMs: 1_100,
+  burnDurationMs: 1_250,
+  burnPulseIntervalMs: 550,
+  burnDamagePerPulse: 2
 });
 
 export interface FireHazardDamageProfile {

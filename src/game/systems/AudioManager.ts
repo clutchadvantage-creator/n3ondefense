@@ -425,6 +425,29 @@ export class AudioManager {
     }
   }
 
+  private readonly fireVoices = new Map<object, HTMLAudioElement>();
+
+  /** Borrow an existing mixer voice for exactly one active flame lifetime. */
+  startFireTrap(owner: object): void {
+    if (this.fireVoices.has(owner)) return;
+    const audio = this.presentationSfxPools.fireTrap.find(candidate =>
+      !Array.from(this.fireVoices.values()).includes(candidate) && (candidate.paused || candidate.ended));
+    if (!audio) return;
+    this.fireVoices.set(owner, audio);
+    audio.loop = true;
+    try { audio.currentTime = 0; } catch { /* metadata pending */ }
+    audio.volume = this.getSfxVolume('fireTrap');
+    void audio.play().catch(() => undefined);
+  }
+
+  stopFireTrap(owner: object): void {
+    const audio = this.fireVoices.get(owner);
+    if (!audio) return;
+    this.fireVoices.delete(owner);
+    this.stopDedicatedLoop(audio);
+    audio.loop = false;
+  }
+
   private playPresentationSfx(name: PresentationSfxName): void {
     const now = performance.now();
     if (now - this.lastPresentationSfxAt[name] < PRESENTATION_SFX_MIN_INTERVAL_MS[name]) return;
@@ -599,6 +622,7 @@ export class AudioManager {
    * loops must explicitly follow gameplay pause/resume without losing their
    * lifecycle request. */
   pauseEventPresentationLoops(): void {
+    for (const audio of this.fireVoices.values()) audio.pause();
     this.anomalyPortalIdleAudio?.pause();
     this.heistAlarmAudio?.pause();
     this.heistMusicAudio?.pause();
@@ -611,6 +635,7 @@ export class AudioManager {
       audio.volume = this.getSfxVolume(sound);
       void audio.play().catch(() => undefined);
     };
+    for (const audio of this.fireVoices.values()) resume(audio, 'fireTrap');
     if (this.anomalyPortalIdleRequested) resume(this.anomalyPortalIdleAudio, 'anomalyPortalIdle');
     if (this.heistAlarmRequested) resume(this.heistAlarmAudio, 'heistAlarm');
     if (this.heistMusicRequested && this.heistMusicAudio?.paused) {
@@ -1482,6 +1507,7 @@ export class AudioManager {
    * retiring every world-owned combat/hazard voice before Arena wakes.
    */
   stopRoundScopedAudio(options: { preserveAnomalyTransit?: boolean } = {}): void {
+    for (const owner of this.fireVoices.keys()) this.stopFireTrap(owner);
     this.stopDroneAudio();
     this.stopPlantingLoop();
     this.stopDisarmLoop();
@@ -1607,7 +1633,7 @@ export class AudioManager {
   }
 
   updateDroneAudio(now: number, enemies: readonly DroneAudioOwner[], x: number, y: number, rotation = 0): void {
-    this.droneAudio.update(now, enemies, x, y, this.getSfxVolume(), rotation);
+    this.droneAudio.update(now, enemies, x, y, this.getSfxVolume('droneFlight'), rotation);
   }
   releaseDroneAudio(owner: DroneAudioOwner): void { this.droneAudio.release(owner); }
   stopDroneAudio(): void { this.droneAudio.stop(); }
@@ -1709,7 +1735,7 @@ export class AudioManager {
   }
 
   playSfx(name: Exclude<AudioSfxName,
-    'planting' | 'disarm' | 'securityLaser' | 'fluxCore' | 'lowHealth' | 'anomalyPortalIdle' | 'heistAlarm'>): void {
+    'droneFlight' | 'planting' | 'disarm' | 'securityLaser' | 'fluxCore' | 'lowHealth' | 'anomalyPortalIdle' | 'heistAlarm'>): void {
     switch (name) {
       case 'shot':
         this.playShotSfx();

@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager.ts';
 import { drawHazardStripes } from '../rendering/LayeredArtPrimitives.ts';
-import type { FireHazardDamageProfile } from '../config/fireHazards.ts';
+import { BurningStatus } from './BurningStatus.ts';
+import { FIRE_HAZARD_BALANCE, type FireHazardDamageProfile } from '../config/fireHazards.ts';
 
 export type SharedFireNozzleKind = 'wall' | 'floor';
 export type SharedFireTrapState = 'idle' | 'telegraph' | 'ignition' | 'active' | 'cooldown';
@@ -45,6 +46,7 @@ export interface SharedFireTrapOptions {
   wallPredictionSeconds?: number;
   wallMaximumLead?: number;
   antiCamp?: SharedFireAntiCampConfig;
+  isPlayerAlive?(): boolean;
   onDamagePlayer(amount: number): void;
 }
 
@@ -77,9 +79,8 @@ interface FireNozzleRuntime {
   deployed: boolean;
 }
 
-const FIRE_TIMING = Object.freeze({ telegraph: 980, ignition: 140, active: 1_100, cooldown: 3_250 });
+const FIRE_TIMING = Object.freeze({ telegraph: 980, ignition: 140, active: FIRE_HAZARD_BALANCE.activeDurationMs, cooldown: 3_250 });
 const UPDATE_INTERVAL_MS = 50 as const;
-const WALL_FLAME_START = 62;
 const WALL_FLAME_END = 330;
 const WALL_HALF_WIDTH = 62;
 const FLOOR_DAMAGE_RADIUS = 78;
@@ -173,6 +174,7 @@ export class SharedFireTrapSystem {
   private readonly wallPredictionSeconds: number;
   private readonly wallMaximumLead: number;
   private readonly floorNozzle: FireNozzleRuntime | null;
+  private readonly burning = new BurningStatus();
   private nextUpdateAt = 0;
   private nextWallSelectionAt = 0;
   private lastSelectedWallId = '';
@@ -204,6 +206,7 @@ export class SharedFireTrapSystem {
   }
 
   update(now: number, target: SharedFireTrapTarget): void {
+    if (this.options.isPlayerAlive?.() === false) { this.clearExposure(); return; }
     if (now < this.nextUpdateAt) return;
     this.nextUpdateAt = now + UPDATE_INTERVAL_MS;
     this.smoothedVelocityX += (target.velocityX - this.smoothedVelocityX) * 0.18;
@@ -223,6 +226,7 @@ export class SharedFireTrapSystem {
       }
       this.nextWallSelectionAt = now + this.wallSelectionIntervalMs;
     }
+    let touchingFire = false;
     for (const nozzle of this.nozzles) {
       const dx = target.x - nozzle.placement.x;
       const dy = target.y - nozzle.placement.y;
@@ -231,7 +235,6 @@ export class SharedFireTrapSystem {
         && activeCount < this.maximumConcurrent) {
         nozzle.state = 'ignition';
         nozzle.stateStartedAt = now;
-        this.audio.playSfx('fireTrap');
       }
       if (nozzle.state === 'ignition' && now - nozzle.stateStartedAt >= FIRE_TIMING.ignition
         && activeCount < this.maximumConcurrent) {
@@ -240,12 +243,22 @@ export class SharedFireTrapSystem {
         nozzle.damageContactStartedAt = 0;
         nozzle.damagePulsesDelivered = 0;
         activeCount += 1;
+        this.audio.startFireTrap(nozzle);
+      }
+      // Retire before testing contact: the last invisible frame cannot hurt.
+      if (nozzle.state === 'active' && now - nozzle.stateStartedAt >= FIRE_TIMING.active) {
+        nozzle.state = 'cooldown';
+        nozzle.stateStartedAt = now;
+        nozzle.nextReadyAt = now + (nozzle.placement.kind === 'wall' ? this.wallCooldownMs : FIRE_TIMING.cooldown);
+        this.audio.stopFireTrap(nozzle);
+        activeCount = Math.max(0, activeCount - 1);
       }
       if (nozzle.state === 'active') {
         const hit = nozzle.placement.kind === 'floor'
           ? distanceSquared <= FLOOR_DAMAGE_RADIUS * FLOOR_DAMAGE_RADIUS
           : this.wallFlameContains(nozzle, target.x, target.y);
         if (hit) {
+          touchingFire = true;
           if (nozzle.damagePulsesDelivered === 0) nozzle.damageContactStartedAt = now;
           const duePulses = 1 + Math.floor(
             Math.max(0, now - nozzle.damageContactStartedAt) / this.damageProfile.pulseIntervalMs
@@ -261,12 +274,6 @@ export class SharedFireTrapSystem {
           nozzle.damageContactStartedAt = 0;
           nozzle.damagePulsesDelivered = 0;
         }
-        if (now - nozzle.stateStartedAt >= FIRE_TIMING.active) {
-          nozzle.state = 'cooldown';
-          nozzle.stateStartedAt = now;
-          nozzle.nextReadyAt = now + (nozzle.placement.kind === 'wall' ? this.wallCooldownMs : FIRE_TIMING.cooldown);
-          activeCount = Math.max(0, activeCount - 1);
-        }
       } else if (nozzle.state === 'cooldown' && now >= nozzle.nextReadyAt) {
         nozzle.state = 'idle';
         nozzle.stateStartedAt = now;
@@ -274,7 +281,11 @@ export class SharedFireTrapSystem {
       }
       this.updateWarningLights(nozzle, now);
     }
+    const burnDamage = this.burning.update(now, touchingFire);
+    if (burnDamage > 0) this.options.onDamagePlayer(burnDamage);
+    if (this.options.isPlayerAlive?.() === false) { this.clearExposure(); return; }
     this.drawDynamicLayers(now);
+    if (this.burning.isActive(now)) this.drawBurning(now, target);
   }
 
   diagnostics(): SharedFireTrapDiagnostics {
@@ -296,7 +307,26 @@ export class SharedFireTrapSystem {
     };
   }
 
+  private clearExposure(): void {
+    this.burning.reset();
+    for (const nozzle of this.nozzles) this.audio.stopFireTrap(nozzle);
+    this.flameGraphics.clear();
+    this.glowGraphics.clear();
+  }
+
+  private drawBurning(now: number, target: SharedFireTrapTarget): void {
+    for (let i = 0; i < 4; i += 1) {
+      const phase = (now * 0.003 + i * 0.25) % 1;
+      const x = target.x + Math.sin(i * 2.4 + now * 0.012) * 11;
+      const y = target.y + 8 - phase * 28;
+      this.flameGraphics.fillStyle(0xff6a22, 0.7 * (1 - phase))
+        .fillTriangle(x - 3, y + 4, x + 3, y + 4, x + Math.sin(now * 0.02 + i) * 3, y - 9);
+      this.glowGraphics.fillStyle(0xffda73, 0.85 * (1 - phase)).fillCircle(x, y - 3, 1.5);
+    }
+  }
+
   destroy(): void {
+    this.clearExposure();
     for (const nozzle of this.nozzles) nozzle.root.destroy(true);
     this.nozzles.length = 0;
     this.flameGraphics.destroy();
@@ -304,6 +334,8 @@ export class SharedFireTrapSystem {
   }
 
   discardReferences(): void {
+    this.burning.reset();
+    for (const nozzle of this.nozzles) this.audio.stopFireTrap(nozzle);
     this.nozzles.length = 0;
   }
 
@@ -380,7 +412,12 @@ export class SharedFireTrapSystem {
     const sine = Math.sin(nozzle.placement.rotation);
     const localX = dx * cosine + dy * sine;
     const localY = -dx * sine + dy * cosine;
-    return localX >= WALL_FLAME_START && localX <= this.wallFlameLength(nozzle) && Math.abs(localY) <= WALL_HALF_WIDTH;
+    const length = this.wallFlameLength(nozzle);
+    if (localX < 9 || localX > length) return false;
+    // Three tapered jets, matching the authored outer flame. A 12px body
+    // allowance keeps contact readable without the former wide invisible box.
+    const halfWidth = 24 * (localX - 9) / Math.max(1, length - 9) + 12;
+    return WALL_PORT_OFFSETS.some(offset => Math.abs(localY - offset) <= halfWidth);
   }
 
   private updateWarningLights(nozzle: FireNozzleRuntime, now: number): void {
@@ -574,8 +611,7 @@ export class SharedFireTrapSystem {
     const flameLength = this.wallFlameLength(nozzle);
     for (let port = 0; port < WALL_PORT_OFFSETS.length; port += 1) {
       const portElapsed = activeElapsed - port * WALL_PORT_STAGGER_MS;
-      if (portElapsed < 0) continue;
-      const ignitionRamp = Phaser.Math.Clamp(0.42 + portElapsed / 105, 0, 1);
+      const ignitionRamp = 1;
       const portOffset = WALL_PORT_OFFSETS[port];
       for (let layer = 0; layer < WALL_FIRE_LAYERS.length; layer += 1) {
         const spec = WALL_FIRE_LAYERS[layer];

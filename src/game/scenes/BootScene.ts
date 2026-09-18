@@ -206,6 +206,20 @@ export class BootScene extends Phaser.Scene {
       graphics.lineStyle(1.5, 0xffffff, 0.9).strokeCircle(8, 8, 5);
       graphics.fillStyle(0xffffff, 0.95).fillCircle(6, 6, 2);
     });
+    createProjectileTexture('tank-homing-missile', 48, 24, (g) => {
+      g.fillStyle(0x07131e, 1).fillTriangle(7, 12, 3, 1, 24, 12).fillTriangle(7, 12, 3, 23, 24, 12);
+      g.fillStyle(0x668397, 1).fillTriangle(9, 11, 5, 3, 21, 11).fillTriangle(9, 13, 5, 21, 21, 13);
+      g.fillStyle(0x182e40, 1).fillRoundedRect(7, 6, 27, 12, 3);
+      g.fillStyle(0xb5ccda, 1).fillRoundedRect(9, 7, 24, 9, 3);
+      g.fillStyle(0xf2faff, 1).fillRect(12, 7, 19, 2);
+      g.fillStyle(0x385369, 1).fillTriangle(32, 6, 47, 12, 32, 18);
+      g.fillStyle(0xe2eef4, 1).fillTriangle(32, 7, 46, 12, 32, 12);
+      g.fillStyle(0xff417d, 1).fillRect(26, 7, 3, 10);
+      g.fillStyle(0x102637, 1).fillRect(6, 7, 5, 10);
+      g.fillStyle(0xffa353, 1).fillRect(4, 8, 3, 8);
+      g.fillStyle(0xfff0b2, 1).fillRect(3, 10, 3, 4);
+      g.fillStyle(0x213b4b, 1).fillRect(14, 12, 7, 2);
+    });
     createProjectileTexture('projectile-missile', 24, 12, (graphics) => {
       graphics.fillStyle(0x27313c, 1).fillPoints([{ x: 2, y: 4 }, { x: 15, y: 4 }, { x: 23, y: 7 }, { x: 15, y: 11 }, { x: 2, y: 10 }, { x: 6, y: 7 }], true);
       graphics.fillStyle(0xb8c5d0, 1).fillPoints([{ x: 2, y: 2 }, { x: 15, y: 2 }, { x: 23, y: 6 }, { x: 15, y: 8 }, { x: 2, y: 8 }, { x: 6, y: 5 }], true);

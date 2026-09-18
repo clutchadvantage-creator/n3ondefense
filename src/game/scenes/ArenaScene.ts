@@ -92,6 +92,7 @@ import { FramePerformanceMonitor } from '../performance/FramePerformanceMonitor.
 import { arenaCombatWarmupPlan, type ArenaCombatWarmupPlan } from '../performance/ArenaRuntimePreparation.ts';
 import { ArenaLifecycleProfiler } from '../performance/ArenaLifecycleProfiler.ts';
 import { shouldReplaceTurretTarget } from '../performance/Targeting.ts';
+import { ProjectileImpactVfx } from '../vfx/ProjectileImpactVfx.ts';
 import { ProjectileTrailBatch } from '../performance/ProjectileTrailBatch.ts';
 import { UniformSpatialGrid } from '../performance/UniformSpatialGrid.ts';
 import { BoostVisualSystem } from '../systems/BoostVisualSystem.ts';
@@ -279,11 +280,6 @@ interface NavState {
   approachRadius: number;
   recoveryUntil: number;
   recoverySign: -1 | 1;
-}
-
-interface PatrolPoint {
-  x: number;
-  y: number;
 }
 
 interface TurretTargetDecision {
@@ -504,6 +500,7 @@ export class ArenaScene extends Phaser.Scene {
   private readonly pooledProjectileDisplayObjects = new Set<Phaser.GameObjects.GameObject>();
   private projectileTrails: ProjectileTrailBatch | null = null;
   private mechanicalDestructionVfx!: MechanicalDestructionVfx;
+  private projectileImpactVfx!: ProjectileImpactVfx;
   private muzzleFlashVfx!: PlayerMuzzleFlashVfx;
   private boostVisual!: BoostVisualSystem;
   private mineExplosionVfx!: MineExplosionVfx;
@@ -749,7 +746,8 @@ export class ArenaScene extends Phaser.Scene {
   };
 
   private navState = new WeakMap<Enemy, NavState>();
-  private patrolTargets = new WeakMap<Enemy, PatrolPoint>();
+  private navigationQueriesRemaining = 0;
+  private navigationHasObjective = false;
   private readonly enemySeparationGrid = new UniformSpatialGrid<Enemy>(48);
   private grenadeSplashX = 0;
   private grenadeSplashY = 0;
@@ -1671,6 +1669,7 @@ export class ArenaScene extends Phaser.Scene {
 
     if (this.tutorialHardPaused || this.state.state === RoundState.Paused || this.legendaryRevealInProgress || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
       this.muzzleFlashVfx.reset();
+      this.projectileImpactVfx.reset();
       return;
     }
 
@@ -1689,6 +1688,7 @@ export class ArenaScene extends Phaser.Scene {
         this.updateHud(now);
       }
       this.muzzleFlashVfx.reset();
+      this.projectileImpactVfx.reset();
       return;
     }
 
@@ -1696,6 +1696,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.anomalyController?.blocksArenaGameplay) {
       this.player.setVelocity(0, 0);
       this.muzzleFlashVfx.reset();
+      this.projectileImpactVfx.reset();
       this.updateHud(now);
       return;
     }
@@ -1719,6 +1720,7 @@ export class ArenaScene extends Phaser.Scene {
     this.updatePlayerMovement(now);
     this.updatePlayerShooting(now);
     this.muzzleFlashVfx.update(now);
+    this.projectileImpactVfx.update(now);
 
     if (this.bossEncounter || this.supremeFinale) {
       const bossCombatAtFrameStart = this.bossFlowPhase === 'combat';
@@ -1945,6 +1947,7 @@ export class ArenaScene extends Phaser.Scene {
    */
   private createCombatPresentationSystems(): void {
     if (this.combatPresentationLive) return;
+    this.projectileImpactVfx = new ProjectileImpactVfx(this, this.particlesEnabled);
     this.muzzleFlashVfx = new PlayerMuzzleFlashVfx(this, this.particlesEnabled);
     this.boostVisual = new BoostVisualSystem(
       this,
@@ -1971,6 +1974,7 @@ export class ArenaScene extends Phaser.Scene {
     this.mineExplosionVfx?.destroy();
     this.bombExplosionCosmeticVfx?.destroy();
     this.muzzleFlashVfx?.destroy();
+    this.projectileImpactVfx?.destroy();
     this.combatPresentationLive = false;
   }
 
@@ -2666,7 +2670,6 @@ export class ArenaScene extends Phaser.Scene {
       recoveryUntil: 0,
       recoverySign: navigationSequence % 2 === 0 ? 1 : -1
     });
-    this.patrolTargets.set(enemy, { x: spawn.x, y: spawn.y });
     return enemy;
   }
 
@@ -2720,6 +2723,9 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateEnemies(now: number, dt: number): void {
     const activeSites = this.bombSites.getActiveBombSites();
+    this.navigationQueriesRemaining = 8;
+    const objectiveChanged = this.navigationHasObjective !== (activeSites.length > 0);
+    this.navigationHasObjective = activeSites.length > 0;
     const gasHazard = this.gasHazard?.visualGasActive ? this.gasHazard : null;
     const activeDefusersBySite = this.activeDefusersBySite;
     activeDefusersBySite.clear();
@@ -2732,6 +2738,10 @@ export class ArenaScene extends Phaser.Scene {
       enemy.updateMechanicalPresentation(now);
 
       if (enemy instanceof FlyingDrone) { this.updateDrone(enemy, now, dt); continue; }
+      if (objectiveChanged) {
+        const nav = this.navState.get(enemy);
+        if (nav) { nav.path.length = 0; nav.waypointIndex = 0; nav.nextRepathAt = 0; }
+      }
       if (enemy.getData('arcadeMovementControlled')) {
         gasHazard?.carveVisualTunnel(
           enemy.x,
@@ -2745,7 +2755,8 @@ export class ArenaScene extends Phaser.Scene {
       const targetSite = assignedSite ?? this.selectEnemyObjective(enemy, activeSites);
       if (enemy.stats.type === 'tank' && !assignedSite) this.updateTankHomingMissile(enemy, now);
       if (!targetSite) {
-        this.updateEnemyPatrol(enemy, now);
+        if (enemy.stats.type === 'shooter') this.updateShooter(enemy, now, null);
+        else this.navigateEnemy(enemy, this.player.x, this.player.y, now, enemy.stats.speed);
       } else if (assignedSite && this.defuseAssignees.has(enemy)) {
         if (this.updateDefuser(enemy, assignedSite, now, dt)) {
           activeDefusersBySite.set(assignedSite.id, (activeDefusersBySite.get(assignedSite.id) ?? 0) + 1);
@@ -2935,27 +2946,6 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private updateEnemyPatrol(enemy: Enemy, now: number): void {
-    const target = this.patrolTargets.get(enemy) ?? { x: enemy.x, y: enemy.y };
-    const targetDx = enemy.x - target.x;
-    const targetDy = enemy.y - target.y;
-    if (targetDx * targetDx + targetDy * targetDy < 42 * 42 || Math.random() < 0.002) {
-      const bounds=this.layout.generation.bounds;
-      target.x = Phaser.Math.Clamp(enemy.x + Phaser.Math.Between(-260, 260), bounds.x+60, bounds.x+bounds.w-60);
-      target.y = Phaser.Math.Clamp(enemy.y + Phaser.Math.Between(-220, 220), bounds.y+60, bounds.y+bounds.h-60);
-      this.patrolTargets.set(enemy, target);
-    }
-
-    const playerDx = enemy.x - this.player.x;
-    const playerDy = enemy.y - this.player.y;
-    if (playerDx * playerDx + playerDy * playerDy < 260 * 260) {
-      this.navigateEnemy(enemy, this.player.x, this.player.y, now, enemy.stats.speed * 0.95);
-      return;
-    }
-
-    this.navigateEnemy(enemy, target.x, target.y, now, enemy.stats.speed * 0.82);
-  }
-
   private enemyPrefersObjective(enemy: Enemy, now: number, chance: number): boolean {
     const nav = this.navState.get(enemy);
     if (!nav) return Math.random() < chance;
@@ -3065,11 +3055,11 @@ export class ArenaScene extends Phaser.Scene {
     const x = enemy.x + Math.cos(angle) * launchOffset;
     const y = enemy.y + Math.sin(angle) * launchOffset;
     const speed = getTankHomingMissileSpeed(this.player.speed);
-    const sprite = this.physics.add.image(x, y, 'projectile-missile');
-    sprite.setDisplaySize(30, 14).setTint(COLORS.pink).setRotation(angle).setDepth(9);
+    const sprite = this.physics.add.image(x, y, 'tank-homing-missile');
+    sprite.setDisplaySize(30, 14).setRotation(angle).setDepth(9);
     sprite.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     const body = sprite.body as Phaser.Physics.Arcade.Body | null;
-    body?.setSize(24, 10, true);
+    body?.setSize(48, 20, true); // 2× art; same world collision dimensions.
 
     this.homingMissiles.push({
       sprite,
@@ -3117,7 +3107,8 @@ export class ArenaScene extends Phaser.Scene {
       missile.sprite.setRotation(angle);
       missile.sprite.setAlpha(missile.lifeMs < 1500 ? 0.7 + Math.sin(this.time.now * 0.035) * 0.3 : 1);
       if (this.time.now >= missile.nextTrailAt) {
-        this.spawnProjectileTrail(missile.sprite.x, missile.sprite.y, COLORS.pink, this.time.now);
+        this.projectileImpactVfx.emitMissileTrail(
+          missile.sprite.x - Math.cos(angle) * 14, missile.sprite.y - Math.sin(angle) * 14, angle, this.time.now);
         missile.nextTrailAt = this.time.now + 30;
       }
       gasHazard?.carveVisualTunnel(
@@ -3141,7 +3132,7 @@ export class ArenaScene extends Phaser.Scene {
   private detonateHomingMissile(missile: HomingMissile, cause: 'impact' | 'expired' | 'wall' | 'intercepted'): void {
     if (missile.detonated) return;
     missile.detonated = true;
-    const { x, y } = missile.sprite;
+    const { x, y, rotation } = missile.sprite;
     missile.sprite.destroy();
 
     const intercepted = cause === 'intercepted';
@@ -3157,7 +3148,7 @@ export class ArenaScene extends Phaser.Scene {
       duration: intercepted ? 180 : 260,
       onComplete: () => this.retireFxCircle(blast)
     });
-    this.spawnImpact(x, y, color);
+    this.projectileImpactVfx.emitMissileImpact(x, y, rotation, this.time.now);
     this.audio.playSfx('bomblet');
     this.fluxCores?.damageArea(
       x,
@@ -3188,9 +3179,9 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.recordProjectileMiss('enemy', cause === 'wall' ? 'wall' : 'expired');
   }
 
-  private updateShooter(enemy: Enemy, now: number, site: BombSiteRuntime): void {
-    const turretTarget = this.getSecondaryTurretTarget(enemy, now);
-    const focusBombSite = this.enemyPrefersObjective(enemy, now, 0.25);
+  private updateShooter(enemy: Enemy, now: number, site: BombSiteRuntime | null): void {
+    const turretTarget = site ? this.getSecondaryTurretTarget(enemy, now) : null;
+    const focusBombSite = site !== null && this.enemyPrefersObjective(enemy, now, 0.25);
     const focusX = turretTarget?.sprite.x ?? (focusBombSite ? site.x : this.player.x);
     const focusY = turretTarget?.sprite.y ?? (focusBombSite ? site.y : this.player.y);
 
@@ -3211,7 +3202,7 @@ export class ArenaScene extends Phaser.Scene {
       enemy.setVelocity(0, 0);
     }
 
-    if (now - enemy.lastShotMs > ENEMY_BALANCE.shooter.attackCooldownMs) {
+    if (distanceSquared <= 560 * 560 && now - enemy.lastShotMs > ENEMY_BALANCE.shooter.attackCooldownMs) {
       enemy.lastShotMs = now;
       const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, turretTarget?.sprite.x ?? this.player.x, turretTarget?.sprite.y ?? this.player.y);
       GameplayTelemetryRecorder.recordProjectileFired('enemy');
@@ -3278,7 +3269,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const body = enemy.body as Phaser.Physics.Arcade.Body | null;
-    if (body && (body.blocked.left || body.blocked.right || body.blocked.up || body.blocked.down)) {
+    if (now >= nav.nextRepathAt && body && (body.blocked.left || body.blocked.right || body.blocked.up || body.blocked.down)) {
       nav.path.length = 0;
       nav.waypointIndex = 0;
       nav.nextRepathAt = 0;
@@ -3325,7 +3316,10 @@ export class ArenaScene extends Phaser.Scene {
 
     const key = `${Math.floor(targetX / 40)},${Math.floor(targetY / 40)}:${this.fences.length}-${this.mines.length}`;
 
-    if (nav.path.length === 0 || nav.targetKey !== key || now >= nav.nextRepathAt) {
+    // Empty paths and moving targets still respect the staggered deadline.
+    // Bound expensive queries per update; existing local steering runs for all enemies.
+    if (now >= nav.nextRepathAt && this.navigationQueriesRemaining > 0) {
+      this.navigationQueriesRemaining -= 1;
       nav.path = this.pathfinder.findPath(enemy.x, enemy.y, targetX, targetY, {
         cellPenalty: this.navigationCellPenalty,
         smooth: nav.stuckTicks === 0,
@@ -3768,7 +3762,7 @@ export class ArenaScene extends Phaser.Scene {
             } else {
               hitMissile.sprite.setTintFill(0xffffff);
               this.scheduleRoundDelayedCall(55, () => {
-                if (hitMissile.sprite.active) hitMissile.sprite.setTint(COLORS.pink);
+                if (hitMissile.sprite.active) hitMissile.sprite.clearTint();
               });
             }
             continue;
@@ -3897,6 +3891,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private ricochetProjectileFromWall(projectile: Projectile): boolean {
+    this.projectileImpactVfx.emit(projectile.sprite.x, projectile.sprite.y, projectile.sprite.rotation,
+      projectile.trailColor, this.time.now);
     const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
     if (!body) return false;
     const previousX = projectile.previousX ?? projectile.sprite.x;
@@ -4061,28 +4057,9 @@ export class ArenaScene extends Phaser.Scene {
       this.detonateGrenadeRound(projectile, x, y, directlyHitEnemy);
       return;
     }
-    if ((projectile.from === 'player' || projectile.from === 'turret') && projectile.ammoMode === 'scattershot') {
-      const pulse = this.obtainFxCircle({
-        x,
-        y,
-        radius: 3,
-        color,
-        alpha: 0.72,
-        depth: 8,
-        strokeWidth: 1,
-        strokeColor: 0xffffff,
-        strokeAlpha: 0.5
-      });
-      this.tweens.add({
-        targets: pulse,
-        radius: 11,
-        alpha: 0,
-        duration: 125,
-        onComplete: () => this.retireFxCircle(pulse)
-      });
-      return;
-    }
-    this.spawnImpact(x, y, color);
+    if (projectile.from === 'player' || projectile.from === 'turret') {
+      this.projectileImpactVfx.emit(x, y, projectile.sprite.rotation, color, this.time.now);
+    } else this.spawnImpact(x, y, color);
   }
 
   private detonateGrenadeRound(
@@ -6373,6 +6350,7 @@ export class ArenaScene extends Phaser.Scene {
       createArenaFireTrapPlacements(this.layout, round),
       {
         environment: 'arena',
+        isPlayerAlive: () => this.player.active && !this.player.isDead(),
         particlesEnabled: this.particlesEnabled,
         damageProfile: getFireHazardDamageProfile(round, this.protocol),
         maximumConcurrent: 2,
@@ -9276,7 +9254,6 @@ export class ArenaScene extends Phaser.Scene {
     this.grenadeProjectileSequence = 0;
     this.enemyNavigationSequence = 0;
     this.navState = new WeakMap<Enemy, NavState>();
-    this.patrolTargets = new WeakMap<Enemy, PatrolPoint>();
     this.enemySeparationGrid.clear();
     this.enemyColliders.clear();
     this.separationSubject = null;
