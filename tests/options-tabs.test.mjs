@@ -22,8 +22,8 @@ test('Options uses five data-driven tabs and defaults every scene opening to Aud
   assert.doesNotMatch(options, /setSettings\(\{[^}]*activeTab/);
 });
 
-test('tab contents are created once and hidden tabs have all nested pointer input disabled', () => {
-  assert.equal((options.match(/this\.createAudioTab\(/g) ?? []).length, 1);
+test('only Audio rebuilds for category toggles and hidden tabs disable nested input', () => {
+  assert.equal((options.match(/this\.createAudioTab\(/g) ?? []).length, 2);
   assert.equal((options.match(/this\.createGameplayTab\(/g) ?? []).length, 1);
   assert.equal((options.match(/this\.createInterfaceTab\(/g) ?? []).length, 1);
   assert.equal((options.match(/this\.createProfileTab\(/g) ?? []).length, 1);
@@ -39,7 +39,8 @@ test('Audio tab keeps the existing mixer keys and tab content scrolls only insid
   assert.match(audioTab, /MASTER VOLUME/);
   assert.match(audioTab, /MUSIC VOLUME/);
   assert.match(audioTab, /SFX VOLUME/);
-  assert.match(audioTab, /SFX_DEFINITIONS\.forEach/);
+  assert.match(audioTab, /for \(const category of SFX_CATEGORIES\)/);
+  assert.match(audioTab, /category\.keys\.map/);
   assert.match(audioTab, /save\.settings\.soundVolumes\[definition\.key\]/);
   assert.match(options, /setSettings\(\{ soundVolumes: \{ \.\.\.current, \[key\]: value \} \}\)/);
   assert.match(options, /container\.setMask\(this\.contentMask\)/);

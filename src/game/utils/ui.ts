@@ -79,6 +79,7 @@ export interface ButtonPresentationOptions {
   focusDefaultPriority?: number;
   focusShortcut?: 'page-left' | 'page-right' | 'tab-left' | 'tab-right';
   focusLabel?: string;
+  focusId?: string;
   focusGroup?: string;
   holdRepeat?: boolean;
 }
@@ -147,6 +148,7 @@ export const createButton = (
   const isPrevious = /^(?:<|\u25c0|previous|prev)/i.test(normalizedLabel);
   const isNext = /^(?:>|\u25b6|next)/i.test(normalizedLabel);
   registerUiFocusable(scene, button, {
+    id: presentation.focusId,
     label: normalizedLabel,
     activate,
     repeatable: presentation.holdRepeat,

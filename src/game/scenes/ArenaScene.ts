@@ -1668,12 +1668,14 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (this.tutorialHardPaused || this.state.state === RoundState.Paused || this.legendaryRevealInProgress || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) {
+      if (this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) this.arenaFireTraps?.clearExposure();
       this.muzzleFlashVfx.reset();
       this.projectileImpactVfx.reset();
       return;
     }
 
     if (this.roundRuntime.phase !== 'active') {
+      this.arenaFireTraps?.clearExposure();
       // Reward collection remains navigable, but no shooting, enemy AI,
       // hazards, spawn work, telemetry frames, or combat callbacks may advance
       // after END REQUESTED. This is the shared lock for ordinary, boss,
@@ -1694,6 +1696,7 @@ export class ArenaScene extends Phaser.Scene {
 
     if (!this.tutorialDirector?.isActive()) this.anomalyController?.update(delta);
     if (this.anomalyController?.blocksArenaGameplay) {
+      this.arenaFireTraps?.clearExposure();
       this.player.setVelocity(0, 0);
       this.muzzleFlashVfx.reset();
       this.projectileImpactVfx.reset();
@@ -5496,6 +5499,8 @@ export class ArenaScene extends Phaser.Scene {
   private beginAnomalyTransition(request: AnomalyEntryRequest): void {
     if (!isValidAnomalyEntryCost(request.cost)) return;
     if (request.anomalyId !== 'heist' || !this.anomalyReturnLifecycle.begin(request.sessionId)) return;
+    this.arenaFireTraps?.clearExposure();
+    this.projectileImpactVfx.reset();
     // Cosmetic debris does not belong to the suspended gameplay snapshot.
     // Retire it before capturing the anomaly baseline; portal/session state is
     // otherwise left entirely to the existing authoritative handoff.

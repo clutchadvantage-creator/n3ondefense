@@ -307,7 +307,7 @@ export class SharedFireTrapSystem {
     };
   }
 
-  private clearExposure(): void {
+  clearExposure(): void {
     this.burning.reset();
     for (const nozzle of this.nozzles) this.audio.stopFireTrap(nozzle);
     this.flameGraphics.clear();
@@ -417,7 +417,8 @@ export class SharedFireTrapSystem {
     // Three tapered jets, matching the authored outer flame. A 12px body
     // allowance keeps contact readable without the former wide invisible box.
     const halfWidth = 24 * (localX - 9) / Math.max(1, length - 9) + 12;
-    return WALL_PORT_OFFSETS.some(offset => Math.abs(localY - offset) <= halfWidth);
+    for (const offset of WALL_PORT_OFFSETS) if (Math.abs(localY - offset) <= halfWidth) return true;
+    return false;
   }
 
   private updateWarningLights(nozzle: FireNozzleRuntime, now: number): void {

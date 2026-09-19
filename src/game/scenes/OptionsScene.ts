@@ -28,7 +28,7 @@ import { drawHudAbilityIcon, drawHudResourceIcon } from '../systems/Hud';
 import { TUTORIAL_REPLAY_GROUPS } from '../tutorial/TutorialRegistry.ts';
 import { requestTutorialReplay, resetTutorialSequence, skipTutorialSequence } from '../tutorial/TutorialProgress.ts';
 import { DEFAULT_CONTROLLER_SETTINGS, normalizeControllerSettings } from '../config/controllerSettings.ts';
-import { configureSceneUiNavigation, registerUiFocusable } from '../input/UiNavigationController.ts';
+import { configureSceneUiNavigation, registerUiFocusable, UiNavigationController } from '../input/UiNavigationController.ts';
 
 type OptionsTabId = 'audio' | 'gameplay' | 'interface' | 'profile' | 'system';
 
@@ -323,7 +323,7 @@ export class OptionsScene extends Phaser.Scene {
     const global = this.add.container(0, 0);
     this.audioGlobalPanel = global;
     container.add(global);
-    global.add(this.add.rectangle(centerX, top + 129, width, 258, 0x08131f, 1));
+    global.add(this.add.rectangle(centerX, top + 135, width, 270, 0x08131f, 1));
     this.addSectionHeader(global, centerX, y, 'GLOBAL AUDIO', 'PRIMARY MIXER');
     const globalPanelTop = y + 25;
     const globalPanelHeight = 164;
@@ -352,10 +352,11 @@ export class OptionsScene extends Phaser.Scene {
     const columnCount = twoColumns ? 2 : 1;
     const columnWidth = (innerWidth - columnGap * (columnCount - 1)) / columnCount;
     y += 44;
-    this.audioCategoryTop = y - 24;
+    this.audioCategoryTop = y - 26;
     for (const category of SFX_CATEGORIES) {
       const expanded = this.expandedAudioCategories.has(category.id);
-      const header = this.addTabButton(container, centerX, y,
+      const focusId = `options:audio:category:${category.id}`;
+      const header = createButton(this, centerX, y,
         `${expanded ? '−' : '+'}  ${category.label.toUpperCase()}  (${category.keys.length})`, () => {
           const offset = this.scrollStates.get('audio')?.offset ?? 0;
           if (expanded) this.expandedAudioCategories.delete(category.id);
@@ -366,7 +367,9 @@ export class OptionsScene extends Phaser.Scene {
           const state = this.scrollStates.get('audio')!;
           state.offset = Math.min(offset, state.max);
           this.selectTab('audio');
-        }, innerWidth);
+          UiNavigationController.get().phaserLayer(this).manager.focus(focusId);
+        }, innerWidth, 'menu', { focusId, focusLabel: category.label });
+      container.add(header);
       this.registerScrollTarget('audio', header, y, 22);
       y += 46;
       if (!expanded) continue;

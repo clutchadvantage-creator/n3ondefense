@@ -141,12 +141,12 @@ test('Arena fire placement is deterministic, bombsite-safe, and shares one bound
   assert.match(shared, /WALL_PORT_OFFSETS = Object\.freeze\(\[-18, 0, 18\]\)/);
   assert.match(shared, /WALL_PORT_STAGGER_MS = 60/);
   assert.match(shared, /'idle' \| 'telegraph' \| 'ignition' \| 'active' \| 'cooldown'/);
-  assert.match(shared, /state = 'ignition'[\s\S]*?playSfx\('fireTrap'\)/);
+  assert.match(shared, /state = 'active'[\s\S]*?startFireTrap\(nozzle\)/);
   assert.match(shared, /selectWallCandidate/);
   assert.doesNotMatch(shared, /drawBeveledTechPlate|const barrel =|const shield = scene\.add\.polygon/);
   assert.match(shared, /physicsBodies: 0/);
   assert.match(shared, /independentTimers: 0/);
-  assert.match(shared, /this\.audio\.playSfx\('fireTrap'\)/);
+  assert.match(shared, /this\.audio\.stopFireTrap\(nozzle\)/);
   assert.match(arena, /new SharedFireTrapSystem/);
   assert.match(heist, /new SharedFireTrapSystem/);
   assert.doesNotMatch(heist, /createFireNozzle/);

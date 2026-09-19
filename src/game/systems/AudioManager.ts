@@ -430,8 +430,13 @@ export class AudioManager {
   /** Borrow an existing mixer voice for exactly one active flame lifetime. */
   startFireTrap(owner: object): void {
     if (this.fireVoices.has(owner)) return;
-    const audio = this.presentationSfxPools.fireTrap.find(candidate =>
-      !Array.from(this.fireVoices.values()).includes(candidate) && (candidate.paused || candidate.ended));
+    let audio: HTMLAudioElement | undefined;
+    for (const candidate of this.presentationSfxPools.fireTrap) {
+      if (!candidate.paused && !candidate.ended) continue;
+      let owned = false;
+      for (const voice of this.fireVoices.values()) if (voice === candidate) { owned = true; break; }
+      if (!owned) { audio = candidate; break; }
+    }
     if (!audio) return;
     this.fireVoices.set(owner, audio);
     audio.loop = true;

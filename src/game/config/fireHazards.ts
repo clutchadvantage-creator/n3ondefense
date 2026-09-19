@@ -9,8 +9,10 @@ import { applyHazardDamageMode, type RunModeFamily } from './modeBalance.ts';
  * readable hit cadence without wasting alternate pulses or spamming feedback.
  */
 export const FIRE_HAZARD_BALANCE = Object.freeze({
-  playerDamagePerPulse: 12,
-  maximumPlayerDamagePerPulse: 19.2,
+  // Normal's shared 0.7 hazard multiplier resolves this to 11.9 HP/pulse:
+  // three pulses = 35.7 HP, 27.46% of the baseline 130 HP operative.
+  playerDamagePerPulse: 17,
+  maximumPlayerDamagePerPulse: 27.2,
   damagePulseIntervalMs: 520,
   activeDurationMs: 1_100,
   burnDurationMs: 1_250,

@@ -101,6 +101,7 @@ const createSnagTrap = (scene: Phaser.Scene, placement: MechanicalPlacement): Tr
 /** HEIST retains its spike/snare machinery here while fire is delegated to
  * the same bounded runtime used by Arena and future anomaly scenes. */
 export class HeistTrapSystem {
+  clearFireExposure(): void { this.fireSystem.clearExposure(); }
   private readonly traps: TrapRuntime[];
   private readonly fireSystem: SharedFireTrapSystem;
   private readonly restraintOverlay: Phaser.GameObjects.Graphics;

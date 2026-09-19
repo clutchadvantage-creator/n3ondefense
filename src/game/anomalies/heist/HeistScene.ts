@@ -1998,6 +1998,8 @@ export class HeistScene extends Phaser.Scene {
 
   private failHeist(reason: 'player-dead' | 'extraction-timeout' = 'player-dead'): void {
     if (this.returning) return;
+    this.trapSystem?.clearFireExposure();
+    this.projectileImpactVfx.reset();
     this.returning = true;
     this.phase = 'returning';
     this.audio.play('heist-failed');
@@ -2014,6 +2016,8 @@ export class HeistScene extends Phaser.Scene {
     durationMs: number
   ): void {
     this.pendingFadeReturn = { success, reason };
+    this.trapSystem?.clearFireExposure();
+    this.projectileImpactVfx.reset();
     this.cameras.main.once(
       Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
       this.onReturnFadeComplete,
