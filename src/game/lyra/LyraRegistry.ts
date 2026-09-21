@@ -1,6 +1,7 @@
 import { TUTORIAL_SEQUENCES } from '../tutorial/TutorialRegistry.ts';
 import type { LyraMessage } from './LyraTypes.ts';
 import { LYRA_PRIORITY as P } from './LyraTypes.ts';
+import { LYRA_TUTORIAL_SCRIPT } from './LyraTutorialScript.ts';
 
 const context = (id: string, text: string, scenes: string[] = ['arena']): LyraMessage =>
   ({ id, text, scenes, mode: 'GUIDANCE', priority: P.context, once: 'profile', expiryMs: 12000 });
@@ -23,6 +24,7 @@ export const LYRA_MESSAGES: readonly LyraMessage[] = [
   { id: 'ambient.store.1', text: 'Permanent upgrades. My preferred form of optimism.', mode: 'AMBIENT', priority: P.ambient, scenes: ['upgrades'], weight: 1, cooldownMs: 900000 },
   ...TUTORIAL_SEQUENCES.flatMap(sequence => sequence.steps.map(step => ({
     id: `tutorial.${sequence.id}.${step.id}`, text: step.body, mode: 'GUIDANCE' as const,
+    recordedText: LYRA_TUTORIAL_SCRIPT[`${sequence.id}.${step.id}`]?.text,
     priority: P.training, tutorial: true, cooldownMs: 0, expiryMs: 1000
   })))
 ];
@@ -30,7 +32,7 @@ export const LYRA_MESSAGE_BY_ID = new Map(LYRA_MESSAGES.map(message => [message.
 
 /** Local recordings only. Paths relative to public/assets/audio/lyra/. Missing entries use the provider chain. */
 export const LYRA_RECORDINGS: Record<string, Partial<Record<string, string>>> = {
-  'en-US': {}
+  'en-US': Object.fromEntries(Object.entries(LYRA_TUTORIAL_SCRIPT).map(([id, line]) => [`tutorial.${id}`, line.file]))
 };
 /** Set to an authored public-relative video path when footage is supplied. */
 export const LYRA_ADVANCED_PREVIEW: string | null = null;

@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import type { LyraComms } from './LyraComms.ts';
 import { LYRA_MESSAGES } from './LyraRegistry.ts';
 import { SaveSystem } from '../systems/SaveSystem.ts';
-import { requestTutorialReplay } from '../tutorial/TutorialProgress.ts';
+import { createTutorialProgress, requestTutorialReplay } from '../tutorial/TutorialProgress.ts';
 
 /** Dynamically imported only in DEV; no debug controls in the production bundle. */
 export function installLyraDevPanel(game: Phaser.Game, comms: LyraComms): void {
@@ -34,17 +34,27 @@ export function installLyraDevPanel(game: Phaser.Game, comms: LyraComms): void {
   const line = document.createElement('select');
   line.append(...LYRA_MESSAGES.map(message => new Option(message.id, message.id))); label('Line / recording key ', line);
   const button = (text: string, action: () => void): void => { const b = document.createElement('button'); b.textContent = text; b.onclick = action; content.append(b); };
-  button('Preview provider chain', () => {
+  const preview = (voiceSource?: 'recorded' | 'tts'): void => {
     const message = LYRA_MESSAGES.find(m => m.id === line.value)!;
     comms.cancel(); comms.queue.resetCooldowns();
     // Keep current scene safety; previews cannot speak over a reveal or paused run.
-    comms.queue.submit({ ...message, scenes: undefined, once: undefined, tutorial: false, priority: 100 });
-  });
+    comms.queue.submit({ ...message, text: message.recordedText ?? message.text,
+      voiceSource, condition: undefined, scenes: undefined, once: undefined, tutorial: false, priority: 100 });
+  };
+  const note = document.createElement('p'); note.textContent = 'Preview in Menu or Garage. Voice settings and gameplay safety gates still apply.'; content.append(note);
+  button('Preview provider chain', () => preview());
+  button('Preview recorded file', () => preview('recorded'));
+  button('Preview local TTS', () => preview('tts'));
   button('Stop / clear queue', () => comms.cancel());
   button('Clear cooldowns', () => comms.queue.resetCooldowns());
   button('Try ambient (safe scenes)', () => { comms.queue.resetCooldowns(); comms.ambient(); });
   button('Reset contextual seen', () => comms.resetSeen());
   button('Replay initial training', () => SaveSystem.updateTutorialProgress(state => requestTutorialReplay(state, 'onboarding.basic-controls')));
+  button('Reset all training (progression kept)', () => {
+    comms.cancel();
+    SaveSystem.updateTutorialProgress(state => Object.assign(state, createTutorialProgress()));
+    comms.resetSeen();
+  });
   const diagnostics = document.createElement('pre'); content.append(diagnostics);
   let timer: number | undefined;
   root.ontoggle = () => {

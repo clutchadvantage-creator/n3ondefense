@@ -14,6 +14,8 @@
   const press = action => { const states = arena.playerInput.states; states.beginFrame(); if (action) states.setHeld(action, true); states.finishFrame('gameplay'); };
   report.promise = (async () => {
     try {
+      await until(() => game.scene.keys.menu && game.scene.keys.arena && !game.scene.keys.boot.sys.isActive(), 'Boot completed');
+      await wait(150);
       const { SaveSystem } = await import(live('/src/game/systems/SaveSystem.ts'));
       const { LyraComms } = await import(live('/src/game/lyra/LyraComms.ts'));
       const { AudioManager } = await import(live('/src/game/systems/AudioManager.ts'));

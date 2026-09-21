@@ -16,6 +16,10 @@ export interface LyraMessage {
   /** Instructions already have the tutorial's persistent, binding-aware view. */
   tutorial?: boolean;
   condition?: 'low-health' | 'defusing';
+  /** A recording is valid only while the presented instructions match its transcript. */
+  recordedText?: string;
+  /** Used by the development voice lab to exercise each provider independently. */
+  voiceSource?: 'recorded' | 'tts';
 }
 export interface LyraSettings {
   voice: boolean;
@@ -44,7 +48,7 @@ export function normalizeLyraSettings(value: unknown): LyraSettings {
     language: typeof v.language === 'string' && /^[a-z]{2,3}(?:-[a-zA-Z]{2,8})*$/.test(v.language) ? v.language : 'en-US' };
 }
 export interface LyraContext { scope: string; scene: string; blocked: boolean; training: boolean; ambientSafe: boolean; lowHealth?: boolean; defusing?: boolean; }
-export interface LyraPlayback { cancel(): void; }
+export interface LyraPlayback { cancel(): void; readonly durationMs?: number; }
 export interface LyraVoiceProvider {
   play(message: LyraMessage, settings: LyraSettings, started: () => void, ended: () => void, failed: () => void): LyraPlayback | null;
   destroy?(): void;

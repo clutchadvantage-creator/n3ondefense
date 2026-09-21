@@ -17,6 +17,7 @@ export class RecordedAudioProvider implements LyraVoiceProvider {
   private readonly base: string;
   constructor(recordings: Record<string, Partial<Record<string, string>>>, base: string) { this.recordings = recordings; this.base = base; }
   play(message: LyraMessage, settings: LyraSettings, started: () => void, ended: () => void, failed: () => void): LyraPlayback | null {
+    if (message.recordedText !== undefined && message.recordedText !== message.text) return null;
     const path = this.recordings[settings.language]?.[message.id];
     if (!path) return null;
     const audio = new Audio(`${this.base}${path}`);
@@ -33,7 +34,7 @@ export class RecordedAudioProvider implements LyraVoiceProvider {
     const fail = (): void => { if (!retired) { cancel(); failed(); } };
     audio.onerror = fail;
     void audio.play().catch(fail);
-    return { cancel };
+    return { cancel, get durationMs() { return Number.isFinite(audio.duration) ? audio.duration * 1000 : undefined; } };
   }
 }
 

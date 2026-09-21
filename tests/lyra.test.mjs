@@ -7,6 +7,10 @@ import { LYRA_MESSAGES, LYRA_MESSAGE_BY_ID } from '../src/game/lyra/LyraRegistry
 import { createTutorialProgress, completeFirstRunTeachingRound, setFirstRunTeachingStage } from '../src/game/tutorial/TutorialProgress.ts';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import { TUTORIAL_SEQUENCES } from '../src/game/tutorial/TutorialRegistry.ts';
+import { LYRA_TUTORIAL_SCRIPT } from '../src/game/lyra/LyraTutorialScript.ts';
+import { resolveTutorialCopy } from '../src/game/tutorial/TutorialCopy.ts';
+import { DEFAULT_ABILITY_BINDINGS } from '../src/game/config/controls.ts';
+import { existsSync } from 'node:fs';
 
 const message = (id, priority = 40, extra = {}) => ({ id, text: id, priority, mode: 'SYSTEM', ...extra });
 const context = { scope: 'profile:arena:1', scene: 'arena', blocked: false, training: false, ambientSafe: false };
@@ -130,5 +134,28 @@ test('action gates are separated across rounds and all tutorial lines have stabl
   for (const sequence of TUTORIAL_SEQUENCES) for (const step of sequence.steps) {
     assert.ok(LYRA_MESSAGE_BY_ID.has(`tutorial.${sequence.id}.${step.id}`));
     assert.notEqual(step.completion.type, 'auto');
+  }
+});
+test('all 17 authored recordings have exact default-control subtitle parity and existing files', () => {
+  assert.equal(Object.keys(LYRA_TUTORIAL_SCRIPT).length, 17);
+  for (const [id, line] of Object.entries(LYRA_TUTORIAL_SCRIPT)) {
+    const sequence = TUTORIAL_SEQUENCES.find(s => id.startsWith(s.id + '.'));
+    const step = sequence.steps.find(s => id === `${sequence.id}.${s.id}`);
+    assert.ok(step, id);
+    assert.equal(resolveTutorialCopy(step, 'keyboardMouse', 'generic', DEFAULT_ABILITY_BINDINGS).body, line.text, id);
+    assert.equal(LYRA_MESSAGE_BY_ID.get(`tutorial.${id}`).recordedText, line.text);
+    assert.ok(existsSync(new URL(`../public/assets/audio/lyra/${line.file}`, import.meta.url)), line.file);
+  }
+});
+test('controller and remapped instructions cannot play a recording naming the wrong control', () => {
+  const sequence = TUTORIAL_SEQUENCES.find(s => s.id === 'onboarding.tactics');
+  const step = sequence.steps.find(s => s.id === 'shield');
+  const definition = LYRA_MESSAGE_BY_ID.get('tutorial.onboarding.tactics.shield');
+  const provider = new RecordedAudioProvider({ 'en-US': { [definition.id]: 'lyrashield.mp3' } }, '/local/');
+  for (const [device, bindings] of [['gamepad', DEFAULT_ABILITY_BINDINGS], ['keyboardMouse', { ...DEFAULT_ABILITY_BINDINGS, shield: 'Keyboard:KeyZ' }]]) {
+    const copy = resolveTutorialCopy(step, device, 'xbox', bindings);
+    assert.notEqual(copy.body, definition.recordedText);
+    assert.equal(provider.play({ ...definition, text: copy.body }, DEFAULT_LYRA_SETTINGS, () => {}, () => {}, () => {}), null);
+    assert.ok(!copy.body.includes('MIDDLE MOUSE BUTTON'));
   }
 });

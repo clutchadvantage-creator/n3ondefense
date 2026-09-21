@@ -31,7 +31,7 @@ export class LoadingScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Loading); }
 
   init(data: ArenaLoadRequest): void {
-    if (data.reason === 'new-run') LyraComms.get().resetRun();
+    if (data.reason === 'new-run' || data.reason === 'replay-after-fail') LyraComms.get().resetRun();
     this.transitionRequest = data as ArenaTransitionRequest;
     this.handoffStarted = false;
   }

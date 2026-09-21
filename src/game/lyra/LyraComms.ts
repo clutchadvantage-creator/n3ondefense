@@ -138,14 +138,17 @@ export class LyraComms {
     this.readUntil = this.startedAt + (message.durationMs ?? Math.min(12000, Math.max(3500, message.text.length * 48)));
     this.present();
     if (!this.settings.voice || this.settings.volume === 0) { this.completeSpeech(); return; }
-    const providers = [this.recorded, this.tts, this.textOnly];
+    const providers = message.voiceSource === 'recorded' ? [this.recorded, this.textOnly]
+      : message.voiceSource === 'tts' ? [this.tts, this.textOnly] : [this.recorded, this.tts, this.textOnly];
+    const providerNames = message.voiceSource === 'recorded' ? ['recorded', 'text-only']
+      : message.voiceSource === 'tts' ? ['browser-tts', 'text-only'] : ['recorded', 'browser-tts', 'text-only'];
     const attempt = (index: number): void => {
       if (generation !== this.generation) return;
       window.clearTimeout(this.watchdog);
       this.playback?.cancel(); this.playback = null;
       if (index >= providers.length) { this.completeSpeech(); return; }
       let providerStarted = false;
-      this.provider = ['recorded', 'browser-tts', 'text-only'][index];
+      this.provider = providerNames[index];
       this.playback = providers[index].play(message, this.settings, () => {
         if (generation !== this.generation) return;
         providerStarted = true; this.voiceStarted = true; this.speaking = true;
@@ -162,7 +165,7 @@ export class LyraComms {
         if (!providerStarted) { this.stopVoice(); attempt(index + 1); }
         else this.watchdog = window.setTimeout(() => {
           if (generation === this.generation) { this.stopVoice(); this.completeSpeech(); }
-        }, 25000);
+        }, Math.min(180000, Math.max(15000, (this.playback?.durationMs ?? message.text.length * 100 / this.settings.rate) + 2000)));
       }, 2000);
     };
     attempt(0);

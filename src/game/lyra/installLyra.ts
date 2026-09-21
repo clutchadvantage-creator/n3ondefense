@@ -8,6 +8,7 @@ import type { LyraMessage } from './LyraTypes.ts';
 export interface LyraSceneState { blocked: boolean; ambientSafe: boolean; lowHealth?: boolean; defusing?: boolean; }
 type LyraScene = Phaser.Scene & { getLyraState?: () => LyraSceneState };
 export function installLyra(game: Phaser.Game): void {
+  let destroyed = false;
   const comms = LyraComms.get();
   const root = document.createElement('aside');
   root.className = 'lyra-comms'; root.hidden = true; root.setAttribute('aria-live', 'polite');
@@ -77,6 +78,9 @@ export function installLyra(game: Phaser.Game): void {
   document.addEventListener('visibilitychange', visibility);
   game.events.on('poststep', update);
   const destroy = (): void => {
+    if (destroyed) return;
+    destroyed = true;
+    game.events.off('destroy', destroy);
     game.events.off('poststep', update); unsubscribe();
     document.removeEventListener('visibilitychange', visibility);
     for (const [scene, boundary] of boundaries) for (const event of ['shutdown', 'sleep', 'pause']) scene.events.off(event, boundary);
@@ -84,5 +88,5 @@ export function installLyra(game: Phaser.Game): void {
   };
   game.events.once('destroy', destroy);
   if (import.meta.hot) import.meta.hot.dispose(destroy);
-  if (import.meta.env.DEV) void import('./LyraDevPanel.ts').then(module => module.installLyraDevPanel(game, comms));
+  if (import.meta.env.DEV) void import('./LyraDevPanel.ts').then(module => { if (!destroyed) module.installLyraDevPanel(game, comms); });
 }

@@ -4,13 +4,12 @@ import { completeTutorialSequence, completeTutorialStep, isTutorialSequenceEligi
 import { TutorialEventBus } from './TutorialEventBus.ts';
 import { TutorialOverlay } from './TutorialOverlay.ts';
 import type { TutorialEvent, TutorialHost, TutorialSequenceDefinition } from './TutorialTypes.ts';
-import { compactBindingLabel } from '../config/controls.ts';
+import { resolveTutorialCopy } from './TutorialCopy.ts';
 import { resolveTutorialAdvancePolicy, type TutorialAdvancePolicy } from './TutorialStepRules.ts';
 import {
   getUiInputPresentation,
   subscribeUiInputPresentation
 } from '../input/UiNavigationController.ts';
-import { resolveActionPrompt } from '../input/ActionInput.ts';
 import type { TutorialStepDefinition } from './TutorialTypes.ts';
 import { LyraComms } from '../lyra/LyraComms.ts';
 
@@ -206,26 +205,7 @@ export class TutorialDirector {
 
   private resolvePresentedCopy(step: TutorialStepDefinition): { body: string; inputDemo?: string[] } {
     const { device, family } = getUiInputPresentation();
-    const bindings = SaveSystem.get().settings.abilityBindings;
-    const prompt = (action: Parameters<typeof resolveActionPrompt>[0], keyboard: string): string =>
-      resolveActionPrompt(action, device, family, keyboard);
-    const replacements: Record<string, string> = {
-      '{MOVE}': device === 'gamepad' ? 'LEFT STICK' : 'W / A / S / D',
-      '{AIM}': device === 'gamepad' ? 'RIGHT STICK' : 'MOUSE',
-      '{FIRE}': prompt('fire', 'LMB'),
-      '{INTERACT}': prompt('interact', 'E'),
-      '{FENCE}': prompt('fence', compactBindingLabel(bindings.fence)),
-      '{TURRET}': prompt('turret', compactBindingLabel(bindings.turret)),
-      '{MINE}': prompt('mine', compactBindingLabel(bindings.mine)),
-      '{DASH}': prompt('dash', compactBindingLabel(bindings.dash)),
-      '{SHIELD}': prompt('shield', compactBindingLabel(bindings.shield))
-    };
-    const replace = (value: string): string => Object.entries(replacements)
-      .reduce((copy, [token, label]) => copy.replaceAll(token, label), value);
-    return {
-      body: replace(step.body),
-      inputDemo: step.inputDemo?.map(replace)
-    };
+    return resolveTutorialCopy(step, device, family, SaveSystem.get().settings.abilityBindings);
   }
 
   private advance(): void {

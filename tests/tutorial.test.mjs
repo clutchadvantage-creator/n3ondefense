@@ -87,7 +87,7 @@ test('fresh-profile Main Menu welcome is one-time and does not spill into establ
   assert.equal(isTutorialSequenceEligible(fresh, welcome, 'menu'), true);
   assert.equal(welcome.steps.at(-1).target, 'menu.start-local');
   assert.equal(welcome.steps.at(-1).completion.event, 'ui.startLocalSelected');
-  assert.match(welcome.steps.at(-1).body, /does not publish scores/i);
+  assert.match(welcome.steps.at(-1).body, /without publishing your score/i);
   completeTutorialStep(fresh, welcome.id, 'welcome');
   assert.equal(fresh.firstRunStage, 'waiting-for-start-local');
   assert.equal(fresh.firstRunWelcomePending, true);

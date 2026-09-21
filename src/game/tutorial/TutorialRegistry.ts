@@ -1,58 +1,59 @@
 import type { TutorialSequenceDefinition } from './TutorialTypes.ts';
+import { lyraTutorialText } from '../lyra/LyraTutorialScript.ts';
 
 export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
   {
     id: 'onboarding.menu-welcome', scene: 'menu', title: 'WELCOME TO N3ONDEFENSE', autoStart: true, freshProfileOnly: true,
     firstRunStages: ['welcome-main-menu', 'waiting-for-start-local'], skippable: true,
     steps: [
-      { id: 'welcome', eyebrow: 'LYRA // INITIAL LINK', title: 'WELCOME TO THE ARENA, OPERATIVE!', body: 'I am LYRA, your tactical systems intelligence. We will start with movement, then arm and defend a charge. I will stay on comms. You handle the aiming.', mode: 'menu', advanceLabel: 'NEXT', completion: { type: 'manual' } },
-      { id: 'advanced-preview', title: 'ADVANCED OPERATIONS // FIELD RECORDING', body: 'A look ahead at Supreme operations. The fundamentals remain the same: move, read the threat, and defend your charge. You can skip this recording and deploy whenever you are ready.', advancedPreview: true, mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
-      { id: 'start-local', target: 'menu.start-local', eyebrow: 'LYRA // TRAINING DEPLOYMENT', title: 'START LOCAL', body: 'Start your first training run here. Local play keeps the run local and does not publish scores to the online leaderboards. Click START LOCAL to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }
+      { id: 'welcome', eyebrow: 'LYRA // INITIAL LINK', title: 'WELCOME TO THE ARENA, OPERATIVE!', body: lyraTutorialText('onboarding.menu-welcome.welcome'), mode: 'menu', advanceLabel: 'NEXT', completion: { type: 'manual' } },
+      { id: 'advanced-preview', title: 'ADVANCED OPERATIONS // FIELD RECORDING', body: lyraTutorialText('onboarding.menu-welcome.advanced-preview'), advancedPreview: true, mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
+      { id: 'start-local', target: 'menu.start-local', eyebrow: 'LYRA // TRAINING DEPLOYMENT', title: 'START LOCAL', body: lyraTutorialText('onboarding.menu-welcome.start-local'), mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }
     ]
   },
   {
     id: 'onboarding.menu-resume-training', scene: 'menu', title: 'RESUME TRAINING', autoStart: true,
     firstRunStages: ['arena-teaching'], skippable: true,
-    steps: [{ id: 'start-local', target: 'menu.start-local', eyebrow: 'LYRA // TRAINING INCOMPLETE', title: 'RETURN TO LOCAL TRAINING', body: 'Your Arena Teaching is still in progress. Click START LOCAL to resume the training deployment.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }]
+    steps: [{ id: 'start-local', target: 'menu.start-local', eyebrow: 'LYRA // TRAINING INCOMPLETE', title: 'RETURN TO LOCAL TRAINING', body: lyraTutorialText('onboarding.menu-resume-training.start-local'), mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }]
   },
   {
     id: 'onboarding.basic-controls', scene: 'arena', title: 'INITIAL DEPLOYMENT', autoStart: true, firstRunStages: ['arena-teaching'], skippable: true,
     steps: [
-      { id: 'welcome', eyebrow: 'LYRA // LIVE TRAINING', title: 'WELCOME, OPERATIVE', body: 'LYRA online. This is a live deployment. First, we will check movement and weapons. Continue when you are ready.', mode: 'hard-pause', completion: { type: 'manual' } },
-      { id: 'move', target: 'world.player', title: 'MOVE YOUR OPERATIVE', body: 'Use {MOVE} to move. Keep space around you; a stationary operative makes the security system optimistic.', inputDemo: ['{MOVE}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.playerMoved' } },
-      { id: 'aim', target: 'world.player', title: 'AIM AT THREATS', body: 'Movement confirmed. Use {AIM} to turn toward your reticle. You can move and aim independently.', inputDemo: ['{AIM}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.aimChanged' } },
-      { id: 'fire', target: 'world.player', title: 'FIRE YOUR WEAPON', body: 'Aim linked. Press {FIRE} to fire. Shots use Energy; leave some in reserve.', inputDemo: ['{FIRE}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.weaponFired' } }
+      { id: 'welcome', eyebrow: 'LYRA // LIVE TRAINING', title: 'WELCOME, OPERATIVE', body: lyraTutorialText('onboarding.basic-controls.welcome'), mode: 'hard-pause', completion: { type: 'manual' } },
+      { id: 'move', target: 'world.player', title: 'MOVE YOUR OPERATIVE', body: lyraTutorialText('onboarding.basic-controls.move'), inputDemo: ['{MOVE}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.playerMoved' } },
+      { id: 'aim', target: 'world.player', title: 'AIM AT THREATS', body: lyraTutorialText('onboarding.basic-controls.aim'), inputDemo: ['{AIM}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.aimChanged' } },
+      { id: 'fire', target: 'world.player', title: 'FIRE YOUR WEAPON', body: lyraTutorialText('onboarding.basic-controls.fire'), inputDemo: ['{FIRE}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.weaponFired' } }
     ]
   },
   {
     id: 'onboarding.defense', scene: 'arena', title: 'BOMBSITE DEFENSE', autoStart: true, firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.hud', skippable: true,
     steps: [
-      { id: 'bombsite', target: 'world.bombsite', title: 'ARM THE CHARGE', body: 'Move into the available bombsite and hold {INTERACT}. Once planted, defend it until detonation.', inputDemo: ['{INTERACT}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'objective.bombArmed' } },
-      { id: 'enemy', target: 'world.enemy', title: 'HOSTILE CONTACT', body: 'Charge armed. Damage a hostile. Stop defusers before they disarm it. Once you have made contact, defend until detonation.', mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.enemyDamaged' } },
+      { id: 'bombsite', target: 'world.bombsite', title: 'ARM THE CHARGE', body: lyraTutorialText('onboarding.defense.bombsite'), inputDemo: ['{INTERACT}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'objective.bombArmed' } },
+      { id: 'enemy', target: 'world.enemy', title: 'HOSTILE CONTACT', body: lyraTutorialText('onboarding.defense.enemy'), mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.enemyDamaged' } },
     ]
   },
   {
     id: 'onboarding.hud', scene: 'arena', title: 'TACTICAL HUD', autoStart: true, firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.basic-controls', skippable: true,
     steps: [
-      { id: 'vitals', target: 'hud.vitals', title: 'OPERATIVE VITALS', body: 'Weapons confirmed. Pink is Health; cyan is Energy. Collect recovery supplies when safe. Keep moving while Energy recovers.', mode: 'hard-pause', completion: { type: 'manual' } },
+      { id: 'vitals', target: 'hud.vitals', title: 'OPERATIVE VITALS', body: lyraTutorialText('onboarding.hud.vitals'), mode: 'hard-pause', completion: { type: 'manual' } },
     ]
   },
   {
     id: 'onboarding.tactics', scene: 'arena', title: 'SECOND DEPLOYMENT // DEFENSIVE SYSTEMS', autoStart: true,
     firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.defense', minimumTrainingRound: 2, skippable: true,
     steps: [
-      { id: 'shield', target: 'hud.shield', title: 'RAISE YOUR SHIELD', body: 'Press {SHIELD} to form a temporary energy barrier. The shield costs Energy and cannot reactivate until its cooldown completes.', inputDemo: ['{SHIELD}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.shield' } },
-      { id: 'dash', target: 'hud.abilities', title: 'DASH THROUGH DANGER', body: 'Press {DASH} to surge toward your aim direction. Dashing costs Energy and then enters cooldown.', inputDemo: ['{DASH}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.dash' } },
-      { id: 'mine', target: 'hud.mine', title: 'DEPLOY A MINE', body: 'The highlighted HUD module shows your Mine rack and readiness. Aim at a valid location and press {MINE} to deploy area defense.', inputDemo: ['{MINE}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.mine' } },
-      { id: 'fence', target: 'hud.fence', title: 'BUILD A FENCE', body: 'Press {FENCE} to place an electric fence. Fire through it to split projectiles.', illustration: 'OPERATIVE  >  SHOT  >  FENCE  >  SPLIT SHOTS', inputDemo: ['{FENCE}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.fence' } },
-      { id: 'turret', target: 'hud.turret', title: 'DEPLOY A TURRET', body: 'Press {TURRET} near a bombsite to help stop defuse attempts.', inputDemo: ['{TURRET}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.turret' } },
+      { id: 'shield', target: 'hud.shield', title: 'RAISE YOUR SHIELD', body: lyraTutorialText('onboarding.tactics.shield'), inputDemo: ['{SHIELD}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.shield' } },
+      { id: 'dash', target: 'hud.abilities', title: 'DASH THROUGH DANGER', body: lyraTutorialText('onboarding.tactics.dash'), inputDemo: ['{DASH}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.dash' } },
+      { id: 'mine', target: 'hud.mine', title: 'DEPLOY A MINE', body: lyraTutorialText('onboarding.tactics.mine'), inputDemo: ['{MINE}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.mine' } },
+      { id: 'fence', target: 'hud.fence', title: 'BUILD A FENCE', body: lyraTutorialText('onboarding.tactics.fence'), illustration: 'OPERATIVE  >  SHOT  >  FENCE  >  SPLIT SHOTS', inputDemo: ['{FENCE}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.fence' } },
+      { id: 'turret', target: 'hud.turret', title: 'DEPLOY A TURRET', body: lyraTutorialText('onboarding.tactics.turret'), inputDemo: ['{TURRET}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.turret' } },
       { id: 'awareness', target: 'hud.abilities', title: 'READ THE FIELD', body: 'Systems checked. Watch each module?s readiness and the security warning zones. Keep your escape route open while defending.', mode: 'hard-pause', completion: { type: 'manual' } }
     ]
   },
   {
     id: 'onboarding.certification', scene: 'arena', title: 'FIELD CERTIFICATION', autoStart: true,
     firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.tactics', minimumTrainingRound: 3, skippable: true,
-    steps: [{ id: 'release', title: 'YOU HAVE THE FIELD', body: 'Movement, weapons, and defensive systems checked. I will flag new systems when you encounter them. You have the field, operative. Try to leave me something to monitor.', mode: 'hard-pause', completion: { type: 'manual' } }]
+    steps: [{ id: 'release', title: 'YOU HAVE THE FIELD', body: lyraTutorialText('onboarding.certification.release'), mode: 'hard-pause', completion: { type: 'manual' } }]
   },
   {
     id: 'onboarding.menu-store', scene: 'menu', title: 'PERMANENT PROGRESSION', autoStart: true,
