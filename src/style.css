@@ -113,7 +113,7 @@ body {
 
 /* Event-driven teaching layer shared by Phaser scenes and DOM storefronts. */
 .tutorial-overlay { position: absolute; inset: 0; z-index: 9000; pointer-events: none; font-family: 'Rajdhani', sans-serif; color: #eaffff; }
-.tutorial-overlay[hidden] { display: none; }
+.tutorial-overlay[hidden], .tutorial-overlay [hidden] { display: none; }
 .tutorial-shade { position: absolute; pointer-events: auto; background: rgba(1, 5, 11, 0.72); backdrop-filter: saturate(0.68); transition: all 150ms ease-out; }
 .tutorial-focus { position: absolute; pointer-events: none; border: 2px solid #69f5ff; border-radius: 8px; box-shadow: 0 0 0 1px rgba(255, 85, 205, 0.6), 0 0 24px rgba(78, 235, 255, 0.76), inset 0 0 18px rgba(78, 235, 255, 0.18); transition: all 110ms linear; animation: tutorial-focus-pulse 1.4s ease-in-out infinite; }
 .tutorial-focus-circle { border-radius: 50%; }

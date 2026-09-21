@@ -1,4 +1,7 @@
 import { HudInformationSystem } from '../../ui/HudInformationSystem.ts';
+import { EchoRuntime } from '../../echo/EchoRuntime.ts';
+import type { EchoShot } from '../../echo/EchoTimeline.ts';
+import { authoritativeEchoDamage, stampEchoDamage, type EchoDamageStamp } from '../../echo/EchoRules.ts';
 import Phaser from 'phaser';
 import { ABILITY_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, WEAPON_BALANCE, getDifficultyCurve } from '../../config/balance/index.ts';
 import { COLORS } from '../../config/constants.ts';
@@ -83,6 +86,7 @@ type HeistPhase = 'inbound' | 'vault-opening' | 'looting' | 'egress-delay' | 'eg
 type ProjectileOwner = 'player' | 'enemy' | 'turret';
 
 interface HeistProjectile {
+  echo?: EchoDamageStamp;
   sprite: Phaser.Physics.Arcade.Image;
   owner: ProjectileOwner;
   damage: number;
@@ -170,6 +174,7 @@ export class HeistScene extends Phaser.Scene {
   private enemies: Enemy[] = [];
   private projectiles: HeistProjectile[] = [];
   private projectilePool!: ReusableObjectPool<HeistProjectile, HeistProjectileSpawn>;
+  private echo: EchoRuntime | null = null;
   private fxCirclePool!: ReusableObjectPool<Phaser.GameObjects.Arc, BoostFxCircleSpawn>;
   private projectileTrails!: ProjectileTrailBatch;
   private projectileImpactVfx!: ProjectileImpactVfx;
@@ -237,6 +242,7 @@ export class HeistScene extends Phaser.Scene {
   private grenadeSplashY = 0;
   private grenadeSplashRadiusSquared = 0;
   private grenadeSplashDamage = 0;
+  private grenadeSplashEcho?: EchoDamageStamp;
   private grenadeSplashExcludedEnemy: Enemy | null = null;
   private nextPoolMaintenanceAt = 0;
   private escapeDeadline = 0;
@@ -269,7 +275,7 @@ export class HeistScene extends Phaser.Scene {
     const dx = enemy.x - this.grenadeSplashX;
     const dy = enemy.y - this.grenadeSplashY;
     if (dx * dx + dy * dy > this.grenadeSplashRadiusSquared) return;
-    this.damageEnemy(enemy, this.grenadeSplashDamage);
+    this.damageEnemy(enemy, this.grenadeSplashDamage, this.grenadeSplashEcho);
   };
   private readonly applyEnemySeparationNeighbor = (other: Enemy): void => {
     const enemy = this.separationSubject;
@@ -491,6 +497,8 @@ export class HeistScene extends Phaser.Scene {
       } else if (body) body.setSize(projectile.sprite.width, projectile.sprite.height, true);
       projectile.owner = state.owner;
       projectile.damage = state.damage;
+      projectile.echo = state.echo;
+      if (state.echo) projectile.sprite.setTint(0x72faff).setAlpha(.72);
       projectile.lifeMs = state.lifeMs;
       projectile.trailColor = state.trailColor;
       projectile.critical = state.critical;
@@ -544,6 +552,7 @@ export class HeistScene extends Phaser.Scene {
         if (body) { body.stop(); body.enable = false; this.physics.world.remove(body); }
         projectile.sprite.setActive(false).setVisible(false).setPosition(-10_000, -10_000);
         projectile.crossedFences.clear();
+        projectile.echo = undefined;
         projectile.sprite.setOrigin(0.5);
         projectile.grenadeBouncesRemaining = 0;
         projectile.grenadeTotalBounces = 0;
@@ -610,6 +619,7 @@ export class HeistScene extends Phaser.Scene {
     }
     this.player.updateEnergy(dt);
     this.updatePlayerMovement(now);
+    this.echo?.update(delta, this.inputController, now);
     this.updatePlayerCombat(now);
     this.muzzleFlashVfx.update(now);
     this.projectileImpactVfx.update(now);
@@ -789,6 +799,9 @@ export class HeistScene extends Phaser.Scene {
       ],
       radarRange: HUD_RADAR_RANGE, radarContacts: this.hudRadarContacts
     };
+    this.echo?.destroy();
+    this.echo = new EchoRuntime(this, this.player, this.replayEchoShot);
+    this.hudPayload.abilities[4] = this.echo.hud;
     this.hud.update(this.hudPayload);
   }
 
@@ -913,6 +926,9 @@ export class HeistScene extends Phaser.Scene {
     const ricochets = now < this.player.buffs.ricochetUntil ? RICOCHET_MAX_WALL_BOUNCES : 0;
     const x = this.player.x + Math.cos(angle) * 14;
     const y = this.player.y + Math.sin(angle) * 14;
+    if (this.echo?.timeline.recording) this.echo.timeline.recordShot({ x, y, angle, mode: ammoMode,
+      speed: this.player.weapon.projectileSpeed, damage, critical, ricochets, grenadeSequence: this.grenadeProjectileSequence,
+      texture: this.projectileTextureKey, width: this.projectileWidth, height: this.projectileHeight });
     if (ammoMode === 'scattershot') {
       for (const offset of SCATTERSHOT_ANGLE_OFFSETS) {
         this.spawnPlayerAmmoProjectile(ammoMode, x, y, angle + offset, damage, projectileColor, trailColor, critical, ricochets);
@@ -1058,21 +1074,24 @@ export class HeistScene extends Phaser.Scene {
   }
 
   private spawnPlayerAmmoProjectile(mode: TemporaryAmmoMode, x: number, y: number, angle: number, damage: number,
-    tint: number, trailColor: number, critical: boolean, ricochetsRemaining: number): void {
+    tint: number, trailColor: number, critical: boolean, ricochetsRemaining: number,
+    echoShot?: Readonly<EchoShot>, echoMultiplier = .5): void {
     const grenade = mode === 'grenade';
     const scatter = mode === 'scattershot';
     const speedMultiplier = grenade ? TEMPORARY_AMMO_BALANCE.grenade.projectileSpeedMultiplier
       : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.projectileSpeedMultiplier : 1;
-    const speed = this.player.weapon.projectileSpeed * speedMultiplier;
-    const grenadeSequence = grenade ? this.grenadeProjectileSequence++ : 0;
+    const speed = (echoShot?.speed ?? this.player.weapon.projectileSpeed) * speedMultiplier;
+    const grenadeSequence = grenade ? echoShot?.grenadeSequence ?? this.grenadeProjectileSequence++ : 0;
     const bounceCount = grenade ? grenadeBounceCountForSequence(grenadeSequence) : 0;
     const now = this.time.now;
     const projectile = this.projectilePool.obtain({
-      owner: 'player', texture: grenade ? 'ammo-grenade-round' : scatter ? 'ammo-scatter-pellet' : this.projectileTextureKey,
-      width: grenade ? TEMPORARY_AMMO_BALANCE.grenade.width : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.width : this.projectileWidth,
-      height: grenade ? TEMPORARY_AMMO_BALANCE.grenade.height : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.height : this.projectileHeight,
+      owner: 'player', texture: grenade ? 'ammo-grenade-round' : scatter ? 'ammo-scatter-pellet' : echoShot?.texture ?? this.projectileTextureKey,
+      width: grenade ? TEMPORARY_AMMO_BALANCE.grenade.width : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.width : echoShot?.width ?? this.projectileWidth,
+      height: grenade ? TEMPORARY_AMMO_BALANCE.grenade.height : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.height : echoShot?.height ?? this.projectileHeight,
       tint, rotation: angle, velocityX: Math.cos(angle) * speed, velocityY: Math.sin(angle) * speed,
-      damage: damage * (scatter ? TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier : 1),
+      damage: damage * (scatter ? TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier : 1) * (echoShot ? echoMultiplier : 1),
+      echo: echoShot ? stampEchoDamage(damage * (scatter ? TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier : 1), echoMultiplier) : undefined,
+      nativePalette: echoShot ? false : undefined,
       lifeMs: grenade ? TEMPORARY_AMMO_BALANCE.grenade.projectileLifetimeMs
         : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.projectileLifetimeMs : 950,
       trailColor, critical, ricochetsRemaining, ammoMode: mode, previousX: x, previousY: y,
@@ -1087,6 +1106,12 @@ export class HeistScene extends Phaser.Scene {
     });
     this.projectiles.push(projectile);
   }
+
+  private readonly replayEchoShot = (shot: Readonly<EchoShot>, dx: number, dy: number, multiplier: number): void => {
+    const offsets = shot.mode === 'scattershot' ? SCATTERSHOT_ANGLE_OFFSETS : [0];
+    for (const offset of offsets) this.spawnPlayerAmmoProjectile(shot.mode, shot.x + dx, shot.y + dy,
+      shot.angle + offset, shot.damage, 0x72faff, 0xff5bd8, shot.critical, shot.ricochets, shot, multiplier);
+  };
 
   private consumeGrenadeBounce(projectile: HeistProjectile, now: number): boolean {
     const pulse = this.fxCirclePool.obtain({
@@ -1192,6 +1217,7 @@ export class HeistScene extends Phaser.Scene {
     this.projectileTrails.beginFrame(now);
     for (let index = this.projectiles.length - 1; index >= 0; index -= 1) {
       const projectile = this.projectiles[index];
+      if (projectile.echo) projectile.damage = authoritativeEchoDamage(projectile.damage, projectile.echo);
       projectile.lifeMs -= delta;
       if (projectile.lifeMs <= 0) {
         if (projectile.ammoMode === 'grenade' && projectile.owner !== 'enemy') this.detonateGrenade(projectile);
@@ -1276,7 +1302,7 @@ export class HeistScene extends Phaser.Scene {
         const enemy = projectile.ammoMode === 'grenade' ? null : this.findEnemyHit(projectile.sprite.x, projectile.sprite.y);
         if (enemy) {
           this.emitProjectileImpact(projectile);
-          this.damageEnemy(enemy, projectile.damage);
+          this.damageEnemy(enemy, projectile.damage, projectile.echo);
           if (projectile.ammoMode === 'grenade') this.detonateGrenade(projectile, enemy);
           this.retireProjectile(projectile, index);
           continue;
@@ -1311,6 +1337,7 @@ export class HeistScene extends Phaser.Scene {
 
   private detonateGrenade(projectile: HeistProjectile, directHit?: Enemy): void {
     if (projectile.grenadeDetonated) return;
+    if (projectile.echo) projectile.damage = authoritativeEchoDamage(projectile.damage, projectile.echo);
     projectile.grenadeDetonated = true;
     const radius = TEMPORARY_AMMO_BALANCE.grenade.splashRadius;
     const damage = projectile.damage * TEMPORARY_AMMO_BALANCE.grenade.splashDamageMultiplier;
@@ -1318,7 +1345,7 @@ export class HeistScene extends Phaser.Scene {
       [0xffffff, 0xffa340, 0xff4e27, 0xff174f], this.time.now, 'grenade-round');
     this.coreAudio.playSfx('grenadeShotExplosion');
     const primary = directHit ?? this.findEnemyHit(projectile.sprite.x, projectile.sprite.y);
-    if (primary) this.damageEnemy(primary, projectile.damage);
+    if (primary) this.damageEnemy(primary, projectile.damage, projectile.echo);
     const container = this.findContainerHit(projectile.sprite.x, projectile.sprite.y);
     if (container) this.damageContainer(container, projectile.damage);
     if (this.phase === 'looting') {
@@ -1333,6 +1360,7 @@ export class HeistScene extends Phaser.Scene {
     this.grenadeSplashY = projectile.sprite.y;
     this.grenadeSplashRadiusSquared = radius * radius;
     this.grenadeSplashDamage = damage;
+    this.grenadeSplashEcho = projectile.echo ? stampEchoDamage(projectile.echo.equivalentDamage * TEMPORARY_AMMO_BALANCE.grenade.splashDamageMultiplier, projectile.echo.multiplier) : undefined;
     this.grenadeSplashExcludedEnemy = primary;
     this.enemySpatialGrid.forEachNearby(
       projectile.sprite.x,
@@ -1840,8 +1868,10 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private damageEnemy(enemy: Enemy, amount: number): void {
+  private damageEnemy(enemy: Enemy, amount: number, echo?: EchoDamageStamp): void {
+    if (echo) amount = authoritativeEchoDamage(amount, echo);
     if (!enemy.active || enemy.hp <= 0 || amount <= 0) return;
+    if (echo) { this.damageDealt += enemy.takeDamage(amount, 'echo', echo); return; }
     const applied = Math.min(enemy.hp, amount);
     enemy.hp -= applied;
     this.damageDealt += applied;
@@ -1931,6 +1961,7 @@ export class HeistScene extends Phaser.Scene {
       const speed = Math.max(1, body.velocity.length());
       const spacing = ABILITY_BALANCE.fence.projectileFanSpacingRadians;
       const newDamage = projectile.damage * stage.damageShare;
+      const echo = projectile.echo ? stampEchoDamage(projectile.echo.equivalentDamage * stage.damageShare, projectile.echo.multiplier) : undefined;
       const crossedFences = new Set(projectile.crossedFences);
       for (let stream = 0; stream < stage.streamCount; stream += 1) {
         const angle = base + (stream - (stage.streamCount - 1) * 0.5) * spacing;
@@ -1938,6 +1969,7 @@ export class HeistScene extends Phaser.Scene {
           body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
           projectile.sprite.setRotation(angle);
           projectile.damage = newDamage;
+          projectile.echo = echo;
           continue;
         }
         const x = projectile.sprite.x + Math.cos(angle) * 11;
@@ -1954,6 +1986,7 @@ export class HeistScene extends Phaser.Scene {
           velocityX: Math.cos(angle) * speed,
           velocityY: Math.sin(angle) * speed,
           damage: newDamage,
+          echo,
           lifeMs: projectile.lifeMs,
           trailColor: projectile.trailColor,
           critical: projectile.critical,
@@ -2545,6 +2578,7 @@ export class HeistScene extends Phaser.Scene {
   }
 
   private cleanup(): void {
+    this.echo?.destroy(); this.echo = null;
     const finalInputDevice = this.inputController?.activeDevice ?? this.session?.initialInputDevice;
     this.pendingFadeReturn = null;
     this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.onDevInstantReturn, this);

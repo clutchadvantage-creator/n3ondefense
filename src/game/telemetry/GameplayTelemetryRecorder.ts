@@ -6,7 +6,7 @@ import type { ModFocusSignalId, RunContractId } from '../economy/types.ts';
 import type { ArcadeMetricEvent } from '../arcade/types.ts';
 import type { AnomalyMetricEvent } from '../anomalies/types.ts';
 
-export type CombatDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard' | 'bomb' | 'bombSite' | 'splitCurrent' | 'unknown';
+export type CombatDamageSource = 'weapon' | 'echo' | 'turret' | 'mine' | 'fence' | 'hazard' | 'bomb' | 'bombSite' | 'splitCurrent' | 'unknown';
 export type PlayerDamageSource = 'enemy-contact' | 'enemy-projectile' | 'enemy-missile' | 'enemy-death-mine' | 'laser' | 'bomblet' | 'gas' | 'fire-trap' | 'bombsite-reactor' | 'boss';
 export type PickupDropSource = 'enemy' | 'arena-support' | 'site-recovery' | 'boss-damage' | 'boss-support' | 'boss-loot' | 'flux-core' | 'arcade-loot' | 'arena-smashable';
 export type EncounterKind = 'round' | 'boss';
@@ -14,7 +14,7 @@ export type EncounterOutcome = 'completed' | 'playerDead' | 'bombDefused' | 'bos
 export type TelemetryAbility = 'dash' | 'shield' | 'fence' | 'turret' | 'mine';
 export type EnergyAction = TelemetryAbility | 'shot';
 export type AbilityDenialReason = 'energy' | 'cooldown' | 'active-limit' | 'invalid-placement' | 'already-active';
-export type ProjectileOwner = 'weapon' | 'turret' | 'enemy' | 'boss';
+export type ProjectileOwner = 'weapon' | 'echo' | 'turret' | 'enemy' | 'boss';
 export type ProjectileMissReason = 'expired' | 'wall' | 'fence-split';
 export type SpawnBlockReason = 'count-cap' | 'weight-cap' | 'composition';
 export type ModEffectMetric = 'triggers' | 'damage' | 'playerDamage' | 'countdownMs' | 'credits' | 'pulls';
@@ -314,8 +314,8 @@ const ensureEncounterRevision = (encounter: GameplayEncounterMetrics): GameplayE
   // Populate safe runtime defaults without relabeling legacy measurements as if
   // those counters had actually been observed during play.
   encounter.metricsRevision ??= 1;
-  encounter.projectiles ??= { weapon: emptyProjectileMetrics(), turret: emptyProjectileMetrics(), enemy: emptyProjectileMetrics(), boss: emptyProjectileMetrics() };
-  for (const owner of ['weapon', 'turret', 'enemy', 'boss'] as ProjectileOwner[]) encounter.projectiles[owner] ??= emptyProjectileMetrics();
+  encounter.projectiles ??= { weapon: emptyProjectileMetrics(), echo: emptyProjectileMetrics(), turret: emptyProjectileMetrics(), enemy: emptyProjectileMetrics(), boss: emptyProjectileMetrics() };
+  for (const owner of ['weapon', 'echo', 'turret', 'enemy', 'boss'] as ProjectileOwner[]) encounter.projectiles[owner] ??= emptyProjectileMetrics();
   encounter.endingPlayerHealth ??= encounter.minimumPlayerHealth ?? encounter.maximumPlayerHealth;
   encounter.endingPlayerEnergy ??= encounter.minimumPlayerEnergy ?? encounter.maximumPlayerEnergy;
   encounter.energy ??= { starting: encounter.maximumPlayerEnergy, ending: encounter.endingPlayerEnergy, timeAtZeroMs: 0, timeBelow25PercentMs: 0, regenerationRequested: 0, regenerationApplied: 0, regenerationWasted: 0, deniedActions: {}, deniedEnergyShortfall: {}, abilityDenials: {} };
@@ -396,7 +396,7 @@ export class GameplayTelemetryRecorder {
       shotsFired: 0, shotEnergySpent: 0, potentialWeaponDamageFired: 0,
       weaponDamageAtStart: input.weaponDamage, weaponFireRateAtStart: input.weaponFireRate,
       weaponCritChanceAtStart: input.weaponCritChance, weaponHeatPerShotAtStart: input.weaponHeatPerShot,
-      projectiles: { weapon: emptyProjectileMetrics(), turret: emptyProjectileMetrics(), enemy: emptyProjectileMetrics(), boss: emptyProjectileMetrics() },
+      projectiles: { weapon: emptyProjectileMetrics(), echo: emptyProjectileMetrics(), turret: emptyProjectileMetrics(), enemy: emptyProjectileMetrics(), boss: emptyProjectileMetrics() },
       maximumPlayerHealth: input.maximumPlayerHealth, endingPlayerHealth: input.maximumPlayerHealth,
       maximumPlayerEnergy: input.maximumPlayerEnergy, endingPlayerEnergy: input.maximumPlayerEnergy,
       energyRegenPerSecond: input.energyRegenPerSecond,

@@ -12,7 +12,7 @@ import {
   type InputDevice
 } from './ActionInput.ts';
 
-const ABILITY_ACTIONS: readonly AbilityAction[] = ['fence', 'turret', 'mine', 'dash', 'shield'];
+const ABILITY_ACTIONS: readonly AbilityAction[] = ['fence', 'turret', 'mine', 'dash', 'shield', 'echo'];
 
 export class PlayerInput {
   readonly move = { x: 0, y: 0 };
@@ -22,7 +22,7 @@ export class PlayerInput {
   private readonly pointerButtons = new Uint8Array(5);
   private readonly gamepadBuffer: (BrowserGamepadLike | null)[] = [];
   private readonly fixedKeys: Record<'up' | 'left' | 'down' | 'right' | 'interact' | 'pause' | 'one' | 'two' | 'three', Phaser.Input.Keyboard.Key>;
-  private readonly abilityKeys = new Map<AbilityAction, Phaser.Input.Keyboard.Key>();
+  private readonly heldCodes = new Set<string>();
   private readonly pendingPulses = new Set<InputAction>();
   private bindings: AbilityBindings;
   private settings: ControllerSettings;
@@ -50,11 +50,12 @@ export class PlayerInput {
       interact: keyboard.addKey('E'), pause: keyboard.addKey('ESC'), one: keyboard.addKey('ONE'),
       two: keyboard.addKey('TWO'), three: keyboard.addKey('THREE')
     };
-    this.rebuildAbilityKeys();
     scene.input.on('pointerdown', this.onPointerDown);
     scene.input.on('pointerup', this.onPointerUp);
     scene.input.on('pointermove', this.onPointerMove);
     window.addEventListener('keydown', this.onKeyActivity);
+    window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.onBlur);
   }
 
   update(context: InputContext, now = performance.now()): boolean {
@@ -67,7 +68,7 @@ export class PlayerInput {
       const pads = navigator.getGamepads();
       for (let index = 0; index < pads.length; index += 1) this.gamepadBuffer[index] = pads[index];
     }
-    const gamepad = this.gamepadReader.poll(this.gamepadBuffer, this.settings);
+    const gamepad = this.gamepadReader.poll(this.gamepadBuffer, this.settings, this.bindings);
     this.meaningfulGamepad = gamepad.meaningful;
     if (gamepad.freshActivity) this.gamepadActivityAt = now;
     if (this.keyboardActivityAt > this.gamepadActivityAt && this.device !== 'keyboardMouse') this.setDevice('keyboardMouse');
@@ -113,13 +114,12 @@ export class PlayerInput {
   get meaningfulGamepadInput(): boolean { return this.meaningfulGamepad; }
 
   prompt(action: InputAction, keyboardFallback: string): string {
-    return resolveActionPrompt(action, this.device, this.family, keyboardFallback);
+    return resolveActionPrompt(action, this.device, this.family, keyboardFallback, this.bindings[action as AbilityAction]);
   }
 
   refresh(bindings: AbilityBindings, settings: ControllerSettings): void {
     this.bindings = { ...bindings };
     this.settings = { ...settings };
-    this.rebuildAbilityKeys();
   }
 
   /** Carries the last active gameplay device across a temporary scene handoff. */
@@ -169,21 +169,14 @@ export class PlayerInput {
     this.scene.input.off('pointerup', this.onPointerUp);
     this.scene.input.off('pointermove', this.onPointerMove);
     window.removeEventListener('keydown', this.onKeyActivity);
+    window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onBlur);
+    this.heldCodes.clear();
   }
 
   private bindingHeld(binding: InputBinding, action: AbilityAction): boolean {
     if (binding.startsWith('Mouse:')) return this.pointerButtons[Number(binding.slice(6))] === 1;
-    return this.abilityKeys.get(action)?.isDown ?? false;
-  }
-
-  private rebuildAbilityKeys(): void {
-    const keyboard = this.scene.input.keyboard;
-    if (!keyboard) return;
-    this.abilityKeys.clear();
-    for (const action of ABILITY_ACTIONS) {
-      const binding = this.bindings[action];
-      if (binding.startsWith('Keyboard:')) this.abilityKeys.set(action, keyboard.addKey(binding.slice(9)));
-    }
+    return binding.startsWith('Keyboard:') && this.heldCodes.has(binding.slice(9));
   }
 
   private setDevice(device: InputDevice): void {
@@ -206,6 +199,9 @@ export class PlayerInput {
     if (Math.abs(pointer.velocity.x) + Math.abs(pointer.velocity.y) > 0.5) this.keyboardActivityAt = performance.now();
   };
   private readonly onKeyActivity = (event: KeyboardEvent): void => {
+    if (!this.scene.sys.isActive()) return;
+    this.heldCodes.add(event.code);
+    if (ABILITY_ACTIONS.some(action => this.bindings[action] === `Keyboard:${event.code}`)) event.preventDefault();
     if (event.repeat) return;
     this.keyboardActivityAt = performance.now();
     if (event.code === 'KeyE') this.pendingPulses.add('interact');
@@ -217,4 +213,6 @@ export class PlayerInput {
       if (this.bindings[action] === `Keyboard:${event.code}`) this.pendingPulses.add(action);
     }
   };
+  private readonly onKeyUp = (event: KeyboardEvent): void => { this.heldCodes.delete(event.code); };
+  private readonly onBlur = (): void => { this.heldCodes.clear(); this.clear(); };
 }

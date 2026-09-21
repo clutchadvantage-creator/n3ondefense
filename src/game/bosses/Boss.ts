@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
+import { authoritativeEchoDamage, type EchoDamageStamp } from '../echo/EchoRules.ts';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossHealth, type BossArchetype } from '../config/bossBalance';
 import type { RunModeFamily } from '../config/modeBalance.ts';
 
-export type BossDamageSource = 'weapon' | 'turret' | 'mine' | 'fence' | 'hazard';
+export type BossDamageSource = 'weapon' | 'echo' | 'turret' | 'mine' | 'fence' | 'hazard';
 
 export interface BossInstanceOptions {
   /** Applies only to this boss instance; normal milestone bosses remain unchanged. */
@@ -138,7 +139,8 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     right?.setX(42 + extension);
   }
 
-  takeDamage(amount: number, source: BossDamageSource = 'weapon'): number {
+  takeDamage(amount: number, source: BossDamageSource = 'weapon', echo?: EchoDamageStamp): number {
+    if (source === 'echo') amount = authoritativeEchoDamage(amount, echo);
     if (this.defeated || !Number.isFinite(amount) || amount <= 0) return 0;
     const applied = Math.min(this.hp, amount * (source === 'hazard' ? BOSS_BALANCE.hazardDamageMultiplier : 1));
     if (applied <= 0) return 0;

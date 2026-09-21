@@ -1757,6 +1757,15 @@ export class AudioManager {
   playSfx(name: Exclude<AudioSfxName,
     'droneFlight' | 'planting' | 'disarm' | 'securityLaser' | 'fluxCore' | 'lowHealth' | 'anomalyPortalIdle' | 'heistAlarm'>): void {
     switch (name) {
+      case 'echoRecord':
+        this.beep('sfx', 620, 80, .035, name);
+        break;
+      case 'echoSnap':
+        this.beep('sfx', 1180, 100, .045, name);
+        break;
+      case 'echoComplete':
+        this.beep('sfx', 420, 65, .02, name);
+        break;
       case 'shot':
         this.playShotSfx();
         break;

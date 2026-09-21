@@ -1,11 +1,12 @@
 import type { ControllerSettings } from '../config/controllerSettings.ts';
+import type { AbilityBindings, InputBinding } from '../config/controls.ts';
 
 export type InputDevice = 'keyboardMouse' | 'gamepad';
 export type InputContext = 'gameplay' | 'paused' | 'menu' | 'modal' | 'tutorial';
 export type GamepadFamily = 'xbox' | 'playstation' | 'generic';
 
 export const INPUT_ACTIONS = [
-  'fire', 'interact', 'fence', 'turret', 'mine', 'dash', 'shield',
+  'fire', 'interact', 'fence', 'turret', 'mine', 'dash', 'shield', 'echo',
   'selectFence', 'selectTurret', 'selectMine', 'pause',
   'confirm', 'cancel', 'navigateUp', 'navigateDown', 'navigateLeft', 'navigateRight',
   'pageLeft', 'pageRight', 'tabLeft', 'tabRight'
@@ -14,7 +15,7 @@ export type InputAction = typeof INPUT_ACTIONS[number];
 
 const ACTION_INDEX = Object.fromEntries(INPUT_ACTIONS.map((action, index) => [action, index])) as Record<InputAction, number>;
 const GAMEPLAY_ACTIONS = new Set<InputAction>([
-  'fire', 'interact', 'fence', 'turret', 'mine', 'dash', 'shield',
+  'fire', 'interact', 'fence', 'turret', 'mine', 'dash', 'shield', 'echo',
   'selectFence', 'selectTurret', 'selectMine', 'pause'
 ]);
 const UI_ACTIONS = new Set<InputAction>([
@@ -183,7 +184,7 @@ export class StandardGamepadReader {
     };
   }
 
-  poll(gamepads: readonly (BrowserGamepadLike | null)[], settings: ControllerSettings): GamepadPollResult {
+  poll(gamepads: readonly (BrowserGamepadLike | null)[], settings: ControllerSettings, bindings?: AbilityBindings): GamepadPollResult {
     let pad = this.activeIndex === null ? null : gamepads.find((candidate) => candidate?.index === this.activeIndex) ?? null;
     let freshIndex: number | null = null;
     // A meaningful standard pad becomes authoritative. This also supports hot
@@ -241,6 +242,10 @@ export class StandardGamepadReader {
     set('shield', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.rightBumper));
     set('fire', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.rightTrigger, 0.25));
     set('pause', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.start));
+    if (bindings) for (const action of ['fence', 'turret', 'mine', 'dash', 'shield', 'echo'] as const) {
+      const binding = bindings[action];
+      if (binding.startsWith('Gamepad:')) set(action, buttonDown(pad, Number(binding.slice(8))));
+    }
     set('confirm', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.south));
     set('cancel', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.east));
     // Menu navigation deliberately does not inherit gameplay dead-zone or aim
@@ -352,7 +357,16 @@ export function resolveActionPrompt(
   action: InputAction,
   device: InputDevice,
   family: GamepadFamily,
-  keyboardFallback: string
+  keyboardFallback: string,
+  binding?: InputBinding
 ): string {
+  if (device === 'gamepad' && binding?.startsWith('Gamepad:')) {
+    const button = Number(binding.slice(8));
+    const names = family === 'xbox' ? ['A','B','X','Y','LB','RB','LT','RT','VIEW','MENU','LS','RS','D UP','D DOWN','D LEFT','D RIGHT']
+      : family === 'playstation' ? ['CROSS','CIRCLE','SQUARE','TRIANGLE','L1','R1','L2','R2','SHARE','OPTIONS','L3','R3','D UP','D DOWN','D LEFT','D RIGHT']
+      : ['SOUTH','EAST','WEST','NORTH','L1','R1','L2','R2','BACK','START','L3','R3','D UP','D DOWN','D LEFT','D RIGHT'];
+    return names[button] ?? 'UNBOUND';
+  }
+  if (device === 'gamepad' && action === 'echo') return 'UNBOUND';
   return device === 'gamepad' ? GAMEPAD_GLYPHS[family][action] ?? keyboardFallback : keyboardFallback;
 }

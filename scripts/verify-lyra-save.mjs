@@ -63,7 +63,12 @@ try {
     || JSON.stringify(after.disk) !== JSON.stringify(before.disk) || after.active) {
     throw Error('Reload mismatch or stale speech: ' + JSON.stringify({ before, after }));
   }
-  const report = { passed: true, ending, verifiedAt: new Date().toISOString(), before, after };
+  const environment = await evaluate(`(() => {
+    const gl = n3onGame.renderer.gl, ext = gl?.getExtension('WEBGL_debug_renderer_info');
+    return { viewport: { width: innerWidth, height: innerHeight }, game: { width: n3onGame.scale.width, height: n3onGame.scale.height },
+      devicePixelRatio, userAgent: navigator.userAgent, renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null };
+  })()`);
+  const report = { passed: true, ending, verifiedAt: new Date().toISOString(), before, after, environment };
   await writeFile(output, JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report));
 } finally { socket.close(); }

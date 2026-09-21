@@ -5,7 +5,8 @@ import { DEFAULT_HUD_SETTINGS, glowMultiplier, normalizeHudSettings, type HudSet
 export const HUD_RADAR_RANGE = 900;
 
 export interface HudAbilitySlot {
-  id: 'fence' | 'turret' | 'mine' | 'shield';
+  id: 'fence' | 'turret' | 'mine' | 'shield' | 'echo';
+  status?: string;
   keybind: string;
   /** Retained for payload compatibility; the HUD renders the matching in-game equipment art. */
   icon: string;
@@ -162,6 +163,12 @@ export function drawHudResourceIcon(graphics: Phaser.GameObjects.Graphics, kind:
 
 export function drawHudAbilityIcon(graphics: Phaser.GameObjects.Graphics, id: HudAbilitySlot['id']): void {
   graphics.clear();
+  if (id === 'echo') {
+    graphics.lineStyle(1.5, MAGENTA, .6).strokeCircle(-5, 0, 10);
+    graphics.lineStyle(2, CYAN, .95).strokeCircle(4, 0, 10);
+    graphics.fillStyle(CYAN, .8).fillTriangle(-1, -5, -1, 5, 7, 0);
+    return;
+  }
   if (id === 'fence') {
     // Miniature of the deployed two-node telescoping fence.
     graphics.fillStyle(CYAN, 0.12).fillCircle(-13, 10, 7).fillCircle(13, 10, 7);
@@ -380,7 +387,7 @@ export class Hud {
     this.radarLabel = this.createText('TACTICAL RADAR', 10, '#78c7d6', 'Rajdhani, sans-serif')
       .setOrigin(0.5, 1).setFontStyle('bold');
 
-    for (const slot of ['fence', 'turret', 'mine', 'shield'] as const) this.createAbilitySlot(slot);
+    for (const slot of ['fence', 'turret', 'mine', 'shield', 'echo'] as const) this.createAbilitySlot(slot);
     for (let index = 0; index < 3; index += 1) this.buffVisuals.push(this.createBuffVisual());
 
     this.root.add([
@@ -696,10 +703,10 @@ export class Hud {
     const gap = Math.max(3, Math.round(5 * layout.scale));
     const contentTop = rect.y + Math.round(21 * layout.scale);
     const contentHeight = rect.height - Math.round(28 * layout.scale);
-    const cellWidth = (rect.width - inset * 2 - gap * 3) / 4;
+    const cellWidth = (rect.width - inset * 2 - gap * 4) / 5;
     const slotScale = Math.min(1.18, cellWidth / BASE_ABILITY_WIDTH, contentHeight / BASE_ABILITY_HEIGHT);
     let index = 0;
-    for (const id of ['fence', 'turret', 'mine', 'shield'] as const) {
+    for (const id of ['fence', 'turret', 'mine', 'shield', 'echo'] as const) {
       const visual = this.abilitySlots.get(id);
       if (!visual) continue;
       const cellX = rect.x + inset + index * (cellWidth + gap);
@@ -999,6 +1006,7 @@ export class Hud {
     else if (coolingDown) status = this.formatCooldown(cooldownMs);
     else if (!slot.hasEnergy) status = 'LOW EN';
     else if (!slot.underLimit) status = slot.id === 'mine' ? 'EMPTY' : 'FULL';
+    if (slot.status !== undefined) status = slot.status;
     if (visual.lastStatus !== status) {
       visual.lastStatus = status;
       visual.statusText.setText(status).setVisible(status.length > 0);

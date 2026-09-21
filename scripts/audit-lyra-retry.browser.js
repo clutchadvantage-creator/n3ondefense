@@ -40,6 +40,10 @@
         const result = game.scene.keys.results;
         const replay = all(result).find(o => o.text === 'REPLAY LOCAL'); check(!!replay, 'Actual replay action available ' + cycle);
         replay.parentContainer.getByName('button-hit').emit('pointerdown');
+        await until(() => game.scene.keys.loading?.statusText?.text === 'DEPLOYMENT READY', 'Replay deployment confirmation');
+        const deploy = all(game.scene.keys.loading).find(o => o.text === 'CLICK TO DEPLOY' || o.text === 'PRESS A TO DEPLOY');
+        check(!!deploy, 'Replay deployment action available ' + cycle);
+        deploy.parentContainer.getByName('button-hit').emit('pointerdown');
       }
       game.scene.stop('arena'); await wait(150);
       check(comms.diagnostics().active === null && AudioManager.get().lyraDuck === 0, 'Final retirement leaves no speech or ducking');

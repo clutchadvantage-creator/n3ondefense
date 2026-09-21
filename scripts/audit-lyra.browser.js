@@ -45,6 +45,7 @@
       originalUpdate = arena.sys.sceneUpdate; arena.sys.sceneUpdate = () => {}; arena.physics.pause();
       check(arena.tutorialHardPaused, 'Acknowledgement gates simulation');
       await manual(); check(step() === 'move', 'Movement is first live action');
+      check(document.querySelector('.tutorial-continue').getClientRects().length === 0, 'Action-gated training hides its manual Continue control');
       arena.physics.pause(); arena.updatePlayerMovement(arena.time.now);
       arena.playerInput.move.x = 1; arena.updatePlayerMovement(arena.time.now + 16); await wait(220);
       check(step() === 'move', 'Input without displacement cannot complete movement');

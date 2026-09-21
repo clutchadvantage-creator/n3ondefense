@@ -1,6 +1,9 @@
 export const SFX_DEFINITIONS = [
   { key: 'shot', label: 'Weapon Fire' },
   { key: 'boost', label: 'Boost' },
+  { key: 'echoRecord', label: 'Echo Recording Start' },
+  { key: 'echoSnap', label: 'Echo Snap / Return' },
+  { key: 'echoComplete', label: 'Echo Replay Complete' },
   { key: 'shieldOn', label: 'Shield Activation' },
   { key: 'shieldOff', label: 'Shield Deactivation' },
   { key: 'planting', label: 'Planting' },
@@ -81,7 +84,7 @@ export type AudioSfxName = typeof SFX_DEFINITIONS[number]['key'];
  * unchanged so existing per-sound preferences survive the reorganization. */
 export const SFX_CATEGORIES = [
   { id: 'combat', label: 'Weapons & Combat', keys: ['shot', 'hit', 'mine', 'bomblet', 'bomb', 'grenadeShotExplosion', 'smashableBreak'] },
-  { id: 'operative', label: 'Operative & Abilities', keys: ['boost', 'shieldOn', 'shieldOff', 'planting', 'playerDamage', 'lowHealth', 'playerDeath', 'place', 'placeTurret', 'electricFence', 'placeMine', 'unavailable'] },
+  { id: 'operative', label: 'Operative & Abilities', keys: ['boost', 'echoRecord', 'echoSnap', 'echoComplete', 'shieldOn', 'shieldOff', 'planting', 'playerDamage', 'lowHealth', 'playerDeath', 'place', 'placeTurret', 'electricFence', 'placeMine', 'unavailable'] },
   { id: 'enemies', label: 'Enemies & Bosses', keys: ['enemyDeath', 'droneFlight', 'totemEntrance', 'totemPulse', 'miniBossSpawn', 'bossArtilleryExplosion', 'sentryBossAttack', 'mageBossLargeAttack', 'mageBossMagicAttack', 'brawlerBossChargeAttack'] },
   { id: 'hazards', label: 'Arena Hazards', keys: ['securityLaser', 'beep', 'defuseAlarm', 'disarm', 'gas', 'gasCanImpact', 'gasFizz', 'lasersOff', 'fireTrap'] },
   { id: 'rewards', label: 'Pickups & Rewards', keys: ['pickup', 'healthPickup', 'energyPickup', 'damageBoostPickup', 'speedPickup', 'fireRatePickup', 'creditPickup', 'coreTokenPickup', 'fluxCorePickup', 'ricochetPickup', 'grenadeRoundsPickup', 'scattershotPickup', 'modPickup', 'fluxCore', 'modCollection', 'legendaryMod'] },

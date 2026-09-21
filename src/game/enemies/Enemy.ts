@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { authoritativeEchoDamage, type EchoDamageStamp } from '../echo/EchoRules.ts';
 import type { EnemyType } from '../types';
 import { ENEMY_BALANCE } from '../config/balance';
 import { GameplayTelemetryRecorder, type CombatDamageSource } from '../telemetry/GameplayTelemetryRecorder.ts';
@@ -63,7 +64,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(7);
   }
 
-  takeDamage(amount: number, source: CombatDamageSource = 'unknown'): number {
+  takeDamage(amount: number, source: CombatDamageSource = 'unknown', echo?: EchoDamageStamp): number {
+    if (source === 'echo') amount = authoritativeEchoDamage(amount, echo);
     if (!Number.isFinite(amount) || amount <= 0 || this.hp <= 0) return 0;
     if (this.telemetryFirstDamagedAtActiveMs === null) {
       this.telemetryFirstDamagedAtActiveMs = GameplayTelemetryRecorder.activeEncounterElapsedMs();

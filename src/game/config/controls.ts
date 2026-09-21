@@ -1,5 +1,5 @@
-export type AbilityAction = 'fence' | 'turret' | 'mine' | 'dash' | 'shield';
-export type InputBinding = `Keyboard:${string}` | `Mouse:${number}`;
+export type AbilityAction = 'fence' | 'turret' | 'mine' | 'dash' | 'shield' | 'echo';
+export type InputBinding = `Keyboard:${string}` | `Mouse:${number}` | `Gamepad:${number}`;
 export type AbilityBindings = Record<AbilityAction, InputBinding>;
 
 /** Authoritative fixed combat bindings used by both gameplay and teaching UI. */
@@ -12,7 +12,8 @@ export const ABILITY_ACTIONS: ReadonlyArray<{ action: AbilityAction; label: stri
   { action: 'turret', label: 'Turret' },
   { action: 'mine', label: 'Mine' },
   { action: 'dash', label: 'Dash' },
-  { action: 'shield', label: 'Shield' }
+  { action: 'shield', label: 'Shield' },
+  { action: 'echo', label: 'Echo' }
 ];
 
 export const DEFAULT_ABILITY_BINDINGS: AbilityBindings = {
@@ -20,12 +21,14 @@ export const DEFAULT_ABILITY_BINDINGS: AbilityBindings = {
   turret: 'Keyboard:KeyF',
   mine: 'Keyboard:KeyR',
   dash: 'Keyboard:Space',
-  shield: 'Mouse:1'
+  shield: 'Mouse:1',
+  echo: 'Keyboard:AltLeft'
 };
 
 export const RESERVED_ABILITY_BINDINGS = new Set<InputBinding>([
   'Keyboard:Escape', 'Keyboard:KeyW', 'Keyboard:KeyA', 'Keyboard:KeyS', 'Keyboard:KeyD',
-  'Keyboard:KeyE', 'Keyboard:F8', 'Mouse:0'
+  'Keyboard:KeyE', 'Keyboard:F8', 'Mouse:0',
+  'Gamepad:0', 'Gamepad:1', 'Gamepad:2', 'Gamepad:3', 'Gamepad:4', 'Gamepad:5', 'Gamepad:7', 'Gamepad:9'
 ]);
 
 export const normalizeAbilityBindings = (value: unknown): AbilityBindings => {
@@ -46,9 +49,12 @@ export const normalizeAbilityBindings = (value: unknown): AbilityBindings => {
 };
 
 export const isInputBinding = (value: string): value is InputBinding =>
-  /^Keyboard:[A-Za-z0-9]+$/.test(value) || /^Mouse:[0-4]$/.test(value);
+  /^Keyboard:[A-Za-z0-9]+$/.test(value) || /^Mouse:[0-4]$/.test(value) || /^Gamepad:(?:[0-9]|1[0-5])$/.test(value);
 
 export const bindingLabel = (binding: InputBinding): string => {
+  if (binding === 'Keyboard:AltLeft') return 'LEFT ALT';
+  if (binding === 'Keyboard:AltRight') return 'RIGHT ALT';
+  if (binding.startsWith('Gamepad:')) return `PAD ${Number(binding.slice(8)) + 1}`;
   if (binding.startsWith('Mouse:')) {
     const button = Number(binding.slice(6));
     return ['MOUSE 1 (FIRE)', 'MIDDLE MOUSE', 'RIGHT MOUSE', 'MOUSE BACK', 'MOUSE FORWARD'][button] ?? `MOUSE ${button + 1}`;
@@ -62,6 +68,8 @@ export const bindingLabel = (binding: InputBinding): string => {
 };
 
 export const compactBindingLabel = (binding: InputBinding): string => {
+  if (binding === 'Keyboard:AltLeft') return 'L ALT';
+  if (binding === 'Keyboard:AltRight') return 'R ALT';
   if (!binding.startsWith('Mouse:')) return bindingLabel(binding);
   return ['LMB', 'MMB', 'RMB', 'M4', 'M5'][Number(binding.slice(6))] ?? bindingLabel(binding);
 };

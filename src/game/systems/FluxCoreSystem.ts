@@ -5,7 +5,7 @@ import type { Player } from '../entities/Player';
 import type { ArenaTheme, RectSpec } from '../types';
 import { SeededRandom } from './SeededRandom';
 
-export type FluxCoreDamageSource = 'weapon' | 'turret' | 'enemy-projectile' | 'mine' | 'fence' | 'bomblet' | 'bomb' | 'boss';
+export type FluxCoreDamageSource = 'weapon' | 'echo' | 'turret' | 'enemy-projectile' | 'mine' | 'fence' | 'bomblet' | 'bomb' | 'boss';
 
 export interface FluxCoreDestroyedEvent {
   x: number;

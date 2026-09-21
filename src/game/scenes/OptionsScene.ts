@@ -949,7 +949,7 @@ export class OptionsScene extends Phaser.Scene {
     const panelWidth = Math.min(contentWidth, 900);
     // This tab scrolls, so keep the control grid's geometry stable instead of
     // squeezing the footer upward into the Dash row on short viewports.
-    const panelHeight = 260;
+    const panelHeight = 300;
     const panelCenterY = topY + panelHeight * 0.5;
     container.add(this.add.rectangle(centerX, panelCenterY, panelWidth, panelHeight, 0x0b1422, 0.92)
       .setStrokeStyle(2, 0x53dfff, 0.72));
@@ -999,7 +999,7 @@ export class OptionsScene extends Phaser.Scene {
       this.registerScrollTarget('gameplay', hit, y, 16);
     });
 
-    const resetY = topY + 206;
+    const resetY = topY + 250;
     const reset = this.add.text(centerX + panelWidth * 0.25 + 62, resetY, 'RESET DEFAULTS', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#ffcf91', backgroundColor: '#172238', padding: { x: 18, y: 5 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
@@ -1043,8 +1043,25 @@ export class OptionsScene extends Phaser.Scene {
     status: Phaser.GameObjects.Text
   ): void {
     this.cancelBindingCapture?.();
-    status.setText(`Listening for ${action.toUpperCase()} - press a key or mouse button. Esc cancels.`).setColor('#fff0a8');
+    status.setText(`Listening for ${action.toUpperCase()} - press a key, mouse, or unassigned controller button. Esc cancels.`).setColor('#fff0a8');
     labels.get(action)?.setText('PRESS INPUT...');
+    let padFrame = 0;
+    const priorPadButtons = new Set<string>();
+    for (const pad of navigator.getGamepads?.() ?? []) if (pad) pad.buttons.forEach((b, i) => { if (b.pressed || b.value > .5) priorPadButtons.add(`${pad.index}:${i}`); });
+    const pollPad = (): void => {
+      for (const pad of navigator.getGamepads?.() ?? []) if (pad?.mapping === 'standard') {
+        for (let i = 0; i < Math.min(16, pad.buttons.length); i++) {
+          const key = `${pad.index}:${i}`, down = pad.buttons[i].pressed || pad.buttons[i].value > .5;
+          if (down && !priorPadButtons.has(key)) {
+            const binding: InputBinding = `Gamepad:${i}`;
+            if (RESERVED_ABILITY_BINDINGS.has(binding)) return finish(null, 'That controller button is assigned to a core action. Choose an unused button.');
+            return finish(binding);
+          }
+          if (down) priorPadButtons.add(key); else priorPadButtons.delete(key);
+        }
+      }
+      padFrame = requestAnimationFrame(pollPad);
+    };
 
     const finish = (binding: InputBinding | null, message?: string): void => {
       cleanup();
@@ -1087,12 +1104,14 @@ export class OptionsScene extends Phaser.Scene {
       finish(binding, binding ? undefined : 'That mouse button is not supported.');
     };
     const cleanup = (): void => {
+      cancelAnimationFrame(padFrame);
       window.removeEventListener('keydown', onKey, true);
       window.removeEventListener('mousedown', onMouse, true);
       this.cancelBindingCapture = null;
     };
     const cancel = (): void => finish(null);
     this.cancelBindingCapture = cancel;
+    padFrame = requestAnimationFrame(pollPad);
     window.setTimeout(() => {
       if (this.cancelBindingCapture !== cancel) return;
       window.addEventListener('keydown', onKey, true);
