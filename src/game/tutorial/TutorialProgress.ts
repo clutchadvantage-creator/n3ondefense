@@ -3,6 +3,9 @@ import type { TutorialSequenceDefinition } from './TutorialTypes.ts';
 
 export const createTutorialProgress = (): TutorialProgressState => ({
   version: 3,
+  lyraCurriculum: 4,
+  trainingRoundsCompleted: 0,
+  lyraSeen: [],
   firstRunWelcomePending: true,
   firstRunStage: 'welcome-main-menu',
   completedSequences: [],
@@ -41,8 +44,12 @@ export const setFirstRunTeachingStage = (state: TutorialProgressState, stage: Fi
  * which previously left the profile at `arena-teaching` and made Main Menu
  * incorrectly demand another START LOCAL deployment.
  */
-export const completeFirstRunTeachingRound = (state: TutorialProgressState): boolean => {
+export const completeFirstRunTeachingRound = (state: TutorialProgressState, round = 3): boolean => {
   if (state.firstRunStage !== 'arena-teaching') return false;
+  if (state.lyraCurriculum === 4) {
+    state.trainingRoundsCompleted = Math.max(state.trainingRoundsCompleted ?? 0, Math.min(3, round));
+    if (round < 3) return false;
+  }
   for (const sequenceId of ['onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']) {
     addUnique(state.completedSequences, sequenceId);
     state.skippedSequences = state.skippedSequences.filter((id) => id !== sequenceId);

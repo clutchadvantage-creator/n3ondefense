@@ -151,6 +151,8 @@ test('tutorial eligibility respects scene, prerequisites, completion, and skip s
   const defense = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.defense');
   assert.equal(isTutorialSequenceEligible(progress, defense, 'arena'), false);
   completeTutorialSequence(progress, 'onboarding.basic-controls');
+  assert.equal(isTutorialSequenceEligible(progress, defense, 'arena'), false);
+  completeTutorialSequence(progress, 'onboarding.hud');
   assert.equal(isTutorialSequenceEligible(progress, defense, 'menu'), false);
   assert.equal(isTutorialSequenceEligible(progress, defense, 'arena'), true);
   skipTutorialSequence(progress, defense.id);
@@ -244,7 +246,7 @@ test('Arena tutorial cleanup and success events are wired to authoritative gamep
   assert.match(arena, /this\.pointerLock\.requestLock\(\)/);
   assert.match(arena, /const displayDiameter = diameter \* camera\.zoom/);
   assert.match(arena, /firstRunStage === 'arena-teaching'/);
-  assert.match(arena, /completeFirstRunTeachingRound\(progress\)/);
+  assert.match(arena, /completeFirstRunTeachingRound\(progress, completedRound\)/);
   assert.match(arena, /this\.scene\.start\(SceneKeys\.MainMenu\)/);
 });
 

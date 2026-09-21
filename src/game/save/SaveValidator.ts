@@ -11,8 +11,10 @@ import { createDefaultGarageState, normalizeGarageState } from '../garage/Garage
 import { createDefaultWeeklyOperationsState, createWeeklyBaselines, normalizeWeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import { DEFAULT_AIM_SETTINGS, DEFAULT_HUD_SETTINGS, normalizeAimSettings, normalizeHudSettings } from '../config/interfaceSettings.ts';
 import { DEFAULT_CONTROLLER_SETTINGS, normalizeControllerSettings } from '../config/controllerSettings.ts';
+import { DEFAULT_LYRA_SETTINGS, normalizeLyraSettings } from '../lyra/LyraTypes.ts';
 
 const defaultSettings: LocalPlayerSettings = {
+  lyra: { ...DEFAULT_LYRA_SETTINGS },
   masterVolume: DEFAULT_AUDIO_VOLUME,
   musicVolume: DEFAULT_AUDIO_VOLUME,
   sfxVolume: DEFAULT_AUDIO_VOLUME,
@@ -29,6 +31,9 @@ const defaultSettings: LocalPlayerSettings = {
 
 const createDefaultTutorialProgress = (): TutorialProgressState => ({
   version: 3,
+  lyraCurriculum: 4,
+  trainingRoundsCompleted: 0,
+  lyraSeen: [],
   firstRunWelcomePending: true,
   firstRunStage: 'welcome-main-menu',
   completedSequences: [],
@@ -65,6 +70,9 @@ const normalizeTutorialProgress = (value: unknown): TutorialProgressState => {
   }
   return {
     version: 3,
+    lyraCurriculum: candidate.lyraCurriculum === 4 ? 4 : 0,
+    trainingRoundsCompleted: clamp(toInteger(candidate.trainingRoundsCompleted), 0, 3),
+    lyraSeen: uniqueStrings(candidate.lyraSeen).slice(0, 256),
     // Tutorial progress older than v2 belongs to an established profile. Do
     // not surprise those players with a newly-added first-run flow.
     firstRunWelcomePending: firstRunStage === 'welcome-main-menu' || firstRunStage === 'waiting-for-start-local',
@@ -191,6 +199,7 @@ const normalizeSettings = (settings: unknown): LocalPlayerSettings => {
   }
   return {
     masterVolume: clamp(toFiniteNumber(candidate.masterVolume, defaultSettings.masterVolume), 0, 1),
+    lyra: normalizeLyraSettings(candidate.lyra),
     musicVolume: clamp(toFiniteNumber(candidate.musicVolume, defaultSettings.musicVolume), 0, 1),
     sfxVolume: clamp(toFiniteNumber(candidate.sfxVolume, defaultSettings.sfxVolume), 0, 1),
     soundVolumes,

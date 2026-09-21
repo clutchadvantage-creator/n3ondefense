@@ -148,6 +148,10 @@ const isSessionData = (value: unknown): value is HeistSessionData => {
 const emptyLoot = (): PendingAnomalyLoot => ({ credits: 0, coreTokens: 0, plasmaChips: 0, fluxCores: 0, modIds: [] });
 
 export class HeistScene extends Phaser.Scene {
+  getLyraState(): import('../../lyra/installLyra.ts').LyraSceneState {
+    return { blocked: !this.player?.active || this.manuallyPaused || this.inputCapturePaused || this.returning || this.phase === 'inbound',
+      ambientSafe: false, lowHealth: this.player?.hp <= this.player?.stats.maxHealth * .25 };
+  }
   private readonly audio = createAnomalyAudioHooks();
   private readonly coreAudio = AudioManager.get();
   private session!: HeistSessionData;

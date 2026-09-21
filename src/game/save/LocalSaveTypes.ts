@@ -62,6 +62,7 @@ export interface LocalPlayerProgress {
 }
 
 export interface LocalPlayerSettings {
+  lyra: import('../lyra/LyraTypes.ts').LyraSettings;
   masterVolume: number;
   musicVolume: number;
   sfxVolume: number;
@@ -89,6 +90,10 @@ export type FirstRunTeachingStage =
 
 export interface TutorialProgressState {
   version: 3;
+  /** Zero denotes the earlier one-round curriculum; established profiles keep their progress. */
+  lyraCurriculum?: number;
+  trainingRoundsCompleted?: number;
+  lyraSeen?: string[];
   /** True only for a profile created after the first-run Main Menu welcome was introduced. */
   firstRunWelcomePending: boolean;
   /** Authoritative cross-scene state for the one-time new-operative teaching flow. */
@@ -132,7 +137,7 @@ export interface LocalPlayerSaveV1 {
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
   progress: Omit<LocalPlayerProgress, 'normalHighestRound' | 'supremeHighestRound' | 'supremeOverdriveCompleted' | 'regularOverdriveCompleted' | 'regularOverdriveSupremeBridgeAwarded' | 'firstSupremeTutorialSeen' | 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'arcadeEventsCompleted' | 'goldenEnemiesKilled' | 'arcadeMiniBossesKilled' | 'neonCircuitsCompleted' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
-  settings: Omit<LocalPlayerSettings, 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'controller' | 'contextualTutorials' | 'buttonJiggle'>;
+  settings: Omit<LocalPlayerSettings, 'lyra' | 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'controller' | 'contextualTutorials' | 'buttonJiggle'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }
 

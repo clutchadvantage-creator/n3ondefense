@@ -1,13 +1,16 @@
 import type Phaser from 'phaser';
 import { HudInformationSystem } from '../ui/HudInformationSystem.ts';
+import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
 
 /** One live event slot in the shared panel; no separate anomaly HUD. */
 export class AnomalyHudView {
   private readonly information: HudInformationSystem;
+  private introduced = false;
   constructor(scene: Phaser.Scene) {
     this.information = HudInformationSystem.forScene(scene);
   }
   show(title: string, detail: string, color = 0xff5bd8, durationMs = 0): void {
+    if (!this.introduced) { this.introduced = true; TutorialEventBus.emit('anomaly.discovered'); }
     if (durationMs > 0) {
       const key = `anomaly:notice:${title}`;
       if (this.information.queue.active?.key === key) return;

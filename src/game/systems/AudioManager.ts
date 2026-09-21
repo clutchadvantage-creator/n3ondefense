@@ -276,6 +276,18 @@ export class AudioManager {
   private lastMenuHoverSfxAt = -Infinity;
   private lastUnavailableSfxAt = -Infinity;
   private cachedMusicVolume = DEFAULT_AUDIO_VOLUME * DEFAULT_AUDIO_VOLUME;
+  private lyraDuck = 0;
+  private lyraDuckFrom = 0;
+  private lyraDuckTarget = 0;
+  private lyraDuckAt = 0;
+
+  setLyraDucking(amount: number): void {
+    const target = Math.max(0, Math.min(.5, amount));
+    if (target === this.lyraDuckTarget) return;
+    this.lyraDuckFrom = this.lyraDuck;
+    this.lyraDuckTarget = target;
+    this.lyraDuckAt = performance.now();
+  }
   private cachedSfxVolume = DEFAULT_AUDIO_VOLUME * DEFAULT_AUDIO_VOLUME;
   private readonly cachedSoundVolumes = {} as Record<AudioSfxName, number>;
   /** WebAudio tones are outside Phaser's clock just like HTMLAudioElement
@@ -318,7 +330,7 @@ export class AudioManager {
   }
 
   private getVolume(kind: 'music' | 'sfx', sound?: AudioSfxName): number {
-    if (kind === 'music') return this.cachedMusicVolume;
+    if (kind === 'music') return this.cachedMusicVolume * (1 - this.lyraDuck);
     return sound ? this.cachedSoundVolumes[sound] ?? this.cachedSfxVolume : this.cachedSfxVolume;
   }
 
@@ -1253,6 +1265,9 @@ export class AudioManager {
   }
 
   private updateMusicFade(): void {
+    const fade = Math.min(1, (performance.now() - this.lyraDuckAt) / 250);
+    this.lyraDuck = this.lyraDuckFrom + (this.lyraDuckTarget - this.lyraDuckFrom) * fade;
+    if (this.heistMusicAudio && this.heistMusicRequested) this.heistMusicAudio.volume = this.clampVolume(this.getVolume('music'));
     const audio = this.currentPlaylistAudio();
     if (!audio || audio.paused || this.heistMusicRequested) return;
     const fadeIn = audio === this.musicFadeAudio ? Math.min(1, (performance.now() - this.musicFadeStartedAt) / 250) : 1;

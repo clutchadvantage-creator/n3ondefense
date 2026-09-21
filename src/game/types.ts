@@ -354,6 +354,7 @@ export interface GameSaveData {
   unlockedCosmetics: string[];
   equippedCosmetics: Partial<Record<CosmeticOption['category'], string>>;
   settings: {
+    lyra: import('./lyra/LyraTypes.ts').LyraSettings;
     masterVolume: number;
     musicVolume: number;
     sfxVolume: number;

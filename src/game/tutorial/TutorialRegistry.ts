@@ -5,50 +5,59 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     id: 'onboarding.menu-welcome', scene: 'menu', title: 'WELCOME TO N3ONDEFENSE', autoStart: true, freshProfileOnly: true,
     firstRunStages: ['welcome-main-menu', 'waiting-for-start-local'], skippable: true,
     steps: [
-      { id: 'welcome', eyebrow: 'N3ON PROTOCOL // INITIAL LINK', title: 'WELCOME TO THE ARENA, OPERATIVE!', body: 'Enter the arena, plant charges, defend them from enemies, and survive increasingly difficult rounds. Earn Credits for permanent upgrades and recover Mods that reshape future builds.', mode: 'menu', advanceLabel: 'NEXT', completion: { type: 'manual' } },
-      { id: 'start-local', target: 'menu.start-local', eyebrow: 'N3ON PROTOCOL // TRAINING DEPLOYMENT', title: 'START LOCAL', body: 'Start your first training run here. Local play keeps the run local and does not publish scores to the online leaderboards. Click START LOCAL to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }
+      { id: 'welcome', eyebrow: 'LYRA // INITIAL LINK', title: 'WELCOME TO THE ARENA, OPERATIVE!', body: 'I am LYRA, your tactical systems intelligence. We will start with movement, then arm and defend a charge. I will stay on comms. You handle the aiming.', mode: 'menu', advanceLabel: 'NEXT', completion: { type: 'manual' } },
+      { id: 'advanced-preview', title: 'ADVANCED OPERATIONS // FIELD RECORDING', body: 'A look ahead at Supreme operations. The fundamentals remain the same: move, read the threat, and defend your charge. You can skip this recording and deploy whenever you are ready.', advancedPreview: true, mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
+      { id: 'start-local', target: 'menu.start-local', eyebrow: 'LYRA // TRAINING DEPLOYMENT', title: 'START LOCAL', body: 'Start your first training run here. Local play keeps the run local and does not publish scores to the online leaderboards. Click START LOCAL to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }
     ]
   },
   {
     id: 'onboarding.menu-resume-training', scene: 'menu', title: 'RESUME TRAINING', autoStart: true,
     firstRunStages: ['arena-teaching'], skippable: true,
-    steps: [{ id: 'start-local', target: 'menu.start-local', eyebrow: 'N3ON PROTOCOL // TRAINING INCOMPLETE', title: 'RETURN TO LOCAL TRAINING', body: 'Your Arena Teaching is still in progress. Click START LOCAL to resume the training deployment.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }]
+    steps: [{ id: 'start-local', target: 'menu.start-local', eyebrow: 'LYRA // TRAINING INCOMPLETE', title: 'RETURN TO LOCAL TRAINING', body: 'Your Arena Teaching is still in progress. Click START LOCAL to resume the training deployment.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }]
   },
   {
     id: 'onboarding.basic-controls', scene: 'arena', title: 'INITIAL DEPLOYMENT', autoStart: true, firstRunStages: ['arena-teaching'], skippable: true,
     steps: [
-      { id: 'welcome', eyebrow: 'N3ON PROTOCOL // LIVE TRAINING', title: 'WELCOME, OPERATIVE', body: 'This training runs inside a real deployment. Read each instruction, acknowledge information screens, then perform the requested combat actions yourself.', mode: 'hard-pause', completion: { type: 'manual' } },
-      { id: 'identify-player', target: 'world.player', title: 'YOUR OPERATIVE', body: 'The highlighted unit is your operative. Keep it moving to avoid attacks and protect it while defending each planted charge.', mode: 'hard-pause', spotlight: 'circle', completion: { type: 'manual' } },
-      { id: 'move', target: 'world.player', title: 'MOVE YOUR OPERATIVE', body: 'Use {MOVE} to move through the arena. This step advances after the operative actually changes position.', inputDemo: ['{MOVE}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.playerMoved' } },
-      { id: 'aim', target: 'world.player', title: 'AIM AT THREATS', body: 'Use {AIM} to rotate your operative toward the reticle. Aim independently while continuing to move.', inputDemo: ['{AIM}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.aimChanged' } },
-      { id: 'fire', target: 'world.player', title: 'FIRE YOUR WEAPON', body: 'Press {FIRE} to fire toward the reticle. Every shot consumes Energy, so watch the cyan Energy bar.', inputDemo: ['{FIRE}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.weaponFired' } }
+      { id: 'welcome', eyebrow: 'LYRA // LIVE TRAINING', title: 'WELCOME, OPERATIVE', body: 'LYRA online. This is a live deployment. First, we will check movement and weapons. Continue when you are ready.', mode: 'hard-pause', completion: { type: 'manual' } },
+      { id: 'move', target: 'world.player', title: 'MOVE YOUR OPERATIVE', body: 'Use {MOVE} to move. Keep space around you; a stationary operative makes the security system optimistic.', inputDemo: ['{MOVE}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.playerMoved' } },
+      { id: 'aim', target: 'world.player', title: 'AIM AT THREATS', body: 'Movement confirmed. Use {AIM} to turn toward your reticle. You can move and aim independently.', inputDemo: ['{AIM}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.aimChanged' } },
+      { id: 'fire', target: 'world.player', title: 'FIRE YOUR WEAPON', body: 'Aim linked. Press {FIRE} to fire. Shots use Energy; leave some in reserve.', inputDemo: ['{FIRE}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.weaponFired' } }
     ]
   },
   {
-    id: 'onboarding.defense', scene: 'arena', title: 'BOMBSITE DEFENSE', autoStart: true, firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.basic-controls', skippable: true,
+    id: 'onboarding.defense', scene: 'arena', title: 'BOMBSITE DEFENSE', autoStart: true, firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.hud', skippable: true,
     steps: [
       { id: 'bombsite', target: 'world.bombsite', title: 'ARM THE CHARGE', body: 'Move into the available bombsite and hold {INTERACT}. Once planted, defend it until detonation.', inputDemo: ['{INTERACT}'], mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'objective.bombArmed' } },
-      { id: 'enemy', target: 'world.enemy', title: 'HOSTILE CONTACT', body: 'Damage a hostile. Defusers must be interrupted before they disarm the active charge.', mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.enemyDamaged' } },
+      { id: 'enemy', target: 'world.enemy', title: 'HOSTILE CONTACT', body: 'Charge armed. Damage a hostile. Stop defusers before they disarm it. Once you have made contact, defend until detonation.', mode: 'live', spotlight: 'circle', completion: { type: 'event', event: 'combat.enemyDamaged' } },
+    ]
+  },
+  {
+    id: 'onboarding.hud', scene: 'arena', title: 'TACTICAL HUD', autoStart: true, firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.basic-controls', skippable: true,
+    steps: [
+      { id: 'vitals', target: 'hud.vitals', title: 'OPERATIVE VITALS', body: 'Weapons confirmed. Pink is Health; cyan is Energy. Collect recovery supplies when safe. Keep moving while Energy recovers.', mode: 'hard-pause', completion: { type: 'manual' } },
+    ]
+  },
+  {
+    id: 'onboarding.tactics', scene: 'arena', title: 'SECOND DEPLOYMENT // DEFENSIVE SYSTEMS', autoStart: true,
+    firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.defense', minimumTrainingRound: 2, skippable: true,
+    steps: [
+      { id: 'shield', target: 'hud.shield', title: 'RAISE YOUR SHIELD', body: 'Press {SHIELD} to form a temporary energy barrier. The shield costs Energy and cannot reactivate until its cooldown completes.', inputDemo: ['{SHIELD}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.shield' } },
+      { id: 'dash', target: 'hud.abilities', title: 'DASH THROUGH DANGER', body: 'Press {DASH} to surge toward your aim direction. Dashing costs Energy and then enters cooldown.', inputDemo: ['{DASH}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.dash' } },
       { id: 'mine', target: 'hud.mine', title: 'DEPLOY A MINE', body: 'The highlighted HUD module shows your Mine rack and readiness. Aim at a valid location and press {MINE} to deploy area defense.', inputDemo: ['{MINE}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.mine' } },
       { id: 'fence', target: 'hud.fence', title: 'BUILD A FENCE', body: 'Press {FENCE} to place an electric fence. Fire through it to split projectiles.', illustration: 'OPERATIVE  >  SHOT  >  FENCE  >  SPLIT SHOTS', inputDemo: ['{FENCE}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.fence' } },
       { id: 'turret', target: 'hud.turret', title: 'DEPLOY A TURRET', body: 'Press {TURRET} near a bombsite to help stop defuse attempts.', inputDemo: ['{TURRET}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.turret' } },
-      { id: 'dash', target: 'hud.abilities', title: 'DASH THROUGH DANGER', body: 'Press {DASH} to surge toward your aim direction. Dashing costs Energy and then enters cooldown.', inputDemo: ['{DASH}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.dash' } },
-      { id: 'shield', target: 'hud.shield', title: 'RAISE YOUR SHIELD', body: 'Press {SHIELD} to form a temporary energy barrier. The shield costs Energy and cannot reactivate until its cooldown completes.', inputDemo: ['{SHIELD}'], mode: 'live', completion: { type: 'event', event: 'combat.ability.shield' } }
+      { id: 'awareness', target: 'hud.abilities', title: 'READ THE FIELD', body: 'Systems checked. Watch each module?s readiness and the security warning zones. Keep your escape route open while defending.', mode: 'hard-pause', completion: { type: 'manual' } }
     ]
   },
   {
-    id: 'onboarding.hud', scene: 'arena', title: 'TACTICAL HUD', autoStart: true, firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.defense', skippable: true,
-    steps: [
-      { id: 'vitals', target: 'hud.vitals', title: 'OPERATIVE VITALS', body: 'Pink tracks Health and cyan tracks Energy. Weapon fire and abilities consume Energy; incoming damage reduces Health.', mode: 'hard-pause', completion: { type: 'manual' } },
-      { id: 'objective', target: 'hud.objective', title: 'TACTICAL OBJECTIVE', body: 'This center console shows what to do next, the active charge timer, and an urgent DEFUSE alert when enemies begin disarming a bomb.', mode: 'hard-pause', completion: { type: 'manual' } },
-      { id: 'stats', target: 'hud.stats', title: 'RUN CACHE', body: 'This panel tracks the current round, active hostiles, and persistent resources collected during the deployment.', mode: 'hard-pause', completion: { type: 'manual' } },
-      { id: 'abilities', target: 'hud.abilities', title: 'COMBAT COMMAND DECK', body: 'Each module shows its key, remaining uses, and readiness. A cooldown number appears while that ability is recharging.', mode: 'hard-pause', completion: { type: 'manual' } }
-    ]
+    id: 'onboarding.certification', scene: 'arena', title: 'FIELD CERTIFICATION', autoStart: true,
+    firstRunStages: ['arena-teaching'], prerequisite: 'onboarding.tactics', minimumTrainingRound: 3, skippable: true,
+    steps: [{ id: 'release', title: 'YOU HAVE THE FIELD', body: 'Movement, weapons, and defensive systems checked. I will flag new systems when you encounter them. You have the field, operative. Try to leave me something to monitor.', mode: 'hard-pause', completion: { type: 'manual' } }]
   },
   {
     id: 'onboarding.menu-store', scene: 'menu', title: 'PERMANENT PROGRESSION', autoStart: true,
     firstRunStages: ['waiting-for-store'], skippable: true,
-    steps: [{ id: 'store', target: 'menu.store', eyebrow: 'N3ON PROTOCOL // POST-DEPLOYMENT', title: 'STORE / UPGRADES', body: 'Credits earned in the Arena persist between runs. Spend them on permanent upgrades that help your operative push farther. Click STORE to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.storeSelected' } }]
+    steps: [{ id: 'store', target: 'menu.store', eyebrow: 'LYRA // POST-DEPLOYMENT', title: 'STORE / UPGRADES', body: 'Credits earned in the Arena persist between runs. Spend them on permanent upgrades that help your operative push farther. Click STORE to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.storeSelected' } }]
   },
   {
     id: 'onboarding.store', scene: 'upgrades', title: 'PERMANENT UPGRADES', autoStart: true,
@@ -62,7 +71,7 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
   {
     id: 'onboarding.menu-garage', scene: 'menu', title: 'MOD LOADOUT', autoStart: true,
     firstRunStages: ['waiting-for-garage'], skippable: true,
-    steps: [{ id: 'garage', target: 'menu.garage', eyebrow: 'N3ON PROTOCOL // LOADOUT SYSTEMS', title: 'OPERATOR GARAGE / MOD COLLECTION', body: 'Mods recovered during runs can alter your build. Inspect and equip them through the Operator Garage and its Mod Collection station. Click OPERATOR GARAGE to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.garageSelected' } }]
+    steps: [{ id: 'garage', target: 'menu.garage', eyebrow: 'LYRA // LOADOUT SYSTEMS', title: 'OPERATOR GARAGE / MOD COLLECTION', body: 'Mods recovered during runs can alter your build. Inspect and equip them through the Operator Garage and its Mod Collection station. Click OPERATOR GARAGE to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.garageSelected' } }]
   },
   {
     id: 'onboarding.garage', scene: 'garage', title: 'OPERATOR LOADOUT', autoStart: true,
@@ -145,7 +154,8 @@ export const TUTORIAL_SEQUENCE_BY_ID = new Map(TUTORIAL_SEQUENCES.map((sequence)
 export const TUTORIAL_REPLAY_GROUPS = [
   { label: 'BASIC CONTROLS', sequenceId: 'onboarding.basic-controls' },
   { label: 'DEFENDING A BOMBSITE', sequenceId: 'onboarding.defense' },
-  { label: 'HUD & ABILITIES', sequenceId: 'onboarding.hud' },
+  { label: 'VITALS & RESOURCES', sequenceId: 'onboarding.hud' },
+  { label: 'DEFENSIVE ABILITIES', sequenceId: 'onboarding.tactics' },
   { label: 'PROGRESSION & STORE', sequenceId: 'progression.store', followups: ['progression.upgrades'] },
   { label: 'GARAGE & LOADOUT', sequenceId: 'progression.garage', followups: ['progression.garage-loadout'] },
   { label: 'MOD COLLECTION', sequenceId: 'progression.mod-collection' }

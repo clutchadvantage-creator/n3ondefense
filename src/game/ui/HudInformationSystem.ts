@@ -32,6 +32,7 @@ export class HudInformationSystem {
   private readonly rows = new Map<string, { text: Phaser.GameObjects.Text; essential: boolean }>();
   private settings = normalizeHudSettings(undefined);
   private shown: HudNotification | null = null;
+  private communication: HudNotification | null = null;
   private destroyed = false;
   private panelY = 208;
   private topBoundary = 134;
@@ -62,6 +63,11 @@ export class HudInformationSystem {
   }
 
   notify(notice: HudNotification): void { if (!this.destroyed) this.queue.submit(notice); }
+
+  /** LYRA shares the existing console; event state remains in its live footer. */
+  setCommunication(message: string | null, mode = 'GUIDANCE', speaking = false): void {
+    this.communication = message ? { category: 'system', heading: `LYRA // ${mode}${speaking ? ' • TRANSMITTING' : ''}`, message } : null;
+  }
 
   /** Live event state is updated in place, never timed out or pushed into the toast queue. */
   setEventState(key: 'arcade' | 'anomaly', heading: string, message: string, category: HudNotificationCategory = 'arcade'): void {
@@ -100,7 +106,7 @@ export class HudInformationSystem {
     this.syncCamera();
     if (suspended) return;
     this.queue.update(deltaMs);
-    const notice = this.queue.active ?? this.eventStates.values().next().value ?? null;
+    const notice = this.communication ?? this.queue.active ?? this.eventStates.values().next().value ?? null;
     if (notice !== this.shown || this.eventRevision !== this.shownEventRevision) {
       this.shown = notice;
       this.shownEventRevision = this.eventRevision;
@@ -126,7 +132,7 @@ export class HudInformationSystem {
     if (notice) {
       const age = this.queue.elapsedMs;
       // Never fade a live timer or paid entry prompt with an unrelated toast.
-      const fade = this.eventStates.size || !this.queue.active ? 1 : Math.min(1, age / 180, (notice.durationMs! - age) / 260);
+      const fade = this.communication || this.eventStates.size || !this.queue.active ? 1 : Math.min(1, age / 180, (notice.durationMs! - age) / 260);
       this.panel.setAlpha(Math.max(0, fade)).setY(this.panelY + (1 - fade) * (age < 180 ? 8 : -8));
     }
     const safeWidth = this.scene.scale.height < 720 ? (this.scene.scale.width - 96) / 2 : Math.min(760, this.scene.scale.width - 48);
@@ -164,7 +170,7 @@ export class HudInformationSystem {
   }
 
   clear(): void {
-    this.queue.clear(); this.shown = null; this.panel.setVisible(false);
+    this.queue.clear(); this.communication = null; this.shown = null; this.panel.setVisible(false);
   }
 
   destroy(): void {

@@ -353,6 +353,28 @@ export class OptionsScene extends Phaser.Scene {
     const columnWidth = (innerWidth - columnGap * (columnCount - 1)) / columnCount;
     y += 44;
     this.audioCategoryTop = y - 26;
+    const lyra = { ...save.settings.lyra };
+    this.addSectionHeader(container, centerX, y, 'LYRA COMMUNICATIONS', 'VOICE & ACCESSIBILITY');
+    y += 42;
+    const voiceTrackWidth = Math.min(250, innerWidth * .38);
+    const voiceTrackX = innerRight - voiceTrackWidth / 2 - 42;
+    const persistLyra = (): void => { SaveSystem.setSettings({ lyra: { ...lyra } }); };
+    const voiceLabelWidth = Math.max(100, voiceTrackX - voiceTrackWidth / 2 - innerLeft - 28);
+    this.createSlider(container, innerLeft + 15, voiceTrackX, y, 'LYRA VOICE VOLUME', lyra.volume, voiceTrackWidth, value => { lyra.volume = value; persistLyra(); }, voiceLabelWidth);
+    y += 45;
+    this.createSlider(container, innerLeft + 15, voiceTrackX, y, 'MUSIC DUCKING', lyra.ducking / .5, voiceTrackWidth, value => { lyra.ducking = value * .5; persistLyra(); }, voiceLabelWidth);
+    y += 45;
+    for (const [key, title] of [['voice', 'LYRA VOICE'], ['browserTts', 'LOCAL SPEECH FALLBACK'], ['subtitles', 'LYRA SUBTITLES'], ['ambient', 'AMBIENT COMMENTS']] as const) {
+      const button = this.addTabButton(container, centerX, y, `${title}: ${lyra[key] ? 'ON' : 'OFF'}`, () => {
+        lyra[key] = !lyra[key]; persistLyra();
+        (button.getByName('button-label') as Phaser.GameObjects.Text).setText(`${title}: ${lyra[key] ? 'ON' : 'OFF'}`);
+      }, Math.min(innerWidth, 430));
+      this.registerScrollTarget('audio', button, y, 22); y += 46;
+    }
+    container.add(this.add.text(centerX, y, 'Required training text stays visible. Contextual guidance: Gameplay tab.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#a9d9e2', wordWrap: { width: innerWidth - 20 }, align: 'center'
+    }).setOrigin(.5));
+    y += 46;
     for (const category of SFX_CATEGORIES) {
       const expanded = this.expandedAudioCategories.has(category.id);
       const focusId = `options:audio:category:${category.id}`;

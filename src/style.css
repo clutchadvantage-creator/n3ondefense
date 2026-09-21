@@ -192,3 +192,19 @@ body {
   white-space: nowrap;
   pointer-events: none;
 }
+.lyra-comms { position:absolute; top:22%; left:50%; transform:translateX(-50%); width:min(570px,calc(100% - 40px)); padding:12px 18px; border:1px solid #59dbe5; border-left:3px solid #ff5bd8; background:rgba(4,14,25,.96); color:#dffaff; font:18px Rajdhani,sans-serif; pointer-events:none; z-index:8500; }
+.lyra-comms[hidden], .lyra-monitor[hidden] { display:none; }
+.lyra-comms strong { font:13px Orbitron,sans-serif; color:#63f7ff; }
+.lyra-comms p { margin:6px 0 0; }
+.lyra-monitor { position:relative; margin:12px 0; padding:14px; border:1px solid #3db7ce; background:repeating-linear-gradient(0deg,#061923 0px,#061923 3px,#081d29 4px); white-space:pre-line; color:#a8e6ee; min-height:100px; font:15px Rajdhani,sans-serif; }
+.lyra-monitor-video { display:block; width:100%; max-height:230px; object-fit:contain; }
+.lyra-monitor-play { position:absolute; inset:40% 12%; color:#dffaff; background:#071923; border:1px solid #63f7ff; cursor:pointer; }
+.lyra-dev { position:absolute; left:8px; bottom:8px; max-width:min(490px,95vw); max-height:70vh; overflow:auto; z-index:15000; pointer-events:auto; color:#9bbbc5; background:#06101a; font:12px monospace; }
+.lyra-dev summary { padding:5px; cursor:pointer; }
+.lyra-dev > div { padding:12px; }
+.lyra-dev label { display:block; margin:8px 0; }
+.lyra-dev select { width:100%; }
+.lyra-dev button { margin:4px; }
+.lyra-dev pre { white-space:pre-wrap; }
+.tutorial-live .tutorial-callout { pointer-events:none; }
+.tutorial-live .tutorial-title { font-size:20px; }

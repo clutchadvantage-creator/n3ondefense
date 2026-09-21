@@ -6,6 +6,7 @@ import type { ArenaLoadRequest } from '../utils/runFlow';
 import { createButton } from '../utils/ui';
 import { normalizeRunProtocolId } from '../mods/modBalance.ts';
 import { AudioManager } from '../systems/AudioManager.ts';
+import { LyraComms } from '../lyra/LyraComms.ts';
 import { configureSceneUiNavigation, getUiInputPresentation, subscribeUiInputPresentation } from '../input/UiNavigationController.ts';
 
 interface PreparationStep { label: string; target: number; run: () => void; }
@@ -30,6 +31,7 @@ export class LoadingScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Loading); }
 
   init(data: ArenaLoadRequest): void {
+    if (data.reason === 'new-run') LyraComms.get().resetRun();
     this.transitionRequest = data as ArenaTransitionRequest;
     this.handoffStarted = false;
   }

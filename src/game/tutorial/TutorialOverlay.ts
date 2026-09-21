@@ -1,5 +1,6 @@
 import type { TutorialStepDefinition, TutorialTargetBounds } from './TutorialTypes.ts';
 import { projectViewportBoundsToTutorialMount, resolveTutorialCalloutPlacement } from './TutorialTargeting.ts';
+import { LYRA_ADVANCED_PREVIEW } from '../lyra/LyraRegistry.ts';
 
 const make = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string): HTMLElementTagNameMap[K] => {
   const element = document.createElement(tag);
@@ -23,6 +24,8 @@ export class TutorialOverlay {
   private readonly illustration = make('div', 'tutorial-illustration');
   private readonly keys = make('div', 'tutorial-input-demo');
   private readonly progress = make('div', 'tutorial-progress');
+  private readonly monitor = make('div', 'lyra-monitor');
+  private video: HTMLVideoElement | null = null;
   private readonly skip = make('button', 'tutorial-skip');
   private readonly continueButton = make('button', 'tutorial-continue');
   private targetResolver: (() => TutorialTargetBounds | null) | null = null;
@@ -62,7 +65,7 @@ export class TutorialOverlay {
       this.consumePointerEvent(event);
       this.manualHandler?.();
     });
-    this.callout.append(this.eyebrow, this.title, this.body, this.illustration, this.keys, this.progress, this.continueButton);
+    this.callout.append(this.eyebrow, this.title, this.body, this.monitor, this.illustration, this.keys, this.progress, this.continueButton);
     this.root.append(this.shadeTop, this.shadeRight, this.shadeBottom, this.shadeLeft, this.focus, this.arrow, this.callout, this.skip);
     for (const shade of [this.shadeTop, this.shadeRight, this.shadeBottom, this.shadeLeft]) {
       shade.addEventListener('pointerdown', this.consumePointerEvent);
@@ -85,7 +88,22 @@ export class TutorialOverlay {
     this.root.classList.remove('tutorial-confirm');
     this.targetResolver = targetResolver;
     this.manualHandler = onManual;
-    this.eyebrow.textContent = step.eyebrow ?? 'N3ON PROTOCOL // GUIDANCE';
+    this.eyebrow.textContent = step.eyebrow ?? 'LYRA // TACTICAL GUIDANCE';
+    this.root.classList.toggle('tutorial-live', step.mode === 'live');
+    this.retireVideo();
+    this.monitor.hidden = !step.advancedPreview;
+    if (step.advancedPreview) {
+      this.monitor.textContent = 'ADVANCED OPERATIONS // TELEMETRY BRIEFING\nSupreme protocols build on movement, threat awareness, and site defense.';
+      if (LYRA_ADVANCED_PREVIEW) {
+        const video = make('video', 'lyra-monitor-video');
+        this.video = video; video.muted = true; video.playsInline = true; video.preload = 'metadata';
+        video.src = `${import.meta.env.BASE_URL}${LYRA_ADVANCED_PREVIEW}`;
+        const play = make('button', 'lyra-monitor-play'); play.type = 'button'; play.textContent = 'PLAY FIELD RECORDING';
+        play.onclick = () => { void video.play().then(() => { play.hidden = true; }).catch(() => { play.textContent = 'RETRY RECORDING'; }); };
+        video.onerror = () => { this.retireVideo(); this.monitor.textContent = 'FIELD RECORDING UNAVAILABLE // You can continue your deployment.'; };
+        this.monitor.replaceChildren(video, play);
+      }
+    }
     this.title.textContent = step.title;
     this.updatePromptText(step.body, step.inputDemo);
     this.illustration.textContent = step.illustration ?? '';
@@ -125,6 +143,7 @@ export class TutorialOverlay {
   }
 
   hide(): void {
+    this.retireVideo();
     cancelAnimationFrame(this.frame);
     this.root.hidden = true;
     this.targetResolver = null;
@@ -132,6 +151,7 @@ export class TutorialOverlay {
   }
 
   destroy(): void {
+    this.retireVideo();
     cancelAnimationFrame(this.frame);
     this.root.remove();
   }
@@ -178,5 +198,10 @@ export class TutorialOverlay {
     this.arrow.style.top = `${placeBelow ? bottom + 5 : y - 5}px`;
     this.arrow.dataset.position = placeBelow ? 'below' : 'above';
     this.arrow.hidden = placement.position === 'center';
+  }
+
+  private retireVideo(): void {
+    if (!this.video) return;
+    this.video.onerror = null; this.video.pause(); this.video.removeAttribute('src'); this.video.load(); this.video.remove(); this.video = null;
   }
 }

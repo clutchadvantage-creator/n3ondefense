@@ -572,7 +572,13 @@ export class Hud {
     const slot = this.abilitySlots.get(target);
     if (!slot) return null;
     const bounds = slot.root.getBounds();
-    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+    const camera = this.scene.cameras.main;
+    // getBounds includes the HUD root's inverse zoom. Project that fixed-scroll
+    // geometry through the camera before the tutorial converts canvas to CSS pixels.
+    const originX = camera.width * camera.originX, originY = camera.height * camera.originY;
+    return { x: camera.x + originX + (bounds.x - originX) * camera.zoomX,
+      y: camera.y + originY + (bounds.y - originY) * camera.zoomY,
+      width: bounds.width * camera.zoomX, height: bounds.height * camera.zoomY };
   }
 
   private layout(width: number, height: number): void {

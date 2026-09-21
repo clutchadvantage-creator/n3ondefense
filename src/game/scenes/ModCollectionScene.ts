@@ -430,6 +430,7 @@ export class ModCollectionScene extends Phaser.Scene {
   }
 
   private showInfusionModal(card: ModCardInstance, preservePage = false): void {
+    TutorialEventBus.emit('mod.infusionOpened');
     if (!preservePage) this.infusionPage = 0;
     this.hideInfusionModal();
     setSceneUiModalDepth(this, 30);

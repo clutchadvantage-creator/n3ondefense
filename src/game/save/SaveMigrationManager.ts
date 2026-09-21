@@ -3,6 +3,7 @@ import { DEFAULT_AUDIO_VOLUME, createDefaultSoundVolumes } from '../config/audio
 import { DEFAULT_ABILITY_BINDINGS } from '../config/controls';
 import { DEFAULT_AIM_SETTINGS, DEFAULT_HUD_SETTINGS } from '../config/interfaceSettings';
 import { DEFAULT_CONTROLLER_SETTINGS } from '../config/controllerSettings';
+import { normalizeLyraSettings } from '../lyra/LyraTypes.ts';
 import { CURRENT_SAVE_VERSION, EXPORT_FORMAT, GAME_VERSION, type ExportedSaveFile, type ImportedSavePreview, type LocalPlayerSave, type LocalPlayerSaveV1 } from './LocalSaveTypes';
 
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -54,6 +55,8 @@ export const migrateUnknownSave = (input: unknown, existingNames: string[] = [])
   if (isObject(input) && typeof input.credits === 'number' && typeof input.coreTokens === 'number') {
     const profileName = createUniqueName('Legacy Profile', existingNames);
     return createDefaultLocalSave(`legacy-${Date.now()}`, profileName, {
+      tutorials: { version: 3, firstRunStage: 'complete', firstRunWelcomePending: false,
+        lyraCurriculum: 0, completedSequences: [], skippedSequences: [], completedSteps: {}, replaySequenceId: null },
       wallet: {
         credits: input.credits,
         coreTokens: input.coreTokens,
@@ -65,6 +68,7 @@ export const migrateUnknownSave = (input: unknown, existingNames: string[] = [])
         equipped: isObject(input.equippedCosmetics) ? input.equippedCosmetics : {}
       },
       settings: isObject(input.settings) ? {
+        lyra: normalizeLyraSettings(input.settings.lyra),
         masterVolume: typeof input.settings.masterVolume === 'number' ? input.settings.masterVolume : DEFAULT_AUDIO_VOLUME,
         musicVolume: typeof input.settings.musicVolume === 'number' ? input.settings.musicVolume : DEFAULT_AUDIO_VOLUME,
         sfxVolume: typeof input.settings.sfxVolume === 'number' ? input.settings.sfxVolume : DEFAULT_AUDIO_VOLUME,
@@ -78,6 +82,7 @@ export const migrateUnknownSave = (input: unknown, existingNames: string[] = [])
         contextualTutorials: true,
         buttonJiggle: 1
       } : {
+        lyra: normalizeLyraSettings(undefined),
         masterVolume: DEFAULT_AUDIO_VOLUME,
         musicVolume: DEFAULT_AUDIO_VOLUME,
         sfxVolume: DEFAULT_AUDIO_VOLUME,

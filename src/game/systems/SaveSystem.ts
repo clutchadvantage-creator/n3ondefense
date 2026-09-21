@@ -51,6 +51,7 @@ export class SaveSystem {
       unlockedCosmetics: [...save.cosmetics.owned],
       equippedCosmetics: { ...save.cosmetics.equipped },
       settings: {
+        lyra: { ...save.settings.lyra },
         masterVolume: save.settings.masterVolume,
         musicVolume: save.settings.musicVolume,
         sfxVolume: save.settings.sfxVolume,

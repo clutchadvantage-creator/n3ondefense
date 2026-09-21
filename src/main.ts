@@ -4,6 +4,7 @@ import { createGameConfig } from './game/config/gameConfig';
 import { installMenuAudio } from './ui/installMenuAudio';
 import { installUiNavigation } from './game/input/UiNavigationController.ts';
 import { AudioManager } from './game/systems/AudioManager';
+import { installLyra } from './game/lyra/installLyra.ts';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -22,6 +23,7 @@ installMenuAudio();
 installUiNavigation(document.querySelector<HTMLElement>('#game-ui-root')!);
 const game = new Phaser.Game(createGameConfig('phaser-game'));
 AudioManager.get().bindMusicLifecycle(game);
+installLyra(game);
 
 if (import.meta.env.DEV) {
   (globalThis as typeof globalThis & { n3onGame?: Phaser.Game }).n3onGame = game;

@@ -666,6 +666,8 @@ export class ArenaScene extends Phaser.Scene {
   private tutorialHardPaused = false;
   private tutorialClockWasPaused = false;
   private tutorialAimAngle: number | null = null;
+  private tutorialMoveOrigin: { x: number; y: number } | null = null;
+  private lyraHazardIntroduced = false;
   private readonly performanceMonitor = new FramePerformanceMonitor(600);
   private readonly lifecycleProfiler = new ArenaLifecycleProfiler();
   private lastArenaPreparation: ArenaPreparationReport | null = null;
@@ -1066,7 +1068,8 @@ export class ArenaScene extends Phaser.Scene {
     this.tutorialDirector = new TutorialDirector({
       scene: 'arena',
       resolveTarget: (target) => this.resolveTutorialTarget(target),
-      setMode: (mode) => this.setTutorialMode(mode)
+      setMode: (mode) => this.setTutorialMode(mode),
+      trainingRound: () => Math.max(this.currentCombatRound(), (SaveSystem.getTutorialProgress().trainingRoundsCompleted ?? 0) + 1)
     });
 
     this.scale.on('resize', this.handleResize, this);
@@ -1526,7 +1529,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private registerBombSiteEvents(): void {
     this.bombSites.on('bomb-site-armed', (site: BombSiteRuntime) => {
-      if (this.tutorialDirector?.awaits('objective.bombArmed')) TutorialEventBus.emit('objective.bombArmed', { siteId: site.id });
+      TutorialEventBus.emit('objective.bombArmed', { siteId: site.id });
       GameplayTelemetryRecorder.recordBombArmed(site.id);
       this.bombsiteMods.onBombArmed(site, this.getBombDefenseDurationMs(), this.time.now);
       this.state.set(RoundState.Defense);
@@ -1637,7 +1640,7 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
-    this.hudInformation?.update(delta, this.tutorialHardPaused || this.legendaryRevealInProgress || this.state.state === RoundState.Paused);
+    this.hudInformation?.update(delta, Boolean(this.tutorialDirector?.isActive()) || this.legendaryRevealInProgress || this.state.state === RoundState.Paused);
     if (this.state.state !== RoundState.Paused) this.updateWeeklyCompletion(now);
 
     const gameplayCanSoundLowHealth = !this.tutorialHardPaused
@@ -1810,6 +1813,10 @@ export class ArenaScene extends Phaser.Scene {
     const fluxSuppressesLasers = this.fluxCores?.isLaserSuppressed(now) ?? false;
     const securityLasersSuppressed = gasSuppressesLasers || fluxSuppressesLasers;
     const laserDangerWindow = this.laserSecurity?.isDangerWindow(now, securityLasersSuppressed) ?? false;
+    if (laserDangerWindow && !this.tutorialDirector?.isActive() && !this.lyraHazardIntroduced) {
+      this.lyraHazardIntroduced = true;
+      TutorialEventBus.emit('hazard.firstActive');
+    }
     this.laserSecurity?.update(now, dt, this.player, hazardTargets, playerLaserImmune, securityLasersSuppressed);
     this.bombletHazard?.update(now, this.player, hazardTargets, laserDangerWindow);
     this.updateEnemies(now, dt);
@@ -2231,11 +2238,17 @@ export class ArenaScene extends Phaser.Scene {
 
     const movementX = this.playerInput.move.x;
     const movementY = this.playerInput.move.y;
+    if (this.tutorialDirector?.awaits('combat.playerMoved')) {
+      if (!this.tutorialMoveOrigin) this.tutorialMoveOrigin = { x: this.player.x, y: this.player.y };
+      else if (Math.hypot(this.player.x - this.tutorialMoveOrigin.x, this.player.y - this.tutorialMoveOrigin.y) >= 8) {
+        TutorialEventBus.emit('combat.playerMoved');
+        this.tutorialMoveOrigin = null;
+      }
+    } else this.tutorialMoveOrigin = null;
 
     if (now >= this.player.dashUntil) {
       const movementLengthSquared = movementX * movementX + movementY * movementY;
       if (movementLengthSquared > 0) {
-        if (this.tutorialDirector?.awaits('combat.playerMoved')) TutorialEventBus.emit('combat.playerMoved');
         const fieldSpeed = this.bombsiteMods?.playerMoveSpeedMultiplier(this.player.x, this.player.y) ?? 1;
         const speedScale = this.playerInput.activeDevice === 'gamepad'
           ? this.player.speed * fieldSpeed
@@ -5057,6 +5070,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private collectPickup(type: PickupType, source: Pickup['source'], explicitAmount?: number): void {
+    TutorialEventBus.emit('pickup.collected', { type });
     this.audio.playSfx(GAMEPLAY_PICKUP_SFX_BY_TYPE[type]);
     if (this.modRuntime.triggerSupremePickupSurge(this.time.now, type)) {
       this.supremeModEffects?.showPickupSurge(this.time.now, this.player.x, this.player.y);
@@ -6584,7 +6598,9 @@ export class ArenaScene extends Phaser.Scene {
     this.transitionAfterModReveals(resultTransitionDelay, () => {
       const completedTeachingRound = SaveSystem.getTutorialProgress().firstRunStage === 'arena-teaching';
       if (completedTeachingRound) {
-        SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress); });
+        SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress, completedRound); });
+      }
+      if (completedTeachingRound && SaveSystem.getTutorialProgress().lyraCurriculum !== 4) {
         GameplayTelemetryRecorder.finishRun('quit');
         OnlineRunManager.complete('quit', completedRound);
         this.registry.remove('arena-session');
@@ -8590,6 +8606,18 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  getLyraState(): import('../lyra/installLyra.ts').LyraSceneState {
+    return {
+      blocked: !this.player?.active || this.legendaryRevealInProgress || this.state.state === RoundState.Paused
+        || this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat
+        || Boolean(this.anomalyController?.blocksArenaGameplay) || this.bossFlowPhase === 'intro'
+        || this.bossFlowPhase === 'destruction' || this.bossFlowPhase === 'transitioning',
+      ambientSafe: false,
+      lowHealth: !this.tutorialHardPaused && this.player?.hp <= this.player?.stats.maxHealth * .25,
+      defusing: !this.tutorialHardPaused && this.state.state === RoundState.Defusing
+    };
+  }
+
   private resolveTutorialTarget(target: string): TutorialTargetBounds | null {
     if (target.startsWith('hud.')) {
       const id = target.slice(4) as 'vitals' | 'objective' | 'stats' | 'abilities' | 'fence' | 'turret' | 'mine' | 'shield';
@@ -9460,6 +9488,9 @@ export class ArenaScene extends Phaser.Scene {
     this.modAcquisitionPresenter = null;
     this.tutorialDirector?.destroy();
     this.tutorialDirector = null;
+    this.tutorialMoveOrigin = null;
+    this.tutorialAimAngle = null;
+    this.lyraHazardIntroduced = false;
     this.tutorialHardPaused = false;
     this.tutorialClockWasPaused = false;
     this.legendaryRevealInProgress = false;

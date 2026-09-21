@@ -299,6 +299,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     window.setTimeout(() => {
       if (!this.scene.isActive()) return;
       TutorialEventBus.emit('ui.garageSceneOpened');
+      if (SaveSystem.hasCompletedRegularOverdrive()) TutorialEventBus.emit('progression.supremeAvailable');
       if (SaveSystem.getHighestRound() >= RUN_PROTOCOLS.overdrive.unlockHighestRound) TutorialEventBus.emit('progression.overdriveUnlocked');
     }, 180);
 
@@ -1249,6 +1250,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private showPlasmaRecalibration(modId: string): void {
+    TutorialEventBus.emit('mod.recalibrationOpened');
     const root = this.createOverlay('PLASMA RECALIBRATION // MODULE ENGINEERING');
     const { width, height } = this.scale;
     const compact = width < 1250 || height < 760;

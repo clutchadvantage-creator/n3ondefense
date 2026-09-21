@@ -12,6 +12,7 @@ import {
 } from '../input/UiNavigationController.ts';
 import { resolveActionPrompt } from '../input/ActionInput.ts';
 import type { TutorialStepDefinition } from './TutorialTypes.ts';
+import { LyraComms } from '../lyra/LyraComms.ts';
 
 /** One director per visible scene. Awarding/game state remains independent of this presentation queue. */
 export class TutorialDirector {
@@ -53,6 +54,7 @@ export class TutorialDirector {
       if (!this.active) return;
       const copy = this.resolvePresentedCopy(this.active.steps[this.stepIndex]);
       this.overlay.updatePromptText(copy.body, copy.inputDemo);
+      LyraComms.get().training(this.host.scene, `tutorial.${this.active.id}.${this.active.steps[this.stepIndex].id}`, copy.body);
     });
     window.addEventListener('keydown', this.keyHandler, { capture: true });
   }
@@ -65,6 +67,7 @@ export class TutorialDirector {
       : null;
     const sequence = replay ?? TUTORIAL_SEQUENCES.find((candidate) =>
       candidate.autoStart
+      && (this.host.trainingRound?.() ?? 1) >= (candidate.minimumTrainingRound ?? 1)
       && isTutorialSequenceEligible(progress, candidate, this.host.scene)
     );
     if (sequence) this.begin(sequence);
@@ -112,6 +115,7 @@ export class TutorialDirector {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    LyraComms.get().endTraining(this.host.scene);
     this.clearTimer();
     this.clearTransitionTimer();
     this.host.setMode('live');
@@ -193,6 +197,7 @@ export class TutorialDirector {
         ? (this.advancePolicy.reason === 'acknowledgement' ? step.advanceLabel ?? this.advancePolicy.label : this.advancePolicy.label)
         : null
     );
+    LyraComms.get().training(this.host.scene, `tutorial.${this.active.id}.${step.id}`, step.body);
     TutorialEventBus.emit('tutorial.stepShown', { sequenceId: this.active.id, stepId: step.id });
     if (this.advancePolicy.type === 'auto') {
       this.timer = window.setTimeout(() => this.advance(), this.advancePolicy.delayMs);
@@ -232,6 +237,7 @@ export class TutorialDirector {
     const step = sequence.steps[this.stepIndex];
     SaveSystem.updateTutorialProgress((state) => completeTutorialStep(state, sequence.id, step.id));
     this.overlay.confirm();
+    LyraComms.get().endTraining(this.host.scene);
     TutorialEventBus.emit('tutorial.stepCompleted', { sequenceId: sequence.id, stepId: step.id });
     this.stepIndex += 1;
     if (this.stepIndex >= sequence.steps.length) {
@@ -267,6 +273,7 @@ export class TutorialDirector {
 
   private finish(notify: boolean): void {
     const sequenceId = this.active?.id;
+    LyraComms.get().endTraining(this.host.scene);
     this.clearTimer();
     this.acceptingCompletion = false;
     this.advancePolicy = null;

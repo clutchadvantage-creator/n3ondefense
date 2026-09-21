@@ -22,6 +22,7 @@ export interface TutorialStepDefinition {
   title: string;
   body: string;
   illustration?: string;
+  advancedPreview?: boolean;
   inputDemo?: string[];
   mode: TutorialMode;
   spotlight?: TutorialSpotlightShape;
@@ -44,12 +45,14 @@ export interface TutorialSequenceDefinition {
   freshProfileOnly?: boolean;
   /** Explicit first-run stages in which this sequence may run. */
   firstRunStages?: readonly FirstRunTeachingStage[];
+  minimumTrainingRound?: number;
 }
 
 export interface TutorialHost {
   scene: string;
   resolveTarget(target: string): TutorialTargetBounds | null;
   setMode(mode: TutorialMode): void;
+  trainingRound?: () => number;
   /** Return false when a real action is currently impossible (for example, no affordable upgrade). */
   isEventActionAvailable?: (event: string) => boolean;
   onComplete?: (sequenceId: string) => void;
