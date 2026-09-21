@@ -38,7 +38,7 @@ test('combat HUD uses one icon-led cyber deck with truthful resource and deploya
   for (const resource of ['credits', 'coreTokens', 'plasmaChips', 'fluxCores']) {
     assert.match(hud, new RegExp(`updateResource\\('${resource}'`));
   }
-  assert.match(hud, /\['fence', 'turret', 'mine', 'shield'\] as const/);
+  assert.match(hud, /\['fence', 'turret', 'mine', 'shield', 'echo'\] as const/);
   for (const ability of ['fence', 'turret', 'mine']) assert.match(hud, new RegExp(`id === '${ability}'`));
   assert.match(hud, /Layered energy bubble with orbit segments and crackling core/);
   assert.match(hud, /strokeCircle\(0, 0, 14\)/);

@@ -7,6 +7,7 @@ export const HUD_RADAR_RANGE = 900;
 export interface HudAbilitySlot {
   id: 'fence' | 'turret' | 'mine' | 'shield' | 'echo';
   status?: string;
+  countLabel?: string;
   keybind: string;
   /** Retained for payload compatibility; the HUD renders the matching in-game equipment art. */
   icon: string;
@@ -998,7 +999,7 @@ export class Hud {
       visual.keyText.setX(8 + visual.keyChip.displayWidth / 2);
     }
 
-    const countLabel = slot.capacity === null ? (slot.active ? 'ON' : '--') : `${slot.count}/${slot.capacity}`;
+    const countLabel = slot.countLabel ?? (slot.capacity === null ? (slot.active ? 'ON' : '--') : `${slot.count}/${slot.capacity}`);
     this.setTextIfChanged(visual.countText, countLabel);
     let status = '';
     if (slot.active) status = 'ACTIVE';
@@ -1035,7 +1036,7 @@ export class Hud {
     if (coolingDown || visualStateChanged) {
       const ringRadius = 21;
       visual.cooldownRing.clear().lineStyle(1, 0x244c5c, 0.5).strokeCircle(50, 35, ringRadius);
-      if (slot.active) {
+      if (slot.active && slot.id !== 'echo') {
         visual.cooldownRing.lineStyle(2, MAGENTA, 0.92).strokeCircle(50, 35, ringRadius);
       } else if (coolingDown) {
         const progress = 1 - Phaser.Math.Clamp(cooldownMs / Math.max(1, slot.cooldownDurationMs), 0, 1);

@@ -96,7 +96,7 @@ export class PlayerInput {
     this.states.setHeld('selectTurret', this.fixedKeys.two.isDown || this.pendingPulses.has('selectTurret'));
     this.states.setHeld('selectMine', this.fixedKeys.three.isDown || this.pendingPulses.has('selectMine'));
     for (const action of ABILITY_ACTIONS) {
-      this.states.setHeld(action, this.bindingHeld(this.bindings[action], action) || gamepad.held(action) || this.pendingPulses.has(action));
+      this.states.setHeld(action, this.bindingHeld(this.bindings[action]) || gamepad.held(action) || this.pendingPulses.has(action));
     }
     for (const action of ['confirm', 'cancel', 'navigateUp', 'navigateDown', 'navigateLeft', 'navigateRight', 'pageLeft', 'pageRight', 'tabLeft', 'tabRight'] as const) {
       this.states.setHeld(action, gamepad.held(action));
@@ -174,7 +174,7 @@ export class PlayerInput {
     this.heldCodes.clear();
   }
 
-  private bindingHeld(binding: InputBinding, action: AbilityAction): boolean {
+  private bindingHeld(binding: InputBinding): boolean {
     if (binding.startsWith('Mouse:')) return this.pointerButtons[Number(binding.slice(6))] === 1;
     return binding.startsWith('Keyboard:') && this.heldCodes.has(binding.slice(9));
   }

@@ -3,7 +3,7 @@ import { ECHO_BALANCE, normalizeEchoConfig, type EchoConfig } from './EchoRules.
 export interface EchoShot {
   time: number; x: number; y: number; angle: number; mode: 'normal' | 'scattershot' | 'grenade';
   speed: number; damage: number; critical: boolean; ricochets: number; grenadeSequence: number;
-  texture: string; width: number; height: number;
+  texture: string; width: number; height: number; nativePalette: boolean;
 }
 export interface EchoHost {
   validOrigin(x: number, y: number): boolean;
@@ -20,7 +20,7 @@ export class EchoTimeline {
   readonly samples = new Float64Array((ECHO_BALANCE.recordingMs * ECHO_BALANCE.sampleHz / 1000 + 2) * 5);
   readonly shots: EchoShot[] = Array.from({ length: ECHO_BALANCE.maximumShots }, () => ({
     time: 0, x: 0, y: 0, angle: 0, mode: 'normal', speed: 0, damage: 0, critical: false, ricochets: 0,
-    grenadeSequence: 0, texture: '', width: 0, height: 0
+    grenadeSequence: 0, texture: '', width: 0, height: 0, nativePalette: false
   }));
   recording = false;
   replaying = false;
@@ -37,6 +37,10 @@ export class EchoTimeline {
   private nextSampleMs = 0;
   private originX = 0;
   private originY = 0;
+  private previousX = 0;
+  private previousY = 0;
+  private previousRotation = 0;
+  private previousDash = false;
   private readonly returned = { x: 0, y: 0 };
   private readonly host: EchoHost;
   constructor(host: EchoHost, config: Partial<EchoConfig> = {}) { this.host = host; this.config = normalizeEchoConfig(config); }
@@ -53,41 +57,55 @@ export class EchoTimeline {
       if (pressed && held && this.armed && !this.replaying && this.cooldownMs === 0 && this.host.validOrigin(x, y)) {
         this.armed = false; this.recording = true; this.elapsedMs = 0; this.shotCount = 0; this.sampleCount = 0;
         this.originX = x; this.originY = y; this.sample(x, y, rotation, dashing);
+        this.previousX = x; this.previousY = y; this.previousRotation = rotation; this.previousDash = dashing;
         this.nextSampleMs = 1000 / ECHO_BALANCE.sampleHz; this.host.event('record');
       }
       return;
     }
-    this.elapsedMs = Math.min(this.config.recordingMs, this.elapsedMs + dt);
-    if (this.elapsedMs >= this.nextSampleMs) {
-      this.sample(x, y, rotation, dashing);
-      this.nextSampleMs = this.elapsedMs + 1000 / ECHO_BALANCE.sampleHz;
+    const previousMs = this.elapsedMs;
+    this.elapsedMs = Math.min(this.config.recordingMs, previousMs + dt);
+    const turn = Math.atan2(Math.sin(rotation - this.previousRotation), Math.cos(rotation - this.previousRotation));
+    while (this.nextSampleMs <= this.elapsedMs + .000001) {
+      const fraction = Math.min(1, (this.nextSampleMs - previousMs) / Math.max(.001, dt));
+      this.sample(this.previousX + (x - this.previousX) * fraction, this.previousY + (y - this.previousY) * fraction,
+        this.previousRotation + turn * fraction, this.previousDash, Math.min(this.elapsedMs, this.nextSampleMs));
+      this.nextSampleMs += 1000 / ECHO_BALANCE.sampleHz;
     }
+    this.previousX = x; this.previousY = y; this.previousRotation = rotation; this.previousDash = dashing;
     if (!held || this.elapsedMs >= this.config.recordingMs) this.finish(x, y, rotation, dashing);
   }
 
   recordShot(shot: Omit<EchoShot, 'time'>, source: 'weapon' | 'echo' = 'weapon'): boolean {
     if (!this.recording || source !== 'weapon') return false;
     if (this.shotCount >= this.shots.length) { this.rejectedShots++; return false; }
-    Object.assign(this.shots[this.shotCount++], shot, { time: this.elapsedMs });
+    const target = this.shots[this.shotCount++];
+    Object.assign(target, shot); target.time = this.elapsedMs;
     return true;
   }
   reset(): void {
     this.recording = this.replaying = false; this.elapsedMs = this.durationMs = this.replayMs = this.cooldownMs = 0;
-    this.sampleCount = this.shotCount = this.sampleCursor = this.shotCursor = 0; this.armed = false;
-    this.samples.fill(0);
-    for (const shot of this.shots) { shot.texture = ''; shot.damage = 0; shot.time = 0; }
+    this.clearRecording(); this.armed = false;
     this.host.event('cancel');
   }
-  private sample(x: number, y: number, rotation: number, dashing: boolean): void {
+  private clearRecording(): void {
+    this.sampleCount = this.shotCount = this.sampleCursor = this.shotCursor = 0;
+    this.samples.fill(0);
+    for (const shot of this.shots) {
+      shot.time = shot.x = shot.y = shot.angle = shot.speed = shot.damage = shot.ricochets = shot.grenadeSequence = shot.width = shot.height = 0;
+      shot.texture = ''; shot.mode = 'normal'; shot.critical = shot.nativePalette = false;
+    }
+  }
+  private sample(x: number, y: number, rotation: number, dashing: boolean, time = this.elapsedMs): void {
+    if (this.sampleCount > 0 && Math.abs(this.samples[(this.sampleCount - 1) * 5] - time) < .000001) this.sampleCount--;
     const i = Math.min(this.sampleCount, this.samples.length / 5 - 1) * 5;
-    this.samples[i] = this.elapsedMs; this.samples[i + 1] = x; this.samples[i + 2] = y;
+    this.samples[i] = time; this.samples[i + 1] = x; this.samples[i + 2] = y;
     this.samples[i + 3] = rotation; this.samples[i + 4] = Number(dashing);
     this.sampleCount = Math.min(this.sampleCount + 1, this.samples.length / 5);
   }
   private finish(x: number, y: number, rotation: number, dashing: boolean): void {
     this.sample(x, y, rotation, dashing); this.recording = false;
     this.durationMs = this.elapsedMs; this.cooldownMs = this.config.cooldownMs;
-    if (!this.host.snap(this.originX, this.originY, this.returned)) { this.host.event('cancel'); return; }
+    if (!this.host.snap(this.originX, this.originY, this.returned)) { this.clearRecording(); this.host.event('cancel'); return; }
     this.replaying = true; this.replayMs = 0; this.sampleCursor = this.shotCursor = 0;
     this.host.event('snap'); this.play();
   }
@@ -103,6 +121,6 @@ export class EchoTimeline {
     this.host.pose(this.samples[a + 1] + (this.samples[b + 1] - this.samples[a + 1]) * t + offsetX,
       this.samples[a + 2] + (this.samples[b + 2] - this.samples[a + 2]) * t + offsetY,
       this.samples[a + 3] + turn * t, this.samples[a + 4] === 1);
-    if (this.replayMs >= this.durationMs) { this.replaying = false; this.host.event('complete'); }
+    if (this.replayMs >= this.durationMs) { this.replaying = false; this.host.event('complete'); this.clearRecording(); }
   }
 }

@@ -44,6 +44,7 @@ export interface UiFocusableOptions {
 }
 
 export interface SceneUiNavigationOptions {
+  inputCaptured?: () => boolean;
   onBack?: () => unknown;
   onTabLeft?: () => unknown;
   onTabRight?: () => unknown;
@@ -53,6 +54,7 @@ export interface SceneUiNavigationOptions {
 }
 
 interface NavigationLayer {
+  readonly inputCaptured?: boolean;
   id: string;
   manager: UiFocusManager;
   priority: number;
@@ -103,6 +105,8 @@ const safeControllerSettings = () => {
 };
 
 class PhaserNavigationLayer implements NavigationLayer {
+  get inputCaptured(): boolean { return this.capturesInput?.() ?? false; }
+  private capturesInput?: () => boolean;
   readonly manager = new UiFocusManager();
   readonly priority: number;
   private readonly shortcuts = new Map<Shortcut, Set<string>>();
@@ -127,6 +131,7 @@ class PhaserNavigationLayer implements NavigationLayer {
   readonly id: string;
 
   configure(options: SceneUiNavigationOptions): void {
+    if ('inputCaptured' in options) this.capturesInput = options.inputCaptured;
     if ('onBack' in options) this.onBack = options.onBack;
     if ('onTabLeft' in options) this.onTabLeft = options.onTabLeft;
     if ('onTabRight' in options) this.onTabRight = options.onTabRight;
@@ -551,6 +556,7 @@ export class UiNavigationController {
     const layer = this.activeLayer();
     for (const candidate of this.layers) candidate.drawFocus(now, this.device === 'gamepad' && candidate === layer);
     this.updateHints(layer);
+    if (layer?.inputCaptured) { this.resetActivationHold(); this.navigationRepeat.reset(); this.sliderRepeat.reset(); return; }
     if (!layer || this.device !== 'gamepad' || !document.hasFocus()) { this.resetActivationHold(); return; }
     const direction = this.heldDirection(pad.uiNavigateX, pad.uiNavigateY, pad.uiAxisX, pad.uiAxisY);
     const hasUiAction = Boolean(direction)
@@ -666,7 +672,7 @@ export class UiNavigationController {
       this.notifyPresentation();
     }
     const layer = this.activeLayer();
-    if (!layer || layer.id.startsWith('dom:') || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+    if (!layer || layer.inputCaptured || layer.id.startsWith('dom:') || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
     const direction = ({ ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' } as const)[event.key];
     if (direction) {
       if (layer.manager.current?.adjust && (direction === 'left' || direction === 'right')) layer.manager.adjust(direction === 'left' ? -1 : 1);

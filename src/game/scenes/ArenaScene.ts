@@ -784,7 +784,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.grenadeSplashOwner === 'turret') {
       GameplayTelemetryRecorder.recordTurretHit(this.grenadeSplashTurretId, applied, overkill);
     } else {
-      GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, this.grenadeSplashCritical);
+      GameplayTelemetryRecorder.recordProjectileHit(this.grenadeSplashOwner, applied, overkill, this.grenadeSplashCritical);
     }
     enemy.defuseProgressMs = 0;
     enemy.defuseInterruptedUntil = this.time.now + 800;
@@ -1708,6 +1708,8 @@ export class ArenaScene extends Phaser.Scene {
 
     if (!this.tutorialDirector?.isActive()) this.anomalyController?.update(delta);
     if (this.anomalyController?.blocksArenaGameplay) {
+      if (this.echo?.timeline.recording || this.echo?.timeline.replaying || this.echo?.timeline.cooldownMs
+        || this.projectiles.some(projectile => projectile.echo)) this.clearEcho();
       this.arenaFireTraps?.clearExposure();
       this.player.setVelocity(0, 0);
       this.muzzleFlashVfx.reset();
@@ -2381,7 +2383,8 @@ export class ArenaScene extends Phaser.Scene {
     const ricochetsRemaining = now < this.player.buffs.ricochetUntil ? RICOCHET_MAX_WALL_BOUNCES : 0;
     if (this.echo?.timeline.recording) this.echo.timeline.recordShot({ x: spawnX, y: spawnY, angle, mode: ammoMode,
       speed, damage, critical: crit, ricochets: ricochetsRemaining, grenadeSequence: this.grenadeProjectileSequence,
-      texture: this.projectileTextureKey, width: this.projectileWidth, height: this.projectileHeight });
+      texture: this.projectileTextureKey, width: this.projectileWidth, height: this.projectileHeight,
+      nativePalette: ammoMode === 'normal' && this.projectileNativePalette });
     if (ammoMode === 'scattershot') {
       for (let index = 0; index < SCATTERSHOT_ANGLE_OFFSETS.length; index += 1) {
         const pelletAngle = angle + SCATTERSHOT_ANGLE_OFFSETS[index];
@@ -2455,7 +2458,7 @@ export class ArenaScene extends Phaser.Scene {
       depth: 8,
       damage: baseDamage * damageMultiplier * (echoShot ? echoMultiplier : 1),
       echo: echoShot ? stampEchoDamage(baseDamage * damageMultiplier, echoMultiplier) : undefined,
-      nativePalette: echoShot ? false : undefined,
+      nativePalette: echoShot?.nativePalette,
       from: 'player',
       lifeMs,
       trailColor,
@@ -3778,13 +3781,13 @@ export class ArenaScene extends Phaser.Scene {
       if (canSplitAtFence) {
         const splitCount = this.splitProjectileAtFence(p, this.pendingSplitProjectiles);
         if (splitCount > 0) {
-          GameplayTelemetryRecorder.recordProjectileMiss(p.from === 'turret' ? 'turret' : 'weapon', 'fence-split', splitCount);
+          GameplayTelemetryRecorder.recordProjectileMiss(p.echo ? 'echo' : p.from === 'turret' ? 'turret' : 'weapon', 'fence-split', splitCount);
           this.retireProjectile(p);
           continue;
         }
       }
 
-      const fluxSource = p.from === 'player'
+      const fluxSource = p.echo ? 'echo' : p.from === 'player'
         ? 'weapon'
         : p.from === 'turret' ? 'turret' : 'enemy-projectile';
       if (p.ammoMode !== 'grenade' && this.fluxCores?.damagePoint(p.sprite.x, p.sprite.y, 7, p.damage, fluxSource)) {
@@ -3809,7 +3812,7 @@ export class ArenaScene extends Phaser.Scene {
             const applied = Math.min(hitMissile.hp, p.damage);
             const overkill = Math.max(0, p.damage - applied);
             hitMissile.hp = Math.max(0, hitMissile.hp - applied);
-            GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
+            GameplayTelemetryRecorder.recordProjectileHit(p.echo ? 'echo' : 'weapon', applied, overkill, p.critical);
             this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, COLORS.cyan);
             this.retireProjectile(p);
             if (hitMissile.hp <= 0) {
@@ -3830,7 +3833,7 @@ export class ArenaScene extends Phaser.Scene {
           const applied = boss.takeDamage(p.damage, p.echo ? 'echo' : p.from === 'player' ? 'weapon' : 'turret', p.echo);
           const overkill = Math.max(0, p.damage - applied);
           if (p.from === 'turret') GameplayTelemetryRecorder.recordTurretHit(p.turretId ?? '', applied, overkill);
-          else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
+          else GameplayTelemetryRecorder.recordProjectileHit(p.echo ? 'echo' : 'weapon', applied, overkill, p.critical);
           this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.nativePalette ? (p.emissiveColor ?? p.trailColor) : p.sprite.tintTopLeft);
           this.retireProjectile(p);
           if (boss.isDefeated && (boss === this.bossEncounter?.boss || this.supremeFinale?.allDefeated)) {
@@ -3855,10 +3858,10 @@ export class ArenaScene extends Phaser.Scene {
           const finalDamage = p.damage * (1 + conditionalBonus);
           const wasAlive = !hitEnemy.isDead();
           const applied = hitEnemy.takeDamage(finalDamage, p.echo ? 'echo' : p.from === 'player' ? 'weapon' : 'turret', p.echo);
-          if (p.from === 'player' && applied > 0 && this.tutorialDirector?.awaits('combat.enemyDamaged')) TutorialEventBus.emit('combat.enemyDamaged', { type: hitEnemy.stats.type, damage: applied });
+          if (p.from === 'player' && !p.echo && applied > 0 && this.tutorialDirector?.awaits('combat.enemyDamaged')) TutorialEventBus.emit('combat.enemyDamaged', { type: hitEnemy.stats.type, damage: applied });
           const overkill = Math.max(0, finalDamage - applied);
           if (p.from === 'turret') GameplayTelemetryRecorder.recordTurretHit(p.turretId ?? '', applied, overkill);
-          else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, p.critical);
+          else GameplayTelemetryRecorder.recordProjectileHit(p.echo ? 'echo' : 'weapon', applied, overkill, p.critical);
           hitEnemy.defuseProgressMs = 0;
           hitEnemy.defuseInterruptedUntil = now + 800;
           if (wasAlive && hitEnemy.isDead() && p.from === 'player' && p.splitCurrentEligible) {
@@ -4172,7 +4175,7 @@ export class ArenaScene extends Phaser.Scene {
       }
       const overkill = Math.max(0, finalDamage - applied);
       if (source === 'turret') GameplayTelemetryRecorder.recordTurretHit(projectile.turretId ?? '', applied, overkill);
-      else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, projectile.critical);
+      else GameplayTelemetryRecorder.recordProjectileHit(projectile.echo ? 'echo' : 'weapon', applied, overkill, projectile.critical);
       primaryEnemy.defuseProgressMs = 0;
       primaryEnemy.defuseInterruptedUntil = this.time.now + 800;
       if (wasAlive && primaryEnemy.isDead() && projectile.from === 'player' && projectile.splitCurrentEligible) {
@@ -4187,7 +4190,7 @@ export class ArenaScene extends Phaser.Scene {
       const applied = boss.takeDamage(projectile.damage, source, projectile.echo);
       const overkill = Math.max(0, projectile.damage - applied);
       if (source === 'turret') GameplayTelemetryRecorder.recordTurretHit(projectile.turretId ?? '', applied, overkill);
-      else GameplayTelemetryRecorder.recordProjectileHit('weapon', applied, overkill, projectile.critical);
+      else GameplayTelemetryRecorder.recordProjectileHit(projectile.echo ? 'echo' : 'weapon', applied, overkill, projectile.critical);
     }
     if (directlyHitFluxCore) {
       this.fluxCores?.damageCombatTarget(directlyHitFluxCore, projectile.damage, source);
@@ -5556,6 +5559,7 @@ export class ArenaScene extends Phaser.Scene {
   private beginAnomalyTransition(request: AnomalyEntryRequest): void {
     if (!isValidAnomalyEntryCost(request.cost)) return;
     if (request.anomalyId !== 'heist' || !this.anomalyReturnLifecycle.begin(request.sessionId)) return;
+    this.clearEcho();
     this.arenaFireTraps?.clearExposure();
     this.projectileImpactVfx.reset();
     // Cosmetic debris does not belong to the suspended gameplay snapshot.
@@ -6590,6 +6594,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private completeRound(): void {
     if (this.state.state === RoundState.Victory && this.pendingRoundPayload) return;
+    this.echo?.reset();
     const endToken = this.roundRuntime.requestEnd('completed');
     if (!endToken) return;
     this.captureEncounterCheckpoint('B_END_REQUESTED');
@@ -7236,6 +7241,7 @@ export class ArenaScene extends Phaser.Scene {
   private completeBossFight(): void {
     if (this.bossVictoryHandled || !this.bossEncounter || !this.pendingRoundPayload
       || !this.transitionBossFlow('combat', 'destruction')) return;
+    this.echo?.reset();
     const endToken = this.roundRuntime.requestEnd('completed');
     if (!endToken) return;
     this.captureEncounterCheckpoint('B_END_REQUESTED');
@@ -7285,6 +7291,7 @@ export class ArenaScene extends Phaser.Scene {
   private completeSupremeTerminalEncounter(): void {
     if (this.bossVictoryHandled || !this.supremeFinale || !this.pendingRoundPayload
       || !this.transitionBossFlow('combat', 'destruction')) return;
+    this.echo?.reset();
     const endToken = this.roundRuntime.requestEnd('completed');
     if (!endToken) return;
     this.captureEncounterCheckpoint('B_END_REQUESTED');
@@ -7650,6 +7657,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private triggerDefeat(reason: 'playerDead' | 'bombDefused'): void {
     if (this.state.state === RoundState.Defeat) return;
+    this.echo?.reset();
     const endToken = this.roundRuntime.requestEnd('defeated');
     if (!endToken) return;
     this.captureEncounterCheckpoint('B_END_REQUESTED');

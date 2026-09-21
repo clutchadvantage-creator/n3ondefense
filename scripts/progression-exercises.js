@@ -26,11 +26,35 @@ export async function createProgressionExercises({game, report, pad, wait, until
     }
   };
   game.events.on('step',defend);
+  const observedEcho = new WeakSet();
+  const driveEcho = () => {
+    const scene = game.scene.getScenes(true).find(s => s.echo && (s.scene.key === 'arena' || s.scene.key === 'anomaly-heist'));
+    const echo = scene?.echo, t = echo?.timeline;
+    if (t && !observedEcho.has(echo)) {
+      observedEcho.add(echo);
+      const original = t.host.event;
+      t.host.event = event => {
+        if (event === 'snap') {
+          (report.echoActivations ??= []).push({ scene: scene.scene.key, round: report.round, durationMs: t.durationMs,
+            shots: t.shotCount, samples: t.sampleCount, rejectedShots: t.rejectedShots });
+          coverage('echoReplay');
+        }
+        original(event);
+      };
+    }
+    const playing = t && !scene.manuallyPaused && !scene.inputCapturePaused && scene.state?.state !== 'Paused'
+      && !scene.returning && !scene.legendaryRevealInProgress && !scene.anomalyController?.blocksArenaGameplay
+      && (scene.scene.key !== 'arena' || scene.roundRuntime?.phase === 'active');
+    const down = Boolean(playing && (t.recording || (!pad.buttons[6].pressed && !t.replaying && t.cooldownMs === 0)));
+    pad.buttons[6].pressed = pad.buttons[6].touched = down; pad.buttons[6].value = Number(down);
+  };
+  if (report.options.includeEcho) game.events.on('step', driveEcho);
   return {
-    destroy(){game.events.off('step',defend);},
+    destroy(){game.events.off('step',defend);game.events.off('step',driveEcho);},
     setupProfile(protocol, initialHighestRound) {
       const result=SaveSystem.createProfile(`Progression ${Date.now().toString().slice(-7)}`);
       check(result.ok,'fresh isolated progression profile');
+      if (report.options.includeEcho) SaveSystem.setSettings({ abilityBindings: { ...SaveSystem.get().settings.abilityBindings, echo: 'Gamepad:6' } });
       // A late-round player has acknowledged contextual teaching. Otherwise a
       // fresh fixture correctly pauses for the first defuse/tutorial prompt.
       SaveSystem.updateTutorialProgress(p=>{

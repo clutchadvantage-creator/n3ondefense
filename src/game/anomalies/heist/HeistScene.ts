@@ -384,6 +384,7 @@ export class HeistScene extends Phaser.Scene {
       };
       debug.forceHeistReturn = (success = true) => {
         if (this.returning) return false;
+        this.echo?.reset();
         this.returning = true;
         this.phase = 'returning';
         this.returnToArena(success, success ? 'extracted' : 'player-dead');
@@ -407,6 +408,7 @@ export class HeistScene extends Phaser.Scene {
 
   private readonly onDevInstantReturn = (): void => {
     if (this.returning) return;
+    this.echo?.reset();
     this.returning = true;
     this.phase = 'returning';
     this.returnToArena(true, 'extracted');
@@ -928,7 +930,8 @@ export class HeistScene extends Phaser.Scene {
     const y = this.player.y + Math.sin(angle) * 14;
     if (this.echo?.timeline.recording) this.echo.timeline.recordShot({ x, y, angle, mode: ammoMode,
       speed: this.player.weapon.projectileSpeed, damage, critical, ricochets, grenadeSequence: this.grenadeProjectileSequence,
-      texture: this.projectileTextureKey, width: this.projectileWidth, height: this.projectileHeight });
+      texture: this.projectileTextureKey, width: this.projectileWidth, height: this.projectileHeight,
+      nativePalette: ammoMode === 'normal' && this.projectileNativePalette });
     if (ammoMode === 'scattershot') {
       for (const offset of SCATTERSHOT_ANGLE_OFFSETS) {
         this.spawnPlayerAmmoProjectile(ammoMode, x, y, angle + offset, damage, projectileColor, trailColor, critical, ricochets);
@@ -1091,7 +1094,7 @@ export class HeistScene extends Phaser.Scene {
       tint, rotation: angle, velocityX: Math.cos(angle) * speed, velocityY: Math.sin(angle) * speed,
       damage: damage * (scatter ? TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier : 1) * (echoShot ? echoMultiplier : 1),
       echo: echoShot ? stampEchoDamage(damage * (scatter ? TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier : 1), echoMultiplier) : undefined,
-      nativePalette: echoShot ? false : undefined,
+      nativePalette: echoShot?.nativePalette,
       lifeMs: grenade ? TEMPORARY_AMMO_BALANCE.grenade.projectileLifetimeMs
         : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.projectileLifetimeMs : 950,
       trailColor, critical, ricochetsRemaining, ammoMode: mode, previousX: x, previousY: y,
@@ -2025,6 +2028,7 @@ export class HeistScene extends Phaser.Scene {
 
   private completeHeist(): void {
     if (this.returning) return;
+    this.echo?.reset();
     this.returning = true;
     this.phase = 'returning';
     this.audio.play('portal-return');
@@ -2037,6 +2041,7 @@ export class HeistScene extends Phaser.Scene {
     if (this.returning) return;
     this.trapSystem?.clearFireExposure();
     this.projectileImpactVfx.reset();
+    this.echo?.reset();
     this.returning = true;
     this.phase = 'returning';
     this.audio.play('heist-failed');
@@ -2227,6 +2232,7 @@ export class HeistScene extends Phaser.Scene {
       { label: 'Abort Heist // Return To Arena', tone: 'warning', onClick: () => {
         this.pauseMenu?.destroy();
         this.pauseMenu = null;
+        this.echo?.reset();
         this.returning = true;
         this.returnToArena(false, 'scene-shutdown');
       } }

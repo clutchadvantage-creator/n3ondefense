@@ -10,9 +10,9 @@ export function stampEchoDamage(equivalentDamage: number, multiplier: number): E
   return Object.freeze({ equivalentDamage: Math.max(0, finite(equivalentDamage)), multiplier: echoMultiplier(multiplier) });
 }
 /** Called at the final health-write boundary. Unknown/missing provenance fails closed. */
-export function authoritativeEchoDamage(requested: number, stamp?: EchoDamageStamp, scale = 1): number {
+export function authoritativeEchoDamage(requested: number, stamp?: EchoDamageStamp): number {
   if (!stamp) return 0;
-  return Math.max(0, Math.min(finite(requested), finite(stamp.equivalentDamage) * Math.max(0, finite(scale)) * echoMultiplier(stamp.multiplier)));
+  return Math.max(0, Math.min(finite(requested), finite(stamp.equivalentDamage) * echoMultiplier(stamp.multiplier)));
 }
 export function normalizeEchoConfig(config: Partial<EchoConfig> = {}): EchoConfig {
   return { recordingMs: Math.max(1, Math.min(ECHO_BALANCE.recordingMs, finite(config.recordingMs ?? ECHO_BALANCE.recordingMs))),

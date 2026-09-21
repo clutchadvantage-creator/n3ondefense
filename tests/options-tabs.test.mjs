@@ -73,12 +73,12 @@ test('existing Options controls are retained and routed to their logical tabs', 
   assert.match(systemTab, /this\.feedbackReportUi\?\.open\(\)/);
 });
 
-test('button jiggle is profile-backed and the keybind reset occupies the empty final grid cell', () => {
+test('button jiggle is profile-backed and reset sits below all six ability bindings', () => {
   const keybindPanel = methodSource('createKeybindPanel', 'beginBindingCapture');
   assert.match(options, /SaveSystem\.setSettings\(\{ buttonJiggle \}\)/);
   assert.match(options, /'BUTTON JIGGLE'[\s\S]*?buttonJiggle, 0, 1/);
-  assert.match(keybindPanel, /const panelHeight = 260/);
-  assert.match(keybindPanel, /const resetY = topY \+ 206/);
+  assert.match(keybindPanel, /const panelHeight = 300/);
+  assert.match(keybindPanel, /const resetY = topY \+ 250/);
   assert.doesNotMatch(keybindPanel, /this\.viewport\.bottom - topY/);
 });
 

@@ -164,6 +164,7 @@ export class OptionsScene extends Phaser.Scene {
     this.resetTransientUiState();
     this.resizePending = false;
     configureSceneUiNavigation(this, {
+      inputCaptured: () => this.cancelBindingCapture !== null,
       onBack: () => this.handleEscReturn(),
       onTabLeft: () => this.cycleOptionsTab(-1),
       onTabRight: () => this.cycleOptionsTab(1),
@@ -957,7 +958,7 @@ export class OptionsScene extends Phaser.Scene {
       fontFamily: 'Orbitron, sans-serif', fontSize: '21px', color: '#69f4ff'
     }).setOrigin(0.5));
 
-    const status = this.add.text(centerX, topY + 59, 'Select a binding, then press a key or mouse button. WASD, E, Esc, F8, and primary fire are reserved.', {
+    const status = this.add.text(centerX, topY + 59, 'Select a binding, then press a key, mouse, or unused controller button. Core controls remain reserved.', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#a9cfe0', align: 'center', lineSpacing: 3,
       wordWrap: { width: panelWidth - 64, useAdvancedWrap: true }
     }).setOrigin(0.5, 0);
