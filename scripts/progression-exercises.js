@@ -45,7 +45,7 @@ export async function createProgressionExercises({game, report, pad, wait, until
     const playing = t && !scene.manuallyPaused && !scene.inputCapturePaused && scene.state?.state !== 'Paused'
       && !scene.returning && !scene.legendaryRevealInProgress && !scene.anomalyController?.blocksArenaGameplay
       && (scene.scene.key !== 'arena' || scene.roundRuntime?.phase === 'active');
-    const down = Boolean(playing && (t.recording || (!pad.buttons[6].pressed && !t.replaying && t.cooldownMs === 0)));
+    const down = Boolean(playing && !pad.buttons[6].pressed && !t.recording && !t.replaying && t.cooldownMs === 0);
     pad.buttons[6].pressed = pad.buttons[6].touched = down; pad.buttons[6].value = Number(down);
   };
   if (report.options.includeEcho) game.events.on('step', driveEcho);

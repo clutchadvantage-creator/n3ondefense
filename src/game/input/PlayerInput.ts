@@ -213,6 +213,9 @@ export class PlayerInput {
       if (this.bindings[action] === `Keyboard:${event.code}`) this.pendingPulses.add(action);
     }
   };
-  private readonly onKeyUp = (event: KeyboardEvent): void => { this.heldCodes.delete(event.code); };
+  private readonly onKeyUp = (event: KeyboardEvent): void => {
+    this.heldCodes.delete(event.code);
+    if (this.scene.sys.isActive() && ABILITY_ACTIONS.some(action => this.bindings[action] === `Keyboard:${event.code}`)) event.preventDefault();
+  };
   private readonly onBlur = (): void => { this.heldCodes.clear(); this.clear(); };
 }

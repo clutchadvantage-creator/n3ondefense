@@ -22,13 +22,13 @@
       arena.tutorialDirector?.destroy(); arena.tutorialDirector = null;
       await wait(150);
       key('AltRight', true); await wait(100); check(!arena.echo.timeline.recording, 'Right Alt does not activate default Echo'); key('AltRight', false);
-      key('AltLeft', true); await until(() => arena.echo.timeline.recording, 'Left Alt records');
+      key('AltLeft', true); await until(() => arena.echo.timeline.recording, 'Left Alt records'); key('AltLeft', false);
       const start = { x: arena.player.x, y: arena.player.y };
-      await wait(1000); key('AltLeft', false);
-      await until(() => arena.echo.timeline.replaying, 'Release snaps and replays');
-      check(arena.echo.timeline.durationMs >= 900 && arena.echo.timeline.durationMs < 1250, 'Real held input records one second', arena.echo.timeline.durationMs);
-      check(Math.hypot(arena.player.x - start.x, arena.player.y - start.y) < 1, 'Real release returns to origin');
-      check(arena.echo.timeline.cooldownMs > 11500, 'Live cooldown starts at release');
+      await wait(1000); check(arena.echo.timeline.recording, 'Recording continues after first tap is released'); key('AltLeft', true); await wait(30); key('AltLeft', false);
+      await until(() => arena.echo.timeline.replaying, 'Second press snaps and replays');
+      check(arena.echo.timeline.durationMs >= 900 && arena.echo.timeline.durationMs < 1250, 'Two real presses record one second', arena.echo.timeline.durationMs);
+      check(Math.hypot(arena.player.x - start.x, arena.player.y - start.y) < 1, 'Second press returns to origin');
+      check(arena.echo.timeline.cooldownMs > 11500, 'Live cooldown starts at second press');
       await until(() => !arena.echo.timeline.replaying, 'One-second replay completes');
       await wait(200); check(!arena.echo.root.visible && arena.echo.timeline.shotCount === 0, 'Hologram and recording clear after exit');
       arena.scene.pause();
@@ -41,6 +41,7 @@
           player.body.reset(safe.x + dx, safe.y + dy);
           echo.update(dt, { held: () => held, pressed: () => pressed, prompt: () => 'L ALT' }, scene.time.now);
         };
+        const finish = (dt, dx = 0, dy = 0) => { step(dt, false, false, dx, dy); step(0, true, true, dx, dy); };
         const clearProjectiles = () => {
           if (scene === arena) { for (const p of scene.projectiles) scene.retireProjectile(p); scene.projectiles.length = 0; }
           else for (let i = scene.projectiles.length - 1; i >= 0; i--) scene.retireProjectile(scene.projectiles[i], i);
@@ -63,7 +64,7 @@
         input.held = originalHeld; scene.temporaryAmmo.reset();
         const energy = player.energy, heat = player.heat;
         const deployables = [scene.mines.length, scene.fences.length, scene.turrets.length];
-        step(400, false, false, 12, 0);
+        finish(400, 12, 0);
         check(echo.timeline.replaying && echo.timeline.cooldownMs === 12000, label + ' snap starts replay and full cooldown');
         check(Math.hypot(player.x - safe.x, player.y - safe.y) < .01, label + ' body reset at origin');
         for (let i = 0; i < modes.length; i++) {
@@ -84,7 +85,7 @@
         const listeners = scene.events.listenerCount('shutdown'), roots = scene.children.list.length;
         const sampleReserve = echo.timeline.samples, weaponReserve = echo.timeline.shots;
         for (let i = 0; i < 100; i++) {
-          echo.reset(); step(0, false); step(0, true, true); step(100, false); step(300, false);
+          echo.reset(); step(0, false); step(0, true, true); finish(100); step(300, false);
         }
         check(scene.children.list.length === roots && scene.events.listenerCount('shutdown') === listeners, label + ' 100 cycles retain stable roots/listeners');
         check(echo.timeline.samples === sampleReserve && echo.timeline.shots === weaponReserve, label + ' 100 cycles reuse bounded buffers');
@@ -93,7 +94,7 @@
         check(echo.timeline.elapsedMs === elapsed, label + ' paused scene does not advance recording');
         const obstacle = scene.add.rectangle(safe.x, safe.y, 30, 30, 0xffffff, 0);
         scene.physics.add.existing(obstacle, true);
-        step(100, false, false, 70, 0);
+        finish(100, 70, 0);
         check(echo.timeline.replaying && echo.valid(player.x, player.y) && Math.hypot(player.x - safe.x, player.y - safe.y) > 25,
           label + ' new collision at origin selects nearby full-body safe return', { x: player.x - safe.x, y: player.y - safe.y });
         obstacle.destroy(); echo.reset(); player.body.reset(safe.x, safe.y);
@@ -150,7 +151,7 @@
         fire(now); input.held = originalHeld;
         const liveProjectile = scene.projectiles.at(-1);
         const footprint = [liveProjectile.sprite.body.sourceWidth, liveProjectile.sprite.body.sourceHeight];
-        clearProjectiles(); step(100, false);
+        clearProjectiles(); finish(100);
         const replayProjectile = scene.projectiles.find(p => p.echo);
         check(replayProjectile && replayProjectile.nativePalette && footprint[0] === replayProjectile.sprite.body.sourceWidth
           && footprint[1] === replayProjectile.sprite.body.sourceHeight, label + ' premium projectile collision footprint survives spectral tint');

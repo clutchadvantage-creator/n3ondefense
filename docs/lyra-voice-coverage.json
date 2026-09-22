@@ -1,0 +1,1496 @@
+{
+  "generatedAt": "2026-09-22T04:01:15.517Z",
+  "language": "en-US",
+  "registered": 62,
+  "recorded": 17,
+  "missingCount": 45,
+  "missing": [
+    {
+      "id": "warning.health",
+      "mode": "WARNING",
+      "scene": "context controlled",
+      "title": "warning.health",
+      "text": "Integrity critical. Move clear and recover health.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-warning-health.mp3"
+    },
+    {
+      "id": "warning.defuse",
+      "mode": "WARNING",
+      "scene": "context controlled",
+      "title": "warning.defuse",
+      "text": "Charge under disarm. Interrupt the defusers now.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-warning-defuse.mp3"
+    },
+    {
+      "id": "tactical.planted",
+      "mode": "TACTICAL",
+      "scene": "context controlled",
+      "title": "tactical.planted",
+      "text": "Charge armed. Hold this site and keep the defusers off it.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tactical-planted.mp3"
+    },
+    {
+      "id": "event.arcade.complete",
+      "mode": "EVENT",
+      "scene": [
+        "arena"
+      ],
+      "title": "event.arcade.complete",
+      "text": "Arcade objective complete. Rewards secured.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-event-arcade-complete.mp3"
+    },
+    {
+      "id": "event.arcade.failed",
+      "mode": "EVENT",
+      "scene": [
+        "arena"
+      ],
+      "title": "event.arcade.failed",
+      "text": "Arcade window closed. Return to the primary objective.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-event-arcade-failed.mp3"
+    },
+    {
+      "id": "context.pickup",
+      "mode": "GUIDANCE",
+      "scene": [
+        "arena"
+      ],
+      "title": "context.pickup",
+      "text": "Recovered supplies restore combat resources. Collect them when the approach is clear.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-pickup.mp3"
+    },
+    {
+      "id": "context.anomaly",
+      "mode": "GUIDANCE",
+      "scene": [
+        "arena"
+      ],
+      "title": "context.anomaly",
+      "text": "Anomaly access detected. Check the entry fee and extraction objective before committing.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-anomaly.mp3"
+    },
+    {
+      "id": "context.arcade",
+      "mode": "GUIDANCE",
+      "scene": [
+        "arena"
+      ],
+      "title": "context.arcade",
+      "text": "Arcade objective online. The notification console tracks your target and remaining time.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-arcade.mp3"
+    },
+    {
+      "id": "context.hazard",
+      "mode": "GUIDANCE",
+      "scene": [
+        "arena"
+      ],
+      "title": "context.hazard",
+      "text": "Security hazards are active. Watch their warning zones and move before they fire.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-hazard.mp3"
+    },
+    {
+      "id": "context.recalibration",
+      "mode": "GUIDANCE",
+      "scene": [
+        "garage"
+      ],
+      "title": "context.recalibration",
+      "text": "Recalibration rolls a replacement stat. Review the cost, then compare the candidate before applying it.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-recalibration.mp3"
+    },
+    {
+      "id": "context.infusion",
+      "mode": "GUIDANCE",
+      "scene": [
+        "mods"
+      ],
+      "title": "context.infusion",
+      "text": "Infusion changes this card’s visual finish. Review the appearance and resource cost before committing.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-infusion.mp3"
+    },
+    {
+      "id": "context.supreme",
+      "mode": "GUIDANCE",
+      "scene": [
+        "garage"
+      ],
+      "title": "context.supreme",
+      "text": "Supreme protocols are available. Inspect the requirements in Operations before deploying.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-supreme.mp3"
+    },
+    {
+      "id": "system.ready",
+      "mode": "SYSTEM",
+      "scene": [
+        "garage"
+      ],
+      "title": "system.ready",
+      "text": "Systems linked. I am LYRA. Let’s keep your next deployment productive.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-system-ready.mp3"
+    },
+    {
+      "id": "ambient.garage.1",
+      "mode": "AMBIENT",
+      "scene": [
+        "garage"
+      ],
+      "title": "ambient.garage.1",
+      "text": "A balanced loadout. A reassuring amount of engineering has gone into your survival.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-ambient-garage-1.mp3"
+    },
+    {
+      "id": "ambient.garage.2",
+      "mode": "AMBIENT",
+      "scene": [
+        "garage"
+      ],
+      "title": "ambient.garage.2",
+      "text": "Take your time. The arena has never complained about receiving a prepared operative.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-ambient-garage-2.mp3"
+    },
+    {
+      "id": "ambient.store.1",
+      "mode": "AMBIENT",
+      "scene": [
+        "upgrades"
+      ],
+      "title": "ambient.store.1",
+      "text": "Permanent upgrades. My preferred form of optimism.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-ambient-store-1.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.tactics.awareness",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "READ THE FIELD",
+      "text": "Systems checked. Watch each module?s readiness and the security warning zones. Keep your escape route open while defending.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-tactics-awareness.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.menu-store.store",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "STORE / UPGRADES",
+      "text": "Credits earned in the Arena persist between runs. Spend them on permanent upgrades that help your operative push farther. Click STORE to continue.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-menu-store-store.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.store.credits",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CREDITS PERSIST",
+      "text": "Credits earned during deployments remain in your wallet and fund permanent improvements.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-credits.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.store.card",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CHOOSE A SYSTEM",
+      "text": "Each upgrade module shows its current level, next improvement, and cost. Upgrades apply to future deployments.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-card.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.store.action",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "RETURN STRONGER",
+      "text": "Select and purchase upgrades when you are ready. Every permanent improvement helps your next run push farther.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-action.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.menu-garage.garage",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "OPERATOR GARAGE / MOD COLLECTION",
+      "text": "Mods recovered during runs can alter your build. Inspect and equip them through the Operator Garage and its Mod Collection station. Click OPERATOR GARAGE to continue.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-menu-garage-garage.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.garage.loadout",
+      "mode": "GUIDANCE",
+      "scene": "garage",
+      "title": "YOUR INSTALLED MODS",
+      "text": "These five docks show the Mods installed for your next deployment. Each slot accepts its matching category, while Utility can support flexible builds.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-garage-loadout.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.garage.mod-collection",
+      "mode": "GUIDANCE",
+      "scene": "garage",
+      "title": "OPEN MOD COLLECTION",
+      "text": "The Mod Collection is where recovered cards are inspected, upgraded, infused, equipped, or recycled. Click MOD COLLECTION to continue.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-garage-mod-collection.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.mod-collection.archive",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "RECOVERED MOD ARCHIVE",
+      "text": "Every Mod card recovered during a run appears in this archive. Rarity, rank, infusion, and duplicate status remain attached to the exact card.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-mod-collection-archive.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.mod-collection.details",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "INSPECT YOUR BUILD",
+      "text": "Select a card to read its complete effect and manage compatible loadout slots. New Mods create new ways to approach future rounds.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-mod-collection-details.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.mod-collection.complete",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "TEACHING COMPLETE",
+      "text": "Your workstation is ready. Keep earning Credits, improving Mods, adapting your build, and pushing farther.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-mod-collection-complete.mp3"
+    },
+    {
+      "id": "tutorial.context.first-mod.first-mod",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "MOD RECOVERED",
+      "text": "Mods are awarded immediately. Visit the Mod Collection to inspect, upgrade, infuse, and equip the exact card you found.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-context-first-mod-first-mod.mp3"
+    },
+    {
+      "id": "tutorial.context.corrupted-mod.corrupted",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "CORRUPTED MOD",
+      "text": "Corrupted Mods carry an exceptional advantage and a real drawback. Read both effects before installing one.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-context-corrupted-mod-corrupted.mp3"
+    },
+    {
+      "id": "tutorial.context.legendary-mod.legendary",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "LEGENDARY LOADOUT RULE",
+      "text": "Legendary Mods are extremely rare. Only one Legendary Mod may be equipped across the entire loadout.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-context-legendary-mod-legendary.mp3"
+    },
+    {
+      "id": "tutorial.context.first-defuse.defuse-alert",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "BOMB DEFUSE IN PROGRESS",
+      "text": "Enemies are actively disarming the highlighted bomb. Eliminate or interrupt every defuser before their progress completes. The red HUD alert, yellow caution icon, warning audio, and striped site perimeter remain active while the danger continues.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-context-first-defuse-defuse-alert.mp3"
+    },
+    {
+      "id": "tutorial.progression.mod-collection.archive",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "OWNED CARD ARCHIVE",
+      "text": "Every acquired copy appears here. Border color identifies rarity; the duplicate marker counts extra copies regardless of upgrade level.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-mod-collection-archive.mp3"
+    },
+    {
+      "id": "tutorial.progression.mod-collection.details",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "INSPECT & CONFIGURE",
+      "text": "The viewer shows the selected card's rank, infusion, category, and complete effect. Equip it to a compatible slot or the Utility/Wildcard dock.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-mod-collection-details.mp3"
+    },
+    {
+      "id": "tutorial.progression.mod-collection.equip",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "INSTALL A MOD",
+      "text": "Use a valid category slot or the Utility/Wildcard dock whenever you want to install the selected card into the real next-deployment loadout.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-mod-collection-equip.mp3"
+    },
+    {
+      "id": "tutorial.progression.mod-collection.upgrade",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "UPGRADE OR RECYCLE",
+      "text": "Upgrade favorite cards with the displayed currencies. Unupgraded duplicate copies can be recycled into Plasma Chips.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-mod-collection-upgrade.mp3"
+    },
+    {
+      "id": "tutorial.context.first-boss.boss",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "BOSS SIGNAL DETECTED",
+      "text": "The highlighted boss combines its complete attack kit with arena security. Read the telegraphs, preserve Energy, and keep moving.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-context-first-boss-boss.mp3"
+    },
+    {
+      "id": "tutorial.progression.store.store",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "RETURN STRONGER",
+      "text": "Credits survive failed deployments. Spend them in the Store on permanent upgrades, then deploy again.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-store-store.mp3"
+    },
+    {
+      "id": "tutorial.progression.upgrades.credits",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CREDITS",
+      "text": "This wallet value shows your Credits. Credits persist after every deployment and purchase permanent combat upgrades, cosmetics, and Mod improvements.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-upgrades-credits.mp3"
+    },
+    {
+      "id": "tutorial.progression.upgrades.core-tokens",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CORE TOKENS",
+      "text": "This wallet value shows Core Tokens, a persistent rare resource used by higher-rarity Mod upgrades and select unlocks.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-upgrades-core-tokens.mp3"
+    },
+    {
+      "id": "tutorial.progression.upgrades.card",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CHOOSE A SYSTEM",
+      "text": "Each highlighted module shows its current level, next improvement, and exact cost. Select one to inspect it.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-upgrades-card.mp3"
+    },
+    {
+      "id": "tutorial.progression.upgrades.purchase",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "INSTALL AN UPGRADE",
+      "text": "Try an available upgrade. A successful install persists across every future run; if funds are short, the Store shows the exact amount still needed.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-upgrades-purchase.mp3"
+    },
+    {
+      "id": "tutorial.progression.garage.garage",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "OPERATOR GARAGE",
+      "text": "Your Garage shows what is installed for the next deployment. Configure Mods, Signals, Contracts, cosmetics, and presets here.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-garage-garage.mp3"
+    },
+    {
+      "id": "tutorial.progression.garage-loadout.loadout",
+      "mode": "GUIDANCE",
+      "scene": "garage",
+      "title": "NEXT DEPLOYMENT LOADOUT",
+      "text": "These five highlighted docks contain the Mods installed for your next deployment. Browse or unequip cards independently by slot.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-garage-loadout-loadout.mp3"
+    },
+    {
+      "id": "tutorial.progression.garage-loadout.configuration",
+      "mode": "GUIDANCE",
+      "scene": "garage",
+      "title": "OPERATIONS CONFIGURATION",
+      "text": "This terminal opens Operations, where you choose an unlocked mode and starting checkpoint. Contracts, Signals, fees, and progression remain linked to the same next deployment.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-garage-loadout-configuration.mp3"
+    },
+    {
+      "id": "tutorial.progression.overdrive.overdrive",
+      "mode": "GUIDANCE",
+      "scene": "garage",
+      "title": "OVERDRIVE UNLOCKED",
+      "text": "This station opens Overdrive progression. Its constellation tiers let experienced operatives begin at later rounds after meeting each highest-round requirement.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-overdrive-overdrive.mp3"
+    }
+  ],
+  "variants": [
+    {
+      "id": "tutorial.onboarding.menu-welcome.start-local",
+      "kind": "action-unavailable",
+      "text": "Begin your first training run here.\n\nSTART LOCAL launches standard play without publishing your score to the online leaderboards.\n\nSelect START LOCAL when you’re ready, Operative. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.menu-resume-training.start-local",
+      "kind": "action-unavailable",
+      "text": "Arena training is still in progress.\n\nSelect START LOCAL to resume your training deployment. I kept everything exactly where you left it. Mostly. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.basic-controls.move",
+      "kind": "controller",
+      "families": [
+        "xbox",
+        "playstation",
+        "generic"
+      ],
+      "text": "Use LEFT STICK to move.\n\nA stationary operative makes an exceptionally convenient target. The security systems appreciate your cooperation."
+    },
+    {
+      "id": "tutorial.onboarding.basic-controls.move",
+      "kind": "action-unavailable",
+      "text": "Use W, A, S, and D to move.\n\nA stationary operative makes an exceptionally convenient target. The security systems appreciate your cooperation. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.basic-controls.aim",
+      "kind": "controller",
+      "families": [
+        "xbox",
+        "playstation",
+        "generic"
+      ],
+      "text": "Neural link established. Motor control appears functional.\n\n...Encouraging.\n\nUse the RIGHT STICK to aim toward your reticle. Movement and targeting operate independently."
+    },
+    {
+      "id": "tutorial.onboarding.basic-controls.aim",
+      "kind": "action-unavailable",
+      "text": "Neural link established. Motor control appears functional.\n\n...Encouraging.\n\nUse the MOUSE to aim toward your reticle. Movement and targeting operate independently. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.basic-controls.fire",
+      "kind": "controller",
+      "families": [
+        "xbox"
+      ],
+      "text": "Targeting link confirmed.\n\nPress RT to fire.\n\nRemember: your weapon consumes energy, Operative. Accuracy is considerably cheaper than panic."
+    },
+    {
+      "id": "tutorial.onboarding.basic-controls.fire",
+      "kind": "controller",
+      "families": [
+        "playstation",
+        "generic"
+      ],
+      "text": "Targeting link confirmed.\n\nPress R2 to fire.\n\nRemember: your weapon consumes energy, Operative. Accuracy is considerably cheaper than panic."
+    },
+    {
+      "id": "tutorial.onboarding.basic-controls.fire",
+      "kind": "action-unavailable",
+      "text": "Targeting link confirmed.\n\nPress LEFT MOUSE BUTTON to fire.\n\nRemember: your weapon consumes energy, Operative. Accuracy is considerably cheaper than panic. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.defense.bombsite",
+      "kind": "controller",
+      "families": [
+        "xbox"
+      ],
+      "text": "Move into the available bombsite and hold A to plant the charge.\n\nOnce armed, defend it until detonation.\n\nAnd when the timer reaches zero, I recommend being somewhere else. The cleanup drones have already filed several complaints."
+    },
+    {
+      "id": "tutorial.onboarding.defense.bombsite",
+      "kind": "controller",
+      "families": [
+        "playstation"
+      ],
+      "text": "Move into the available bombsite and hold CROSS to plant the charge.\n\nOnce armed, defend it until detonation.\n\nAnd when the timer reaches zero, I recommend being somewhere else. The cleanup drones have already filed several complaints."
+    },
+    {
+      "id": "tutorial.onboarding.defense.bombsite",
+      "kind": "controller",
+      "families": [
+        "generic"
+      ],
+      "text": "Move into the available bombsite and hold SOUTH to plant the charge.\n\nOnce armed, defend it until detonation.\n\nAnd when the timer reaches zero, I recommend being somewhere else. The cleanup drones have already filed several complaints."
+    },
+    {
+      "id": "tutorial.onboarding.defense.bombsite",
+      "kind": "action-unavailable",
+      "text": "Move into the available bombsite and hold E to plant the charge.\n\nOnce armed, defend it until detonation.\n\nAnd when the timer reaches zero, I recommend being somewhere else. The cleanup drones have already filed several complaints. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.defense.enemy",
+      "kind": "action-unavailable",
+      "text": "Charge armed.\n\nEngage a hostile and confirm weapons contact.\n\nEnemies may attempt to disarm the device. Stop them before they succeed, then defend the charge until detonation. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.shield",
+      "kind": "controller",
+      "families": [
+        "xbox"
+      ],
+      "text": "Operative, let’s improve your chances of surviving this.\n\nPress RB to activate your SHIELD.\n\nShielding consumes energy and requires time to recharge before it can be activated again.\n\nUse it deliberately. These operative frames are not what RWG would describe as... disposable."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.shield",
+      "kind": "controller",
+      "families": [
+        "playstation",
+        "generic"
+      ],
+      "text": "Operative, let’s improve your chances of surviving this.\n\nPress R1 to activate your SHIELD.\n\nShielding consumes energy and requires time to recharge before it can be activated again.\n\nUse it deliberately. These operative frames are not what RWG would describe as... disposable."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.shield",
+      "kind": "rebound-key-template",
+      "text": "Operative, let’s improve your chances of surviving this.\n\nPress {SHIELD} to activate your SHIELD.\n\nShielding consumes energy and requires time to recharge before it can be activated again.\n\nUse it deliberately. These operative frames are not what RWG would describe as... disposable."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.shield",
+      "kind": "action-unavailable",
+      "text": "Operative, let’s improve your chances of surviving this.\n\nPress MIDDLE MOUSE BUTTON to activate your SHIELD.\n\nShielding consumes energy and requires time to recharge before it can be activated again.\n\nUse it deliberately. These operative frames are not what RWG would describe as... disposable. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.dash",
+      "kind": "controller",
+      "families": [
+        "xbox"
+      ],
+      "text": "RWG has provided several additional methods of keeping you alive, including the DASH system.\n\nPress LB to surge toward your current aim direction.\n\nDashing — as you may have suspected — consumes energy and has a cooldown.\n\nYour survival will depend heavily on managing Health, Energy, movement, and timing. Preferably all four simultaneously."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.dash",
+      "kind": "controller",
+      "families": [
+        "playstation",
+        "generic"
+      ],
+      "text": "RWG has provided several additional methods of keeping you alive, including the DASH system.\n\nPress L1 to surge toward your current aim direction.\n\nDashing — as you may have suspected — consumes energy and has a cooldown.\n\nYour survival will depend heavily on managing Health, Energy, movement, and timing. Preferably all four simultaneously."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.dash",
+      "kind": "rebound-key-template",
+      "text": "RWG has provided several additional methods of keeping you alive, including the DASH system.\n\nPress {DASH} to surge toward your current aim direction.\n\nDashing — as you may have suspected — consumes energy and has a cooldown.\n\nYour survival will depend heavily on managing Health, Energy, movement, and timing. Preferably all four simultaneously."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.dash",
+      "kind": "action-unavailable",
+      "text": "RWG has provided several additional methods of keeping you alive, including the DASH system.\n\nPress SPACE BAR to surge toward your current aim direction.\n\nDashing — as you may have suspected — consumes energy and has a cooldown.\n\nYour survival will depend heavily on managing Health, Energy, movement, and timing. Preferably all four simultaneously. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.mine",
+      "kind": "controller",
+      "families": [
+        "xbox"
+      ],
+      "text": "The highlighted HUD module represents your MINE RACK.\n\nMine rack online. Charges are limited, so placement matters.\n\nAim at a valid location and press B to deploy a mine.\n\nRWG reminds all operatives that it accepts no liability for improper placement, accidental detonation, personal injury, or death.\n\nA remarkably comprehensive waiver."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.mine",
+      "kind": "controller",
+      "families": [
+        "playstation"
+      ],
+      "text": "The highlighted HUD module represents your MINE RACK.\n\nMine rack online. Charges are limited, so placement matters.\n\nAim at a valid location and press CIRCLE to deploy a mine.\n\nRWG reminds all operatives that it accepts no liability for improper placement, accidental detonation, personal injury, or death.\n\nA remarkably comprehensive waiver."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.mine",
+      "kind": "controller",
+      "families": [
+        "generic"
+      ],
+      "text": "The highlighted HUD module represents your MINE RACK.\n\nMine rack online. Charges are limited, so placement matters.\n\nAim at a valid location and press EAST to deploy a mine.\n\nRWG reminds all operatives that it accepts no liability for improper placement, accidental detonation, personal injury, or death.\n\nA remarkably comprehensive waiver."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.mine",
+      "kind": "rebound-key-template",
+      "text": "The highlighted HUD module represents your MINE RACK.\n\nMine rack online. Charges are limited, so placement matters.\n\nAim at a valid location and press {MINE} to deploy a mine.\n\nRWG reminds all operatives that it accepts no liability for improper placement, accidental detonation, personal injury, or death.\n\nA remarkably comprehensive waiver."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.mine",
+      "kind": "action-unavailable",
+      "text": "The highlighted HUD module represents your MINE RACK.\n\nMine rack online. Charges are limited, so placement matters.\n\nAim at a valid location and press R to deploy a mine.\n\nRWG reminds all operatives that it accepts no liability for improper placement, accidental detonation, personal injury, or death.\n\nA remarkably comprehensive waiver. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.fence",
+      "kind": "controller",
+      "families": [
+        "xbox"
+      ],
+      "text": "Press X to deploy an electric fence.\n\nFences can slow enemies and temporarily restrict their movement.\n\nR&D also recommends firing through active fences. Their report describes the resulting effect as, quote, “wondrous.”\n\nI requested a more technical explanation. None was provided. Use your discretion, Operative."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.fence",
+      "kind": "controller",
+      "families": [
+        "playstation"
+      ],
+      "text": "Press SQUARE to deploy an electric fence.\n\nFences can slow enemies and temporarily restrict their movement.\n\nR&D also recommends firing through active fences. Their report describes the resulting effect as, quote, “wondrous.”\n\nI requested a more technical explanation. None was provided. Use your discretion, Operative."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.fence",
+      "kind": "controller",
+      "families": [
+        "generic"
+      ],
+      "text": "Press WEST to deploy an electric fence.\n\nFences can slow enemies and temporarily restrict their movement.\n\nR&D also recommends firing through active fences. Their report describes the resulting effect as, quote, “wondrous.”\n\nI requested a more technical explanation. None was provided. Use your discretion, Operative."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.fence",
+      "kind": "rebound-key-template",
+      "text": "Press {FENCE} to deploy an electric fence.\n\nFences can slow enemies and temporarily restrict their movement.\n\nR&D also recommends firing through active fences. Their report describes the resulting effect as, quote, “wondrous.”\n\nI requested a more technical explanation. None was provided. Use your discretion, Operative."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.fence",
+      "kind": "action-unavailable",
+      "text": "Press Q to deploy an electric fence.\n\nFences can slow enemies and temporarily restrict their movement.\n\nR&D also recommends firing through active fences. Their report describes the resulting effect as, quote, “wondrous.”\n\nI requested a more technical explanation. None was provided. Use your discretion, Operative. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.turret",
+      "kind": "controller",
+      "families": [
+        "xbox"
+      ],
+      "text": "Press Y to deploy RWG’s latest personal-security platform: an automated turret.\n\nTurrets can defend territory while you attend to other threats.\n\nConsider them temporary arena partners. Being everywhere at once is difficult.\n\nThey seem less troubled by the limitation."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.turret",
+      "kind": "controller",
+      "families": [
+        "playstation"
+      ],
+      "text": "Press TRIANGLE to deploy RWG’s latest personal-security platform: an automated turret.\n\nTurrets can defend territory while you attend to other threats.\n\nConsider them temporary arena partners. Being everywhere at once is difficult.\n\nThey seem less troubled by the limitation."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.turret",
+      "kind": "controller",
+      "families": [
+        "generic"
+      ],
+      "text": "Press NORTH to deploy RWG’s latest personal-security platform: an automated turret.\n\nTurrets can defend territory while you attend to other threats.\n\nConsider them temporary arena partners. Being everywhere at once is difficult.\n\nThey seem less troubled by the limitation."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.turret",
+      "kind": "rebound-key-template",
+      "text": "Press {TURRET} to deploy RWG’s latest personal-security platform: an automated turret.\n\nTurrets can defend territory while you attend to other threats.\n\nConsider them temporary arena partners. Being everywhere at once is difficult.\n\nThey seem less troubled by the limitation."
+    },
+    {
+      "id": "tutorial.onboarding.tactics.turret",
+      "kind": "action-unavailable",
+      "text": "Press F to deploy RWG’s latest personal-security platform: an automated turret.\n\nTurrets can defend territory while you attend to other threats.\n\nConsider them temporary arena partners. Being everywhere at once is difficult.\n\nThey seem less troubled by the limitation. This action is not currently available; continue when ready."
+    }
+  ],
+  "entries": [
+    {
+      "id": "warning.health",
+      "mode": "WARNING",
+      "scene": "context controlled",
+      "title": "warning.health",
+      "text": "Integrity critical. Move clear and recover health.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-warning-health.mp3"
+    },
+    {
+      "id": "warning.defuse",
+      "mode": "WARNING",
+      "scene": "context controlled",
+      "title": "warning.defuse",
+      "text": "Charge under disarm. Interrupt the defusers now.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-warning-defuse.mp3"
+    },
+    {
+      "id": "tactical.planted",
+      "mode": "TACTICAL",
+      "scene": "context controlled",
+      "title": "tactical.planted",
+      "text": "Charge armed. Hold this site and keep the defusers off it.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tactical-planted.mp3"
+    },
+    {
+      "id": "event.arcade.complete",
+      "mode": "EVENT",
+      "scene": [
+        "arena"
+      ],
+      "title": "event.arcade.complete",
+      "text": "Arcade objective complete. Rewards secured.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-event-arcade-complete.mp3"
+    },
+    {
+      "id": "event.arcade.failed",
+      "mode": "EVENT",
+      "scene": [
+        "arena"
+      ],
+      "title": "event.arcade.failed",
+      "text": "Arcade window closed. Return to the primary objective.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-event-arcade-failed.mp3"
+    },
+    {
+      "id": "context.pickup",
+      "mode": "GUIDANCE",
+      "scene": [
+        "arena"
+      ],
+      "title": "context.pickup",
+      "text": "Recovered supplies restore combat resources. Collect them when the approach is clear.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-pickup.mp3"
+    },
+    {
+      "id": "context.anomaly",
+      "mode": "GUIDANCE",
+      "scene": [
+        "arena"
+      ],
+      "title": "context.anomaly",
+      "text": "Anomaly access detected. Check the entry fee and extraction objective before committing.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-anomaly.mp3"
+    },
+    {
+      "id": "context.arcade",
+      "mode": "GUIDANCE",
+      "scene": [
+        "arena"
+      ],
+      "title": "context.arcade",
+      "text": "Arcade objective online. The notification console tracks your target and remaining time.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-arcade.mp3"
+    },
+    {
+      "id": "context.hazard",
+      "mode": "GUIDANCE",
+      "scene": [
+        "arena"
+      ],
+      "title": "context.hazard",
+      "text": "Security hazards are active. Watch their warning zones and move before they fire.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-hazard.mp3"
+    },
+    {
+      "id": "context.recalibration",
+      "mode": "GUIDANCE",
+      "scene": [
+        "garage"
+      ],
+      "title": "context.recalibration",
+      "text": "Recalibration rolls a replacement stat. Review the cost, then compare the candidate before applying it.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-recalibration.mp3"
+    },
+    {
+      "id": "context.infusion",
+      "mode": "GUIDANCE",
+      "scene": [
+        "mods"
+      ],
+      "title": "context.infusion",
+      "text": "Infusion changes this card’s visual finish. Review the appearance and resource cost before committing.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-infusion.mp3"
+    },
+    {
+      "id": "context.supreme",
+      "mode": "GUIDANCE",
+      "scene": [
+        "garage"
+      ],
+      "title": "context.supreme",
+      "text": "Supreme protocols are available. Inspect the requirements in Operations before deploying.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-context-supreme.mp3"
+    },
+    {
+      "id": "system.ready",
+      "mode": "SYSTEM",
+      "scene": [
+        "garage"
+      ],
+      "title": "system.ready",
+      "text": "Systems linked. I am LYRA. Let’s keep your next deployment productive.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-system-ready.mp3"
+    },
+    {
+      "id": "ambient.garage.1",
+      "mode": "AMBIENT",
+      "scene": [
+        "garage"
+      ],
+      "title": "ambient.garage.1",
+      "text": "A balanced loadout. A reassuring amount of engineering has gone into your survival.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-ambient-garage-1.mp3"
+    },
+    {
+      "id": "ambient.garage.2",
+      "mode": "AMBIENT",
+      "scene": [
+        "garage"
+      ],
+      "title": "ambient.garage.2",
+      "text": "Take your time. The arena has never complained about receiving a prepared operative.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-ambient-garage-2.mp3"
+    },
+    {
+      "id": "ambient.store.1",
+      "mode": "AMBIENT",
+      "scene": [
+        "upgrades"
+      ],
+      "title": "ambient.store.1",
+      "text": "Permanent upgrades. My preferred form of optimism.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-ambient-store-1.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.menu-welcome.welcome",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "WELCOME TO THE ARENA, OPERATIVE!",
+      "text": "Welcome, Operative. I am LYRA — your Tactical Systems Intelligence Assistant. TSIA, if brevity becomes necessary. It usually does.\n\nBeginning RWG-recommended training and systems calibration.\n\nWe’ll start with movement, then proceed to arming and defending a planted charge.\n\nI’ll remain on comms. You handle the shooting. I find our arrangement considerably safer that way.",
+      "file": "lyrawelcome.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyrawelcome.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.menu-welcome.advanced-preview",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "ADVANCED OPERATIONS // FIELD RECORDING",
+      "text": "Operative... this is a preview of Supreme Operations.\n\nThis is where your training eventually leads. The arena is considerably less forgiving by then.\n\nTry to keep up.\n\nDon’t worry. We’ll begin somewhere significantly less suicidal.",
+      "file": "lyrasupremepreview.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyrasupremepreview.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.menu-welcome.start-local",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "START LOCAL",
+      "text": "Begin your first training run here.\n\nSTART LOCAL launches standard play without publishing your score to the online leaderboards.\n\nSelect START LOCAL when you’re ready, Operative.",
+      "file": "lyrastartlocal.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyrastartlocal.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.menu-resume-training.start-local",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "RETURN TO LOCAL TRAINING",
+      "text": "Arena training is still in progress.\n\nSelect START LOCAL to resume your training deployment. I kept everything exactly where you left it. Mostly.",
+      "file": "lyrareturntotraining.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyrareturntotraining.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.basic-controls.welcome",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "WELCOME, OPERATIVE",
+      "text": "LYRA online.\n\nThis is a live deployment exercise. We’ll begin with movement and weapons calibration.\n\nContinue when you’re ready, Operative.",
+      "file": "lyraenteringarena.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyraenteringarena.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.basic-controls.move",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "MOVE YOUR OPERATIVE",
+      "text": "Use W, A, S, and D to move.\n\nA stationary operative makes an exceptionally convenient target. The security systems appreciate your cooperation.",
+      "file": "lyramovement.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyramovement.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.basic-controls.aim",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "AIM AT THREATS",
+      "text": "Neural link established. Motor control appears functional.\n\n...Encouraging.\n\nUse the MOUSE to aim toward your reticle. Movement and targeting operate independently.",
+      "file": "lyraaiming.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyraaiming.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.basic-controls.fire",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "FIRE YOUR WEAPON",
+      "text": "Targeting link confirmed.\n\nPress LEFT MOUSE BUTTON to fire.\n\nRemember: your weapon consumes energy, Operative. Accuracy is considerably cheaper than panic.",
+      "file": "lyrafiring.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyrafiring.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.defense.bombsite",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "ARM THE CHARGE",
+      "text": "Move into the available bombsite and hold E to plant the charge.\n\nOnce armed, defend it until detonation.\n\nAnd when the timer reaches zero, I recommend being somewhere else. The cleanup drones have already filed several complaints.",
+      "file": "lyraplantingcharge.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyraplantingcharge.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.defense.enemy",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "HOSTILE CONTACT",
+      "text": "Charge armed.\n\nEngage a hostile and confirm weapons contact.\n\nEnemies may attempt to disarm the device. Stop them before they succeed, then defend the charge until detonation.",
+      "file": "lyrafirstcombatdefusers.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyrafirstcombatdefusers.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.hud.vitals",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "OPERATIVE VITALS",
+      "text": "Weapons confirmed.\n\nRed represents Health. Cyan represents Energy.\n\nCollect the corresponding pickups when either becomes depleted. I strongly recommend maintaining both.",
+      "file": "lyrahealthenergy.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyrahealthenergy.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.tactics.shield",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "RAISE YOUR SHIELD",
+      "text": "Operative, let’s improve your chances of surviving this.\n\nPress MIDDLE MOUSE BUTTON to activate your SHIELD.\n\nShielding consumes energy and requires time to recharge before it can be activated again.\n\nUse it deliberately. These operative frames are not what RWG would describe as... disposable.",
+      "file": "lyrashield.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyrashield.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.tactics.dash",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "DASH THROUGH DANGER",
+      "text": "RWG has provided several additional methods of keeping you alive, including the DASH system.\n\nPress SPACE BAR to surge toward your current aim direction.\n\nDashing — as you may have suspected — consumes energy and has a cooldown.\n\nYour survival will depend heavily on managing Health, Energy, movement, and timing. Preferably all four simultaneously.",
+      "file": "lyradash.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyradash.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.tactics.mine",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "DEPLOY A MINE",
+      "text": "The highlighted HUD module represents your MINE RACK.\n\nMine rack online. Charges are limited, so placement matters.\n\nAim at a valid location and press R to deploy a mine.\n\nRWG reminds all operatives that it accepts no liability for improper placement, accidental detonation, personal injury, or death.\n\nA remarkably comprehensive waiver.",
+      "file": "lyramines.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyramines.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.tactics.fence",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "BUILD A FENCE",
+      "text": "Press Q to deploy an electric fence.\n\nFences can slow enemies and temporarily restrict their movement.\n\nR&D also recommends firing through active fences. Their report describes the resulting effect as, quote, “wondrous.”\n\nI requested a more technical explanation. None was provided. Use your discretion, Operative.",
+      "file": "lyraelectricfences.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyraelectricfences.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.tactics.turret",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "DEPLOY A TURRET",
+      "text": "Press F to deploy RWG’s latest personal-security platform: an automated turret.\n\nTurrets can defend territory while you attend to other threats.\n\nConsider them temporary arena partners. Being everywhere at once is difficult.\n\nThey seem less troubled by the limitation.",
+      "file": "lyraturrets.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyraturrets.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.tactics.awareness",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "READ THE FIELD",
+      "text": "Systems checked. Watch each module?s readiness and the security warning zones. Keep your escape route open while defending.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-tactics-awareness.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.certification.release",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "YOU HAVE THE FIELD",
+      "text": "Systems calibrated.\n\nMonitor the readiness and cooldown state of your defensive modules during combat.\n\nRWG Training Manual, Entry 47-A — Mobility and Survival — recommends remaining mobile, managing your resources, and collecting available pickups whenever conditions allow.\n\nFor once, the manual is correct.\n\nTraining calibration complete.\n\nGood luck, Operative.\n\nLYRA standing by.",
+      "file": "lyratrainingcomplete.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "lyratrainingcomplete.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.menu-store.store",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "STORE / UPGRADES",
+      "text": "Credits earned in the Arena persist between runs. Spend them on permanent upgrades that help your operative push farther. Click STORE to continue.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-menu-store-store.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.store.credits",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CREDITS PERSIST",
+      "text": "Credits earned during deployments remain in your wallet and fund permanent improvements.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-credits.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.store.card",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CHOOSE A SYSTEM",
+      "text": "Each upgrade module shows its current level, next improvement, and cost. Upgrades apply to future deployments.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-card.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.store.action",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "RETURN STRONGER",
+      "text": "Select and purchase upgrades when you are ready. Every permanent improvement helps your next run push farther.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-action.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.menu-garage.garage",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "OPERATOR GARAGE / MOD COLLECTION",
+      "text": "Mods recovered during runs can alter your build. Inspect and equip them through the Operator Garage and its Mod Collection station. Click OPERATOR GARAGE to continue.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-menu-garage-garage.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.garage.loadout",
+      "mode": "GUIDANCE",
+      "scene": "garage",
+      "title": "YOUR INSTALLED MODS",
+      "text": "These five docks show the Mods installed for your next deployment. Each slot accepts its matching category, while Utility can support flexible builds.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-garage-loadout.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.garage.mod-collection",
+      "mode": "GUIDANCE",
+      "scene": "garage",
+      "title": "OPEN MOD COLLECTION",
+      "text": "The Mod Collection is where recovered cards are inspected, upgraded, infused, equipped, or recycled. Click MOD COLLECTION to continue.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-garage-mod-collection.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.mod-collection.archive",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "RECOVERED MOD ARCHIVE",
+      "text": "Every Mod card recovered during a run appears in this archive. Rarity, rank, infusion, and duplicate status remain attached to the exact card.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-mod-collection-archive.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.mod-collection.details",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "INSPECT YOUR BUILD",
+      "text": "Select a card to read its complete effect and manage compatible loadout slots. New Mods create new ways to approach future rounds.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-mod-collection-details.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.mod-collection.complete",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "TEACHING COMPLETE",
+      "text": "Your workstation is ready. Keep earning Credits, improving Mods, adapting your build, and pushing farther.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-mod-collection-complete.mp3"
+    },
+    {
+      "id": "tutorial.context.first-mod.first-mod",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "MOD RECOVERED",
+      "text": "Mods are awarded immediately. Visit the Mod Collection to inspect, upgrade, infuse, and equip the exact card you found.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-context-first-mod-first-mod.mp3"
+    },
+    {
+      "id": "tutorial.context.corrupted-mod.corrupted",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "CORRUPTED MOD",
+      "text": "Corrupted Mods carry an exceptional advantage and a real drawback. Read both effects before installing one.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-context-corrupted-mod-corrupted.mp3"
+    },
+    {
+      "id": "tutorial.context.legendary-mod.legendary",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "LEGENDARY LOADOUT RULE",
+      "text": "Legendary Mods are extremely rare. Only one Legendary Mod may be equipped across the entire loadout.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-context-legendary-mod-legendary.mp3"
+    },
+    {
+      "id": "tutorial.context.first-defuse.defuse-alert",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "BOMB DEFUSE IN PROGRESS",
+      "text": "Enemies are actively disarming the highlighted bomb. Eliminate or interrupt every defuser before their progress completes. The red HUD alert, yellow caution icon, warning audio, and striped site perimeter remain active while the danger continues.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-context-first-defuse-defuse-alert.mp3"
+    },
+    {
+      "id": "tutorial.progression.mod-collection.archive",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "OWNED CARD ARCHIVE",
+      "text": "Every acquired copy appears here. Border color identifies rarity; the duplicate marker counts extra copies regardless of upgrade level.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-mod-collection-archive.mp3"
+    },
+    {
+      "id": "tutorial.progression.mod-collection.details",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "INSPECT & CONFIGURE",
+      "text": "The viewer shows the selected card's rank, infusion, category, and complete effect. Equip it to a compatible slot or the Utility/Wildcard dock.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-mod-collection-details.mp3"
+    },
+    {
+      "id": "tutorial.progression.mod-collection.equip",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "INSTALL A MOD",
+      "text": "Use a valid category slot or the Utility/Wildcard dock whenever you want to install the selected card into the real next-deployment loadout.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-mod-collection-equip.mp3"
+    },
+    {
+      "id": "tutorial.progression.mod-collection.upgrade",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "UPGRADE OR RECYCLE",
+      "text": "Upgrade favorite cards with the displayed currencies. Unupgraded duplicate copies can be recycled into Plasma Chips.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-mod-collection-upgrade.mp3"
+    },
+    {
+      "id": "tutorial.context.first-boss.boss",
+      "mode": "GUIDANCE",
+      "scene": "arena",
+      "title": "BOSS SIGNAL DETECTED",
+      "text": "The highlighted boss combines its complete attack kit with arena security. Read the telegraphs, preserve Energy, and keep moving.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-context-first-boss-boss.mp3"
+    },
+    {
+      "id": "tutorial.progression.store.store",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "RETURN STRONGER",
+      "text": "Credits survive failed deployments. Spend them in the Store on permanent upgrades, then deploy again.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-store-store.mp3"
+    },
+    {
+      "id": "tutorial.progression.upgrades.credits",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CREDITS",
+      "text": "This wallet value shows your Credits. Credits persist after every deployment and purchase permanent combat upgrades, cosmetics, and Mod improvements.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-upgrades-credits.mp3"
+    },
+    {
+      "id": "tutorial.progression.upgrades.core-tokens",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CORE TOKENS",
+      "text": "This wallet value shows Core Tokens, a persistent rare resource used by higher-rarity Mod upgrades and select unlocks.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-upgrades-core-tokens.mp3"
+    },
+    {
+      "id": "tutorial.progression.upgrades.card",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CHOOSE A SYSTEM",
+      "text": "Each highlighted module shows its current level, next improvement, and exact cost. Select one to inspect it.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-upgrades-card.mp3"
+    },
+    {
+      "id": "tutorial.progression.upgrades.purchase",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "INSTALL AN UPGRADE",
+      "text": "Try an available upgrade. A successful install persists across every future run; if funds are short, the Store shows the exact amount still needed.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-upgrades-purchase.mp3"
+    },
+    {
+      "id": "tutorial.progression.garage.garage",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "OPERATOR GARAGE",
+      "text": "Your Garage shows what is installed for the next deployment. Configure Mods, Signals, Contracts, cosmetics, and presets here.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-garage-garage.mp3"
+    },
+    {
+      "id": "tutorial.progression.garage-loadout.loadout",
+      "mode": "GUIDANCE",
+      "scene": "garage",
+      "title": "NEXT DEPLOYMENT LOADOUT",
+      "text": "These five highlighted docks contain the Mods installed for your next deployment. Browse or unequip cards independently by slot.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-garage-loadout-loadout.mp3"
+    },
+    {
+      "id": "tutorial.progression.garage-loadout.configuration",
+      "mode": "GUIDANCE",
+      "scene": "garage",
+      "title": "OPERATIONS CONFIGURATION",
+      "text": "This terminal opens Operations, where you choose an unlocked mode and starting checkpoint. Contracts, Signals, fees, and progression remain linked to the same next deployment.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-garage-loadout-configuration.mp3"
+    },
+    {
+      "id": "tutorial.progression.overdrive.overdrive",
+      "mode": "GUIDANCE",
+      "scene": "garage",
+      "title": "OVERDRIVE UNLOCKED",
+      "text": "This station opens Overdrive progression. Its constellation tiers let experienced operatives begin at later rounds after meeting each highest-round requirement.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-progression-overdrive-overdrive.mp3"
+    }
+  ],
+  "unmappedFiles": [],
+  "unavailableSuffix": " This action is not currently available; continue when ready."
+}

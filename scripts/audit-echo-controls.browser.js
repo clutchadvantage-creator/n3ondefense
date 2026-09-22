@@ -7,6 +7,8 @@
   const key = (code, down) => window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, key: code === 'AltLeft' ? 'Alt' : code.replace('Key', ''), bubbles: true, cancelable: true }));
   const originalPads = Object.getOwnPropertyDescriptor(navigator, 'getGamepads');
   const originalSize = { width: game.scale.width, height: game.scale.height };
+  const errorHandler = event => report.errors.push(String(event.error?.stack ?? event.message ?? event.reason));
+  window.addEventListener('error', errorHandler); window.addEventListener('unhandledrejection', errorHandler);
   report.promise = (async () => {
     try {
       await until(() => game.scene.keys.arena && !game.scene.keys.boot.sys.isActive(), 'Boot complete'); await wait(150);
@@ -42,7 +44,10 @@
         const all = []; const visit = o => { all.push(o); o.list?.forEach(visit); }; options.children.list.forEach(visit);
         const echo = all.find(o => o.text === 'ECHO'), reset = all.find(o => o.text === 'RESET DEFAULTS');
         check(echo && reset && echo.getBounds().bottom < reset.getBounds().top, 'Echo and reset do not overlap at ' + width);
-        report.screenshots.push({ label: 'echo-controls-' + width, png: await new Promise(r => game.renderer.snapshot(img => r(img.src))) });
+        report.screenshots.push({ label: 'echo-controls-' + width, png: await Promise.race([
+          new Promise(r => game.renderer.snapshot(img => r(img.src))),
+          wait(10000).then(() => { throw Error('Timed out capturing controls at ' + width); })
+        ]) });
       }
       game.scale.resize(originalSize.width, originalSize.height); await wait(200);
       // Resize rebuilds focus owners; use the current layer after settling.
@@ -55,22 +60,31 @@
       const arena = game.scene.keys.arena;
       await until(() => arena.sys.isActive() && arena.roundRuntime?.phase === 'active', 'Arena active');
       arena.player.invulnUntil = Infinity; arena.pointerLockInitialGate = false; arena.playerInput.adoptDevice('gamepad');
+      // Headless keyboard testing cannot acquire trusted browser mouse lock.
+      // Remove only that browser capture adapter, retaining real action input.
+      arena.pointerLock?.destroy(); arena.pointerLock = null;
       if (arena.state.state === 'Paused') arena.restoreGameplayAfterPause(); await wait(120);
       key('AltLeft', true); await wait(100); check(!arena.echo.timeline.recording, 'Old default no longer activates after rebind'); key('AltLeft', false);
       key('KeyZ', true); await until(() => arena.echo.timeline.recording, 'Rebound Z starts recording');
+      key('KeyZ', false); await wait(100); check(arena.echo.timeline.recording, 'Tap release does not finish recording');
       await wait(300); arena.togglePause(); const recordedMs = arena.echo.timeline.elapsedMs;
       await wait(300); check(arena.echo.timeline.elapsedMs === recordedMs, 'In-game pause freezes recording');
       arena.playerInput.adoptDevice('gamepad'); arena.resumeGameplay(); await wait(300);
-      check(arena.echo.timeline.recording && arena.echo.timeline.elapsedMs > recordedMs, 'Held key continues recording after resume');
-      await until(() => arena.echo.timeline.replaying, 'Held Z reaches automatic four-second trigger');
+      check(arena.echo.timeline.recording && arena.echo.timeline.elapsedMs > recordedMs, 'Recording continues after resume without holding');
+      await until(() => arena.echo.timeline.replaying, 'Single tap reaches automatic four-second trigger');
       check(arena.echo.timeline.durationMs === 4000 && arena.echo.timeline.cooldownMs > 11500, 'Automatic trigger at four seconds starts cooldown');
       arena.togglePause(); const replayMs = arena.echo.timeline.replayMs, cooldownMs = arena.echo.timeline.cooldownMs;
       await wait(300); check(arena.echo.timeline.replayMs === replayMs && arena.echo.timeline.cooldownMs === cooldownMs, 'In-game pause freezes replay and cooldown');
       arena.playerInput.adoptDevice('gamepad'); arena.resumeGameplay();
+      // Holding a key during cooldown must not produce a fresh press when it expires.
+      key('KeyZ', true);
       await until(() => arena.echo.timeline.cooldownMs === 0, 'Full cooldown expires');
       check(!arena.echo.timeline.recording, 'Continuously held Z cannot retrigger after cooldown');
       key('KeyZ', false); await wait(60); key('KeyZ', true);
-      await until(() => arena.echo.timeline.recording, 'Release then fresh press rearms Echo'); key('KeyZ', false);
+      await until(() => arena.echo.timeline.recording, 'Fresh tap starts next Echo'); key('KeyZ', false);
+      await wait(500); check(arena.echo.timeline.recording, 'Recording remains active with no held Echo input');
+      key('KeyZ', true); await wait(50); key('KeyZ', false);
+      check(arena.echo.timeline.replaying && arena.echo.timeline.durationMs < 900, 'Second fresh tap completes recording early');
       arena.playerInput.adoptDevice('keyboardMouse');
       await wait(150); check(arena.echo.hud.keybind === 'Z', 'HUD displays actual rebound key');
       const owner = arena.echo; game.scene.stop('arena'); await wait(150);
@@ -82,6 +96,7 @@
     finally {
       key('KeyZ', false); key('AltLeft', false);
       if (originalPads) Object.defineProperty(navigator, 'getGamepads', originalPads); else delete navigator.getGamepads;
+      window.removeEventListener('error', errorHandler); window.removeEventListener('unhandledrejection', errorHandler);
       game.scale.resize(originalSize.width, originalSize.height); report.running = false;
     }
   })();

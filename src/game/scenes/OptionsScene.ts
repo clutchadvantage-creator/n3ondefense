@@ -1034,6 +1034,10 @@ export class OptionsScene extends Phaser.Scene {
     });
     container.add(reset);
     this.registerScrollTarget('gameplay', reset, resetY, 18);
+    container.add(this.add.text(centerX, topY + 279, 'ECHO: Press once to record. Press again to return and replay. Auto-completes after 4 seconds.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#a9cfe0', align: 'center',
+      wordWrap: { width: panelWidth - 32 }
+    }).setOrigin(0.5));
     return topY + panelHeight;
   }
 

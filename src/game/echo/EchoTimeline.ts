@@ -72,7 +72,12 @@ export class EchoTimeline {
       this.nextSampleMs += 1000 / ECHO_BALANCE.sampleHz;
     }
     this.previousX = x; this.previousY = y; this.previousRotation = rotation; this.previousDash = dashing;
-    if (!held || this.elapsedMs >= this.config.recordingMs) this.finish(x, y, rotation, dashing);
+    // Echo is a two-press action. Key release only rearms the next edge;
+    // it never ends a recording, and held/repeated input cannot toggle it.
+    if ((pressed && held && this.armed) || this.elapsedMs >= this.config.recordingMs) {
+      this.armed = false;
+      this.finish(x, y, rotation, dashing);
+    }
   }
 
   recordShot(shot: Omit<EchoShot, 'time'>, source: 'weapon' | 'echo' = 'weapon'): boolean {
