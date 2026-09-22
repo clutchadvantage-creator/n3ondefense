@@ -11,6 +11,7 @@ import { ArenaHistory, createArenaFingerprint, type ArenaFingerprint } from './A
 import { createsNarrowPassage, repairNarrowPassages } from './ArenaTraversal.ts';
 import { createSafeArenaFallbacks, type SafeArenaFallbackDraft } from './ArenaFallbacks.ts';
 import { createArenaSmashablePlacements } from '../arena/ArenaSmashablePlacement.ts';
+import { separateEnemyEntrances } from '../arena/EnemySpawnSafety.ts';
 
 const pointClear = (point:PointSpec, rects:RectSpec[], clearance:number):boolean => rects.every((r)=>point.x<r.x-clearance||point.x>r.x+r.w+clearance||point.y<r.y-clearance||point.y>r.y+r.h+clearance);
 const obstacleRect = (obstacle:GeneratedObstacle):RectSpec => ({x:obstacle.x-obstacle.w/2,y:obstacle.y-obstacle.h/2,w:obstacle.w,h:obstacle.h});
@@ -52,6 +53,9 @@ export class ArenaGenerator {
         topology.walls=traversalRepair.walls;
         const selectedSites=this.selectSites(random,topology.objectiveCandidates,siteCount);
         if(selectedSites.length!==siteCount){diagnostics.validationRejected+=1;continue;}
+        const entrances=separateEnemyEntrances(topology.enemySpawns,selectedSites,topology.bounds,topology.walls);
+        if(!entrances){diagnostics.validationRejected+=1;continue;}
+        topology.enemySpawns=entrances;
         const player=topology.playerCandidates[random.int(0,topology.playerCandidates.length-1)];
         const protectedPoints=[player,...selectedSites,...topology.enemySpawns];
         const obstacles=this.addSecondaryObstacles(random,topology.bounds,topology.walls,protectedPoints,archetype,round);

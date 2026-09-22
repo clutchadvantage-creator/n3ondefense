@@ -1,5 +1,6 @@
 import { ARENA_GENERATION_CONFIG as CONFIG } from '../config/arenaGeneration.ts';
 import type { ArenaTemplate, RectSpec } from '../types.ts';
+import { separateEnemyEntrances } from '../arena/EnemySpawnSafety.ts';
 import { SeededRandom } from './SeededRandom.ts';
 import type { PointSpec } from './ArenaTopology.ts';
 
@@ -157,11 +158,11 @@ export const createSafeArenaFallbacks = (seed: number, round: number, siteCount:
       archetype: variant.archetype,
       bounds: { ...bounds },
       walls: [...boundary(bounds), ...variant.walls.map((wall) => ({ ...wall }))],
-      bombSites: sites.map((site) => ({ ...site })),
+      bombSites: sites.map((site) => ({ x: Math.round(site.x), y: Math.round(site.y) })),
       // Keep the emergency spawn in the shared central circulation lane. A
       // top-center spawn can land directly on the vertical split variant.
       playerSpawn: point(bounds, 0.5, 0.42),
-      enemySpawns: enemySpawns.map((spawn) => ({ ...spawn })),
+      enemySpawns: separateEnemyEntrances(enemySpawns, sites, bounds, [...boundary(bounds), ...variant.walls]) ?? [],
       majorStructureCount: variant.major,
       chokePointCount: variant.chokes,
       connectedRegionCount: variant.regions,

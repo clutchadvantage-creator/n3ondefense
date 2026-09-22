@@ -1,6 +1,7 @@
 import type { ArenaLayout, RectSpec } from '../types.ts';
 import { ARENA_GENERATION_CONFIG as CONFIG } from '../config/arenaGeneration.ts';
 import { GridPathfinder } from './GridPathfinder.ts';
+import { clearOfBombsites } from '../arena/EnemySpawnSafety.ts';
 
 const overlapsRect = (r: RectSpec, x: number, y: number, pad = 0): boolean => {
   return x >= r.x - pad && x <= r.x + r.w + pad && y >= r.y - pad && y <= r.y + r.h + pad;
@@ -13,6 +14,7 @@ export class ArenaValidator {
     const fail = (message: string): void => { failures.push(message); };
     const pass = (message: string): void => { checks.push(message); };
     const blockers: RectSpec[] = [...layout.walls, ...layout.obstacles.map((o) => ({ x: o.x - o.w / 2, y: o.y - o.h / 2, w: o.w, h: o.h }))];
+    if (layout.enemySpawns.length > 0 && layout.enemySpawns.every(sp => clearOfBombsites(sp, layout.bombSites))) pass('enemy-spawns-separated-from-sites'); else fail('enemy-spawn-too-close-to-site');
     if (blockers.every((r) => r.w > 0 && r.h > 0 && r.x >= 0 && r.y >= 0 && r.x + r.w <= worldWidth && r.y + r.h <= worldHeight)) pass('geometry-in-bounds'); else fail('invalid-geometry');
     if (blockers.every((r) => !overlapsRect(r, layout.playerSpawn.x, layout.playerSpawn.y, 34))) pass('player-spawn-clear'); else fail('player-spawn-blocked');
     if (layout.enemySpawns.every((sp) => blockers.every((r) => !overlapsRect(r, sp.x, sp.y, 30)))) pass('enemy-spawns-clear'); else fail('enemy-spawn-blocked');
@@ -51,6 +53,7 @@ export class ArenaValidator {
 
   static validate(layout: ArenaLayout, worldWidth: number, worldHeight: number): boolean {
     if (layout.generation) return this.validateDetailed(layout, worldWidth, worldHeight).valid;
+    if (!layout.enemySpawns.length || !layout.enemySpawns.every(sp => clearOfBombsites(sp, layout.bombSites))) return false;
     const blockers: RectSpec[] = [...layout.walls, ...layout.obstacles.map((o) => ({ x: o.x - o.w / 2, y: o.y - o.h / 2, w: o.w, h: o.h }))];
 
     for (const r of blockers) {

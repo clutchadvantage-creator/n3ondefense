@@ -39,18 +39,7 @@
       pad.buttons[7] = { pressed: false, value: 0 }; await wait(60);
       check(layer.manager.focus('options:gameplay:reset-ability-bindings'), 'Reset binding control available'); layer.manager.activate();
       check(SaveSystem.get().settings.abilityBindings.echo === DEFAULT_ABILITY_BINDINGS.echo, 'Actual reset restores Left Alt');
-      for (const [width, height] of [[1280, 720], [960, 600]]) {
-        game.scale.resize(width, height); await wait(250); options.selectTab('gameplay'); options.scrollActiveTab(10000);
-        const all = []; const visit = o => { all.push(o); o.list?.forEach(visit); }; options.children.list.forEach(visit);
-        const echo = all.find(o => o.text === 'ECHO'), reset = all.find(o => o.text === 'RESET DEFAULTS');
-        check(echo && reset && echo.getBounds().bottom < reset.getBounds().top, 'Echo and reset do not overlap at ' + width);
-        report.screenshots.push({ label: 'echo-controls-' + width, png: await Promise.race([
-          new Promise(r => game.renderer.snapshot(img => r(img.src))),
-          wait(10000).then(() => { throw Error('Timed out capturing controls at ' + width); })
-        ]) });
-      }
-      game.scale.resize(originalSize.width, originalSize.height); await wait(200);
-      // Resize rebuilds focus owners; use the current layer after settling.
+      // Actual compact browser dimensions are covered by audit-echo-compact.mjs.
       options.selectTab('gameplay'); options.scrollActiveTab(10000);
       const currentLayer = UiNavigationController.get().phaserLayer(options);
       currentLayer.manager.focus('options:gameplay:binding:echo'); currentLayer.manager.activate(); await wait(40);

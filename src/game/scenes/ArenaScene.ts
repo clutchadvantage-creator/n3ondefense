@@ -3,6 +3,7 @@ import { WeeklyCompletionTracker } from '../progression/WeeklyCompletionTracker.
 import type { WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import { shakeGameplayCamera } from '../vfx/GameplayCameraShake.ts';
 import Phaser from 'phaser';
+import { clearOfBombsites, selectSafeEnemySpawn, ENEMY_SPAWN_SAFETY } from '../arena/EnemySpawnSafety.ts';
 import { FlyingDrone } from '../enemies/drone/FlyingDrone.ts';
 import type { DroneVariant } from '../enemies/drone/DroneFlight.ts';
 import { grenadeTouchesSmashable } from '../arena/SmashableCombatQuery.ts';
@@ -2601,8 +2602,9 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
-    GameplayTelemetryRecorder.recordSpawnAttempt('spawned', 0);
-    this.spawnEnemy(type, defensePhase);
+    const spawned = this.spawnEnemy(type, defensePhase);
+    GameplayTelemetryRecorder.recordSpawnAttempt(spawned ? 'spawned' : 'unsafe-entrance', spawned ? 0 : cadenceMs);
+    if (!spawned) return;
     if (type === 'defuser') this.lastDefuserSpawnAt = now;
     if (type === 'tank' || type === 'disruptor' || type === 'star') this.lastSpecialSpawnAt = now;
   }
@@ -2658,9 +2660,13 @@ export class ArenaScene extends Phaser.Scene {
     return candidates[candidates.length - 1];
   }
 
-  private spawnEnemy(type: EnemyType, defensePhase: boolean, explicitSpawn?: { x: number; y: number }, droneVariant: DroneVariant = 'standard'): Enemy {
+  private spawnEnemy(type: EnemyType, defensePhase: boolean, explicitSpawn?: { x: number; y: number }, droneVariant: DroneVariant = 'standard'): Enemy | null {
     const base = baseEnemyStats[type];
-    const spawn = type === 'drone' ? this.findDroneEntrance() : explicitSpawn ?? Phaser.Utils.Array.GetRandom(this.layout.enemySpawns);
+    const spawn = selectSafeEnemySpawn(type === 'drone' ? this.findDroneEntrance() : explicitSpawn,
+      this.layout.enemySpawns, this.layout.bombSites, point => type === 'drone'
+        || !this.intersectsWallGeometry(point.x, point.y, ENEMY_SPAWN_SAFETY.wallClearance, ENEMY_SPAWN_SAFETY.wallClearance),
+      Math.floor(Math.random() * this.layout.enemySpawns.length));
+    if (!spawn) return null;
     const curve = getDifficultyCurve(this.roundManager.round, this.bombSites.destroyedCount());
     const phaseScale = defensePhase ? 1 : 0.9;
 
@@ -2738,7 +2744,7 @@ export class ArenaScene extends Phaser.Scene {
       const fraction = .12 + Math.random() * .76;
       x = side < 2 ? b.x + (side ? b.w - 30 : 30) : b.x + b.w * fraction;
       y = side < 2 ? b.y + b.h * fraction : b.y + (side === 2 ? 30 : b.h - 30);
-      if (Math.hypot(x - this.player.x, y - this.player.y) >= 360) break;
+      if (Math.hypot(x - this.player.x, y - this.player.y) >= 360 && clearOfBombsites({ x, y }, this.layout.bombSites)) break;
     }
     return { x, y };
   }
@@ -3356,7 +3362,7 @@ export class ArenaScene extends Phaser.Scene {
         nav.recoverySign = nav.recoverySign === 1 ? -1 : 1;
         if (nav.stuckTicks >= 14) {
           const recovery = this.pathfinder.findNearestWalkableWorld(enemy.x, enemy.y, 0, 4);
-          if (recovery) {
+          if (recovery && clearOfBombsites(recovery, this.layout.bombSites)) {
             const recoveryDx = recovery.x - enemy.x;
             const recoveryDy = recovery.y - enemy.y;
             if (recoveryDx * recoveryDx + recoveryDy * recoveryDy > 24 * 24) {
@@ -6019,7 +6025,7 @@ export class ArenaScene extends Phaser.Scene {
       const point = this.pathfinder.findNearestWalkableWorld(candidate.x, candidate.y, 0, 7);
       const clearance = Phaser.Math.Clamp(requestedClearance, 24, 96);
       if (!point || this.intersectsWallGeometry(point.x, point.y, clearance, clearance)) continue;
-      if (this.isNearBombSite(point.x, point.y, Math.max(105, clearance + 78))) continue;
+      if (!clearOfBombsites(point, this.layout.bombSites)) continue;
       const playerDx = point.x - this.player.x;
       const playerDy = point.y - this.player.y;
       if (playerDx * playerDx + playerDy * playerDy < minimumPlayerDistanceSquared) continue;
@@ -7123,10 +7129,11 @@ export class ArenaScene extends Phaser.Scene {
       const point = this.findBossSupportPickupPoint();
       if (!point) break;
       const enemy = this.spawnEnemy('shooter', false, point);
+      if (!enemy) continue;
       enemy.setData('bossSupport', true);
       enemy.lastShotMs = now + index * 180;
       this.bossSupportEnemies.add(enemy);
-      encounter.playSupportEntrance(point.x, point.y);
+      encounter.playSupportEntrance(enemy.x, enemy.y);
       spawned += 1;
     }
     if (spawned > 0) {

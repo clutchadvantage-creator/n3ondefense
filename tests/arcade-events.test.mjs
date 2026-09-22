@@ -85,7 +85,7 @@ test('Supply Drop uses validated dimensional clearance and a bounded premium lan
   assert.match(event, /findSpawnPoints\(1, 250, PACKAGE_CLEARANCE\)/);
   assert.match(arena, /requestedClearance = 24/);
   assert.match(arena, /intersectsWallGeometry\(point\.x, point\.y, clearance, clearance\)/);
-  assert.match(arena, /isNearBombSite\(point\.x, point\.y, Math\.max\(105, clearance \+ 78\)\)/);
+  assert.match(arena, /clearOfBombsites\(point, this\.layout\.bombSites\)/);
   for (const feature of ['parachute', 'PARACHUTE_COLLAPSE_MS', 'drawLandingImpact']) {
     assert.match(visual, new RegExp(feature));
   }
