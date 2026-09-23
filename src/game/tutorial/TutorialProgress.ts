@@ -18,6 +18,9 @@ const addUnique = (values: string[], value: string): void => {
   if (!values.includes(value)) values.push(value);
 };
 
+const ARENA_TEACHING_SEQUENCES = ['onboarding.menu-welcome', 'onboarding.menu-resume-training',
+  'onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud', 'onboarding.tactics', 'onboarding.certification'];
+
 export const isTutorialSequenceComplete = (state: TutorialProgressState, sequenceId: string): boolean =>
   state.completedSequences.includes(sequenceId) || state.skippedSequences.includes(sequenceId);
 
@@ -48,17 +51,20 @@ export const completeFirstRunTeachingRound = (state: TutorialProgressState, roun
   if (state.firstRunStage !== 'arena-teaching') return false;
   if (state.lyraCurriculum === 4) {
     state.trainingRoundsCompleted = Math.max(state.trainingRoundsCompleted ?? 0, Math.min(3, round));
-    if (round < 3) return false;
+    if (state.trainingRoundsCompleted < 3) return false;
   }
-  for (const sequenceId of ['onboarding.basic-controls', 'onboarding.defense', 'onboarding.hud']) {
+  for (const sequenceId of ARENA_TEACHING_SEQUENCES) {
     addUnique(state.completedSequences, sequenceId);
     state.skippedSequences = state.skippedSequences.filter((id) => id !== sequenceId);
   }
+  if (state.replaySequenceId && ARENA_TEACHING_SEQUENCES.includes(state.replaySequenceId)) state.replaySequenceId = null;
   setFirstRunTeachingStage(state, 'waiting-for-store');
   return true;
 };
 
 export const completeTutorialStep = (state: TutorialProgressState, sequenceId: string, stepId: string): void => {
+  // Late UI acknowledgements must not regress a graduated profile back into a run.
+  if (state.completedSequences.includes(sequenceId)) return;
   const steps = state.completedSteps[sequenceId] ?? (state.completedSteps[sequenceId] = []);
   addUnique(steps, stepId);
   if (sequenceId === 'onboarding.menu-welcome' && stepId === 'welcome') {

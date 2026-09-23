@@ -21,6 +21,7 @@ export class SplashScene extends Phaser.Scene {
   private splashImage: Phaser.GameObjects.Image | null = null;
   private versionText: Phaser.GameObjects.Text | null = null;
   private creatorText: Phaser.GameObjects.Text | null = null;
+  private developmentText: Phaser.GameObjects.Text | null = null;
   private sloganText: Phaser.GameObjects.Text | null = null;
   private sloganCyanGhost: Phaser.GameObjects.Text | null = null;
   private sloganPinkGhost: Phaser.GameObjects.Text | null = null;
@@ -86,6 +87,10 @@ export class SplashScene extends Phaser.Scene {
     };
     this.versionText = this.add.text(0, 0, `Version ${GAME_VERSION}`, creditStyle).setOrigin(0, 1).setDepth(20);
     this.creatorText = this.add.text(0, 0, 'Created By RuntWerkx Gaming Division', creditStyle).setOrigin(1, 1).setDepth(20);
+    this.developmentText = this.add.text(0, 0, 'IN DEVELOPMENT — Content and features may change at any time.', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#b8cbd4',
+      align: 'center', stroke: '#02050b', strokeThickness: 4
+    }).setOrigin(0.5, 1).setDepth(20);
     this.layoutCornerText(width, height);
 
     const sloganStyle: Phaser.Types.GameObjects.Text.TextStyle = {
@@ -192,6 +197,7 @@ export class SplashScene extends Phaser.Scene {
       this.splashImage = null;
       this.versionText = null;
       this.creatorText = null;
+      this.developmentText = null;
       this.sloganText = null;
       this.sloganCyanGhost = null;
       this.sloganPinkGhost = null;
@@ -263,7 +269,7 @@ export class SplashScene extends Phaser.Scene {
     const imageTop = this.splashImage.y - texture.naturalHeight * this.splashImage.scaleY * 0.5;
     const mappedPromptLeadIn = imageTop + texture.naturalHeight * this.splashImage.scaleY * 0.825;
     this.sloganX = width / 2;
-    this.sloganY = Phaser.Math.Clamp(mappedPromptLeadIn, height * 0.62, height - 86);
+    this.sloganY = Phaser.Math.Clamp(mappedPromptLeadIn, height * 0.62, height - 116);
 
     const fontSize = Math.round(Phaser.Math.Clamp(width / 45, 10, 25));
     const letterSpacing = Phaser.Math.Clamp(Math.round(fontSize * 0.08), 1, 2);
@@ -277,6 +283,8 @@ export class SplashScene extends Phaser.Scene {
     const bottom = height - Phaser.Math.Clamp(height * 0.022, 14, 26);
     this.versionText?.setPosition(margin, bottom);
     this.creatorText?.setPosition(width - margin, bottom);
+    this.developmentText?.setPosition(width / 2, bottom - 60)
+      .setFontSize(width < 700 ? 14 : 16).setWordWrapWidth(Math.max(160, width - margin * 2));
   }
 
   private layoutSplashImage(width: number, height: number): void {

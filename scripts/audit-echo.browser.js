@@ -36,7 +36,21 @@
         report.current = label;
         const echo = scene.echo, player = scene.player, input = scene.playerInput ?? scene.inputController;
         const originalHeld = input.held, fire = scene === arena ? now => scene.updatePlayerShooting(now) : now => scene.updatePlayerCombat(now);
-        const safe = { x: player.x, y: player.y };
+        let safe = { x: player.x, y: player.y };
+        if (scene === arena) {
+          // Use a legal combat location now that explicit fixture spawns are also
+          // subject to bombsite exclusion. Keep direct and splash targets together.
+          const b = scene.layout.generation.bounds;
+          const { clearOfBombsites } = await import('/src/game/arena/EnemySpawnSafety.ts');
+          let found = null;
+          for (let y = b.y + 100; y < b.y + b.h - 100 && !found; y += 40)
+            for (let x = b.x + 100; x < b.x + b.w - 180; x += 40) {
+              if ([0, 60, 75].every(dx => clearOfBombsites({ x: x + dx, y }, scene.layout.bombSites)
+                && !scene.intersectsWallGeometry(x + dx, y, 36, 36))) { found = { x, y }; break; }
+            }
+          if (!found) throw Error('No legal fixture target area');
+          safe = found; player.body.reset(safe.x, safe.y);
+        }
         const step = (dt, held, pressed = false, dx = 0, dy = 0) => {
           player.body.reset(safe.x + dx, safe.y + dy);
           echo.update(dt, { held: () => held, pressed: () => pressed, prompt: () => 'L ALT' }, scene.time.now);

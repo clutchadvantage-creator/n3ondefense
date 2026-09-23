@@ -6639,6 +6639,15 @@ export class ArenaScene extends Phaser.Scene {
     SaveSystem.addPlasmaChips(rewardPlasmaChips);
     SaveSystem.addFluxCores(rewardFluxCores);
     SaveSystem.recordRoundCompletion(completedRound, this.protocol);
+    const completedTeachingRound = SaveSystem.getTutorialProgress().firstRunStage === 'arena-teaching';
+    if (completedTeachingRound) {
+      // Persist graduation with the round outcome, before rewards/transition delays.
+      SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress, completedRound); });
+      if (SaveSystem.getTutorialProgress().firstRunStage === 'waiting-for-store') {
+        this.tutorialDirector?.destroy();
+        this.tutorialDirector = null;
+      }
+    }
     OnlineRunManager.recordMilestone(completedRound);
     this.captureTelemetryEndState();
     GameplayTelemetryRecorder.endEncounter('completed', {
@@ -6651,10 +6660,6 @@ export class ArenaScene extends Phaser.Scene {
 
     const resultTransitionDelay = this.bombExplosionCosmeticVfx.recommendedSceneHoldMs(1400, this.time.now);
     this.transitionAfterModReveals(resultTransitionDelay, () => {
-      const completedTeachingRound = SaveSystem.getTutorialProgress().firstRunStage === 'arena-teaching';
-      if (completedTeachingRound) {
-        SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress, completedRound); });
-      }
       if (completedTeachingRound && SaveSystem.getTutorialProgress().lyraCurriculum !== 4) {
         GameplayTelemetryRecorder.finishRun('quit');
         OnlineRunManager.complete('quit', completedRound);

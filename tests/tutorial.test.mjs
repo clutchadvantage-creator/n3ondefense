@@ -14,6 +14,34 @@ import {
   skipTutorialSequence
 } from '../src/game/tutorial/TutorialProgress.ts';
 import { TUTORIAL_SEQUENCES } from '../src/game/tutorial/TutorialRegistry.ts';
+
+test('third training round retires all Arena teaching and stale deployment callbacks', () => {
+  const state = createTutorialProgress();
+  setFirstRunTeachingStage(state, 'arena-teaching');
+  completeFirstRunTeachingRound(state, 1);
+  completeFirstRunTeachingRound(state, 2);
+  state.replaySequenceId = 'onboarding.menu-resume-training';
+  assert.equal(completeFirstRunTeachingRound(state, 3), true);
+  assert.equal(state.replaySequenceId, null);
+  for (const id of ['onboarding.menu-welcome', 'onboarding.menu-resume-training', 'onboarding.basic-controls',
+    'onboarding.defense', 'onboarding.hud', 'onboarding.tactics', 'onboarding.certification']) {
+    assert.equal(isTutorialSequenceComplete(state, id), true, id);
+    const sequence = TUTORIAL_SEQUENCES.find(s => s.id === id);
+    assert.equal(isTutorialSequenceEligible(state, sequence, sequence.scene), false);
+  }
+  completeTutorialStep(state, 'onboarding.menu-welcome', 'welcome');
+  completeTutorialStep(state, 'onboarding.menu-welcome', 'start-local');
+  assert.equal(state.firstRunStage, 'waiting-for-store');
+  assert.equal(isTutorialSequenceEligible(state, TUTORIAL_SEQUENCES.find(s => s.id === 'onboarding.menu-store'), 'menu'), true);
+  const save = createDefaultLocalSave('training-test', 'Training'); save.tutorials = state;
+  assert.equal(normalizeLocalSave(JSON.parse(JSON.stringify(save))).tutorials.firstRunStage, 'waiting-for-store');
+});
+
+test('persisted three-round progress graduates even when the latest run restarts at one', () => {
+  const state = createTutorialProgress(); setFirstRunTeachingStage(state, 'arena-teaching'); state.trainingRoundsCompleted = 3;
+  assert.equal(completeFirstRunTeachingRound(state, 1), true);
+  assert.equal(state.firstRunStage, 'waiting-for-store');
+});
 import { resolveTutorialAdvancePolicy } from '../src/game/tutorial/TutorialStepRules.ts';
 import {
   projectTutorialBoundsToViewport,
@@ -271,7 +299,7 @@ test('first-run scene handoff, live Main Menu targets, and undimmed Arena teachi
   assert.match(menu, /TutorialEventBus\.emit\('ui\.startLocalSelected'\)/);
   assert.match(menu, /TutorialEventBus\.emit\('ui\.storeSelected'\)/);
   assert.match(menu, /TutorialEventBus\.emit\('ui\.garageSelected'\)/);
-  assert.match(menu, /firstRunStage === 'arena-teaching' && profile\.roundsCompleted > 0/);
+  assert.match(menu, /teaching\.firstRunStage === 'arena-teaching'/);
   assert.match(menu, /completeFirstRunTeachingRound\(progress\)/);
   assert.match(store, /onboarding\.store[\s\S]*?SceneKeys\.MainMenu/);
   assert.doesNotMatch(storefront, /root\.replaceChildren/);

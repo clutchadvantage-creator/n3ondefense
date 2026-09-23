@@ -283,8 +283,11 @@ export class TutorialDirector {
 
   private startNext(): void {
     if (this.destroyed) return;
-    const queued = this.pending.shift();
-    if (queued) this.begin(queued);
-    else this.startEligible();
+    const progress = SaveSystem.getTutorialProgress();
+    while (this.pending.length) {
+      const queued = this.pending.shift()!;
+      if (isTutorialSequenceEligible(progress, queued, this.host.scene)) { this.begin(queued); return; }
+    }
+    this.startEligible();
   }
 }

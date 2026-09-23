@@ -58,13 +58,15 @@ Validation results and fixture options are recorded in [echo-validation-measurem
 
 The focused browser fixture exercises the real Arena renderer at round 68 and the actual HEIST handoff. It checks two-press activation, one-second recordings, mixed shot-time ammo, real normal/scatter collision damage, real grenade bounce/direct/splash damage, premium projectile collision parity, the enemy and boss final cap, single kill rewards, unchanged energy/heat/ammo/deployables, full-body safe return after inserting collision at the origin, world bounds, pause, failure, handoff, and shutdown. One hundred activation/retirement cycles per scene retain the same buffers, scene-root count, and shutdown-listener count.
 
-The controls fixture uses actual Options focus/capture/reset actions, synthetic browser keyboard events, and a mocked standard gamepad. It checks keyboard rebinding, reserved controls, controller capture, compact 1280×720 and 960×600 layouts, persistence, old-key rejection, release-independent recording, the automatic four-second trigger, a second tap ending early, pause during recording and replay, full cooldown, and held-input rearming. A separate browser reload checks both normalized settings and disk storage.
+The controls fixture passed **24 checks** using actual Options focus/capture/reset actions, synthetic browser keyboard events, and a mocked standard gamepad. It checks keyboard rebinding, reserved controls, controller capture, persistence, old-key rejection, release-independent recording, the automatic four-second trigger, a second tap ending early, pause during recording and replay, full cooldown, and held-input rearming. A separate browser reload retained the rebound Z key in normalized settings and disk storage. A separate CDP fixture passed **14 checks at actual browser/canvas sizes of 1280×720 and 960×600**, verifying the controls, instructions, and all five HUD slots. Its screenshots were reviewed.
 
 The assisted progression fixture runs normal pressure limits, five rank-three Mods, overlapping hazards, drones, live special ammo, deployables, events, HEIST, rewards, stores, and saves. Its optional `includeEcho` adapter sends a short controller press whenever Echo becomes ready; it does not hold the button or shorten the production cooldown. Every replay records its duration, sample count, shot count, and overflow diagnostic. Invulnerability, supplied ability energy, assisted defuser kills, and accelerated event/boss outcomes remain explicit fixture controls.
 
 Final numerical run results are listed in the compact evidence record. Earlier hold/release prototype measurements are superseded by the two-press runs. These are assisted runtime checks, not unassisted campaign clears, every possible seed/loadout combination, or a guarantee of 60 FPS on all hardware. The ending fixture withholds real-player fire during the three-boss pressure sample; its Echo activations there measure movement/presentation, while earlier ordinary combat includes Echo weapon replay.
 
-The focused automated tests cover timing, early second presses, untouched automatic completion, cooldown, key repeat, fixed sampling at several frame rates, interpolation, mixed ammo/timestamps, bounded extreme fire reserves, safe-return fallback, damage caps, cleanup, anti-recursion, migration/rebinding/reset, and controller mapping. HUD and Options layout assertions were updated for the new slot and binding row.
+The focused automated tests cover timing, early second presses, untouched automatic completion, cooldown, key repeat, fixed sampling at several frame rates, interpolation, mixed ammo/timestamps, bounded extreme fire reserves, safe-return fallback, damage caps, cleanup, anti-recursion, migration/rebinding/reset, and controller mapping. HUD and Options layout assertions were updated for the new slot and binding row. All **734 tests**, the production build, and the itch build passed on the final code. The focused Arena/HEIST fixture passed **80 checks**.
+
+The additional requested bombsite safety, three-round tutorial retirement, and splash notice are detailed in [bombsite-spawn-and-training-fixes.md](bombsite-spawn-and-training-fixes.md). Their validation includes 600 generated arenas, 1,260 real enemy spawns, and the Store-to-Garage teaching handoff. They do not alter Echo input or damage rules.
 
 Remaining manual checks: physical keyboard/OS Alt behavior outside synthetic browser events, physical controller hardware, subjective audio balance/listening, and movement readability on different displays and lower-end GPUs. The hologram and compact control screens were captured for visual review. Placeholder Echo tones can later be replaced through the existing audio entries.
 
@@ -95,6 +97,7 @@ npm.cmd run build
 npm.cmd run build:itch
 node scripts/run-layout-audit.mjs artifacts/echo-browser.json ./audit-echo.browser.js
 node scripts/run-layout-audit.mjs artifacts/echo-controls.json ./audit-echo-controls.browser.js
+node scripts/audit-echo-compact.mjs
 node --experimental-strip-types scripts/audit-lyra-voice-coverage.mjs
 ```
 

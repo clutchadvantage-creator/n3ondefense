@@ -1,0 +1,23 @@
+# Bombsite spawn safety and training handoff
+
+Enemy creation now requires **320 world pixels of center-to-center separation from every bombsite**, regardless of site state. The shared rule reserves the 96-pixel site presentation, 160 pixels of approach space, and a 64-pixel enemy footprint allowance. It affects spawning and stuck-enemy repositioning; enemies can still approach and attack objectives normally.
+
+Previously ordinary enemies selected authored entrances without checking objective distance. Drones selected edge positions independently, and explicit Arcade/boss-support requests could bypass ordinary selection. Some seed combinations therefore placed fresh enemies beside objectives. `EnemySpawnSafety.ts` now supplies the common exclusion, bounded runtime selection, and generation repair. Unsafe generated entrances move to the nearest tested perimeter candidate; their count is preserved. The existing validator still checks navigation, group-width routes, geometry, and objective reachability. It additionally rejects unsafe entrances. Fallback layouts use the same repair. Integer coordinate rounding occurs before checking separation; seed 71271 has a dedicated regression for that boundary case.
+
+Arena's actual enemy-creation boundary checks normal, explicit, support, and drone requests. Arcade candidate selection uses the same separation. If every entrance is invalid, no enemy is constructed; ordinary spawning records `unsafe-entrance` and retries through its usual cadence. No unsafe emergency position is substituted. Boss support entrance effects follow the actual accepted position. Stuck-enemy relocation also checks the reserve before teleporting. Enemy counts, combat statistics, currencies, and authored objective locations are unchanged.
+
+Six focused tests cover the inclusive 320-pixel boundary, all site states, invalid/explicit requests, exhausted entrances, nonmutating repair, validator rejection, 500 fallback layouts, and integer rounding. The live browser audit passed **1,969 checks**: **600 generated layouts** across twelve requested archetypes, ten seeds, and rounds 1/30/68/137/148; **1,260 actual enemy spawns** across all seven enemy types; and rejection without construction when all entrances are unsafe. The smallest generated separation was exactly 320 pixels. Accepted layouts covered eleven archetypes; hub-spoke requests selected validated fallbacks, so this does not claim accepted hub-spoke gameplay coverage.
+
+The three-round training handoff now persists at successful round completion, before reward/transition delays. Graduation retires Welcome, Resume Training, Basic Controls, HUD, Defense, Tactics, and Certification together, and clears their stale replay request. A late deployment acknowledgement cannot regress those completed sequences back to `arena-teaching`. Queued sequences are rechecked against current progress before presentation. Main Menu repairs profiles with a persisted three-round counter, including the interrupted third-round case where two training rounds and a completed round-three outcome were saved. Legacy one-round teaching keeps its previous repair path. Players still in their first two rounds retain the resume-training prompt.
+
+After graduation, existing Store teaching leads into Garage teaching. Browser checks verify the Store gate, absence of the START LOCAL gate, stale-queue retirement, saved graduation, and Garage handoff. This uses the established progression lessons and leaves Mod reveals independent.
+
+The splash screen now includes a small static notice: **“IN DEVELOPMENT — Content and features may change at any time.”** Its position clears the embedded continue prompt and footer credits, adapts on resize, and retires with the scene. The combined training/splash fixture passed **14 checks**, including replay without duplicate notices. A stalled screenshot attempt was discarded; the complete repeat passed in a fresh browser. The screenshot was reviewed separately.
+
+Validation: all **734 tests**, production build, and itch build passed. Echo-specific runtime and sustained gameplay evidence is documented in [echo-implementation.md](echo-implementation.md). Raw browser evidence: `artifacts/enemy-spawn-browser.json` and `artifacts/training-graduation.json`; compact retained results are in [echo-validation-measurements.json](echo-validation-measurements.json).
+
+```powershell
+node --experimental-strip-types --test tests/enemy-spawn-safety.test.mjs tests/tutorial.test.mjs
+node scripts/run-layout-audit.mjs artifacts/enemy-spawn-browser.json ./audit-enemy-spawns.browser.js
+node scripts/run-layout-audit.mjs artifacts/training-graduation.json ./audit-training-graduation.browser.js
+```

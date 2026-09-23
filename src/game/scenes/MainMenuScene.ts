@@ -122,7 +122,12 @@ export class MainMenuScene extends Phaser.Scene {
       // Repair profiles already stranded by the previous completion guard.
       // A persisted completed round proves that this first-run deployment
       // succeeded, so Main Menu must continue at Store—not START LOCAL.
-      if (SaveSystem.getTutorialProgress().lyraCurriculum !== 4 && SaveSystem.getTutorialProgress().firstRunStage === 'arena-teaching' && profile.roundsCompleted > 0) {
+      const teaching = SaveSystem.getTutorialProgress();
+      if (teaching.firstRunStage === 'arena-teaching' && (
+        (teaching.trainingRoundsCompleted ?? 0) >= 3
+        || (teaching.lyraCurriculum !== 4 && profile.roundsCompleted > 0)
+        || ((teaching.trainingRoundsCompleted ?? 0) >= 2 && profile.highestRound >= 3)
+      )) {
         SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress); });
       }
     }
