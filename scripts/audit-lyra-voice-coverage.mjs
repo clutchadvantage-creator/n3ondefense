@@ -51,7 +51,7 @@ const lines = [
 missing.forEach((entry, index) => lines.push(`### ${index + 1}. ${entry.title}`, '',
   `ID: \`${entry.id}\`  \nSuggested file: \`${entry.suggestedFile}\``, '', quote(entry.text), ''));
 lines.push('## Existing recordings that still fall back to TTS in some situations', '',
-  'Recorded audio is accepted only when its transcript exactly matches the displayed instructions. This prevents a recording from teaching the wrong button. The 17 existing files cover the default English keyboard/mouse script; controller prompts, rebound ability keys, and the unavailable-action explanation can change that script.', '',
+  'Recorded tutorial audio is accepted only when its registered transcript exactly matches the displayed instructions. This prevents a recording from teaching the wrong button. The original 17 training recordings cover the default English keyboard/mouse script. Controller prompts, rebound ability keys, and the unavailable-action explanation can change recorded tutorial text, including later Store/Garage lessons.', '',
   '### Controller variants — exact current text', '',
   'These variants do not have matching recordings. Family names below identify the actual controller prompt text. A variant-aware recording map will be needed to select these files; adding another file under the same message ID alone would replace its default recording.', '');
 for (const variant of variants.filter(v => v.kind === 'controller')) lines.push(`#### ${variant.id} — ${variant.families.join(', ')}`, '', quote(variant.text), '');

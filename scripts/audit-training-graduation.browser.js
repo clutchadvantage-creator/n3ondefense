@@ -38,6 +38,23 @@
       stop(); SaveSystem.updateTutorialProgress(p => completeTutorialSequence(p, 'onboarding.store'));
       game.scene.start('menu'); await wait(400);
       check(game.scene.keys.menu.tutorialDirector.isActiveSequence('onboarding.menu-garage'), 'Store teaching hands off to Garage');
+      stop();
+      check(SaveSystem.createProfile('Boundary ' + Date.now().toString().slice(-6)).ok, 'Isolated live completion profile');
+      SaveSystem.updateTutorialProgress(p => {
+        p.firstRunStage = 'arena-teaching'; p.firstRunWelcomePending = false; p.trainingRoundsCompleted = 2;
+        p.completedSequences = ['onboarding.menu-welcome', 'onboarding.basic-controls', 'onboarding.hud', 'onboarding.defense', 'onboarding.tactics'];
+      });
+      game.scene.start('arena', { baseSeed: 550055, round: 3, objectiveMode: 'open', protocol: 'normal', runStartedAt: Date.now(), modsEarned: [], modFocus: null, contract: null });
+      const arena = game.scene.keys.arena, deadline = performance.now() + 25000;
+      while (arena.roundRuntime?.phase !== 'active') { if (performance.now() > deadline) throw Error('Live third round did not activate'); await wait(25); }
+      arena.player.invulnUntil = Infinity; arena.playerInput.adoptDevice('gamepad');
+      arena.state.set('Victory'); arena.completeRound();
+      check(SaveSystem.getTutorialProgress().firstRunStage === 'waiting-for-store', 'Actual Arena completion graduates synchronously before its transition');
+      check(arena.tutorialDirector === null && !arena.tutorialHardPaused, 'Actual completion retires the Arena director and its pause');
+      check(JSON.parse(LocalSaveManager.getActiveProfileSaveRaw()).tutorials.trainingRoundsCompleted === 3, 'Actual third-round graduation is already on disk');
+      check(arena.physics.world.isPaused, 'Graduation does not resume completed-round physics');
+      stop(); game.scene.start('menu'); await wait(400);
+      check(game.scene.keys.menu.tutorialDirector.isActiveSequence('onboarding.menu-store'), 'Leaving immediately after completion still leads to Store');
       stop(); game.scene.start('splash', { replay: true, returnScene: 'menu' }); await wait(1300);
       const splash = game.scene.keys.splash, note = splash.developmentText;
       check(note?.text === 'IN DEVELOPMENT — Content and features may change at any time.', 'Splash development notice displayed');

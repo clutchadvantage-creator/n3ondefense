@@ -1,6 +1,6 @@
 # LYRA — remaining custom voice recordings
 
-The current English catalog contains **62 message IDs: 17 have working custom recordings and 45 have no matching custom recording**. The following is generated from the actual message registry, tutorial text resolver, recording map, and files in `public/assets/audio/lyra/`.
+The current English catalog contains **62 message IDs: 33 have working custom recordings and 29 have no matching custom recording**. The following is generated from the actual message registry, tutorial text resolver, recording map, and files in `public/assets/audio/lyra/`.
 
 Missing recordings use local browser TTS when LYRA voice and Browser TTS are enabled and a suitable local voice exists. Otherwise they use the existing text-only fallback. This is a coverage inventory, not a claim that every message played during a test session.
 
@@ -8,315 +8,203 @@ Missing recordings use local browser TTS when LYRA voice and Browser TTS are ena
 
 Record the quoted text for each ID. Suggested filenames are organizational suggestions; new files must also be registered in `LYRA_RECORDINGS` before the game uses them. Keep files in `public/assets/audio/lyra/`.
 
-### 1. warning.health
-
-ID: `warning.health`  
-Suggested file: `lyra-warning-health.mp3`
-
-> Integrity critical. Move clear and recover health.
-
-### 2. warning.defuse
-
-ID: `warning.defuse`  
-Suggested file: `lyra-warning-defuse.mp3`
-
-> Charge under disarm. Interrupt the defusers now.
-
-### 3. tactical.planted
-
-ID: `tactical.planted`  
-Suggested file: `lyra-tactical-planted.mp3`
-
-> Charge armed. Hold this site and keep the defusers off it.
-
-### 4. event.arcade.complete
-
-ID: `event.arcade.complete`  
-Suggested file: `lyra-event-arcade-complete.mp3`
-
-> Arcade objective complete. Rewards secured.
-
-### 5. event.arcade.failed
-
-ID: `event.arcade.failed`  
-Suggested file: `lyra-event-arcade-failed.mp3`
-
-> Arcade window closed. Return to the primary objective.
-
-### 6. context.pickup
-
-ID: `context.pickup`  
-Suggested file: `lyra-context-pickup.mp3`
-
-> Recovered supplies restore combat resources. Collect them when the approach is clear.
-
-### 7. context.anomaly
-
-ID: `context.anomaly`  
-Suggested file: `lyra-context-anomaly.mp3`
-
-> Anomaly access detected. Check the entry fee and extraction objective before committing.
-
-### 8. context.arcade
-
-ID: `context.arcade`  
-Suggested file: `lyra-context-arcade.mp3`
-
-> Arcade objective online. The notification console tracks your target and remaining time.
-
-### 9. context.hazard
-
-ID: `context.hazard`  
-Suggested file: `lyra-context-hazard.mp3`
-
-> Security hazards are active. Watch their warning zones and move before they fire.
-
-### 10. context.recalibration
+### 1. context.recalibration
 
 ID: `context.recalibration`  
 Suggested file: `lyra-context-recalibration.mp3`
 
 > Recalibration rolls a replacement stat. Review the cost, then compare the candidate before applying it.
 
-### 11. context.infusion
+### 2. context.infusion
 
 ID: `context.infusion`  
 Suggested file: `lyra-context-infusion.mp3`
 
 > Infusion changes this card’s visual finish. Review the appearance and resource cost before committing.
 
-### 12. context.supreme
+### 3. context.supreme
 
 ID: `context.supreme`  
 Suggested file: `lyra-context-supreme.mp3`
 
 > Supreme protocols are available. Inspect the requirements in Operations before deploying.
 
-### 13. system.ready
+### 4. system.ready
 
 ID: `system.ready`  
 Suggested file: `lyra-system-ready.mp3`
 
 > Systems linked. I am LYRA. Let’s keep your next deployment productive.
 
-### 14. ambient.garage.1
-
-ID: `ambient.garage.1`  
-Suggested file: `lyra-ambient-garage-1.mp3`
-
-> A balanced loadout. A reassuring amount of engineering has gone into your survival.
-
-### 15. ambient.garage.2
-
-ID: `ambient.garage.2`  
-Suggested file: `lyra-ambient-garage-2.mp3`
-
-> Take your time. The arena has never complained about receiving a prepared operative.
-
-### 16. ambient.store.1
+### 5. ambient.store.1
 
 ID: `ambient.store.1`  
 Suggested file: `lyra-ambient-store-1.mp3`
 
 > Permanent upgrades. My preferred form of optimism.
 
-### 17. READ THE FIELD
+### 6. READ THE FIELD
 
 ID: `tutorial.onboarding.tactics.awareness`  
 Suggested file: `lyra-tutorial-onboarding-tactics-awareness.mp3`
 
 > Systems checked. Watch each module?s readiness and the security warning zones. Keep your escape route open while defending.
 
-### 18. STORE / UPGRADES
-
-ID: `tutorial.onboarding.menu-store.store`  
-Suggested file: `lyra-tutorial-onboarding-menu-store-store.mp3`
-
-> Credits earned in the Arena persist between runs. Spend them on permanent upgrades that help your operative push farther. Click STORE to continue.
-
-### 19. CREDITS PERSIST
-
-ID: `tutorial.onboarding.store.credits`  
-Suggested file: `lyra-tutorial-onboarding-store-credits.mp3`
-
-> Credits earned during deployments remain in your wallet and fund permanent improvements.
-
-### 20. CHOOSE A SYSTEM
-
-ID: `tutorial.onboarding.store.card`  
-Suggested file: `lyra-tutorial-onboarding-store-card.mp3`
-
-> Each upgrade module shows its current level, next improvement, and cost. Upgrades apply to future deployments.
-
-### 21. RETURN STRONGER
-
-ID: `tutorial.onboarding.store.action`  
-Suggested file: `lyra-tutorial-onboarding-store-action.mp3`
-
-> Select and purchase upgrades when you are ready. Every permanent improvement helps your next run push farther.
-
-### 22. OPERATOR GARAGE / MOD COLLECTION
-
-ID: `tutorial.onboarding.menu-garage.garage`  
-Suggested file: `lyra-tutorial-onboarding-menu-garage-garage.mp3`
-
-> Mods recovered during runs can alter your build. Inspect and equip them through the Operator Garage and its Mod Collection station. Click OPERATOR GARAGE to continue.
-
-### 23. YOUR INSTALLED MODS
+### 7. YOUR INSTALLED MODS
 
 ID: `tutorial.onboarding.garage.loadout`  
 Suggested file: `lyra-tutorial-onboarding-garage-loadout.mp3`
 
 > These five docks show the Mods installed for your next deployment. Each slot accepts its matching category, while Utility can support flexible builds.
 
-### 24. OPEN MOD COLLECTION
+### 8. OPEN MOD COLLECTION
 
 ID: `tutorial.onboarding.garage.mod-collection`  
 Suggested file: `lyra-tutorial-onboarding-garage-mod-collection.mp3`
 
 > The Mod Collection is where recovered cards are inspected, upgraded, infused, equipped, or recycled. Click MOD COLLECTION to continue.
 
-### 25. RECOVERED MOD ARCHIVE
+### 9. RECOVERED MOD ARCHIVE
 
 ID: `tutorial.onboarding.mod-collection.archive`  
 Suggested file: `lyra-tutorial-onboarding-mod-collection-archive.mp3`
 
 > Every Mod card recovered during a run appears in this archive. Rarity, rank, infusion, and duplicate status remain attached to the exact card.
 
-### 26. INSPECT YOUR BUILD
+### 10. INSPECT YOUR BUILD
 
 ID: `tutorial.onboarding.mod-collection.details`  
 Suggested file: `lyra-tutorial-onboarding-mod-collection-details.mp3`
 
 > Select a card to read its complete effect and manage compatible loadout slots. New Mods create new ways to approach future rounds.
 
-### 27. TEACHING COMPLETE
+### 11. TEACHING COMPLETE
 
 ID: `tutorial.onboarding.mod-collection.complete`  
 Suggested file: `lyra-tutorial-onboarding-mod-collection-complete.mp3`
 
 > Your workstation is ready. Keep earning Credits, improving Mods, adapting your build, and pushing farther.
 
-### 28. MOD RECOVERED
+### 12. MOD RECOVERED
 
 ID: `tutorial.context.first-mod.first-mod`  
 Suggested file: `lyra-tutorial-context-first-mod-first-mod.mp3`
 
 > Mods are awarded immediately. Visit the Mod Collection to inspect, upgrade, infuse, and equip the exact card you found.
 
-### 29. CORRUPTED MOD
+### 13. CORRUPTED MOD
 
 ID: `tutorial.context.corrupted-mod.corrupted`  
 Suggested file: `lyra-tutorial-context-corrupted-mod-corrupted.mp3`
 
 > Corrupted Mods carry an exceptional advantage and a real drawback. Read both effects before installing one.
 
-### 30. LEGENDARY LOADOUT RULE
+### 14. LEGENDARY LOADOUT RULE
 
 ID: `tutorial.context.legendary-mod.legendary`  
 Suggested file: `lyra-tutorial-context-legendary-mod-legendary.mp3`
 
 > Legendary Mods are extremely rare. Only one Legendary Mod may be equipped across the entire loadout.
 
-### 31. BOMB DEFUSE IN PROGRESS
+### 15. BOMB DEFUSE IN PROGRESS
 
 ID: `tutorial.context.first-defuse.defuse-alert`  
 Suggested file: `lyra-tutorial-context-first-defuse-defuse-alert.mp3`
 
 > Enemies are actively disarming the highlighted bomb. Eliminate or interrupt every defuser before their progress completes. The red HUD alert, yellow caution icon, warning audio, and striped site perimeter remain active while the danger continues.
 
-### 32. OWNED CARD ARCHIVE
+### 16. OWNED CARD ARCHIVE
 
 ID: `tutorial.progression.mod-collection.archive`  
 Suggested file: `lyra-tutorial-progression-mod-collection-archive.mp3`
 
 > Every acquired copy appears here. Border color identifies rarity; the duplicate marker counts extra copies regardless of upgrade level.
 
-### 33. INSPECT & CONFIGURE
+### 17. INSPECT & CONFIGURE
 
 ID: `tutorial.progression.mod-collection.details`  
 Suggested file: `lyra-tutorial-progression-mod-collection-details.mp3`
 
 > The viewer shows the selected card's rank, infusion, category, and complete effect. Equip it to a compatible slot or the Utility/Wildcard dock.
 
-### 34. INSTALL A MOD
+### 18. INSTALL A MOD
 
 ID: `tutorial.progression.mod-collection.equip`  
 Suggested file: `lyra-tutorial-progression-mod-collection-equip.mp3`
 
 > Use a valid category slot or the Utility/Wildcard dock whenever you want to install the selected card into the real next-deployment loadout.
 
-### 35. UPGRADE OR RECYCLE
+### 19. UPGRADE OR RECYCLE
 
 ID: `tutorial.progression.mod-collection.upgrade`  
 Suggested file: `lyra-tutorial-progression-mod-collection-upgrade.mp3`
 
 > Upgrade favorite cards with the displayed currencies. Unupgraded duplicate copies can be recycled into Plasma Chips.
 
-### 36. BOSS SIGNAL DETECTED
+### 20. BOSS SIGNAL DETECTED
 
 ID: `tutorial.context.first-boss.boss`  
 Suggested file: `lyra-tutorial-context-first-boss-boss.mp3`
 
 > The highlighted boss combines its complete attack kit with arena security. Read the telegraphs, preserve Energy, and keep moving.
 
-### 37. RETURN STRONGER
+### 21. RETURN STRONGER
 
 ID: `tutorial.progression.store.store`  
 Suggested file: `lyra-tutorial-progression-store-store.mp3`
 
 > Credits survive failed deployments. Spend them in the Store on permanent upgrades, then deploy again.
 
-### 38. CREDITS
+### 22. CREDITS
 
 ID: `tutorial.progression.upgrades.credits`  
 Suggested file: `lyra-tutorial-progression-upgrades-credits.mp3`
 
 > This wallet value shows your Credits. Credits persist after every deployment and purchase permanent combat upgrades, cosmetics, and Mod improvements.
 
-### 39. CORE TOKENS
+### 23. CORE TOKENS
 
 ID: `tutorial.progression.upgrades.core-tokens`  
 Suggested file: `lyra-tutorial-progression-upgrades-core-tokens.mp3`
 
 > This wallet value shows Core Tokens, a persistent rare resource used by higher-rarity Mod upgrades and select unlocks.
 
-### 40. CHOOSE A SYSTEM
+### 24. CHOOSE A SYSTEM
 
 ID: `tutorial.progression.upgrades.card`  
 Suggested file: `lyra-tutorial-progression-upgrades-card.mp3`
 
 > Each highlighted module shows its current level, next improvement, and exact cost. Select one to inspect it.
 
-### 41. INSTALL AN UPGRADE
+### 25. INSTALL AN UPGRADE
 
 ID: `tutorial.progression.upgrades.purchase`  
 Suggested file: `lyra-tutorial-progression-upgrades-purchase.mp3`
 
 > Try an available upgrade. A successful install persists across every future run; if funds are short, the Store shows the exact amount still needed.
 
-### 42. OPERATOR GARAGE
+### 26. OPERATOR GARAGE
 
 ID: `tutorial.progression.garage.garage`  
 Suggested file: `lyra-tutorial-progression-garage-garage.mp3`
 
 > Your Garage shows what is installed for the next deployment. Configure Mods, Signals, Contracts, cosmetics, and presets here.
 
-### 43. NEXT DEPLOYMENT LOADOUT
+### 27. NEXT DEPLOYMENT LOADOUT
 
 ID: `tutorial.progression.garage-loadout.loadout`  
 Suggested file: `lyra-tutorial-progression-garage-loadout-loadout.mp3`
 
 > These five highlighted docks contain the Mods installed for your next deployment. Browse or unequip cards independently by slot.
 
-### 44. OPERATIONS CONFIGURATION
+### 28. OPERATIONS CONFIGURATION
 
 ID: `tutorial.progression.garage-loadout.configuration`  
 Suggested file: `lyra-tutorial-progression-garage-loadout-configuration.mp3`
 
 > This terminal opens Operations, where you choose an unlocked mode and starting checkpoint. Contracts, Signals, fees, and progression remain linked to the same next deployment.
 
-### 45. OVERDRIVE UNLOCKED
+### 29. OVERDRIVE UNLOCKED
 
 ID: `tutorial.progression.overdrive.overdrive`  
 Suggested file: `lyra-tutorial-progression-overdrive-overdrive.mp3`
@@ -325,7 +213,7 @@ Suggested file: `lyra-tutorial-progression-overdrive-overdrive.mp3`
 
 ## Existing recordings that still fall back to TTS in some situations
 
-Recorded audio is accepted only when its transcript exactly matches the displayed instructions. This prevents a recording from teaching the wrong button. The 17 existing files cover the default English keyboard/mouse script; controller prompts, rebound ability keys, and the unavailable-action explanation can change that script.
+Recorded tutorial audio is accepted only when its registered transcript exactly matches the displayed instructions. This prevents a recording from teaching the wrong button. The original 17 training recordings cover the default English keyboard/mouse script. Controller prompts, rebound ability keys, and the unavailable-action explanation can change recorded tutorial text, including later Store/Garage lessons.
 
 ### Controller variants — exact current text
 
@@ -597,6 +485,8 @@ For a recorded line, that changes its transcript and selects TTS. The affected e
 - `tutorial.onboarding.tactics.mine`
 - `tutorial.onboarding.tactics.fence`
 - `tutorial.onboarding.tactics.turret`
+- `tutorial.onboarding.menu-store.store`
+- `tutorial.onboarding.menu-garage.garage`
 
 The machine-readable inventory includes each complete default-keyboard unavailable-action transcript. Controller or custom-key versions use their resolved full text plus the same suffix. Tutorial lines already listed in the 45-line recording list can receive the same suffix when action-gated.
 
@@ -611,6 +501,17 @@ The machine-readable inventory includes each complete default-keyboard unavailab
 
 | Message ID | Custom file |
 | --- | --- |
+| `warning.health` | `operativehealthlyra.mp3` |
+| `warning.defuse` | `defusewarninglyra.mp3` |
+| `tactical.planted` | `tacticalplantedlyra.mp3` |
+| `event.arcade.complete` | `eventarcadecompletelyra.mp3` |
+| `event.arcade.failed` | `eventarcadefailedlyra.mp3` |
+| `context.pickup` | `contextpickuplyra.mp3` |
+| `context.anomaly` | `contextanomalylyra.mp3` |
+| `context.arcade` | `contextarcadelyra.mp3` |
+| `context.hazard` | `contexthazardlyra.mp3` |
+| `ambient.garage.1` | `ambientgarage1lyra.mp3` |
+| `ambient.garage.2` | `ambientgarage2lyra.mp3` |
 | `tutorial.onboarding.menu-welcome.welcome` | `lyrawelcome.mp3` |
 | `tutorial.onboarding.menu-welcome.advanced-preview` | `lyrasupremepreview.mp3` |
 | `tutorial.onboarding.menu-welcome.start-local` | `lyrastartlocal.mp3` |
@@ -628,6 +529,11 @@ The machine-readable inventory includes each complete default-keyboard unavailab
 | `tutorial.onboarding.tactics.fence` | `lyraelectricfences.mp3` |
 | `tutorial.onboarding.tactics.turret` | `lyraturrets.mp3` |
 | `tutorial.onboarding.certification.release` | `lyratrainingcomplete.mp3` |
+| `tutorial.onboarding.menu-store.store` | `tutorialonboardingmenu-storelyra.mp3` |
+| `tutorial.onboarding.store.credits` | `tutorialonboardingstorecreditslyra.mp3` |
+| `tutorial.onboarding.store.card` | `tutorialonboardingstorecardlyra.mp3` |
+| `tutorial.onboarding.store.action` | `tutorialonboardingstoreactionlyra.mp3` |
+| `tutorial.onboarding.menu-garage.garage` | `tutorialonboardingmenu-garagelyra.mp3` |
 
 Unmapped audio files in the LYRA folder: **none**.
 

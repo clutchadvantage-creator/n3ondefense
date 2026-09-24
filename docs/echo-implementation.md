@@ -14,6 +14,8 @@ The first press records the initial transform. Release rearms the next input edg
 
 Playback follows the historical route and shortest angular interpolation. Dash is reproduced as rapid recorded movement and wider holographic separation; it does not invoke dash again or spend its resources. The hologram has no physics body, target selection, AI, objective interaction, or pickup collection. Recording data is cleared on completion and cancellation, while the bounded reserve is reused for the next activation.
 
+Safe return checks a 13-pixel body radius against world bounds and enabled static colliders in both Arena and HEIST. If the recorded origin becomes blocked, a bounded search tests outward in four-pixel steps up to 384 pixels, then checks the player's current position. If no safe position exists, playback cancels without teleporting into collision. A corrected return translates the recorded route and weapon positions together, preserving their relative movement and aim.
+
 `EchoRuntime.ts` owns scene presentation and the player-body adapter. It reuses the equipped operative texture, frame, dimensions, and origin in three translucent cyan/magenta/white images. A short recorded route, origin marker, paired departure/arrival rings, dash separation, and a brief exit flicker communicate the temporal replay. The route updates at 20 Hz and retains at most 32 displayed segments. Presentation uses existing textures and eight reusable game objects; it creates no new texture cache, per-frame tween, timer, or physics body. HUD text updates at 10 Hz or immediately on state changes.
 
 ## Weapons, damage, and rewards
@@ -64,15 +66,44 @@ The assisted progression fixture runs normal pressure limits, five rank-three Mo
 
 Final numerical run results are listed in the compact evidence record. Earlier hold/release prototype measurements are superseded by the two-press runs. These are assisted runtime checks, not unassisted campaign clears, every possible seed/loadout combination, or a guarantee of 60 FPS on all hardware. The ending fixture withholds real-player fire during the three-boss pressure sample; its Echo activations there measure movement/presentation, while earlier ordinary combat includes Echo weapon replay.
 
-The focused automated tests cover timing, early second presses, untouched automatic completion, cooldown, key repeat, fixed sampling at several frame rates, interpolation, mixed ammo/timestamps, bounded extreme fire reserves, safe-return fallback, damage caps, cleanup, anti-recursion, migration/rebinding/reset, and controller mapping. HUD and Options layout assertions were updated for the new slot and binding row. All **734 tests**, the production build, and the itch build passed on the final code. The focused Arena/HEIST fixture passed **80 checks**.
+The final corrected normal run completed **rounds 1–12 in 222.8 seconds**, with **171 gameplay assertions, 14 encounter retirements, 12 disk-save comparisons, and 17 Echo replays**. It exercised all six Arcade types, two HEIST returns, three Pause/Options/Store cycles, two bosses, physical rewards, and four Mod reveals. The first four encounters averaged 16.883 ms of smoothed Phaser frame time; the final four averaged 16.865 ms. Continuous raw means were **16.648 ms in Defense, 16.895 ms in Defusing, 16.680 ms in HEIST, and 16.666 ms in boss combat**, with histogram p95 intervals of 17/19/17/17 ms. All analyzer budgets passed. Individual intervals still reached 38.4 ms in Defusing and 48.2 ms in HEIST, so this is not a hitch-free claim.
+
+The final corrected late run completed **Supreme rounds 137–148 and the Centaurus ending in 489.8 seconds**, passing **194 gameplay assertions, 24 finale assertions, 16 encounter retirements, 13 disk-save comparisons, and 30 Echo replays**. It exercised all six Arcade types, two HEIST returns, three Pause/Options/Store cycles, two ordinary bosses, and five Mod reveals. Its first four encounters averaged 17.264 ms of smoothed Phaser frame time; the final four averaged 16.909 ms. Continuous raw means were **16.896 ms in Defense, 16.930 ms in Defusing, 16.644 ms in HEIST, and 16.678 ms in boss combat**, with histogram p95 intervals of 19/20/17/17 ms. All sustained gameplay budgets passed: phases with at least 120 frames require a raw mean no greater than 20 ms and histogram p95 no greater than 34 ms. Histogram percentiles round upward to whole milliseconds.
+
+| Sustained ending sample | Raw mean interval | Raw p95 interval |
+| --- | ---: | ---: |
+| Centaurus ordinary, 40 seconds | 16.828 ms | 18.1 ms |
+| Three bosses, first 20 seconds | 16.666 ms | 16.9 ms |
+| Three bosses, second 20 seconds | 16.666 ms | 16.9 ms |
+| Three bosses, third 20 seconds | 16.708 ms | 16.9 ms |
+| Two bosses remaining, 20 seconds | 16.692 ms | 16.9 ms |
+| One boss remaining, 20 seconds | 16.660 ms | 16.9 ms |
+
+All three bosses remained alive and active for the full 60-second sample. Completion stayed false after the first two deaths and persisted after the third. Credits, terminal debrief, the actual Garage action, and an independent browser reload preserved completion and Supreme highest round 148. The longest late boss-combat interval was 39.3 ms; synchronous scene initialization still produces larger isolated hitches.
+
+Together the final runs cover **24 ordinary rounds plus Centaurus, 365 gameplay assertions, 24 finale assertions, 30 encounter retirements, 25 disk-save comparisons, and 47 Echo replays**. Every recorded replay lasted four seconds, used 241 movement samples, and reported zero rejected weapon events. The 25 quiescent checkpoints retained stable resize/game/window/document listener counts of 22/27/19/17. These are final-code early and late samples, plus the focused round-68 ability check; they are not a new consecutive round-68-to-148 campaign soak. Measurements used the isolated Edge WebGL browser at 1528 × 811 and DPR 1, with an NVIDIA GeForce RTX 5070 reported through ANGLE/Direct3D11.
+
+The focused automated tests cover timing, early second presses, untouched automatic completion, cooldown, key repeat, fixed sampling at several frame rates, interpolation, mixed ammo/timestamps, bounded extreme fire reserves, safe-return fallback, damage caps, cleanup, anti-recursion, migration/rebinding/reset, and controller mapping. HUD and Options layout assertions were updated for the new slot and binding row. All **736 tests**, the production build, and the itch build passed on the final code. The focused Arena/HEIST fixture passed **80 checks**.
 
 The additional requested bombsite safety, three-round tutorial retirement, and splash notice are detailed in [bombsite-spawn-and-training-fixes.md](bombsite-spawn-and-training-fixes.md). Their validation includes 600 generated arenas, 1,260 real enemy spawns, and the Store-to-Garage teaching handoff. They do not alter Echo input or damage rules.
 
 Remaining manual checks: physical keyboard/OS Alt behavior outside synthetic browser events, physical controller hardware, subjective audio balance/listening, and movement readability on different displays and lower-end GPUs. The hologram and compact control screens were captured for visual review. Placeholder Echo tones can later be replaced through the existing audio entries.
 
+## Rendering correction found during Echo validation
+
+An earlier full late run completed gameplay but failed the sustained Defusing budget: **21.345 ms raw mean against 20 ms**. Its evidence is retained as `artifacts/echo-before-circle-late.json` and its summary. The early ordinary encounter means were 21.129, 20.473, and 24.448 ms in rounds 137–139. A diagnostic run with Echo disabled and the same three-round fixture prefix measured 17.240, 16.951, and 17.485 ms. Separate runs include live combat randomness, so these numbers do not isolate an exact per-activation cost. They do establish that the extra replay workload needed rendering headroom.
+
+The shared mine/grenade explosion renderer repeatedly triangulated full circular paths. `CircleFillPath.ts` recognizes the existing Phaser 3.90 full-circle tessellation without changing its vertices. `CircleFillPipeline.ts` uses those same vertices as a triangle fan for uniform-color circle fills. Strokes, other shapes, gradients, and unrecognized sampling use the existing MultiPipeline behavior. Canvas rendering remains on Phaser's existing path. The explosion artwork, density limits, lifetime, colors, damage, pools, and public effect API are unchanged.
+
+The pipeline is installed once per WebGL game and owned by Phaser's renderer. It does not create per-scene shaders, textures, circles, or alternate effect pools. Scene retirement destroys the same two Graphics owners; renderer shutdown owns the one shared pipeline. Thirty create/destroy cycles retained the same pipeline, zero scene roots, and an unchanged texture count.
+
+In the final isolated probe, **18 simultaneous explosions averaged 8.471 → 5.083 ms of renderer CPU**, a **40.0% reduction**; update CPU averaged 0.067 → 0.061 ms. Six explosions averaged 2.959 → 1.747 ms. These are renderer CPU measurements, not a claimed FPS percentage. Twenty-four before/after WebGL comparisons covered ordinary explosions and premium bomblets at four ages and zooms 1.0, 0.9, and 0.65. The greatest mean RGB difference was **0.001698/255**; at most 0.000162% of pixels differed by more than 40 in a channel. Rasterization differences remain; this does not claim pixel identity. The actual Arena/HEIST ability fixture was repeated after the renderer correction and still passed all 80 checks.
+
+The probe is reproducible with `node scripts/run-layout-audit.mjs artifacts/explosion-circle-final.json ./audit-explosion-circle-cost.browser.js`. It compares the actual production pipeline against Phaser's original pipeline on the same Graphics commands. The fixed circle matcher has tests for positions/radii, malformed coordinates, alternative tessellation, partial arcs, ellipses, and zero-radius paths.
+
 ## LYRA recording inventory
 
-[Every missing custom voice line and its exact text](lyra-missing-voice-lines.md) is included in this pass's final report. The registry has **62 messages: 17 mapped custom recordings and 45 without custom VO**. All 17 files exist; there are no unmapped audio files in the LYRA folder.
+[Every missing custom voice line and its exact text](lyra-missing-voice-lines.md) is included in this pass's final report. At completion of the Echo pass, the registry had **62 messages: 17 mapped custom recordings and 45 without custom VO**. All 17 files existed with no unmapped audio files. The linked inventory is maintained as new recordings arrive; the subsequent [mechanical HUD pass](mechanical-hud-notifications.md) registers sixteen more.
 
 The inventory also includes **20 distinct controller transcripts across nine recorded tutorial IDs**, **five templates affected by rebound ability keys**, and **twelve recorded action-gated IDs** that can switch to TTS when the unavailable-action explanation is appended. It explains language/file-failure/development-preview fallbacks and supplies suggested filenames for the missing recordings. An existing `module?s` punctuation typo was corrected to `module’s` before generating the recording script. No new dialogue or replacement voice files were invented.
 
@@ -85,6 +116,7 @@ The inventory also includes **20 distinct controller transcripts across nine rec
 | Arena and HEIST | `src/game/scenes/ArenaScene.ts`, `src/game/anomalies/heist/HeistScene.ts` |
 | Damage and attribution | `src/game/enemies/Enemy.ts`, `src/game/bosses/Boss.ts`, `src/game/telemetry/GameplayTelemetryRecorder.ts`, `src/game/systems/FluxCoreSystem.ts` |
 | Presentation and sound | `src/game/systems/Hud.ts`, `AudioManager.ts`, `src/game/config/audio.ts` |
+| Explosion rendering | `src/game/rendering/CircleFillPath.ts`, `CircleFillPipeline.ts`, `src/game/vfx/MineExplosionVfx.ts`, `tests/circle-fill-path.test.mjs`, `scripts/audit-explosion-circle-cost.browser.js` |
 | Tests and browser fixtures | `tests/echo.test.mjs`, `tests/hud-layout.test.mjs`, `tests/options-tabs.test.mjs`, `scripts/audit-echo.browser.js`, `audit-echo-controls.browser.js`, `progression-exercises.js` |
 | Voice inventory | `src/game/tutorial/TutorialRegistry.ts`, `scripts/audit-lyra-voice-coverage.mjs`, `docs/lyra-missing-voice-lines.md`, `docs/lyra-voice-coverage.json` |
 | Completion evidence | This report, `scripts/summarize-echo-validation.mjs`, `docs/echo-validation-measurements.json` |

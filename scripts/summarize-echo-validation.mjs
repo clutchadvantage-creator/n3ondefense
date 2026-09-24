@@ -3,7 +3,7 @@ const read = async path => {
   const bytes = await readFile(path);
   return JSON.parse(bytes.toString(bytes[0] === 255 && bytes[1] === 254 ? 'utf16le' : 'utf8').replace(/^\uFEFF/, ''));
 };
-const report = { recordedAt: new Date().toISOString(), tests: 734, builds: ['production', 'itch'] };
+const report = { recordedAt: new Date().toISOString(), tests: 736, builds: ['production', 'itch'] };
 for (const name of ['normal', 'late']) {
   const raw = await read(`artifacts/echo-${name}.json`), summary = await read(`artifacts/echo-${name}.summary.json`);
   if (raw.running || raw.errors.length) throw Error(`${name} did not finish cleanly`);
@@ -27,11 +27,17 @@ report.bindingReload = (await read('artifacts/echo-binding-reload.json')).result
 if (report.bindingReload.binding !== 'Keyboard:KeyZ' || report.bindingReload.diskBinding !== 'Keyboard:KeyZ') throw Error('Binding reload failed');
 report.endingReload = await read('artifacts/echo-ending-reload.json');
 if (!report.endingReload.completed || report.endingReload.highest !== 148) throw Error('Ending reload failed');
-const earlier = await read('artifacts/echo-before-spawn-late.summary.json');
-report.priorPerformanceFailure = { file: 'artifacts/echo-before-spawn-late.summary.json', passed: earlier.passed,
+const earlier = await read('artifacts/echo-before-circle-late.summary.json');
+report.priorPerformanceFailure = { file: 'artifacts/echo-before-circle-late.summary.json', passed: earlier.passed,
   failures: earlier.failures, earlyPerformance: earlier.earlyPerformance, latePerformance: earlier.latePerformance,
   continuousPhases: earlier.continuousFrames.phases,
-  note: 'Retained earlier run before bombsite spawn repair. Its timing failure was real; the cause was not isolated. The new entrance geometry means this is not a matched Echo-off/on comparison.' };
+  note: 'Retained earlier run after bombsite repair but before the measured explosion circle rendering correction. Defusing exceeded the sustained mean budget.' };
+const off = await read('artifacts/echo-disabled-late.json');
+report.echoDisabledDiagnostic = { options: off.options, rounds: off.encounters.map(e => ({ round: e.round, frameMs: e.frames.mean, updateMs: e.update.mean })),
+  note: 'Three-round diagnostic prefix, not a complete campaign validation. Live combat randomness and separate runs prevent interpreting the difference as an exact isolated ability cost.' };
+const circles = await read('artifacts/explosion-circle-final.json');
+if (circles.errors.length || circles.running || circles.artStages.length !== 24) throw Error('Circle validation failed');
+report.circleRendering = { cases: circles.cases, art: circles.art, artStages: circles.artStages, lifetime: circles.lifetime };
 await writeFile('docs/echo-validation-measurements.json', JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify({ normal: report.normal.passed, late: report.late.passed, replays: ['normal', 'late'].map(k => report[k].echoActivations.length),
   checks: Object.fromEntries(['ability', 'controls', 'compact', 'spawnSafety', 'trainingAndSplash'].map(k => [k, report[k].cases.length])) }));

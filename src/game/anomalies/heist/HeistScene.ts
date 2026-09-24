@@ -2028,6 +2028,7 @@ export class HeistScene extends Phaser.Scene {
 
   private completeHeist(): void {
     if (this.returning) return;
+    this.hudInformation?.clear();
     this.echo?.reset();
     this.returning = true;
     this.phase = 'returning';
@@ -2039,6 +2040,7 @@ export class HeistScene extends Phaser.Scene {
 
   private failHeist(reason: 'player-dead' | 'extraction-timeout' = 'player-dead'): void {
     if (this.returning) return;
+    this.hudInformation?.clear();
     this.trapSystem?.clearFireExposure();
     this.projectileImpactVfx.reset();
     this.echo?.reset();
@@ -2076,6 +2078,7 @@ export class HeistScene extends Phaser.Scene {
 
   private returnToArena(success: boolean, reason: 'extracted' | 'player-dead' | 'extraction-timeout' | 'scene-shutdown'): void {
     if (this.returnResultDelivered) return;
+    this.hudInformation?.clear();
     this.returnResultDelivered = true;
     this.inputController.clear();
     this.input.enabled = false;

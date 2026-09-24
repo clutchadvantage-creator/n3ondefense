@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { LyraQueue } from '../src/game/lyra/LyraQueue.ts';
 import { DEFAULT_LYRA_SETTINGS, normalizeLyraSettings } from '../src/game/lyra/LyraTypes.ts';
 import { selectLyraVoice, BrowserTTSProvider, RecordedAudioProvider } from '../src/game/lyra/LyraVoiceProviders.ts';
-import { LYRA_MESSAGES, LYRA_MESSAGE_BY_ID } from '../src/game/lyra/LyraRegistry.ts';
+import { LYRA_MESSAGES, LYRA_MESSAGE_BY_ID, LYRA_RECORDINGS } from '../src/game/lyra/LyraRegistry.ts';
 import { createTutorialProgress, completeFirstRunTeachingRound, setFirstRunTeachingStage } from '../src/game/tutorial/TutorialProgress.ts';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import { TUTORIAL_SEQUENCES } from '../src/game/tutorial/TutorialRegistry.ts';
@@ -157,5 +157,16 @@ test('controller and remapped instructions cannot play a recording naming the wr
     assert.notEqual(copy.body, definition.recordedText);
     assert.equal(provider.play({ ...definition, text: copy.body }, DEFAULT_LYRA_SETTINGS, () => {}, () => {}, () => {}), null);
     assert.ok(!copy.body.includes('MIDDLE MOUSE BUTTON'));
+  }
+});
+test('registered custom recordings resolve to real unique messages and files, with tutorial transcript guards', () => {
+  const files = Object.values(LYRA_RECORDINGS['en-US']);
+  assert.equal(new Set(files).size, files.length);
+  assert.equal(files.length, 33);
+  for (const [id, file] of Object.entries(LYRA_RECORDINGS['en-US'])) {
+    const definition = LYRA_MESSAGE_BY_ID.get(id);
+    assert.ok(definition, id);
+    assert.ok(existsSync(new URL(`../public/assets/audio/lyra/${file}`, import.meta.url)), file);
+    if (definition.tutorial) assert.ok(definition.recordedText, id);
   }
 });

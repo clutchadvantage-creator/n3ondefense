@@ -1,121 +1,10 @@
 {
-  "generatedAt": "2026-09-23T22:00:27.579Z",
+  "generatedAt": "2026-09-24T10:58:40.717Z",
   "language": "en-US",
   "registered": 62,
-  "recorded": 17,
-  "missingCount": 45,
+  "recorded": 33,
+  "missingCount": 29,
   "missing": [
-    {
-      "id": "warning.health",
-      "mode": "WARNING",
-      "scene": "context controlled",
-      "title": "warning.health",
-      "text": "Integrity critical. Move clear and recover health.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-warning-health.mp3"
-    },
-    {
-      "id": "warning.defuse",
-      "mode": "WARNING",
-      "scene": "context controlled",
-      "title": "warning.defuse",
-      "text": "Charge under disarm. Interrupt the defusers now.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-warning-defuse.mp3"
-    },
-    {
-      "id": "tactical.planted",
-      "mode": "TACTICAL",
-      "scene": "context controlled",
-      "title": "tactical.planted",
-      "text": "Charge armed. Hold this site and keep the defusers off it.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tactical-planted.mp3"
-    },
-    {
-      "id": "event.arcade.complete",
-      "mode": "EVENT",
-      "scene": [
-        "arena"
-      ],
-      "title": "event.arcade.complete",
-      "text": "Arcade objective complete. Rewards secured.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-event-arcade-complete.mp3"
-    },
-    {
-      "id": "event.arcade.failed",
-      "mode": "EVENT",
-      "scene": [
-        "arena"
-      ],
-      "title": "event.arcade.failed",
-      "text": "Arcade window closed. Return to the primary objective.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-event-arcade-failed.mp3"
-    },
-    {
-      "id": "context.pickup",
-      "mode": "GUIDANCE",
-      "scene": [
-        "arena"
-      ],
-      "title": "context.pickup",
-      "text": "Recovered supplies restore combat resources. Collect them when the approach is clear.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-context-pickup.mp3"
-    },
-    {
-      "id": "context.anomaly",
-      "mode": "GUIDANCE",
-      "scene": [
-        "arena"
-      ],
-      "title": "context.anomaly",
-      "text": "Anomaly access detected. Check the entry fee and extraction objective before committing.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-context-anomaly.mp3"
-    },
-    {
-      "id": "context.arcade",
-      "mode": "GUIDANCE",
-      "scene": [
-        "arena"
-      ],
-      "title": "context.arcade",
-      "text": "Arcade objective online. The notification console tracks your target and remaining time.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-context-arcade.mp3"
-    },
-    {
-      "id": "context.hazard",
-      "mode": "GUIDANCE",
-      "scene": [
-        "arena"
-      ],
-      "title": "context.hazard",
-      "text": "Security hazards are active. Watch their warning zones and move before they fire.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-context-hazard.mp3"
-    },
     {
       "id": "context.recalibration",
       "mode": "GUIDANCE",
@@ -169,32 +58,6 @@
       "suggestedFile": "lyra-system-ready.mp3"
     },
     {
-      "id": "ambient.garage.1",
-      "mode": "AMBIENT",
-      "scene": [
-        "garage"
-      ],
-      "title": "ambient.garage.1",
-      "text": "A balanced loadout. A reassuring amount of engineering has gone into your survival.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-ambient-garage-1.mp3"
-    },
-    {
-      "id": "ambient.garage.2",
-      "mode": "AMBIENT",
-      "scene": [
-        "garage"
-      ],
-      "title": "ambient.garage.2",
-      "text": "Take your time. The arena has never complained about receiving a prepared operative.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-ambient-garage-2.mp3"
-    },
-    {
       "id": "ambient.store.1",
       "mode": "AMBIENT",
       "scene": [
@@ -217,61 +80,6 @@
       "fileExists": false,
       "usesRecordingByDefault": false,
       "suggestedFile": "lyra-tutorial-onboarding-tactics-awareness.mp3"
-    },
-    {
-      "id": "tutorial.onboarding.menu-store.store",
-      "mode": "GUIDANCE",
-      "scene": "menu",
-      "title": "STORE / UPGRADES",
-      "text": "Credits earned in the Arena persist between runs. Spend them on permanent upgrades that help your operative push farther. Click STORE to continue.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tutorial-onboarding-menu-store-store.mp3"
-    },
-    {
-      "id": "tutorial.onboarding.store.credits",
-      "mode": "GUIDANCE",
-      "scene": "upgrades",
-      "title": "CREDITS PERSIST",
-      "text": "Credits earned during deployments remain in your wallet and fund permanent improvements.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tutorial-onboarding-store-credits.mp3"
-    },
-    {
-      "id": "tutorial.onboarding.store.card",
-      "mode": "GUIDANCE",
-      "scene": "upgrades",
-      "title": "CHOOSE A SYSTEM",
-      "text": "Each upgrade module shows its current level, next improvement, and cost. Upgrades apply to future deployments.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tutorial-onboarding-store-card.mp3"
-    },
-    {
-      "id": "tutorial.onboarding.store.action",
-      "mode": "GUIDANCE",
-      "scene": "upgrades",
-      "title": "RETURN STRONGER",
-      "text": "Select and purchase upgrades when you are ready. Every permanent improvement helps your next run push farther.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tutorial-onboarding-store-action.mp3"
-    },
-    {
-      "id": "tutorial.onboarding.menu-garage.garage",
-      "mode": "GUIDANCE",
-      "scene": "menu",
-      "title": "OPERATOR GARAGE / MOD COLLECTION",
-      "text": "Mods recovered during runs can alter your build. Inspect and equip them through the Operator Garage and its Mod Collection station. Click OPERATOR GARAGE to continue.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tutorial-onboarding-menu-garage-garage.mp3"
     },
     {
       "id": "tutorial.onboarding.garage.loadout",
@@ -779,6 +587,16 @@
       "id": "tutorial.onboarding.tactics.turret",
       "kind": "action-unavailable",
       "text": "Press F to deploy RWG’s latest personal-security platform: an automated turret.\n\nTurrets can defend territory while you attend to other threats.\n\nConsider them temporary arena partners. Being everywhere at once is difficult.\n\nThey seem less troubled by the limitation. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.menu-store.store",
+      "kind": "action-unavailable",
+      "text": "Credits earned in the Arena persist between runs. Spend them on permanent upgrades that help your operative push farther. Click STORE to continue. This action is not currently available; continue when ready."
+    },
+    {
+      "id": "tutorial.onboarding.menu-garage.garage",
+      "kind": "action-unavailable",
+      "text": "Mods recovered during runs can alter your build. Inspect and equip them through the Operator Garage and its Mod Collection station. Click OPERATOR GARAGE to continue. This action is not currently available; continue when ready."
     }
   ],
   "entries": [
@@ -788,10 +606,10 @@
       "scene": "context controlled",
       "title": "warning.health",
       "text": "Integrity critical. Move clear and recover health.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-warning-health.mp3"
+      "file": "operativehealthlyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "operativehealthlyra.mp3"
     },
     {
       "id": "warning.defuse",
@@ -799,10 +617,10 @@
       "scene": "context controlled",
       "title": "warning.defuse",
       "text": "Charge under disarm. Interrupt the defusers now.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-warning-defuse.mp3"
+      "file": "defusewarninglyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "defusewarninglyra.mp3"
     },
     {
       "id": "tactical.planted",
@@ -810,10 +628,10 @@
       "scene": "context controlled",
       "title": "tactical.planted",
       "text": "Charge armed. Hold this site and keep the defusers off it.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tactical-planted.mp3"
+      "file": "tacticalplantedlyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "tacticalplantedlyra.mp3"
     },
     {
       "id": "event.arcade.complete",
@@ -823,10 +641,10 @@
       ],
       "title": "event.arcade.complete",
       "text": "Arcade objective complete. Rewards secured.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-event-arcade-complete.mp3"
+      "file": "eventarcadecompletelyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "eventarcadecompletelyra.mp3"
     },
     {
       "id": "event.arcade.failed",
@@ -836,10 +654,10 @@
       ],
       "title": "event.arcade.failed",
       "text": "Arcade window closed. Return to the primary objective.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-event-arcade-failed.mp3"
+      "file": "eventarcadefailedlyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "eventarcadefailedlyra.mp3"
     },
     {
       "id": "context.pickup",
@@ -849,10 +667,10 @@
       ],
       "title": "context.pickup",
       "text": "Recovered supplies restore combat resources. Collect them when the approach is clear.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-context-pickup.mp3"
+      "file": "contextpickuplyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "contextpickuplyra.mp3"
     },
     {
       "id": "context.anomaly",
@@ -862,10 +680,10 @@
       ],
       "title": "context.anomaly",
       "text": "Anomaly access detected. Check the entry fee and extraction objective before committing.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-context-anomaly.mp3"
+      "file": "contextanomalylyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "contextanomalylyra.mp3"
     },
     {
       "id": "context.arcade",
@@ -875,10 +693,10 @@
       ],
       "title": "context.arcade",
       "text": "Arcade objective online. The notification console tracks your target and remaining time.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-context-arcade.mp3"
+      "file": "contextarcadelyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "contextarcadelyra.mp3"
     },
     {
       "id": "context.hazard",
@@ -888,10 +706,10 @@
       ],
       "title": "context.hazard",
       "text": "Security hazards are active. Watch their warning zones and move before they fire.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-context-hazard.mp3"
+      "file": "contexthazardlyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "contexthazardlyra.mp3"
     },
     {
       "id": "context.recalibration",
@@ -953,10 +771,10 @@
       ],
       "title": "ambient.garage.1",
       "text": "A balanced loadout. A reassuring amount of engineering has gone into your survival.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-ambient-garage-1.mp3"
+      "file": "ambientgarage1lyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "ambientgarage1lyra.mp3"
     },
     {
       "id": "ambient.garage.2",
@@ -966,10 +784,10 @@
       ],
       "title": "ambient.garage.2",
       "text": "Take your time. The arena has never complained about receiving a prepared operative.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-ambient-garage-2.mp3"
+      "file": "ambientgarage2lyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "ambientgarage2lyra.mp3"
     },
     {
       "id": "ambient.store.1",
@@ -1188,10 +1006,10 @@
       "scene": "menu",
       "title": "STORE / UPGRADES",
       "text": "Credits earned in the Arena persist between runs. Spend them on permanent upgrades that help your operative push farther. Click STORE to continue.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tutorial-onboarding-menu-store-store.mp3"
+      "file": "tutorialonboardingmenu-storelyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "tutorialonboardingmenu-storelyra.mp3"
     },
     {
       "id": "tutorial.onboarding.store.credits",
@@ -1199,10 +1017,10 @@
       "scene": "upgrades",
       "title": "CREDITS PERSIST",
       "text": "Credits earned during deployments remain in your wallet and fund permanent improvements.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tutorial-onboarding-store-credits.mp3"
+      "file": "tutorialonboardingstorecreditslyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "tutorialonboardingstorecreditslyra.mp3"
     },
     {
       "id": "tutorial.onboarding.store.card",
@@ -1210,10 +1028,10 @@
       "scene": "upgrades",
       "title": "CHOOSE A SYSTEM",
       "text": "Each upgrade module shows its current level, next improvement, and cost. Upgrades apply to future deployments.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tutorial-onboarding-store-card.mp3"
+      "file": "tutorialonboardingstorecardlyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "tutorialonboardingstorecardlyra.mp3"
     },
     {
       "id": "tutorial.onboarding.store.action",
@@ -1221,10 +1039,10 @@
       "scene": "upgrades",
       "title": "RETURN STRONGER",
       "text": "Select and purchase upgrades when you are ready. Every permanent improvement helps your next run push farther.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tutorial-onboarding-store-action.mp3"
+      "file": "tutorialonboardingstoreactionlyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "tutorialonboardingstoreactionlyra.mp3"
     },
     {
       "id": "tutorial.onboarding.menu-garage.garage",
@@ -1232,10 +1050,10 @@
       "scene": "menu",
       "title": "OPERATOR GARAGE / MOD COLLECTION",
       "text": "Mods recovered during runs can alter your build. Inspect and equip them through the Operator Garage and its Mod Collection station. Click OPERATOR GARAGE to continue.",
-      "file": null,
-      "fileExists": false,
-      "usesRecordingByDefault": false,
-      "suggestedFile": "lyra-tutorial-onboarding-menu-garage-garage.mp3"
+      "file": "tutorialonboardingmenu-garagelyra.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": true,
+      "suggestedFile": "tutorialonboardingmenu-garagelyra.mp3"
     },
     {
       "id": "tutorial.onboarding.garage.loadout",

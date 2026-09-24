@@ -6609,6 +6609,7 @@ export class ArenaScene extends Phaser.Scene {
     this.physics.pause();
     this.arcadeController?.stop('round-ended');
     this.anomalyController?.stop('round-ended');
+    this.hudInformation?.clear();
     this.clearRoundInfusionEffects();
     this.audio.stopLowHealthWarning();
     this.showBanner('ALL TARGETS DESTROYED');
@@ -7254,6 +7255,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.bossVictoryHandled || !this.bossEncounter || !this.pendingRoundPayload
       || !this.transitionBossFlow('combat', 'destruction')) return;
     this.echo?.reset();
+    this.hudInformation?.clear();
     const endToken = this.roundRuntime.requestEnd('completed');
     if (!endToken) return;
     this.captureEncounterCheckpoint('B_END_REQUESTED');
@@ -7304,6 +7306,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.bossVictoryHandled || !this.supremeFinale || !this.pendingRoundPayload
       || !this.transitionBossFlow('combat', 'destruction')) return;
     this.echo?.reset();
+    this.hudInformation?.clear();
     const endToken = this.roundRuntime.requestEnd('completed');
     if (!endToken) return;
     this.captureEncounterCheckpoint('B_END_REQUESTED');
@@ -7676,6 +7679,7 @@ export class ArenaScene extends Phaser.Scene {
     this.roundRuntime.beginRewardFlow(endToken);
     this.arcadeController?.stop(reason === 'playerDead' ? 'player-dead' : 'round-ended');
     this.anomalyController?.stop('round-ended');
+    this.hudInformation?.clear();
     this.clearRoundInfusionEffects();
     this.bombExplosionCosmeticVfx.reset();
     if (reason === 'playerDead') {
@@ -7817,6 +7821,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateHud(now: number): void {
     if (this.bossEncounter || this.supremeFinale) {
+      this.hudInformation.setDisarm(null);
       this.updateBossHud(now);
       return;
     }
@@ -7831,6 +7836,8 @@ export class ArenaScene extends Phaser.Scene {
       if (!defusingFocus || site.timerMs < defusingFocus.timerMs) defusingFocus = site;
     }
     const hudFocus = defusingFocus ?? activeFocus;
+    this.hudInformation.setDisarm(defusingFocus?.letter ?? null,
+      (defusingFocus?.defuseMs ?? 0) / getEnemyDefuseDuration(OBJECTIVE_CONFIG.defuseRequiredMs, this.protocol), defusingCount);
     let targetSite: BombSiteRuntime | null = null;
     let targetDistanceSquared = Number.POSITIVE_INFINITY;
     for (const site of this.bombSites.sites) {

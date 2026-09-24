@@ -15,12 +15,18 @@ export class ArcadeHudView {
     const parts = text.split(' // ');
     this.information.setEventState('arcade', parts.shift() ?? 'N3ON ARCADE', parts.join(' // '), text.startsWith('REDLINE') ? 'redline' : 'arcade');
   }
-  hideObjective(): void { this.information.removeEventState('arcade'); this.nextObjectiveAt = 0; }
+  hideObjective(): void {
+    this.information.removeEventState('arcade');
+    this.information.queue.cancelPrefix('arcade:start:');
+    this.information.queue.cancelPrefix('redline:');
+    this.nextObjectiveAt = 0;
+  }
   announce(title: string, subtitle: string, color = 0xffd65a): void {
     if (color === 0x7dffb2) TutorialEventBus.emit('arcade.completed');
     else if (color === 0xff5d8f) TutorialEventBus.emit('arcade.failed');
     this.information.notify({ category: color === 0xff5d8f ? 'failure' : color === 0x7dffb2 ? 'success' : title.toUpperCase().includes('REDLINE') ? 'redline' : 'arcade',
-      heading: title, message: subtitle, priority: color === 0xffd65a ? 1 : 2 });
+      heading: title, message: subtitle, key: color === 0xffd65a ? `arcade:start:${title}` : undefined,
+      priority: color === 0xffd65a ? 1 : 2 });
   }
   resize(_width: number, _height: number): void {}
   destroy(): void { this.hideObjective(); }

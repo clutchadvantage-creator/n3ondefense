@@ -16,6 +16,7 @@ export class RedlineVisualController {
       key: 'redline:' + text, priority: text.startsWith('CRITICAL') ? 3 : 0, durationMs: 2200 });
   }
   update(now: number, model: RedlineMomentum, _remainingMs: number, terminalMs = -1, result?: RedlineResult): void {
+    HudInformationSystem.forScene(this.scene).setRedlineRpm(terminalMs >= 0 ? 0 : model.rpm);
     const { width: w, height: h } = this.scene.scale;
     const camera = this.scene.cameras.main, zoom = camera.zoom;
     this.root.setPosition(w * .5 * (1 - 1 / zoom), h * .5 * (1 - 1 / zoom)).setScale(1 / zoom);

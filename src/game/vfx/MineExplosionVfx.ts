@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { ExplosionImpulseSource } from './ExplosionCameraImpulse.ts';
 import { applyExplosionCameraImpulse } from './GameplayCameraShake.ts';
+import { useCircleFillPipeline } from '../rendering/CircleFillPipeline.ts';
 
 export type ExplosionPalette = readonly [core: number, primary: number, secondary: number, outer: number];
 
@@ -58,6 +59,8 @@ export class MineExplosionVfx {
     this.maximumActiveExplosions = particlesEnabled ? MAX_ACTIVE_EXPLOSIONS : REDUCED_ACTIVE_EXPLOSIONS;
     this.smokeGraphics = scene.add.graphics().setDepth(14).setBlendMode(Phaser.BlendModes.NORMAL);
     this.graphics = scene.add.graphics().setDepth(15).setBlendMode(Phaser.BlendModes.ADD);
+    useCircleFillPipeline(this.smokeGraphics);
+    useCircleFillPipeline(this.graphics);
     this.states = Array.from({ length: this.maximumActiveExplosions }, (): MineExplosionState => ({
       active: false,
       x: 0,

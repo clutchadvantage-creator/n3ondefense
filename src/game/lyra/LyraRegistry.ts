@@ -24,7 +24,7 @@ export const LYRA_MESSAGES: readonly LyraMessage[] = [
   { id: 'ambient.store.1', text: 'Permanent upgrades. My preferred form of optimism.', mode: 'AMBIENT', priority: P.ambient, scenes: ['upgrades'], weight: 1, cooldownMs: 900000 },
   ...TUTORIAL_SEQUENCES.flatMap(sequence => sequence.steps.map(step => ({
     id: `tutorial.${sequence.id}.${step.id}`, text: step.body, mode: 'GUIDANCE' as const,
-    recordedText: LYRA_TUTORIAL_SCRIPT[`${sequence.id}.${step.id}`]?.text,
+    recordedText: LYRA_TUTORIAL_SCRIPT[`${sequence.id}.${step.id}`]?.text ?? step.body,
     priority: P.training, tutorial: true, cooldownMs: 0, expiryMs: 1000
   })))
 ];
@@ -32,7 +32,25 @@ export const LYRA_MESSAGE_BY_ID = new Map(LYRA_MESSAGES.map(message => [message.
 
 /** Local recordings only. Paths relative to public/assets/audio/lyra/. Missing entries use the provider chain. */
 export const LYRA_RECORDINGS: Record<string, Partial<Record<string, string>>> = {
-  'en-US': Object.fromEntries(Object.entries(LYRA_TUTORIAL_SCRIPT).map(([id, line]) => [`tutorial.${id}`, line.file]))
+  'en-US': {
+    ...Object.fromEntries(Object.entries(LYRA_TUTORIAL_SCRIPT).map(([id, line]) => [`tutorial.${id}`, line.file])),
+    'warning.health': 'operativehealthlyra.mp3',
+    'warning.defuse': 'defusewarninglyra.mp3',
+    'tactical.planted': 'tacticalplantedlyra.mp3',
+    'event.arcade.complete': 'eventarcadecompletelyra.mp3',
+    'event.arcade.failed': 'eventarcadefailedlyra.mp3',
+    'context.pickup': 'contextpickuplyra.mp3',
+    'context.anomaly': 'contextanomalylyra.mp3',
+    'context.arcade': 'contextarcadelyra.mp3',
+    'context.hazard': 'contexthazardlyra.mp3',
+    'ambient.garage.1': 'ambientgarage1lyra.mp3',
+    'ambient.garage.2': 'ambientgarage2lyra.mp3',
+    'tutorial.onboarding.menu-store.store': 'tutorialonboardingmenu-storelyra.mp3',
+    'tutorial.onboarding.menu-garage.garage': 'tutorialonboardingmenu-garagelyra.mp3',
+    'tutorial.onboarding.store.credits': 'tutorialonboardingstorecreditslyra.mp3',
+    'tutorial.onboarding.store.card': 'tutorialonboardingstorecardlyra.mp3',
+    'tutorial.onboarding.store.action': 'tutorialonboardingstoreactionlyra.mp3'
+  }
 };
 /** Set to an authored public-relative video path when footage is supplied. */
 export const LYRA_ADVANCED_PREVIEW: string | null = null;
