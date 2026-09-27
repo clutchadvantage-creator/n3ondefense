@@ -8,13 +8,13 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     steps: [
       { id: 'welcome', eyebrow: 'LYRA // INITIAL LINK', title: 'WELCOME TO THE ARENA, OPERATIVE!', body: lyraTutorialText('onboarding.menu-welcome.welcome'), mode: 'menu', advanceLabel: 'NEXT', completion: { type: 'manual' } },
       { id: 'advanced-preview', title: 'ADVANCED OPERATIONS // FIELD RECORDING', body: lyraTutorialText('onboarding.menu-welcome.advanced-preview'), advancedPreview: true, mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
-      { id: 'start-local', target: 'menu.start-local', eyebrow: 'LYRA // TRAINING DEPLOYMENT', title: 'START LOCAL', body: lyraTutorialText('onboarding.menu-welcome.start-local'), mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }
+      { id: 'start-local', target: 'menu.start-local', eyebrow: 'LYRA // TRAINING DEPLOYMENT', title: 'START GAME', body: 'Begin your first training run here.\n\nSTART GAME launches your campaign deployment.\n\nSelect START GAME when you’re ready, Operative.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }
     ]
   },
   {
     id: 'onboarding.menu-resume-training', scene: 'menu', title: 'RESUME TRAINING', autoStart: true,
     firstRunStages: ['arena-teaching'], skippable: true,
-    steps: [{ id: 'start-local', target: 'menu.start-local', eyebrow: 'LYRA // TRAINING INCOMPLETE', title: 'RETURN TO LOCAL TRAINING', body: lyraTutorialText('onboarding.menu-resume-training.start-local'), mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }]
+    steps: [{ id: 'start-local', target: 'menu.start-local', eyebrow: 'LYRA // TRAINING INCOMPLETE', title: 'RESUME TRAINING', body: 'Arena training is still in progress.\n\nSelect START GAME to resume your training deployment. I kept everything exactly where you left it. Mostly.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }]
   },
   {
     id: 'onboarding.basic-controls', scene: 'arena', title: 'INITIAL DEPLOYMENT', autoStart: true, firstRunStages: ['arena-teaching'], skippable: true,
@@ -65,7 +65,10 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     firstRunStages: ['store-teaching'], skippable: true,
     steps: [
       { id: 'credits', target: 'store.wallet.credits', title: 'CREDITS PERSIST', body: 'Credits earned during deployments remain in your wallet and fund permanent improvements.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
+      { id: 'currencies', target: 'store.wallet', title: 'YOUR CURRENCIES', body: 'Credits fund permanent upgrades. Core Tokens and Plasma Chips support Mod improvements and other purchases. Flux Cores pay anomaly entry fees. Always check the displayed currency and cost before spending.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
       { id: 'card', target: 'store.upgrade-card', title: 'CHOOSE A SYSTEM', body: 'Each upgrade module shows its current level, next improvement, and cost. Upgrades apply to future deployments.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
+      { id: 'purchase', target: 'store.upgrade-action', title: 'IMPROVE YOUR OPERATIVE', body: 'Choose an affordable upgrade and use its purchase control. If none are affordable, continue and return after earning more Credits.', mode: 'menu', completion: { type: 'event', event: 'economy.upgradePurchaseAttempted' } },
+      { id: 'exchange', title: 'CURRENCY EXCHANGE', body: 'The Operator Garage has a Currency Exchange station. Choose the source and target currencies, set an amount, and review the quote before confirming. Converting Flux Cores spends resources you could use to enter an anomaly. No exchange is required for training.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
       { id: 'action', target: 'store.upgrade-action', title: 'RETURN STRONGER', body: 'Select and purchase upgrades when you are ready. Every permanent improvement helps your next run push farther.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } }
     ]
   },
@@ -88,7 +91,8 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     steps: [
       { id: 'archive', target: 'mods.archive', title: 'RECOVERED MOD ARCHIVE', body: 'Every Mod card recovered during a run appears in this archive. Rarity, rank, infusion, and duplicate status remain attached to the exact card.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
       { id: 'details', target: 'mods.details', title: 'INSPECT YOUR BUILD', body: 'Select a card to read its complete effect and manage compatible loadout slots. New Mods create new ways to approach future rounds.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
-      { id: 'complete', target: 'mods.details', title: 'TEACHING COMPLETE', body: 'Your workstation is ready. Keep earning Credits, improving Mods, adapting your build, and pushing farther.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } }
+      { id: 'equip', target: 'mods.details', title: 'INSTALL A MOD', body: 'Select one of your recovered cards and equip it in a compatible slot. Installed Mods apply to your next deployment.', mode: 'menu', completion: { type: 'event', event: 'mods.equipped' } },
+      { id: 'complete', target: 'mods.details', title: 'LOADOUT TRAINING COMPLETE', body: 'Your workstation is ready. Return to the menu to continue any remaining Store training, or choose your next deployment.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } }
     ]
   },
   {

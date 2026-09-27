@@ -20,6 +20,7 @@ export class OnlineRunManager {
   private static profileId: string | null = null;
   private static active: OnlineRunContext | null = OnlineRunManager.loadActive();
   private static flushing = false;
+  private static startGeneration = 0;
   private static initializedProfiles = new Set<string>();
 
   static {
@@ -39,14 +40,22 @@ export class OnlineRunManager {
     }
   }
 
-  static async beginRun(profileId: string, displayName: string, protocol: RunProtocolId = 'normal', equippedMods: EquippedModSnapshot[] = []): Promise<OnlineRunStartResult> {
+  static async beginRun(profileId: string, displayName: string, protocol: RunProtocolId = 'normal', equippedMods: EquippedModSnapshot[] = [], startingRound = 1, signal?: AbortSignal): Promise<OnlineRunStartResult> {
     this.clearActive();
+    const generation = this.startGeneration;
+    const cancelled = () => signal?.aborted || generation !== this.startGeneration;
+    const cancellation: OnlineRunStartResult = { ok: false, state: 'failed', message: 'Deployment request cancelled.' };
     this.profileId = profileId;
     if (!LeaderboardClient.configured()) return { ok: false, state: 'unavailable', message: 'Online service is not configured.' };
     try {
       const credentials = await LeaderboardClient.ensureIdentity(profileId, displayName);
-      const issued = await LeaderboardClient.startRun(credentials);
+      if (cancelled()) return cancellation;
+      const issued = await LeaderboardClient.startRun(credentials, RUN_PROTOCOLS[protocol].family, startingRound);
+      if (cancelled()) return cancellation;
       this.active = {
+        campaignVersion: 2,
+        startingRound,
+        bossRoundsCompleted: 0,
         runId: issued.run_id,
         runToken: issued.run_token,
         runTokenExpiresAt: Date.now() + issued.run_token_expires_in_seconds * 1000,
@@ -66,6 +75,7 @@ export class OnlineRunManager {
       this.setStatus('pending');
       return { ok: true, seed: issued.seed, state: 'started', message: 'Server-authorized online run created.' };
     } catch (error) {
+      if (cancelled()) return cancellation;
       this.clearActive();
       const invalid = error instanceof OnlineApiError && error.invalidCredential;
       return {
@@ -78,12 +88,19 @@ export class OnlineRunManager {
 
   static recordMilestone(highestRound: number): void {
     if (!this.active) return;
+    if (this.active.campaignVersion === 2) {
+      // Only the next successfully cleared local round may advance a campaign run.
+      const expected = this.active.highestRound === 0 ? this.active.startingRound! : this.active.highestRound + 1;
+      if (highestRound !== expected || highestRound > 30) return;
+      if (highestRound % 5 === 0) this.active.bossRoundsCompleted = (this.active.bossRoundsCompleted ?? 0) + 1;
+    }
     this.active.highestRound = Math.max(this.active.highestRound, highestRound);
     this.active.milestoneSequence += 1;
     const progress = delta(SaveSystem.getOnlineProgressSnapshot(), this.active.baseline);
     this.enqueue('milestone', `/v1/runs/${this.active.runId}/milestones`, {
       sequence: this.active.milestoneSequence,
       highest_round: this.active.highestRound,
+      boss_rounds_completed: this.active.bossRoundsCompleted ?? 0,
       ...progress,
       elapsed_ms: Date.now() - this.active.startedAt,
       protocol: RUN_PROTOCOLS[this.active.protocol].family,
@@ -95,12 +112,14 @@ export class OnlineRunManager {
 
   static complete(outcome: 'victory' | 'player_dead' | 'bomb_defused' | 'quit', highestRound?: number): void {
     if (!this.active) return;
-    this.active.highestRound = Math.max(this.active.highestRound, highestRound ?? 0);
+    // Entering a round, or dying in it, does not count as clearing it.
+    if (this.active.campaignVersion !== 2) this.active.highestRound = Math.max(this.active.highestRound, highestRound ?? 0);
     const progress = delta(SaveSystem.getOnlineProgressSnapshot(), this.active.baseline);
     this.enqueue('completion', `/v1/runs/${this.active.runId}/complete`, {
       idempotency_key: `${this.active.runId}-complete`,
       outcome,
       highest_round: this.active.highestRound,
+      boss_rounds_completed: this.active.bossRoundsCompleted ?? 0,
       ...progress,
       elapsed_ms: Date.now() - this.active.startedAt,
       protocol: RUN_PROTOCOLS[this.active.protocol].family,
@@ -181,6 +200,7 @@ export class OnlineRunManager {
   }
 
   private static clearActive(): void {
+    this.startGeneration += 1;
     this.active = null;
     try { sessionStorage.removeItem(ACTIVE_RUN_KEY); } catch { /* no-op */ }
   }

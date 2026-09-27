@@ -408,6 +408,7 @@ export interface ArenaSessionState {
 }
 
 export interface RoundFinishedPayload {
+  modeCompletion?: boolean;
   baseSeed: number;
   completedRound: number;
   completedSeed: number;

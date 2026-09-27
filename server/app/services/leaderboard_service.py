@@ -2,7 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..models import GameRun, Player, RunStatus
-from ..schemas.leaderboards import LeaderboardCategory, LeaderboardEntry
+from ..schemas.leaderboards import CampaignBoard, LeaderboardCategory, LeaderboardEntry
 
 
 CATEGORY_COLUMNS = {
@@ -12,7 +12,7 @@ CATEGORY_COLUMNS = {
 }
 
 
-def _global_ranking(category: LeaderboardCategory):
+def _global_ranking(category: LeaderboardCategory, campaign: CampaignBoard = 'legacy'):
     column = CATEGORY_COLUMNS[category]
     player_runs = select(
         GameRun.id.label('run_id'),
@@ -22,7 +22,9 @@ def _global_ranking(category: LeaderboardCategory):
             partition_by=GameRun.player_id,
             order_by=(column.desc(), GameRun.completed_at.asc(), GameRun.id.asc()),
         ).label('player_row'),
-    ).where(GameRun.status == RunStatus.verified).subquery()
+    ).where(GameRun.status == RunStatus.verified,
+            GameRun.campaign_version == (1 if campaign == 'legacy' else 2),
+            *([] if campaign == 'legacy' else [GameRun.campaign_mode == campaign])).subquery()
     personal_bests = select(
         player_runs.c.run_id,
         player_runs.c.player_id,
@@ -46,8 +48,8 @@ def _to_entry(player: Player, row: object) -> LeaderboardEntry:
     )
 
 
-def ranked_entries(db: Session, category: LeaderboardCategory, limit: int, offset: int = 0) -> list[LeaderboardEntry]:
-    ranking = _global_ranking(category)
+def ranked_entries(db: Session, category: LeaderboardCategory, limit: int, offset: int = 0, campaign: CampaignBoard = 'legacy') -> list[LeaderboardEntry]:
+    ranking = _global_ranking(category, campaign)
     rows = db.execute(
         select(Player, ranking)
         .join(ranking, ranking.c.player_id == Player.id)
@@ -58,14 +60,14 @@ def ranked_entries(db: Session, category: LeaderboardCategory, limit: int, offse
     return [_to_entry(row[0], row) for row in rows]
 
 
-def personal_entry(db: Session, player: Player, category: LeaderboardCategory) -> LeaderboardEntry | None:
-    ranking = _global_ranking(category)
+def personal_entry(db: Session, player: Player, category: LeaderboardCategory, campaign: CampaignBoard = 'legacy') -> LeaderboardEntry | None:
+    ranking = _global_ranking(category, campaign)
     row = db.execute(select(Player, ranking).join(ranking, ranking.c.player_id == Player.id).where(Player.id == player.id)).first()
     return _to_entry(row[0], row) if row else None
 
 
-def around_player(db: Session, player: Player, category: LeaderboardCategory, radius: int) -> list[LeaderboardEntry]:
-    ranking = _global_ranking(category)
+def around_player(db: Session, player: Player, category: LeaderboardCategory, radius: int, campaign: CampaignBoard = 'legacy') -> list[LeaderboardEntry]:
+    ranking = _global_ranking(category, campaign)
     player_rank = db.scalar(select(ranking.c.rank).where(ranking.c.player_id == player.id))
     if player_rank is None:
         return []

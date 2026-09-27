@@ -2,17 +2,12 @@ import Phaser from 'phaser';
 import { LeaderboardClient } from '../../online/LeaderboardClient';
 import { OnlineCredentialStore } from '../../online/OnlineCredentialStore';
 import { OnlineRunManager } from '../../online/OnlineRunManager';
-import type { OnlineLeaderboardCategory, OnlineLeaderboardEntry } from '../../online/onlineTypes';
+import type { OnlineCampaignBoard, OnlineLeaderboardEntry } from '../../online/onlineTypes';
+import { LEADERBOARD_CATEGORIES as CATEGORIES, LEADERBOARD_PAGE_SIZE } from '../../online/LeaderboardCategories';
 import { SceneKeys } from '../flow/SceneKeys';
 import { SaveSystem } from '../systems/SaveSystem';
 import { createModCollectionButton } from '../ui/ModCollectionUi.ts';
 import { disableButton } from '../utils/ui';
-
-const CATEGORIES: Array<{ key: OnlineLeaderboardCategory; title: string; color: number }> = [
-  { key: 'highest_round', title: 'HIGHEST ROUND', color: 0x63f4ff },
-  { key: 'enemies_destroyed', title: 'ENEMIES DESTROYED', color: 0x71ffad },
-  { key: 'bomb_sites_destroyed', title: 'BOMB TARGETS DESTROYED', color: 0xff69d6 }
-];
 
 interface LeaderboardLayout {
   compact: boolean;
@@ -64,6 +59,9 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
   private boardObjects: Phaser.GameObjects.GameObject[] = [];
   private statusText!: Phaser.GameObjects.Text;
   private aroundMode = false;
+  private campaign: OnlineCampaignBoard = 'normal';
+  private categoryPage = 0;
+  private pageCategories() { return CATEGORIES.slice(this.categoryPage * LEADERBOARD_PAGE_SIZE, (this.categoryPage + 1) * LEADERBOARD_PAGE_SIZE); }
   private requestGeneration = 0;
   private readonly handleResize = (): void => { this.scene.restart(); };
 
@@ -76,7 +74,9 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
     const layout = calculateLayout(width, height);
     this.createConsoleShell(width, height, layout);
 
-    const statusLeft = layout.margin + (layout.compact ? 24 : 34);
+    const modeWidth = layout.compact ? 166 : 208;
+    const modeLeft = layout.margin + (layout.compact ? 22 : 32);
+    const statusLeft = modeLeft + modeWidth + 12;
     const viewWidth = layout.compact ? 152 : 186;
     const viewX = width - layout.margin - (layout.compact ? 22 : 32) - viewWidth / 2;
     const statusRight = viewX - viewWidth / 2 - (layout.compact ? 12 : 18);
@@ -88,6 +88,15 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
       fontStyle: 'bold', align: 'center', lineSpacing: 1, letterSpacing: layout.compact ? 0 : 1,
       wordWrap: { width: Math.max(180, statusRight - statusLeft), useAdvancedWrap: true }
     }).setOrigin(0.5).setMaxLines(2).setDepth(22);
+
+    const modeButton = createModCollectionButton(this, modeLeft + modeWidth / 2, layout.compact ? 111 : 122, `MODE // ${this.campaign.toUpperCase()}`, () => {
+      const modes: OnlineCampaignBoard[] = ['normal', 'overdrive', 'supreme', 'legacy'];
+      this.campaign = modes[(modes.indexOf(this.campaign) + 1) % modes.length];
+      (modeButton.getByName('button-label') as Phaser.GameObjects.Text | null)?.setText(`MODE // ${this.campaign.toUpperCase()}`);
+      void this.loadBoards();
+      return true;
+    }, modeWidth, 'utility', { height: layout.compact ? 32 : 38, fontSize: layout.compact ? 12 : 14 });
+    modeButton.setDepth(23);
 
     const aroundButton = createModCollectionButton(this, viewX, layout.compact ? 111 : 122, this.aroundMode ? 'VIEW // AROUND ME' : 'VIEW // GLOBAL', () => {
       this.aroundMode = !this.aroundMode;
@@ -110,7 +119,10 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
       height: layout.footerButtonHeight, fontSize: layout.compact ? 13 : 16
     }).setDepth(24);
     footerX += localWidth + footerGap;
-    createModCollectionButton(this, footerX + refreshWidth / 2, layout.footerY, 'REFRESH FEED', () => { void this.loadBoards(); return true; }, refreshWidth, 'standard', {
+    createModCollectionButton(this, footerX + refreshWidth / 2, layout.footerY, CATEGORIES.length > LEADERBOARD_PAGE_SIZE ? 'NEXT SCORE TYPES' : 'REFRESH FEED', () => {
+      this.categoryPage = (this.categoryPage + 1) % Math.ceil(CATEGORIES.length / LEADERBOARD_PAGE_SIZE);
+      void this.loadBoards(); return true;
+    }, refreshWidth, 'standard', {
       height: layout.footerButtonHeight, fontSize: layout.compact ? 13 : 16
     }).setDepth(24);
     footerX += refreshWidth + footerGap;
@@ -141,9 +153,9 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
     this.statusText.setText(this.aroundMode ? 'LOADING RECORDS AROUND YOUR RANK...' : 'LOADING VERIFIED GLOBAL RECORDS...').setColor('#a9c9d8');
     const profile = SaveSystem.getActiveProfileSummary();
     try {
-      const result = await Promise.all(CATEGORIES.map(({ key }) => this.aroundMode && profile
-        ? LeaderboardClient.aroundPlayer(profile.id, key)
-        : LeaderboardClient.leaderboard(key)));
+      const result = await Promise.all(this.pageCategories().map(({ key }) => this.aroundMode && profile
+        ? LeaderboardClient.aroundPlayer(profile.id, key, this.campaign)
+        : LeaderboardClient.leaderboard(key, this.campaign)));
       if (!this.scene.isActive() || generation !== this.requestGeneration) return;
       this.drawBoards(result);
       const credentials = profile ? OnlineCredentialStore.load(profile.id) : null;
@@ -164,7 +176,7 @@ export class OnlineLeaderboardsScene extends Phaser.Scene {
     const layout = calculateLayout(width, height);
     const activeProfile = SaveSystem.getActiveProfileSummary();
     const publicId = activeProfile ? OnlineCredentialStore.load(activeProfile.id)?.publicId : undefined;
-    CATEGORIES.forEach((category, boardIndex) => {
+    this.pageCategories().forEach((category, boardIndex) => {
       const x = layout.firstX + boardIndex * (layout.panelWidth + layout.gap);
       this.drawBoardModule(x, layout.contentTop, layout.panelWidth, layout.panelHeight, category, results[boardIndex], publicId, boardIndex, layout.compact);
     });

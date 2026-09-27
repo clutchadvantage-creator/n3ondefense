@@ -66,6 +66,8 @@ import type {
 import { HEIST_BALANCE, HEIST_WORLD } from './HeistConfig.ts';
 import { createHeistFacility, type HeistFacilityRuntime } from './HeistFacility.ts';
 import { HeistRewardService, type HeistContainerReward } from './HeistRewardService.ts';
+import { getHeistCampaignPositions } from './HeistCampaignProgression.ts';
+import { isCampaignRound } from '../../progression/CampaignProgression.ts';
 import { isValidAnomalyEntryCost } from '../AnomalyPricing.ts';
 import { HeistLootPickupSystem } from './HeistLootPickupSystem.ts';
 import { HeistTrapSystem } from './HeistTrapSystem.ts';
@@ -146,7 +148,8 @@ const isSessionData = (value: unknown): value is HeistSessionData => {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<HeistSessionData>;
   return candidate.anomalyId === 'heist' && typeof candidate.sessionId === 'string'
-    && isValidAnomalyEntryCost(candidate.cost) && !!candidate.player && !!candidate.abilities;
+    && isValidAnomalyEntryCost(candidate.cost) && isCampaignRound(candidate.round ?? 0)
+    && !!candidate.player && !!candidate.abilities;
 };
 
 const emptyLoot = (): PendingAnomalyLoot => ({ credits: 0, coreTokens: 0, plasmaChips: 0, fluxCores: 0, modIds: [] });
@@ -165,6 +168,7 @@ export class HeistScene extends Phaser.Scene {
   private trapSystem!: HeistTrapSystem;
   private random!: SeededRandom;
   private rewards!: HeistRewardService;
+  private campaignPositions!: ReturnType<typeof getHeistCampaignPositions>;
   private lootPickups!: HeistLootPickupSystem;
   private pickupPresentation!: GameplayPickupPresentation;
   private pendingLoot: PendingAnomalyLoot = emptyLoot();
@@ -305,6 +309,7 @@ export class HeistScene extends Phaser.Scene {
     const devCreateStartedAt = import.meta.env.DEV ? performance.now() : 0;
     this.resetSessionState();
     this.session = data;
+    this.campaignPositions = getHeistCampaignPositions(data.protocol, data.round);
     this.coreAudio.enterHeistMusic();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     const settings = SaveSystem.get().settings;
@@ -322,7 +327,7 @@ export class HeistScene extends Phaser.Scene {
     );
     this.mineExplosionVfx = new MineExplosionVfx(this, settings.particles);
     this.random = new SeededRandom((data.seed ^ 0x4e1a57 ^ Math.imul(data.round, 0x27d4eb2d)) >>> 0);
-    this.rewards = new HeistRewardService(data.seed, data.round, data.protocol, data.cost);
+    this.rewards = HeistRewardService.forCampaign(data.seed, data.round, data.protocol, data.cost);
     this.pickupPresentation = new GameplayPickupPresentation(
       this,
       () => this.modRuntime.hasInfusion('pickup-orbit')
@@ -349,7 +354,7 @@ export class HeistScene extends Phaser.Scene {
     this.createHud();
     this.createSupportPickups();
     this.trapSystem = new HeistTrapSystem(this, this.facility.trapPlacements, {
-      round: data.round,
+      round: this.campaignPositions.difficultyPosition,
       protocol: data.protocol
     }, {
       isPlayerAlive: () => this.player.active && !this.player.isDead(),
@@ -753,7 +758,7 @@ export class HeistScene extends Phaser.Scene {
         scaleY: { from: 0.9, to: 1.12 }, duration: 780 + index * 37, yoyo: true, repeat: -1,
         ease: 'Sine.easeInOut'
       });
-      const maximumHp = 54 + this.session.round * 2.2;
+      const maximumHp = 54 + this.campaignPositions.difficultyPosition * 2.2;
       this.containers.push({ root, body, cracks, maximumHp, hp: maximumHp, opened: false, index });
     }
   }
@@ -1674,12 +1679,12 @@ export class HeistScene extends Phaser.Scene {
     const regularCapacity = Math.max(0, HEIST_BALANCE.escapeMaximumEnemies - this.enemies.length
       - (spawnMiniBoss ? 1 : 0));
     const count = Math.min(regularCapacity,
-      HEIST_BALANCE.escapeInitialEnemyCount + Math.floor(this.session.round / 8) * HEIST_BALANCE.enemyPerEightRounds);
+      HEIST_BALANCE.escapeInitialEnemyCount + Math.floor(this.campaignPositions.difficultyPosition / 8) * HEIST_BALANCE.enemyPerEightRounds);
     const positions = this.facility.ambushPoints;
     for (let index = 0; index < count; index += 1) {
       const point = positions[index % positions.length];
-      const types = this.session.round >= 8 ? ['grunt', 'shooter', 'tank', 'disruptor'] as const
-        : this.session.round >= 3 ? ['grunt', 'shooter', 'tank'] as const : ['grunt', 'shooter'] as const;
+      const types = this.campaignPositions.difficultyPosition >= 8 ? ['grunt', 'shooter', 'tank', 'disruptor'] as const
+        : this.campaignPositions.difficultyPosition >= 3 ? ['grunt', 'shooter', 'tank'] as const : ['grunt', 'shooter'] as const;
       this.spawnEnemy(types[index % types.length], point.x + (index % 3 - 1) * 34,
         point.y + (Math.floor(index / 3) % 3 - 1) * 30, false);
     }
@@ -1691,10 +1696,10 @@ export class HeistScene extends Phaser.Scene {
 
   private spawnInfiltrationPatrols(): void {
     const count = Math.min(HEIST_BALANCE.maximumRegularEnemies,
-      HEIST_BALANCE.initialEnemyCount + Math.floor(this.session.round / 10));
+      HEIST_BALANCE.initialEnemyCount + Math.floor(this.campaignPositions.difficultyPosition / 10));
     const positions = this.facility.ambushPoints;
-    const types = this.session.round >= 8 ? ['grunt', 'shooter', 'tank', 'disruptor'] as const
-      : this.session.round >= 3 ? ['grunt', 'shooter', 'tank'] as const : ['grunt', 'shooter'] as const;
+    const types = this.campaignPositions.difficultyPosition >= 8 ? ['grunt', 'shooter', 'tank', 'disruptor'] as const
+      : this.campaignPositions.difficultyPosition >= 3 ? ['grunt', 'shooter', 'tank'] as const : ['grunt', 'shooter'] as const;
     let spawned = 0;
     const startIndex = this.random.int(0, Math.max(0, positions.length - 1));
     for (let offset = 0; offset < positions.length && spawned < count; offset += 1) {
@@ -1724,7 +1729,7 @@ export class HeistScene extends Phaser.Scene {
     const count = Math.min(capacity, HEIST_BALANCE.escapeReinforcementCount);
     if (count <= 0) return;
     const positions = this.facility.ambushPoints;
-    const types = this.session.round >= 8 ? ['grunt', 'shooter', 'tank', 'disruptor'] as const
+    const types = this.campaignPositions.difficultyPosition >= 8 ? ['grunt', 'shooter', 'tank', 'disruptor'] as const
       : ['grunt', 'shooter', 'tank'] as const;
     let spawned = 0;
     for (let offset = 0; offset < positions.length && spawned < count; offset += 1) {
@@ -1741,7 +1746,7 @@ export class HeistScene extends Phaser.Scene {
 
   private spawnEnemy(type: keyof typeof baseEnemyStats, x: number, y: number, elite: boolean): void {
     const base = baseEnemyStats[type];
-    const curve = getDifficultyCurve(this.session.round);
+    const curve = getDifficultyCurve(this.campaignPositions.difficultyPosition);
     const mode = getProtocolModeBalance(this.session.protocol);
     const stats: EnemyStats = {
       ...base,
@@ -2437,6 +2442,7 @@ export class HeistScene extends Phaser.Scene {
   private emitMetric(name: AnomalyMetricName, extra: Partial<Parameters<typeof recordAnomalyMetric>[0]> = {}): void {
     recordAnomalyMetric({
       name, anomalyId: 'heist', round: this.session.round, protocol: this.session.protocol,
+      rewardPosition: this.campaignPositions.rewardPosition, difficultyPosition: this.campaignPositions.difficultyPosition,
       elapsedMs: this.elapsedMs, ...extra
     });
   }

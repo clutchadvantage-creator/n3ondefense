@@ -16,6 +16,7 @@ export interface BossEncounterOptions {
   showHealthUi?: boolean;
   /** Preserves the Options particle toggle while retaining reduced core telegraphs. */
   particlesEnabled?: boolean;
+  legBlockers?: readonly RectSpec[];
 }
 
 export interface BossProjectileSpec {
@@ -127,7 +128,7 @@ export class BossEncounter {
       (damage, source) => this.handleBossDamage(damage, source),
       () => callbacks.onDefeated(),
       modeFamily,
-      { healthMultiplier: options.healthMultiplier }
+      { healthMultiplier: options.healthMultiplier, legBlockers: options.legBlockers }
     );
 
     const width = Math.min(900, scene.scale.width - 80);

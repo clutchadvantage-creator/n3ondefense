@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from ..models import GameRun, RunStatus
-from ..schemas.runs import CompleteRunRequest
+from ..schemas.runs import CompleteRunRequest, RunProgress
 
 
 @dataclass(frozen=True)
@@ -11,12 +11,36 @@ class VerificationDecision:
     reason: str
 
 
+def campaign_progress_error(run: GameRun, report: RunProgress) -> str | None:
+    if run.campaign_version != 2:
+        return None
+    starting_round = run.starting_round or 1
+    expected_rounds = max(0, report.highest_round - starting_round + 1)
+    expected_bosses = report.highest_round // 5 - (starting_round - 1) // 5 if expected_rounds else 0
+    if (report.highest_round > 30 or (0 < report.highest_round < starting_round)
+            or report.rounds_completed != expected_rounds):
+        return 'Campaign completion range does not match its authorized local start.'
+    if report.boss_rounds_completed != expected_bosses:
+        return 'Campaign boss completions do not match the cleared range.'
+    if report.bomb_sites_destroyed < expected_rounds - expected_bosses:
+        return 'Bomb-site count is below ordinary completed-round count.'
+    return None
+
+
 def verify_completed_run(run: GameRun, report: CompleteRunRequest) -> VerificationDecision:
     if report.elapsed_ms < 5_000:
         return VerificationDecision(RunStatus.rejected, 'Run duration is below the technical minimum.')
     if report.highest_round == 0 and report.rounds_completed > 0:
         return VerificationDecision(RunStatus.rejected, 'Completed rounds require a highest round.')
-    if report.bomb_sites_destroyed < report.rounds_completed:
+    boss_rounds = 0
+    if run.campaign_version == 2:
+        error = campaign_progress_error(run, report)
+        if error:
+            return VerificationDecision(RunStatus.rejected, error)
+        boss_rounds = report.boss_rounds_completed
+        if report.outcome == 'victory' and report.highest_round != 30:
+            return VerificationDecision(RunStatus.rejected, 'Campaign victory requires local round 30.')
+    if report.bomb_sites_destroyed < report.rounds_completed - boss_rounds:
         return VerificationDecision(RunStatus.rejected, 'Bomb-site count is below completed-round count.')
     if report.enemies_destroyed < report.rounds_completed:
         return VerificationDecision(RunStatus.flagged, 'Enemy count is unusually low for completed rounds.')

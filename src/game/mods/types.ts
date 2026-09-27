@@ -204,6 +204,7 @@ export interface LocalModCollection {
 
 export interface ProtocolPreference {
   preferred: RunProtocolId;
+  selectedStartingRounds?: Partial<Record<'normal' | 'overdrive' | 'supreme', number>>;
   /** Normal progression unlocks checkpoints; this independent preference
    * chooses which unlocked checkpoint the next Normal deployment will use. */
   selectedNormalStartRound: number;

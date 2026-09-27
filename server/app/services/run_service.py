@@ -12,7 +12,7 @@ from ..config import get_settings
 from ..models import GameRun, Player, RunMilestone, RunStatus
 from ..schemas.runs import CompleteRunRequest, MilestoneRequest, RunStartResponse, RunStatusResponse
 from .token_service import run_token
-from .verification_service import verify_completed_run
+from .verification_service import campaign_progress_error, verify_completed_run
 
 
 def _seed_for(run_id: uuid.UUID, player_id: uuid.UUID) -> int:
@@ -24,13 +24,16 @@ def _seed_for(run_id: uuid.UUID, player_id: uuid.UUID) -> int:
     return int.from_bytes(digest[:4], 'big') & 0x7FFFFFFF
 
 
-def start_run(db: Session, player: Player, game_version: str) -> RunStartResponse:
+def start_run(db: Session, player: Player, game_version: str, campaign_version: int = 1,
+              campaign_mode: str | None = None, starting_round: int = 1) -> RunStartResponse:
     run_id = uuid.uuid4()
-    run = GameRun(id=run_id, player_id=player.id, seed=_seed_for(run_id, player.id), game_version=game_version)
+    run = GameRun(id=run_id, player_id=player.id, seed=_seed_for(run_id, player.id), game_version=game_version,
+                  campaign_version=campaign_version, campaign_mode=campaign_mode, starting_round=starting_round)
     db.add(run)
     db.commit()
     token, seconds = run_token(str(player.id), str(run.id))
-    return RunStartResponse(run_id=run.id, seed=run.seed, run_token=token, run_token_expires_in_seconds=seconds)
+    return RunStartResponse(run_id=run.id, seed=run.seed, run_token=token, run_token_expires_in_seconds=seconds,
+                            campaign_version=campaign_version, campaign_mode=campaign_mode, starting_round=starting_round)
 
 
 def submit_milestone(db: Session, run: GameRun, report: MilestoneRequest) -> RunStatusResponse:
@@ -41,6 +44,9 @@ def submit_milestone(db: Session, run: GameRun, report: MilestoneRequest) -> Run
         return RunStatusResponse(run_id=run.id, status=run.status.value, verification_reason=run.verification_reason)
     if report.sequence != run.last_milestone_sequence + 1:
         raise HTTPException(status.HTTP_409_CONFLICT, 'Milestone sequence is not contiguous.')
+    error = campaign_progress_error(run, report)
+    if error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, error)
     prior = db.scalar(select(RunMilestone).where(RunMilestone.run_id == run.id).order_by(RunMilestone.sequence.desc()).limit(1))
     if prior and (
         report.highest_round < prior.round
@@ -83,6 +89,7 @@ def complete_run(db: Session, run: GameRun, report: CompleteRunRequest) -> RunSt
     decision = verify_completed_run(run, report)
     run.highest_round = report.highest_round
     run.rounds_completed = report.rounds_completed
+    run.boss_rounds_completed = report.boss_rounds_completed
     run.enemies_destroyed = report.enemies_destroyed
     run.bomb_sites_destroyed = report.bomb_sites_destroyed
     run.credits_earned = report.credits_earned

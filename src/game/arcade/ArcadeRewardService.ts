@@ -42,7 +42,7 @@ export class ArcadeRewardService {
 
     const amount = selected.kind === 'mod' || selected.kind === 'grenade-rounds' || selected.kind === 'scattershot-rounds'
       ? 1
-      : Math.max(1, Math.floor((selected.baseAmount ?? 1) + this.context.round * (selected.amountPerRound ?? 0)));
+      : Math.max(1, Math.floor((selected.baseAmount ?? 1) + (this.context.rewardPosition ?? this.context.round) * (selected.amountPerRound ?? 0)));
     return { kind: selected.kind, amount, label: rewardLabel(selected.kind, amount) };
   }
 

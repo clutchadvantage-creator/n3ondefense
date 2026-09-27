@@ -7,6 +7,7 @@ import { ECONOMY_BALANCE } from '../economy/economyBalance.ts';
 import { countEquippedSupremeMods, isLegendaryModId, isSupremeModId, MAX_EQUIPPED_SUPREME_MODS } from './ModLoadoutRules.ts';
 import { getApplicableRecalibrationSlots, getRecalibrationCandidatePool, getRecalibrationSlots, PLASMA_RECALIBRATION_STAT_RANGES } from './PlasmaRecalibration.ts';
 import { getLegacyNormalStartRound, normalizeSelectedNormalStartRound } from '../progression/OperationsConfiguration.ts';
+import { CAMPAIGN_MODES, getCampaignStartRounds, type CampaignProgress } from '../progression/CampaignProgression.ts';
 
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const MOD_SLOTS: ModSlot[] = ['weapon', 'player', 'defense', 'bombSite', 'wildcard'];
@@ -123,8 +124,19 @@ export const normalizeModCollection = (mods: unknown): LocalModCollection => {
   };
 };
 
-export const normalizeProtocolPreference = (value: unknown, normalHighestRound = 0): ProtocolPreference => {
+export const normalizeProtocolPreference = (value: unknown, normalHighestRound = 0, campaign?: CampaignProgress): ProtocolPreference => {
   const candidate = isObject(value) ? value : { preferred: value };
+  if (campaign) {
+    const rawStarts = isObject(candidate.selectedStartingRounds) ? candidate.selectedStartingRounds : {};
+    const selectedStartingRounds: ProtocolPreference['selectedStartingRounds'] = {};
+    for (const mode of CAMPAIGN_MODES) {
+      const raw = rawStarts[mode] ?? (mode === 'normal' ? candidate.selectedNormalStartRound : 1);
+      const requested = typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : 1;
+      selectedStartingRounds[mode] = getCampaignStartRounds(campaign, mode).filter((round) => round <= requested).at(-1) ?? 1;
+    }
+    return { preferred: normalizeRunProtocolId(candidate.preferred), selectedStartingRounds,
+      selectedNormalStartRound: selectedStartingRounds.normal ?? 1 };
+  }
   const fallback = getLegacyNormalStartRound(normalHighestRound);
   return {
     preferred: normalizeRunProtocolId(candidate.preferred),

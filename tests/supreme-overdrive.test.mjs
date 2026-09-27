@@ -196,7 +196,7 @@ test('version-thirteen saves migrate Supreme progression defaults without losing
   delete old.progress.supremeHighestRound;
   delete old.progress.supremeOverdriveCompleted;
   const migrated = normalizeLocalSave(old);
-  assert.equal(migrated.version, 18);
+  assert.equal(migrated.version, 19);
   assert.equal(migrated.wallet.credits, 76543);
   assert.equal(migrated.progress.highestRound, 63);
   assert.equal(migrated.progress.supremeHighestRound, 0);
@@ -252,11 +252,11 @@ test('terminal finale owns three simultaneous real boss encounters and persists 
   assert.match(finale, /\['artillery', 'storm-mage', 'void-brawler'\]/);
   assert.match(finale, /ARCHETYPES\.map[\s\S]*?new BossEncounter/);
   assert.match(finale, /if \(remaining === 0\)[\s\S]*?callbacks\.onComplete\(\)/);
-  assert.match(arena, /isSupremeTerminalRound\(this\.protocol, completedRound\)/);
+  assert.match(arena, /getCampaignVictoryDestination\(this\.currentModeFamily\(\), this\.bossRound, 'boss'\)\.kind === 'trinity'/);
   assert.match(arena, /SaveSystem\.recordSupremeCompletion\(\)/);
   assert.match(arena, /terminalBossesDefeated: 3/);
   assert.match(save, /supremeOverdriveCompleted = true/);
-  assert.match(debrief, /SUPREME OVERDRIVE COMPLETE/);
+  assert.match(debrief, /protocolDefinition\.family\.toUpperCase\(\).*COMPLETE/);
   assert.match(debrief, /ALL THREE COMMAND BOSSES ELIMINATED/);
 });
 

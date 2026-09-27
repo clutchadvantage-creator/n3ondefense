@@ -71,7 +71,7 @@ export class N3ONArcadeController {
     this.random = new SeededRandom((context.seed ^ Math.imul(context.round, 0x51f15e11) ^ 0xa7cade11) >>> 0);
     this.hud = new ArcadeHudView(context.scene);
     this.rewards = new ArcadeRewardService(context);
-    if (options.enabled && context.round >= ARCADE_SCHEDULING.minimumRound) {
+    if (options.enabled && (context.difficultyPosition ?? context.round) >= ARCADE_SCHEDULING.minimumRound) {
       this.nextOpportunityAt = this.random.float(
         ARCADE_SCHEDULING.initialOpportunityMinimumMs,
         ARCADE_SCHEDULING.initialOpportunityMaximumMs
@@ -99,7 +99,7 @@ export class N3ONArcadeController {
       return;
     }
     const definition = chooseWeightedArcadeDefinition(
-      getEligibleArcadeDefinitions(this.context.round),
+      getEligibleArcadeDefinitions(this.context.difficultyPosition ?? this.context.round),
       this.random.next(),
       this.recent
     );

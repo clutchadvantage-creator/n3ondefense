@@ -40,6 +40,12 @@ export const setFirstRunTeachingStage = (state: TutorialProgressState, stage: Fi
   state.firstRunWelcomePending = stage === 'welcome-main-menu' || stage === 'waiting-for-start-local';
 };
 
+const advancePostCombatTeaching = (state: TutorialProgressState): void => {
+  setFirstRunTeachingStage(state, !isTutorialSequenceComplete(state, 'onboarding.mod-collection')
+    ? 'waiting-for-garage' : !isTutorialSequenceComplete(state, 'onboarding.store')
+      ? 'waiting-for-store' : 'complete');
+};
+
 /**
  * A successful round is the authoritative completion signal for the Arena
  * portion of first-run Teaching. Do not require every presentation sequence
@@ -58,7 +64,7 @@ export const completeFirstRunTeachingRound = (state: TutorialProgressState, roun
     state.skippedSequences = state.skippedSequences.filter((id) => id !== sequenceId);
   }
   if (state.replaySequenceId && ARENA_TEACHING_SEQUENCES.includes(state.replaySequenceId)) state.replaySequenceId = null;
-  setFirstRunTeachingStage(state, 'waiting-for-store');
+  advancePostCombatTeaching(state);
   return true;
 };
 
@@ -67,6 +73,8 @@ export const completeTutorialStep = (state: TutorialProgressState, sequenceId: s
   if (state.completedSequences.includes(sequenceId)) return;
   const steps = state.completedSteps[sequenceId] ?? (state.completedSteps[sequenceId] = []);
   addUnique(steps, stepId);
+  // Replaying a workstation lesson does not reenroll a graduated profile.
+  if (state.firstRunStage === 'complete') return;
   if (sequenceId === 'onboarding.menu-welcome' && stepId === 'welcome') {
     setFirstRunTeachingStage(state, 'waiting-for-start-local');
   } else if (sequenceId === 'onboarding.menu-welcome' && stepId === 'start-local') {
@@ -81,23 +89,25 @@ export const completeTutorialStep = (state: TutorialProgressState, sequenceId: s
 };
 
 export const completeTutorialSequence = (state: TutorialProgressState, sequenceId: string): void => {
+  const alreadyGraduated = state.firstRunStage === 'complete';
   addUnique(state.completedSequences, sequenceId);
   state.skippedSequences = state.skippedSequences.filter((id) => id !== sequenceId);
   if (state.replaySequenceId === sequenceId) state.replaySequenceId = null;
   if (sequenceId === 'onboarding.menu-welcome') state.firstRunWelcomePending = false;
-  if (sequenceId === 'onboarding.store') setFirstRunTeachingStage(state, 'waiting-for-garage');
+  if (sequenceId === 'onboarding.store') {
+    for (const equivalent of ['progression.store', 'progression.upgrades']) addUnique(state.completedSequences, equivalent);
+    if (!alreadyGraduated) advancePostCombatTeaching(state);
+  }
   if (sequenceId === 'onboarding.mod-collection') {
     // The exact first-run route already taught these same systems. Mark the
     // contextual equivalents complete so their delayed menu triggers cannot
     // immediately replay Store/Garage/Collection teaching after graduation.
     for (const equivalent of [
-      'progression.store',
-      'progression.upgrades',
       'progression.garage',
       'progression.garage-loadout',
       'progression.mod-collection'
     ]) addUnique(state.completedSequences, equivalent);
-    setFirstRunTeachingStage(state, 'complete');
+    if (!alreadyGraduated) advancePostCombatTeaching(state);
   }
 };
 

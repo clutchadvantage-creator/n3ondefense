@@ -121,7 +121,7 @@ export class MainMenuScene extends Phaser.Scene {
     if (profile) {
       // Repair profiles already stranded by the previous completion guard.
       // A persisted completed round proves that this first-run deployment
-      // succeeded, so Main Menu must continue at Store—not START LOCAL.
+      // succeeded, so Main Menu must continue with workstation training.
       const teaching = SaveSystem.getTutorialProgress();
       if (teaching.firstRunStage === 'arena-teaching' && (
         (teaching.trainingRoundsCompleted ?? 0) >= 3
@@ -129,6 +129,8 @@ export class MainMenuScene extends Phaser.Scene {
         || ((teaching.trainingRoundsCompleted ?? 0) >= 2 && profile.highestRound >= 3)
       )) {
         SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress); });
+        SaveSystem.completeCampaignTraining();
+        SaveSystem.claimCampaignPackages();
       }
     }
     const deploymentStart = profile
@@ -150,8 +152,8 @@ export class MainMenuScene extends Phaser.Scene {
         const labels = {
           connected: 'ONLINE IDENTITY CONNECTED',
           none: '',
-          expired: 'ONLINE SESSION EXPIRED - DEPLOY ONLINE TO RECOVER',
-          unavailable: 'ONLINE SERVICE UNAVAILABLE - LOCAL MODE REMAINS AVAILABLE'
+          expired: 'LEADERBOARD SESSION EXPIRED',
+          unavailable: 'LEADERBOARD SERVICE UNAVAILABLE'
         } as const;
         onlineStatus.setText(labels[status]).setColor(status === 'connected' ? '#8fffc4' : status === 'unavailable' ? '#ffbd85' : '#9fc8d8');
       });
@@ -218,7 +220,7 @@ export class MainMenuScene extends Phaser.Scene {
         onConfigure: () => this.scene.start(SceneKeys.Garage, { returnScene: SceneKeys.MainMenu, openRunConfiguration: true })
       });
     };
-    const launchConfiguredRun = (mode: 'online' | 'local', reminderAcknowledged = false): boolean => {
+    const launchConfiguredRun = (reminderAcknowledged = false): boolean => {
       if (!this.deploymentLaunchGate.begin()) return false;
       const selection = this.getRunSetupSelection();
       if (!reminderAcknowledged && SaveSystem.isSavedDeploymentReminderDue()) {
@@ -228,7 +230,7 @@ export class MainMenuScene extends Phaser.Scene {
           selection,
           cost: getRunSetupCost(selection),
           walletCredits: SaveSystem.get().credits,
-          onConfirm: () => launchConfiguredRun(mode, true)
+          onConfirm: () => launchConfiguredRun(true)
         });
         return true;
       }
@@ -239,7 +241,10 @@ export class MainMenuScene extends Phaser.Scene {
       }
 
       setStartButtonsEnabled(false);
-      const commitAndStart = (seed: number): boolean => {
+      const launch = new AbortController();
+      const cancelLaunch = () => launch.abort();
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, cancelLaunch);
+      const commitAndStart = (seed: number, scoreAuthorized: boolean): boolean => {
         const commit = SaveSystem.commitDeploymentLaunch({ acknowledgeReminder: reminderAcknowledged });
         if (!commit.ok || !commit.economySnapshot) {
           this.deploymentLaunchGate.release();
@@ -247,10 +252,8 @@ export class MainMenuScene extends Phaser.Scene {
           showInsufficientFunds(commit.selection);
           return false;
         }
-        if (mode === 'local') {
-          this.confirmLocalTeachingSelection();
-          OnlineRunManager.beginLocalRun();
-        }
+        this.confirmLocalTeachingSelection();
+        if (!scoreAuthorized) OnlineRunManager.beginLocalRun();
         this.deploymentLaunchGate.commit();
         startArenaLoad(this, {
           reason: 'new-run',
@@ -264,43 +267,45 @@ export class MainMenuScene extends Phaser.Scene {
             modsEarned: [],
             ...commit.economySnapshot
           },
-          message: mode === 'online' ? 'Deploying server-authorized online operation...' : 'Building explicitly local operation...'
+          message: scoreAuthorized ? 'Deploying campaign // leaderboard tracking active...' : 'Deploying campaign // leaderboard unavailable, progress saved locally...'
         });
         return true;
       };
 
-      if (mode === 'local') return commitAndStart(Phaser.Math.Between(1, 999_999_999));
       void (async () => {
-        onlineStatus.setText('CREATING SERVER-AUTHORIZED RUN...').setColor('#9fc8d8');
-        const result = await OnlineRunManager.beginRun(profile!.id, profile!.name, protocol, equippedMods);
+        onlineStatus.setText('PREPARING CAMPAIGN AND SCORE TRACKING...').setColor('#9fc8d8');
+        const result = await OnlineRunManager.beginRun(profile!.id, profile!.name, protocol, equippedMods, deploymentStart.startingRound, launch.signal);
+        this.events.off(Phaser.Scenes.Events.SHUTDOWN, cancelLaunch);
+        if (launch.signal.aborted) return;
         if (!result.ok || result.seed === undefined) {
-          onlineStatus.setText(`${result.message} CHOOSE LOCAL MODE OR RETRY.`).setColor('#ff9aab');
-          this.deploymentLaunchGate.release();
-          setStartButtonsEnabled(true);
+          // Offline-started runs retain local progress without being submitted
+          // later as server-authorized scores. No separate play-mode choice.
+          commitAndStart(Phaser.Math.Between(1, 999_999_999), false);
           return;
         }
-        if (!commitAndStart(result.seed)) OnlineRunManager.complete('quit');
+        if (!commitAndStart(result.seed, true)) OnlineRunManager.complete('quit');
       })();
       return true;
     };
 
-    startButton = this.createCommandButton(centerX, menuStartY, 'DEPLOY ONLINE', () => {
-      if (!profile) {
-        this.scene.start(SceneKeys.LocalProfiles);
-        return;
-      }
-      if (!this.allowTeachingMenuAction('online', onlineStatus)) return false;
-      return launchConfiguredRun('online');
-    }, singleButtonWidth, menuButtonHeight + 2, 'primary', 'runStart', tiny ? 15 : short ? 18 : 21);
+    startButton = this.createCommandButton(centerX, menuStartY + menuRowGap, 'BATTLE // COMING SOON', () => {
+      onlineStatus.setText('PVP BATTLE MODE // IN DEVELOPMENT').setColor('#ff7084');
+      const plate = startButton.list[0] as Phaser.GameObjects.Rectangle;
+      plate.setFillStyle(0x521927, 1).setStrokeStyle(2, 0xff405d, 1);
+      this.time.delayedCall(500, () => {
+        if (plate.active) plate.setFillStyle(0x121a2b, 0.95).setStrokeStyle(2, 0x46c6dc, 0.9);
+      });
+      return false;
+    }, singleButtonWidth, menuButtonHeight, 'secondary', 'menu', tiny ? 14 : short ? 17 : 20);
 
-    localStartButton = this.createCommandButton(centerX, menuStartY + menuRowGap, 'START LOCAL', () => {
+    localStartButton = this.createCommandButton(centerX, menuStartY, 'START GAME', () => {
       if (!profile) {
         this.scene.start(SceneKeys.LocalProfiles);
         return;
       }
       if (!this.allowTeachingMenuAction('local', onlineStatus)) return false;
-      return launchConfiguredRun('local');
-    }, singleButtonWidth, menuButtonHeight, 'secondary', 'runStart', tiny ? 14 : short ? 17 : 20);
+      return launchConfiguredRun();
+    }, singleButtonWidth, menuButtonHeight + 2, 'primary', 'runStart', tiny ? 15 : short ? 18 : 21);
 
     const navFontSize = tiny ? 14 : short ? 16 : 19;
     const garageButton = this.createCommandButton(centerX, menuStartY + menuRowGap * 2, 'OPERATOR GARAGE', () => {
@@ -410,7 +415,7 @@ export class MainMenuScene extends Phaser.Scene {
     const instruction = stage === 'welcome-main-menu'
       ? 'READ THE WELCOME BRIEFING, THEN SELECT NEXT.'
       : stage === 'waiting-for-start-local' || stage === 'arena-teaching'
-        ? 'TRAINING LINK ACTIVE // SELECT START LOCAL.'
+        ? 'TRAINING LINK ACTIVE // SELECT START GAME.'
         : stage === 'waiting-for-store' || stage === 'store-teaching'
           ? 'TEACHING LINK ACTIVE // SELECT STORE.'
           : 'TEACHING LINK ACTIVE // SELECT OPERATOR GARAGE.';

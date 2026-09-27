@@ -8,11 +8,13 @@ import type { PlayerGarageState } from '../garage/types.ts';
 import type { WeeklyOperationProgressSource, WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import type { AimSettings, HudSettings } from '../config/interfaceSettings.ts';
 import type { ControllerSettings } from '../config/controllerSettings.ts';
+import type { CampaignProgress } from '../progression/CampaignProgression.ts';
+import type { LegacyCampaignRecord } from '../progression/CampaignLegacyMigration.ts';
 
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 18;
+export const CURRENT_SAVE_VERSION = 19;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -30,6 +32,7 @@ export interface LocalPlayerWallet {
 }
 
 export interface LocalPlayerProgress {
+  campaign: CampaignProgress;
   highestRound: number;
   /** Highest round completed in Normal; drives permanent five-round checkpoint unlocks. */
   normalHighestRound: number;
@@ -125,6 +128,8 @@ export interface LocalPlayerSave {
   garage: PlayerGarageState;
   protocol: ProtocolPreference;
   progress: LocalPlayerProgress;
+  /** Immutable pre-campaign progression evidence. New gameplay never rewrites it. */
+  legacyCampaign?: LegacyCampaignRecord;
   settings: LocalPlayerSettings;
   tutorials: TutorialProgressState;
   metadata: LocalPlayerMetadata;
@@ -136,7 +141,7 @@ export interface LocalPlayerSaveV1 {
   wallet: Omit<LocalPlayerWallet, 'fluxCores'> & { fluxCores?: number };
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
-  progress: Omit<LocalPlayerProgress, 'normalHighestRound' | 'supremeHighestRound' | 'supremeOverdriveCompleted' | 'regularOverdriveCompleted' | 'regularOverdriveSupremeBridgeAwarded' | 'firstSupremeTutorialSeen' | 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'arcadeEventsCompleted' | 'goldenEnemiesKilled' | 'arcadeMiniBossesKilled' | 'neonCircuitsCompleted' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
+  progress: Omit<LocalPlayerProgress, 'campaign' | 'normalHighestRound' | 'supremeHighestRound' | 'supremeOverdriveCompleted' | 'regularOverdriveCompleted' | 'regularOverdriveSupremeBridgeAwarded' | 'firstSupremeTutorialSeen' | 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'arcadeEventsCompleted' | 'goldenEnemiesKilled' | 'arcadeMiniBossesKilled' | 'neonCircuitsCompleted' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
   settings: Omit<LocalPlayerSettings, 'lyra' | 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'controller' | 'contextualTutorials' | 'buttonJiggle'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }

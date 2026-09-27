@@ -20,6 +20,7 @@ export interface SupremeFinaleOptions {
   healthMultiplier: number;
   damageMultiplier: number;
   particlesEnabled: boolean;
+  legBlockers?: readonly RectSpec[];
 }
 
 const ARCHETYPES: readonly BossArchetype[] = ['artillery', 'storm-mage', 'void-brawler'];
@@ -76,6 +77,7 @@ export class SupremeFinaleController {
       {
         showHealthUi: false,
         particlesEnabled: options.particlesEnabled,
+        legBlockers: options.legBlockers,
         healthMultiplier: options.healthMultiplier,
         damageMultiplier: options.damageMultiplier
       }

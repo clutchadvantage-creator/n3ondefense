@@ -169,8 +169,12 @@ export const getSpawnProfile = (round: number, destroyedSites = 0, family: 'norm
   const r = Math.max(1, Math.floor(round));
   const late = Math.max(0, r - 5);
   const droneStage = Math.min(2, Math.floor((r - 1) / 10));
+  // Normal teaches airborne threats after its first two boss milestones.
+  // These replace a small share of ordinary spawns within the existing budget;
+  // Redline owns its separate event population and remains unchanged.
+  const normalDroneWeight = r < 11 ? 0 : 0.015 + Math.min(19, r - 11) * (0.03 / 19);
   const composition: Record<BalanceEnemyType, number> = {
-    drone: family === 'normal' ? 0 : (family === 'supreme' ? .10 : .045) + droneStage * .035,
+    drone: family === 'normal' ? normalDroneWeight : (family === 'supreme' ? .10 : .045) + droneStage * .035,
     grunt: Math.max(0.32, 0.72 - (r - 1) * 0.035),
     shooter: r === 1 ? 0.12 : Math.min(0.24, 0.13 + r * 0.012),
     defuser: r === 1 ? 0.16 : Math.min(0.16, 0.1 + r * 0.006),
@@ -189,7 +193,7 @@ export const getSpawnProfile = (round: number, destroyedSites = 0, family: 'norm
     activeCountCap: Math.min(26, 7 + Math.floor((r - 1) * 1.35) + destroyedSites),
     activeWeightCap: Math.min(39, 8 + (r - 1) * 2 + destroyedSites * 1.5),
     specialSpacingMs: Math.max(6500, 13_000 - (r - 1) * 500),
-    droneCountCap: family === 'normal' ? 0 : (family === 'supreme' ? 2 : 1) + droneStage,
+    droneCountCap: family === 'normal' ? (r < 11 ? 0 : r < 21 ? 1 : 2) : (family === 'supreme' ? 2 : 1) + droneStage,
     composition
   };
 };

@@ -22,7 +22,7 @@ def create_run(
     db: Session = Depends(get_db),
 ) -> RunStartResponse:
     enforce_rate_limit(db, f'run-start:{player.id}:{request.client.host if request.client else "unknown"}', 30, 3600)
-    return start_run(db, player, body.game_version)
+    return start_run(db, player, body.game_version, body.campaign_version, body.campaign_mode, body.starting_round)
 
 
 @router.post('/{run_id}/milestones', response_model=RunStatusResponse)

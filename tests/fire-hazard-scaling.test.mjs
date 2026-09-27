@@ -82,6 +82,6 @@ test('Arena and HEIST inject resolved profiles while shared fire owns no static 
   assert.match(shared, /damageContactStartedAt/);
   assert.match(shared, /damagePulsesDelivered/);
   assert.doesNotMatch(shared, /damagePerTick|damageIntervalMs|\?\? 4\.2|\?\? 260/);
-  assert.match(arena, /damageProfile: getFireHazardDamageProfile\(round, this\.protocol\)/);
+  assert.match(arena, /damageProfile: getFireHazardDamageProfile\(difficultyPosition, this\.protocol\)/);
   assert.match(heist, /damageProfile: getFireHazardDamageProfile\(difficulty\.round, difficulty\.protocol\)/);
 });

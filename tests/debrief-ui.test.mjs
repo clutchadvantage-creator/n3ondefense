@@ -49,7 +49,7 @@ test('debrief action routes preserve completion flow and expose safe post-failur
   for (const label of ['CONTINUE TO NEXT ROUND', 'STORE', 'MOD COLLECTION', 'EXPORT GAMEPLAY METRICS', 'QUIT TO MAIN MENU']) {
     assert.match(finished, new RegExp(label));
   }
-  for (const label of ['REPLAY LOCAL', 'STORE', 'MOD COLLECTION', 'EXPORT GAMEPLAY METRICS', 'MAIN MENU']) {
+  for (const label of ['TRY AGAIN', 'STORE', 'MOD COLLECTION', 'EXPORT GAMEPLAY METRICS', 'MAIN MENU']) {
     assert.match(failed, new RegExp(label));
   }
   assert.match(finished, /returnScene: SceneKeys\.RoundFinished/);
@@ -65,8 +65,8 @@ test('round-finished readability tier increases only secondary typography', () =
   assert.match(finished, /createDebriefShell\([^;]*true\s*\)/);
   assert.match(finished, /layout\.compact, false, true/);
   assert.match(finished, /createOperationReadout\([^;]*layout\.compact, true\)/);
-  assert.match(finished, /ENDLESS FLOW \/\/ NEXT ARENA READY/);
-  assert.match(finished, /SUPREME CLEAR PERSISTED \/\/ THE CONSTELLATION ENDURES/);
+  assert.match(finished, /CAMPAIGN PROGRESSION \/\/ NEXT ENCOUNTER READY/);
+  assert.match(finished, /CAMPAIGN CLEAR PERSISTED \/\/ REPLAY FROM OPERATIONS/);
   assert.doesNotMatch(failed, /enhanceSecondaryTypography|layout\.compact, true, true/);
   assert.doesNotMatch(failed, /createDebriefShell\([^;]*, true\)/);
   for (const pair of [

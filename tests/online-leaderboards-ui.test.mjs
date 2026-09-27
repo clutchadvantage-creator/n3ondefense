@@ -16,14 +16,14 @@ test('Online Leaderboards uses the established cyber-console menu language', () 
 });
 
 test('visual refactor preserves all online leaderboard data routes and controls', () => {
-  assert.match(source, /LeaderboardClient\.aroundPlayer\(profile\.id, key\)/);
-  assert.match(source, /LeaderboardClient\.leaderboard\(key\)/);
+  assert.match(source, /LeaderboardClient\.aroundPlayer\(profile\.id, key, this\.campaign\)/);
+  assert.match(source, /LeaderboardClient\.leaderboard\(key, this\.campaign\)/);
   assert.match(source, /OnlineRunManager\.flushQueue\(\)/);
   assert.match(source, /OnlineRunManager\.pendingCount\(\)/);
   assert.match(source, /SceneKeys\.Leaderboards/);
   assert.match(source, /SceneKeys\.MainMenu/);
   for (const category of ['highest_round', 'enemies_destroyed', 'bomb_sites_destroyed']) {
-    assert.match(source, new RegExp(`key: '${category}'`));
+    assert.match(readFileSync(new URL('../src/online/LeaderboardCategories.ts', import.meta.url), 'utf8'), new RegExp(`key: '${category}'`));
   }
 });
 

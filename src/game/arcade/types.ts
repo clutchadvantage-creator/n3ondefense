@@ -134,11 +134,14 @@ export interface ArcadeRuntimeContext {
   scene: Phaser.Scene;
   player: Player;
   round: number;
+  rewardPosition?: number;
+  difficultyPosition?: number;
   seed: number;
   protocol: RunProtocolId;
   modeFamily: RunModeFamily;
   bounds: RectSpec;
   walls: Phaser.Physics.Arcade.StaticGroup;
+  legBlockers?: readonly RectSpec[];
   particlesEnabled: boolean;
   isBlocked(x: number, y: number): boolean;
   findSpawnPoints(count: number, minimumPlayerDistance: number, clearance?: number): Array<{ x: number; y: number }>;

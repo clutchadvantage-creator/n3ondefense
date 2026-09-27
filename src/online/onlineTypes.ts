@@ -2,7 +2,8 @@ import type { RunProtocolId } from '../game/mods/types.ts';
 
 export type OnlineRunStatus = 'pending' | 'verified' | 'flagged' | 'rejected';
 export type OnlineSubmissionState = OnlineRunStatus | 'submitted' | 'queued_offline' | 'failed';
-export type OnlineLeaderboardCategory = 'highest_round' | 'enemies_destroyed' | 'bomb_sites_destroyed';
+export type { OnlineLeaderboardCategory } from './LeaderboardCategories';
+export type OnlineCampaignBoard = 'normal' | 'overdrive' | 'supreme' | 'legacy';
 
 export interface OnlineCredentials {
   profileId: string;
@@ -15,6 +16,9 @@ export interface OnlineCredentials {
 }
 
 export interface OnlineRunContext {
+  campaignVersion?: 2;
+  startingRound?: number;
+  bossRoundsCompleted?: number;
   runId: string;
   runToken: string;
   runTokenExpiresAt: number;

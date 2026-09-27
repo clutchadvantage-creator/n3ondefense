@@ -2,12 +2,15 @@ import Phaser from 'phaser';
 import { authoritativeEchoDamage, type EchoDamageStamp } from '../echo/EchoRules.ts';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossHealth, type BossArchetype } from '../config/bossBalance';
 import type { RunModeFamily } from '../config/modeBalance.ts';
+import type { RectSpec } from '../types.ts';
+import { BossLegRig } from './BossLegRig.ts';
 
 export type BossDamageSource = 'weapon' | 'echo' | 'turret' | 'mine' | 'fence' | 'hazard';
 
 export interface BossInstanceOptions {
   /** Applies only to this boss instance; normal milestone bosses remain unchanged. */
   healthMultiplier?: number;
+  legBlockers?: readonly RectSpec[];
 }
 
 export class Boss extends Phaser.Physics.Arcade.Sprite {
@@ -17,9 +20,15 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   hp: number;
   private defeated = false;
   private readonly visualRoot: Phaser.GameObjects.Container;
-  private readonly core: Phaser.GameObjects.Arc;
-  private readonly aura: Phaser.GameObjects.Arc;
-  private readonly animatedParts: Phaser.GameObjects.GameObject[] = [];
+  private readonly legRig: BossLegRig;
+  private weaponFacing = 0;
+  private readonly weapons: Phaser.GameObjects.Image[] = [];
+  private presentationNow = 0;
+  private hitUntil = 0;
+  private actionAt = -10000;
+  private actionDuration = 400;
+  private action: 'fire' | 'slam' | 'spin' | 'arrival' = 'fire';
+  private weaponAngle = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -46,97 +55,63 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.body?.setCircle(36, Math.max(0, (this.displayWidth - 72) * 0.5), Math.max(0, (this.displayHeight - 72) * 0.5));
     this.setCollideWorldBounds(true);
 
-    // Animated hardware sits above the cached chassis art. The chassis itself
-    // carries the expensive detail; this rig is deliberately small and only
-    // animates the pieces that communicate attacks.
+    // Blender component sprites share pivots and units with the authored source.
+    // Physics retains a centered 34px world radius independently of sprite padding.
+    this.setTexture('rwg-' + archetype + '-chassis').setDisplaySize(160, 160);
+    const radius = this.hazardRadius / this.scaleX;
+    this.body?.setCircle(radius, this.width / 2 - radius, this.height / 2 - radius);
+    this.legRig = new BossLegRig(scene, archetype, options.legBlockers ?? []);
     this.visualRoot = scene.add.container(x, y).setDepth(9.1);
-    this.aura = scene.add.circle(0, 0, archetype === 'artillery' ? 58 : 52, definition.color, 0.08)
-      .setStrokeStyle(2, definition.color, 0.38).setBlendMode(Phaser.BlendModes.ADD);
-    this.core = scene.add.circle(0, 0, archetype === 'void-brawler' ? 13 : 10, definition.color, 0.72)
-      .setStrokeStyle(2, 0xffffff, 0.85).setBlendMode(Phaser.BlendModes.ADD);
-    this.visualRoot.add([this.aura, this.core]);
-    this.createArchetypeRig(definition.color);
+    const parts = archetype === 'artillery' ? ['artillery-gun']
+      : archetype === 'storm-mage' ? ['storm-mage-rotor'] : ['void-brawler-hammer', 'void-brawler-shield'];
+    for (const part of parts) {
+      const weapon = scene.add.image(0, 0, 'rwg-' + part).setDisplaySize(160, 160);
+      this.weapons.push(weapon);
+      this.visualRoot.add(weapon);
+    }
   }
 
-  private createArchetypeRig(color: number): void {
-    if (this.archetype === 'artillery') {
-      for (const side of [-1, 1]) {
-        const mountShadow = this.scene.add.rectangle(side * 47 + 3, 4, 31, 15, 0x02050a, 0.82)
-          .setStrokeStyle(1, 0x02050a, 0.9);
-        const mount = this.scene.add.rectangle(side * 45, 0, 29, 13, 0x071018, 0.98)
-          .setStrokeStyle(2, color, 0.92);
-        const mountFacet = this.scene.add.polygon(side * 45, -4, [-14, -4, 10, -4, 14, 0, -10, 0], 0xffffff, 0.2)
-          .setStrokeStyle(1, 0xffffff, 0.48);
-        const barrelShadow = this.scene.add.rectangle(side * 59 + 2, 3, 28, 7, 0x02050a, 0.9);
-        const barrel = this.scene.add.rectangle(side * 58, 0, 26, 5, color, 0.82)
-          .setStrokeStyle(1, 0xffffff, 0.7);
-        const muzzle = this.scene.add.circle(side * 72, 0, 3, 0x071018, 1)
-          .setStrokeStyle(1, 0xffffff, 0.82);
-        this.visualRoot.add([mountShadow, barrelShadow, mount, mountFacet, barrel, muzzle]);
-        this.animatedParts.push(mount, barrel);
-      }
-      const chassisRing = this.scene.add.circle(0, 0, 43, 0x000000, 0).setStrokeStyle(4, color, 0.72);
-      const innerRing = this.scene.add.circle(-2, -2, 36, 0x000000, 0).setStrokeStyle(1, 0xffffff, 0.42);
-      this.visualRoot.add(chassisRing);
-      this.visualRoot.add(innerRing);
-      this.animatedParts.push(chassisRing);
-      return;
-    }
-    if (this.archetype === 'storm-mage') {
-      for (let index = 0; index < 3; index += 1) {
-        const satelliteShadow = this.scene.add.polygon(3, 4, [0, -9, 7, 0, 0, 9, -7, 0], 0x02050a, 0.72);
-        const satellite = this.scene.add.polygon(0, 0, [0, -8, 6, 0, 0, 8, -6, 0], color, 0.85)
-          .setStrokeStyle(1, 0xffffff, 0.82).setBlendMode(Phaser.BlendModes.ADD);
-        const satelliteCore = this.scene.add.circle(0, 0, 2.2, 0xffffff, 0.9).setBlendMode(Phaser.BlendModes.ADD);
-        const satelliteRig = this.scene.add.container(0, 0, [satelliteShadow, satellite, satelliteCore]);
-        this.visualRoot.add(satelliteRig);
-        this.animatedParts.push(satelliteRig);
-      }
-      return;
-    }
-    for (const side of [-1, 1]) {
-      const fistShadow = this.scene.add.polygon(side * 42 + 3, 8, [-10, -10, 8, -13, 15, 0, 7, 14, -11, 10, -16, 0], 0x02050a, 0.82);
-      const fist = this.scene.add.polygon(side * 42, 4, [-10, -10, 8, -13, 15, 0, 7, 14, -11, 10, -16, 0], color, 0.9)
-        .setStrokeStyle(2, 0xffffff, 0.72);
-      const knuckles = this.scene.add.rectangle(side * 43, -1, 18, 3, 0xffffff, 0.45);
-      const fistRig = this.scene.add.container(0, 0, [fistShadow, fist, knuckles]);
-      this.visualRoot.add(fistRig);
-      this.animatedParts.push(fistRig);
-    }
-    const phaseRing = this.scene.add.circle(0, 0, 45, 0x000000, 0).setStrokeStyle(3, color, 0.74);
-    const armorChevron = this.scene.add.polygon(0, 17, [-18, -5, 0, 5, 18, -5, 0, 11], 0x071018, 0.8)
-      .setStrokeStyle(1, 0xffffff, 0.48);
-    this.visualRoot.add([phaseRing, armorChevron]);
-    this.animatedParts.push(phaseRing);
+  playAction(action: 'fire' | 'slam' | 'spin' | 'arrival', now: number, duration = 400): void {
+    this.action = action;
+    this.actionAt = now;
+    this.actionDuration = duration;
   }
 
-  updatePresentation(elapsedMs: number, aimAngle: number, charge = 0): void {
+  /** Hammer tip in world space; used by damage and impact presentation alike. */
+  hammerTip(angle = this.weaponAngle): { x: number; y: number } {
+    const facing = this.weaponFacing;
+    return { x: this.x + Math.cos(facing) * 4 - Math.sin(facing) * -22 + Math.cos(angle) * 43,
+      y: this.y + Math.sin(facing) * 4 + Math.cos(facing) * -22 + Math.sin(angle) * 43 };
+  }
+
+  updatePresentation(elapsedMs: number, aimAngle: number, charge = 0, spinAngle?: number): void {
     if (!this.visualRoot.active) return;
+    this.presentationNow = elapsedMs;
+    this.weaponFacing = aimAngle;
+    const chassisAngle = this.legRig.update(this.x, this.y, aimAngle, elapsedMs, charge, this.alpha);
     this.visualRoot.setPosition(this.x, this.y).setAlpha(this.alpha);
-    const pulse = 0.5 + Math.sin(elapsedMs * 0.006) * 0.5;
-    this.aura.setScale(0.94 + pulse * 0.12 + charge * 0.18).setAlpha(0.07 + pulse * 0.11 + charge * 0.18);
-    this.core.setScale(0.9 + pulse * 0.16 + charge * 0.42)
-      .setFillStyle(charge > 0.75 ? 0xffffff : BOSS_ARCHETYPES[this.archetype].color, 0.78 + charge * 0.2);
+    this.setRotation(chassisAngle);
+    const progress = Math.min(1, Math.max(0, (elapsedMs - this.actionAt) / this.actionDuration));
+    const recoil = this.action === 'fire' && progress < 1 ? Math.sin(progress * Math.PI) * 7 : 0;
     if (this.archetype === 'artillery') {
       this.visualRoot.setRotation(aimAngle);
-      return;
-    }
-    if (this.archetype === 'storm-mage') {
+      this.weapons[0].setPosition(-recoil, 0).setRotation(charge > 0 ? Math.sin(elapsedMs * .016) * charge * .18 : 0);
+    } else if (this.archetype === 'storm-mage') {
       this.visualRoot.setRotation(0);
-      this.animatedParts.forEach((part, index) => {
-        const satellite = part as Phaser.GameObjects.Shape;
-        const angle = elapsedMs * (index % 2 === 0 ? 0.0018 : -0.0016) + index * Math.PI * 2 / 3;
-        satellite.setPosition(Math.cos(angle) * (42 + charge * 10), Math.sin(angle) * (42 + charge * 10));
-        satellite.setRotation(angle + Math.PI * 0.5);
-      });
-      return;
+      this.weapons[0].setRotation(elapsedMs * (.001 + charge * .003)).setScale(160 / 384 * (1 + charge * .12));
+    } else {
+      this.visualRoot.setRotation(aimAngle);
+      const swing = this.action === 'slam' && progress < 1
+        ? progress < .48 ? -1.25 * progress / .48 : progress < .68 ? -1.25 + 1.9 * (progress - .48) / .2 : .65 * (1 - progress) / .32
+        : -charge * 1.1;
+      const localAngle = spinAngle === undefined ? swing : spinAngle - aimAngle;
+      this.weapons[0].setPosition(4, -22).setRotation(localAngle);
+      this.weapons[1].setPosition(1 + charge * 8, 22).setRotation(.25 - charge * .35);
+      this.weaponAngle = aimAngle + localAngle;
     }
-    this.visualRoot.setRotation(aimAngle);
-    const extension = 4 + Math.sin(elapsedMs * 0.01) * 3 + charge * 12;
-    const left = this.animatedParts[0] as Phaser.GameObjects.Shape | undefined;
-    const right = this.animatedParts[1] as Phaser.GameObjects.Shape | undefined;
-    left?.setX(-42 - extension);
-    right?.setX(42 + extension);
+    const flash = elapsedMs < this.hitUntil;
+    if (flash) this.setTintFill(0xd9edff); else this.clearTint();
+    for (const part of this.weapons) { if (flash) part.setTint(0xffffff); else part.clearTint(); }
   }
 
   takeDamage(amount: number, source: BossDamageSource = 'weapon', echo?: EchoDamageStamp): number {
@@ -146,13 +121,13 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     if (applied <= 0) return 0;
     this.hp = Math.max(0, this.hp - applied);
     this.onDamaged(applied, source);
-    this.setTintFill(0xffffff);
-    this.scene.time.delayedCall(55, () => {
-      if (this.active) this.clearTint();
-    });
+    this.hitUntil = this.presentationNow + 70;
     if (this.hp <= 0) {
       this.defeated = true;
       this.setVelocity(0, 0);
+      this.setTint(0x8c8c9a);
+      for (const part of this.weapons) part.setTint(0x8c8c9a);
+      this.legRig.defeat();
       this.visualRoot.setAlpha(0.95);
       this.onDefeated();
     }
@@ -170,11 +145,13 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   override setVisible(value: boolean): this {
     super.setVisible(value);
     this.visualRoot?.setVisible(value);
+    this.legRig?.setVisible(value);
     return this;
   }
 
   override destroy(fromScene?: boolean): void {
     this.visualRoot?.destroy(true);
+    this.legRig?.destroy();
     super.destroy(fromScene);
   }
 }

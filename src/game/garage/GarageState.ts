@@ -4,7 +4,8 @@ import type { ModFocusSignalId, RunContractId, RunSetupSelection } from '../econ
 import { MOD_BY_ID } from '../mods/definitions.ts';
 import { getModDatabaseEntries } from '../mods/ModDatabaseService.ts';
 import { createDefaultModLoadout, equipMod } from '../mods/ModInventoryService.ts';
-import { isRunProtocolId, isRunProtocolUnlocked } from '../mods/modBalance.ts';
+import { RUN_PROTOCOLS, isRunProtocolId, isRunProtocolUnlocked } from '../mods/modBalance.ts';
+import { getSupremeCampaignStart } from '../progression/CampaignProgression.ts';
 import type { LocalModCollection, ModCardInstance, ModSlot, RunProtocolId } from '../mods/types.ts';
 import type { LocalPlayerSave } from '../save/LocalSaveTypes.ts';
 import type { CosmeticOption } from '../types.ts';
@@ -37,6 +38,7 @@ const createEmptyPreset = (id: GaragePresetId, index: number): GaragePreset => (
   cardSlots: createDefaultModLoadout(),
   protocol: null,
   normalStartRound: null,
+  campaignStartRound: null,
   contract: null,
   modFocus: null
 });
@@ -84,6 +86,8 @@ export const normalizeGarageState = (value: unknown): PlayerGarageState => {
         ...(typeof raw.savedAt === 'string' && !Number.isNaN(Date.parse(raw.savedAt)) ? { savedAt: raw.savedAt } : {}),
         cardSlots: normalizeCardSlots(raw.cardSlots),
         protocol: isRunProtocolId(raw.protocol) ? raw.protocol : null,
+        campaignStartRound: typeof raw.campaignStartRound === 'number' && Number.isInteger(raw.campaignStartRound)
+          && raw.campaignStartRound >= 1 && raw.campaignStartRound <= 30 ? raw.campaignStartRound : null,
         normalStartRound: typeof raw.normalStartRound === 'number' && Number.isFinite(raw.normalStartRound)
           ? Math.max(1, Math.floor(raw.normalStartRound))
           : null,
@@ -139,6 +143,7 @@ export const saveCurrentGaragePreset = (save: LocalPlayerSave, presetId: GarageP
   preset.cardSlots = { ...loadout.cardSlots };
   const operations = resolveOperationsConfiguration(save.protocol, save.progress);
   preset.protocol = operations.protocol;
+  preset.campaignStartRound = operations.startingRound;
   preset.normalStartRound = save.protocol.selectedNormalStartRound;
   preset.contract = save.garage.nextRun.contract;
   preset.modFocus = save.garage.nextRun.modFocus;
@@ -165,7 +170,9 @@ export const loadGaragePreset = (save: LocalPlayerSave, presetId: GaragePresetId
     save.protocol,
     save.progress,
     targetProtocol,
-    targetProtocol === 'normal' ? preset.normalStartRound ?? save.protocol.selectedNormalStartRound : undefined
+    preset.campaignStartRound ?? (targetProtocol === 'normal'
+      ? Math.min(30, preset.normalStartRound ?? save.protocol.selectedNormalStartRound)
+      : getSupremeCampaignStart(targetProtocol) ?? Math.min(30, RUN_PROTOCOLS[targetProtocol].startingRound))
   );
   if (operationSelection.ok && operationSelection.preference) save.protocol = operationSelection.preference;
   else ignoredProtocol = true;

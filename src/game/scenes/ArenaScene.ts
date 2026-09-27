@@ -48,7 +48,7 @@ import { FLUX_CORE_BALANCE } from '../config/fluxCores';
 import { GAS_HAZARD_BALANCE } from '../config/gasHazards';
 import { getFireHazardDamageProfile } from '../config/fireHazards.ts';
 import type { HazardDamageTarget } from '../config/hazardScaling';
-import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossRewards, getBossTier, isBossRound, selectBossArchetype, type BossArchetype } from '../config/bossBalance';
+import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossRewards, getBossTier, selectBossArchetype, type BossArchetype } from '../config/bossBalance';
 import { BossEncounter, type BossAttackKind, type BossProjectileSpec } from '../bosses/BossEncounter';
 import { BossIntroOverlay } from '../bosses/BossIntroOverlay.ts';
 import { canAdvanceFromBossLootCollection } from '../bosses/BossLootCollectionGate.ts';
@@ -144,12 +144,9 @@ import {
   createGameplayModPickupVisual,
   updateGameplayModPickupVisual
 } from '../loot/GameplayPickupPresentation.ts';
-import { getSupremeStage, isSupremeProtocol, isSupremeTerminalRound } from '../progression/SupremeProgression.ts';
-import { resolveSupremeBridgeReward } from '../progression/SupremeBridgeReward.ts';
-import {
-  isRegularOverdriveTerminalCompletion,
-  resolveSupremePostRoundPlan
-} from '../progression/SupremeRoundTransition.ts';
+import { getSupremeStage, isSupremeProtocol } from '../progression/SupremeProgression.ts';
+import { getCampaignProtocol, getCampaignRewardPosition, getCampaignVictoryDestination, getSupremeCampaignStart, isCampaignBossRound, isCampaignRound } from '../progression/CampaignProgression.ts';
+import { getCampaignCombatPosition, getCampaignHazardAvailability } from '../progression/CampaignDifficulty.ts';
 import { SupremeConstellationFloor } from '../vfx/SupremeConstellationFloor.ts';
 import { SupremeFinaleController } from '../bosses/SupremeFinaleController.ts';
 import { SupremeFinaleOverlay } from '../bosses/SupremeFinaleOverlay.ts';
@@ -196,11 +193,6 @@ interface Projectile {
   redlineOwned?: boolean;
   nativePalette?: boolean;
   emissiveColor?: number;
-}
-
-interface SupremeBridgeAwardOutcome {
-  firstSupremeAwarded: boolean;
-  modId: string | null;
 }
 
 interface ProjectileSpawn extends Omit<Projectile, 'sprite' | 'crossedFences' | 'nextTrailAt'> {
@@ -994,9 +986,10 @@ export class ArenaScene extends Phaser.Scene {
     this.transitionReason = wrapper?.transitionReason ?? 'startup';
     this.nextStartupPresentationKind = this.transitionReason === 'continue-next-round' ? 'round' : 'deployment';
     const sessionFromData = this.parseSessionData(this.extractSessionData(data));
-    const sessionFromRegistry = this.registry.get('arena-session') as ArenaSessionState | undefined;
+    const sessionFromRegistry = this.parseSessionData(this.registry.get('arena-session'));
     const session = sessionFromData ?? sessionFromRegistry;
-    this.protocol = session?.protocol ?? 'normal';
+    this.protocol = getCampaignProtocol(RUN_PROTOCOLS[session?.protocol ?? 'normal'].family,
+      isCampaignRound(session?.round ?? 1) ? session?.round ?? 1 : 1);
     this.modFocus = session?.modFocus ?? null;
     this.contract = session?.contract ?? null;
     this.creditsSpentBeforeRun = session?.creditsSpentBeforeRun ?? 0;
@@ -1031,7 +1024,7 @@ export class ArenaScene extends Phaser.Scene {
     this.createCombatPools();
     this.createCombatPresentationSystems();
     if (session) {
-      this.roundManager = new RoundManager(session.baseSeed, session.objectiveMode, session.round);
+      this.roundManager = new RoundManager(session.baseSeed, session.objectiveMode, session.round, this.currentModeFamily());
       this.registry.set('arena-session', session);
     } else {
       this.roundManager = new RoundManager(Phaser.Math.Between(1, 999_999_999), OBJECTIVE_CONFIG.defaultMode, 1);
@@ -1145,10 +1138,10 @@ export class ArenaScene extends Phaser.Scene {
       debugGlobal.n3onArenaPreparation=()=>this.lastArenaPreparation?structuredClone(this.lastArenaPreparation):null;
       debugGlobal.n3onArenaPerformanceReport=()=>structuredClone(this.lifecycleProfiler.report());
       debugGlobal.forceSupremeStage=(protocol)=>{
-        const stage=getSupremeStage(protocol);
-        if(!stage)return false;
+        const round=getSupremeCampaignStart(protocol);
+        if(!round)return false;
         this.protocol=protocol;
-        this.roundManager=new RoundManager(this.roundManager.seedBase,this.roundManager.mode,stage.level);
+        this.roundManager=new RoundManager(this.roundManager.seedBase,this.roundManager.mode,round,'supreme');
         this.createRoundFromDefinition(this.roundManager.currentDefinition());
         return true;
       };
@@ -1163,14 +1156,13 @@ export class ArenaScene extends Phaser.Scene {
       };
       debugGlobal.forceSupremeFinale=()=>{
         const protocol:RunProtocolId='supreme-centaurus';
-        const stage=getSupremeStage(protocol)!;
         this.protocol=protocol;
-        this.roundManager=new RoundManager(this.roundManager.seedBase,this.roundManager.mode,stage.level);
+        this.roundManager=new RoundManager(this.roundManager.seedBase,this.roundManager.mode,30,'supreme');
         const completed=this.roundManager.currentDefinition();
-        const nextManager=new RoundManager(this.roundManager.seedBase,this.roundManager.mode,stage.level+1);
+        const nextManager=new RoundManager(this.roundManager.seedBase,this.roundManager.mode,30,'supreme');
         const next=nextManager.currentDefinition();
         this.beginBossFight({
-          baseSeed:this.roundManager.seedBase,completedRound:stage.level,completedSeed:completed.seed,completedTemplate:completed.template,
+          baseSeed:this.roundManager.seedBase,completedRound:30,completedSeed:completed.seed,completedTemplate:completed.template,
           nextRound:next.round,nextSeed:next.seed,nextTemplate:next.template,objectiveMode:this.roundManager.mode,
           creditsGained:0,coreTokensGained:0,plasmaChipsGained:0,fluxCoresGained:0,bossDefeated:null,
           protocol,equippedMods:this.modRuntime.snapshot(),modsEarned:[...this.modsEarned],runStartedAt:this.runStartedAt,
@@ -1197,11 +1189,11 @@ export class ArenaScene extends Phaser.Scene {
     if (!data || typeof data !== 'object') return undefined;
     const candidate = data as Partial<ArenaSessionState>;
     if (typeof candidate.baseSeed !== 'number' || !Number.isFinite(candidate.baseSeed)) return undefined;
-    if (typeof candidate.round !== 'number' || !Number.isFinite(candidate.round)) return undefined;
+    if (!isCampaignRound(candidate.round ?? 0)) return undefined;
     if (candidate.objectiveMode !== 'open' && candidate.objectiveMode !== 'sequential') return undefined;
     return {
       baseSeed: Math.floor(candidate.baseSeed),
-      round: Math.max(1, Math.floor(candidate.round)),
+      round: candidate.round!,
       objectiveMode: candidate.objectiveMode,
       protocol: normalizeRunProtocolId(candidate.protocol),
       runStartedAt: typeof candidate.runStartedAt === 'number' ? candidate.runStartedAt : Date.now(),
@@ -1227,10 +1219,26 @@ export class ArenaScene extends Phaser.Scene {
 
   private createRoundFromDefinition(def: ReturnType<RoundManager['currentDefinition']>): void {
     this.nextStartupPresentationKind ??= 'round';
+    if (isCampaignBossRound(def.round)) {
+      const next = new RoundManager(this.roundManager.seedBase, this.roundManager.mode, Math.min(30, def.round + 1), this.currentModeFamily()).currentDefinition();
+      this.beginBossFight({
+        baseSeed: this.roundManager.seedBase, completedRound: def.round, completedSeed: def.seed,
+        completedTemplate: def.template, nextRound: next.round, nextSeed: next.seed, nextTemplate: next.template,
+        objectiveMode: this.roundManager.mode, creditsGained: 0, coreTokensGained: 0, plasmaChipsGained: 0, fluxCoresGained: 0,
+        bossDefeated: null, protocol: this.protocol, nextProtocol: getCampaignProtocol(this.currentModeFamily(), next.round),
+        equippedMods: this.modRuntime.snapshot(), modsEarned: [...this.modsEarned], runStartedAt: this.runStartedAt,
+        modFocus: this.modFocus, contract: this.contract, creditsSpentBeforeRun: this.creditsSpentBeforeRun,
+        upgradeCompletionPercentage: this.upgradeCompletionPercentage, accountProgressionTier: this.accountProgressionTier,
+        runCreditsEarned: this.runCreditsEarned
+      });
+      return;
+    }
     this.startRoundRuntime('round', `arena-${this.protocol}-round-${def.round}`, def.round, () => this.initializeStandardRound(def));
   }
 
   private initializeStandardRound(def: ReturnType<RoundManager['currentDefinition']>): void {
+    const difficultyPosition = getCampaignCombatPosition(this.currentModeFamily(), def.round);
+    const hazards = getCampaignHazardAvailability(this.currentModeFamily(), def.round);
     this.prepareCombatRuntime(def.round);
     this.temporaryAmmo.reset();
     this.turretWeaponSync.reset();
@@ -1296,7 +1304,7 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.laserSecurity = new LaserSecuritySystem(
       this,
-      def.round,
+      difficultyPosition,
       this.layout.theme,
       (damage) => {
         GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
@@ -1304,9 +1312,9 @@ export class ArenaScene extends Phaser.Scene {
       (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop(),
       this.currentModeBalance().hazardDamageMultiplier
     );
-    this.bombletHazard = new BombletHazardSystem(
+    if (hazards.bomblets) this.bombletHazard = new BombletHazardSystem(
       this,
-      def.round,
+      difficultyPosition,
       def.seed,
       this.layout.theme,
       this.layout.generation.bounds,
@@ -1328,10 +1336,10 @@ export class ArenaScene extends Phaser.Scene {
       },
       this.currentModeBalance().hazardDamageMultiplier
     );
-    if (def.round >= GAS_HAZARD_BALANCE.unlockRound) {
+    if (hazards.gas) {
       this.gasHazard = new GasHazardSystem(
         this,
-        def.round,
+        difficultyPosition,
         def.seed,
         this.layout.generation.bounds,
         (x, y) => this.hitWall(x, y),
@@ -1345,7 +1353,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.fluxCores = new FluxCoreSystem(
       this,
-      def.round,
+      difficultyPosition,
       def.seed,
       this.layout.theme,
       this.layout.generation.bounds,
@@ -1544,7 +1552,7 @@ export class ArenaScene extends Phaser.Scene {
       this.bombsiteMods.onBombArmed(site, this.getBombDefenseDurationMs(), this.time.now);
       this.state.set(RoundState.Defense);
       this.bombSites.refreshVisuals(this.layout.theme);
-      const graceMs = getSpawnProfile(this.roundManager.round, this.bombSites.destroyedCount()).initialGraceMs;
+      const graceMs = getSpawnProfile(this.currentCombatPosition(), this.bombSites.destroyedCount(), this.currentModeFamily()).initialGraceMs;
       if (this.bombSites.activeBombCount() === 1) this.nextSpawnAt = this.time.now + graceMs;
       this.showBanner(`SITE ${site.letter} ARMED\n${this.bombSites.activeBombCount()} ACTIVE CHARGE${this.bombSites.activeBombCount() === 1 ? '' : 'S'}`);
       this.audio.playSfx('beep');
@@ -1881,7 +1889,7 @@ export class ArenaScene extends Phaser.Scene {
     let activeWeightCap: number | undefined;
     let activeBombs = 0;
     if (!this.bossEncounter && !this.supremeFinale) {
-      const profile = getSpawnProfile(this.roundManager.round, this.bombSites.destroyedCount());
+      const profile = getSpawnProfile(this.currentCombatPosition(), this.bombSites.destroyedCount(), this.currentModeFamily());
       activeBombs = this.bombSites.activeBombCount();
       const pressure = getConcurrentSpawnPressure(profile, activeBombs);
       const modePressure = this.currentModeBalance().activePressureMultiplier;
@@ -2151,7 +2159,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private prepareCombatRuntime(round: number): void {
     const startedAt = performance.now();
-    const plan = arenaCombatWarmupPlan(this.protocol, round, this.particlesEnabled);
+    const plan = arenaCombatWarmupPlan(this.protocol, getCampaignCombatPosition(this.currentModeFamily(), round), this.particlesEnabled);
     const addedProjectiles = this.projectilePool.prewarm(plan.projectiles, {
       x: -10_000,
       y: -10_000,
@@ -2552,7 +2560,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateRelentlessSpawns(now: number, defensePhase: boolean): void {
-    const level = this.roundManager.round;
+    const level = this.currentCombatPosition();
     const destroyed = this.bombSites.destroyedCount();
 
     const profile = getSpawnProfile(level, destroyed, this.currentModeFamily());
@@ -2633,13 +2641,13 @@ export class ArenaScene extends Phaser.Scene {
       (enemy) => !enemy.getData('n3onArcadeEvent') && enemy.stats.type === type
     ).length;
     const candidates = (Object.keys(profile.composition) as EnemyType[]).filter((type) => {
-      if (profile.composition[type] <= 0 || this.roundManager.round < ENEMY_BALANCE[type].unlockRound) return false;
+      if (profile.composition[type] <= 0 || this.currentCombatPosition() < ENEMY_BALANCE[type].unlockRound) return false;
       if (!defensePhase && type === 'defuser') return false;
       if (type === 'defuser') {
         return activeCount(type) < OBJECTIVE_BALANCE.maxActiveDefusers
           && now - this.lastDefuserSpawnAt >= OBJECTIVE_BALANCE.defuserSpawnSpacingMs;
       }
-      if (type === 'disruptor' && activeCount(type) >= (this.roundManager.round < 10 ? 1 : 2)) return false;
+      if (type === 'disruptor' && activeCount(type) >= (this.currentCombatPosition() < 10 ? 1 : 2)) return false;
       if (type === 'drone' && activeCount(type) >= profile.droneCountCap) return false;
       if (type === 'star' && activeCount(type) >= 1) return false;
       if ((type === 'tank' || type === 'disruptor' || type === 'star') && now - this.lastSpecialSpawnAt < profile.specialSpacingMs) return false;
@@ -2667,7 +2675,7 @@ export class ArenaScene extends Phaser.Scene {
         || !this.intersectsWallGeometry(point.x, point.y, ENEMY_SPAWN_SAFETY.wallClearance, ENEMY_SPAWN_SAFETY.wallClearance),
       Math.floor(Math.random() * this.layout.enemySpawns.length));
     if (!spawn) return null;
-    const curve = getDifficultyCurve(this.roundManager.round, this.bombSites.destroyedCount());
+    const curve = getDifficultyCurve(this.currentCombatPosition(), this.bombSites.destroyedCount());
     const phaseScale = defensePhase ? 1 : 0.9;
 
     const stats = {
@@ -2916,7 +2924,7 @@ export class ArenaScene extends Phaser.Scene {
     this.defuseTargetByEnemy.clear();
     if (activeSites.length === 0) return;
 
-    const desired = getDefuseAssigneeCount(this.roundManager.round)
+    const desired = getDefuseAssigneeCount(this.currentCombatPosition())
       + Math.max(0, activeSites.length - 1)
       + this.bombsiteMods.objectiveAssigneeBonus();
     const candidates = this.defuseCandidateBuffer;
@@ -5426,11 +5434,14 @@ export class ArenaScene extends Phaser.Scene {
       scene: this,
       player: this.player,
       round,
+      rewardPosition: getCampaignRewardPosition(this.currentModeFamily(), round),
+      difficultyPosition: getCampaignCombatPosition(this.currentModeFamily(), round),
       seed,
       protocol: this.protocol,
       modeFamily: this.currentModeFamily(),
       bounds: this.layout.generation.bounds,
       walls: this.walls,
+      legBlockers: this.wallRects,
       particlesEnabled: this.particlesEnabled,
       isBlocked: (x, y) => this.hitWall(x, y),
       findSpawnPoints: (count, minimumPlayerDistance, clearance) =>
@@ -5438,7 +5449,7 @@ export class ArenaScene extends Phaser.Scene {
       findCheckpointPoints: (count) => this.findArcadeCheckpointPoints(count, seed),
       spawnEnemy: ({ type, x, y, droneVariant }) => {
         if (type === 'drone') {
-          const pressure = getConcurrentSpawnPressure(getSpawnProfile(this.roundManager.round, this.bombSites.destroyedCount()), this.bombSites.activeBombCount());
+          const pressure = getConcurrentSpawnPressure(getSpawnProfile(this.currentCombatPosition(), this.bombSites.destroyedCount(), this.currentModeFamily()), this.bombSites.activeBombCount());
           const multiplier = this.currentModeBalance().activePressureMultiplier;
           if (this.enemies.length >= Math.round(pressure.activeCountCap * multiplier)
             || this.enemies.reduce((sum, e) => sum + ENEMY_BALANCE[e.stats.type].weight, 0) + ENEMY_BALANCE.drone.weight > pressure.activeWeightCap * multiplier) return null;
@@ -5501,6 +5512,7 @@ export class ArenaScene extends Phaser.Scene {
       scene: this,
       player: this.player,
       round,
+      difficultyPosition: getCampaignCombatPosition(this.currentModeFamily(), round),
       seed,
       protocol: this.protocol,
       bounds: this.layout.generation.bounds,
@@ -6219,7 +6231,7 @@ export class ArenaScene extends Phaser.Scene {
   ): ModPickup | null {
     const definition = rollModDrop({
       source,
-      round: this.currentCombatRound(),
+      round: getCampaignRewardPosition(this.currentModeFamily(), this.currentCombatRound()),
       seed: this.layout.seed,
       sequence: this.modDropSequence++,
       protocol: this.protocol,
@@ -6337,32 +6349,21 @@ export class ArenaScene extends Phaser.Scene {
     return true;
   }
 
-  private tryAwardSupremeBridge(completedRound: number): SupremeBridgeAwardOutcome {
+  private presentCampaignPackages(): void {
+    const grants = SaveSystem.claimCampaignPackages();
     const collection = SaveSystem.getModCollection();
-    const resolution = resolveSupremeBridgeReward({
-      protocol: this.protocol,
-      completedRound,
-      seed: this.layout.seed,
-      alreadyAwarded: SaveSystem.hasRegularOverdriveSupremeBridgeAwarded(),
-      ownedModIds: Object.keys(collection.inventory)
-    });
-    if (!resolution.markSatisfied) return { firstSupremeAwarded: false, modId: null };
-    if (!resolution.modId) {
-      SaveSystem.markRegularOverdriveSupremeBridgeAwarded();
-      return { firstSupremeAwarded: false, modId: null };
+    for (const grant of grants) for (const cardId of grant.cardIds) {
+      const card = collection.cards.find((candidate) => candidate.instanceId === cardId);
+      const definition = card && MOD_BY_ID.get(card.modId);
+      if (!card || !definition) continue;
+      const duplicate = collection.cards.some((candidate) => candidate.modId === card.modId && candidate.instanceId !== cardId);
+      this.modsEarned.push({ modId: card.modId, duplicate, source: 'milestone' });
+      GameplayTelemetryRecorder.recordModDrop(card.modId, definition.rarity, 'milestone', duplicate);
+      const position = this.modRevealScreenPosition(this.player.x, this.player.y);
+      this.modAcquisitionPresenter?.enqueue({ card: { ...card }, rarity: definition.rarity, duplicate,
+        sourceScreenX: position.x, sourceScreenY: position.y,
+        contextLine: `${grant.packageId.toUpperCase()} COMPLETION REWARD` });
     }
-    const definition = MOD_BY_ID.get(resolution.modId);
-    if (!definition || definition.rarity !== 'supreme') return { firstSupremeAwarded: false, modId: null };
-    const awarded = this.awardResolvedMod(
-      definition,
-      'milestone',
-      this.player.x,
-      this.player.y,
-      0,
-      'UNLOCKED FOR SUPREME OVERDRIVE'
-    );
-    if (awarded) SaveSystem.markRegularOverdriveSupremeBridgeAwarded();
-    return { firstSupremeAwarded: awarded, modId: awarded ? definition.id : null };
   }
 
   private modRevealScreenPosition(worldX: number, worldY: number): { x: number; y: number } {
@@ -6415,20 +6416,22 @@ export class ArenaScene extends Phaser.Scene {
 
   private createArenaFireTraps(round: number): void {
     this.arenaFireTraps?.destroy();
+    this.arenaFireTraps = null;
     const family = this.currentModeFamily();
+    if (!getCampaignHazardAvailability(family, round).fire) return;
+    const difficultyPosition = getCampaignCombatPosition(family, round);
     const familyPressure = family === 'supreme' ? 2 : family === 'overdrive' ? 1 : 0;
-    const roundPressure = Phaser.Math.Clamp((Math.max(1, round) - 1) / 42, 0, 1);
+    const roundPressure = Phaser.Math.Clamp((difficultyPosition - 1) / 42, 0, 1);
     this.arenaFireTraps = new SharedFireTrapSystem(
       this,
-      createArenaFireTrapPlacements(this.layout, round),
+      createArenaFireTrapPlacements(this.layout, difficultyPosition),
       {
         environment: 'arena',
         isPlayerAlive: () => this.player.active && !this.player.isDead(),
         particlesEnabled: this.particlesEnabled,
-        damageProfile: getFireHazardDamageProfile(round, this.protocol),
+        damageProfile: getFireHazardDamageProfile(difficultyPosition, this.protocol),
         maximumConcurrent: 2,
-        // Infrastructure is visible from early rounds; only how often and how
-        // far ahead a bank selects its lane scales with mode/round pressure.
+        // Authored placement and caps stay unchanged after the Normal unlock.
         wallCooldownMs: Math.round(6_200 - roundPressure * 1_650 - familyPressure * 360),
         wallSelectionIntervalMs: Math.round(1_400 - roundPressure * 520 - familyPressure * 145),
         wallPredictionSeconds: 0.06 + roundPressure * 0.17 + familyPressure * 0.035,
@@ -6619,19 +6622,11 @@ export class ArenaScene extends Phaser.Scene {
     const completedSeed = this.layout.seed;
     const completedTemplate = this.layout.template;
     this.tryAwardMod('milestone', isGuaranteedMilestone(completedRound));
-    // Round 50 is also a boss round. Its bridge reward and campaign unlock
-    // must wait for the boss victory endpoint; awarding here lets a reveal
-    // compete with beginBossFight and can grant the bridge before a failed boss.
-    const deferSupremeBridge = isBossRound(completedRound)
-      && isRegularOverdriveTerminalCompletion(this.protocol, completedRound);
-    const supremeBridge = deferSupremeBridge
-      ? { firstSupremeAwarded: false, modId: null }
-      : this.tryAwardSupremeBridge(completedRound);
-
-    const rawRewardCredits = this.roundCredits + this.scaleModCredits(getRoundCompletionCredits(completedRound));
+    const rewardPosition = getCampaignRewardPosition(this.currentModeFamily(), completedRound);
+    const rawRewardCredits = this.roundCredits + this.scaleModCredits(getRoundCompletionCredits(rewardPosition));
     const rewardMultiplier = this.currentRewardMultiplier();
     const rewardCredits = Math.round(rawRewardCredits * (getContract(this.contract)?.creditRewardMultiplier ?? 1) * rewardMultiplier);
-    const baseCompletionTokens = Math.max(REWARD_BALANCE.completionBaseTokens, Math.floor(completedRound / REWARD_BALANCE.tokenRoundDivisor));
+    const baseCompletionTokens = Math.max(REWARD_BALANCE.completionBaseTokens, Math.floor(rewardPosition / REWARD_BALANCE.tokenRoundDivisor));
     const rewardTokens = Math.round((this.roundCoreTokens + baseCompletionTokens) * rewardMultiplier);
     const rewardPlasmaChips = Math.round(this.roundPlasmaChips * rewardMultiplier);
     const rewardFluxCores = Math.round(this.roundFluxCores * rewardMultiplier);
@@ -6641,14 +6636,17 @@ export class ArenaScene extends Phaser.Scene {
     SaveSystem.addFluxCores(rewardFluxCores);
     SaveSystem.recordRoundCompletion(completedRound, this.protocol);
     const completedTeachingRound = SaveSystem.getTutorialProgress().firstRunStage === 'arena-teaching';
+    let graduatedTraining = false;
     if (completedTeachingRound) {
       // Persist graduation with the round outcome, before rewards/transition delays.
-      SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress, completedRound); });
-      if (SaveSystem.getTutorialProgress().firstRunStage === 'waiting-for-store') {
+      SaveSystem.updateTutorialProgress((progress) => { graduatedTraining = completeFirstRunTeachingRound(progress, completedRound); });
+      if (graduatedTraining) {
+        SaveSystem.completeCampaignTraining();
         this.tutorialDirector?.destroy();
         this.tutorialDirector = null;
       }
     }
+    this.presentCampaignPackages();
     OnlineRunManager.recordMilestone(completedRound);
     this.captureTelemetryEndState();
     GameplayTelemetryRecorder.endEncounter('completed', {
@@ -6661,7 +6659,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const resultTransitionDelay = this.bombExplosionCosmeticVfx.recommendedSceneHoldMs(1400, this.time.now);
     this.transitionAfterModReveals(resultTransitionDelay, () => {
-      if (completedTeachingRound && SaveSystem.getTutorialProgress().lyraCurriculum !== 4) {
+      if (graduatedTraining) {
         GameplayTelemetryRecorder.finishRun('quit');
         OnlineRunManager.complete('quit', completedRound);
         this.registry.remove('arena-session');
@@ -6687,7 +6685,7 @@ export class ArenaScene extends Phaser.Scene {
         fluxCoresGained: rewardFluxCores,
         bossDefeated: null,
         protocol: this.protocol,
-        nextProtocol: this.protocol,
+        nextProtocol: getCampaignProtocol(this.currentModeFamily(), next.round),
         equippedMods: this.modRuntime.snapshot(),
         modsEarned: [...this.modsEarned],
         runStartedAt: this.runStartedAt,
@@ -6699,56 +6697,29 @@ export class ArenaScene extends Phaser.Scene {
         runCreditsEarned: this.runCreditsEarned + rewardCredits
       };
 
-      if (isSupremeTerminalRound(this.protocol, completedRound)) {
-        this.beginBossFight(payload, true);
-        return;
-      }
-      if (isBossRound(completedRound)) {
-        this.beginBossFight(payload, false);
-        return;
-      }
-      this.presentCompletedRound(payload, supremeBridge);
+      this.presentCompletedRound(payload);
     });
   }
 
   /** Single authoritative post-round handoff. Reward ownership and the unlock
    * flag are already durable before either presentation scene is entered. */
-  private presentCompletedRound(
-    payload: RoundFinishedPayload,
-    bridge: SupremeBridgeAwardOutcome
-  ): void {
-    const regularOverdriveCompleted = SaveSystem.hasCompletedRegularOverdrive();
-    const plan = resolveSupremePostRoundPlan({
-      protocol: payload.protocol,
-      completedRound: payload.completedRound,
-      firstSupremeAwarded: bridge.firstSupremeAwarded,
-      firstSupremeTutorialSeen: SaveSystem.hasSeenFirstSupremeTutorial(),
-      regularOverdriveCompleted
-    });
-
-    if (plan.newlyUnlocksSupremeOverdrive) {
-      SaveSystem.recordRegularOverdriveCompletion();
-    }
-    if (plan.completesRegularOverdrive) {
-      // The live run crosses the boundary now. Persisting the real Supreme
-      // protocol also makes its universal slots available in the between-round
-      // Mod Collection without force-equipping the newly awarded card.
-      SaveSystem.setPreferredProtocol(plan.nextProtocol);
-    }
-
+  private presentCompletedRound(payload: RoundFinishedPayload): void {
+    const mode = RUN_PROTOCOLS[payload.protocol].family;
+    const modeCompletion = payload.completedRound === 30 && mode !== 'supreme';
     const finalizedPayload: RoundFinishedPayload = {
       ...payload,
-      nextProtocol: plan.nextProtocol,
-      supremeOverdriveUnlocked: plan.newlyUnlocksSupremeOverdrive
+      nextProtocol: getCampaignProtocol(mode, payload.nextRound),
+      modeCompletion,
+      supremeOverdriveUnlocked: modeCompletion && mode === 'overdrive'
     };
+    if (modeCompletion) {
+      OnlineRunManager.complete('victory', payload.completedRound);
+      GameplayTelemetryRecorder.finishRun('bossDefeated');
+      this.registry.remove('arena-session');
+    }
     this.pendingRoundPayload = finalizedPayload;
     this.registry.set('round-finished', finalizedPayload);
     this.endCurrentRoundRuntime('completed');
-    if (plan.milestone) {
-      this.registry.set('supreme-milestone', { kind: plan.milestone });
-      this.scene.start(SceneKeys.SupremeMilestone, { kind: plan.milestone });
-      return;
-    }
     this.scene.start(SceneKeys.RoundFinished);
   }
 
@@ -6763,6 +6734,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private initializeBossRound(payload: RoundFinishedPayload, terminalEncounter: boolean): void {
+    const difficultyPosition = getCampaignCombatPosition(this.currentModeFamily(), payload.completedRound);
+    const hazards = getCampaignHazardAvailability(this.currentModeFamily(), payload.completedRound);
     this.prepareCombatRuntime(payload.completedRound);
     this.pendingRoundPayload = payload;
     this.bossRound = payload.completedRound;
@@ -6800,7 +6773,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bombSites.initialize(this, [], this.layout.theme);
     this.laserSecurity = new LaserSecuritySystem(
       this,
-      this.bossRound,
+      difficultyPosition,
       this.layout.theme,
       (damage) => {
         GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
@@ -6808,9 +6781,9 @@ export class ArenaScene extends Phaser.Scene {
       (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop(),
       this.currentModeBalance().hazardDamageMultiplier
     );
-    this.bombletHazard = new BombletHazardSystem(
+    if (hazards.bomblets) this.bombletHazard = new BombletHazardSystem(
       this,
-      this.bossRound,
+      difficultyPosition,
       bossSeed,
       this.layout.theme,
       this.layout.generation.bounds,
@@ -6832,10 +6805,10 @@ export class ArenaScene extends Phaser.Scene {
       },
       this.currentModeBalance().hazardDamageMultiplier
     );
-    if (this.bossRound >= GAS_HAZARD_BALANCE.unlockRound) {
+    if (hazards.gas) {
       this.gasHazard = new GasHazardSystem(
         this,
-        this.bossRound,
+        difficultyPosition,
         bossSeed,
         this.layout.generation.bounds,
         (x, y) => this.hitWall(x, y),
@@ -6849,7 +6822,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.fluxCores = new FluxCoreSystem(
       this,
-      this.bossRound,
+      difficultyPosition,
       bossSeed,
       this.layout.theme,
       this.layout.generation.bounds,
@@ -6914,24 +6887,24 @@ export class ArenaScene extends Phaser.Scene {
         { x: bounds.x + bounds.w * .5, y: bounds.y + bounds.h * .72 }
       ];
       this.supremeFinale = new SupremeFinaleController(
-        this, this.bossRound, bossSeed, spawns, bounds, (x, y) => this.hitWall(x, y),
+        this, difficultyPosition, bossSeed, spawns, bounds, (x, y) => this.hitWall(x, y),
         {
           ...callbacks,
           onBossDefeated: (defeatedArchetype, remaining) => this.handleSupremeBossDefeated(defeatedArchetype, remaining),
           onComplete: () => this.completeSupremeTerminalEncounter()
         },
         this.currentModeFamily(),
-        { particlesEnabled: this.particlesEnabled, healthMultiplier: bossHealthStageDelta, damageMultiplier: bossDamageStageDelta }
+        { particlesEnabled: this.particlesEnabled, healthMultiplier: bossHealthStageDelta, damageMultiplier: bossDamageStageDelta, legBlockers: this.wallRects }
       );
       GameplayTelemetryRecorder.startBoss('artillery', this.supremeFinale.totalMaximumHealth);
       for (const boss of this.supremeFinale.bosses) this.supremeBossWallColliders.push(this.physics.add.collider(boss, this.walls));
     } else {
       this.bossEncounter = new BossEncounter(
-        this, this.bossRound, bossSeed, archetype, spawn, this.layout.generation.bounds,
+        this, difficultyPosition, bossSeed, archetype, spawn, this.layout.generation.bounds,
         (x, y) => this.hitWall(x, y),
         { ...callbacks, onDefeated: () => this.completeBossFight() },
         this.currentModeFamily(),
-        { particlesEnabled: this.particlesEnabled, healthMultiplier: bossHealthStageDelta, damageMultiplier: bossDamageStageDelta }
+        { particlesEnabled: this.particlesEnabled, healthMultiplier: bossHealthStageDelta, damageMultiplier: bossDamageStageDelta, legBlockers: this.wallRects }
       );
       GameplayTelemetryRecorder.startBoss(archetype, this.bossEncounter.boss.maxHp);
       this.bossWallCollider = this.physics.add.collider(this.bossEncounter.boss, this.walls);
@@ -7122,10 +7095,10 @@ export class ArenaScene extends Phaser.Scene {
     const available = Math.max(0, maximumActive - activeCount);
     if (available <= 0) return;
 
-    const tierBonus = Math.min(2, Math.floor(Math.max(0, getBossTier(this.bossRound) - 1) / 3));
+    const tierBonus = Math.min(2, Math.floor(Math.max(0, getBossTier(this.currentCombatPosition()) - 1) / 3));
     // Supreme inherits every regular Overdrive encounter feature before its
     // stage-specific pressure multipliers are applied.
-    const overdriveBonus = this.currentModeFamily() !== 'normal' && getBossTier(this.bossRound) >= 3 ? 1 : 0;
+    const overdriveBonus = this.currentModeFamily() !== 'normal' && getBossTier(this.currentCombatPosition()) >= 3 ? 1 : 0;
     const requested = Math.min(
       available,
       BOSS_BALANCE.supportEnemyBaseWaveSize[archetype] + tierBonus + overdriveBonus
@@ -7335,7 +7308,7 @@ export class ArenaScene extends Phaser.Scene {
       this.clearRoundInfusionEffects();
       this.supremeConstellation?.setFinaleIntensity(true);
 
-      const baseRewards = getBossRewards(this.bossRound);
+      const baseRewards = getBossRewards(getCampaignRewardPosition(this.currentModeFamily(), this.bossRound));
       const rewardMultiplier = this.currentRewardMultiplier();
       const terminalCredits = this.scaleModCredits(Math.round(baseRewards.credits * 3 * rewardMultiplier));
       const terminalTokens = Math.max(3, Math.round(baseRewards.coreTokens * 3 * rewardMultiplier));
@@ -7460,7 +7433,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bossLootLaunchesPending = 0;
     this.showBanner('BOSS VAULT OPEN // COLLECT REWARDS');
 
-    const rewards = getBossRewards(this.bossRound);
+    const rewards = getBossRewards(getCampaignRewardPosition(this.currentModeFamily(), this.bossRound));
     const rewardMultiplier = this.currentRewardMultiplier();
     const bossCredits = this.scaleModCredits(Math.round(rewards.credits * rewardMultiplier));
     const bossCoreTokens = Math.max(1, Math.round(rewards.coreTokens * rewardMultiplier));
@@ -7628,14 +7601,23 @@ export class ArenaScene extends Phaser.Scene {
     this.pendingProgressEnemyKills += 1;
     this.flushPendingCombatProgress();
 
-    const collectedCredits = this.roundCredits;
-    const collectedTokens = this.roundCoreTokens;
+    const rewardPosition = getCampaignRewardPosition(this.currentModeFamily(), this.bossRound);
+    const rewardMultiplier = this.currentRewardMultiplier();
+    const completionCredits = Math.round(this.scaleModCredits(getRoundCompletionCredits(rewardPosition))
+      * (getContract(this.contract)?.creditRewardMultiplier ?? 1) * rewardMultiplier);
+    const completionTokens = Math.round(Math.max(1, Math.floor(rewardPosition / 3)) * rewardMultiplier);
+    const collectedCredits = this.roundCredits + completionCredits;
+    const collectedTokens = this.roundCoreTokens + completionTokens;
     const collectedPlasma = this.roundPlasmaChips;
     const collectedFluxCores = this.roundFluxCores;
     SaveSystem.addCredits(collectedCredits);
     SaveSystem.addCoreTokens(collectedTokens);
     SaveSystem.addPlasmaChips(collectedPlasma);
     SaveSystem.addFluxCores(collectedFluxCores);
+    SaveSystem.recordRoundCompletion(this.bossRound, this.protocol, 'boss');
+    this.tryAwardMod('milestone', true);
+    this.presentCampaignPackages();
+    OnlineRunManager.recordMilestone(this.bossRound);
     this.runCreditsEarned += collectedCredits;
     this.captureTelemetryEndState();
     GameplayTelemetryRecorder.endEncounter('bossDefeated', {
@@ -7656,11 +7638,10 @@ export class ArenaScene extends Phaser.Scene {
       runCreditsEarned: this.runCreditsEarned
     };
     this.pendingRoundPayload = payload;
-    const supremeBridge = isRegularOverdriveTerminalCompletion(payload.protocol, payload.completedRound)
-      ? this.tryAwardSupremeBridge(payload.completedRound)
-      : { firstSupremeAwarded: false, modId: null };
     this.transitionAfterModReveals(350, () => {
-      this.presentCompletedRound(payload, supremeBridge);
+      if (getCampaignVictoryDestination(this.currentModeFamily(), this.bossRound, 'boss').kind === 'trinity') {
+        this.beginBossFight(payload, true);
+      } else this.presentCompletedRound(payload);
     });
   }
 
@@ -8052,6 +8033,10 @@ export class ArenaScene extends Phaser.Scene {
     return this.bossEncounter || this.supremeFinale ? this.bossRound : this.roundManager.round;
   }
 
+  private currentCombatPosition(): number {
+    return getCampaignCombatPosition(this.currentModeFamily(), this.currentCombatRound());
+  }
+
   private captureTelemetryEndState(): void {
     const activePickups: Partial<Record<PickupType, number>> = {};
     for (const pickup of this.pickups) {
@@ -8261,8 +8246,9 @@ export class ArenaScene extends Phaser.Scene {
     if (!this.balanceTelemetry?.visible) return;
     const round = this.roundManager.round;
     const destroyed = this.bombSites.destroyedCount();
-    const spawn = getSpawnProfile(round, destroyed);
-    const curve = getDifficultyCurve(round, destroyed);
+    const difficultyPosition = this.currentCombatPosition();
+    const spawn = getSpawnProfile(difficultyPosition, destroyed, this.currentModeFamily());
+    const curve = getDifficultyCurve(difficultyPosition, destroyed);
     const activeWeight = this.enemies.reduce((sum, enemy) => sum + ENEMY_BALANCE[enemy.stats.type].weight, 0);
     const totalHp = this.enemies.reduce((sum, enemy) => sum + enemy.hp, 0);
     this.balanceTelemetry.setText(
@@ -8883,13 +8869,31 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private restartFromRoundOne(): void {
+    this.hidePauseMenu();
     this.arcadeController?.stop('round-ended');
     this.flushPendingCombatProgress();
     this.captureTelemetryEndState();
     GameplayTelemetryRecorder.endEncounter('quit', { credits: this.roundCredits, coreTokens: this.roundCoreTokens, fluxCores: this.roundFluxCores });
     GameplayTelemetryRecorder.finishRun('quit');
+    OnlineRunManager.complete('quit');
     this.endCurrentRoundRuntime('restart');
-    startArenaLoad(this, { reason: 'new-run', message: 'Restarting from round 1...' });
+    const launch = new AbortController();
+    const cancelLaunch = () => launch.abort();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cancelLaunch);
+    const profile = SaveSystem.getActiveProfileSummary()!;
+    // Preserve this action's existing Normal round-one restart and no setup fee.
+    const equippedMods = new ModRuntime(SaveSystem.getModCollection(), undefined, 'normal').snapshot();
+    void (async () => {
+      const issued = await OnlineRunManager.beginRun(profile.id, profile.name, 'normal', equippedMods, 1, launch.signal);
+      this.events.off(Phaser.Scenes.Events.SHUTDOWN, cancelLaunch);
+      if (launch.signal.aborted) return;
+      if (!issued.ok) OnlineRunManager.beginLocalRun();
+      startArenaLoad(this, {
+        reason: 'new-run', message: 'Restarting from round 1...',
+        session: { baseSeed: issued.seed ?? Phaser.Math.Between(1, 999_999_999), round: 1,
+          objectiveMode: OBJECTIVE_CONFIG.defaultMode, protocol: 'normal', equippedMods, modsEarned: [], runStartedAt: Date.now() }
+      });
+    })();
   }
 
   private quitToMenu(): void {
@@ -9173,7 +9177,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private compactCombatCapacityForRound(round: number): void {
     if (!this.projectilePool || !this.fxCirclePool || !this.projectileTrails) return;
-    const reserve = arenaCombatWarmupPlan(this.protocol, round, this.particlesEnabled);
+    const reserve = arenaCombatWarmupPlan(this.protocol, getCampaignCombatPosition(this.currentModeFamily(), round), this.particlesEnabled);
     const projectiles = this.projectilePool.trimAvailable(
       reserve.projectiles,
       (projectile) => this.destroyPooledProjectile(projectile)

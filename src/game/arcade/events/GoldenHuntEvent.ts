@@ -41,9 +41,10 @@ export class GoldenHuntEvent implements ArcadeEvent {
     this.startedAt = activeElapsedMs;
     const points = this.context.findSpawnPoints(GOLDEN_TARGET_COUNT, 280);
     if (points.length < GOLDEN_TARGET_COUNT) return false;
-    const unlocked: EnemyType[] = this.context.round >= 10
+    const difficultyPosition = this.context.difficultyPosition ?? this.context.round;
+    const unlocked: EnemyType[] = difficultyPosition >= 10
       ? ['grunt', 'shooter', 'tank', 'disruptor', 'grunt']
-      : this.context.round >= 5
+      : difficultyPosition >= 5
         ? ['grunt', 'shooter', 'grunt', 'tank', 'shooter']
         : ['grunt', 'shooter', 'grunt', 'shooter', 'grunt'];
     for (let index = 0; index < GOLDEN_TARGET_COUNT; index += 1) {

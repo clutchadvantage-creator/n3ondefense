@@ -35,7 +35,7 @@ export class MiniBossEvent implements ArcadeEvent {
     this.archetype = selectBossArchetype(this.context.round, this.context.seed ^ 0xa7cade);
     this.encounter = new BossEncounter(
       this.context.scene,
-      this.context.round,
+      this.context.difficultyPosition ?? this.context.round,
       this.context.seed ^ 0x6d1b055,
       this.archetype,
       point,
@@ -53,7 +53,8 @@ export class MiniBossEvent implements ArcadeEvent {
       {
         healthMultiplier: ARCADE_MINIBOSS_HEALTH_MULTIPLIER,
         showHealthUi: false,
-        particlesEnabled: this.context.particlesEnabled
+        particlesEnabled: this.context.particlesEnabled,
+        legBlockers: this.context.legBlockers
       }
     );
     this.wallCollider = this.context.scene.physics.add.collider(this.encounter.boss, this.context.walls);

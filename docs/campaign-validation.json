@@ -1,0 +1,524 @@
+{
+  "baseline": "e38bcedde97e6487fc8582eabe1cb3f79c7a1f2f",
+  "scope": "Short assisted local browser checks. Online transport is mocked; no external submissions. No campaign soak or production-backend deployment.",
+  "browserAssertions": 117,
+  "fixtures": {
+    "boundaries": {
+      "source": "artifacts/campaign-boundaries-final.json",
+      "assertions": 76,
+      "checks": [
+        {
+          "ok": true,
+          "label": "isolated test profile"
+        },
+        {
+          "ok": true,
+          "label": "fresh profile later modes locked"
+        },
+        {
+          "ok": true,
+          "label": "failed package persistence rolls back cards and claim"
+        },
+        {
+          "ok": true,
+          "label": "training grants three distinct Commons"
+        },
+        {
+          "ok": true,
+          "label": "training reward cannot repeat"
+        },
+        {
+          "ok": true,
+          "label": "normal 1: local round and family"
+        },
+        {
+          "ok": true,
+          "label": "normal 1: combat position"
+        },
+        {
+          "ok": true,
+          "label": "normal 1: ordinary objectives"
+        },
+        {
+          "ok": true,
+          "label": "normal 1: gas availability"
+        },
+        {
+          "ok": true,
+          "label": "normal 1: fire availability"
+        },
+        {
+          "ok": true,
+          "label": "normal 11: local round and family"
+        },
+        {
+          "ok": true,
+          "label": "normal 11: combat position"
+        },
+        {
+          "ok": true,
+          "label": "normal 11: ordinary objectives"
+        },
+        {
+          "ok": true,
+          "label": "normal 11: gas availability"
+        },
+        {
+          "ok": true,
+          "label": "normal 11: fire availability"
+        },
+        {
+          "ok": true,
+          "label": "normal 21: local round and family"
+        },
+        {
+          "ok": true,
+          "label": "normal 21: combat position"
+        },
+        {
+          "ok": true,
+          "label": "normal 21: ordinary objectives"
+        },
+        {
+          "ok": true,
+          "label": "normal 21: gas availability"
+        },
+        {
+          "ok": true,
+          "label": "normal 21: fire availability"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 1: local round and family"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 1: combat position"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 1: ordinary objectives"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 1: gas availability"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 1: fire availability"
+        },
+        {
+          "ok": true,
+          "label": "supreme 1: local round and family"
+        },
+        {
+          "ok": true,
+          "label": "supreme 1: combat position"
+        },
+        {
+          "ok": true,
+          "label": "supreme 1: ordinary objectives"
+        },
+        {
+          "ok": true,
+          "label": "supreme 1: gas availability"
+        },
+        {
+          "ok": true,
+          "label": "supreme 1: fire availability"
+        },
+        {
+          "ok": true,
+          "label": "normal 5: local round and family"
+        },
+        {
+          "ok": true,
+          "label": "normal 5: combat position"
+        },
+        {
+          "ok": true,
+          "label": "normal 5: boss replaces ordinary arena"
+        },
+        {
+          "ok": true,
+          "label": "Boss 5 death cannot unlock starts"
+        },
+        {
+          "ok": true,
+          "label": "normal 5: physical rewards collected"
+        },
+        {
+          "ok": true,
+          "label": "normal 5: boss unlocks all earlier starts"
+        },
+        {
+          "ok": true,
+          "label": "normal 5: retired scene roots"
+        },
+        {
+          "ok": true,
+          "label": "normal 10: local round and family"
+        },
+        {
+          "ok": true,
+          "label": "normal 10: combat position"
+        },
+        {
+          "ok": true,
+          "label": "normal 10: boss replaces ordinary arena"
+        },
+        {
+          "ok": true,
+          "label": "normal 10: physical rewards collected"
+        },
+        {
+          "ok": true,
+          "label": "normal 10: boss unlocks all earlier starts"
+        },
+        {
+          "ok": true,
+          "label": "normal 10: retired scene roots"
+        },
+        {
+          "ok": true,
+          "label": "normal 30: local round and family"
+        },
+        {
+          "ok": true,
+          "label": "normal 30: combat position"
+        },
+        {
+          "ok": true,
+          "label": "normal 30: boss replaces ordinary arena"
+        },
+        {
+          "ok": true,
+          "label": "normal 30: physical rewards collected"
+        },
+        {
+          "ok": true,
+          "label": "normal 30: boss unlocks all earlier starts"
+        },
+        {
+          "ok": true,
+          "label": "normal 30: terminal debrief, no automatic next mode"
+        },
+        {
+          "ok": true,
+          "label": "normal: completion and package persisted"
+        },
+        {
+          "ok": true,
+          "label": "normal: next mode unlocked"
+        },
+        {
+          "ok": true,
+          "label": "normal: completion package cannot repeat"
+        },
+        {
+          "ok": true,
+          "label": "normal 30: retired scene roots"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 30: local round and family"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 30: combat position"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 30: boss replaces ordinary arena"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 30: physical rewards collected"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 30: boss unlocks all earlier starts"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 30: terminal debrief, no automatic next mode"
+        },
+        {
+          "ok": true,
+          "label": "overdrive: completion and package persisted"
+        },
+        {
+          "ok": true,
+          "label": "overdrive: next mode unlocked"
+        },
+        {
+          "ok": true,
+          "label": "overdrive: completion package cannot repeat"
+        },
+        {
+          "ok": true,
+          "label": "overdrive 30: retired scene roots"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: local round and family"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: combat position"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: boss replaces ordinary arena"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: physical rewards collected"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: boss unlocks all earlier starts"
+        },
+        {
+          "ok": true,
+          "label": "Trinity starts incomplete"
+        },
+        {
+          "ok": true,
+          "label": "Trinity 1 deaths cannot complete campaign"
+        },
+        {
+          "ok": true,
+          "label": "Trinity 2 deaths cannot complete campaign"
+        },
+        {
+          "ok": true,
+          "label": "third Trinity death persists Supreme completion"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: retired scene roots"
+        },
+        {
+          "ok": true,
+          "label": "reload profile through persisted save"
+        },
+        {
+          "ok": true,
+          "label": "reload neither repeats nor loses package cards"
+        },
+        {
+          "ok": true,
+          "label": "all one-time package claims survive reload"
+        }
+      ],
+      "frames": [],
+      "errors": []
+    },
+    "online": {
+      "source": "artifacts/campaign-online.json",
+      "assertions": 19,
+      "checks": [
+        {
+          "ok": true,
+          "label": "normal: explicit board response"
+        },
+        {
+          "ok": true,
+          "label": "normal: all board routes carry mode"
+        },
+        {
+          "ok": true,
+          "label": "overdrive: explicit board response"
+        },
+        {
+          "ok": true,
+          "label": "overdrive: all board routes carry mode"
+        },
+        {
+          "ok": true,
+          "label": "supreme: explicit board response"
+        },
+        {
+          "ok": true,
+          "label": "supreme: all board routes carry mode"
+        },
+        {
+          "ok": true,
+          "label": "legacy: explicit board response"
+        },
+        {
+          "ok": true,
+          "label": "legacy: all board routes carry mode"
+        },
+        {
+          "ok": true,
+          "label": "old server cannot masquerade as a new mode leaderboard"
+        },
+        {
+          "ok": true,
+          "label": "old server cannot start an unversioned campaign run"
+        },
+        {
+          "ok": true,
+          "label": "mode and checkpoint acknowledged on run start"
+        },
+        {
+          "ok": true,
+          "label": "start uses local checkpoint and version 2"
+        },
+        {
+          "ok": true,
+          "label": "duplicate successful-round notification does not duplicate milestone"
+        },
+        {
+          "ok": true,
+          "label": "death on 11 preserves cleared round 10 and one boss"
+        },
+        {
+          "ok": true,
+          "label": "online screen defaults to Normal"
+        },
+        {
+          "ok": true,
+          "label": "screen loads overdrive independently"
+        },
+        {
+          "ok": true,
+          "label": "screen loads supreme independently"
+        },
+        {
+          "ok": true,
+          "label": "screen loads legacy independently"
+        },
+        {
+          "ok": true,
+          "label": "leaderboard scene retires its objects"
+        }
+      ],
+      "frames": [],
+      "errors": []
+    },
+    "regression": {
+      "source": "artifacts/campaign-regression.json",
+      "assertions": 22,
+      "checks": [
+        {
+          "ok": true,
+          "label": "new isolated training profile"
+        },
+        {
+          "ok": true,
+          "label": "training 1: successful outcome persisted"
+        },
+        {
+          "ok": true,
+          "label": "training 1: package timing"
+        },
+        {
+          "ok": true,
+          "label": "training 2: successful outcome persisted"
+        },
+        {
+          "ok": true,
+          "label": "training 2: package timing"
+        },
+        {
+          "ok": true,
+          "label": "training 3: successful outcome persisted"
+        },
+        {
+          "ok": true,
+          "label": "training 3: package timing"
+        },
+        {
+          "ok": true,
+          "label": "third round leads to Garage"
+        },
+        {
+          "ok": true,
+          "label": "graduated player is not forced into START LOCAL"
+        },
+        {
+          "ok": true,
+          "label": "Mod teaching leads to Store"
+        },
+        {
+          "ok": true,
+          "label": "Store teaching retires first-run forcing"
+        },
+        {
+          "ok": true,
+          "label": "workstation replay neither reenrolls nor regrants"
+        },
+        {
+          "ok": true,
+          "label": "normal: live update smoke sample"
+        },
+        {
+          "ok": true,
+          "label": "overdrive: live update smoke sample"
+        },
+        {
+          "ok": true,
+          "label": "supreme: live update smoke sample"
+        },
+        {
+          "ok": true,
+          "label": "HEIST entry uses real 60-Flux wallet check"
+        },
+        {
+          "ok": true,
+          "label": "HEIST has independent late reward and difficulty positions"
+        },
+        {
+          "ok": true,
+          "label": "HEIST session fee equals deducted amount"
+        },
+        {
+          "ok": true,
+          "label": "HEIST keeps container count"
+        },
+        {
+          "ok": true,
+          "label": "all HEIST containers opened through damage path"
+        },
+        {
+          "ok": true,
+          "label": "HEIST returns to same local round"
+        },
+        {
+          "ok": true,
+          "label": "HEIST retires its visual objects"
+        }
+      ],
+      "frames": [
+        {
+          "mode": "normal",
+          "round": 11,
+          "frames": 200,
+          "meanMs": 19.997999999988824,
+          "p95Ms": 20.200000002980232,
+          "maxMs": 20.5
+        },
+        {
+          "mode": "overdrive",
+          "round": 21,
+          "frames": 200,
+          "meanMs": 20.00050000000745,
+          "p95Ms": 20.200000002980232,
+          "maxMs": 20.5
+        },
+        {
+          "mode": "supreme",
+          "round": 29,
+          "frames": 199,
+          "meanMs": 19.99949748744842,
+          "p95Ms": 20.199999999254942,
+          "maxMs": 20.399999998509884
+        }
+      ],
+      "errors": []
+    }
+  }
+}

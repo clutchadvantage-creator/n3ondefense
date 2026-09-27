@@ -1,5 +1,6 @@
 import type { ModeBalanceDefinition } from '../config/modeBalance.ts';
 import type { RunProtocolId } from '../mods/types.ts';
+import type { CampaignProgress } from './CampaignProgression.ts';
 
 export interface ConstellationPoint {
   x: number;
@@ -106,6 +107,7 @@ export const SUPREME_STAGE_BY_PROTOCOL = new Map(SUPREME_STAGE_DEFINITIONS.map((
 export const SUPREME_PROTOCOL_IDS = SUPREME_STAGE_DEFINITIONS.map((stage) => stage.protocolId);
 
 export interface SupremeProgressSnapshot {
+  campaign?: CampaignProgress;
   highestRound: number;
   supremeHighestRound: number;
   regularOverdriveCompleted?: boolean;

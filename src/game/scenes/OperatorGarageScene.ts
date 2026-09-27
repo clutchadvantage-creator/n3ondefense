@@ -33,7 +33,7 @@ import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
 import { filterModDatabaseEntries, getModDatabaseEntry, type ModDatabaseStatusFilter } from '../mods/ModDatabaseService.ts';
 import { ModDatabaseViewer } from '../mods/ModDatabaseViewer.ts';
 import { MOD_RARITY_COLORS, createModCardView } from '../mods/ModCardView.ts';
-import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, isRunProtocolUnlocked } from '../mods/modBalance.ts';
+import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS } from '../mods/modBalance.ts';
 import type { ModCardInstance, ModCategory, ModRarity, ModSlot } from '../mods/types.ts';
 import {
   describeRecalibrationSlot,
@@ -73,7 +73,8 @@ import {
   formatEconomyNumber,
   type EconomyConsoleRect
 } from '../garage/EconomyConsoleUi.ts';
-import { getSupremeStage, isSupremeProtocol } from '../progression/SupremeProgression.ts';
+import { isSupremeProtocol } from '../progression/SupremeProgression.ts';
+import { getSupremeCampaignStart, isCampaignModeUnlocked, isCampaignStartUnlocked } from '../progression/CampaignProgression.ts';
 import {
   formatOperationsMode,
   getHighestUnlockedNormalCheckpoint,
@@ -300,7 +301,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       if (!this.scene.isActive()) return;
       TutorialEventBus.emit('ui.garageSceneOpened');
       if (SaveSystem.hasCompletedRegularOverdrive()) TutorialEventBus.emit('progression.supremeAvailable');
-      if (SaveSystem.getHighestRound() >= RUN_PROTOCOLS.overdrive.unlockHighestRound) TutorialEventBus.emit('progression.overdriveUnlocked');
+      if (isCampaignModeUnlocked(SaveSystem.getCampaignProgress(), 'overdrive')) TutorialEventBus.emit('progression.overdriveUnlocked');
     }, 180);
 
     if (this.status) {
@@ -729,6 +730,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const narrow = width < 760;
     const current = SaveSystem.getOperationsConfiguration();
     const progress = {
+      campaign: SaveSystem.getCampaignProgress(),
       highestRound: SaveSystem.getHighestRound(),
       normalHighestRound: SaveSystem.getNormalHighestRound(),
       supremeHighestRound: SaveSystem.getSupremeHighestRound(),
@@ -739,7 +741,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     const modes = getOperationsModeStatuses(progress);
     const checkpoints = getOperationsCheckpointOptions(viewedMode, {
       preferred: current.protocol,
-      selectedNormalStartRound: current.mode === 'normal' ? current.startingRound : 1
+      selectedNormalStartRound: current.mode === 'normal' ? current.startingRound : 1,
+      selectedStartingRounds: { [current.mode]: current.startingRound }
     }, progress);
     const pageSize = compact ? 12 : 15;
     const pageCount = Math.max(1, Math.ceil(checkpoints.length / pageSize));
@@ -848,7 +851,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         }
         const result = SaveSystem.setOperationsCheckpoint(
           option.protocol,
-          option.mode === 'normal' ? option.startingRound : undefined
+          option.startingRound
         );
         this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? ''}`;
         this.refreshConfigurationTerminalState();
@@ -1955,8 +1958,9 @@ export class OperatorGarageScene extends Phaser.Scene {
       onTabRight: () => this.showOverdrive('supreme')
     });
     const { width, height } = this.scale;
-    const highest = SaveSystem.getHighestRound();
-    const supremeHighest = SaveSystem.getSupremeHighestRound();
+    const campaign = SaveSystem.getCampaignProgress();
+    const highest = campaign.modes.overdrive.highestBossDefeated;
+    const supremeHighest = campaign.modes.supreme.highestBossDefeated;
     const narrow = width < 760;
     const outerMargin = narrow ? 14 : 28;
     const frameTop = narrow ? 94 : 104;
@@ -2004,7 +2008,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     }).setOrigin(1, 0.5);
     root.add([overdriveButton, supremeButton, instruction]);
 
-    const protocols = RUN_PROTOCOL_IDS.filter((id) => RUN_PROTOCOLS[id].family === this.protocolTerminalFamily);
+    const protocols = RUN_PROTOCOL_IDS.filter((id) => RUN_PROTOCOLS[id].family === this.protocolTerminalFamily
+      && (this.protocolTerminalFamily === 'supreme' || RUN_PROTOCOLS[id].startingRound <= 30));
     const columns = 2;
     const rows = Math.ceil(protocols.length / columns);
     const columnGap = narrow ? 7 : 18;
@@ -2018,7 +2023,12 @@ export class OperatorGarageScene extends Phaser.Scene {
     const firstCenterY = cardsTop + Math.max(0, (availableHeight - usedHeight) / 2) + cardHeight / 2;
     protocols.forEach((id, index) => {
       const definition = RUN_PROTOCOLS[id];
-      const unlocked = isRunProtocolUnlocked(id, { highestRound: highest, supremeHighestRound: supremeHighest, regularOverdriveCompleted: SaveSystem.hasCompletedRegularOverdrive() });
+      const startRound = getSupremeCampaignStart(id) ?? definition.startingRound;
+      const unlocked = isCampaignStartUnlocked(campaign, definition.family, startRound);
+      const requiredBoss = Math.ceil(startRound / 5) * 5;
+      const unlockText = isCampaignModeUnlocked(campaign, definition.family)
+        ? `DEFEAT ${definition.family.toUpperCase()} BOSS ${requiredBoss}`
+        : `DEFEAT ${definition.family === 'supreme' ? 'OVERDRIVE' : 'NORMAL'} BOSS 30`;
       const selected = current === id;
       const column = index % columns;
       const row = Math.floor(index / columns);
@@ -2043,7 +2053,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       const tierX = x - cardWidth / 2 + (narrow ? 22 : 34);
       const tierBadge = this.add.circle(tierX, y, tierRadius, selected ? 0x2b2114 : unlocked ? 0x09222a : 0x15131d, 1)
         .setStrokeStyle(2, accent, unlocked ? 0.76 : 0.35);
-      const tierText = this.add.text(tierX, y, `${definition.family === 'supreme' ? definition.startingRound : String(definition.tier).padStart(2, '0')}`, {
+      const tierText = this.add.text(tierX, y, `${startRound}`, {
         fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(cardHeight * 0.16, 8, 15)}px`, color: unlocked ? '#e8ffff' : '#786c7a', fontStyle: 'bold'
       }).setOrigin(0.5);
       const textLeft = tierX + tierRadius + (narrow ? 7 : 14);
@@ -2057,8 +2067,8 @@ export class OperatorGarageScene extends Phaser.Scene {
         color: selected ? '#ffc070' : unlocked ? '#75ffb1' : '#a46f82'
       }).setOrigin(1, 0.5);
       const detail = this.add.text(textLeft, y + cardHeight * 0.13, unlocked
-        ? `DEPLOYMENT START // ROUND ${definition.startingRound}`
-        : `CLEAR ROUND ${definition.unlockHighestRound} TO UNLOCK`, {
+        ? `DEPLOYMENT START // ROUND ${startRound}`
+        : unlockText, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${Phaser.Math.Clamp(cardHeight * 0.13, 8, 13)}px`, color: unlocked ? '#8fc4d1' : '#b27b8c', fontStyle: 'bold'
       }).setOrigin(0, 0.5).setMaxLines(1);
 
@@ -2066,11 +2076,8 @@ export class OperatorGarageScene extends Phaser.Scene {
       const progressRight = x + cardWidth / 2 - (narrow ? 10 : 17);
       const progressWidth = Math.max(24, progressRight - progressLeft);
       const progressY = y + cardHeight / 2 - (narrow ? 7 : 11);
-      const supremeStage = getSupremeStage(id);
-      const progressValue = supremeStage?.unlockSource === 'supreme'
-        ? supremeHighest
-        : SaveSystem.hasCompletedRegularOverdrive() ? definition.unlockHighestRound : 0;
-      const progressRatio = unlocked ? 1 : Phaser.Math.Clamp(progressValue / definition.unlockHighestRound, 0, 1);
+      const progressValue = campaign.modes[definition.family].highestBossDefeated;
+      const progressRatio = unlocked ? 1 : Phaser.Math.Clamp(progressValue / requiredBoss, 0, 1);
       const progressTrack = this.add.rectangle(progressLeft, progressY, progressWidth, narrow ? 2 : 4, 0x02070c, 1)
         .setOrigin(0, 0.5).setStrokeStyle(1, accent, 0.22);
       const progressFill = this.add.rectangle(progressLeft, progressY, Math.max(1, progressWidth * progressRatio), narrow ? 2 : 4, accent, unlocked ? 0.72 : 0.42)

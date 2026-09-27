@@ -17,6 +17,7 @@ import {
 import { calculateGarageLayout } from '../src/game/garage/garageLayout.ts';
 import { calculateGearLockerLayout } from '../src/game/garage/gearLockerLayout.ts';
 import { MOD_BY_ID, MOD_DEFINITIONS } from '../src/game/mods/definitions.ts';
+import { recordCampaignVictory } from '../src/game/progression/CampaignProgression.ts';
 import { addModDrop, deleteModCard, equipMod, unequipMod } from '../src/game/mods/ModInventoryService.ts';
 import { ModRuntime } from '../src/game/mods/ModRuntime.ts';
 import { RUN_PROTOCOLS } from '../src/game/mods/modBalance.ts';
@@ -53,6 +54,24 @@ test('Garage defaults provide five attractive empty category docks', () => {
   assert.match(docks[4].label, /UTILITY \/ WILDCARD/);
 });
 
+test('Garage presets retain arbitrary campaign starts and map old Supreme identities', () => {
+  const save = createDefaultLocalSave('campaign-preset', 'Campaign Preset');
+  recordCampaignVictory(save.progress.campaign, 'normal', 30, 'boss');
+  recordCampaignVictory(save.progress.campaign, 'overdrive', 30, 'boss');
+  recordCampaignVictory(save.progress.campaign, 'supreme', 30, 'boss');
+  save.protocol.preferred = 'supreme-delphinus';
+  save.protocol.selectedStartingRounds = { normal: 1, overdrive: 1, supreme: 29 };
+  assert.equal(saveCurrentGaragePreset(save, 'config-a').ok, true);
+  save.protocol.selectedStartingRounds.supreme = 1;
+  assert.equal(loadGaragePreset(save, 'config-a').ok, true);
+  assert.equal(save.protocol.selectedStartingRounds.supreme, 29);
+  const legacy = save.garage.presets[0];
+  delete legacy.campaignStartRound;
+  legacy.protocol = 'supreme-capricornus';
+  assert.equal(loadGaragePreset(save, 'config-a').ok, true);
+  assert.equal(save.protocol.selectedStartingRounds.supreme, 25);
+});
+
 test('Garage dock models preserve the exact equipped card, rank, and infusion', () => {
   const save = createDefaultLocalSave('garage-equipped', 'Garage Equipped');
   const cards = addCategoryLoadout(save);
@@ -76,6 +95,8 @@ test('Garage uses existing Mod category validation instead of inventing equip ru
 
 test('Garage presets restore at most two universal Supreme Mods only with a Supreme protocol', () => {
   const save = createDefaultLocalSave('garage-supreme', 'Garage Supreme');
+  recordCampaignVictory(save.progress.campaign, 'normal', 30, 'boss');
+  recordCampaignVictory(save.progress.campaign, 'overdrive', 30, 'boss');
   save.progress.highestRound = 53;
   save.progress.regularOverdriveCompleted = true;
   save.protocol.preferred = 'supreme-leo';
@@ -123,6 +144,7 @@ test('Overdrive progression terminal keeps full constellation protocol names in 
 
 test('Garage presets save and immediately restore five Mod and deployment references', () => {
   const save = createDefaultLocalSave('garage-preset', 'Garage Preset');
+  recordCampaignVictory(save.progress.campaign, 'normal', 30, 'boss');
   const cards = addCategoryLoadout(save);
   save.progress.highestRound = 60;
   save.protocol.preferred = 'overdrive-draco';
@@ -136,7 +158,7 @@ test('Garage presets save and immediately restore five Mod and deployment refere
   assert.equal(result.ok, true);
   assert.equal(result.missingCards, 0);
   assert.equal(result.ignoredProtocol, false);
-  assert.equal(save.protocol.preferred, 'overdrive-draco');
+  assert.equal(save.protocol.preferred, 'overdrive');
   assert.deepEqual(save.garage.nextRun, { contract: 'elite-hunt', modFocus: 'defense' });
   const loadout = save.mods.loadouts[0];
   for (const slot of GARAGE_MOD_SLOTS) assert.equal(loadout.cardSlots[slot], cards[slot].instanceId);
@@ -194,7 +216,7 @@ test('version-seven profiles migrate to empty Garage presets without losing data
   delete legacy.garage;
   const migrated = normalizeLocalSave(legacy);
   assert.ok(migrated);
-  assert.equal(migrated.version, 18);
+  assert.equal(migrated.version, 19);
   assert.equal(migrated.wallet.credits, 4567);
   assert.equal(migrated.mods.plasmaChips, 33);
   assert.deepEqual(migrated.garage, createDefaultGarageState());

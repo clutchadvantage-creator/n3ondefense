@@ -10,6 +10,7 @@ import { createPremiumOperativeFrameSvgDataUri } from '../../ui/stores/PremiumOp
 import { createBaseOperativeFrameSvgDataUri } from '../../ui/stores/BaseOperativeFrameSvg.ts';
 import { createDetailedEnemyRobotTextures } from '../enemies/EnemyArtTextures.ts';
 import { createDetailedBossTextures } from '../bosses/BossArtTextures.ts';
+import { preloadBossModels } from '../bosses/BossModelAssets.ts';
 import { createMechanicalDebrisTextures } from '../vfx/MechanicalDestructionVfx.ts';
 import { createMineFrameSvgDataUri } from '../cosmetics/MineFrameArt.ts';
 import {
@@ -23,6 +24,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    preloadBossModels(this);
     this.load.audio('sfx-boost', publicAssetUrl('assets/audio/soundeffects/boostsound.mp3'));
     for (const frame of COSMETICS) {
       if (frame.category !== 'playerShape') continue;

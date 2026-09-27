@@ -174,7 +174,7 @@ export const OVERDRIVE_WEEKLY_OPERATION_ROTATIONS: readonly WeeklyOperationRotat
     objectives: [
       { id: 'overdrive-eliminate-4000', title: 'Eliminate 4,000 enemies', description: 'Destroy hostiles during Overdrive deployments.', statKey: 'enemiesDestroyed', target: 4_000, progressMode: 'rotation' },
       { id: 'overdrive-complete-55', title: 'Complete 55 rounds', description: 'Complete rounds in any Overdrive tier.', statKey: 'roundsCompleted', target: 55, progressMode: 'rotation' },
-      { id: 'overdrive-reach-40', title: 'Reach Overdrive Round 40', description: 'Push an Overdrive deployment to Round 40.', statKey: 'highestRound', target: 40, progressMode: 'absolute' }
+      { id: 'overdrive-reach-40', title: 'Complete Overdrive Round 30', description: 'Defeat the final boss of an Overdrive campaign.', statKey: 'highestRound', target: 30, progressMode: 'absolute' }
     ],
     reward: { credits: 45_000, coreTokens: 10, plasmaChips: 16, fluxCores: 2, randomMod: true }
   },

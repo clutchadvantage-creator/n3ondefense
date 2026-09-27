@@ -1,7 +1,7 @@
 import { GAME_VERSION } from '../game/config/version';
 import { API_BASE_URL } from '../config/api';
 import { OnlineCredentialStore } from './OnlineCredentialStore';
-import type { OnlineCredentials, OnlineLeaderboardCategory, OnlineLeaderboardEntry } from './onlineTypes';
+import type { OnlineCampaignBoard, OnlineCredentials, OnlineLeaderboardCategory, OnlineLeaderboardEntry } from './onlineTypes';
 
 interface TokenResponse {
   player: { public_id: string; display_name: string };
@@ -56,9 +56,16 @@ export class LeaderboardClient {
     return existing ? this.ensureAccess(existing, true) : null;
   }
 
-  static async startRun(credentials: OnlineCredentials): Promise<{ run_id: string; seed: number; run_token: string; run_token_expires_in_seconds: number; status: 'pending' }> {
+  static async startRun(credentials: OnlineCredentials, mode: Exclude<OnlineCampaignBoard, 'legacy'>, startingRound: number): Promise<{ run_id: string; seed: number; run_token: string; run_token_expires_in_seconds: number; status: 'pending' }> {
+    if (!Number.isInteger(startingRound) || startingRound < 1 || startingRound > 30) throw new Error('Invalid campaign start.');
     const current = await this.ensureAccess(credentials);
-    return await this.request('/v1/runs', current, { method: 'POST', body: JSON.stringify({ game_version: GAME_VERSION }) });
+    const issued = await this.request<{ run_id: string; seed: number; run_token: string; run_token_expires_in_seconds: number; status: 'pending'; campaign_version?: number; campaign_mode?: string; starting_round?: number }>('/v1/runs', current, {
+      method: 'POST', body: JSON.stringify({ game_version: GAME_VERSION, campaign_version: 2, campaign_mode: mode, starting_round: startingRound })
+    });
+    if (issued.campaign_version !== 2 || issued.campaign_mode !== mode || issued.starting_round !== startingRound) {
+      throw new OnlineApiError('The online service has not acknowledged this campaign version.', 409);
+    }
+    return issued;
   }
 
   static async submit(path: string, credentials: OnlineCredentials, runToken: string, body: Record<string, unknown>): Promise<{ status: string; verification_reason?: string }> {
@@ -66,27 +73,38 @@ export class LeaderboardClient {
     return await this.request(path, current, { method: 'POST', headers: { 'X-Run-Token': runToken }, body: JSON.stringify(body) });
   }
 
-  static async leaderboard(category: OnlineLeaderboardCategory): Promise<OnlineLeaderboardEntry[]> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/v1/leaderboards/${category}?limit=50`);
+  static async leaderboard(category: OnlineLeaderboardCategory, campaign: OnlineCampaignBoard = 'normal'): Promise<OnlineLeaderboardEntry[]> {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/v1/leaderboards/${category}?limit=50&campaign=${campaign}`);
     if (!response.ok) throw new OnlineApiError('Leaderboard unavailable.', response.status);
-    return ((await response.json()) as { entries: OnlineLeaderboardEntry[] }).entries;
+    const board = await response.json() as { campaign?: string; entries: OnlineLeaderboardEntry[] };
+    this.requireCampaign(board.campaign, campaign);
+    return board.entries;
   }
 
-  static async aroundPlayer(profileId: string, category: OnlineLeaderboardCategory): Promise<OnlineLeaderboardEntry[]> {
+  static async aroundPlayer(profileId: string, category: OnlineLeaderboardCategory, campaign: OnlineCampaignBoard = 'normal'): Promise<OnlineLeaderboardEntry[]> {
     const credentials = OnlineCredentialStore.load(profileId);
     if (!credentials) return [];
     const current = await this.ensureAccess(credentials);
-    const response = await this.request<{ entries: OnlineLeaderboardEntry[] }>(
-      `/v1/leaderboards/${category}/around-me?radius=3`, current, { method: 'GET' }
+    const response = await this.request<{ campaign?: string; entries: OnlineLeaderboardEntry[] }>(
+      `/v1/leaderboards/${category}/around-me?radius=3&campaign=${campaign}`, current, { method: 'GET' }
     );
+    this.requireCampaign(response.campaign, campaign);
     return response.entries;
   }
 
-  static async personalBests(profileId: string): Promise<Record<OnlineLeaderboardCategory, OnlineLeaderboardEntry | null> | null> {
+  static async personalBests(profileId: string, campaign: OnlineCampaignBoard = 'normal'): Promise<Record<OnlineLeaderboardCategory, OnlineLeaderboardEntry | null> | null> {
     const credentials = OnlineCredentialStore.load(profileId);
     if (!credentials) return null;
     const current = await this.ensureAccess(credentials);
-    return await this.request('/v1/leaderboards/me/bests', current, { method: 'GET' });
+    const response = await this.request<Record<OnlineLeaderboardCategory, OnlineLeaderboardEntry | null> & { campaign?: string }>(`/v1/leaderboards/me/bests?campaign=${campaign}`, current, { method: 'GET' });
+    this.requireCampaign(response.campaign, campaign);
+    return response;
+  }
+
+  private static requireCampaign(actual: string | undefined, expected: OnlineCampaignBoard): void {
+    if (actual !== expected && !(actual === undefined && expected === 'legacy')) {
+      throw new OnlineApiError('Leaderboard campaign version mismatch.', 409);
+    }
   }
 
   private static async ensureAccess(credentials: OnlineCredentials, forceRefresh = false): Promise<OnlineCredentials> {

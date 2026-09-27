@@ -11,6 +11,7 @@ import {
   selectOperationsCheckpoint
 } from '../src/game/progression/OperationsConfiguration.ts';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
+import { recordCampaignVictory } from '../src/game/progression/CampaignProgression.ts';
 
 const progress = (normalHighestRound, overrides = {}) => ({
   highestRound: normalHighestRound,
@@ -69,6 +70,8 @@ test('Operations mode and checkpoint availability delegates to existing protocol
 
 test('existing saves migrate their prior Normal starting point without losing progression', () => {
   const legacy = createDefaultLocalSave('operations-legacy', 'Operations Legacy');
+  legacy.version = 18;
+  delete legacy.progress.campaign;
   legacy.progress.highestRound = 27;
   legacy.progress.normalHighestRound = 27;
   legacy.protocol = { preferred: 'normal' };
@@ -83,6 +86,7 @@ test('selected Operations configuration persists across normalization and invali
   const save = createDefaultLocalSave('operations-persist', 'Operations Persist');
   save.progress.highestRound = 40;
   save.progress.normalHighestRound = 40;
+  recordCampaignVictory(save.progress.campaign, 'normal', 30, 'boss');
   save.protocol = { preferred: 'normal', selectedNormalStartRound: 10 };
   const reloaded = normalizeLocalSave(structuredClone(save));
   assert.equal(reloaded.protocol.selectedNormalStartRound, 10);
@@ -90,7 +94,7 @@ test('selected Operations configuration persists across normalization and invali
 
   save.protocol.selectedNormalStartRound = 999;
   const repaired = normalizeLocalSave(save);
-  assert.equal(repaired.protocol.selectedNormalStartRound, 40);
+  assert.equal(repaired.protocol.selectedNormalStartRound, 30);
   assert.equal(repaired.progress.normalHighestRound, 40);
 });
 
@@ -118,8 +122,8 @@ test('Main Menu is a launch summary while Garage owns controller-ready Operation
   assert.match(menu, /SaveSystem\.getOperationsConfiguration\(\)/);
   assert.doesNotMatch(menu, /cycleUnlockedProtocol|previousProtocolButton|nextProtocolButton/);
   assert.doesNotMatch(menu, /ONLINE IDENTITY WILL BE CREATED WHEN YOU DEPLOY ONLINE/);
-  assert.match(menu, /launchConfiguredRun\('local'\)/);
-  assert.match(menu, /launchConfiguredRun\('online'\)/);
+  assert.match(menu, /launchConfiguredRun\(\)/);
+  assert.match(menu, /BATTLE \/\/ COMING SOON/);
 
   assert.match(garage, /private showOperations\(/);
   assert.match(garage, /operations-mode-tabs/);

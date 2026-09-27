@@ -29,16 +29,18 @@ test('Redline chains expire and priority kills extend the window without extra k
  for(let i=0;i<14;i++)m.update(250,1,false,false);
  m.kill();assert.equal(m.chain,1);assert.equal(m.longestChain,2);
 });
-test('Natural drone composition excludes all Normal rounds, advances gradually, and preserves pressure caps',()=>{
+test('Natural drones enter Normal at 11 with gradual pressure and preserve event/mode budgets',()=>{
  for(let r=1;r<=148;r++){
   const n=getSpawnProfile(r),o=getSpawnProfile(r,0,'overdrive'),s=getSpawnProfile(r,0,'supreme');
-  assert.equal(n.composition.drone,0);assert.equal(n.droneCountCap,0);
+  if(r<11){assert.equal(n.composition.drone,0);assert.equal(n.droneCountCap,0);}
+  else {assert.ok(n.composition.drone>0&&n.composition.drone<o.composition.drone);assert.equal(n.droneCountCap,r<21?1:2);}
   assert.ok(o.composition.drone>0&&s.composition.drone>o.composition.drone);
   assert.ok(o.droneCountCap<=3&&s.droneCountCap<=4);
   assert.equal(o.activeCountCap,n.activeCountCap);assert.equal(s.activeWeightCap,n.activeWeightCap);
   for(const p of [n,o,s])assert.ok(Math.abs(Object.values(p.composition).reduce((a,b)=>a+b,0)-1)<1e-12);
  }
  assert.ok(getSpawnProfile(1,0,'overdrive').composition.drone<getSpawnProfile(25,0,'overdrive').composition.drone);
+ for(let r=12;r<=30;r++)assert.ok(getSpawnProfile(r).composition.drone>getSpawnProfile(r-1).composition.drone);
  assert.ok(ENEMY_BALANCE.drone.credits<ENEMY_BALANCE.tank.credits);
 });
 test('Flight steering remains bounded, finite, smooth and independent of ground navigation',()=>{

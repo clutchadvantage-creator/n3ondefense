@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-09-24T10:58:40.717Z",
+  "generatedAt": "2026-09-27T21:53:04.505Z",
   "language": "en-US",
-  "registered": 62,
-  "recorded": 33,
-  "missingCount": 29,
+  "registered": 66,
+  "recorded": 31,
+  "missingCount": 35,
   "missing": [
     {
       "id": "context.recalibration",
@@ -71,6 +71,28 @@
       "suggestedFile": "lyra-ambient-store-1.mp3"
     },
     {
+      "id": "tutorial.onboarding.menu-welcome.start-local",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "START GAME",
+      "text": "Begin your first training run here.\n\nSTART GAME launches your campaign deployment.\n\nSelect START GAME when you’re ready, Operative.",
+      "file": "lyrastartlocal.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyrastartlocal.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.menu-resume-training.start-local",
+      "mode": "GUIDANCE",
+      "scene": "menu",
+      "title": "RESUME TRAINING",
+      "text": "Arena training is still in progress.\n\nSelect START GAME to resume your training deployment. I kept everything exactly where you left it. Mostly.",
+      "file": "lyrareturntotraining.mp3",
+      "fileExists": true,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyrareturntotraining.mp3"
+    },
+    {
       "id": "tutorial.onboarding.tactics.awareness",
       "mode": "GUIDANCE",
       "scene": "arena",
@@ -80,6 +102,39 @@
       "fileExists": false,
       "usesRecordingByDefault": false,
       "suggestedFile": "lyra-tutorial-onboarding-tactics-awareness.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.store.currencies",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "YOUR CURRENCIES",
+      "text": "Credits fund permanent upgrades. Core Tokens and Plasma Chips support Mod improvements and other purchases. Flux Cores pay anomaly entry fees. Always check the displayed currency and cost before spending.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-currencies.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.store.purchase",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "IMPROVE YOUR OPERATIVE",
+      "text": "Choose an affordable upgrade and use its purchase control. If none are affordable, continue and return after earning more Credits.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-purchase.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.store.exchange",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CURRENCY EXCHANGE",
+      "text": "The Operator Garage has a Currency Exchange station. Choose the source and target currencies, set an amount, and review the quote before confirming. Converting Flux Cores spends resources you could use to enter an anomaly. No exchange is required for training.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-exchange.mp3"
     },
     {
       "id": "tutorial.onboarding.garage.loadout",
@@ -126,11 +181,22 @@
       "suggestedFile": "lyra-tutorial-onboarding-mod-collection-details.mp3"
     },
     {
+      "id": "tutorial.onboarding.mod-collection.equip",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "INSTALL A MOD",
+      "text": "Select one of your recovered cards and equip it in a compatible slot. Installed Mods apply to your next deployment.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-mod-collection-equip.mp3"
+    },
+    {
       "id": "tutorial.onboarding.mod-collection.complete",
       "mode": "GUIDANCE",
       "scene": "mods",
-      "title": "TEACHING COMPLETE",
-      "text": "Your workstation is ready. Keep earning Credits, improving Mods, adapting your build, and pushing farther.",
+      "title": "LOADOUT TRAINING COMPLETE",
+      "text": "Your workstation is ready. Return to the menu to continue any remaining Store training, or choose your next deployment.",
       "file": null,
       "fileExists": false,
       "usesRecordingByDefault": false,
@@ -336,16 +402,6 @@
     }
   ],
   "variants": [
-    {
-      "id": "tutorial.onboarding.menu-welcome.start-local",
-      "kind": "action-unavailable",
-      "text": "Begin your first training run here.\n\nSTART LOCAL launches standard play without publishing your score to the online leaderboards.\n\nSelect START LOCAL when you’re ready, Operative. This action is not currently available; continue when ready."
-    },
-    {
-      "id": "tutorial.onboarding.menu-resume-training.start-local",
-      "kind": "action-unavailable",
-      "text": "Arena training is still in progress.\n\nSelect START LOCAL to resume your training deployment. I kept everything exactly where you left it. Mostly. This action is not currently available; continue when ready."
-    },
     {
       "id": "tutorial.onboarding.basic-controls.move",
       "kind": "controller",
@@ -828,22 +884,22 @@
       "id": "tutorial.onboarding.menu-welcome.start-local",
       "mode": "GUIDANCE",
       "scene": "menu",
-      "title": "START LOCAL",
-      "text": "Begin your first training run here.\n\nSTART LOCAL launches standard play without publishing your score to the online leaderboards.\n\nSelect START LOCAL when you’re ready, Operative.",
+      "title": "START GAME",
+      "text": "Begin your first training run here.\n\nSTART GAME launches your campaign deployment.\n\nSelect START GAME when you’re ready, Operative.",
       "file": "lyrastartlocal.mp3",
       "fileExists": true,
-      "usesRecordingByDefault": true,
+      "usesRecordingByDefault": false,
       "suggestedFile": "lyrastartlocal.mp3"
     },
     {
       "id": "tutorial.onboarding.menu-resume-training.start-local",
       "mode": "GUIDANCE",
       "scene": "menu",
-      "title": "RETURN TO LOCAL TRAINING",
-      "text": "Arena training is still in progress.\n\nSelect START LOCAL to resume your training deployment. I kept everything exactly where you left it. Mostly.",
+      "title": "RESUME TRAINING",
+      "text": "Arena training is still in progress.\n\nSelect START GAME to resume your training deployment. I kept everything exactly where you left it. Mostly.",
       "file": "lyrareturntotraining.mp3",
       "fileExists": true,
-      "usesRecordingByDefault": true,
+      "usesRecordingByDefault": false,
       "suggestedFile": "lyrareturntotraining.mp3"
     },
     {
@@ -1023,6 +1079,17 @@
       "suggestedFile": "tutorialonboardingstorecreditslyra.mp3"
     },
     {
+      "id": "tutorial.onboarding.store.currencies",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "YOUR CURRENCIES",
+      "text": "Credits fund permanent upgrades. Core Tokens and Plasma Chips support Mod improvements and other purchases. Flux Cores pay anomaly entry fees. Always check the displayed currency and cost before spending.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-currencies.mp3"
+    },
+    {
       "id": "tutorial.onboarding.store.card",
       "mode": "GUIDANCE",
       "scene": "upgrades",
@@ -1032,6 +1099,28 @@
       "fileExists": true,
       "usesRecordingByDefault": true,
       "suggestedFile": "tutorialonboardingstorecardlyra.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.store.purchase",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "IMPROVE YOUR OPERATIVE",
+      "text": "Choose an affordable upgrade and use its purchase control. If none are affordable, continue and return after earning more Credits.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-purchase.mp3"
+    },
+    {
+      "id": "tutorial.onboarding.store.exchange",
+      "mode": "GUIDANCE",
+      "scene": "upgrades",
+      "title": "CURRENCY EXCHANGE",
+      "text": "The Operator Garage has a Currency Exchange station. Choose the source and target currencies, set an amount, and review the quote before confirming. Converting Flux Cores spends resources you could use to enter an anomaly. No exchange is required for training.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-store-exchange.mp3"
     },
     {
       "id": "tutorial.onboarding.store.action",
@@ -1100,11 +1189,22 @@
       "suggestedFile": "lyra-tutorial-onboarding-mod-collection-details.mp3"
     },
     {
+      "id": "tutorial.onboarding.mod-collection.equip",
+      "mode": "GUIDANCE",
+      "scene": "mods",
+      "title": "INSTALL A MOD",
+      "text": "Select one of your recovered cards and equip it in a compatible slot. Installed Mods apply to your next deployment.",
+      "file": null,
+      "fileExists": false,
+      "usesRecordingByDefault": false,
+      "suggestedFile": "lyra-tutorial-onboarding-mod-collection-equip.mp3"
+    },
+    {
       "id": "tutorial.onboarding.mod-collection.complete",
       "mode": "GUIDANCE",
       "scene": "mods",
-      "title": "TEACHING COMPLETE",
-      "text": "Your workstation is ready. Keep earning Credits, improving Mods, adapting your build, and pushing farther.",
+      "title": "LOADOUT TRAINING COMPLETE",
+      "text": "Your workstation is ready. Return to the menu to continue any remaining Store training, or choose your next deployment.",
       "file": null,
       "fileExists": false,
       "usesRecordingByDefault": false,

@@ -38,12 +38,13 @@ export class RoundFinishedScene extends Phaser.Scene {
     const sections = splitDebriefPrimary(layout.primary, layout.compact);
     const completedRound = payload?.completedRound ?? '-';
     const supremeCompletion = payload?.supremeCompletion === true;
+    const modeCompletion = supremeCompletion || payload?.modeCompletion === true;
 
     createDebriefShell(
       this,
       layout,
       'complete',
-      supremeCompletion ? 'SUPREME OVERDRIVE COMPLETE' : 'ROUND FINISHED',
+      modeCompletion ? `${protocolDefinition.family.toUpperCase()} COMPLETE` : 'ROUND FINISHED',
       supremeCompletion ? 'TERMINAL OVERRIDE DESTROYED // FINAL PROTOCOL CLEARED' : `ROUND ${completedRound} // OPERATION COMPLETE`,
       true
     );
@@ -72,11 +73,12 @@ export class RoundFinishedScene extends Phaser.Scene {
         : payload?.supremeOverdriveUnlocked
           ? 'SUPREME OVERDRIVE // PROTOCOL UNLOCKED'
           : 'NEXT DEPLOYMENT // ARENA PREVIEW',
-      primary: supremeCompletion ? 'LEVEL 100 CLEARED' : `ROUND ${payload?.nextRound ?? '-'}`,
+      primary: modeCompletion ? 'ROUND 30 CLEARED' : `ROUND ${payload?.nextRound ?? '-'}`,
       details: supremeCompletion
         ? ['ALL THREE COMMAND BOSSES ELIMINATED', 'COMPLETION FLAG SAVED TO OPERATIVE PROFILE']
         : payload?.supremeOverdriveUnlocked
-          ? ['OVERDRIVE LEO // LEVEL 51', 'SUPREME MODS MAY NOW BE EQUIPPED']
+          ? ['SUPREME OVERDRIVE UNLOCKED // SELECT IN GARAGE', 'SUPREME MODS MAY NOW BE EQUIPPED IN SUPREME']
+          : modeCompletion ? ['OVERDRIVE UNLOCKED // SELECT IN GARAGE', 'NORMAL REMAINS REPLAYABLE']
           : [`LAYOUT ${displayId(payload?.nextTemplate)}`, `SEED ${payload?.nextSeed ?? '-'}`],
       tone: 'complete'
     }, layout.compact, true);
@@ -100,7 +102,7 @@ export class RoundFinishedScene extends Phaser.Scene {
             return;
           }
           const nextProtocol = payload.nextProtocol ?? payload.protocol;
-          const equippedMods = nextProtocol === payload.protocol
+          const equippedMods = RUN_PROTOCOLS[nextProtocol].family === RUN_PROTOCOLS[payload.protocol].family
             ? payload.equippedMods
             : new ModRuntime(SaveSystem.getModCollection(), undefined, nextProtocol).snapshot();
           const session: ArenaSessionState = {
@@ -154,9 +156,9 @@ export class RoundFinishedScene extends Phaser.Scene {
     const actions = createDebriefActions(
       this,
       layout.actions,
-      supremeCompletion ? supremeActions : standardActions,
+      modeCompletion ? supremeActions : standardActions,
       layout.compact,
-      supremeCompletion ? 'SUPREME CLEAR PERSISTED // THE CONSTELLATION ENDURES' : 'ENDLESS FLOW // NEXT ARENA READY',
+      modeCompletion ? 'CAMPAIGN CLEAR PERSISTED // REPLAY FROM OPERATIONS' : 'CAMPAIGN PROGRESSION // NEXT ENCOUNTER READY',
       true
     );
     continueButton = actions.get('CONTINUE TO NEXT ROUND');

@@ -12,6 +12,8 @@ import { createDefaultWeeklyOperationsState, createWeeklyBaselines, normalizeWee
 import { DEFAULT_AIM_SETTINGS, DEFAULT_HUD_SETTINGS, normalizeAimSettings, normalizeHudSettings } from '../config/interfaceSettings.ts';
 import { DEFAULT_CONTROLLER_SETTINGS, normalizeControllerSettings } from '../config/controllerSettings.ts';
 import { DEFAULT_LYRA_SETTINGS, normalizeLyraSettings } from '../lyra/LyraTypes.ts';
+import { normalizeCampaignProgress } from '../progression/CampaignSaveNormalizer.ts';
+import { migrateLegacyCampaignProgress } from '../progression/CampaignLegacyMigration.ts';
 
 const defaultSettings: LocalPlayerSettings = {
   lyra: { ...DEFAULT_LYRA_SETTINGS },
@@ -162,6 +164,7 @@ const normalizeProgress = (progress: unknown): LocalPlayerProgress => {
     creditSpendByCategory[category] = toInteger(rawSpend[category]);
   }
   return {
+    campaign: normalizeCampaignProgress(candidate.campaign),
     highestRound: toInteger(candidate.highestRound),
     // Saves created before mode-specific checkpoints retain their earned
     // starting access rather than being forced back to Round 1.
@@ -264,8 +267,9 @@ export const createDefaultLocalSave = (profileId: string, profileName: string, s
     },
     mods: normalizeModCollection(source?.mods),
     garage: normalizeGarageState(source?.garage),
-    protocol: normalizeProtocolPreference(source?.protocol, progress.normalHighestRound),
+    protocol: normalizeProtocolPreference(source?.protocol, progress.normalHighestRound, source?.progress?.campaign ? progress.campaign : undefined),
     progress,
+    ...(source?.legacyCampaign ? { legacyCampaign: structuredClone(source.legacyCampaign) } : {}),
     settings: normalizeSettings(source?.settings),
     tutorials: source?.tutorials ? normalizeTutorialProgress(source.tutorials) : createDefaultTutorialProgress(),
     metadata: {
@@ -274,7 +278,25 @@ export const createDefaultLocalSave = (profileId: string, profileName: string, s
       gameVersion: GAME_VERSION
     }
   };
+  if (source && !source.progress?.campaign) installLegacyCampaign(save, Math.min(18, source.version ?? 18));
   return normalizeLocalSave(save) ?? save;
+};
+
+const installLegacyCampaign = (save: LocalPlayerSave, version: number): void => {
+  const migration = migrateLegacyCampaignProgress({
+    sourceSaveVersion: version,
+    highestRound: save.progress.highestRound,
+    normalHighestRound: save.progress.normalHighestRound,
+    supremeHighestRound: save.progress.supremeHighestRound,
+    regularOverdriveCompleted: save.progress.regularOverdriveCompleted,
+    supremeOverdriveCompleted: save.progress.supremeOverdriveCompleted,
+    preferredProtocol: save.protocol.preferred,
+    selectedNormalStartRound: save.protocol.selectedNormalStartRound,
+    trainingRoundsCompleted: save.tutorials.trainingRoundsCompleted ?? 0,
+    completedTutorialSequences: [...save.tutorials.completedSequences]
+  });
+  save.progress.campaign = migration.progress;
+  save.legacyCampaign = migration.legacy;
 };
 
 export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
@@ -303,6 +325,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       equipped: normalizeEquippedCosmetics(v1.cosmetics?.equipped, owned)
     };
     current.progress = {
+      campaign: normalizeCampaignProgress(undefined),
       highestRound: toInteger(v1.progress?.highestRound),
       normalHighestRound: toInteger(v1.progress?.highestRound),
       supremeHighestRound: 0,
@@ -341,7 +364,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === 12 || version === 13 || version === 14 || version === 15 || version === 16 || version === 17 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === 12 || version === 13 || version === 14 || version === 15 || version === 16 || version === 17 || version === 18 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;
@@ -365,7 +388,11 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
     current.mods = normalizeModCollection(candidate.mods);
     current.garage = normalizeGarageState(candidate.garage);
     current.progress = normalizeProgress(candidate.progress);
-    current.protocol = normalizeProtocolPreference(candidate.protocol, current.progress.normalHighestRound);
+    if (version >= 19 && isObject(candidate.legacyCampaign)) {
+      // This archive has no authority over new progression; retain it verbatim.
+      current.legacyCampaign = structuredClone(candidate.legacyCampaign);
+    }
+    current.protocol = normalizeProtocolPreference(candidate.protocol, current.progress.normalHighestRound, version >= 19 ? current.progress.campaign : undefined);
     current.settings = normalizeSettings(candidate.settings);
     current.tutorials = normalizeTutorialProgress(candidate.tutorials);
     current.metadata = normalizeMetadata(candidate.metadata, CURRENT_SAVE_VERSION);
@@ -379,7 +406,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
 
   current.mods = normalizeModCollection(current.mods);
   current.garage = normalizeGarageState(current.garage);
-  current.protocol = normalizeProtocolPreference(current.protocol, current.progress?.normalHighestRound ?? 0);
+  current.protocol = normalizeProtocolPreference(current.protocol, current.progress?.normalHighestRound ?? 0, version >= 19 ? current.progress?.campaign : undefined);
   current.tutorials = normalizeTutorialProgress(current.tutorials);
   // Older profiles that already crossed the bridge and own a Supreme have
   // clearly satisfied the one-time introduction. Never force them a duplicate.
@@ -400,6 +427,16 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
     // Existing Supreme owners predate this briefing and must not be forced
     // through a retroactive first-acquisition ceremony.
     current.progress.firstSupremeTutorialSeen = current.progress.firstSupremeTutorialSeen || ownsSupreme;
+  }
+  if (version < 19) {
+    installLegacyCampaign(current as LocalPlayerSave, version);
+    const campaign = current.progress!.campaign;
+    const preferred = current.protocol!.preferred;
+    const mode = preferred === 'normal' ? 'normal' : preferred.startsWith('supreme-') ? 'supreme' : 'overdrive';
+    current.protocol = normalizeProtocolPreference({ ...current.protocol,
+      selectedStartingRounds: { normal: current.protocol!.selectedNormalStartRound,
+        [mode]: mode === 'normal' ? current.protocol!.selectedNormalStartRound : campaign.modes[mode].legacyStartRound }
+    }, current.progress!.normalHighestRound, campaign);
   }
   return current as LocalPlayerSave;
 };

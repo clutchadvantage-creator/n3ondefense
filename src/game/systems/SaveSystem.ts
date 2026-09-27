@@ -12,6 +12,7 @@ import { buildEconomyAnalytics, type EconomyAnalyticsSnapshot } from '../economy
 import type { PlasmaRecalibrationCandidate } from '../mods/PlasmaRecalibration.ts';
 import type { WalletChangeListener, WalletSnapshot } from '../economy/WalletState.ts';
 import type { ModStatChangeListener } from '../mods/ModStatEvents.ts';
+import type { CampaignEncounterKind } from '../progression/CampaignProgression.ts';
 
 export class SaveSystem {
   /** Read-only live progress projection. Reward collection remains with getWeeklyOperations. */
@@ -120,9 +121,11 @@ export class SaveSystem {
     return PlayerProfileStore.exchangeCurrency(source, target, amount);
   }
 
-  static recordRoundCompletion(round: number, protocol?: RunProtocolId): void {
-    PlayerProfileStore.recordRoundCompletion(round, protocol);
+  static recordRoundCompletion(round: number, protocol?: RunProtocolId, encounter: CampaignEncounterKind = 'arena'): void {
+    PlayerProfileStore.recordRoundCompletion(round, protocol, encounter);
   }
+  static completeCampaignTraining(): void { PlayerProfileStore.completeCampaignTraining(); }
+  static claimCampaignPackages() { return PlayerProfileStore.claimCampaignPackages(); }
 
   static recordSupremeCompletion(): void { PlayerProfileStore.recordSupremeCompletion(); }
   static hasRegularOverdriveSupremeBridgeAwarded(): boolean { return PlayerProfileStore.hasRegularOverdriveSupremeBridgeAwarded(); }
@@ -223,6 +226,7 @@ export class SaveSystem {
   }
   static getHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.highestRound; }
   static getNormalHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.normalHighestRound; }
+  static getCampaignProgress() { return PlayerProfileStore.getActiveSave().progress.campaign; }
   static getSupremeHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.supremeHighestRound; }
   static hasCompletedSupremeOverdrive(): boolean { return PlayerProfileStore.getActiveSave().progress.supremeOverdriveCompleted; }
   static getWeeklyOperations(nowMs = Date.now()) { return PlayerProfileStore.getWeeklyOperations(nowMs); }

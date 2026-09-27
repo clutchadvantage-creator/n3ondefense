@@ -38,7 +38,7 @@ test('version-16 profiles migrate selected IDs without enabling persistence', ()
   legacy.garage = { nextRun: { contract: 'bomb-rush', modFocus: 'defense' }, presets: legacy.garage.presets };
   const migrated = normalizeLocalSave(legacy);
   assert.ok(migrated);
-  assert.equal(migrated.version, 18);
+  assert.equal(migrated.version, 19);
   assert.equal(migrated.garage.savedDeploymentEnabled, false);
   assert.deepEqual(migrated.garage.nextRun, { contract: 'bomb-rush', modFocus: 'defense' });
 });
@@ -239,10 +239,11 @@ test('a simulated rapid double start can commit only one wallet transaction', ()
   assert.equal(before - save.wallet.credits, getRunSetupCost(save.garage.nextRun));
 });
 
-test('Main Menu routes Local and Online through the shared commit and reminder gate', () => {
+test('Start Game uses automatic score authorization and preserves the shared commit and reminder gate', () => {
   const source = readFileSync(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8');
-  assert.match(source, /launchConfiguredRun\('online'\)/);
-  assert.match(source, /launchConfiguredRun\('local'\)/);
+  assert.match(source, /launchConfiguredRun\(\)/);
+  assert.match(source, /await OnlineRunManager\.beginRun/);
+  assert.match(source, /if \(!scoreAuthorized\) OnlineRunManager\.beginLocalRun\(\)/);
   assert.match(source, /SaveSystem\.isSavedDeploymentReminderDue\(\)/);
   assert.match(source, /SaveSystem\.commitDeploymentLaunch/);
   assert.doesNotMatch(source, /clearRunSetupSelection/);

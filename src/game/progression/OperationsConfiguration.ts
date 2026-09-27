@@ -2,6 +2,7 @@ import type { RunModeFamily } from '../config/modeBalance.ts';
 import { RUN_PROTOCOL_IDS, RUN_PROTOCOLS, isRunProtocolUnlocked } from '../mods/modBalance.ts';
 import type { ProtocolPreference, RunProtocolId } from '../mods/types.ts';
 import type { SupremeProgressSnapshot } from './SupremeProgression.ts';
+import { getCampaignProtocol, getCampaignStartRounds, isCampaignModeUnlocked, isCampaignStartUnlocked } from './CampaignProgression.ts';
 
 export const NORMAL_CHECKPOINT_INTERVAL = 5;
 
@@ -103,7 +104,9 @@ export const getOperationsModeStatuses = (progress: OperationsProgressSnapshot):
       mode,
       label: formatOperationsMode(mode),
       unlocked,
-      unlockRequirement: unlocked ? null : modeUnlockRequirement(mode)
+      unlockRequirement: unlocked ? null : progress.campaign
+        ? `DEFEAT ${mode === 'overdrive' ? 'NORMAL' : 'OVERDRIVE'} BOSS 30`
+        : modeUnlockRequirement(mode)
     };
   });
 
@@ -111,6 +114,15 @@ export const resolveOperationsConfiguration = (
   preference: ProtocolPreference,
   progress: OperationsProgressSnapshot
 ): ResolvedOperationsConfiguration => {
+  if (progress.campaign) {
+    const requestedMode = RUN_PROTOCOLS[preference.preferred]?.family ?? 'normal';
+    const mode = isCampaignModeUnlocked(progress.campaign, requestedMode) ? requestedMode : 'normal';
+    const starts = getCampaignStartRounds(progress.campaign, mode);
+    const requested = preference.selectedStartingRounds?.[mode]
+      ?? (mode === 'normal' ? preference.selectedNormalStartRound : 1);
+    const startingRound = starts.filter((round) => round <= integer(requested, 1)).at(-1) ?? 1;
+    return { mode, startingRound, protocol: getCampaignProtocol(mode, startingRound) };
+  }
   const requested = RUN_PROTOCOLS[preference.preferred];
   const protocol = requested && isRunProtocolUnlocked(requested.id, progress) ? requested.id : 'normal';
   const definition = RUN_PROTOCOLS[protocol];
@@ -139,6 +151,20 @@ export const getOperationsCheckpointOptions = (
   progress: OperationsProgressSnapshot
 ): OperationsCheckpointOption[] => {
   const resolved = resolveOperationsConfiguration(preference, progress);
+  if (progress.campaign) {
+    return Array.from({ length: 30 }, (_, index) => {
+      const startingRound = index + 1;
+      const unlocked = isCampaignStartUnlocked(progress.campaign!, mode, startingRound);
+      return {
+        mode, startingRound, protocol: getCampaignProtocol(mode, startingRound),
+        label: startingRound % 5 === 0 ? 'BOSS ROUND' : 'ARENA',
+        unlocked, selected: resolved.mode === mode && resolved.startingRound === startingRound,
+        unlockRequirement: unlocked ? null : !isCampaignModeUnlocked(progress.campaign!, mode)
+          ? `DEFEAT ${mode === 'supreme' ? 'OVERDRIVE' : 'NORMAL'} BOSS 30`
+          : `DEFEAT ${formatOperationsMode(mode)} BOSS ${Math.ceil(startingRound / 5) * 5}`
+      };
+    });
+  }
   if (mode === 'normal') {
     return getUnlockedNormalStartRounds(progress.normalHighestRound).map((startingRound) => ({
       mode,
@@ -173,6 +199,17 @@ export const selectOperationsCheckpoint = (
   protocol: RunProtocolId,
   normalStartingRound?: number
 ): OperationsSelectionResult => {
+  if (progress.campaign) {
+    const mode = RUN_PROTOCOLS[protocol]?.family;
+    const requested = normalStartingRound ?? (mode && current.selectedStartingRounds?.[mode]) ?? 1;
+    if (!mode || !isCampaignStartUnlocked(progress.campaign, mode, requested)) {
+      return { ok: false, message: 'START ROUND IS NOT UNLOCKED // DEFEAT THE REQUIRED BOSS' };
+    }
+    return { ok: true, message: `${formatOperationsMode(mode)} // START ROUND ${requested} SELECTED`,
+      preference: { ...current, preferred: getCampaignProtocol(mode, requested),
+        selectedNormalStartRound: mode === 'normal' ? requested : current.selectedNormalStartRound,
+        selectedStartingRounds: { ...current.selectedStartingRounds, [mode]: requested } } };
+  }
   if (protocol === 'normal') {
     const requested = integer(normalStartingRound, 1);
     if (!isNormalStartRoundUnlocked(requested, progress.normalHighestRound)) {

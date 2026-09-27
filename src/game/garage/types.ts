@@ -11,6 +11,7 @@ export interface GaragePreset {
   cardSlots: ModLoadoutSlots;
   protocol: RunProtocolId | null;
   normalStartRound: number | null;
+  campaignStartRound?: number | null;
   contract: RunContractId | null;
   modFocus: ModFocusSignalId | null;
 }

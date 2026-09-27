@@ -116,7 +116,7 @@ test('new curriculum continues round one and two; third completion opens post-ru
   const progress = createTutorialProgress(); setFirstRunTeachingStage(progress, 'arena-teaching');
   assert.equal(completeFirstRunTeachingRound(progress, 1), false); assert.equal(progress.trainingRoundsCompleted, 1);
   assert.equal(completeFirstRunTeachingRound(progress, 2), false); assert.equal(progress.firstRunStage, 'arena-teaching');
-  assert.equal(completeFirstRunTeachingRound(progress, 3), true); assert.equal(progress.firstRunStage, 'waiting-for-store');
+  assert.equal(completeFirstRunTeachingRound(progress, 3), true); assert.equal(progress.firstRunStage, 'waiting-for-garage');
 });
 test('established profiles are not enrolled in the new curriculum during normalization', () => {
   const save = createDefaultLocalSave('lyra-old', 'Existing');
@@ -136,13 +136,18 @@ test('action gates are separated across rounds and all tutorial lines have stabl
     assert.notEqual(step.completion.type, 'auto');
   }
 });
-test('all 17 authored recordings have exact default-control subtitle parity and existing files', () => {
+test('authored recordings retain transcripts; renamed Start Game prompts reject old audio', () => {
   assert.equal(Object.keys(LYRA_TUTORIAL_SCRIPT).length, 17);
   for (const [id, line] of Object.entries(LYRA_TUTORIAL_SCRIPT)) {
     const sequence = TUTORIAL_SEQUENCES.find(s => id.startsWith(s.id + '.'));
     const step = sequence.steps.find(s => id === `${sequence.id}.${s.id}`);
     assert.ok(step, id);
-    assert.equal(resolveTutorialCopy(step, 'keyboardMouse', 'generic', DEFAULT_ABILITY_BINDINGS).body, line.text, id);
+    const body = resolveTutorialCopy(step, 'keyboardMouse', 'generic', DEFAULT_ABILITY_BINDINGS).body;
+    if (id === 'onboarding.menu-welcome.start-local' || id === 'onboarding.menu-resume-training.start-local') {
+      assert.notEqual(body, line.text, id);
+      assert.match(body, /START GAME/);
+      assert.doesNotMatch(body, /START LOCAL|without publishing/);
+    } else assert.equal(body, line.text, id);
     assert.equal(LYRA_MESSAGE_BY_ID.get(`tutorial.${id}`).recordedText, line.text);
     assert.ok(existsSync(new URL(`../public/assets/audio/lyra/${line.file}`, import.meta.url)), line.file);
   }

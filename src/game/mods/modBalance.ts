@@ -1,6 +1,7 @@
 import type { ModRarity, ModDropSource, RunProtocolId } from './types.ts';
 import { MODE_BALANCE, type RunModeFamily } from '../config/modeBalance.ts';
 import { SUPREME_PROTOCOL_IDS, SUPREME_STAGE_DEFINITIONS, getSupremeStage, isSupremeStageUnlocked, type SupremeProgressSnapshot } from '../progression/SupremeProgression.ts';
+import { getSupremeCampaignStart, isCampaignModeUnlocked } from '../progression/CampaignProgression.ts';
 
 export const MOD_BALANCE = {
   maxRank: 3,
@@ -182,10 +183,10 @@ const BASE_RUN_PROTOCOL_IDS = [
 export const RUN_PROTOCOL_IDS: readonly RunProtocolId[] = [...BASE_RUN_PROTOCOL_IDS, ...SUPREME_PROTOCOL_IDS];
 
 const regularOverdriveDescription = (startingRound: number): string =>
-  `SURVIVAL // Begin at Round ${startingRound}. Deadlier threats, x2 boosts, improved Mods. Supreme Mods offline.`;
+  `SURVIVAL // 30 local rounds. Boss victories unlock replay starts through Round ${Math.min(30, startingRound)}. Deadlier threats, x2 boosts, improved Mods. Supreme Mods offline.`;
 
 const BASE_RUN_PROTOCOLS = {
-  normal: { id: 'normal', family: 'normal', tier: 0, label: 'NORMAL PROTOCOL', description: 'POWER FANTASY // Replayable checkpoint starts unlock every 5 cleared rounds. Supreme Mods offline.', unlockHighestRound: 0, startingRound: 1, scoreMultiplier: MODE_BALANCE.normal.scoreMultiplier, modDropMultiplier: MODE_BALANCE.normal.modDropChanceMultiplier },
+  normal: { id: 'normal', family: 'normal', tier: 0, label: 'NORMAL PROTOCOL', description: 'LEARN // 30 local rounds. Boss victories unlock all earlier replay starts. Supreme Mods offline.', unlockHighestRound: 0, startingRound: 1, scoreMultiplier: MODE_BALANCE.normal.scoreMultiplier, modDropMultiplier: MODE_BALANCE.normal.modDropChanceMultiplier },
   overdrive: { id: 'overdrive', family: 'overdrive', tier: 1, label: 'OVERDRIVE CYGNUS', description: regularOverdriveDescription(5), unlockHighestRound: 8, startingRound: 5, scoreMultiplier: MODE_BALANCE.overdrive.scoreMultiplier, modDropMultiplier: MODE_BALANCE.overdrive.modDropChanceMultiplier },
   'overdrive-orion': { id: 'overdrive-orion', family: 'overdrive', tier: 2, label: 'OVERDRIVE ORION', description: regularOverdriveDescription(10), unlockHighestRound: 13, startingRound: 10, scoreMultiplier: MODE_BALANCE.overdrive.scoreMultiplier, modDropMultiplier: MODE_BALANCE.overdrive.modDropChanceMultiplier },
   'overdrive-ares': { id: 'overdrive-ares', family: 'overdrive', tier: 3, label: 'OVERDRIVE ARES', description: regularOverdriveDescription(15), unlockHighestRound: 18, startingRound: 15, scoreMultiplier: MODE_BALANCE.overdrive.scoreMultiplier, modDropMultiplier: MODE_BALANCE.overdrive.modDropChanceMultiplier },
@@ -205,7 +206,7 @@ export const RUN_PROTOCOLS: Record<RunProtocolId, RunProtocolDefinition> = {
     family: 'supreme' as const,
     tier: 11 + index,
     label: `SUPREME ${stage.constellation}`,
-    description: `ENDGAME // Begin at Round ${stage.level}. Constellation pressure, Supreme rewards, full Overdrive systems.`,
+    description: `ENDGAME // Constellation begins at Supreme Round ${getSupremeCampaignStart(stage.protocolId)}. Supreme rewards, full Overdrive systems.`,
     unlockHighestRound: stage.unlockRound,
     startingRound: stage.level,
     scoreMultiplier: stage.difficulty.scoreMultiplier,
@@ -220,6 +221,7 @@ export const normalizeRunProtocolId = (value: unknown): RunProtocolId =>
   isRunProtocolId(value) ? value : 'normal';
 
 export const isRunProtocolUnlocked = (id: RunProtocolId, progress: SupremeProgressSnapshot): boolean => {
+  if (progress.campaign) return isCampaignModeUnlocked(progress.campaign, RUN_PROTOCOLS[id].family);
   const stage = getSupremeStage(id);
   return stage ? isSupremeStageUnlocked(stage, progress) : progress.highestRound >= RUN_PROTOCOLS[id].unlockHighestRound;
 };

@@ -44,7 +44,7 @@ export class AnomalyController {
     this.random = new SeededRandom((context.seed ^ Math.imul(context.round, 0x6d2b79f5) ^ 0xa1104a1f) >>> 0);
     this.hud = new AnomalyHudView(context.scene);
     this.audio = options.audio ?? createSilentAnomalyAudioHooks();
-    if (options.enabled && context.round >= 3) {
+    if (options.enabled && (context.difficultyPosition ?? context.round) >= 3) {
       this.nextOpportunityAt = this.random.float(ANOMALY_SCHEDULING.minimumOpportunityMs, ANOMALY_SCHEDULING.maximumOpportunityMs);
     }
   }
@@ -107,7 +107,7 @@ export class AnomalyController {
       this.nextOpportunityAt = this.elapsedMs + ANOMALY_SCHEDULING.retryAfterMissMs;
       return;
     }
-    const eligible = getEligibleAnomalies(this.context.round, this.context.protocol);
+    const eligible = getEligibleAnomalies(this.context.difficultyPosition ?? this.context.round, this.context.protocol);
     if (!eligible.length || !this.start(this.chooseWeighted(eligible))) {
       this.nextOpportunityAt = this.elapsedMs + ANOMALY_SCHEDULING.retryAfterMissMs;
     }
@@ -197,7 +197,7 @@ export class AnomalyController {
     this.spawnedAt = this.elapsedMs;
     this.charge = 0;
     this.portalIdleStarted = false;
-    this.chargeTarget = Math.min(definition.chargeMaximum, Math.ceil(definition.chargeBase + this.context.round * definition.chargePerRound));
+    this.chargeTarget = Math.min(definition.chargeMaximum, Math.ceil(definition.chargeBase + (this.context.difficultyPosition ?? this.context.round) * definition.chargePerRound));
     this.visual = new AnomalyPortalVisual(this.context.scene, location.x, location.y, this.options.particlesEnabled);
     this.audio.play('anomaly-spawn');
     this.hud.show('ANOMALY SIGNAL CHARGING', `0 / ${this.chargeTarget} HOSTILE ENERGY`, 0x63f7ff);

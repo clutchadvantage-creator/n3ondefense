@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys';
 import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
 import { MOD_BALANCE } from '../mods/modBalance.ts';
+import { validateModEquip } from '../mods/ModLoadoutRules.ts';
 import { createModCardView, MOD_RARITY_COLORS } from '../mods/ModCardView.ts';
 import type { ModCardInstance, ModCategory, ModSlot } from '../mods/types.ts';
 import { buildModArchiveAnalytics, type ModArchiveAnalytics } from '../mods/ModArchiveAnalytics.ts';
@@ -273,6 +274,11 @@ export class ModCollectionScene extends Phaser.Scene {
         return projectTutorialBoundsToViewport(rect, canvas, this.scale.width, this.scale.height);
       },
       setMode: () => undefined,
+      isEventActionAvailable: (event) => event !== 'mods.equipped' || cards.some((card) => {
+        const definition = MOD_BY_ID.get(card.modId);
+        return !!definition && !!activeLoadout && (['weapon', 'player', 'defense', 'bombSite', 'wildcard'] as ModSlot[])
+          .some((slot) => validateModEquip(activeLoadout.slots, definition, slot, SaveSystem.getPreferredProtocol()).ok);
+      }),
       onComplete: (sequenceId) => {
         if (sequenceId === 'onboarding.mod-collection' && this.scene.isActive()) {
           this.scene.start(SceneKeys.MainMenu);

@@ -35,6 +35,8 @@ import type { ArcadeMetricEvent } from '../arcade/types.ts';
 import { executeCurrencyExchange, type ExchangeCurrency } from '../economy/CurrencyExchange.ts';
 import { walletState, type WalletChangeListener, type WalletSnapshot } from '../economy/WalletState.ts';
 import { resolveOperationsConfiguration, selectOperationsCheckpoint } from '../progression/OperationsConfiguration.ts';
+import { getPendingCampaignPackages, recordCampaignTrainingCompletion, recordCampaignVictory, type CampaignEncounterKind } from '../progression/CampaignProgression.ts';
+import { prepareCampaignRewardPackages, type PreparedCampaignPackages } from '../progression/CampaignRewardPackages.ts';
 
 export interface PurchaseResult {
   ok: boolean;
@@ -84,6 +86,7 @@ export class PlayerProfileStore {
     const selected = LocalSaveManager.getActiveProfileSave();
     if (selected) {
       PlayerProfileStore.activeSave = selected;
+      PlayerProfileStore.claimCampaignPackages();
       PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
       walletState.prime(PlayerProfileStore.walletSnapshot(selected));
       return;
@@ -102,6 +105,7 @@ export class PlayerProfileStore {
     if (!PlayerProfileStore.activeSave) {
       const loaded = LocalSaveManager.getActiveProfileSave();
       PlayerProfileStore.activeSave = loaded ?? null;
+      if (loaded) PlayerProfileStore.claimCampaignPackages();
       if (loaded) walletState.prime(PlayerProfileStore.walletSnapshot(loaded));
     }
     if (!PlayerProfileStore.activeSave) {
@@ -151,6 +155,7 @@ export class PlayerProfileStore {
     }
 
     PlayerProfileStore.activeSave = result.save;
+    PlayerProfileStore.claimCampaignPackages();
     PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
     walletState.publish(PlayerProfileStore.walletSnapshot(result.save), true);
     PlayerProfileStore.markNotice('SAVED LOCALLY');
@@ -171,6 +176,7 @@ export class PlayerProfileStore {
     const result = LocalSaveManager.createProfileFromLegacy(name);
     if (!result.ok || !result.save) return { ok: false, message: result.message };
     PlayerProfileStore.activeSave = result.save;
+    PlayerProfileStore.claimCampaignPackages();
     PlayerProfileStore.lastPlaytimeCommitAt = Date.now();
     walletState.publish(PlayerProfileStore.walletSnapshot(result.save), true);
     PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
@@ -195,6 +201,7 @@ export class PlayerProfileStore {
       const fallback = LocalSaveManager.getActiveProfileSave();
       if (fallback) {
         PlayerProfileStore.activeSave = fallback;
+        PlayerProfileStore.claimCampaignPackages();
         walletState.publish(PlayerProfileStore.walletSnapshot(fallback), true);
       } else walletState.prime(null);
     }
@@ -207,6 +214,7 @@ export class PlayerProfileStore {
     if (!result.ok) return result;
     if (PlayerProfileStore.activeSave?.profile.id === profileId) {
       PlayerProfileStore.activeSave = LocalSaveManager.getActiveProfileSave();
+      if (PlayerProfileStore.activeSave) PlayerProfileStore.claimCampaignPackages();
       if (PlayerProfileStore.activeSave) walletState.publish(PlayerProfileStore.walletSnapshot(PlayerProfileStore.activeSave), true);
     }
     PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
@@ -237,6 +245,7 @@ export class PlayerProfileStore {
     if (!result.ok) return result;
     if (mode === 'replace' && targetProfileId) {
       PlayerProfileStore.activeSave = LocalSaveManager.getActiveProfileSave();
+      if (PlayerProfileStore.activeSave) PlayerProfileStore.claimCampaignPackages();
       if (PlayerProfileStore.activeSave) walletState.publish(PlayerProfileStore.walletSnapshot(PlayerProfileStore.activeSave), true);
     }
     PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
@@ -261,8 +270,9 @@ export class PlayerProfileStore {
     return { ok: true, file: result.file };
   }
 
-  static recordRoundCompletion(round: number, protocol?: RunProtocolId): void {
+  static recordRoundCompletion(round: number, protocol: RunProtocolId = 'normal', encounter: CampaignEncounterKind = 'arena'): void {
     const save = PlayerProfileStore.getActiveSave();
+    recordCampaignVictory(save.progress.campaign, RUN_PROTOCOLS[protocol].family, round, encounter);
     save.progress.roundsCompleted += 1;
     save.progress.highestRound = Math.max(save.progress.highestRound, round);
     if (!protocol || protocol === 'normal') {
@@ -285,9 +295,10 @@ export class PlayerProfileStore {
 
   static recordSupremeCompletion(): void {
     const save = PlayerProfileStore.getActiveSave();
+    recordCampaignVictory(save.progress.campaign, 'supreme', 30, 'trinity');
     save.progress.supremeOverdriveCompleted = true;
-    save.progress.supremeHighestRound = Math.max(save.progress.supremeHighestRound, 100);
-    save.progress.highestRound = Math.max(save.progress.highestRound, 100);
+    save.progress.supremeHighestRound = Math.max(save.progress.supremeHighestRound, 30);
+    save.progress.highestRound = Math.max(save.progress.highestRound, 30);
     save.profile.lastPlayedAt = new Date().toISOString();
     PlayerProfileStore.save();
   }
@@ -305,7 +316,31 @@ export class PlayerProfileStore {
   }
 
   static hasCompletedRegularOverdrive(): boolean {
-    return PlayerProfileStore.getActiveSave().progress.regularOverdriveCompleted;
+    return PlayerProfileStore.getActiveSave().progress.campaign.modes.overdrive.completed;
+  }
+
+  static completeCampaignTraining(): void {
+    recordCampaignTrainingCompletion(PlayerProfileStore.getActiveSave().progress.campaign);
+    PlayerProfileStore.save();
+  }
+
+  /** Inventory and claims are one persistence operation; failure keeps the old
+   * in-memory pair so a later retry cannot observe an uncommitted grant. */
+  static claimCampaignPackages(): PreparedCampaignPackages['grants'] {
+    const save = PlayerProfileStore.getActiveSave();
+    if (!getPendingCampaignPackages(save.progress.campaign).length) return [];
+    const prepared = prepareCampaignRewardPackages(save.progress.campaign, save.mods,
+      stableRewardIndex(`${save.profile.id}:campaign-packages`, 0xffffffff), new Date().toISOString());
+    const previousProgress = save.progress.campaign;
+    const previousMods = save.mods;
+    save.progress.campaign = prepared.progress;
+    save.mods = prepared.mods;
+    if (!PlayerProfileStore.save()) {
+      save.progress.campaign = previousProgress;
+      save.mods = previousMods;
+      return [];
+    }
+    return prepared.grants;
   }
 
   static recordRegularOverdriveCompletion(): void {
@@ -389,9 +424,12 @@ export class PlayerProfileStore {
       save.progress.totalCreditsEarned += reward.credits;
       save.progress.totalCoreTokensEarned += reward.coreTokens;
       save.progress.totalFluxCoresEarned += reward.fluxCores ?? 0;
-      if (reward.randomMod && MOD_DEFINITIONS.length > 0) {
-        const modIndex = stableRewardIndex(`${save.profile.id}:${grant.deck}:${grant.rotationId}`, MOD_DEFINITIONS.length);
-        addModDrop(save.mods, MOD_DEFINITIONS[modIndex].id, new Date(nowMs).toISOString());
+      // Weekly packages are claimed in Main Menu, outside any active Supreme
+      // operation. They cannot bypass the in-Supreme drop requirement.
+      const rewardPool = MOD_DEFINITIONS.filter((definition) => definition.rarity !== 'supreme');
+      if (reward.randomMod && rewardPool.length > 0) {
+        const modIndex = stableRewardIndex(`${save.profile.id}:${grant.deck}:${grant.rotationId}`, rewardPool.length);
+        addModDrop(save.mods, rewardPool[modIndex].id, new Date(nowMs).toISOString());
       }
       for (const cosmeticId of reward.cosmeticIds ?? []) {
         if (COSMETICS.some((cosmetic) => cosmetic.id === cosmeticId) && !save.cosmetics.owned.includes(cosmeticId)) {
@@ -802,7 +840,7 @@ export class PlayerProfileStore {
   static setPreferredProtocol(protocol: RunProtocolId): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
     const definition = RUN_PROTOCOLS[protocol];
-    if (!isRunProtocolUnlocked(protocol, save.progress)) return { ok: false, message: `Reach Round ${definition.unlockHighestRound} in the required progression tier to unlock ${definition.label}.` };
+    if (!isRunProtocolUnlocked(protocol, save.progress)) return { ok: false, message: `Defeat ${definition.family === 'supreme' ? 'Overdrive' : 'Normal'} Boss 30 to unlock this mode.` };
     return PlayerProfileStore.setOperationsCheckpoint(protocol, protocol === 'normal' ? save.protocol.selectedNormalStartRound : undefined);
   }
 

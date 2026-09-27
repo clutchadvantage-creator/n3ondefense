@@ -41,6 +41,8 @@ export interface AnomalyMetricEvent {
   name: AnomalyMetricName;
   anomalyId: AnomalyId;
   round: number;
+  rewardPosition?: number;
+  difficultyPosition?: number;
   protocol: RunProtocolId;
   elapsedMs: number;
   cost?: number;
@@ -81,6 +83,7 @@ export interface AnomalyRuntimeContext {
   scene: Phaser.Scene;
   player: Player;
   round: number;
+  difficultyPosition?: number;
   seed: number;
   protocol: RunProtocolId;
   bounds: RectSpec;

@@ -1,0 +1,2549 @@
+{
+  "assumptions": [
+    "General reward positions contiguous 1–90 are approved; 148 retained only as a rejected comparison. HEIST numerical balance is NOT approved. No save is read or written.",
+    "Each mode: 24 ordinary rounds + 6 bosses. Completion bonuses apply to all 30 victories. Full physical boss loot collection.",
+    "Current Supreme stage multipliers advance by the requested local-round stage map; no currency Mods or contracts in baseline.",
+    "Supreme baseline includes its Round-30 boss PLUS existing triple-boss finale rewards; other boss support loot excluded.",
+    "Kill sensitivity assumes 100/250/500 kills per ordinary round and 80% collection of random pickups; composition weights are proxies, not realized kill distributions.",
+    "Kill sensitivity uses current composition, including the approved low-frequency Normal drones introduced at round 11.",
+    "Site count uses current Normal progression; later modes use the mature 5-site count. Actual generated site count is not simulated.",
+    "Optional HEIST: per successful extraction, all 5–8 containers opened equally often, fee 60. No entry frequency or success rate assumed.",
+    "HEIST currency formulas do not apply the Arena Supreme reward multiplier. HEIST enemy drops and miniboss are separate from container averages.",
+    "Currency exchange outputs are alternative uses of the same resource, never additive income."
+  ],
+  "scenarios": [
+    {
+      "mapping": "contiguous",
+      "mode": "normal",
+      "positions": [
+        1,
+        30
+      ],
+      "completion": {
+        "credits": 21870,
+        "coreTokens": 147,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "bosses": {
+        "credits": 12150,
+        "coreTokens": 33,
+        "plasmaChips": 64,
+        "fluxCores": 0
+      },
+      "finale": {
+        "credits": 0,
+        "coreTokens": 0,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "sites": {
+        "credits": 3180,
+        "coreTokens": 0,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "fixedTotal": {
+        "credits": 37200,
+        "coreTokens": 180,
+        "plasmaChips": 64,
+        "fluxCores": 0
+      },
+      "killSensitivity": [
+        {
+          "killsPerOrdinaryRound": 100,
+          "extraIncome": {
+            "credits": 18190.7,
+            "coreTokens": 117.85,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 55391,
+            "coreTokens": 298,
+            "plasmaChips": 64,
+            "fluxCores": 0
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 250,
+          "extraIncome": {
+            "credits": 45476.74,
+            "coreTokens": 294.62,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 82677,
+            "coreTokens": 475,
+            "plasmaChips": 64,
+            "fluxCores": 0
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 500,
+          "extraIncome": {
+            "credits": 90953.48,
+            "coreTokens": 589.23,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 128153,
+            "coreTokens": 769,
+            "plasmaChips": 64,
+            "fluxCores": 0
+          }
+        }
+      ]
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "overdrive",
+      "positions": [
+        31,
+        60
+      ],
+      "completion": {
+        "credits": 39780,
+        "coreTokens": 445,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "bosses": {
+        "credits": 24750,
+        "coreTokens": 69,
+        "plasmaChips": 84,
+        "fluxCores": 0
+      },
+      "finale": {
+        "credits": 0,
+        "coreTokens": 0,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "sites": {
+        "credits": 3600,
+        "coreTokens": 0,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "fixedTotal": {
+        "credits": 68130,
+        "coreTokens": 514,
+        "plasmaChips": 84,
+        "fluxCores": 0
+      },
+      "killSensitivity": [
+        {
+          "killsPerOrdinaryRound": 100,
+          "extraIncome": {
+            "credits": 19603.93,
+            "coreTokens": 152.83,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 87734,
+            "coreTokens": 667,
+            "plasmaChips": 84,
+            "fluxCores": 0
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 250,
+          "extraIncome": {
+            "credits": 49009.82,
+            "coreTokens": 382.08,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 117140,
+            "coreTokens": 896,
+            "plasmaChips": 84,
+            "fluxCores": 0
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 500,
+          "extraIncome": {
+            "credits": 98019.63,
+            "coreTokens": 764.16,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 166150,
+            "coreTokens": 1278,
+            "plasmaChips": 84,
+            "fluxCores": 0
+          }
+        }
+      ]
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "supreme",
+      "positions": [
+        61,
+        90
+      ],
+      "completion": {
+        "credits": 86161,
+        "coreTokens": 1282,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "bosses": {
+        "credits": 66178,
+        "coreTokens": 185,
+        "plasmaChips": 146,
+        "fluxCores": 0
+      },
+      "finale": {
+        "credits": 44730,
+        "coreTokens": 126,
+        "plasmaChips": 88,
+        "fluxCores": 4
+      },
+      "sites": {
+        "credits": 6034,
+        "coreTokens": 0,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "fixedTotal": {
+        "credits": 203103,
+        "coreTokens": 1593,
+        "plasmaChips": 234,
+        "fluxCores": 4
+      },
+      "killSensitivity": [
+        {
+          "killsPerOrdinaryRound": 100,
+          "extraIncome": {
+            "credits": 32852.67,
+            "coreTokens": 246.34,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 235956,
+            "coreTokens": 1839,
+            "plasmaChips": 234,
+            "fluxCores": 4
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 250,
+          "extraIncome": {
+            "credits": 82131.67,
+            "coreTokens": 615.85,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 285235,
+            "coreTokens": 2209,
+            "plasmaChips": 234,
+            "fluxCores": 4
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 500,
+          "extraIncome": {
+            "credits": 164263.35,
+            "coreTokens": 1231.69,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 367366,
+            "coreTokens": 2825,
+            "plasmaChips": 234,
+            "fluxCores": 4
+          }
+        }
+      ]
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "normal",
+      "positions": [
+        1,
+        30
+      ],
+      "completion": {
+        "credits": 21870,
+        "coreTokens": 147,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "bosses": {
+        "credits": 12150,
+        "coreTokens": 33,
+        "plasmaChips": 64,
+        "fluxCores": 0
+      },
+      "finale": {
+        "credits": 0,
+        "coreTokens": 0,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "sites": {
+        "credits": 3180,
+        "coreTokens": 0,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "fixedTotal": {
+        "credits": 37200,
+        "coreTokens": 180,
+        "plasmaChips": 64,
+        "fluxCores": 0
+      },
+      "killSensitivity": [
+        {
+          "killsPerOrdinaryRound": 100,
+          "extraIncome": {
+            "credits": 18190.7,
+            "coreTokens": 117.85,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 55391,
+            "coreTokens": 298,
+            "plasmaChips": 64,
+            "fluxCores": 0
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 250,
+          "extraIncome": {
+            "credits": 45476.74,
+            "coreTokens": 294.62,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 82677,
+            "coreTokens": 475,
+            "plasmaChips": 64,
+            "fluxCores": 0
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 500,
+          "extraIncome": {
+            "credits": 90953.48,
+            "coreTokens": 589.23,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 128153,
+            "coreTokens": 769,
+            "plasmaChips": 64,
+            "fluxCores": 0
+          }
+        }
+      ]
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "overdrive",
+      "positions": [
+        31,
+        60
+      ],
+      "completion": {
+        "credits": 39780,
+        "coreTokens": 445,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "bosses": {
+        "credits": 24750,
+        "coreTokens": 69,
+        "plasmaChips": 84,
+        "fluxCores": 0
+      },
+      "finale": {
+        "credits": 0,
+        "coreTokens": 0,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "sites": {
+        "credits": 3600,
+        "coreTokens": 0,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "fixedTotal": {
+        "credits": 68130,
+        "coreTokens": 514,
+        "plasmaChips": 84,
+        "fluxCores": 0
+      },
+      "killSensitivity": [
+        {
+          "killsPerOrdinaryRound": 100,
+          "extraIncome": {
+            "credits": 19603.93,
+            "coreTokens": 152.83,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 87734,
+            "coreTokens": 667,
+            "plasmaChips": 84,
+            "fluxCores": 0
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 250,
+          "extraIncome": {
+            "credits": 49009.82,
+            "coreTokens": 382.08,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 117140,
+            "coreTokens": 896,
+            "plasmaChips": 84,
+            "fluxCores": 0
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 500,
+          "extraIncome": {
+            "credits": 98019.63,
+            "coreTokens": 764.16,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 166150,
+            "coreTokens": 1278,
+            "plasmaChips": 84,
+            "fluxCores": 0
+          }
+        }
+      ]
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "supreme",
+      "positions": [
+        61,
+        148
+      ],
+      "completion": {
+        "credits": 105170,
+        "coreTokens": 1807,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "bosses": {
+        "credits": 89854,
+        "coreTokens": 254,
+        "plasmaChips": 146,
+        "fluxCores": 0
+      },
+      "finale": {
+        "credits": 68985,
+        "coreTokens": 195,
+        "plasmaChips": 88,
+        "fluxCores": 4
+      },
+      "sites": {
+        "credits": 6034,
+        "coreTokens": 0,
+        "plasmaChips": 0,
+        "fluxCores": 0
+      },
+      "fixedTotal": {
+        "credits": 270043,
+        "coreTokens": 2256,
+        "plasmaChips": 234,
+        "fluxCores": 4
+      },
+      "killSensitivity": [
+        {
+          "killsPerOrdinaryRound": 100,
+          "extraIncome": {
+            "credits": 32852.67,
+            "coreTokens": 246.34,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 302896,
+            "coreTokens": 2502,
+            "plasmaChips": 234,
+            "fluxCores": 4
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 250,
+          "extraIncome": {
+            "credits": 82131.67,
+            "coreTokens": 615.85,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 352175,
+            "coreTokens": 2872,
+            "plasmaChips": 234,
+            "fluxCores": 4
+          }
+        },
+        {
+          "killsPerOrdinaryRound": 500,
+          "extraIncome": {
+            "credits": 164263.35,
+            "coreTokens": 1231.69,
+            "plasmaChips": 0,
+            "fluxCores": 0
+          },
+          "totalWithFixed": {
+            "credits": 434306,
+            "coreTokens": 3488,
+            "plasmaChips": 234,
+            "fluxCores": 4
+          }
+        }
+      ]
+    }
+  ],
+  "heist": [
+    {
+      "position": 1,
+      "entryCost": 60,
+      "expectedContainers": {
+        "credits": 180750,
+        "coreTokens": 36.8,
+        "plasmaChips": 106.71,
+        "fluxCores": 7.42
+      },
+      "expectedMods": 1.5,
+      "sampledContainers": {
+        "credits": 180950.27,
+        "coreTokens": 37,
+        "plasmaChips": 107.37,
+        "fluxCores": 7.46
+      },
+      "samples": 512,
+      "miniBossPlasmaIfPresent": 35.28,
+      "initialEnemies": 7,
+      "escapeTargetBeforeExistingEnemies": 11,
+      "containerHealth": 56.2
+    },
+    {
+      "position": 10,
+      "entryCost": 60,
+      "expectedContainers": {
+        "credits": 198750,
+        "coreTokens": 39,
+        "plasmaChips": 111.3,
+        "fluxCores": 7.69
+      },
+      "expectedMods": 1.5,
+      "sampledContainers": {
+        "credits": 197473.34,
+        "coreTokens": 39.2,
+        "plasmaChips": 110.52,
+        "fluxCores": 8.1
+      },
+      "samples": 512,
+      "miniBossPlasmaIfPresent": 37.8,
+      "initialEnemies": 8,
+      "escapeTargetBeforeExistingEnemies": 12,
+      "containerHealth": 76
+    },
+    {
+      "position": 20,
+      "entryCost": 60,
+      "expectedContainers": {
+        "credits": 218750,
+        "coreTokens": 41.46,
+        "plasmaChips": 116.4,
+        "fluxCores": 7.99
+      },
+      "expectedMods": 1.5,
+      "sampledContainers": {
+        "credits": 219294.15,
+        "coreTokens": 41.47,
+        "plasmaChips": 117.27,
+        "fluxCores": 7.18
+      },
+      "samples": 512,
+      "miniBossPlasmaIfPresent": 40.6,
+      "initialEnemies": 9,
+      "escapeTargetBeforeExistingEnemies": 13,
+      "containerHealth": 98
+    },
+    {
+      "position": 30,
+      "entryCost": 60,
+      "expectedContainers": {
+        "credits": 238750,
+        "coreTokens": 43.9,
+        "plasmaChips": 121.5,
+        "fluxCores": 8.29
+      },
+      "expectedMods": 1.5,
+      "sampledContainers": {
+        "credits": 238098.77,
+        "coreTokens": 43.61,
+        "plasmaChips": 121.61,
+        "fluxCores": 8.52
+      },
+      "samples": 512,
+      "miniBossPlasmaIfPresent": 43.4,
+      "initialEnemies": 10,
+      "escapeTargetBeforeExistingEnemies": 14,
+      "containerHealth": 120
+    },
+    {
+      "position": 31,
+      "entryCost": 60,
+      "expectedContainers": {
+        "credits": 240750,
+        "coreTokens": 44.15,
+        "plasmaChips": 122.01,
+        "fluxCores": 8.32
+      },
+      "expectedMods": 1.5,
+      "sampledContainers": {
+        "credits": 241720.32,
+        "coreTokens": 44.11,
+        "plasmaChips": 123.21,
+        "fluxCores": 7.56
+      },
+      "samples": 512,
+      "miniBossPlasmaIfPresent": 43.68,
+      "initialEnemies": 10,
+      "escapeTargetBeforeExistingEnemies": 14,
+      "containerHealth": 122.2
+    },
+    {
+      "position": 60,
+      "entryCost": 60,
+      "expectedContainers": {
+        "credits": 298750,
+        "coreTokens": 51.26,
+        "plasmaChips": 136.8,
+        "fluxCores": 9.19
+      },
+      "expectedMods": 1.5,
+      "sampledContainers": {
+        "credits": 296277.24,
+        "coreTokens": 51.7,
+        "plasmaChips": 136.99,
+        "fluxCores": 10.45
+      },
+      "samples": 512,
+      "miniBossPlasmaIfPresent": 51.8,
+      "initialEnemies": 13,
+      "escapeTargetBeforeExistingEnemies": 18,
+      "containerHealth": 186
+    },
+    {
+      "position": 61,
+      "entryCost": 60,
+      "expectedContainers": {
+        "credits": 300750,
+        "coreTokens": 51.5,
+        "plasmaChips": 137.31,
+        "fluxCores": 9.22
+      },
+      "expectedMods": 1.5,
+      "sampledContainers": {
+        "credits": 300712.95,
+        "coreTokens": 51.06,
+        "plasmaChips": 139.86,
+        "fluxCores": 9.3
+      },
+      "samples": 512,
+      "miniBossPlasmaIfPresent": 52.08,
+      "initialEnemies": 13,
+      "escapeTargetBeforeExistingEnemies": 18,
+      "containerHealth": 188.20000000000002
+    },
+    {
+      "position": 90,
+      "entryCost": 60,
+      "expectedContainers": {
+        "credits": 358750,
+        "coreTokens": 58.61,
+        "plasmaChips": 152.1,
+        "fluxCores": 10.09
+      },
+      "expectedMods": 1.5,
+      "sampledContainers": {
+        "credits": 345320.52,
+        "coreTokens": 58.71,
+        "plasmaChips": 155.41,
+        "fluxCores": 11.46
+      },
+      "samples": 512,
+      "miniBossPlasmaIfPresent": 60.2,
+      "initialEnemies": 16,
+      "escapeTargetBeforeExistingEnemies": 22,
+      "containerHealth": 252.00000000000003
+    },
+    {
+      "position": 148,
+      "entryCost": 60,
+      "expectedContainers": {
+        "credits": 474750,
+        "coreTokens": 72.82,
+        "plasmaChips": 181.68,
+        "fluxCores": 11.83
+      },
+      "expectedMods": 1.5,
+      "sampledContainers": {
+        "credits": 480327.37,
+        "coreTokens": 71.59,
+        "plasmaChips": 179.95,
+        "fluxCores": 12.75
+      },
+      "samples": 512,
+      "miniBossPlasmaIfPresent": 76.44,
+      "initialEnemies": 16,
+      "escapeTargetBeforeExistingEnemies": 29,
+      "containerHealth": 379.6
+    }
+  ],
+  "arcade": [
+    {
+      "position": 1,
+      "note": "Per successful event before pickup collection and Arena banking; no assumed appearance/success count. Packet bonus uses uniform seed residues.",
+      "goldenHunt": {
+        "credits": 232.40000000000003,
+        "coreTokens": 0.36,
+        "plasmaChips": 1,
+        "fluxCores": 0.16,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "miniBoss": {
+        "credits": 320.6,
+        "coreTokens": 0.54,
+        "plasmaChips": 1.6,
+        "fluxCores": 0.32,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "neonCircuit": {
+        "credits": 189.00000000000003,
+        "coreTokens": 0.36,
+        "plasmaChips": 1,
+        "fluxCores": 0.16,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "hotPackage": {
+        "credits": 246.99099010686177,
+        "coreTokens": 0.4728876464640457,
+        "plasmaChips": 1.209188772576776,
+        "fluxCores": 0.3186363230833284,
+        "mods": 0.24761176867106802,
+        "ammo": 0.32876999940522217
+      },
+      "packetSnatcher": {
+        "credits": 148.58,
+        "coreTokens": 0.1,
+        "plasmaChips": 1.12,
+        "fluxCores": 0.08,
+        "mods": 1.42,
+        "ammo": 0
+      },
+      "redline": {
+        "D": {
+          "credits": 71.36,
+          "coreTokens": 0.14,
+          "plasmaChips": 0.32,
+          "fluxCores": 0.13,
+          "mods": 0.13,
+          "ammo": 0.12
+        },
+        "C": {
+          "credits": 220.16,
+          "coreTokens": 0.56,
+          "plasmaChips": 1.28,
+          "fluxCores": 0.26,
+          "mods": 0.26,
+          "ammo": 0.24
+        },
+        "B": {
+          "credits": 252.8,
+          "coreTokens": 0.56,
+          "plasmaChips": 1.28,
+          "fluxCores": 0.26,
+          "mods": 0.26,
+          "ammo": 0.24
+        },
+        "A": {
+          "credits": 429.12,
+          "coreTokens": 0.84,
+          "plasmaChips": 2.4,
+          "fluxCores": 0.39,
+          "mods": 0.39,
+          "ammo": 0.36
+        },
+        "S": {
+          "credits": 660.48,
+          "coreTokens": 1.6800000000000002,
+          "plasmaChips": 3.84,
+          "fluxCores": 0.52,
+          "mods": 0.52,
+          "ammo": 0.48
+        }
+      }
+    },
+    {
+      "position": 30,
+      "note": "Per successful event before pickup collection and Arena banking; no assumed appearance/success count. Packet bonus uses uniform seed residues.",
+      "goldenHunt": {
+        "credits": 476.00000000000006,
+        "coreTokens": 0.72,
+        "plasmaChips": 2,
+        "fluxCores": 0.16,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "miniBoss": {
+        "credits": 686.0000000000001,
+        "coreTokens": 1.08,
+        "plasmaChips": 3,
+        "fluxCores": 0.48,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "neonCircuit": {
+        "credits": 392.00000000000006,
+        "coreTokens": 0.72,
+        "plasmaChips": 1.8,
+        "fluxCores": 0.16,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "hotPackage": {
+        "credits": 523.1009278534468,
+        "coreTokens": 0.8222458811633855,
+        "plasmaChips": 2.3085736235849246,
+        "fluxCores": 0.3186363230833284,
+        "mods": 0.24761176867106802,
+        "ammo": 0.32876999940522217
+      },
+      "packetSnatcher": {
+        "credits": 316.20000000000005,
+        "coreTokens": 0.2,
+        "plasmaChips": 2.24,
+        "fluxCores": 0.08,
+        "mods": 1.42,
+        "ammo": 0
+      },
+      "redline": {
+        "D": {
+          "credits": 155.84,
+          "coreTokens": 0.28,
+          "plasmaChips": 0.64,
+          "fluxCores": 0.13,
+          "mods": 0.13,
+          "ammo": 0.12
+        },
+        "C": {
+          "credits": 480,
+          "coreTokens": 0.8400000000000001,
+          "plasmaChips": 2.24,
+          "fluxCores": 0.26,
+          "mods": 0.26,
+          "ammo": 0.24
+        },
+        "B": {
+          "credits": 551.6800000000001,
+          "coreTokens": 0.8400000000000001,
+          "plasmaChips": 2.56,
+          "fluxCores": 0.26,
+          "mods": 0.26,
+          "ammo": 0.24
+        },
+        "A": {
+          "credits": 936,
+          "coreTokens": 1.68,
+          "plasmaChips": 4.32,
+          "fluxCores": 0.78,
+          "mods": 0.39,
+          "ammo": 0.36
+        },
+        "S": {
+          "credits": 1440,
+          "coreTokens": 2.24,
+          "plasmaChips": 7.04,
+          "fluxCores": 1.04,
+          "mods": 0.52,
+          "ammo": 0.48
+        }
+      }
+    },
+    {
+      "position": 60,
+      "note": "Per successful event before pickup collection and Arena banking; no assumed appearance/success count. Packet bonus uses uniform seed residues.",
+      "goldenHunt": {
+        "credits": 728.0000000000001,
+        "coreTokens": 1.08,
+        "plasmaChips": 3,
+        "fluxCores": 0.32,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "miniBoss": {
+        "credits": 1064,
+        "coreTokens": 1.6199999999999999,
+        "plasmaChips": 4.6000000000000005,
+        "fluxCores": 0.64,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "neonCircuit": {
+        "credits": 602.0000000000001,
+        "coreTokens": 1.08,
+        "plasmaChips": 2.8000000000000003,
+        "fluxCores": 0.32,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "hotPackage": {
+        "credits": 808.7318979361208,
+        "coreTokens": 1.1716041158627253,
+        "plasmaChips": 3.4079584745930727,
+        "fluxCores": 0.3186363230833284,
+        "mods": 0.24761176867106802,
+        "ammo": 0.32876999940522217
+      },
+      "packetSnatcher": {
+        "credits": 489.6,
+        "coreTokens": 0.30000000000000004,
+        "plasmaChips": 3.3600000000000003,
+        "fluxCores": 0.08,
+        "mods": 1.42,
+        "ammo": 0
+      },
+      "redline": {
+        "D": {
+          "credits": 243.20000000000002,
+          "coreTokens": 0.28,
+          "plasmaChips": 1.12,
+          "fluxCores": 0.13,
+          "mods": 0.13,
+          "ammo": 0.12
+        },
+        "C": {
+          "credits": 748.8000000000001,
+          "coreTokens": 1.12,
+          "plasmaChips": 3.52,
+          "fluxCores": 0.52,
+          "mods": 0.26,
+          "ammo": 0.24
+        },
+        "B": {
+          "credits": 860.8000000000001,
+          "coreTokens": 1.4000000000000001,
+          "plasmaChips": 3.84,
+          "fluxCores": 0.52,
+          "mods": 0.26,
+          "ammo": 0.24
+        },
+        "A": {
+          "credits": 1460.1599999999999,
+          "coreTokens": 2.1,
+          "plasmaChips": 6.72,
+          "fluxCores": 0.78,
+          "mods": 0.39,
+          "ammo": 0.36
+        },
+        "S": {
+          "credits": 2246.4,
+          "coreTokens": 3.3600000000000003,
+          "plasmaChips": 10.24,
+          "fluxCores": 1.56,
+          "mods": 0.52,
+          "ammo": 0.48
+        }
+      }
+    },
+    {
+      "position": 90,
+      "note": "Per successful event before pickup collection and Arena banking; no assumed appearance/success count. Packet bonus uses uniform seed residues.",
+      "goldenHunt": {
+        "credits": 980.0000000000001,
+        "coreTokens": 1.6199999999999999,
+        "plasmaChips": 4.2,
+        "fluxCores": 0.48,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "miniBoss": {
+        "credits": 1442.0000000000002,
+        "coreTokens": 2.16,
+        "plasmaChips": 6,
+        "fluxCores": 0.8,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "neonCircuit": {
+        "credits": 812.0000000000001,
+        "coreTokens": 1.44,
+        "plasmaChips": 3.8000000000000003,
+        "fluxCores": 0.32,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "hotPackage": {
+        "credits": 1094.3628680187949,
+        "coreTokens": 1.520962350562065,
+        "plasmaChips": 4.507343325601221,
+        "fluxCores": 0.5858020579313626,
+        "mods": 0.24761176867106802,
+        "ammo": 0.32876999940522217
+      },
+      "packetSnatcher": {
+        "credits": 663,
+        "coreTokens": 0.4,
+        "plasmaChips": 4.48,
+        "fluxCores": 0.16,
+        "mods": 1.42,
+        "ammo": 0
+      },
+      "redline": {
+        "D": {
+          "credits": 330.56,
+          "coreTokens": 0.42000000000000004,
+          "plasmaChips": 1.44,
+          "fluxCores": 0.13,
+          "mods": 0.13,
+          "ammo": 0.12
+        },
+        "C": {
+          "credits": 1017.6,
+          "coreTokens": 1.4000000000000001,
+          "plasmaChips": 4.48,
+          "fluxCores": 0.52,
+          "mods": 0.26,
+          "ammo": 0.24
+        },
+        "B": {
+          "credits": 1169.92,
+          "coreTokens": 1.6800000000000002,
+          "plasmaChips": 5.44,
+          "fluxCores": 0.78,
+          "mods": 0.26,
+          "ammo": 0.24
+        },
+        "A": {
+          "credits": 1984.32,
+          "coreTokens": 2.94,
+          "plasmaChips": 9.12,
+          "fluxCores": 1.17,
+          "mods": 0.39,
+          "ammo": 0.36
+        },
+        "S": {
+          "credits": 3052.8,
+          "coreTokens": 4.48,
+          "plasmaChips": 14.08,
+          "fluxCores": 1.56,
+          "mods": 0.52,
+          "ammo": 0.48
+        }
+      }
+    },
+    {
+      "position": 148,
+      "note": "Per successful event before pickup collection and Arena banking; no assumed appearance/success count. Packet bonus uses uniform seed residues.",
+      "goldenHunt": {
+        "credits": 1467.2,
+        "coreTokens": 2.34,
+        "plasmaChips": 6.2,
+        "fluxCores": 0.64,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "miniBoss": {
+        "credits": 2172.8,
+        "coreTokens": 3.06,
+        "plasmaChips": 9,
+        "fluxCores": 1.12,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "neonCircuit": {
+        "credits": 1218.0000000000002,
+        "coreTokens": 2.16,
+        "plasmaChips": 5.6000000000000005,
+        "fluxCores": 0.48,
+        "mods": 0.18,
+        "ammo": 0
+      },
+      "hotPackage": {
+        "credits": 1646.582743511965,
+        "coreTokens": 2.2196788199607447,
+        "plasmaChips": 6.339651410614802,
+        "fluxCores": 0.8529677927793969,
+        "mods": 0.24761176867106802,
+        "ammo": 0.32876999940522217
+      },
+      "packetSnatcher": {
+        "credits": 998.2400000000001,
+        "coreTokens": 0.6000000000000001,
+        "plasmaChips": 6.720000000000001,
+        "fluxCores": 0.16,
+        "mods": 1.42,
+        "ammo": 0
+      },
+      "redline": {
+        "D": {
+          "credits": 499.52000000000004,
+          "coreTokens": 0.7000000000000001,
+          "plasmaChips": 2.24,
+          "fluxCores": 0.26,
+          "mods": 0.13,
+          "ammo": 0.12
+        },
+        "C": {
+          "credits": 1537.28,
+          "coreTokens": 1.9600000000000002,
+          "plasmaChips": 6.72,
+          "fluxCores": 0.78,
+          "mods": 0.26,
+          "ammo": 0.24
+        },
+        "B": {
+          "credits": 1767.68,
+          "coreTokens": 2.5200000000000005,
+          "plasmaChips": 8,
+          "fluxCores": 1.04,
+          "mods": 0.26,
+          "ammo": 0.24
+        },
+        "A": {
+          "credits": 2997.12,
+          "coreTokens": 4.2,
+          "plasmaChips": 13.44,
+          "fluxCores": 1.56,
+          "mods": 0.39,
+          "ammo": 0.36
+        },
+        "S": {
+          "credits": 4611.84,
+          "coreTokens": 6.16,
+          "plasmaChips": 20.48,
+          "fluxCores": 2.6,
+          "mods": 0.52,
+          "ammo": 0.48
+        }
+      }
+    }
+  ],
+  "modOdds": [
+    {
+      "mapping": "contiguous",
+      "mode": "normal",
+      "localRound": 1,
+      "rewardPosition": 1,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.34842104700330184,
+        "uncommon": 0.3790245474487927,
+        "rare": 0.23124113818190112,
+        "epic": 0.04114411205858605,
+        "legendary": 0.00016915530741789766,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "normal",
+      "localRound": 1,
+      "rewardPosition": 1,
+      "source": "boss",
+      "chanceOfCard": 0.62,
+      "conditionalRarityProbabilities": {
+        "common": 0.18630557831598524,
+        "uncommon": 0.22800340745833106,
+        "rare": 0.3636701523154666,
+        "epic": 0.20166968057352383,
+        "legendary": 0.020351181336693138,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "normal",
+      "localRound": 1,
+      "rewardPosition": 1,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.34842104700330184,
+        "uncommon": 0.3790245474487927,
+        "rare": 0.23124113818190112,
+        "epic": 0.04114411205858605,
+        "legendary": 0.00016915530741789766,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "normal",
+      "localRound": 1,
+      "rewardPosition": 1,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.28115562492799645,
+        "uncommon": 0.3713903531165824,
+        "rare": 0.2900896676652653,
+        "epic": 0.05691585906894992,
+        "legendary": 0.00044849522120609124,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "normal",
+      "localRound": 30,
+      "rewardPosition": 30,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.29093226571852826,
+        "uncommon": 0.3164862493257249,
+        "rare": 0.3330747460413065,
+        "epic": 0.05926309125943054,
+        "legendary": 0.00024364765500953196,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "normal",
+      "localRound": 30,
+      "rewardPosition": 30,
+      "source": "boss",
+      "chanceOfCard": 0.62,
+      "conditionalRarityProbabilities": {
+        "common": 0.13077508078372688,
+        "uncommon": 0.16004439748313157,
+        "rare": 0.4403478661847362,
+        "epic": 0.2441905472563351,
+        "legendary": 0.024642108292070353,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "normal",
+      "localRound": 30,
+      "rewardPosition": 30,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.29093226571852826,
+        "uncommon": 0.3164862493257249,
+        "rare": 0.3330747460413065,
+        "epic": 0.05926309125943054,
+        "legendary": 0.00024364765500953196,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "normal",
+      "localRound": 30,
+      "rewardPosition": 30,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.22458238624192275,
+        "uncommon": 0.29666037004065987,
+        "rare": 0.39971484267389784,
+        "epic": 0.07842441903048554,
+        "legendary": 0.0006179820130348381,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "overdrive",
+      "localRound": 1,
+      "rewardPosition": 31,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.27612169498211575,
+        "uncommon": 0.3003747947534243,
+        "rare": 0.35918427811451703,
+        "epic": 0.06390868988372199,
+        "legendary": 0.000410542266220968,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "overdrive",
+      "localRound": 1,
+      "rewardPosition": 31,
+      "source": "boss",
+      "chanceOfCard": 0.8370000000000001,
+      "conditionalRarityProbabilities": {
+        "common": 0.1175651628245933,
+        "uncommon": 0.1438779126459514,
+        "rare": 0.4497969651442175,
+        "epic": 0.24943045148475024,
+        "legendary": 0.03932950790048802,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "overdrive",
+      "localRound": 1,
+      "rewardPosition": 31,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.27612169498211575,
+        "uncommon": 0.3003747947534243,
+        "rare": 0.35918427811451703,
+        "epic": 0.06390868988372199,
+        "legendary": 0.000410542266220968,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "overdrive",
+      "localRound": 1,
+      "rewardPosition": 31,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.21075338705392752,
+        "uncommon": 0.27839306027940647,
+        "rare": 0.42620262301315054,
+        "epic": 0.08362134584615485,
+        "legendary": 0.0010295838073606175,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "overdrive",
+      "localRound": 30,
+      "rewardPosition": 60,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.23490693212653996,
+        "uncommon": 0.25553994056220813,
+        "rare": 0.4321651834243268,
+        "epic": 0.07689398553575184,
+        "legendary": 0.0004939583511733126,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "overdrive",
+      "localRound": 30,
+      "rewardPosition": 60,
+      "source": "boss",
+      "chanceOfCard": 0.8370000000000001,
+      "conditionalRarityProbabilities": {
+        "common": 0.0900210879861662,
+        "uncommon": 0.1101690834460164,
+        "rare": 0.4871012939341459,
+        "epic": 0.2701171974911935,
+        "legendary": 0.04259133714247829,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "overdrive",
+      "localRound": 30,
+      "rewardPosition": 60,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.23490693212653996,
+        "uncommon": 0.25553994056220813,
+        "rare": 0.4321651834243268,
+        "epic": 0.07689398553575184,
+        "legendary": 0.0004939583511733126,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "overdrive",
+      "localRound": 30,
+      "rewardPosition": 60,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.17394069507012003,
+        "uncommon": 0.22976561888092975,
+        "rare": 0.49748490884249796,
+        "epic": 0.09760699575581394,
+        "legendary": 0.0012017814506381037,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "supreme",
+      "localRound": 1,
+      "rewardPosition": 61,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.2109927813049741,
+        "uncommon": 0.22952529457361412,
+        "rare": 0.42009698883085667,
+        "epic": 0.07474672421969669,
+        "legendary": 0.00048656677943236903,
+        "supreme": 0.06415164429142628
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "supreme",
+      "localRound": 1,
+      "rewardPosition": 61,
+      "source": "boss",
+      "chanceOfCard": 0.9176,
+      "conditionalRarityProbabilities": {
+        "common": 0.06568400294881588,
+        "uncommon": 0.08038501382085622,
+        "rare": 0.38464728066120185,
+        "epic": 0.21330233930534218,
+        "legendary": 0.034081365508842554,
+        "supreme": 0.22189999775494126
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "supreme",
+      "localRound": 1,
+      "rewardPosition": 61,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.21352949767170779,
+        "uncommon": 0.2322848229694348,
+        "rare": 0.4251477156879165,
+        "epic": 0.07564538642754619,
+        "legendary": 0.0004924166568796498,
+        "supreme": 0.052900160586515005
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "supreme",
+      "localRound": 1,
+      "rewardPosition": 61,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.1539010677860421,
+        "uncommon": 0.203294427862559,
+        "rare": 0.4763743526612632,
+        "epic": 0.09346508525569659,
+        "legendary": 0.001166128168079866,
+        "supreme": 0.07179893826635901
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "supreme",
+      "localRound": 30,
+      "rewardPosition": 90,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.15210542915143796,
+        "uncommon": 0.16546558235927075,
+        "rare": 0.5046227775980429,
+        "epic": 0.08978616984870838,
+        "legendary": 0.0007144583836634716,
+        "supreme": 0.0873055826588768
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "supreme",
+      "localRound": 30,
+      "rewardPosition": 90,
+      "source": "boss",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.04027902302096674,
+        "uncommon": 0.049294039292246995,
+        "rare": 0.3930267815895921,
+        "epic": 0.21794910854069072,
+        "legendary": 0.04256902146636566,
+        "supreme": 0.25688202609013755
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "supreme",
+      "localRound": 30,
+      "rewardPosition": 90,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.15460503708565274,
+        "uncommon": 0.16818474291002872,
+        "rare": 0.5129154408231914,
+        "epic": 0.09126166105101872,
+        "legendary": 0.0007261993573712111,
+        "supreme": 0.07230691877273698
+      }
+    },
+    {
+      "mapping": "contiguous",
+      "mode": "supreme",
+      "localRound": 30,
+      "rewardPosition": 90,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.10653482534737664,
+        "uncommon": 0.14072635543076345,
+        "rare": 0.5494630584874528,
+        "epic": 0.10780515642684729,
+        "legendary": 0.0016441961056337484,
+        "supreme": 0.09382640820192586
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "normal",
+      "localRound": 1,
+      "rewardPosition": 1,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.34842104700330184,
+        "uncommon": 0.3790245474487927,
+        "rare": 0.23124113818190112,
+        "epic": 0.04114411205858605,
+        "legendary": 0.00016915530741789766,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "normal",
+      "localRound": 1,
+      "rewardPosition": 1,
+      "source": "boss",
+      "chanceOfCard": 0.62,
+      "conditionalRarityProbabilities": {
+        "common": 0.18630557831598524,
+        "uncommon": 0.22800340745833106,
+        "rare": 0.3636701523154666,
+        "epic": 0.20166968057352383,
+        "legendary": 0.020351181336693138,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "normal",
+      "localRound": 1,
+      "rewardPosition": 1,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.34842104700330184,
+        "uncommon": 0.3790245474487927,
+        "rare": 0.23124113818190112,
+        "epic": 0.04114411205858605,
+        "legendary": 0.00016915530741789766,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "normal",
+      "localRound": 1,
+      "rewardPosition": 1,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.28115562492799645,
+        "uncommon": 0.3713903531165824,
+        "rare": 0.2900896676652653,
+        "epic": 0.05691585906894992,
+        "legendary": 0.00044849522120609124,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "normal",
+      "localRound": 30,
+      "rewardPosition": 30,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.29093226571852826,
+        "uncommon": 0.3164862493257249,
+        "rare": 0.3330747460413065,
+        "epic": 0.05926309125943054,
+        "legendary": 0.00024364765500953196,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "normal",
+      "localRound": 30,
+      "rewardPosition": 30,
+      "source": "boss",
+      "chanceOfCard": 0.62,
+      "conditionalRarityProbabilities": {
+        "common": 0.13077508078372688,
+        "uncommon": 0.16004439748313157,
+        "rare": 0.4403478661847362,
+        "epic": 0.2441905472563351,
+        "legendary": 0.024642108292070353,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "normal",
+      "localRound": 30,
+      "rewardPosition": 30,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.29093226571852826,
+        "uncommon": 0.3164862493257249,
+        "rare": 0.3330747460413065,
+        "epic": 0.05926309125943054,
+        "legendary": 0.00024364765500953196,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "normal",
+      "localRound": 30,
+      "rewardPosition": 30,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.22458238624192275,
+        "uncommon": 0.29666037004065987,
+        "rare": 0.39971484267389784,
+        "epic": 0.07842441903048554,
+        "legendary": 0.0006179820130348381,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "overdrive",
+      "localRound": 1,
+      "rewardPosition": 31,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.27612169498211575,
+        "uncommon": 0.3003747947534243,
+        "rare": 0.35918427811451703,
+        "epic": 0.06390868988372199,
+        "legendary": 0.000410542266220968,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "overdrive",
+      "localRound": 1,
+      "rewardPosition": 31,
+      "source": "boss",
+      "chanceOfCard": 0.8370000000000001,
+      "conditionalRarityProbabilities": {
+        "common": 0.1175651628245933,
+        "uncommon": 0.1438779126459514,
+        "rare": 0.4497969651442175,
+        "epic": 0.24943045148475024,
+        "legendary": 0.03932950790048802,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "overdrive",
+      "localRound": 1,
+      "rewardPosition": 31,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.27612169498211575,
+        "uncommon": 0.3003747947534243,
+        "rare": 0.35918427811451703,
+        "epic": 0.06390868988372199,
+        "legendary": 0.000410542266220968,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "overdrive",
+      "localRound": 1,
+      "rewardPosition": 31,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.21075338705392752,
+        "uncommon": 0.27839306027940647,
+        "rare": 0.42620262301315054,
+        "epic": 0.08362134584615485,
+        "legendary": 0.0010295838073606175,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "overdrive",
+      "localRound": 30,
+      "rewardPosition": 60,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.23490693212653996,
+        "uncommon": 0.25553994056220813,
+        "rare": 0.4321651834243268,
+        "epic": 0.07689398553575184,
+        "legendary": 0.0004939583511733126,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "overdrive",
+      "localRound": 30,
+      "rewardPosition": 60,
+      "source": "boss",
+      "chanceOfCard": 0.8370000000000001,
+      "conditionalRarityProbabilities": {
+        "common": 0.0900210879861662,
+        "uncommon": 0.1101690834460164,
+        "rare": 0.4871012939341459,
+        "epic": 0.2701171974911935,
+        "legendary": 0.04259133714247829,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "overdrive",
+      "localRound": 30,
+      "rewardPosition": 60,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.23490693212653996,
+        "uncommon": 0.25553994056220813,
+        "rare": 0.4321651834243268,
+        "epic": 0.07689398553575184,
+        "legendary": 0.0004939583511733126,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "overdrive",
+      "localRound": 30,
+      "rewardPosition": 60,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.17394069507012003,
+        "uncommon": 0.22976561888092975,
+        "rare": 0.49748490884249796,
+        "epic": 0.09760699575581394,
+        "legendary": 0.0012017814506381037,
+        "supreme": 0
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "supreme",
+      "localRound": 1,
+      "rewardPosition": 61,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.2109927813049741,
+        "uncommon": 0.22952529457361412,
+        "rare": 0.42009698883085667,
+        "epic": 0.07474672421969669,
+        "legendary": 0.00048656677943236903,
+        "supreme": 0.06415164429142628
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "supreme",
+      "localRound": 1,
+      "rewardPosition": 61,
+      "source": "boss",
+      "chanceOfCard": 0.9176,
+      "conditionalRarityProbabilities": {
+        "common": 0.06568400294881588,
+        "uncommon": 0.08038501382085622,
+        "rare": 0.38464728066120185,
+        "epic": 0.21330233930534218,
+        "legendary": 0.034081365508842554,
+        "supreme": 0.22189999775494126
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "supreme",
+      "localRound": 1,
+      "rewardPosition": 61,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.21352949767170779,
+        "uncommon": 0.2322848229694348,
+        "rare": 0.4251477156879165,
+        "epic": 0.07564538642754619,
+        "legendary": 0.0004924166568796498,
+        "supreme": 0.052900160586515005
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "supreme",
+      "localRound": 1,
+      "rewardPosition": 61,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.1539010677860421,
+        "uncommon": 0.203294427862559,
+        "rare": 0.4763743526612632,
+        "epic": 0.09346508525569659,
+        "legendary": 0.001166128168079866,
+        "supreme": 0.07179893826635901
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "supreme",
+      "localRound": 30,
+      "rewardPosition": 148,
+      "source": "milestone",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.11639279736501662,
+        "uncommon": 0.12661613793714474,
+        "rare": 0.5597577771869772,
+        "epic": 0.09959619162628998,
+        "legendary": 0.0007925199861878302,
+        "supreme": 0.09684457589838354
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "supreme",
+      "localRound": 30,
+      "rewardPosition": 148,
+      "source": "boss",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.028580076239573732,
+        "uncommon": 0.0349767023990531,
+        "rare": 0.40425788187702966,
+        "epic": 0.2241772039536241,
+        "legendary": 0.04378547024701408,
+        "supreme": 0.2642226652837056
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "supreme",
+      "localRound": 30,
+      "rewardPosition": 148,
+      "source": "arcade",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.11851832645043864,
+        "uncommon": 0.12892836249022607,
+        "rare": 0.5699798997163538,
+        "epic": 0.10141498631884346,
+        "legendary": 0.0008069927398251339,
+        "supreme": 0.08035143228431288
+      }
+    },
+    {
+      "mapping": "preserve148",
+      "mode": "supreme",
+      "localRound": 30,
+      "rewardPosition": 148,
+      "source": "anomaly",
+      "chanceOfCard": 1,
+      "conditionalRarityProbabilities": {
+        "common": 0.07959622312574084,
+        "uncommon": 0.10514201670688886,
+        "rare": 0.5951017919767977,
+        "epic": 0.11675951782920593,
+        "legendary": 0.0017807640271893894,
+        "supreme": 0.1016196863341771
+      }
+    }
+  ],
+  "fluxNodeSensitivity": [
+    {
+      "mode": "normal",
+      "nodesPerOrdinaryRound": 2,
+      "expectedRawFluxPerMode": 16.128,
+      "expectedBankedFlux": 16.13,
+      "ordinaryRoundsToAfford35AtModeAverageRate": 53,
+      "ordinaryRoundsToAffordAverageFeeAtModeAverageRate": 94,
+      "ordinaryRoundsToAfford90AtModeAverageRate": 134,
+      "note": "80% collection, independent nodes; excludes events, HEIST, weeklies, finale and wallet carried in. Not observed player behavior."
+    },
+    {
+      "mode": "overdrive",
+      "nodesPerOrdinaryRound": 2,
+      "expectedRawFluxPerMode": 16.128,
+      "expectedBankedFlux": 16.13,
+      "ordinaryRoundsToAfford35AtModeAverageRate": 53,
+      "ordinaryRoundsToAffordAverageFeeAtModeAverageRate": 94,
+      "ordinaryRoundsToAfford90AtModeAverageRate": 134,
+      "note": "80% collection, independent nodes; excludes events, HEIST, weeklies, finale and wallet carried in. Not observed player behavior."
+    },
+    {
+      "mode": "supreme",
+      "nodesPerOrdinaryRound": 2,
+      "expectedRawFluxPerMode": 16.128,
+      "expectedBankedFlux": 28.33,
+      "ordinaryRoundsToAfford35AtModeAverageRate": 30,
+      "ordinaryRoundsToAffordAverageFeeAtModeAverageRate": 53,
+      "ordinaryRoundsToAfford90AtModeAverageRate": 77,
+      "note": "80% collection, independent nodes; excludes events, HEIST, weeklies, finale and wallet carried in. Not observed player behavior."
+    },
+    {
+      "mode": "normal",
+      "nodesPerOrdinaryRound": 6,
+      "expectedRawFluxPerMode": 48.384,
+      "expectedBankedFlux": 48.38,
+      "ordinaryRoundsToAfford35AtModeAverageRate": 18,
+      "ordinaryRoundsToAffordAverageFeeAtModeAverageRate": 32,
+      "ordinaryRoundsToAfford90AtModeAverageRate": 45,
+      "note": "80% collection, independent nodes; excludes events, HEIST, weeklies, finale and wallet carried in. Not observed player behavior."
+    },
+    {
+      "mode": "overdrive",
+      "nodesPerOrdinaryRound": 6,
+      "expectedRawFluxPerMode": 48.384,
+      "expectedBankedFlux": 48.38,
+      "ordinaryRoundsToAfford35AtModeAverageRate": 18,
+      "ordinaryRoundsToAffordAverageFeeAtModeAverageRate": 32,
+      "ordinaryRoundsToAfford90AtModeAverageRate": 45,
+      "note": "80% collection, independent nodes; excludes events, HEIST, weeklies, finale and wallet carried in. Not observed player behavior."
+    },
+    {
+      "mode": "supreme",
+      "nodesPerOrdinaryRound": 6,
+      "expectedRawFluxPerMode": 48.384,
+      "expectedBankedFlux": 82.41,
+      "ordinaryRoundsToAfford35AtModeAverageRate": 11,
+      "ordinaryRoundsToAffordAverageFeeAtModeAverageRate": 19,
+      "ordinaryRoundsToAfford90AtModeAverageRate": 27,
+      "note": "80% collection, independent nodes; excludes events, HEIST, weeklies, finale and wallet carried in. Not observed player behavior."
+    },
+    {
+      "mode": "normal",
+      "nodesPerOrdinaryRound": 12,
+      "expectedRawFluxPerMode": 96.768,
+      "expectedBankedFlux": 96.77,
+      "ordinaryRoundsToAfford35AtModeAverageRate": 9,
+      "ordinaryRoundsToAffordAverageFeeAtModeAverageRate": 16,
+      "ordinaryRoundsToAfford90AtModeAverageRate": 23,
+      "note": "80% collection, independent nodes; excludes events, HEIST, weeklies, finale and wallet carried in. Not observed player behavior."
+    },
+    {
+      "mode": "overdrive",
+      "nodesPerOrdinaryRound": 12,
+      "expectedRawFluxPerMode": 96.768,
+      "expectedBankedFlux": 96.77,
+      "ordinaryRoundsToAfford35AtModeAverageRate": 9,
+      "ordinaryRoundsToAffordAverageFeeAtModeAverageRate": 16,
+      "ordinaryRoundsToAfford90AtModeAverageRate": 23,
+      "note": "80% collection, independent nodes; excludes events, HEIST, weeklies, finale and wallet carried in. Not observed player behavior."
+    },
+    {
+      "mode": "supreme",
+      "nodesPerOrdinaryRound": 12,
+      "expectedRawFluxPerMode": 96.768,
+      "expectedBankedFlux": 163.21,
+      "ordinaryRoundsToAfford35AtModeAverageRate": 6,
+      "ordinaryRoundsToAffordAverageFeeAtModeAverageRate": 10,
+      "ordinaryRoundsToAfford90AtModeAverageRate": 14,
+      "note": "80% collection, independent nodes; excludes events, HEIST, weeklies, finale and wallet carried in. Not observed player behavior."
+    }
+  ],
+  "heistCollectionScenarios": [
+    {
+      "position": 1,
+      "collectionFraction": 0.5,
+      "expectedCurrencies": {
+        "credits": 90375,
+        "coreTokens": 18.4,
+        "plasmaChips": 53.36,
+        "fluxCores": 3.71
+      },
+      "expectedMods": 0.75,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 1,
+      "collectionFraction": 0.8,
+      "expectedCurrencies": {
+        "credits": 144600,
+        "coreTokens": 29.44,
+        "plasmaChips": 85.37,
+        "fluxCores": 5.93
+      },
+      "expectedMods": 1.2000000000000002,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 1,
+      "collectionFraction": 1,
+      "expectedCurrencies": {
+        "credits": 180750,
+        "coreTokens": 36.8,
+        "plasmaChips": 106.71,
+        "fluxCores": 7.42
+      },
+      "expectedMods": 1.5,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 10,
+      "collectionFraction": 0.5,
+      "expectedCurrencies": {
+        "credits": 99375,
+        "coreTokens": 19.5,
+        "plasmaChips": 55.65,
+        "fluxCores": 3.84
+      },
+      "expectedMods": 0.75,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 10,
+      "collectionFraction": 0.8,
+      "expectedCurrencies": {
+        "credits": 159000,
+        "coreTokens": 31.2,
+        "plasmaChips": 89.04,
+        "fluxCores": 6.15
+      },
+      "expectedMods": 1.2000000000000002,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 10,
+      "collectionFraction": 1,
+      "expectedCurrencies": {
+        "credits": 198750,
+        "coreTokens": 39,
+        "plasmaChips": 111.3,
+        "fluxCores": 7.69
+      },
+      "expectedMods": 1.5,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 20,
+      "collectionFraction": 0.5,
+      "expectedCurrencies": {
+        "credits": 109375,
+        "coreTokens": 20.73,
+        "plasmaChips": 58.2,
+        "fluxCores": 3.99
+      },
+      "expectedMods": 0.75,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 20,
+      "collectionFraction": 0.8,
+      "expectedCurrencies": {
+        "credits": 175000,
+        "coreTokens": 33.16,
+        "plasmaChips": 93.12,
+        "fluxCores": 6.39
+      },
+      "expectedMods": 1.2000000000000002,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 20,
+      "collectionFraction": 1,
+      "expectedCurrencies": {
+        "credits": 218750,
+        "coreTokens": 41.46,
+        "plasmaChips": 116.4,
+        "fluxCores": 7.99
+      },
+      "expectedMods": 1.5,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 30,
+      "collectionFraction": 0.5,
+      "expectedCurrencies": {
+        "credits": 119375,
+        "coreTokens": 21.95,
+        "plasmaChips": 60.75,
+        "fluxCores": 4.14
+      },
+      "expectedMods": 0.75,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 30,
+      "collectionFraction": 0.8,
+      "expectedCurrencies": {
+        "credits": 191000,
+        "coreTokens": 35.12,
+        "plasmaChips": 97.2,
+        "fluxCores": 6.63
+      },
+      "expectedMods": 1.2000000000000002,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 30,
+      "collectionFraction": 1,
+      "expectedCurrencies": {
+        "credits": 238750,
+        "coreTokens": 43.9,
+        "plasmaChips": 121.5,
+        "fluxCores": 8.29
+      },
+      "expectedMods": 1.5,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 31,
+      "collectionFraction": 0.5,
+      "expectedCurrencies": {
+        "credits": 120375,
+        "coreTokens": 22.08,
+        "plasmaChips": 61.01,
+        "fluxCores": 4.16
+      },
+      "expectedMods": 0.75,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 31,
+      "collectionFraction": 0.8,
+      "expectedCurrencies": {
+        "credits": 192600,
+        "coreTokens": 35.32,
+        "plasmaChips": 97.61,
+        "fluxCores": 6.65
+      },
+      "expectedMods": 1.2000000000000002,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 31,
+      "collectionFraction": 1,
+      "expectedCurrencies": {
+        "credits": 240750,
+        "coreTokens": 44.15,
+        "plasmaChips": 122.01,
+        "fluxCores": 8.32
+      },
+      "expectedMods": 1.5,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 60,
+      "collectionFraction": 0.5,
+      "expectedCurrencies": {
+        "credits": 149375,
+        "coreTokens": 25.63,
+        "plasmaChips": 68.4,
+        "fluxCores": 4.59
+      },
+      "expectedMods": 0.75,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 60,
+      "collectionFraction": 0.8,
+      "expectedCurrencies": {
+        "credits": 239000,
+        "coreTokens": 41,
+        "plasmaChips": 109.44,
+        "fluxCores": 7.35
+      },
+      "expectedMods": 1.2000000000000002,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 60,
+      "collectionFraction": 1,
+      "expectedCurrencies": {
+        "credits": 298750,
+        "coreTokens": 51.26,
+        "plasmaChips": 136.8,
+        "fluxCores": 9.19
+      },
+      "expectedMods": 1.5,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 61,
+      "collectionFraction": 0.5,
+      "expectedCurrencies": {
+        "credits": 150375,
+        "coreTokens": 25.75,
+        "plasmaChips": 68.66,
+        "fluxCores": 4.61
+      },
+      "expectedMods": 0.75,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 61,
+      "collectionFraction": 0.8,
+      "expectedCurrencies": {
+        "credits": 240600,
+        "coreTokens": 41.2,
+        "plasmaChips": 109.85,
+        "fluxCores": 7.37
+      },
+      "expectedMods": 1.2000000000000002,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 61,
+      "collectionFraction": 1,
+      "expectedCurrencies": {
+        "credits": 300750,
+        "coreTokens": 51.5,
+        "plasmaChips": 137.31,
+        "fluxCores": 9.22
+      },
+      "expectedMods": 1.5,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 90,
+      "collectionFraction": 0.5,
+      "expectedCurrencies": {
+        "credits": 179375,
+        "coreTokens": 29.3,
+        "plasmaChips": 76.05,
+        "fluxCores": 5.04
+      },
+      "expectedMods": 0.75,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 90,
+      "collectionFraction": 0.8,
+      "expectedCurrencies": {
+        "credits": 287000,
+        "coreTokens": 46.88,
+        "plasmaChips": 121.68,
+        "fluxCores": 8.07
+      },
+      "expectedMods": 1.2000000000000002,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 90,
+      "collectionFraction": 1,
+      "expectedCurrencies": {
+        "credits": 358750,
+        "coreTokens": 58.61,
+        "plasmaChips": 152.1,
+        "fluxCores": 10.09
+      },
+      "expectedMods": 1.5,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 148,
+      "collectionFraction": 0.5,
+      "expectedCurrencies": {
+        "credits": 237375,
+        "coreTokens": 36.41,
+        "plasmaChips": 90.84,
+        "fluxCores": 5.91
+      },
+      "expectedMods": 0.75,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 148,
+      "collectionFraction": 0.8,
+      "expectedCurrencies": {
+        "credits": 379800,
+        "coreTokens": 58.25,
+        "plasmaChips": 145.34,
+        "fluxCores": 9.46
+      },
+      "expectedMods": 1.2000000000000002,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    },
+    {
+      "position": 148,
+      "collectionFraction": 1,
+      "expectedCurrencies": {
+        "credits": 474750,
+        "coreTokens": 72.82,
+        "plasmaChips": 181.68,
+        "fluxCores": 11.83
+      },
+      "expectedMods": 1.5,
+      "note": "Uniform per-currency and per-card collection assumption, not measured behavior. Conditioned on successful extraction."
+    }
+  ],
+  "sinks": {
+    "totalPermanentUpgradeCredits": 99766,
+    "rankCreditsPerCard": 3800,
+    "rankTokensPerCard": {
+      "common": 0,
+      "uncommon": 0,
+      "rare": 17,
+      "epic": 145,
+      "legendary": 850,
+      "supreme": 2050
+    },
+    "recalibration": {
+      "roll": 125,
+      "reset": 75
+    },
+    "infusions": {
+      "enemy-growth": 300,
+      "detonation-fireworks": 350,
+      "prismatic-rounds": 375,
+      "holo-afterimage": 400,
+      "pickup-orbit": 325,
+      "ghost-echoes": 425,
+      "arcade-pop": 350
+    },
+    "infusionReconfiguration": 90,
+    "infusionRemoval": 60,
+    "signalCredits": 12500,
+    "savedLoadoutCredits": [
+      0,
+      25000,
+      75000,
+      200000,
+      500000
+    ],
+    "contracts": [
+      {
+        "id": "elite-hunt",
+        "cost": 20000,
+        "creditRewardMultiplier": 1.05,
+        "completionEligibleCreditIncomeToRecoverCost": 399999.99999999965
+      },
+      {
+        "id": "fortified-enemy",
+        "cost": 30000,
+        "creditRewardMultiplier": 1.1,
+        "completionEligibleCreditIncomeToRecoverCost": 299999.9999999997
+      },
+      {
+        "id": "bomb-rush",
+        "cost": 25000,
+        "creditRewardMultiplier": 1.08,
+        "completionEligibleCreditIncomeToRecoverCost": 312499.9999999997
+      }
+    ]
+  },
+  "exchange": [
+    {
+      "source": "credits",
+      "target": "coreTokens",
+      "sourceUnits": 200,
+      "targetUnits": 1
+    },
+    {
+      "source": "credits",
+      "target": "plasmaChips",
+      "sourceUnits": 100,
+      "targetUnits": 1
+    },
+    {
+      "source": "credits",
+      "target": "fluxCores",
+      "sourceUnits": 60000,
+      "targetUnits": 1
+    },
+    {
+      "source": "coreTokens",
+      "target": "credits",
+      "sourceUnits": 1,
+      "targetUnits": 80
+    },
+    {
+      "source": "coreTokens",
+      "target": "plasmaChips",
+      "sourceUnits": 1,
+      "targetUnits": 2
+    },
+    {
+      "source": "coreTokens",
+      "target": "fluxCores",
+      "sourceUnits": 400,
+      "targetUnits": 1
+    },
+    {
+      "source": "plasmaChips",
+      "target": "credits",
+      "sourceUnits": 1,
+      "targetUnits": 40
+    },
+    {
+      "source": "plasmaChips",
+      "target": "coreTokens",
+      "sourceUnits": 3,
+      "targetUnits": 1
+    },
+    {
+      "source": "plasmaChips",
+      "target": "fluxCores",
+      "sourceUnits": 1200,
+      "targetUnits": 1
+    },
+    {
+      "source": "fluxCores",
+      "target": "credits",
+      "sourceUnits": 1,
+      "targetUnits": 30000
+    },
+    {
+      "source": "fluxCores",
+      "target": "coreTokens",
+      "sourceUnits": 1,
+      "targetUnits": 250
+    },
+    {
+      "source": "fluxCores",
+      "target": "plasmaChips",
+      "sourceUnits": 1,
+      "targetUnits": 350
+    }
+  ],
+  "weeklies": {
+    "regular": [
+      {
+        "id": "frontline-pressure",
+        "reward": {
+          "credits": 750,
+          "coreTokens": 1
+        }
+      },
+      {
+        "id": "deep-deployment",
+        "reward": {
+          "credits": 1000,
+          "coreTokens": 1
+        }
+      },
+      {
+        "id": "site-control",
+        "reward": {
+          "credits": 1250,
+          "coreTokens": 2
+        }
+      },
+      {
+        "id": "arcade-signal",
+        "reward": {
+          "credits": 1500,
+          "coreTokens": 2,
+          "fluxCores": 1
+        }
+      }
+    ],
+    "overdrive": [
+      {
+        "id": "overdrive-siege-line",
+        "reward": {
+          "credits": 35000,
+          "coreTokens": 8,
+          "plasmaChips": 12,
+          "fluxCores": 2
+        }
+      },
+      {
+        "id": "overdrive-deep-burn",
+        "reward": {
+          "credits": 45000,
+          "coreTokens": 10,
+          "plasmaChips": 16,
+          "fluxCores": 2,
+          "randomMod": true
+        }
+      },
+      {
+        "id": "overdrive-system-breaker",
+        "reward": {
+          "credits": 60000,
+          "coreTokens": 12,
+          "plasmaChips": 20,
+          "fluxCores": 2,
+          "randomMod": true
+        }
+      },
+      {
+        "id": "overdrive-arcade-maniac",
+        "reward": {
+          "credits": 50000,
+          "coreTokens": 10,
+          "plasmaChips": 18,
+          "fluxCores": 2,
+          "randomMod": true
+        }
+      }
+    ]
+  }
+}

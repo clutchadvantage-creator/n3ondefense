@@ -18,7 +18,7 @@ import {
   createRewardSummary
 } from '../ui/DebriefUi.ts';
 import { startArenaLoad } from '../utils/runFlow';
-import { createButton, disableButton } from '../utils/ui';
+import { createButton, disableButton, enableButton } from '../utils/ui';
 import { setSceneUiModalDepth } from '../input/UiNavigationController.ts';
 import { DeploymentLaunchGate } from '../garage/SavedDeploymentConfiguration.ts';
 import { getRunSetupCost } from '../economy/EconomyService.ts';
@@ -73,7 +73,7 @@ export class ResultScene extends Phaser.Scene {
       { label: 'HIGHEST ROUND', value: String(roundReached) },
       { label: 'COMPLETED SEED', value: String(result?.seed ?? '-') },
       { label: 'RUN TIME', value: formatRunTime(result?.runDurationMs) },
-      { label: 'DEPLOYMENT', value: submissionStatus && submissionStatus !== 'local' ? 'ONLINE' : 'LOCAL' }
+      { label: 'SCORE TRACKING', value: submissionStatus && submissionStatus !== 'local' ? 'LEADERBOARDS' : 'LOCAL ONLY' }
     ], layout.compact);
 
     const outcome = result?.reason === 'bombDefused'
@@ -82,8 +82,8 @@ export class ResultScene extends Phaser.Scene {
         ? { primary: 'OPERATIVE ELIMINATED', summary: 'COMBAT FRAME NO LONGER OPERATIONAL' }
         : { primary: 'PAYLOAD DETONATED', summary: 'MISSION OBJECTIVE COMPLETE' };
     const submissionLabel = submissionStatus && submissionStatus !== 'local'
-      ? `ONLINE RUN ${submissionStatus.replace(/_/g, ' ').toUpperCase()}`
-      : 'LOCAL RUN // NOT SUBMITTED ONLINE';
+      ? `SCORE ${submissionStatus.replace(/_/g, ' ').toUpperCase()}`
+      : 'LEADERBOARD UNAVAILABLE AT START // SAVED LOCALLY';
     createDebriefHighlight(this, sections.highlight, {
       eyebrow: victory ? 'MISSION OUTCOME // VERIFIED' : 'COMBAT DEBRIEF // SETBACK REPORT',
       primary: outcome.primary,
@@ -96,7 +96,7 @@ export class ResultScene extends Phaser.Scene {
     let replayButton!: Phaser.GameObjects.Container;
     const actions = createDebriefActions(this, layout.actions, [
       {
-        label: 'REPLAY LOCAL',
+        label: 'TRY AGAIN',
         primary: true,
         onClick: () => {
           if (!this.deploymentLaunchGate.begin()) return false;
@@ -106,27 +106,38 @@ export class ResultScene extends Phaser.Scene {
             this.showInsufficientFunds(selection);
             return false;
           }
+          disableButton(replayButton);
+          const deploymentStart = SaveSystem.getOperationsConfiguration();
+          const protocol = deploymentStart.protocol;
+          const equippedMods = new ModRuntime(SaveSystem.getModCollection(), undefined, protocol).snapshot();
+          const profile = SaveSystem.getActiveProfileSummary()!;
+          const launch = new AbortController();
+          const cancelLaunch = () => launch.abort();
+          this.events.once(Phaser.Scenes.Events.SHUTDOWN, cancelLaunch);
+          void (async () => {
+          const issued = await OnlineRunManager.beginRun(profile.id, profile.name, protocol, equippedMods, deploymentStart.startingRound, launch.signal);
+          this.events.off(Phaser.Scenes.Events.SHUTDOWN, cancelLaunch);
+          if (launch.signal.aborted) return;
           const commit = SaveSystem.commitDeploymentLaunch();
           if (!commit.ok || !commit.economySnapshot) {
+            if (issued.ok) OnlineRunManager.complete('quit');
             this.deploymentLaunchGate.release();
+            enableButton(replayButton);
             this.showInsufficientFunds(commit.selection);
             return false;
           }
-          OnlineRunManager.beginLocalRun();
-          disableButton(replayButton);
+          if (!issued.ok) OnlineRunManager.beginLocalRun();
           this.deploymentLaunchGate.commit();
           this.registry.remove('round-finished');
-          const deploymentStart = SaveSystem.getOperationsConfiguration();
-          const protocol = deploymentStart.protocol;
           startArenaLoad(this, {
             reason: 'replay-after-fail',
             session: {
-              baseSeed: Phaser.Math.Between(1, 999_999_999),
+              baseSeed: issued.seed ?? Phaser.Math.Between(1, 999_999_999),
               round: deploymentStart.startingRound,
               objectiveMode: OBJECTIVE_CONFIG.defaultMode,
               protocol,
               runStartedAt: Date.now(),
-              equippedMods: new ModRuntime(SaveSystem.getModCollection(), undefined, protocol).snapshot(),
+              equippedMods,
               modsEarned: [],
               // A replay is a new attempt: persistent configuration is charged
               // once here, while manual configuration was consumed previously.
@@ -134,6 +145,8 @@ export class ResultScene extends Phaser.Scene {
             },
             message: 'Rebuilding mission arena...'
           });
+          })();
+          return true;
         }
       },
       {
@@ -157,7 +170,7 @@ export class ResultScene extends Phaser.Scene {
         }
       }
     ], layout.compact, victory ? 'MISSION ARCHIVE // COMPLETE' : 'ADAPT // UPGRADE // RETURN STRONGER');
-    replayButton = actions.get('REPLAY LOCAL')!;
+    replayButton = actions.get('TRY AGAIN')!;
 
     this.scale.off('resize', this.handleResize, this);
     this.scale.on('resize', this.handleResize, this);

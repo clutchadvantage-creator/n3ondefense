@@ -6,6 +6,7 @@ import { isSupremeProtocol } from '../../progression/SupremeProgression.ts';
 import type { PendingAnomalyLoot } from '../types.ts';
 import { HEIST_REWARD_TABLE } from './HeistConfig.ts';
 import { ANOMALY_ENTRY_PRICING, normalizeAnomalyEntryCost } from '../AnomalyPricing.ts';
+import { getHeistCampaignPositions } from './HeistCampaignProgression.ts';
 
 export type HeistContainerReward =
   | { kind: 'credits'; amount: number }
@@ -21,6 +22,10 @@ export const isHeistModRewardEligible = (modId: string, protocol: RunProtocolId)
 };
 
 export class HeistRewardService {
+  static forCampaign(seed: number, localRound: number, protocol: RunProtocolId, entryCost: number): HeistRewardService {
+    return new HeistRewardService(seed, getHeistCampaignPositions(protocol, localRound).rewardPosition, protocol, entryCost);
+  }
+
   private readonly random: SeededRandom;
   private sequence = 0;
   private readonly seed: number;
@@ -29,6 +34,7 @@ export class HeistRewardService {
   private readonly entryCost: number;
   private containerSequence = 0;
 
+  /** `round` is an internal reward position; live campaign callers use forCampaign. */
   constructor(seed: number, round: number, protocol: RunProtocolId, entryCost: number = ANOMALY_ENTRY_PRICING.defaultCost) {
     this.seed = seed;
     this.round = round;
