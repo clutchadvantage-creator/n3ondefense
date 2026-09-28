@@ -1,0 +1,128 @@
+{
+    "startedAt":  "2026-09-28T19:01:12.873Z",
+    "finishedAt":  "2026-09-28T19:01:15.046Z",
+    "controls":  "Isolated DEV profile; due countdown; successful deterministic seeds; simulated kill-charge callbacks; synthetic debrief payload; actual Continue action",
+    "checks":  [
+                   {
+                       "ok":  true,
+                       "label":  "isolated profile"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "arena-teaching: no teaching/replay gate"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "arena-teaching: natural heist signal at round 1"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "arena-teaching: kill charge opens valid portal"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "arena-teaching: retired signal starts existing cooldown"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "arena-teaching: repeated cleanup does not reset cooldown"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "waiting-for-garage: no teaching/replay gate"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "waiting-for-garage: natural skybreach signal at round 1"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "waiting-for-garage: kill charge opens valid portal"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "waiting-for-garage: retired signal starts existing cooldown"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "waiting-for-garage: repeated cleanup does not reset cooldown"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "waiting-for-store: no teaching/replay gate"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "waiting-for-store: natural heist signal at round 1"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "waiting-for-store: kill charge opens valid portal"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "waiting-for-store: retired signal starts existing cooldown"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "waiting-for-store: repeated cleanup does not reset cooldown"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "20 seconds reduce carried delay"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "boss exclusion holds timer"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "Arcade event holds timer"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "waiting timer survives stop and destroy"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "debrief carries remaining countdown"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "actual Continue action found"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "Continue/Loading/Arena keep countdown through boss round"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "boss round remains boss-owned"
+                   }
+               ],
+    "cases":  [
+                  {
+                      "stage":  "arena-teaching",
+                      "id":  "heist",
+                      "seed":  8,
+                      "cost":  89
+                  },
+                  {
+                      "stage":  "waiting-for-garage",
+                      "id":  "skybreach",
+                      "seed":  7,
+                      "cost":  82
+                  },
+                  {
+                      "stage":  "waiting-for-store",
+                      "id":  "heist",
+                      "seed":  8,
+                      "cost":  89
+                  }
+              ],
+    "errors":  [
+
+               ],
+    "unitTests":  794,
+    "buildPassed":  true
+}

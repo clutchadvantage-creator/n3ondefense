@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { AnomalyOpportunityClock } from './AnomalyOpportunityClock.ts';
 import { SeededRandom } from '../systems/SeededRandom.ts';
 import type { RunModeFamily } from '../config/modeBalance.ts';
 import { AnomalyHudView } from './AnomalyHudView.ts';
@@ -14,6 +15,7 @@ import { ANOMALY_ENTRY_PRICING, isValidAnomalyEntryCost, normalizeAnomalyEntryCo
 
 export interface AnomalyControllerOptions {
   enabled: boolean;
+  remainingOpportunityMs?: number;
   modeFamily: RunModeFamily;
   particlesEnabled: boolean;
   audio?: AnomalyAudioHooks;
@@ -28,7 +30,7 @@ export class AnomalyController {
   private visual: AnomalyPortalVisual | null = null;
   private retiringVisual: AnomalyPortalVisual | null = null;
   private elapsedMs = 0;
-  private nextOpportunityAt = Number.POSITIVE_INFINITY;
+  private readonly opportunityClock: AnomalyOpportunityClock;
   private spawnedAt = 0;
   private portalReadyAt = 0;
   private portalIdleStarted = false;
@@ -44,9 +46,10 @@ export class AnomalyController {
     this.random = new SeededRandom((context.seed ^ Math.imul(context.round, 0x6d2b79f5) ^ 0xa1104a1f) >>> 0);
     this.hud = new AnomalyHudView(context.scene);
     this.audio = options.audio ?? createSilentAnomalyAudioHooks();
-    if (options.enabled && (context.difficultyPosition ?? context.round) >= 3) {
-      this.nextOpportunityAt = this.random.float(ANOMALY_SCHEDULING.minimumOpportunityMs, ANOMALY_SCHEDULING.maximumOpportunityMs);
-    }
+    this.opportunityClock = new AnomalyOpportunityClock(
+      this.random.float(ANOMALY_SCHEDULING.minimumOpportunityMs, ANOMALY_SCHEDULING.maximumOpportunityMs),
+      options.remainingOpportunityMs
+    );
   }
 
   update(deltaMs: number): void {
@@ -55,6 +58,9 @@ export class AnomalyController {
     this.elapsedMs += Math.min(250, deltaMs);
     this.hud.update(now);
     this.visual?.update(now);
+    const gameplayEligible = this.options.enabled && this.context.isGameplayEligible();
+    if (this.stateValue === 'waiting' || this.stateValue === 'resolved')
+      this.opportunityClock.advance(deltaMs, gameplayEligible);
 
     if (this.stateValue === 'transitioning') {
       const progress = Phaser.Math.Clamp((now - this.transitionStartedAt) / ANOMALY_SCHEDULING.transitionDurationMs, 0, 1);
@@ -97,19 +103,15 @@ export class AnomalyController {
     }
 
     if (this.stateValue === 'charging' || this.stateValue === 'suspended' || this.stateValue === 'resolved') return;
-    if (!this.options.enabled || this.completedThisRound || this.elapsedMs < this.nextOpportunityAt) return;
-    if (!this.context.isGameplayEligible()) {
-      this.nextOpportunityAt = this.elapsedMs + 10_000;
-      return;
-    }
+    if (!gameplayEligible || this.completedThisRound || !this.opportunityClock.ready) return;
     const chance = ANOMALY_SCHEDULING.opportunityChance[this.options.modeFamily];
     if (!this.random.bool(chance)) {
-      this.nextOpportunityAt = this.elapsedMs + ANOMALY_SCHEDULING.retryAfterMissMs;
+      this.opportunityClock.defer(ANOMALY_SCHEDULING.retryAfterMissMs);
       return;
     }
     const eligible = getEligibleAnomalies(this.context.difficultyPosition ?? this.context.round, this.context.protocol);
     if (!eligible.length || !this.start(this.chooseWeighted(eligible))) {
-      this.nextOpportunityAt = this.elapsedMs + ANOMALY_SCHEDULING.retryAfterMissMs;
+      this.opportunityClock.defer(ANOMALY_SCHEDULING.retryAfterMissMs);
     }
   }
 
@@ -175,6 +177,7 @@ export class AnomalyController {
 
   stop(reason: 'round-ended' | 'scene-shutdown'): void { this.resolve(reason); }
   get state(): AnomalyState { return this.stateValue; }
+  get remainingOpportunityMs(): number { return this.opportunityClock.snapshot; }
   get blocksArenaGameplay(): boolean { return this.stateValue === 'transitioning'; }
   get activeAnomalyId(): AnomalyId | null { return this.definition?.id ?? null; }
   resize(width: number): void { this.hud.resize(width); }
@@ -288,6 +291,9 @@ export class AnomalyController {
 
   private resolve(reason: 'declined' | 'round-ended' | 'scene-shutdown'): void {
     if (this.stateValue === 'resolved' && !this.visual) return;
+    // Ending a round with no signal must preserve its opportunity/retry timer.
+    // Actual opportunities retire once and carry the cooldown to later rounds.
+    if (this.stateValue !== 'waiting') this.opportunityClock.defer(ANOMALY_SCHEDULING.cooldownMs);
     this.completedThisRound = true;
     this.visual?.destroy();
     this.visual = null;
@@ -296,7 +302,6 @@ export class AnomalyController {
     this.stateValue = 'resolved';
     this.audio.stopAll();
     this.hud.hide();
-    this.nextOpportunityAt = this.elapsedMs + ANOMALY_SCHEDULING.cooldownMs;
     if (reason === 'declined') this.completedThisRound = true;
   }
 }

@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { normalizeAnomalyOpportunityMs } from '../anomalies/AnomalyOpportunityClock.ts';
 import type { ArenaSessionState } from '../types';
 import { normalizeRunProtocolId } from '../mods/modBalance.ts';
 import { SceneKeys, SceneStatusOrder, type SceneKeyValue } from './SceneKeys';
@@ -175,6 +176,7 @@ export class RunTransitionManager {
     if (session.objectiveMode !== 'open' && session.objectiveMode !== 'sequential') return undefined;
     return {
       baseSeed: Math.floor(session.baseSeed),
+      anomalyOpportunityMs: normalizeAnomalyOpportunityMs(session.anomalyOpportunityMs),
       round: Math.max(1, Math.floor(session.round)),
       objectiveMode: session.objectiveMode,
       protocol: normalizeRunProtocolId(session.protocol),

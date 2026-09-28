@@ -107,6 +107,7 @@ export class RoundFinishedScene extends Phaser.Scene {
             : new ModRuntime(SaveSystem.getModCollection(), undefined, nextProtocol).snapshot();
           const session: ArenaSessionState = {
             baseSeed: payload.baseSeed,
+            anomalyOpportunityMs: payload.anomalyOpportunityMs,
             round: payload.nextRound,
             objectiveMode: payload.objectiveMode,
             protocol: nextProtocol,

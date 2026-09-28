@@ -19,7 +19,7 @@ export const ANOMALY_DEFINITIONS: readonly AnomalyDefinition[] = [{
   id: 'heist',
   displayName: 'HEIST',
   description: 'BREACH THE VAULT // SECURE THE HAUL // EXTRACT ALIVE',
-  minimumRound: 3,
+  minimumRound: 1,
   weight: 1,
   chargeBase: 12,
   chargePerRound: 0.28,
@@ -34,7 +34,7 @@ export const ANOMALY_DEFINITIONS: readonly AnomalyDefinition[] = [{
 }, {
   id: 'skybreach', displayName: 'SKYBREACH',
   description: 'BREACH HOSTILE AIRSPACE // DISARM THE DREADNOUGHT // RETURN ALIVE',
-  minimumRound: 3, weight: 1, chargeBase: 12, chargePerRound: 0.28, chargeMaximum: 26,
+  minimumRound: 1, weight: 1, chargeBase: 12, chargePerRound: 0.28, chargeMaximum: 26,
   rarity: 'rare', layoutId: 'storm-corridor', encounterTableId: 'skybreach-air-campaign',
   rewardTableId: 'boss-provisional', environmentTheme: 'rwg-high-altitude', extractionRule: 'interact'
 }] as const;

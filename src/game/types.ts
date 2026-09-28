@@ -392,6 +392,8 @@ export interface ArenaReward {
 }
 
 export interface ArenaSessionState {
+  /** Deployment-only anomaly countdown; not persistent account progression. */
+  anomalyOpportunityMs?: number;
   baseSeed: number;
   round: number;
   objectiveMode: ObjectiveMode;
@@ -408,6 +410,7 @@ export interface ArenaSessionState {
 }
 
 export interface RoundFinishedPayload {
+  anomalyOpportunityMs?: number;
   modeCompletion?: boolean;
   baseSeed: number;
   completedRound: number;

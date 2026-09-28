@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { normalizeAnomalyOpportunityMs } from '../anomalies/AnomalyOpportunityClock.ts';
 import type { ArenaSessionState } from '../types';
 import { RunTransitionManager, type ArenaTransitionRequest } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
@@ -279,7 +280,8 @@ export class LoadingScene extends Phaser.Scene {
       equippedMods: candidate.equippedMods, modsEarned: candidate.modsEarned, modFocus: candidate.modFocus ?? null,
       contract: candidate.contract ?? null, creditsSpentBeforeRun: candidate.creditsSpentBeforeRun ?? 0,
       upgradeCompletionPercentage: candidate.upgradeCompletionPercentage ?? 0,
-      accountProgressionTier: candidate.accountProgressionTier ?? 'new', runCreditsEarned: candidate.runCreditsEarned ?? 0
+      accountProgressionTier: candidate.accountProgressionTier ?? 'new', runCreditsEarned: candidate.runCreditsEarned ?? 0,
+      anomalyOpportunityMs: normalizeAnomalyOpportunityMs(candidate.anomalyOpportunityMs)
     };
   }
 }
