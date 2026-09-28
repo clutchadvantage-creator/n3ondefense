@@ -87,7 +87,7 @@ export class AnomalyController {
         if (!visual.readyForInteraction) {
           this.hud.show('DIMENSIONAL BREACH FORMING', 'STAND CLEAR // TRANSIT FIELD UNSTABLE', 0x63f7ff);
         } else {
-          this.hud.show('ANOMALY // HEIST', `${this.context.interactionPrompt()} ENTER // ${this.cost} FLUX CORES`, 0xff5bd8);
+          this.hud.show(`ANOMALY // ${this.definition?.displayName ?? 'UNKNOWN'}`, `${this.context.interactionPrompt()} ENTER // ${this.cost} FLUX CORES`, 0xff5bd8);
           if (this.context.isInteractPressed()) this.tryEnter();
         }
       } else {
@@ -216,7 +216,7 @@ export class AnomalyController {
     this.cost = this.forcedCost ?? rollAnomalyEntryCost(this.random.next());
     this.visual.transformToPortal();
     this.audio.play('portal-rupture');
-    this.hud.show('ANOMALY AVAILABLE', `HEIST // ${this.cost} FLUX CORES`, 0xff5bd8);
+    this.hud.show('ANOMALY AVAILABLE', `${this.definition.displayName} // ${this.cost} FLUX CORES`, 0xff5bd8);
     this.hud.show(this.definition.displayName, `${this.definition.description}\nENTRY COST // ${this.cost} FLUX CORES`, 0xff5bd8, 5600);
     this.context.emitMetric({
       name: 'anomaly_portal_opened', anomalyId: this.definition.id, round: this.context.round,
@@ -234,7 +234,7 @@ export class AnomalyController {
         protocol: this.context.protocol, elapsedMs: this.elapsedMs - this.spawnedAt, cost: this.cost, reason: 'insufficient-flux' });
       return false;
     }
-    if (options.bypassCost && import.meta.env.DEV) console.debug('[HEIST DEV] Portal cost bypassed via F9');
+    if (options.bypassCost && import.meta.env.DEV) console.debug('[ANOMALY DEV] Portal cost bypassed via F9');
     this.stateValue = 'transitioning';
     this.transitionStartedAt = this.context.scene.time.now;
     this.context.player.setVelocity(0, 0);
@@ -242,7 +242,7 @@ export class AnomalyController {
     this.context.emitMetric({ name: 'anomaly_entry_confirmed', anomalyId: this.definition.id, round: this.context.round,
       protocol: this.context.protocol, elapsedMs: this.elapsedMs - this.spawnedAt, cost: this.cost,
       reason: options.source });
-    this.hud.show('ANOMALY TRANSIT LOCKED', 'ARENA STATE SUSPENDING // HEIST LINK ESTABLISHED', 0xff5bd8);
+    this.hud.show('ANOMALY TRANSIT LOCKED', `ARENA STATE SUSPENDING // ${this.definition.displayName} LINK ESTABLISHED`, 0xff5bd8);
     return true;
   }
 

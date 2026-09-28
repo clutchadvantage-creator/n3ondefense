@@ -47,7 +47,8 @@ test('boss presentation uses one bounded, reusable two-layer renderer', () => {
 });
 
 test('Sentry artillery, missiles, and cannon fire have distinct telegraphs and projectiles', () => {
-  assert.match(boss, /projectile-missile/);
+  assert.match(readFileSync(new URL('../src/game/bosses/ArtilleryMarker.ts', import.meta.url), 'utf8'), /projectile-missile/);
+  assert.match(boss, /createArtilleryMarker/);
   assert.match(boss, /timingRing/);
   assert.match(boss, /muzzle-heavy/);
   assert.match(boss, /muzzle-light/);

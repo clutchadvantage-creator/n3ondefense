@@ -147,51 +147,53 @@ interface HeistPickup {
 const isSessionData = (value: unknown): value is HeistSessionData => {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<HeistSessionData>;
-  return candidate.anomalyId === 'heist' && typeof candidate.sessionId === 'string'
+  return (candidate.anomalyId === 'heist' || candidate.anomalyId === 'skybreach') && typeof candidate.sessionId === 'string'
     && isValidAnomalyEntryCost(candidate.cost) && isCampaignRound(candidate.round ?? 0)
     && !!candidate.player && !!candidate.abilities;
 };
 
 const emptyLoot = (): PendingAnomalyLoot => ({ credits: 0, coreTokens: 0, plasmaChips: 0, fluxCores: 0, modIds: [] });
 
-export class HeistScene extends Phaser.Scene {
+/** Shared anomaly combat implementation. HEIST retains its original mission hooks;
+ * other anomalies override the world/director rather than copying weapon rules. */
+export class AnomalyCombatScene extends Phaser.Scene {
   getLyraState(): import('../../lyra/installLyra.ts').LyraSceneState {
     return { blocked: !this.player?.active || this.manuallyPaused || this.inputCapturePaused || this.returning || this.phase === 'inbound',
       ambientSafe: false, lowHealth: this.player?.hp <= this.player?.stats.maxHealth * .25 };
   }
-  private readonly audio = createAnomalyAudioHooks();
-  private readonly coreAudio = AudioManager.get();
-  private session!: HeistSessionData;
-  private player!: Player;
-  private inputController!: PlayerInput;
-  private facility!: HeistFacilityRuntime;
-  private trapSystem!: HeistTrapSystem;
-  private random!: SeededRandom;
-  private rewards!: HeistRewardService;
-  private campaignPositions!: ReturnType<typeof getHeistCampaignPositions>;
-  private lootPickups!: HeistLootPickupSystem;
-  private pickupPresentation!: GameplayPickupPresentation;
-  private readonly pickupMotion = new GameplayPickupMotion();
-  private readonly pickupMotionRoots: Phaser.GameObjects.Container[] = [];
-  private pickupClosedDoorWalls: RectSpec[] = [];
-  private readonly pickupBounds = { x: 0, y: 0, w: HEIST_WORLD.width, h: HEIST_WORLD.height };
-  private pendingLoot: PendingAnomalyLoot = emptyLoot();
-  private phase: HeistPhase = 'inbound';
-  private elapsedMs = 0;
-  private phaseStartedAt = 0;
-  private enemies: Enemy[] = [];
-  private projectiles: HeistProjectile[] = [];
-  private projectilePool!: ReusableObjectPool<HeistProjectile, HeistProjectileSpawn>;
-  private echo: EchoRuntime | null = null;
-  private fxCirclePool!: ReusableObjectPool<Phaser.GameObjects.Arc, BoostFxCircleSpawn>;
-  private projectileTrails!: ProjectileTrailBatch;
-  private projectileImpactVfx!: ProjectileImpactVfx;
-  private muzzleFlashVfx!: PlayerMuzzleFlashVfx;
-  private boostVisual!: BoostVisualSystem;
-  private mineExplosionVfx!: MineExplosionVfx;
-  private environmentSmashables: ArenaSmashableSystem | null = null;
-  private containers: HeistContainer[] = [];
-  private readonly containerCombatTargets: SmashableCombatQuery = {
+  protected readonly audio = createAnomalyAudioHooks();
+  protected readonly coreAudio = AudioManager.get();
+  protected session!: HeistSessionData;
+  protected player!: Player;
+  protected inputController!: PlayerInput;
+  protected facility!: HeistFacilityRuntime;
+  protected trapSystem!: HeistTrapSystem;
+  protected random!: SeededRandom;
+  protected rewards!: HeistRewardService;
+  protected campaignPositions!: ReturnType<typeof getHeistCampaignPositions>;
+  protected lootPickups!: HeistLootPickupSystem;
+  protected pickupPresentation!: GameplayPickupPresentation;
+  protected readonly pickupMotion = new GameplayPickupMotion();
+  protected readonly pickupMotionRoots: Phaser.GameObjects.Container[] = [];
+  protected pickupClosedDoorWalls: RectSpec[] = [];
+  protected readonly pickupBounds: RectSpec = { x: 0, y: 0, w: HEIST_WORLD.width, h: HEIST_WORLD.height };
+  protected pendingLoot: PendingAnomalyLoot = emptyLoot();
+  protected phase: HeistPhase = 'inbound';
+  protected elapsedMs = 0;
+  protected phaseStartedAt = 0;
+  protected enemies: Enemy[] = [];
+  protected projectiles: HeistProjectile[] = [];
+  protected projectilePool!: ReusableObjectPool<HeistProjectile, HeistProjectileSpawn>;
+  protected echo: EchoRuntime | null = null;
+  protected fxCirclePool!: ReusableObjectPool<Phaser.GameObjects.Arc, BoostFxCircleSpawn>;
+  protected projectileTrails!: ProjectileTrailBatch;
+  protected projectileImpactVfx!: ProjectileImpactVfx;
+  protected muzzleFlashVfx!: PlayerMuzzleFlashVfx;
+  protected boostVisual!: BoostVisualSystem;
+  protected mineExplosionVfx!: MineExplosionVfx;
+  protected environmentSmashables: ArenaSmashableSystem | null = null;
+  protected containers: HeistContainer[] = [];
+  protected readonly containerCombatTargets: SmashableCombatQuery = {
     hasTargetAt: (x, y, padding) => this.findContainerHit(x, y, padding) !== null,
     hasTargetInRadius: (x, y, radius) => this.phase === 'looting' && this.containers.some(
       (container) => !container.opened && circleTouchesSmashable(
@@ -199,72 +201,72 @@ export class HeistScene extends Phaser.Scene {
       )
     )
   };
-  private pickups: HeistPickup[] = [];
-  private fences: Fence[] = [];
-  private turrets: Turret[] = [];
-  private mines: Mine[] = [];
-  private extractionPortal: AnomalyPortalVisual | null = null;
-  private extractionPortalIdleStarted = false;
-  private hud!: Hud;
-  private hudPayload!: HudPayload;
-  private readonly hudBuffs: string[] = [];
-  private readonly hudRadarContacts: HudRadarContact[] = [];
-  private lootText!: Phaser.GameObjects.Text;
-  private promptText!: Phaser.GameObjects.Text;
-  private hudInformation!: HudInformationSystem;
-  private crosshair!: Phaser.GameObjects.Graphics;
-  private shieldVisual: OperativeShieldEffect | null = null;
-  private nextPlayerShotAt = 0;
-  private damageDealt = 0;
-  private damageTaken = 0;
-  private containersOpened = 0;
-  private miniBossEncountered = false;
-  private miniBossKilled = false;
-  private returning = false;
-  private returnResultDelivered = false;
-  private pendingFadeReturn: { success: boolean; reason: 'extracted' | 'player-dead' | 'extraction-timeout' } | null = null;
-  private inputCapturePaused = false;
-  private manuallyPaused = false;
-  private pauseMenu: PauseMenuView | null = null;
-  private aimSettings!: AimSettings;
-  private projectileTextureKey = 'projectile-pulse';
-  private projectileWidth = 8;
-  private projectileHeight = 8;
-  private projectileNativePalette = false;
-  private readonly aimScratch = new Phaser.Math.Vector2();
-  private readonly mineSalvoInput = new MineSalvoInput();
-  private pendingMineSalvo = false;
-  private nextHoloAfterimageAt = 0;
-  private grenadeProjectileSequence = 0;
-  private readonly enemySpatialGrid = new UniformSpatialGrid<Enemy>(64);
-  private readonly navigationTargetScratch = { x: 0, y: 0 };
-  private separationSubject: Enemy | null = null;
-  private separationSteerX = 0;
-  private separationSteerY = 0;
-  private grenadeFuseQueryX = 0;
-  private grenadeFuseQueryY = 0;
-  private grenadeFuseQueryProximity = false;
-  private grenadeFuseQueryCandidate: Enemy | null = null;
-  private grenadeFuseQueryCandidateDistanceSquared = Number.POSITIVE_INFINITY;
-  private grenadeSplashX = 0;
-  private grenadeSplashY = 0;
-  private grenadeSplashRadiusSquared = 0;
-  private grenadeSplashDamage = 0;
-  private grenadeSplashEcho?: EchoDamageStamp;
-  private grenadeSplashExcludedEnemy: Enemy | null = null;
-  private nextPoolMaintenanceAt = 0;
-  private escapeDeadline = 0;
-  private nextEscapeReinforcementAt = 0;
-  private escapeReinforcementSequence = 0;
-  private movementSnaredUntil = 0;
-  private enemyLootSequence = 0;
-  private performanceProfiler = import.meta.env.DEV ? new HeistPerformanceProfiler() : null;
-  private devPerformanceOverlay: Phaser.GameObjects.Text | null = null;
-  private devRenderStartedAt = 0;
-  private devPhysicsUpdateStartedAt = 0;
-  private nextDevPerformanceOverlayAt = 0;
-  private devFirstCombatFrameReported = false;
-  private readonly findGrenadeFuseNeighbor = (enemy: Enemy): void => {
+  protected pickups: HeistPickup[] = [];
+  protected fences: Fence[] = [];
+  protected turrets: Turret[] = [];
+  protected mines: Mine[] = [];
+  protected extractionPortal: AnomalyPortalVisual | null = null;
+  protected extractionPortalIdleStarted = false;
+  protected hud!: Hud;
+  protected hudPayload!: HudPayload;
+  protected readonly hudBuffs: string[] = [];
+  protected readonly hudRadarContacts: HudRadarContact[] = [];
+  protected lootText!: Phaser.GameObjects.Text;
+  protected promptText!: Phaser.GameObjects.Text;
+  protected hudInformation!: HudInformationSystem;
+  protected crosshair!: Phaser.GameObjects.Graphics;
+  protected shieldVisual: OperativeShieldEffect | null = null;
+  protected nextPlayerShotAt = 0;
+  protected damageDealt = 0;
+  protected damageTaken = 0;
+  protected containersOpened = 0;
+  protected miniBossEncountered = false;
+  protected miniBossKilled = false;
+  protected returning = false;
+  protected returnResultDelivered = false;
+  protected pendingFadeReturn: { success: boolean; reason: 'extracted' | 'player-dead' | 'extraction-timeout' } | null = null;
+  protected inputCapturePaused = false;
+  protected manuallyPaused = false;
+  protected pauseMenu: PauseMenuView | null = null;
+  protected aimSettings!: AimSettings;
+  protected projectileTextureKey = 'projectile-pulse';
+  protected projectileWidth = 8;
+  protected projectileHeight = 8;
+  protected projectileNativePalette = false;
+  protected readonly aimScratch = new Phaser.Math.Vector2();
+  protected readonly mineSalvoInput = new MineSalvoInput();
+  protected pendingMineSalvo = false;
+  protected nextHoloAfterimageAt = 0;
+  protected grenadeProjectileSequence = 0;
+  protected readonly enemySpatialGrid = new UniformSpatialGrid<Enemy>(64);
+  protected readonly navigationTargetScratch = { x: 0, y: 0 };
+  protected separationSubject: Enemy | null = null;
+  protected separationSteerX = 0;
+  protected separationSteerY = 0;
+  protected grenadeFuseQueryX = 0;
+  protected grenadeFuseQueryY = 0;
+  protected grenadeFuseQueryProximity = false;
+  protected grenadeFuseQueryCandidate: Enemy | null = null;
+  protected grenadeFuseQueryCandidateDistanceSquared = Number.POSITIVE_INFINITY;
+  protected grenadeSplashX = 0;
+  protected grenadeSplashY = 0;
+  protected grenadeSplashRadiusSquared = 0;
+  protected grenadeSplashDamage = 0;
+  protected grenadeSplashEcho?: EchoDamageStamp;
+  protected grenadeSplashExcludedEnemy: Enemy | null = null;
+  protected nextPoolMaintenanceAt = 0;
+  protected escapeDeadline = 0;
+  protected nextEscapeReinforcementAt = 0;
+  protected escapeReinforcementSequence = 0;
+  protected movementSnaredUntil = 0;
+  protected enemyLootSequence = 0;
+  protected performanceProfiler = import.meta.env.DEV ? new HeistPerformanceProfiler() : null;
+  protected devPerformanceOverlay: Phaser.GameObjects.Text | null = null;
+  protected devRenderStartedAt = 0;
+  protected devPhysicsUpdateStartedAt = 0;
+  protected nextDevPerformanceOverlayAt = 0;
+  protected devFirstCombatFrameReported = false;
+  protected readonly findGrenadeFuseNeighbor = (enemy: Enemy): void => {
     if (!enemy.active || enemy.hp <= 0) return;
     const dx = enemy.x - this.grenadeFuseQueryX;
     const dy = enemy.y - this.grenadeFuseQueryY;
@@ -278,14 +280,14 @@ export class HeistScene extends Phaser.Scene {
     this.grenadeFuseQueryCandidateDistanceSquared = distanceSquared;
     this.grenadeFuseQueryCandidate = enemy;
   };
-  private readonly applyGrenadeSplashNeighbor = (enemy: Enemy): void => {
+  protected readonly applyGrenadeSplashNeighbor = (enemy: Enemy): void => {
     if (enemy === this.grenadeSplashExcludedEnemy || !enemy.active || enemy.hp <= 0) return;
     const dx = enemy.x - this.grenadeSplashX;
     const dy = enemy.y - this.grenadeSplashY;
     if (dx * dx + dy * dy > this.grenadeSplashRadiusSquared) return;
     this.damageEnemy(enemy, this.grenadeSplashDamage, this.grenadeSplashEcho);
   };
-  private readonly applyEnemySeparationNeighbor = (other: Enemy): void => {
+  protected readonly applyEnemySeparationNeighbor = (other: Enemy): void => {
     const enemy = this.separationSubject;
     if (!enemy || other === enemy || !other.active) return;
     const offsetX = enemy.x - other.x;
@@ -296,16 +298,28 @@ export class HeistScene extends Phaser.Scene {
     this.separationSteerY += offsetY / distanceSquared * 80;
   };
 
-  constructor() { super(SceneKeys.Heist); }
+  constructor(key: string = SceneKeys.Heist) { super(key); }
+  protected get anomalyId(): import('../types.ts').AnomalyId { return 'heist'; }
+  protected get missionName(): string { return 'HEIST'; }
+  protected get missionLayoutName(): string { return 'Security Facility 07'; }
+  protected worldEntryPoint(): {x:number;y:number} { return this.facility.layout.entryPoint; }
+  protected worldCollisionGroups(): Phaser.Physics.Arcade.StaticGroup[] { return [this.facility.walls, this.facility.vaultDoors]; }
+  protected worldPickupWalls(): readonly RectSpec[] { return this.facility.vaultDoor.body?.enable ? this.pickupClosedDoorWalls : this.facility.wallRects; }
+  protected updateWorld(now: number, _dt: number): void { this.facility.update(now, this.player.x, this.player.y); }
+  protected prepareWorldNavigation(): void { this.facility.prepareNavigationTarget(this.player.x, this.player.y); }
+  protected resizeWorld(): void {}
+  protected weaponContextMultiplier(_now: number): number { return 1; }
+  protected onGameplayPickupCollected(_type: PickupType, _now: number): void {}
+  protected liveEnemyCount(): number { return this.enemies.length; }
 
-  private get modRuntime() { return this.session.sharedRuntime.modRuntime; }
-  private get temporaryAmmo() { return this.session.sharedRuntime.temporaryAmmo; }
-  private get turretWeaponSync() { return this.session.sharedRuntime.turretWeaponSync; }
-  private get mineChargeRack() { return this.session.sharedRuntime.mineChargeRack; }
-  private get abilityState() { return this.session.abilityState; }
+  protected get modRuntime() { return this.session.sharedRuntime.modRuntime; }
+  protected get temporaryAmmo() { return this.session.sharedRuntime.temporaryAmmo; }
+  protected get turretWeaponSync() { return this.session.sharedRuntime.turretWeaponSync; }
+  protected get mineChargeRack() { return this.session.sharedRuntime.mineChargeRack; }
+  protected get abilityState() { return this.session.abilityState; }
 
   create(data?: unknown): void {
-    if (!isSessionData(data)) {
+    if (!isSessionData(data) || data.anomalyId !== this.anomalyId) {
       this.scene.wake(SceneKeys.Arena);
       this.scene.stop();
       return;
@@ -314,7 +328,7 @@ export class HeistScene extends Phaser.Scene {
     this.resetSessionState();
     this.session = data;
     this.campaignPositions = getHeistCampaignPositions(data.protocol, data.round);
-    this.coreAudio.enterHeistMusic();
+    if (this.anomalyId === 'heist') this.coreAudio.enterHeistMusic();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     const settings = SaveSystem.get().settings;
     this.aimSettings = normalizeAimSettings(settings.aim);
@@ -339,19 +353,7 @@ export class HeistScene extends Phaser.Scene {
     this.lootPickups = new HeistLootPickupSystem(this, this.rewards, this.pickupPresentation,
       this.pickupMotion, this.pickupBounds, (x, y) => this.pointBlocked(x, y));
     this.pendingLoot = this.rewards.createEmpty();
-    this.physics.world.setBounds(0, 0, HEIST_WORLD.width, HEIST_WORLD.height);
-    this.cameras.main.setBounds(0, 0, HEIST_WORLD.width, HEIST_WORLD.height);
-    this.cameras.main.setBackgroundColor(0x02050a);
-    this.facility = createHeistFacility(this, (data.seed ^ Math.imul(data.round, 0x45d9f3b)) >>> 0);
-    this.pickupClosedDoorWalls = [...this.facility.wallRects, ...this.facility.vaultDoors.getChildren().map(door => {
-      const body = (door as Phaser.Physics.Arcade.Image).body as Phaser.Physics.Arcade.StaticBody;
-      return { x: body.x, y: body.y, w: body.width, h: body.height };
-    })];
-    this.createEnvironmentSmashables();
-    if (import.meta.env.DEV) console.debug('[HEIST lifecycle] facility-ready', {
-      elapsedMs: performance.now() - devCreateStartedAt,
-      facility: this.facility.diagnostics
-    });
+    this.createEnvironment();
     this.createPlayer();
     if (this.time.now < this.abilityState.shieldActiveUntil) {
       this.shieldVisual = new OperativeShieldEffect(this, this.player);
@@ -359,28 +361,14 @@ export class HeistScene extends Phaser.Scene {
     this.inputController = new PlayerInput(this, settings.abilityBindings, normalizeControllerSettings(settings.controller));
     if (data.initialInputDevice) this.inputController.adoptDevice(data.initialInputDevice);
     this.input.keyboard?.resetKeys();
-    this.createVaultContainers();
     this.createHud();
-    this.createSupportPickups();
-    this.trapSystem = new HeistTrapSystem(this, this.facility.trapPlacements, {
-      round: this.campaignPositions.difficultyPosition,
-      protocol: data.protocol
-    }, {
-      isPlayerAlive: () => this.player.active && !this.player.isDead(),
-      damagePlayer: (amount) => this.damagePlayer(amount),
-      snarePlayer: (until) => { this.movementSnaredUntil = Math.max(this.movementSnaredUntil, until); },
-      playSfx: (name) => this.coreAudio.playSfx(name)
-    }, settings.particles);
-    this.spawnInfiltrationPatrols();
+    this.initializeMission();
     this.crosshair = this.add.graphics().setDepth(20_050);
     this.input.setDefaultCursor('none');
-    this.audio.play('facility-arrival');
-    this.audio.play('corridor-ambience');
-    this.announce('ANOMALY TRANSIT COMPLETE', 'HEIST // SECURITY FACILITY 07');
     this.cameras.main.fadeIn(540, 208, 255, 255);
     this.scale.on('resize', this.handleResize, this);
     this.events.on('resume-from-options', this.onResumeFromOptions, this);
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && this.anomalyId === 'heist') {
       const debug = globalThis as typeof globalThis & {
         forceHeistAmbush?: () => void;
         forceHeistExtraction?: () => void;
@@ -420,7 +408,40 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private readonly onDevInstantReturn = (): void => {
+  protected createEnvironment(): void {
+    const data = this.session;
+    this.physics.world.setBounds(0, 0, HEIST_WORLD.width, HEIST_WORLD.height);
+    this.cameras.main.setBounds(0, 0, HEIST_WORLD.width, HEIST_WORLD.height);
+    this.cameras.main.setBackgroundColor(0x02050a);
+    this.facility = createHeistFacility(this, (data.seed ^ Math.imul(data.round, 0x45d9f3b)) >>> 0);
+    this.pickupClosedDoorWalls = [...this.facility.wallRects, ...this.facility.vaultDoors.getChildren().map(door => {
+      const body = (door as Phaser.Physics.Arcade.Image).body as Phaser.Physics.Arcade.StaticBody;
+      return { x: body.x, y: body.y, w: body.width, h: body.height };
+    })];
+    this.createEnvironmentSmashables();
+  }
+
+  protected initializeMission(): void {
+    const data = this.session;
+    const settings = SaveSystem.get().settings;
+    this.createVaultContainers();
+    this.createSupportPickups();
+    this.trapSystem = new HeistTrapSystem(this, this.facility.trapPlacements, {
+      round: this.campaignPositions.difficultyPosition,
+      protocol: data.protocol
+    }, {
+      isPlayerAlive: () => this.player.active && !this.player.isDead(),
+      damagePlayer: (amount) => this.damagePlayer(amount),
+      snarePlayer: (until) => { this.movementSnaredUntil = Math.max(this.movementSnaredUntil, until); },
+      playSfx: (name) => this.coreAudio.playSfx(name)
+    }, settings.particles);
+    this.spawnInfiltrationPatrols();
+    this.audio.play('facility-arrival');
+    this.audio.play('corridor-ambience');
+    this.announce('ANOMALY TRANSIT COMPLETE', 'HEIST // SECURITY FACILITY 07');
+  }
+
+  protected readonly onDevInstantReturn = (): void => {
     if (this.returning) return;
     this.echo?.reset();
     this.returning = true;
@@ -428,7 +449,7 @@ export class HeistScene extends Phaser.Scene {
     this.returnToArena(true, 'extracted');
   };
 
-  private resetSessionState(): void {
+  protected resetSessionState(): void {
     this.pendingLoot = emptyLoot();
     this.phase = 'inbound';
     this.elapsedMs = 0;
@@ -473,10 +494,10 @@ export class HeistScene extends Phaser.Scene {
     this.escapeReinforcementSequence = 0;
     this.movementSnaredUntil = 0;
     this.enemyLootSequence = 0;
-    if (import.meta.env.DEV) this.performanceProfiler = new HeistPerformanceProfiler();
+    if (import.meta.env.DEV && this.anomalyId === 'heist') this.performanceProfiler = new HeistPerformanceProfiler();
   }
 
-  private resolveProjectileCosmetics(): void {
+  protected resolveProjectileCosmetics(): void {
     const presentation = resolveProjectileCosmeticPresentation(
       getCosmeticById(SaveSystem.getEquippedCosmeticId('projectileShape'))
     );
@@ -486,7 +507,7 @@ export class HeistScene extends Phaser.Scene {
     this.projectileNativePalette = presentation.preserveNativePalette;
   }
 
-  private createCombatPools(): void {
+  protected createCombatPools(): void {
     const configureProjectile = (projectile: HeistProjectile, state: HeistProjectileSpawn): void => {
       const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
       if (body) {
@@ -616,7 +637,7 @@ export class HeistScene extends Phaser.Scene {
     }
     this.updateInputCapture();
     profiler?.mark('presentationInput');
-    this.facility.update(now, this.player.x, this.player.y);
+    this.updateWorld(now, this.inputCapturePaused || this.manuallyPaused ? 0 : dt);
     this.extractionPortal?.update(now);
     this.updateCrosshair();
     this.mineExplosionVfx.update(now);
@@ -641,7 +662,7 @@ export class HeistScene extends Phaser.Scene {
     this.muzzleFlashVfx.update(now);
     this.projectileImpactVfx.update(now);
     this.updateAbilities(now);
-    this.facility.prepareNavigationTarget(this.player.x, this.player.y);
+    this.prepareWorldNavigation();
     profiler?.mark('playerCombatAndMods');
     this.enemySpatialGrid.rebuild(this.enemies);
     this.updateProjectiles(now, delta);
@@ -655,7 +676,7 @@ export class HeistScene extends Phaser.Scene {
     this.pickupMotionRoots.length = 0;
     for (const pickup of this.pickups) this.pickupMotionRoots.push(pickup.root);
     this.lootPickups.appendMotionTargets(this.pickupMotionRoots);
-    const pickupWalls = this.facility.vaultDoor.body?.enable ? this.pickupClosedDoorWalls : this.facility.wallRects;
+    const pickupWalls = this.worldPickupWalls();
     this.pickupMotion.update(this.pickupMotionRoots, root => root, this.pickupBounds, pickupWalls, now, dt);
     this.pickupMotion.separate(this.pickupMotionRoots, root => root, this.pickupBounds, pickupWalls);
     this.updatePickups(now, dt);
@@ -664,11 +685,11 @@ export class HeistScene extends Phaser.Scene {
       pickupField.attractionRadius, pickupField.pullSpeed,
       (reward, x, y) => this.collectLoot(reward, x, y));
     const playerBody = this.player.body as Phaser.Physics.Arcade.Body | null;
-    this.trapSystem.update(now, this.player.x, this.player.y,
+    this.trapSystem?.update(now, this.player.x, this.player.y,
       getProtocolModeBalance(this.session.protocol).hazardDamageMultiplier,
       playerBody?.velocity.x ?? 0, playerBody?.velocity.y ?? 0);
     this.updateMission(now);
-    this.updateEscapeReinforcements(now);
+    if (this.anomalyId === 'heist') this.updateEscapeReinforcements(now);
     profiler?.mark('pickupsHazardsMission');
     this.updateHud(now);
     this.maintainCombatPools(now);
@@ -682,7 +703,7 @@ export class HeistScene extends Phaser.Scene {
     if (this.player.isDead()) this.failHeist();
   }
 
-  private maintainCombatPools(now: number): void {
+  protected maintainCombatPools(now: number): void {
     if (now < this.nextPoolMaintenanceAt) return;
     this.nextPoolMaintenanceAt = now + 2_000;
     const projectileStats = this.projectilePool.stats();
@@ -698,9 +719,9 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private createPlayer(): void {
+  protected createPlayer(): void {
     const source = this.session.player;
-    const start = this.facility.layout.entryPoint;
+    const start = this.worldEntryPoint();
     this.player = new Player(this, start.x, start.y, source.textureKey, { ...source.stats }, { ...source.energyStats }, { ...source.weapon });
     // Preserve valid Overdrive/Supreme overhealth and overcharge exactly as
     // they existed at the anomaly threshold. The anomaly is the same run.
@@ -717,12 +738,11 @@ export class HeistScene extends Phaser.Scene {
     this.player.setAppearanceResolver((timeMs) => SaveSystem.getOperativeFrameAppearance(timeMs));
     this.player.restoreOperativeAppearance(this.time.now, true);
     if (source.tint !== null) this.player.setTint(source.tint);
-    this.physics.add.collider(this.player, this.facility.walls);
-    this.physics.add.collider(this.player, this.facility.vaultDoors);
+    for (const group of this.worldCollisionGroups()) this.physics.add.collider(this.player, group);
     followGameplayPlayer(this.cameras.main, this.player);
   }
 
-  private createVaultContainers(): void {
+  protected createVaultContainers(): void {
     const count = this.random.int(HEIST_BALANCE.containerMinimum, HEIST_BALANCE.containerMaximum);
     const positions = this.facility.containerPoints;
     for (let index = 0; index < count; index += 1) {
@@ -779,7 +799,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private createHud(): void {
+  protected createHud(): void {
     const width = this.scale.width;
     this.hud = new Hud(this, SaveSystem.get().settings.hud);
     this.createHudPayload();
@@ -797,7 +817,7 @@ export class HeistScene extends Phaser.Scene {
     this.handleResize(this.scale.gameSize);
   }
 
-  private createHudPayload(): void {
+  protected createHudPayload(): void {
     const bindings = SaveSystem.get().settings.abilityBindings;
     const slot = (id: 'fence' | 'turret' | 'mine' | 'shield', label: string, keybind: string) => ({
       id, keybind, icon: id, label, cooldownMs: 0, cooldownDurationMs: 1,
@@ -811,7 +831,7 @@ export class HeistScene extends Phaser.Scene {
       level: this.session.round, enemies: 0,
       credits: wallet.credits, coreTokens: wallet.coreTokens,
       plasmaChips: SaveSystem.getModCollection().plasmaChips, fluxCores: wallet.fluxCores,
-      phase: 'ANOMALY', objective: 'INFILTRATE THE VAULT', objectiveTimerMs: null,
+      phase: 'ANOMALY', objective: this.missionObjective(this.time.now), objectiveTimerMs: null,
       defuseAlert: false, bombUrgent: false, bombActive: false, bombProgress: 0,
       buffs: this.hudBuffs,
       abilities: [
@@ -829,7 +849,7 @@ export class HeistScene extends Phaser.Scene {
   }
 
 
-  private createSupportPickups(): void {
+  protected createSupportPickups(): void {
     for (const entry of this.facility.supportPoints) {
       this.pickups.push({
         kind: entry.kind,
@@ -840,13 +860,13 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private createGameplayPickup(type: PickupType, x: number, y: number): Phaser.GameObjects.Container {
+  protected createGameplayPickup(type: PickupType, x: number, y: number): Phaser.GameObjects.Container {
     const root = this.pickupPresentation.create(type, x, y);
     this.pickupMotion.register(root, type);
     return root;
   }
 
-  private createEnvironmentSmashables(): void {
+  protected createEnvironmentSmashables(): void {
     const placements = createHeistSmashablePlacements(this.facility.layout, this.session.round);
     this.environmentSmashables = new ArenaSmashableSystem(
       this,
@@ -858,7 +878,7 @@ export class HeistScene extends Phaser.Scene {
     );
   }
 
-  private dropEnvironmentSmashableLoot(type: ArenaSmashableLoot, x: number, y: number): void {
+  protected dropEnvironmentSmashableLoot(type: ArenaSmashableLoot, x: number, y: number): void {
     const provisionalReward: HeistContainerReward | undefined = type === 'credits'
       ? { kind: 'credits', amount: PICKUP_BALANCE.credits }
       : type === 'coreToken' ? { kind: 'coreTokens', amount: 1 }
@@ -878,13 +898,13 @@ export class HeistScene extends Phaser.Scene {
     });
   }
 
-  private updatePlayerMovement(now: number): void {
+  protected updatePlayerMovement(now: number): void {
     const move = this.inputController.move;
     const aim = this.getAimPoint();
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
     const forwardFacingFrame = this.player.texture.key === 'player-spaceship' || this.player.texture.key === 'player-airplane';
     this.player.setRotation(angle + (forwardFacingFrame ? 0 : Math.PI / 2));
-    if (now < this.movementSnaredUntil || this.trapSystem.isMovementSnared(now)) {
+    if (now < this.movementSnaredUntil || this.trapSystem?.isMovementSnared(now)) {
       this.player.setVelocity(0, 0);
     } else if (now >= this.player.dashUntil) {
       const lengthSquared = move.x * move.x + move.y * move.y;
@@ -928,7 +948,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private updatePlayerCombat(now: number): void {
+  protected updatePlayerCombat(now: number): void {
     if (!this.inputController.held('fire') || this.player.heat >= this.player.weapon.maxHeat) return;
     const ammoMode = this.temporaryAmmo.activeMode(now);
     const cadence = ammoMode === 'grenade'
@@ -945,7 +965,7 @@ export class HeistScene extends Phaser.Scene {
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
     const critical = this.random.next() < this.player.weapon.critChance;
     const criticalMultiplier = WEAPON_BALANCE.critMultiplier * this.modRuntime.multiplier('weaponCritDamage');
-    const damage = this.player.weapon.damage * this.player.damageMultiplier * (critical ? criticalMultiplier : 1);
+    const damage = this.player.weapon.damage * this.player.damageMultiplier * this.weaponContextMultiplier(now) * (critical ? criticalMultiplier : 1);
     const projectileColor = SaveSystem.getCosmeticColor('projectileColor', now);
     const trailColor = SaveSystem.getCosmeticColor('trailColor', now);
     const ricochets = now < this.player.buffs.ricochetUntil ? RICOCHET_MAX_WALL_BOUNCES : 0;
@@ -971,7 +991,7 @@ export class HeistScene extends Phaser.Scene {
     this.coreAudio.playSfx('shot');
   }
 
-  private updateAbilities(now: number): void {
+  protected updateAbilities(now: number): void {
     if (this.inputController.pressed('shield')) this.activateShield(now);
     if (this.shieldVisual) {
       this.shieldVisual.update(this.player, now);
@@ -983,7 +1003,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private activateShield(now: number): void {
+  protected activateShield(now: number): void {
     if (now < this.abilityState.shieldCooldownUntil || !this.player.canSpendEnergy(this.session.abilities.shieldEnergyCost)) {
       this.coreAudio.playSfx('unavailable');
       return;
@@ -996,7 +1016,7 @@ export class HeistScene extends Phaser.Scene {
     this.coreAudio.playSfx('shieldOn');
   }
 
-  private placeFence(now: number): void {
+  protected placeFence(now: number): void {
     const cfg = this.session.abilities.fence;
     const aim = this.getAimPoint();
     if (now < this.abilityState.cooldownUntil.fence || this.fences.length >= cfg.maxActive
@@ -1012,7 +1032,7 @@ export class HeistScene extends Phaser.Scene {
     this.coreAudio.playSfx('electricFence');
   }
 
-  private placeTurret(now: number): void {
+  protected placeTurret(now: number): void {
     const cfg = this.session.abilities.turret;
     const aim = this.getAimPoint();
     if (now < this.abilityState.cooldownUntil.turret || this.turrets.length >= cfg.maxActive
@@ -1028,7 +1048,7 @@ export class HeistScene extends Phaser.Scene {
     this.coreAudio.playSfx('placeTurret');
   }
 
-  private placeMine(now: number): void {
+  protected placeMine(now: number): void {
     const cfg = this.session.abilities.mine;
     const aim = this.getAimPoint();
     if (this.mineChargeRack.availability(now, cfg.cooldownMs) !== 'ready'
@@ -1046,7 +1066,7 @@ export class HeistScene extends Phaser.Scene {
     this.coreAudio.playSfx('placeMine');
   }
 
-  private updateMineSalvoInput(now: number): void {
+  protected updateMineSalvoInput(now: number): void {
     if (!this.modRuntime.has('full-rack-salvo')) {
       this.mineSalvoInput.cancel();
       this.pendingMineSalvo = false;
@@ -1061,7 +1081,7 @@ export class HeistScene extends Phaser.Scene {
     queue(this.mineSalvoInput.update(now));
   }
 
-  private placeFullRackSalvo(now: number, aimX: number, aimY: number): void {
+  protected placeFullRackSalvo(now: number, aimX: number, aimY: number): void {
     const salvo = this.modRuntime.fullRackSalvo();
     if (!salvo) return;
     const cfg = this.session.abilities.mine;
@@ -1083,14 +1103,14 @@ export class HeistScene extends Phaser.Scene {
     this.time.delayedCall(salvo.flightMs, () => this.coreAudio.playSfx('placeMine'));
   }
 
-  private isValidPlacement(x: number, y: number): boolean {
-    if (x < 92 || y < 92 || x > HEIST_WORLD.width - 92 || y > HEIST_WORLD.height - 92) return false;
+  protected isValidPlacement(x: number, y: number): boolean {
+    if (x < 92 || y < 92 || x > this.pickupBounds.w - 92 || y > this.pickupBounds.h - 92) return false;
     if (this.pointBlocked(x, y)) return false;
     return !this.containers.some((container) => !container.opened
       && Math.abs(container.root.x - x) < 52 && Math.abs(container.root.y - y) < 44);
   }
 
-  private spawnProjectile(owner: ProjectileOwner, x: number, y: number, angle: number, speed: number, damage: number, color: number, lifeMs: number): void {
+  protected spawnProjectile(owner: ProjectileOwner, x: number, y: number, angle: number, speed: number, damage: number, color: number, lifeMs: number): void {
     const projectile = this.projectilePool.obtain({ owner, texture: owner === 'enemy' ? 'pixel' : this.projectileTextureKey,
       width: owner === 'enemy' ? 10 : this.projectileWidth, height: owner === 'enemy' ? 5 : this.projectileHeight,
       tint: color, rotation: angle, velocityX: Math.cos(angle) * speed, velocityY: Math.sin(angle) * speed,
@@ -1099,7 +1119,7 @@ export class HeistScene extends Phaser.Scene {
     this.projectiles.push(projectile);
   }
 
-  private spawnPlayerAmmoProjectile(mode: TemporaryAmmoMode, x: number, y: number, angle: number, damage: number,
+  protected spawnPlayerAmmoProjectile(mode: TemporaryAmmoMode, x: number, y: number, angle: number, damage: number,
     tint: number, trailColor: number, critical: boolean, ricochetsRemaining: number,
     echoShot?: Readonly<EchoShot>, echoMultiplier = .5): void {
     const grenade = mode === 'grenade';
@@ -1133,13 +1153,13 @@ export class HeistScene extends Phaser.Scene {
     this.projectiles.push(projectile);
   }
 
-  private readonly replayEchoShot = (shot: Readonly<EchoShot>, dx: number, dy: number, multiplier: number): void => {
+  protected readonly replayEchoShot = (shot: Readonly<EchoShot>, dx: number, dy: number, multiplier: number): void => {
     const offsets = shot.mode === 'scattershot' ? SCATTERSHOT_ANGLE_OFFSETS : [0];
     for (const offset of offsets) this.spawnPlayerAmmoProjectile(shot.mode, shot.x + dx, shot.y + dy,
       shot.angle + offset, shot.damage, 0x72faff, 0xff5bd8, shot.critical, shot.ricochets, shot, multiplier);
   };
 
-  private consumeGrenadeBounce(projectile: HeistProjectile, now: number): boolean {
+  protected consumeGrenadeBounce(projectile: HeistProjectile, now: number): boolean {
     const pulse = this.fxCirclePool.obtain({
       x: projectile.sprite.x, y: projectile.sprite.y, radius: 4,
       color: projectile.sprite.tintTopLeft, alpha: 0.55, depth: 10,
@@ -1163,7 +1183,7 @@ export class HeistScene extends Phaser.Scene {
     return false;
   }
 
-  private updateGrenadeFlight(projectile: HeistProjectile, now: number, delta: number): boolean {
+  protected updateGrenadeFlight(projectile: HeistProjectile, now: number, delta: number): boolean {
     if (now >= (projectile.grenadeFuseAt ?? 0)) return true;
     if (now >= (projectile.grenadeNextBounceAt ?? Number.POSITIVE_INFINITY)
       && this.consumeGrenadeBounce(projectile, now)) return true;
@@ -1181,7 +1201,7 @@ export class HeistScene extends Phaser.Scene {
     return false;
   }
 
-  private findGrenadeEnemy(x: number, y: number, proximity: boolean): Enemy | null {
+  protected findGrenadeEnemy(x: number, y: number, proximity: boolean): Enemy | null {
     this.grenadeFuseQueryX = x;
     this.grenadeFuseQueryY = y;
     this.grenadeFuseQueryProximity = proximity;
@@ -1196,7 +1216,7 @@ export class HeistScene extends Phaser.Scene {
     return this.grenadeFuseQueryCandidate;
   }
 
-  private detonateGrenadeForNearbyTarget(projectile: HeistProjectile, now: number): boolean {
+  protected detonateGrenadeForNearbyTarget(projectile: HeistProjectile, now: number): boolean {
     const { x, y } = projectile.sprite;
     const directEnemy = this.findGrenadeEnemy(projectile.sprite.x, projectile.sprite.y, false);
     if (directEnemy) {
@@ -1221,7 +1241,7 @@ export class HeistScene extends Phaser.Scene {
   }
 
   /** 0 = blocked, 1 = continue, 2 = detonate. */
-  private bounceGrenadeFromWall(projectile: HeistProjectile, now: number): 0 | 1 | 2 {
+  protected bounceGrenadeFromWall(projectile: HeistProjectile, now: number): 0 | 1 | 2 {
     const body = projectile.sprite.body as Phaser.Physics.Arcade.Body | null;
     if (!body) return 0;
     const vertical = this.pointBlocked(projectile.sprite.x, projectile.previousY);
@@ -1234,12 +1254,12 @@ export class HeistScene extends Phaser.Scene {
     return this.consumeGrenadeBounce(projectile, now) ? 2 : 1;
   }
 
-  private emitProjectileImpact(projectile: HeistProjectile): void {
+  protected emitProjectileImpact(projectile: HeistProjectile): void {
     this.projectileImpactVfx.emit(projectile.sprite.x, projectile.sprite.y,
       projectile.sprite.rotation, projectile.trailColor, this.time.now);
   }
 
-  private updateProjectiles(now: number, delta: number): void {
+  protected updateProjectiles(now: number, delta: number): void {
     this.projectileTrails.beginFrame(now);
     for (let index = this.projectiles.length - 1; index >= 0; index -= 1) {
       const projectile = this.projectiles[index];
@@ -1361,7 +1381,7 @@ export class HeistScene extends Phaser.Scene {
     this.projectileTrails.render(now);
   }
 
-  private detonateGrenade(projectile: HeistProjectile, directHit?: Enemy): void {
+  protected detonateGrenade(projectile: HeistProjectile, directHit?: Enemy): void {
     if (projectile.grenadeDetonated) return;
     if (projectile.echo) projectile.damage = authoritativeEchoDamage(projectile.damage, projectile.echo);
     projectile.grenadeDetonated = true;
@@ -1397,7 +1417,7 @@ export class HeistScene extends Phaser.Scene {
     this.grenadeSplashExcludedEnemy = null;
   }
 
-  private updateEnemies(now: number, dt: number): void {
+  protected updateEnemies(now: number, dt: number): void {
     for (let index = this.enemies.length - 1; index >= 0; index -= 1) {
       const enemy = this.enemies[index];
       if (!enemy.active || enemy.hp <= 0) { this.removeEnemy(enemy, index); continue; }
@@ -1440,7 +1460,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private updateMines(now: number): void {
+  protected updateMines(now: number): void {
     for (let index = this.mines.length - 1; index >= 0; index -= 1) {
       const mine = this.mines[index];
       mine.update(now);
@@ -1471,7 +1491,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private updateFences(now: number, dt: number): void {
+  protected updateFences(now: number, dt: number): void {
     for (let index = this.fences.length - 1; index >= 0; index -= 1) {
       const fence = this.fences[index];
       if (fence.isExpired(now)) { fence.destroy(); this.fences.splice(index, 1); continue; }
@@ -1483,7 +1503,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private spawnTurretAmmoVolley(turret: Turret, mode: TemporaryAmmoMode, angle: number, damage: number, now: number): void {
+  protected spawnTurretAmmoVolley(turret: Turret, mode: TemporaryAmmoMode, angle: number, damage: number, now: number): void {
     const scatter = mode === 'scattershot';
     const grenade = mode === 'grenade';
     const count = scatter ? SCATTERSHOT_ANGLE_OFFSETS.length : 1;
@@ -1529,7 +1549,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private updateTurrets(now: number): void {
+  protected updateTurrets(now: number): void {
     for (let index = this.turrets.length - 1; index >= 0; index -= 1) {
       const turret = this.turrets[index];
       if (turret.hp <= 0) { turret.destroy(); this.turrets.splice(index, 1); continue; }
@@ -1563,7 +1583,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private updatePickups(now: number, dt: number): void {
+  protected updatePickups(now: number, dt: number): void {
     const field = this.modRuntime.magneticServiceField(this.player.stats.pickupRadius);
     for (let index = this.pickups.length - 1; index >= 0; index -= 1) {
       const pickup = this.pickups[index];
@@ -1583,8 +1603,9 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private collectGameplayPickup(pickup: HeistPickup, now: number): void {
+  protected collectGameplayPickup(pickup: HeistPickup, now: number): void {
     const type = pickup.kind;
+    this.onGameplayPickupCollected(type, now);
     this.coreAudio.playSfx(GAMEPLAY_PICKUP_SFX_BY_TYPE[type]);
     if (pickup.provisionalReward) this.rewards.add(this.pendingLoot, pickup.provisionalReward);
     if (type === 'health') {
@@ -1634,7 +1655,7 @@ export class HeistScene extends Phaser.Scene {
     this.pickupPresentation.showCollectionLabel(type, this.player.x, this.player.y);
   }
 
-  private updateMission(now: number): void {
+  protected updateMission(now: number): void {
     const doorDistanceSquared = this.facility.distanceSquaredToVault(this.player.x, this.player.y);
     if (this.phase === 'inbound' && doorDistanceSquared <= HEIST_BALANCE.vaultApproachRadius ** 2) {
       this.setPhase('vault-opening');
@@ -1677,7 +1698,7 @@ export class HeistScene extends Phaser.Scene {
     } else this.promptText.setVisible(false);
   }
 
-  private startAmbush(): void {
+  protected startAmbush(): void {
     if (this.phase === 'egress-ready' || this.phase === 'escape' || this.returning) return;
     this.setPhase('egress-ready');
     this.facility.setAlertLighting(true);
@@ -1706,7 +1727,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private spawnInfiltrationPatrols(): void {
+  protected spawnInfiltrationPatrols(): void {
     const count = Math.min(HEIST_BALANCE.maximumRegularEnemies,
       HEIST_BALANCE.initialEnemyCount + Math.floor(this.campaignPositions.difficultyPosition / 10));
     const positions = this.facility.ambushPoints;
@@ -1724,7 +1745,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private startTimedEscape(now: number): void {
+  protected startTimedEscape(now: number): void {
     if (this.phase !== 'egress-ready' || this.returning) return;
     this.setPhase('escape');
     this.escapeDeadline = now + HEIST_BALANCE.extractionDurationMs;
@@ -1734,7 +1755,7 @@ export class HeistScene extends Phaser.Scene {
     this.announce('45 SECOND EXTRACTION WINDOW', 'FOLLOW THE EMERGENCY ROUTE LIGHTS // HAUL REMAINS PROVISIONAL');
   }
 
-  private updateEscapeReinforcements(now: number): void {
+  protected updateEscapeReinforcements(now: number): void {
     if (this.phase !== 'escape' || now < this.nextEscapeReinforcementAt || this.returning) return;
     this.nextEscapeReinforcementAt = now + HEIST_BALANCE.escapeReinforcementIntervalMs;
     const capacity = Math.max(0, HEIST_BALANCE.escapeMaximumEnemies - this.enemies.length);
@@ -1756,7 +1777,7 @@ export class HeistScene extends Phaser.Scene {
     this.escapeReinforcementSequence = (this.escapeReinforcementSequence + Math.max(1, spawned)) % positions.length;
   }
 
-  private spawnEnemy(type: keyof typeof baseEnemyStats, x: number, y: number, elite: boolean): void {
+  protected spawnEnemy(type: keyof typeof baseEnemyStats, x: number, y: number, elite: boolean): void {
     const base = baseEnemyStats[type];
     const curve = getDifficultyCurve(this.campaignPositions.difficultyPosition);
     const mode = getProtocolModeBalance(this.session.protocol);
@@ -1785,7 +1806,7 @@ export class HeistScene extends Phaser.Scene {
     });
   }
 
-  private openExtraction(): void {
+  protected openExtraction(): void {
     if (this.extractionPortal) return;
     this.audio.play('extraction-activation');
     this.emitMetric('anomaly_extraction_started');
@@ -1794,7 +1815,7 @@ export class HeistScene extends Phaser.Scene {
     this.extractionPortal.transformToPortal();
   }
 
-  private damageContainer(container: HeistContainer, amount: number): void {
+  protected damageContainer(container: HeistContainer, amount: number): void {
     if (container.opened || this.phase !== 'looting') return;
     container.hp -= amount;
     this.audio.play('loot-container-impact');
@@ -1820,7 +1841,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private collectLoot(reward: ReturnType<HeistRewardService['rollContainer']>, x: number, y: number): void {
+  protected collectLoot(reward: ReturnType<HeistRewardService['rollContainer']>, x: number, y: number): void {
     this.rewards.add(this.pendingLoot, reward);
     if (reward.kind === 'mod') this.coreAudio.playSfx('modPickup');
     else {
@@ -1833,7 +1854,7 @@ export class HeistScene extends Phaser.Scene {
       reward.kind === 'mod' ? y : this.player.y);
   }
 
-  private drawContainerCracks(container: HeistContainer): void {
+  protected drawContainerCracks(container: HeistContainer): void {
     const ratio = Phaser.Math.Clamp(1 - container.hp / container.maximumHp, 0, 1);
     const cracks = container.cracks;
     cracks.clear().lineStyle(2, 0xeaffff, 0.35 + ratio * 0.55);
@@ -1850,7 +1871,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private createContainerBurst(container: HeistContainer): void {
+  protected createContainerBurst(container: HeistContainer): void {
     const x = container.root.x;
     const y = container.root.y;
     const color = container.index % 2 ? 0xff55d2 : 0x62f5ff;
@@ -1888,7 +1909,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private damageEnemy(enemy: Enemy, amount: number, echo?: EchoDamageStamp): void {
+  protected damageEnemy(enemy: Enemy, amount: number, echo?: EchoDamageStamp): void {
     if (echo) amount = authoritativeEchoDamage(amount, echo);
     if (!enemy.active || enemy.hp <= 0 || amount <= 0) return;
     if (echo) { this.damageDealt += enemy.takeDamage(amount, 'echo', echo); return; }
@@ -1900,7 +1921,7 @@ export class HeistScene extends Phaser.Scene {
     if (enemy.hp <= 0) this.triggerSplitCurrent(enemy, applied);
   }
 
-  private triggerSplitCurrent(killedEnemy: Enemy, killingDamage: number): void {
+  protected triggerSplitCurrent(killedEnemy: Enemy, killingDamage: number): void {
     const standard = this.modRuntime.has('split-current') && this.modRuntime.nativeSlotActive('split-current', 0);
     const corrupted = this.modRuntime.has('fractured-current');
     if (!standard && !corrupted) return;
@@ -1926,7 +1947,7 @@ export class HeistScene extends Phaser.Scene {
     this.damageEnemy(target, damage);
   }
 
-  private damagePlayer(amount: number): void {
+  protected damagePlayer(amount: number): void {
     const now = this.time.now;
     if (now < this.abilityState.shieldActiveUntil || now < this.player.dashUntil || now < this.player.invulnUntil) return;
     const before = this.player.hp;
@@ -1947,7 +1968,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private blast(x: number, y: number, radius: number, damage: number): void {
+  protected blast(x: number, y: number, radius: number, damage: number): void {
     this.environmentSmashables?.damageArea(x, y, radius, damage);
     for (const enemy of this.enemies) {
       const dx = enemy.x - x; const dy = enemy.y - y;
@@ -1959,7 +1980,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private splitAtFence(projectile: HeistProjectile): void {
+  protected splitAtFence(projectile: HeistProjectile): void {
     for (const fence of this.fences) {
       if (projectile.crossedFences.has(fence)) continue;
       const crossed = this.segmentsIntersect(projectile.previousX, projectile.previousY,
@@ -2031,7 +2052,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private segmentsIntersect(ax: number, ay: number, bx: number, by: number,
+  protected segmentsIntersect(ax: number, ay: number, bx: number, by: number,
     cx: number, cy: number, dx: number, dy: number): boolean {
     const cross = (px: number, py: number, qx: number, qy: number, rx: number, ry: number): number =>
       (qx - px) * (ry - py) - (qy - py) * (rx - px);
@@ -2043,7 +2064,7 @@ export class HeistScene extends Phaser.Scene {
       && ((cdA <= 0 && cdB >= 0) || (cdA >= 0 && cdB <= 0));
   }
 
-  private completeHeist(): void {
+  protected completeHeist(): void {
     if (this.returning) return;
     this.hudInformation?.clear();
     this.echo?.reset();
@@ -2055,7 +2076,7 @@ export class HeistScene extends Phaser.Scene {
     this.beginReturnFade(true, 'extracted', HEIST_BALANCE.transitionDurationMs);
   }
 
-  private failHeist(reason: 'player-dead' | 'extraction-timeout' = 'player-dead'): void {
+  protected failHeist(reason: 'player-dead' | 'extraction-timeout' = 'player-dead'): void {
     if (this.returning) return;
     this.hudInformation?.clear();
     this.trapSystem?.clearFireExposure();
@@ -2065,13 +2086,13 @@ export class HeistScene extends Phaser.Scene {
     this.phase = 'returning';
     this.audio.play('heist-failed');
     this.emitMetric('anomaly_failed', this.finalMetricFields(reason));
-    this.announce(reason === 'extraction-timeout' ? 'EXTRACTION WINDOW LOST' : 'HEIST FAILED',
+    this.announce(reason === 'extraction-timeout' ? 'EXTRACTION WINDOW LOST' : `${this.missionName} FAILED`,
       'PROVISIONAL HAUL LOST // ARENA LINK RESTORING');
     this.physics.pause();
     this.time.delayedCall(720, () => this.beginReturnFade(false, reason, 500));
   }
 
-  private beginReturnFade(
+  protected beginReturnFade(
     success: boolean,
     reason: 'extracted' | 'player-dead' | 'extraction-timeout',
     durationMs: number
@@ -2087,13 +2108,13 @@ export class HeistScene extends Phaser.Scene {
     this.cameras.main.fadeOut(durationMs, 100, 225, 255);
   }
 
-  private readonly onReturnFadeComplete = (): void => {
+  protected readonly onReturnFadeComplete = (): void => {
     const pending = this.pendingFadeReturn;
     this.pendingFadeReturn = null;
     if (pending) this.returnToArena(pending.success, pending.reason);
   };
 
-  private returnToArena(success: boolean, reason: 'extracted' | 'player-dead' | 'extraction-timeout' | 'scene-shutdown'): void {
+  protected returnToArena(success: boolean, reason: 'extracted' | 'player-dead' | 'extraction-timeout' | 'scene-shutdown'): void {
     if (this.returnResultDelivered) return;
     this.hudInformation?.clear();
     this.returnResultDelivered = true;
@@ -2103,7 +2124,7 @@ export class HeistScene extends Phaser.Scene {
     const arena = this.scene.get(SceneKeys.Arena);
     const result: AnomalyReturnResult = {
       sessionId: this.session.sessionId,
-      anomalyId: 'heist',
+      anomalyId: this.anomalyId,
       success,
       sourcePortal: { ...this.session.sourcePortal },
       loot: success ? this.pendingLoot : emptyLoot(),
@@ -2135,15 +2156,24 @@ export class HeistScene extends Phaser.Scene {
     arena.events.emit('anomaly-return', result);
   }
 
-  private updateHud(now: number): void {
-    this.lootText.setText(`PENDING HAUL\n¢ ${this.pendingLoot.credits.toLocaleString()}  ◆ ${this.pendingLoot.coreTokens}  ◇ ${this.pendingLoot.plasmaChips}\nFLUX ${this.pendingLoot.fluxCores}  MODS ${this.pendingLoot.modIds.length}`);
-    const objective = this.phase === 'inbound' || this.phase === 'vault-opening' ? 'INFILTRATE THE VAULT'
+  protected missionObjective(now: number): string {
+    return this.phase === 'inbound' || this.phase === 'vault-opening' ? 'INFILTRATE THE VAULT'
       : this.phase === 'looting' ? `BREACH SECURITY CONTAINERS // ${this.containersOpened} / ${this.containers.length}`
         : this.phase === 'egress-delay' ? 'EXIT THE VAULT'
           : this.phase === 'egress-ready' ? 'CROSS THE VAULT THRESHOLD // ARM EXTRACTION CLOCK'
             : this.phase === 'escape' ? `EXTRACT // ${Math.max(0, Math.ceil((this.escapeDeadline - now) / 1000))}s // ${this.enemies.length} HOSTILES`
             : 'ARENA LINK RESTORING';
-    this.hudInformation.setEventState('anomaly', 'HEIST', objective, 'anomaly');
+  }
+  protected missionObjectiveTarget(): {x:number;y:number} | null {
+    if (this.phase === 'escape') return null;
+    const bounds = this.facility.layout.vaultBounds;
+    return {x:bounds.x+bounds.w*.5,y:bounds.y+bounds.h*.5};
+  }
+
+  protected updateHud(now: number): void {
+    this.lootText.setText(`PENDING HAUL\n¢ ${this.pendingLoot.credits.toLocaleString()}  ◆ ${this.pendingLoot.coreTokens}  ◇ ${this.pendingLoot.plasmaChips}\nFLUX ${this.pendingLoot.fluxCores}  MODS ${this.pendingLoot.modIds.length}`);
+    const objective = this.missionObjective(now);
+    this.hudInformation.setEventState('anomaly', this.missionName, objective, 'anomaly');
     this.hudBuffs.length = 0;
     const appendBuff = (label: string, until: number): void => {
       if (until > now) this.hudBuffs.push(`${label} ${Math.ceil((until - now) / 1000)}s`);
@@ -2156,24 +2186,18 @@ export class HeistScene extends Phaser.Scene {
     if (ammo) appendBuff(ammo === 'grenade' ? 'GRENADE ROUNDS' : 'SCATTERSHOT', this.temporaryAmmo.activeUntil(now));
 
     this.hudRadarContacts.length = 0;
-    for (const enemy of this.enemies) this.hudRadarContacts.push({
+    for (const enemy of this.enemies) if (enemy.active && enemy.hp > 0) this.hudRadarContacts.push({
       kind: enemy.name === 'heist-mini-boss' ? 'boss' : 'enemy',
       dx: enemy.x - this.player.x, dy: enemy.y - this.player.y, state: 'normal'
     });
-    if (this.phase !== 'escape') {
-      const target = {
-        x: this.facility.layout.vaultBounds.x + this.facility.layout.vaultBounds.w * 0.5,
-        y: this.facility.layout.vaultBounds.y + this.facility.layout.vaultBounds.h * 0.5
-      };
-      this.hudRadarContacts.push({ kind: 'objective', dx: target.x - this.player.x, dy: target.y - this.player.y,
-        state: 'available' });
-    }
+    const objectiveTarget = this.missionObjectiveTarget();
+    if (objectiveTarget) this.hudRadarContacts.push({ kind: 'objective', dx: objectiveTarget.x-this.player.x, dy: objectiveTarget.y-this.player.y, state: 'available' });
 
     const wallet = SaveSystem.get();
     Object.assign(this.hudPayload, {
       hp: this.player.hp, maxHp: this.player.stats.maxHealth,
       energy: this.player.energy, maxEnergy: this.player.energyStats.max,
-      level: this.session.round, enemies: this.enemies.length,
+      level: this.session.round, enemies: this.liveEnemyCount(),
       credits: wallet.credits, coreTokens: wallet.coreTokens,
       plasmaChips: SaveSystem.getModCollection().plasmaChips, fluxCores: wallet.fluxCores,
       phase: 'ANOMALY', objective,
@@ -2205,11 +2229,11 @@ export class HeistScene extends Phaser.Scene {
     this.hud.update(this.hudPayload);
   }
 
-  private announce(title: string, detail: string): void {
+  protected announce(title: string, detail: string): void {
     this.hudInformation.notify({ category: title.includes('FAILED') || title.includes('LOST') ? 'failure' : 'anomaly', heading: title, message: detail, priority: 2 });
   }
 
-  private readonly handleResize = (size: Phaser.Structs.Size): void => {
+  protected readonly handleResize = (size: Phaser.Structs.Size): void => {
     const width = size.width;
     const height = size.height;
     const statsBounds = this.hud?.getTutorialTargetBounds('stats');
@@ -2217,11 +2241,12 @@ export class HeistScene extends Phaser.Scene {
     this.lootText?.setPosition(width - 18, statsBottom + 12);
     this.promptText?.setPosition(width * 0.5, height - 48);
     this.devPerformanceOverlay?.setX(width - 14);
+    this.resizeWorld();
   };
 
-  private setPhase(phase: HeistPhase): void { this.phase = phase; this.phaseStartedAt = this.time.now; }
+  protected setPhase(phase: HeistPhase): void { this.phase = phase; this.phaseStartedAt = this.time.now; }
 
-  private getAimPoint(): { x: number; y: number } {
+  protected getAimPoint(): { x: number; y: number } {
     if (this.inputController.activeDevice === 'gamepad' && this.inputController.controllerAim.magnitude > 0) {
       return { x: this.player.x + this.inputController.controllerAim.x * 300, y: this.player.y + this.inputController.controllerAim.y * 300 };
     }
@@ -2230,7 +2255,7 @@ export class HeistScene extends Phaser.Scene {
     return this.input.activePointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
   }
 
-  private pauseHeist(): void {
+  protected pauseHeist(): void {
     if (this.manuallyPaused || this.returning) return;
     this.manuallyPaused = true;
     this.physics.pause();
@@ -2242,14 +2267,14 @@ export class HeistScene extends Phaser.Scene {
     this.crosshair.setVisible(false);
     this.pauseMenu?.destroy();
     this.pauseMenu = createPauseMenuView(this, {
-      encounter: 'Anomaly // Heist', seed: this.session.seed, layout: 'Security Facility 07'
+      encounter: `Anomaly // ${this.missionName}`, seed: this.session.seed, layout: this.missionLayoutName
     }, [
-      { label: 'Resume Heist', tone: 'primary', onClick: () => this.resumeHeist() },
+      { label: `Resume ${this.missionName}`, tone: 'primary', onClick: () => this.resumeHeist() },
       { label: 'Options', onClick: () => {
-        this.scene.launch(SceneKeys.Options, { returnScene: SceneKeys.Heist, resumePausedScene: true });
+        this.scene.launch(SceneKeys.Options, { returnScene: this.scene.key, resumePausedScene: true });
         this.scene.pause();
       } },
-      { label: 'Abort Heist // Return To Arena', tone: 'warning', onClick: () => {
+      { label: `Abort ${this.missionName} // Return To Arena`, tone: 'warning', onClick: () => {
         this.pauseMenu?.destroy();
         this.pauseMenu = null;
         this.echo?.reset();
@@ -2259,7 +2284,7 @@ export class HeistScene extends Phaser.Scene {
     ]);
   }
 
-  private resumeHeist(): void {
+  protected resumeHeist(): void {
     if (!this.manuallyPaused) return;
     this.pauseMenu?.destroy();
     this.pauseMenu = null;
@@ -2273,11 +2298,11 @@ export class HeistScene extends Phaser.Scene {
       this.coreAudio.resumeEventPresentationLoops();
       return;
     }
-    this.session.inputBridge.showResume('CLICK TO RESUME HEIST');
+    this.session.inputBridge.showResume(`CLICK TO RESUME ${this.missionName}`);
     this.session.inputBridge.requestLock();
   }
 
-  private readonly onResumeFromOptions = (): void => {
+  protected readonly onResumeFromOptions = (): void => {
     const settings = SaveSystem.get().settings;
     this.hud.applySettings(settings.hud);
     this.hudInformation?.applySettings(settings.hud);
@@ -2288,14 +2313,14 @@ export class HeistScene extends Phaser.Scene {
     this.resumeHeist();
   };
 
-  private refreshHudInputPrompts(): void {
+  protected refreshHudInputPrompts(): void {
     const bindings = SaveSystem.get().settings.abilityBindings;
     for (const slot of this.hudPayload.abilities) {
       slot.keybind = this.inputController.prompt(slot.id, compactBindingLabel(bindings[slot.id]));
     }
   }
 
-  private updateInputCapture(): void {
+  protected updateInputCapture(): void {
     const bridge = this.session.inputBridge;
     if (this.manuallyPaused) {
       bridge?.hidePrompt();
@@ -2312,7 +2337,7 @@ export class HeistScene extends Phaser.Scene {
       this.coreAudio.pauseEventPresentationLoops();
       this.input.setDefaultCursor('default');
       this.crosshair.setVisible(false);
-      bridge?.showResume('CLICK TO RESUME HEIST');
+      bridge?.showResume(`CLICK TO RESUME ${this.missionName}`);
     } else {
       this.physics.resume();
       this.coreAudio.resumeEventPresentationLoops();
@@ -2322,7 +2347,7 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private updateCrosshair(): void {
+  protected updateCrosshair(): void {
     if (this.inputCapturePaused || this.manuallyPaused) return;
     const aim = this.getAimPoint();
     const color = this.phase === 'escape' ? 0xff6985 : 0x6af5ff;
@@ -2330,7 +2355,7 @@ export class HeistScene extends Phaser.Scene {
     drawReticle(this.crosshair, 0, 0, this.aimSettings.reticle, color);
   }
 
-  private pointBlocked(x: number, y: number): boolean {
+  protected pointBlocked(x: number, y: number): boolean {
     if (x < 74 || x > HEIST_WORLD.width - 74 || y < 74 || y > HEIST_WORLD.height - 74) return true;
     if (this.facility.vaultDoor.body?.enable && this.facility.layout.vaultDoors.some((door) => {
       const halfWidth = door.orientation === 'horizontal' ? door.width * 0.5 : 34;
@@ -2340,26 +2365,26 @@ export class HeistScene extends Phaser.Scene {
     return this.facility.containsWallPoint(x, y);
   }
 
-  private findContainerHit(x: number, y: number, padding = 0): HeistContainer | null {
+  protected findContainerHit(x: number, y: number, padding = 0): HeistContainer | null {
     if (this.phase !== 'looting') return null;
     return this.containers.find((container) => !container.opened && Math.abs(x - container.root.x) <= 38 + padding && Math.abs(y - container.root.y) <= 30 + padding) ?? null;
   }
 
-  private findEnemyHit(x: number, y: number): Enemy | null {
+  protected findEnemyHit(x: number, y: number): Enemy | null {
     return this.enemies.find((enemy) => enemy.active && (enemy.x - x) ** 2 + (enemy.y - y) ** 2 <= (enemy.stats.size * 0.55 + 6) ** 2) ?? null;
   }
 
-  private findTurretHit(x: number, y: number): Turret | null {
+  protected findTurretHit(x: number, y: number): Turret | null {
     return this.turrets.find((turret) => turret.hp > 0
       && (turret.sprite.x - x) ** 2 + (turret.sprite.y - y) ** 2 <= 19 * 19) ?? null;
   }
 
-  private findFenceHit(x: number, y: number): Fence | null {
+  protected findFenceHit(x: number, y: number): Fence | null {
     return this.fences.find((fence) => fence.hp > 0
       && this.distanceToSegment(x, y, fence.x1, fence.y1, fence.x2, fence.y2) <= 9) ?? null;
   }
 
-  private nearestEnemy(x: number, y: number, range: number): Enemy | null {
+  protected nearestEnemy(x: number, y: number, range: number): Enemy | null {
     let nearest: Enemy | null = null;
     let best = range * range;
     for (const enemy of this.enemies) {
@@ -2369,12 +2394,12 @@ export class HeistScene extends Phaser.Scene {
     return nearest;
   }
 
-  private retireProjectile(projectile: HeistProjectile, activeIndex: number): void {
+  protected retireProjectile(projectile: HeistProjectile, activeIndex: number): void {
     this.projectilePool.release(projectile);
     this.projectiles.splice(activeIndex, 1);
   }
 
-  private removeEnemy(enemy: Enemy, index: number): void {
+  protected removeEnemy(enemy: Enemy, index: number): void {
     if (enemy.name === 'heist-mini-boss' && enemy.hp <= 0) {
       this.miniBossKilled = true;
       const premiumDrop = this.rewards.rollMiniBossReward();
@@ -2407,7 +2432,7 @@ export class HeistScene extends Phaser.Scene {
     this.enemies.splice(index, 1);
   }
 
-  private spawnEnemyDrops(enemy: Enemy): void {
+  protected spawnEnemyDrops(enemy: Enemy): void {
     const standardChance = Math.min(1,
       PICKUP_BALANCE.enemyDropChance * this.modRuntime.multiplier('enemyPickupChance'));
     if (this.random.next() < standardChance) {
@@ -2425,12 +2450,12 @@ export class HeistScene extends Phaser.Scene {
         provisionalReward
       });
     }
-    if (this.random.next() >= HEIST_BALANCE.enemyAnomalyLootChance) return;
+    if (this.anomalyId !== 'heist' || this.random.next() >= HEIST_BALANCE.enemyAnomalyLootChance) return;
     const reward = this.rewards.rollEnemyBonus();
     this.lootPickups.spawn(enemy.x + 18, enemy.y - 12, reward, 2_000 + this.enemyLootSequence++);
   }
 
-  private finalMetricFields(reason: string): Partial<Parameters<typeof recordAnomalyMetric>[0]> {
+  protected finalMetricFields(reason: string): Partial<Parameters<typeof recordAnomalyMetric>[0]> {
     return {
       reason,
       damageDealt: Math.round(this.damageDealt * 100) / 100,
@@ -2441,7 +2466,7 @@ export class HeistScene extends Phaser.Scene {
     };
   }
 
-  private distanceToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  protected distanceToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
     const dx = x2 - x1; const dy = y2 - y1;
     const length = dx * dx + dy * dy;
     if (length <= 0) return Math.hypot(px - x1, py - y1);
@@ -2449,23 +2474,23 @@ export class HeistScene extends Phaser.Scene {
     return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
   }
 
-  private emitMetric(name: AnomalyMetricName, extra: Partial<Parameters<typeof recordAnomalyMetric>[0]> = {}): void {
+  protected emitMetric(name: AnomalyMetricName, extra: Partial<Parameters<typeof recordAnomalyMetric>[0]> = {}): void {
     recordAnomalyMetric({
-      name, anomalyId: 'heist', round: this.session.round, protocol: this.session.protocol,
+      name, anomalyId: this.anomalyId, round: this.session.round, protocol: this.session.protocol,
       rewardPosition: this.campaignPositions.rewardPosition, difficultyPosition: this.campaignPositions.difficultyPosition,
       elapsedMs: this.elapsedMs, ...extra
     });
   }
 
-  private readonly onDevPreRender = (): void => {
+  protected readonly onDevPreRender = (): void => {
     this.devRenderStartedAt = performance.now();
   };
 
-  private readonly onDevPreUpdate = (): void => {
+  protected readonly onDevPreUpdate = (): void => {
     this.devPhysicsUpdateStartedAt = performance.now();
   };
 
-  private readonly onDevPhysicsUpdateComplete = (): void => {
+  protected readonly onDevPhysicsUpdateComplete = (): void => {
     if (this.devPhysicsUpdateStartedAt <= 0) return;
     // Arcade World.update is registered on Scene UPDATE before this DEV-only
     // listener. This captures that update envelope without wrapping or
@@ -2474,13 +2499,13 @@ export class HeistScene extends Phaser.Scene {
     this.devPhysicsUpdateStartedAt = 0;
   };
 
-  private readonly onDevRender = (): void => {
+  protected readonly onDevRender = (): void => {
     if (this.devRenderStartedAt <= 0) return;
     this.performanceProfiler?.recordRender(performance.now() - this.devRenderStartedAt);
     this.devRenderStartedAt = 0;
   };
 
-  private readonly toggleDevPerformanceOverlay = (): void => {
+  protected readonly toggleDevPerformanceOverlay = (): void => {
     if (!import.meta.env.DEV) return;
     if (!this.devPerformanceOverlay) {
       this.devPerformanceOverlay = this.add.text(this.scale.width - 14, 14, '', {
@@ -2495,7 +2520,7 @@ export class HeistScene extends Phaser.Scene {
     this.nextDevPerformanceOverlayAt = 0;
   };
 
-  private updateDevPerformanceOverlay(now: number): void {
+  protected updateDevPerformanceOverlay(now: number): void {
     if (!this.devPerformanceOverlay?.visible || now < this.nextDevPerformanceOverlayAt) return;
     this.nextDevPerformanceOverlayAt = now + 500;
     const snapshot = this.performanceProfiler?.snapshot();
@@ -2521,7 +2546,7 @@ export class HeistScene extends Phaser.Scene {
     );
   }
 
-  private createDevPerformanceSnapshot(): Record<string, unknown> {
+  protected createDevPerformanceSnapshot(): Record<string, unknown> {
     const arena = this.scene.manager.getScene(SceneKeys.Arena);
     const arenaRuntime = arena as Phaser.Scene & { physics?: Phaser.Physics.Arcade.ArcadePhysics };
     const arenaClock = arena.time as unknown as { _active?: unknown[]; _pendingInsertion?: unknown[] };
@@ -2602,7 +2627,7 @@ export class HeistScene extends Phaser.Scene {
     };
   }
 
-  private cleanup(): void {
+  protected cleanup(): void {
     this.echo?.destroy(); this.echo = null;
     const finalInputDevice = this.inputController?.activeDevice ?? this.session?.initialInputDevice;
     this.pendingFadeReturn = null;
@@ -2620,7 +2645,7 @@ export class HeistScene extends Phaser.Scene {
       }
     };
     safely('anomaly-audio', () => this.audio.stopAll());
-    safely('heist-music', () => this.coreAudio.exitHeistMusic());
+    if (this.anomalyId === 'heist') safely('heist-music', () => this.coreAudio.exitHeistMusic());
     // HEIST is a separate world owner. Retire its weapon, hazard, pickup and
     // fire-trap voices before the preserved Arena wakes, while deliberately
     // allowing the short portal transit bridge to finish.
@@ -2662,7 +2687,7 @@ export class HeistScene extends Phaser.Scene {
     if (!this.returning && this.session) {
       const arena = this.scene.get(SceneKeys.Arena);
       arena.events.emit('anomaly-return', {
-        sessionId: this.session.sessionId, anomalyId: 'heist', success: false,
+        sessionId: this.session.sessionId, anomalyId: this.anomalyId, success: false,
         sourcePortal: { ...this.session.sourcePortal }, loot: emptyLoot(), reason: 'scene-shutdown',
         inputDevice: finalInputDevice
       } satisfies AnomalyReturnResult);
@@ -2680,4 +2705,8 @@ export class HeistScene extends Phaser.Scene {
       delete debug.n3onHeistPerf;
     }
   }
+}
+
+export class HeistScene extends AnomalyCombatScene {
+  constructor() { super(SceneKeys.Heist); }
 }

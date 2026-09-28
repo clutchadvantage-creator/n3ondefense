@@ -1215,7 +1215,7 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   private hasPreservedGameplay(): boolean {
-    return [SceneKeys.Arena, SceneKeys.Heist].some(key =>
+    return [SceneKeys.Arena, SceneKeys.Heist, SceneKeys.SkyBreach].some(key =>
       this.scene.isActive(key) || this.scene.isPaused(key) || this.scene.isSleeping(key));
   }
 
@@ -1228,6 +1228,7 @@ export class OptionsScene extends Phaser.Scene {
       // cannot wake a deployment that the player has explicitly ended.
       this.scene.get(SceneKeys.Arena).events.emit('quit-from-options');
       this.scene.stop(SceneKeys.Heist);
+      this.scene.stop(SceneKeys.SkyBreach);
       this.scene.stop();
     }, 'Cancel', () => { this.quitConfirmation = null; });
   }

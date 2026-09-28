@@ -15,7 +15,7 @@ const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 test('Anomaly registry keeps the first event data-driven and entry prices on the exact approved table', () => {
   assert.deepEqual([...ANOMALY_ENTRY_COSTS], Array.from({ length: 56 }, (_, i) => 35 + i));
-  assert.equal(ANOMALY_DEFINITIONS.length, 1);
+  assert.deepEqual(ANOMALY_DEFINITIONS.map(d => d.id), ['heist', 'skybreach']);
   assert.equal(ANOMALY_DEFINITIONS[0].id, 'heist');
   assert.ok(ANOMALY_SCHEDULING.cooldownMs > ANOMALY_SCHEDULING.maximumOpportunityMs);
   assert.ok(ANOMALY_SCHEDULING.interactionRadius > 0);
@@ -63,7 +63,7 @@ test('HEIST reward scaling improves with entry risk but never guarantees a full 
 
 test('Arena suspension is the authoritative preservation boundary and only commits successful extraction', () => {
   const arena = source('../src/game/scenes/ArenaScene.ts');
-  assert.match(arena, /this\.scene\.launch\(SceneKeys\.Heist, session\);[\s\S]{0,400}this\.scene\.sleep\(\)/);
+  assert.match(arena, /this\.scene\.launch\(ANOMALY_SCENES\[request\.anomalyId\], session\);[\s\S]{0,400}this\.scene\.sleep\(\)/);
   assert.match(arena, /if \(result\.success\) this\.commitAnomalyLoot\(result\)/);
   assert.match(arena, /this\.player\.invulnUntil = Math\.max\([\s\S]*?HEIST_BALANCE\.safeReturnInvulnerabilityMs/);
   assert.match(arena, /sharedRuntime:\s*\{[\s\S]*?modRuntime: this\.modRuntime,[\s\S]*?temporaryAmmo: this\.temporaryAmmo,[\s\S]*?mineChargeRack: this\.mineChargeRack/);
@@ -75,12 +75,12 @@ test('Arena suspension is the authoritative preservation boundary and only commi
 
 test('HEIST failure bypasses normal defeat and restores through the Arena return event', () => {
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
-  assert.match(heist, /private failHeist\(reason: 'player-dead' \| 'extraction-timeout' = 'player-dead'\)/);
+  assert.match(heist, /protected failHeist\(reason: 'player-dead' \| 'extraction-timeout' = 'player-dead'\)/);
   assert.match(heist, /beginReturnFade\(false, reason, 500\)/);
   assert.doesNotMatch(heist, /SceneKeys\.Results|triggerDefeat/);
   assert.match(heist, /arena\.events\.emit\('anomaly-return'/);
   assert.match(heist, /Phaser\.Cameras\.Scene2D\.Events\.FADE_OUT_COMPLETE/);
-  const transition = heist.slice(heist.indexOf('private returnToArena'), heist.indexOf('private updateHud'));
+  const transition = heist.slice(heist.indexOf('protected returnToArena'), heist.indexOf('protected updateHud'));
   assert.doesNotMatch(transition, /this\.scene\.resume\(SceneKeys\.Arena\)/);
 });
 
@@ -187,14 +187,14 @@ test('HEIST facility and shared Arcade HUD use bounded dimensional presentation 
 test('Arena owns ordered HEIST stop, Arena wake, and WAKE-bound restoration', () => {
   const arena = source('../src/game/scenes/ArenaScene.ts');
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
-  const transition = heist.slice(heist.indexOf('private returnToArena'), heist.indexOf('private updateHud'));
+  const transition = heist.slice(heist.indexOf('protected returnToArena'), heist.indexOf('protected updateHud'));
   assert.doesNotMatch(transition, /this\.scene\.(?:resume|wake)\(SceneKeys\.Arena\)/);
   assert.doesNotMatch(transition, /this\.scene\.stop\(SceneKeys\.Heist\)/);
   assert.match(transition, /arena\.events\.emit\('anomaly-return'/);
   const stageReturn = arena.slice(arena.indexOf('private readonly onAnomalyReturn'), arena.indexOf('private readonly onArenaWoken'));
   const restoreReturn = arena.slice(arena.indexOf('private readonly onArenaWoken'), arena.indexOf('constructor()'));
   assert.match(stageReturn, /stageReturn\(result\.sessionId\)/);
-  assert.ok(stageReturn.indexOf('this.scene.stop(SceneKeys.Heist)') < stageReturn.indexOf('this.scene.wake(SceneKeys.Arena)'));
+  assert.ok(stageReturn.indexOf('this.scene.stop(ANOMALY_SCENES[result.anomalyId])') < stageReturn.indexOf('this.scene.wake(SceneKeys.Arena)'));
   assert.match(stageReturn, /this\.scene\.wake\(SceneKeys\.Arena\)/);
   assert.doesNotMatch(stageReturn, /this\.scene\.(?:start|restart)\(SceneKeys\.Arena/);
   assert.doesNotMatch(stageReturn, /restoreAnomalySimulation/);
@@ -219,8 +219,8 @@ test('Arena owns ordered HEIST stop, Arena wake, and WAKE-bound restoration', ()
 
 test('HEIST shutdown leaves Phaser-owned objects to Phaser and resets reusable scene state', () => {
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
-  const reset = heist.slice(heist.indexOf('private resetSessionState'), heist.indexOf('private resolveProjectileCosmetics'));
-  const cleanup = heist.slice(heist.indexOf('private cleanup()'), heist.lastIndexOf('\n}'));
+  const reset = heist.slice(heist.indexOf('protected resetSessionState'), heist.indexOf('protected resolveProjectileCosmetics'));
+  const cleanup = heist.slice(heist.indexOf('protected cleanup()'), heist.lastIndexOf('\n}'));
   assert.match(reset, /this\.returning = false/);
   assert.match(reset, /this\.returnResultDelivered = false/);
   assert.match(reset, /this\.containers\.length = 0/);
@@ -228,7 +228,7 @@ test('HEIST shutdown leaves Phaser-owned objects to Phaser and resets reusable s
   assert.match(cleanup, /projectilePool\?\.discardReferences\(\)/);
   assert.match(cleanup, /fxCirclePool\?\.discardReferences\(\)/);
   assert.match(cleanup, /lootPickups\?\.discardReferences\(\)/);
-  assert.match(heist, /private maintainCombatPools/);
+  assert.match(heist, /protected maintainCombatPools/);
   assert.match(heist, /nextPoolMaintenanceAt = now \+ 2_000/);
   assert.doesNotMatch(cleanup, /this\.facility\?\.destroy|this\.hud\?\.destroy|this\.projectilePool\?\.destroy/);
 });
@@ -316,7 +316,7 @@ test('HEIST creates physical provisional loot and extraction never waits for eve
   const heist = source('../src/game/anomalies/heist/HeistScene.ts');
   const lootSystem = source('../src/game/anomalies/heist/HeistLootPickupSystem.ts');
   assert.match(heist, /this\.lootPickups\.spawn\(/);
-  assert.match(heist, /private collectLoot[\s\S]*this\.rewards\.add\(this\.pendingLoot, reward\)/);
+  assert.match(heist, /protected collectLoot[\s\S]*this\.rewards\.add\(this\.pendingLoot, reward\)/);
   assert.match(lootSystem, /pickup\.settled/);
   assert.match(lootSystem, /createPhysicalLootPlan/);
   assert.match(lootSystem, /GameplayPickupPresentation/);
@@ -334,7 +334,7 @@ test('HEIST escape timer, traps, patrols, and reinforcements remain bounded and 
   assert.equal(HEIST_BALANCE.extractionDurationMs, 45_000);
   assert.match(heist, /phase === 'egress-ready' && !this\.facility\.isInsideVault/);
   assert.match(heist, /this\.escapeDeadline = now \+ HEIST_BALANCE\.extractionDurationMs/);
-  assert.match(heist, /private spawnInfiltrationPatrols/);
+  assert.match(heist, /protected spawnInfiltrationPatrols/);
   assert.match(heist, /escapeMaximumEnemies - this\.enemies\.length/);
   assert.match(heist, /selectEnemyPickup/);
   assert.match(heist, /enemyAnomalyLootChance/);

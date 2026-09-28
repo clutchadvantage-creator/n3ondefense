@@ -45,7 +45,7 @@ export class RunTransitionManager {
     if (RunTransitionManager.inProgress || game.registry.has('arena-session')) return true;
     return game.scene.scenes.some(scene => {
       const key = scene.sys.settings.key;
-      const runScene = key === SceneKeys.Arena || key === SceneKeys.Heist || key === SceneKeys.Loading
+      const runScene = key === SceneKeys.Arena || key === SceneKeys.Heist || key === SceneKeys.SkyBreach || key === SceneKeys.Loading
         || key === SceneKeys.Results || key === SceneKeys.RoundFinished;
       return runScene && (scene.sys.isActive() || scene.sys.isPaused() || scene.sys.isSleeping());
     });

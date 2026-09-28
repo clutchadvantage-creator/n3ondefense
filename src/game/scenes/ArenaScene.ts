@@ -1,3 +1,4 @@
+import { ANOMALY_SCENES } from '../anomalies/AnomalyScenes.ts';
 import { GameplayPickupMotion, collectOrAttractPickup, energyPickupBlocked, findGameplayPickupLanding } from '../loot/GameplayPickupMotion.ts';
 import { HudInformationSystem } from '../ui/HudInformationSystem.ts';
 import { WeeklyCompletionTracker } from '../progression/WeeklyCompletionTracker.ts';
@@ -856,7 +857,7 @@ export class ArenaScene extends Phaser.Scene {
     this.traceAnomalyReturn('return-staged');
     // One owner and one deferred queue: retire the anomaly first, then wake
     // this same preserved Arena instance. Restoration runs from WAKE below.
-    this.scene.stop(SceneKeys.Heist);
+    this.scene.stop(ANOMALY_SCENES[result.anomalyId]);
     this.scene.wake(SceneKeys.Arena);
   };
   private readonly onArenaWoken = (): void => {
@@ -919,8 +920,8 @@ export class ArenaScene extends Phaser.Scene {
     this.crosshairValid = null;
     this.refreshHudWallet();
     this.showBanner(result.success
-      ? 'HEIST COMPLETE // HAUL COMMITTED'
-      : 'HEIST FAILED // ARENA STATE RESTORED');
+      ? `${result.anomalyId.toUpperCase()} COMPLETE // HAUL COMMITTED`
+      : `${result.anomalyId.toUpperCase()} FAILED // ARENA STATE RESTORED`);
     this.clearGameplayInput();
     const pointerRequired = this.playerInput.activeDevice !== 'gamepad' && Boolean(this.pointerLock?.supported);
     if (pointerRequired && !this.pointerLock?.locked) {
@@ -5375,7 +5376,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private beginAnomalyTransition(request: AnomalyEntryRequest): void {
     if (!isValidAnomalyEntryCost(request.cost)) return;
-    if (request.anomalyId !== 'heist' || !this.anomalyReturnLifecycle.begin(request.sessionId)) return;
+    if (!ANOMALY_SCENES[request.anomalyId] || !this.anomalyReturnLifecycle.begin(request.sessionId)) return;
     this.clearEcho();
     this.arenaFireTraps?.clearExposure();
     this.projectileImpactVfx.reset();
@@ -5401,11 +5402,13 @@ export class ArenaScene extends Phaser.Scene {
     const appearance = SaveSystem.getOperativeFrameAppearance(this.time.now);
     const session: HeistSessionData = {
       sessionId: request.sessionId,
-      anomalyId: 'heist',
+      anomalyId: request.anomalyId,
       cost: request.cost,
       round: this.currentCombatRound(),
       seed: this.layout.seed ^ 0x4e1a57,
       protocol: this.protocol,
+      modFocus: this.modFocus,
+      contract: this.contract,
       sourcePortal: { ...request.portal },
       player: {
         textureKey: appearance.textureKey,
@@ -5447,6 +5450,15 @@ export class ArenaScene extends Phaser.Scene {
       },
       inputBridge: this.devAnomalyReturnSoak ? undefined : this.pointerLock ?? undefined,
       initialInputDevice: this.playerInput.activeDevice,
+      difficulty: {
+        ...getDifficultyCurve(this.currentCombatPosition(), this.bombSites.destroyedCount()),
+        activeCount: getConcurrentSpawnPressure(
+          getSpawnProfile(this.currentCombatPosition(), this.bombSites.destroyedCount(), this.currentModeFamily()),
+          this.bombSites.activeBombCount()
+        ).activeCountCap,
+        rewardMultiplier: this.currentRewardMultiplier(),
+        contractHealthMultiplier: getContract(this.contract)?.enemyHealthMultiplier ?? 1
+      },
       dev: {
         forceMiniBoss: import.meta.env.DEV
           ? this.registry.get('heist-dev-force-miniboss') as boolean | null | undefined
@@ -5454,7 +5466,7 @@ export class ArenaScene extends Phaser.Scene {
         instantReturn: import.meta.env.DEV && Boolean(this.devAnomalyReturnSoak)
       }
     };
-    this.scene.launch(SceneKeys.Heist, session);
+    this.scene.launch(ANOMALY_SCENES[request.anomalyId], session);
     // The portal begins a pale entry flash immediately before this handoff.
     // Clear it before sleeping so a failed handoff can never leave a paused,
     // still-visible Arena rendering the first white flash frame.
@@ -5673,6 +5685,8 @@ export class ArenaScene extends Phaser.Scene {
     if (this.scene.isSleeping(SceneKeys.Arena)) failures.push('arena-scene-sleeping');
     if (this.scene.isActive(SceneKeys.Heist)) failures.push('heist-still-active');
     if (this.scene.isVisible(SceneKeys.Heist)) failures.push('heist-still-visible');
+    if (this.scene.isActive(SceneKeys.SkyBreach)) failures.push('skybreach-still-active');
+    if (this.scene.isVisible(SceneKeys.SkyBreach)) failures.push('skybreach-still-visible');
     if (!camera || !camera.visible || camera.alpha <= 0) failures.push('arena-camera-hidden');
     if (camera.width <= 0 || camera.height <= 0) failures.push('arena-camera-viewport-invalid');
     if (!Number.isFinite(camera.zoom) || camera.zoom <= 0) failures.push('arena-camera-zoom-invalid');
@@ -5801,7 +5815,7 @@ export class ArenaScene extends Phaser.Scene {
     ];
     for (const entry of entries) {
       if (entry.amount <= 0) continue;
-      recordAnomalyMetric({ name: 'anomaly_reward_committed', anomalyId: 'heist', round: this.currentCombatRound(),
+      recordAnomalyMetric({ name: 'anomaly_reward_committed', anomalyId: result.anomalyId, round: this.currentCombatRound(),
         protocol: this.protocol, elapsedMs: 0, rewardKind: entry.kind, rewardAmount: entry.amount });
     }
     for (const modId of loot.modIds) {
@@ -5815,7 +5829,7 @@ export class ArenaScene extends Phaser.Scene {
         MOD_PICKUP_REVEAL_LEAD_IN_MS
       );
       if (!awarded) continue;
-      recordAnomalyMetric({ name: 'anomaly_reward_committed', anomalyId: 'heist', round: this.currentCombatRound(),
+      recordAnomalyMetric({ name: 'anomaly_reward_committed', anomalyId: result.anomalyId, round: this.currentCombatRound(),
         protocol: this.protocol, elapsedMs: 0, rewardKind: 'mod', rewardAmount: 1 });
     }
   }

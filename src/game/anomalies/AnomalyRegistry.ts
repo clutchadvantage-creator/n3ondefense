@@ -31,6 +31,12 @@ export const ANOMALY_DEFINITIONS: readonly AnomalyDefinition[] = [{
   environmentTheme: 'abandoned-dimensional-research',
   portalVariant: 'dimensional-breach',
   extractionRule: 'interact'
+}, {
+  id: 'skybreach', displayName: 'SKYBREACH',
+  description: 'BREACH HOSTILE AIRSPACE // DISARM THE DREADNOUGHT // RETURN ALIVE',
+  minimumRound: 3, weight: 1, chargeBase: 12, chargePerRound: 0.28, chargeMaximum: 26,
+  rarity: 'rare', layoutId: 'storm-corridor', encounterTableId: 'skybreach-air-campaign',
+  rewardTableId: 'boss-provisional', environmentTheme: 'rwg-high-altitude', extractionRule: 'interact'
 }] as const;
 
 export const ANOMALY_BY_ID = new Map<AnomalyId, AnomalyDefinition>(

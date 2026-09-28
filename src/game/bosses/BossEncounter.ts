@@ -1,3 +1,4 @@
+import { createArtilleryMarker } from './ArtilleryMarker.ts';
 import Phaser from 'phaser';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossDamageMultiplier, type BossArchetype } from '../config/bossBalance';
 import type { RunModeFamily } from '../config/modeBalance.ts';
@@ -478,30 +479,8 @@ export class BossEncounter {
   private scheduleStrike(x: number, y: number, radius: number, damage: number, delayMs: number, color: number, attack: BossAttackKind): void {
     if (!this.combatActive || this.boss.isDefeated) return;
     const target = this.clampPoint(x, y);
-    const targetRing = this.scene.add.circle(0, 0, radius, color, 0.055)
-      .setStrokeStyle(3, color, 0.94)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const timingRing = this.scene.add.circle(0, 0, radius * 0.72, 0x000000, 0)
-      .setStrokeStyle(2, 0xffffff, 0.82)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    const reticle = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-    reticle.lineStyle(2, color, 0.78);
-    for (let index = 0; index < 12; index += 1) {
-      const angle = index * Math.PI / 6;
-      const inner = radius * (index % 3 === 0 ? 0.7 : 0.82);
-      const outer = radius * (index % 3 === 0 ? 1.18 : 1.04);
-      reticle.lineBetween(Math.cos(angle) * inner, Math.sin(angle) * inner, Math.cos(angle) * outer, Math.sin(angle) * outer);
-    }
-    reticle.lineStyle(1, 0xffffff, 0.56)
-      .lineBetween(-radius * 0.34, 0, radius * 0.34, 0)
-      .lineBetween(0, -radius * 0.34, 0, radius * 0.34);
-    const payload = this.scene.add.image(0, -270, 'projectile-missile')
-      .setDisplaySize(34, 17)
-      .setTint(attack === 'artillery-strike' ? 0xffd070 : color)
-      .setRotation(Math.PI * 0.5)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setVisible(attack === 'artillery-strike');
-    const marker = this.scene.add.container(target.x, target.y, [targetRing, timingRing, reticle, payload]).setDepth(7);
+    const { marker, targetRing, timingRing, reticle, payload } = createArtilleryMarker(
+      this.scene, target.x, target.y, radius, color, attack === 'artillery-strike');
     this.pendingStrikes.push({
       ...target,
       radius,

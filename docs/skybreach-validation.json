@@ -1,0 +1,852 @@
+{
+  "recordedAt": "2026-09-28T13:53:52.886Z",
+  "fixture": "scripts/audit-skybreach.browser.js",
+  "browserChecks": 189,
+  "passed": true,
+  "controls": [
+    "isolated DEV profile",
+    "invulnerability",
+    "supplied energy",
+    "simulated controller",
+    "accelerated module boundaries",
+    "accelerated boss damage",
+    "allied fire isolated for independent hardpoint checks",
+    "45/sec requested cadence constrained by existing 22/sec maximum"
+  ],
+  "limitations": [
+    "short assisted samples, not unassisted full-length clears",
+    "no physical controller or audible-output verification",
+    "frame intervals from performance.now at game steps; not GPU timer queries",
+    "not an exhaustive loadout or slower-device performance claim"
+  ],
+  "modes": [
+    {
+      "mode": "normal",
+      "round": 4,
+      "difficulty": {
+        "localRound": 4,
+        "rewardPosition": 4,
+        "difficultyPosition": 4,
+        "health": 0.9082,
+        "damage": 0.7956,
+        "speed": 1.036,
+        "pressure": 1,
+        "activeCap": 11,
+        "formationCount": 3,
+        "bossHealth": 5472,
+        "bossDamage": 0.78,
+        "rewardMultiplier": 1
+      },
+      "frames": 181,
+      "mean": 16.60718232047492,
+      "p95": 17,
+      "highRatePlayerProjectiles": 17,
+      "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":1256,\"height\":708,\"scrollX\":69.77777777777771,\"scrollY\":447,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+    },
+    {
+      "mode": "overdrive",
+      "round": 16,
+      "difficulty": {
+        "localRound": 16,
+        "rewardPosition": 46,
+        "difficultyPosition": 46,
+        "health": 2.1,
+        "damage": 1.65,
+        "speed": 1.28,
+        "pressure": 1,
+        "activeCap": 24,
+        "formationCount": 4,
+        "bossHealth": 22400,
+        "bossDamage": 1.48,
+        "rewardMultiplier": 1
+      },
+      "frames": 180,
+      "mean": 16.620555555572114,
+      "p95": 17,
+      "highRatePlayerProjectiles": 17,
+      "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":1256,\"height\":708,\"scrollX\":572,\"scrollY\":39.333333333333314,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+    },
+    {
+      "mode": "supreme",
+      "round": 26,
+      "difficulty": {
+        "localRound": 26,
+        "rewardPosition": 86,
+        "difficultyPosition": 136,
+        "health": 4.513320000000001,
+        "damage": 2.6202,
+        "speed": 1.4336000000000002,
+        "pressure": 1.22,
+        "activeCap": 24,
+        "formationCount": 7,
+        "bossHealth": 31360,
+        "bossDamage": 1.8055999999999999,
+        "rewardMultiplier": 1.9500000000000002
+      },
+      "frames": 180,
+      "mean": 16.624444444477557,
+      "p95": 17,
+      "highRatePlayerProjectiles": 17,
+      "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":1256,\"height\":708,\"scrollX\":69.77777777777771,\"scrollY\":446,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+    }
+  ],
+  "checks": [
+    {
+      "ok": true,
+      "label": "isolated profile"
+    },
+    {
+      "ok": true,
+      "label": "normal: force eligible SkyBreach opportunity"
+    },
+    {
+      "ok": true,
+      "label": "normal: paid portal entry"
+    },
+    {
+      "ok": true,
+      "label": "normal: exact shared fee deducted"
+    },
+    {
+      "ok": true,
+      "label": "normal: Arena sleeps"
+    },
+    {
+      "ok": true,
+      "label": "normal: shared authoritative build"
+    },
+    {
+      "ok": true,
+      "label": "normal: player stats preserved"
+    },
+    {
+      "ok": true,
+      "label": "normal: suspended clock and player remain intact"
+    },
+    {
+      "ok": true,
+      "label": "normal: aircraft keeps 12px collision radius"
+    },
+    {
+      "ok": true,
+      "label": "normal: responsive controller movement"
+    },
+    {
+      "ok": true,
+      "label": "normal: dash executes"
+    },
+    {
+      "ok": true,
+      "label": "normal: shield executes"
+    },
+    {
+      "ok": true,
+      "label": "normal: authoritative turret placed"
+    },
+    {
+      "ok": true,
+      "label": "normal: mine rack launches"
+    },
+    {
+      "ok": true,
+      "label": "normal: fence preserved"
+    },
+    {
+      "ok": true,
+      "label": "normal: normal uses shared projectile pool"
+    },
+    {
+      "ok": true,
+      "label": "normal: scattershot uses shared projectile pool"
+    },
+    {
+      "ok": true,
+      "label": "normal: grenade uses shared projectile pool"
+    },
+    {
+      "ok": true,
+      "label": "normal: Rapid Fire remains active"
+    },
+    {
+      "ok": true,
+      "label": "normal: shared fire cadence advances"
+    },
+    {
+      "ok": true,
+      "label": "normal: all five aircraft/ground roles"
+    },
+    {
+      "ok": true,
+      "label": "normal: shared artillery telegraph"
+    },
+    {
+      "ok": true,
+      "label": "normal: health pickup restores"
+    },
+    {
+      "ok": true,
+      "label": "normal: energy pickup restores"
+    },
+    {
+      "ok": true,
+      "label": "normal: high fire-rate build respects existing 22/sec ceiling"
+    },
+    {
+      "ok": true,
+      "label": "authored module 1: OUTER AIR PATROL"
+    },
+    {
+      "ok": true,
+      "label": "module 1 spawns its authored role"
+    },
+    {
+      "ok": true,
+      "label": "authored module 2: CROSSING CONTACTS"
+    },
+    {
+      "ok": true,
+      "label": "module 2 spawns its authored role"
+    },
+    {
+      "ok": true,
+      "label": "authored module 3: DRONE PICKET"
+    },
+    {
+      "ok": true,
+      "label": "module 3 spawns its authored role"
+    },
+    {
+      "ok": true,
+      "label": "authored module 4: ARMORED CONVOY"
+    },
+    {
+      "ok": true,
+      "label": "module 4 spawns its authored role"
+    },
+    {
+      "ok": true,
+      "label": "authored module 5: ANTI-AIR CORRIDOR"
+    },
+    {
+      "ok": true,
+      "label": "module 5 spawns its authored role"
+    },
+    {
+      "ok": true,
+      "label": "authored module 6: SERVICE WINDOW"
+    },
+    {
+      "ok": true,
+      "label": "authored module 7: STRIKE ESCORT"
+    },
+    {
+      "ok": true,
+      "label": "module 7 spawns its authored role"
+    },
+    {
+      "ok": true,
+      "label": "authored module 8: WAR ZEPPELIN"
+    },
+    {
+      "ok": true,
+      "label": "module 8 spawns its authored role"
+    },
+    {
+      "ok": true,
+      "label": "authored module 9: SIEGE BATTERY"
+    },
+    {
+      "ok": true,
+      "label": "module 9 spawns its authored role"
+    },
+    {
+      "ok": true,
+      "label": "authored module 10: ELITE INTERDICTION"
+    },
+    {
+      "ok": true,
+      "label": "module 10 spawns its authored role"
+    },
+    {
+      "ok": true,
+      "label": "authored module 11: FINAL APPROACH"
+    },
+    {
+      "ok": true,
+      "label": "final approach automatically starts Dreadnought"
+    },
+    {
+      "ok": true,
+      "label": "normal: loot remains provisional"
+    },
+    {
+      "ok": true,
+      "label": "all five boss attack families execute in live updates"
+    },
+    {
+      "ok": true,
+      "label": "normal: core rejects early damage"
+    },
+    {
+      "ok": true,
+      "label": "normal: core rejects Echo before opening"
+    },
+    {
+      "ok": true,
+      "label": "normal: targetable cannon-left"
+    },
+    {
+      "ok": true,
+      "label": "normal: disabled cannon-left"
+    },
+    {
+      "ok": true,
+      "label": "normal: targetable cannon-right"
+    },
+    {
+      "ok": true,
+      "label": "normal: disabled cannon-right"
+    },
+    {
+      "ok": true,
+      "label": "normal: targetable broadside-left"
+    },
+    {
+      "ok": true,
+      "label": "normal: disabled broadside-left"
+    },
+    {
+      "ok": true,
+      "label": "normal: targetable broadside-right"
+    },
+    {
+      "ok": true,
+      "label": "normal: disabled broadside-right"
+    },
+    {
+      "ok": true,
+      "label": "normal: targetable missile-left"
+    },
+    {
+      "ok": true,
+      "label": "normal: disabled missile-left"
+    },
+    {
+      "ok": true,
+      "label": "normal: targetable missile-right"
+    },
+    {
+      "ok": true,
+      "label": "normal: disabled missile-right"
+    },
+    {
+      "ok": true,
+      "label": "normal: targetable artillery"
+    },
+    {
+      "ok": true,
+      "label": "normal: disabled artillery"
+    },
+    {
+      "ok": true,
+      "label": "normal: destroyed weapons cancel queued fire"
+    },
+    {
+      "ok": true,
+      "label": "normal: all seven hardpoints expose core"
+    },
+    {
+      "ok": true,
+      "label": "normal: physical boss burst stays pending"
+    },
+    {
+      "ok": true,
+      "label": "normal: successful haul committed once"
+    },
+    {
+      "ok": true,
+      "label": "normal: scene objects and combat references retired"
+    },
+    {
+      "ok": true,
+      "label": "normal: captured visual roots destroyed"
+    },
+    {
+      "ok": true,
+      "label": "normal: same Arena player restored"
+    },
+    {
+      "ok": true,
+      "label": "normal: suspension snapshot retired"
+    },
+    {
+      "ok": true,
+      "label": "normal: camera zoom and input restored"
+    },
+    {
+      "ok": true,
+      "label": "normal: second opportunity"
+    },
+    {
+      "ok": true,
+      "label": "normal: failure discards only pending earnings"
+    },
+    {
+      "ok": true,
+      "label": "normal: established failure ejection restores playable Arena"
+    },
+    {
+      "ok": true,
+      "label": "HEIST remains eligible"
+    },
+    {
+      "ok": true,
+      "label": "HEIST paid entry"
+    },
+    {
+      "ok": true,
+      "label": "HEIST facility and containers retain existing initialization"
+    },
+    {
+      "ok": true,
+      "label": "HEIST escrow unchanged"
+    },
+    {
+      "ok": true,
+      "label": "HEIST commit and return remain functional"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: force eligible SkyBreach opportunity"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: paid portal entry"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: exact shared fee deducted"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: Arena sleeps"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: shared authoritative build"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: player stats preserved"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: suspended clock and player remain intact"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: aircraft keeps 12px collision radius"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: responsive controller movement"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: dash executes"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: shield executes"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: authoritative turret placed"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: mine rack launches"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: fence preserved"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: normal uses shared projectile pool"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: scattershot uses shared projectile pool"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: grenade uses shared projectile pool"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: Rapid Fire remains active"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: shared fire cadence advances"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: all five aircraft/ground roles"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: shared artillery telegraph"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: health pickup restores"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: energy pickup restores"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: high fire-rate build respects existing 22/sec ceiling"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: loot remains provisional"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: core rejects early damage"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: core rejects Echo before opening"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: targetable cannon-left"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: disabled cannon-left"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: targetable cannon-right"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: disabled cannon-right"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: targetable broadside-left"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: disabled broadside-left"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: targetable broadside-right"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: disabled broadside-right"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: targetable missile-left"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: disabled missile-left"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: targetable missile-right"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: disabled missile-right"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: targetable artillery"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: disabled artillery"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: destroyed weapons cancel queued fire"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: all seven hardpoints expose core"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: physical boss burst stays pending"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: successful haul committed once"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: scene objects and combat references retired"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: captured visual roots destroyed"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: same Arena player restored"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: suspension snapshot retired"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: camera zoom and input restored"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: second opportunity"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: failure discards only pending earnings"
+    },
+    {
+      "ok": true,
+      "label": "overdrive: established failure ejection restores playable Arena"
+    },
+    {
+      "ok": true,
+      "label": "supreme: force eligible SkyBreach opportunity"
+    },
+    {
+      "ok": true,
+      "label": "supreme: paid portal entry"
+    },
+    {
+      "ok": true,
+      "label": "supreme: exact shared fee deducted"
+    },
+    {
+      "ok": true,
+      "label": "supreme: Arena sleeps"
+    },
+    {
+      "ok": true,
+      "label": "supreme: shared authoritative build"
+    },
+    {
+      "ok": true,
+      "label": "supreme: player stats preserved"
+    },
+    {
+      "ok": true,
+      "label": "supreme: suspended clock and player remain intact"
+    },
+    {
+      "ok": true,
+      "label": "supreme: aircraft keeps 12px collision radius"
+    },
+    {
+      "ok": true,
+      "label": "supreme: responsive controller movement"
+    },
+    {
+      "ok": true,
+      "label": "supreme: dash executes"
+    },
+    {
+      "ok": true,
+      "label": "supreme: shield executes"
+    },
+    {
+      "ok": true,
+      "label": "supreme: authoritative turret placed"
+    },
+    {
+      "ok": true,
+      "label": "supreme: mine rack launches"
+    },
+    {
+      "ok": true,
+      "label": "supreme: fence preserved"
+    },
+    {
+      "ok": true,
+      "label": "supreme: normal uses shared projectile pool"
+    },
+    {
+      "ok": true,
+      "label": "supreme: scattershot uses shared projectile pool"
+    },
+    {
+      "ok": true,
+      "label": "supreme: grenade uses shared projectile pool"
+    },
+    {
+      "ok": true,
+      "label": "supreme: Rapid Fire remains active"
+    },
+    {
+      "ok": true,
+      "label": "supreme: shared fire cadence advances"
+    },
+    {
+      "ok": true,
+      "label": "supreme: all five aircraft/ground roles"
+    },
+    {
+      "ok": true,
+      "label": "supreme: shared artillery telegraph"
+    },
+    {
+      "ok": true,
+      "label": "supreme: health pickup restores"
+    },
+    {
+      "ok": true,
+      "label": "supreme: energy pickup restores"
+    },
+    {
+      "ok": true,
+      "label": "supreme: Crown of Stars pickup surge"
+    },
+    {
+      "ok": true,
+      "label": "supreme: Singularity suppression field"
+    },
+    {
+      "ok": true,
+      "label": "supreme: high fire-rate build respects existing 22/sec ceiling"
+    },
+    {
+      "ok": true,
+      "label": "supreme: loot remains provisional"
+    },
+    {
+      "ok": true,
+      "label": "supreme: core rejects early damage"
+    },
+    {
+      "ok": true,
+      "label": "supreme: core rejects Echo before opening"
+    },
+    {
+      "ok": true,
+      "label": "supreme: targetable cannon-left"
+    },
+    {
+      "ok": true,
+      "label": "supreme: disabled cannon-left"
+    },
+    {
+      "ok": true,
+      "label": "supreme: targetable cannon-right"
+    },
+    {
+      "ok": true,
+      "label": "supreme: disabled cannon-right"
+    },
+    {
+      "ok": true,
+      "label": "supreme: targetable broadside-left"
+    },
+    {
+      "ok": true,
+      "label": "supreme: disabled broadside-left"
+    },
+    {
+      "ok": true,
+      "label": "supreme: targetable broadside-right"
+    },
+    {
+      "ok": true,
+      "label": "supreme: disabled broadside-right"
+    },
+    {
+      "ok": true,
+      "label": "supreme: targetable missile-left"
+    },
+    {
+      "ok": true,
+      "label": "supreme: disabled missile-left"
+    },
+    {
+      "ok": true,
+      "label": "supreme: targetable missile-right"
+    },
+    {
+      "ok": true,
+      "label": "supreme: disabled missile-right"
+    },
+    {
+      "ok": true,
+      "label": "supreme: targetable artillery"
+    },
+    {
+      "ok": true,
+      "label": "supreme: disabled artillery"
+    },
+    {
+      "ok": true,
+      "label": "supreme: destroyed weapons cancel queued fire"
+    },
+    {
+      "ok": true,
+      "label": "supreme: all seven hardpoints expose core"
+    },
+    {
+      "ok": true,
+      "label": "supreme: physical boss burst stays pending"
+    },
+    {
+      "ok": true,
+      "label": "supreme: successful haul committed once"
+    },
+    {
+      "ok": true,
+      "label": "supreme: scene objects and combat references retired"
+    },
+    {
+      "ok": true,
+      "label": "supreme: captured visual roots destroyed"
+    },
+    {
+      "ok": true,
+      "label": "supreme: same Arena player restored"
+    },
+    {
+      "ok": true,
+      "label": "supreme: suspension snapshot retired"
+    },
+    {
+      "ok": true,
+      "label": "supreme: camera zoom and input restored"
+    },
+    {
+      "ok": true,
+      "label": "supreme: second opportunity"
+    },
+    {
+      "ok": true,
+      "label": "supreme: failure discards only pending earnings"
+    },
+    {
+      "ok": true,
+      "label": "supreme: established failure ejection restores playable Arena"
+    }
+  ],
+  "errors": []
+}

@@ -56,7 +56,7 @@ test('HEIST projectile and enemy hot paths use indexed walls and allocation-free
 test('HEIST preserves Arena by sleeping it and exposes DEV-only isolation diagnostics', () => {
   const arena = source('../src/game/scenes/ArenaScene.ts');
   const scene = source('../src/game/anomalies/heist/HeistScene.ts');
-  assert.match(arena, /this\.scene\.launch\(SceneKeys\.Heist, session\)[\s\S]*?this\.scene\.sleep\(\)/);
+  assert.match(arena, /this\.scene\.launch\(ANOMALY_SCENES\[request\.anomalyId\], session\)[\s\S]*?this\.scene\.sleep\(\)/);
   assert.match(scene, /simulationAndRenderingInert: arena\.sys\.isSleeping\(\)/);
   assert.match(scene, /debug\.n3onHeistPerf = \(\) => this\.createDevPerformanceSnapshot\(\)/);
   assert.match(scene, /keydown-F6/);

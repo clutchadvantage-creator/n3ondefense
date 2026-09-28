@@ -8,6 +8,7 @@ import type { TurretWeaponSyncController } from '../player/TemporaryOffensiveEff
 import type { MineChargeRack } from '../abilities/MineChargeRack.ts';
 import type { PlayerStats, WeaponStats, EnergyStats, RectSpec } from '../types.ts';
 import type { InputDevice } from '../input/ActionInput.ts';
+import type { ModFocusSignalId, RunContractId } from '../economy/types.ts';
 
 export interface AnomalyInputBridge {
   readonly locked: boolean;
@@ -19,7 +20,7 @@ export interface AnomalyInputBridge {
   hidePrompt(): void;
 }
 
-export type AnomalyId = 'heist';
+export type AnomalyId = 'heist' | 'skybreach';
 export type AnomalyState = 'waiting' | 'charging' | 'portal-ready' | 'transitioning' | 'suspended' | 'resolved';
 export type AnomalyOutcome = 'completed' | 'failed' | 'declined' | 'round-ended' | 'scene-shutdown';
 
@@ -159,11 +160,13 @@ export interface AnomalyPlayerState {
 
 export interface HeistSessionData {
   sessionId: string;
-  anomalyId: 'heist';
+  anomalyId: AnomalyId;
   cost: number;
   round: number;
   seed: number;
   protocol: RunProtocolId;
+  modFocus?: ModFocusSignalId | null;
+  contract?: RunContractId | null;
   sourcePortal: { x: number; y: number };
   player: {
     textureKey: string;
@@ -195,6 +198,11 @@ export interface HeistSessionData {
   abilityState: SharedAbilityState;
   inputBridge?: AnomalyInputBridge;
   initialInputDevice?: InputDevice;
+  /** Snapshot of the entering Arena's combat/reward context, not a new ladder. */
+  difficulty?: {
+    healthMultiplier: number; damageMultiplier: number; speedMultiplier: number;
+    activeCount: number; rewardMultiplier: number; contractHealthMultiplier: number;
+  };
   dev?: { forceMiniBoss?: boolean | null; instantReturn?: boolean };
 }
 

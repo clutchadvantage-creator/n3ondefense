@@ -141,7 +141,7 @@ test('grenade smart fuses use a short shared arming window and fixed-rate spatia
   assert.doesNotMatch(arenaContact, /crate|vending|decorative/i);
 
   const heistContact = heist.slice(
-    heist.indexOf('private detonateGrenadeForNearbyTarget'),
+    heist.indexOf('protected detonateGrenadeForNearbyTarget'),
     heist.indexOf('/** 0 = blocked')
   );
   assert.ok(heistContact.indexOf('findGrenadeEnemy(projectile.sprite.x, projectile.sprite.y, false)')

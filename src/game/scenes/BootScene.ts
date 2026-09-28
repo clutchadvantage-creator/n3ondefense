@@ -497,7 +497,7 @@ export class BootScene extends Phaser.Scene {
     });
 
     g.destroy();
-    const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, heistModule, legendaryRevealModule, supremeMilestoneModule, upgradeModule, cosmeticModule, modModule, garageModule, resultModule, optionsModule, roundFinishedModule, loadingModule, profileLoadingModule] = await Promise.all([
+    const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, heistModule, skybreachModule, legendaryRevealModule, supremeMilestoneModule, upgradeModule, cosmeticModule, modModule, garageModule, resultModule, optionsModule, roundFinishedModule, loadingModule, profileLoadingModule] = await Promise.all([
       import('./SplashScene'),
       import('./LeaderboardsScene'),
       import('./OnlineLeaderboardsScene'),
@@ -505,6 +505,7 @@ export class BootScene extends Phaser.Scene {
       import('./MainMenuScene'),
       import('./ArenaScene'),
       import('../anomalies/heist/HeistScene'),
+      import('../anomalies/skybreach/SkyBreachScene'),
       import('./LegendaryModRevealScene'),
       import('./SupremeMilestoneScene'),
       import('./UpgradeStoreScene'),
@@ -526,6 +527,7 @@ export class BootScene extends Phaser.Scene {
     this.scene.add(SceneKeys.MainMenu, menuModule.MainMenuScene, false);
     this.scene.add(SceneKeys.Arena, arenaModule.ArenaScene, false);
     this.scene.add(SceneKeys.Heist, heistModule.HeistScene, false);
+    this.scene.add(SceneKeys.SkyBreach, skybreachModule.SkyBreachScene, false);
     this.scene.add(SceneKeys.LegendaryModReveal, legendaryRevealModule.LegendaryModRevealScene, false);
     this.scene.add(SceneKeys.SupremeMilestone, supremeMilestoneModule.SupremeMilestoneScene, false);
     this.scene.add(SceneKeys.Upgrades, upgradeModule.UpgradeStoreScene, false);
