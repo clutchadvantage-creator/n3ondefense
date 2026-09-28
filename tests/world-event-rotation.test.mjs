@@ -23,7 +23,7 @@ test('every Arcade event and anomaly owns an identical interval in the same rand
   assert.equal(chooseWorldEvent([], .5), undefined);
 });
 
-test('each due opportunity selects an event without a second chance roll or repeat exclusion', () => {
+test('each due opportunity selects an event without a second chance roll', () => {
   const observed = new Set();
   for (let seed = 1; seed <= 1000; seed++) {
     let count = 0;
@@ -33,12 +33,44 @@ test('each due opportunity selects an event without a second chance roll or repe
     assert.equal(rotation.snapshot.remainingMs, WORLD_EVENT_TIMING.cooldownMs);
   }
   assert.equal(observed.size, 8);
-  const repeated = [];
-  const rotation = new WorldEventRotation(5, [pool[6]], { remainingMs: 0, drawIndex: 1 });
-  const start = entry => { repeated.push(entry.id); return true; };
-  rotation.update(1, true, false, start);
-  advance(rotation, WORLD_EVENT_TIMING.cooldownMs, start);
-  assert.deepEqual(repeated, ['heist', 'heist']);
+});
+
+test('the previous event is excluded while all seven alternatives retain equal chances', () => {
+  for (const previous of pool) {
+    const counts = new Map(pool.map(entry => [entry.id, 0]));
+    for (let i = 0; i < 700; i++) {
+      const entry = chooseWorldEvent(pool, (i + .5) / 700, `${previous.kind}:${previous.id}`);
+      counts.set(entry.id, counts.get(entry.id) + 1);
+    }
+    for (const entry of pool) assert.equal(counts.get(entry.id), entry.id === previous.id ? 0 : 100);
+  }
+});
+
+test('no immediate repeats across serialized round handoffs; an event may return after another', () => {
+  let rotation = new WorldEventRotation(4, pool.slice(-2), { remainingMs: 0, drawIndex: 1 });
+  const starts = [];
+  for (let i = 0; i < 20; i++) {
+    rotation.update(1, true, false, entry => { starts.push(entry.id); return true; });
+    const state = normalizeWorldEventRotation(JSON.parse(JSON.stringify(rotation.snapshot)));
+    assert.equal(state.lastStarted, `anomaly:${starts.at(-1)}`);
+    rotation = new WorldEventRotation(4, pool.slice(-2), { ...state, remainingMs: 0 });
+  }
+  for (let i = 1; i < starts.length; i++) assert.notEqual(starts[i], starts[i - 1]);
+  assert.equal(starts[0], starts[2]);
+});
+
+test('failed placement does not replace last-started history or allow a stale pending repeat', () => {
+  const rotation = new WorldEventRotation(3, pool, { remainingMs: 0, drawIndex: 1,
+    lastStarted: 'anomaly:heist', pending: 'anomaly:heist' });
+  let selected;
+  rotation.update(1, true, false, entry => { selected = entry; return false; });
+  assert.notEqual(selected.id, 'heist');
+  assert.equal(rotation.snapshot.lastStarted, 'anomaly:heist');
+  const pending = rotation.snapshot.pending;
+  advance(rotation, WORLD_EVENT_TIMING.placementRetryMs, entry => {
+    assert.equal(`${entry.kind}:${entry.id}`, pending); return true;
+  });
+  assert.equal(rotation.snapshot.lastStarted, pending);
 });
 
 test('short-round handoffs preserve the same selection sequence as uninterrupted eligible time', () => {

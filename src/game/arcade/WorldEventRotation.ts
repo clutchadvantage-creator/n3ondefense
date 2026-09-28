@@ -7,6 +7,7 @@ export interface WorldEventRotationState {
   remainingMs: number;
   drawIndex: number;
   pending?: string;
+  lastStarted?: string;
 }
 
 // Common pacing for every entry. No mode/round odds and no extra portal roll.
@@ -20,11 +21,14 @@ export const normalizeWorldEventRotation = (value: unknown): WorldEventRotationS
     || !Number.isSafeInteger(state.drawIndex) || state.drawIndex! < 0) return undefined;
   return { remainingMs: Math.min(state.remainingMs!, WORLD_EVENT_TIMING.cooldownMs),
     drawIndex: state.drawIndex! >>> 0,
-    pending: typeof state.pending === 'string' ? state.pending : undefined };
+    pending: typeof state.pending === 'string' ? state.pending : undefined,
+    lastStarted: typeof state.lastStarted === 'string' ? state.lastStarted : undefined };
 };
 
-export const chooseWorldEvent = (pool: readonly WorldEventChoice[], roll: number): WorldEventChoice | undefined =>
-  pool[Math.min(pool.length - 1, Math.floor(Math.max(0, Math.min(1, roll)) * pool.length))];
+export const chooseWorldEvent = (pool: readonly WorldEventChoice[], roll: number, lastStarted?: string): WorldEventChoice | undefined => {
+  const candidates = pool.filter(choice => key(choice) !== lastStarted);
+  return candidates[Math.min(candidates.length - 1, Math.floor(Math.max(0, Math.min(1, roll)) * candidates.length))];
+};
 
 const key = (choice: WorldEventChoice): string => `${choice.kind}:${choice.id}`;
 
@@ -40,19 +44,23 @@ export class WorldEventRotation {
     this.state = normalizeWorldEventRotation(carried) ?? { remainingMs: 0, drawIndex: 0 };
     if (!normalizeWorldEventRotation(carried)) this.state.remainingMs = WORLD_EVENT_TIMING.initialMinimumMs
       + this.roll() * (WORLD_EVENT_TIMING.initialMaximumMs - WORLD_EVENT_TIMING.initialMinimumMs);
-    if (!pool.some(choice => key(choice) === this.state.pending)) this.state.pending = undefined;
+    if (!pool.some(choice => key(choice) === this.state.lastStarted)) this.state.lastStarted = undefined;
+    if (!pool.some(choice => key(choice) === this.state.pending) || this.state.pending === this.state.lastStarted)
+      this.state.pending = undefined;
   }
 
   update(deltaMs: number, eligible: boolean, active: boolean, start: (choice: WorldEventChoice) => boolean): void {
     if (!eligible || active || !Number.isFinite(deltaMs) || deltaMs <= 0) return;
     this.state.remainingMs = Math.max(0, this.state.remainingMs - Math.min(deltaMs, 250));
     if (this.state.remainingMs > 0) return;
-    const choice = this.pool.find(candidate => key(candidate) === this.state.pending) ?? chooseWorldEvent(this.pool, this.roll());
+    const choice = this.pool.find(candidate => key(candidate) === this.state.pending)
+      ?? chooseWorldEvent(this.pool, this.roll(), this.state.lastStarted);
     if (!choice) return;
     // Keep a selected event when its safe placement is temporarily blocked.
     // Rerolling here would bias the pool against events with larger footprints.
     this.state.pending = key(choice);
     if (start(choice)) {
+      this.state.lastStarted = key(choice);
       this.state.pending = undefined;
       this.state.remainingMs = WORLD_EVENT_TIMING.cooldownMs;
     } else this.state.remainingMs = WORLD_EVENT_TIMING.placementRetryMs;
