@@ -26,23 +26,13 @@ const randomRewardPool = (
   ]
 });
 
-export const ARCADE_SCHEDULING = {
-  minimumRound: 2,
-  initialOpportunityMinimumMs: 28_000,
-  initialOpportunityMaximumMs: 52_000,
-  retryAfterMissMs: 48_000,
-  eventCooldownMs: 105_000,
-  opportunityChance: { normal: 0.46, overdrive: 0.54, supreme: 0.6 },
-  recentHistorySize: 2
-} as const;
-
 export const ARCADE_EVENT_DEFINITIONS: readonly ArcadeEventDefinition[] = [
   {
     id: 'golden-hunt',
     displayName: 'GOLDEN HUNT',
     description: 'Eliminate all 5 Golden Enemies.',
-    weight: 1.15,
-    minimumRound: 2,
+    weight: 1,
+    minimumRound: 1,
     durationMs: 60_000,
     reward: randomRewardPool(800, 30, 2, 0.08, 1, 0.025, 5, 0.18)
   },
@@ -50,8 +40,8 @@ export const ARCADE_EVENT_DEFINITIONS: readonly ArcadeEventDefinition[] = [
     id: 'mini-boss',
     displayName: 'MINI-BOSS DETECTED',
     description: 'Destroy the Arcade boss before it phases out.',
-    weight: 0.72,
-    minimumRound: 5,
+    weight: 1,
+    minimumRound: 1,
     durationMs: 78_000,
     reward: randomRewardPool(1_100, 45, 3, 0.1, 2, 0.035, 8, 0.25)
   },
@@ -60,7 +50,7 @@ export const ARCADE_EVENT_DEFINITIONS: readonly ArcadeEventDefinition[] = [
     displayName: 'NEON CIRCUIT',
     description: 'Hit every checkpoint before time expires.',
     weight: 1,
-    minimumRound: 2,
+    minimumRound: 1,
     durationMs: 34_000,
     reward: randomRewardPool(650, 25, 2, 0.07, 1, 0.02, 5, 0.16)
   },
@@ -68,8 +58,8 @@ export const ARCADE_EVENT_DEFINITIONS: readonly ArcadeEventDefinition[] = [
     id: 'hot-package',
     displayName: 'HOT PACKAGE INBOUND',
     description: 'Hold the drop zone and crack the Supply Pod.',
-    weight: 0.92,
-    minimumRound: 3,
+    weight: 1,
+    minimumRound: 1,
     durationMs: 58_000,
     reward: randomRewardPool(260, 11, 1, 0.035, 1, 0.012, 3, 0.1)
   },
@@ -77,8 +67,8 @@ export const ARCADE_EVENT_DEFINITIONS: readonly ArcadeEventDefinition[] = [
     id: 'packet-snatcher',
     displayName: 'PACKET SNATCHER',
     description: 'Intercept the Data Thief before extraction.',
-    weight: 0.68,
-    minimumRound: 4,
+    weight: 1,
+    minimumRound: 1,
     durationMs: 31_000,
     reward: randomRewardPool(420, 17, 1, 0.035, 1, 0.012, 4, 0.14)
   },
@@ -86,8 +76,8 @@ export const ARCADE_EVENT_DEFINITIONS: readonly ArcadeEventDefinition[] = [
     id: 'redline',
     displayName: 'REDLINE',
     description: 'Move. Dash. Chain kills. Push RPM into the red for better loot.',
-    weight: 0.84,
-    minimumRound: 4,
+    weight: 1,
+    minimumRound: 1,
     durationMs: 52_000,
     reward: randomRewardPool(330, 14, 2, 0.04, 1, 0.018, 4, 0.12)
   }
@@ -100,27 +90,6 @@ const FACTORIES: Record<ArcadeEventId, ArcadeEventFactory> = {
   'hot-package': { create: (context, definition) => new HotPackageEvent(context, definition) },
   'packet-snatcher': { create: (context, definition) => new PacketSnatcherEvent(context, definition) },
   'redline': { create: (context, definition) => new RedlineEvent(context, definition) }
-};
-
-export const getEligibleArcadeDefinitions = (round: number): ArcadeEventDefinition[] =>
-  ARCADE_EVENT_DEFINITIONS.filter((definition) => round >= definition.minimumRound);
-
-export const chooseWeightedArcadeDefinition = (
-  definitions: readonly ArcadeEventDefinition[],
-  roll: number,
-  recent: readonly ArcadeEventId[]
-): ArcadeEventDefinition | null => {
-  if (definitions.length === 0) return null;
-  const alternatives = definitions.filter((definition) => !recent.includes(definition.id));
-  const pool = alternatives.length > 0 ? alternatives : [...definitions];
-  const totalWeight = pool.reduce((sum, definition) => sum + Math.max(0, definition.weight), 0);
-  if (totalWeight <= 0) return null;
-  let cursor = Math.max(0, Math.min(0.999999, roll)) * totalWeight;
-  for (const definition of pool) {
-    cursor -= Math.max(0, definition.weight);
-    if (cursor <= 0) return definition;
-  }
-  return pool.at(-1) ?? null;
 };
 
 export const createArcadeEvent = (

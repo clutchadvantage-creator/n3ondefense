@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { AnomalyOpportunityClock } from './AnomalyOpportunityClock.ts';
 import { SeededRandom } from '../systems/SeededRandom.ts';
 import type { RunModeFamily } from '../config/modeBalance.ts';
 import { AnomalyHudView } from './AnomalyHudView.ts';
@@ -7,15 +6,13 @@ import { AnomalyPortalVisual } from './AnomalyPortalVisual.ts';
 import { createSilentAnomalyAudioHooks, type AnomalyAudioHooks } from './AnomalyAudioHooks.ts';
 import {
   ANOMALY_SCHEDULING,
-  ANOMALY_BY_ID,
-  getEligibleAnomalies
+  ANOMALY_BY_ID
 } from './AnomalyRegistry.ts';
 import type { AnomalyDefinition, AnomalyId, AnomalyRuntimeContext, AnomalyState } from './types.ts';
 import { ANOMALY_ENTRY_PRICING, isValidAnomalyEntryCost, normalizeAnomalyEntryCost, rollAnomalyEntryCost } from './AnomalyPricing.ts';
 
 export interface AnomalyControllerOptions {
   enabled: boolean;
-  remainingOpportunityMs?: number;
   modeFamily: RunModeFamily;
   particlesEnabled: boolean;
   audio?: AnomalyAudioHooks;
@@ -30,7 +27,6 @@ export class AnomalyController {
   private visual: AnomalyPortalVisual | null = null;
   private retiringVisual: AnomalyPortalVisual | null = null;
   private elapsedMs = 0;
-  private readonly opportunityClock: AnomalyOpportunityClock;
   private spawnedAt = 0;
   private portalReadyAt = 0;
   private portalIdleStarted = false;
@@ -39,17 +35,12 @@ export class AnomalyController {
   private chargeTarget = 1;
   private cost: number = ANOMALY_ENTRY_PRICING.defaultCost;
   private forcedCost: number | null = null;
-  private completedThisRound = false;
   private destroyed = false;
 
   constructor(private readonly context: AnomalyRuntimeContext, private readonly options: AnomalyControllerOptions) {
     this.random = new SeededRandom((context.seed ^ Math.imul(context.round, 0x6d2b79f5) ^ 0xa1104a1f) >>> 0);
     this.hud = new AnomalyHudView(context.scene);
     this.audio = options.audio ?? createSilentAnomalyAudioHooks();
-    this.opportunityClock = new AnomalyOpportunityClock(
-      this.random.float(ANOMALY_SCHEDULING.minimumOpportunityMs, ANOMALY_SCHEDULING.maximumOpportunityMs),
-      options.remainingOpportunityMs
-    );
   }
 
   update(deltaMs: number): void {
@@ -58,9 +49,6 @@ export class AnomalyController {
     this.elapsedMs += Math.min(250, deltaMs);
     this.hud.update(now);
     this.visual?.update(now);
-    const gameplayEligible = this.options.enabled && this.context.isGameplayEligible();
-    if (this.stateValue === 'waiting' || this.stateValue === 'resolved')
-      this.opportunityClock.advance(deltaMs, gameplayEligible);
 
     if (this.stateValue === 'transitioning') {
       const progress = Phaser.Math.Clamp((now - this.transitionStartedAt) / ANOMALY_SCHEDULING.transitionDurationMs, 0, 1);
@@ -102,17 +90,6 @@ export class AnomalyController {
       return;
     }
 
-    if (this.stateValue === 'charging' || this.stateValue === 'suspended' || this.stateValue === 'resolved') return;
-    if (!gameplayEligible || this.completedThisRound || !this.opportunityClock.ready) return;
-    const chance = ANOMALY_SCHEDULING.opportunityChance[this.options.modeFamily];
-    if (!this.random.bool(chance)) {
-      this.opportunityClock.defer(ANOMALY_SCHEDULING.retryAfterMissMs);
-      return;
-    }
-    const eligible = getEligibleAnomalies(this.context.difficultyPosition ?? this.context.round, this.context.protocol);
-    if (!eligible.length || !this.start(this.chooseWeighted(eligible))) {
-      this.opportunityClock.defer(ANOMALY_SCHEDULING.retryAfterMissMs);
-    }
   }
 
   handleEnemyKilled(x: number, y: number): void {
@@ -133,8 +110,12 @@ export class AnomalyController {
     if (this.charge >= this.chargeTarget) this.openPortal();
   }
 
+  tryStart(id: AnomalyId): boolean {
+    return this.options.enabled && this.context.isGameplayEligible() && this.force(id);
+  }
+
   force(id: AnomalyId = 'heist'): boolean {
-    if (this.destroyed || this.stateValue !== 'waiting') return false;
+    if (this.destroyed || (this.stateValue !== 'waiting' && this.stateValue !== 'resolved')) return false;
     const definition = ANOMALY_BY_ID.get(id);
     return Boolean(definition && this.start(definition));
   }
@@ -177,7 +158,6 @@ export class AnomalyController {
 
   stop(reason: 'round-ended' | 'scene-shutdown'): void { this.resolve(reason); }
   get state(): AnomalyState { return this.stateValue; }
-  get remainingOpportunityMs(): number { return this.opportunityClock.snapshot; }
   get blocksArenaGameplay(): boolean { return this.stateValue === 'transitioning'; }
   get activeAnomalyId(): AnomalyId | null { return this.definition?.id ?? null; }
   resize(width: number): void { this.hud.resize(width); }
@@ -277,24 +257,8 @@ export class AnomalyController {
     return null;
   }
 
-  private chooseWeighted(definitions: readonly AnomalyDefinition[]): AnomalyDefinition {
-    let total = 0;
-    for (const definition of definitions) total += Math.max(0, definition.weight);
-    if (total <= 0) return definitions[0];
-    let roll = this.random.next() * total;
-    for (const definition of definitions) {
-      roll -= Math.max(0, definition.weight);
-      if (roll <= 0) return definition;
-    }
-    return definitions[definitions.length - 1];
-  }
-
-  private resolve(reason: 'declined' | 'round-ended' | 'scene-shutdown'): void {
+  private resolve(_reason: 'declined' | 'round-ended' | 'scene-shutdown'): void {
     if (this.stateValue === 'resolved' && !this.visual) return;
-    // Ending a round with no signal must preserve its opportunity/retry timer.
-    // Actual opportunities retire once and carry the cooldown to later rounds.
-    if (this.stateValue !== 'waiting') this.opportunityClock.defer(ANOMALY_SCHEDULING.cooldownMs);
-    this.completedThisRound = true;
     this.visual?.destroy();
     this.visual = null;
     this.definition = null;
@@ -302,6 +266,5 @@ export class AnomalyController {
     this.stateValue = 'resolved';
     this.audio.stopAll();
     this.hud.hide();
-    if (reason === 'declined') this.completedThisRound = true;
   }
 }

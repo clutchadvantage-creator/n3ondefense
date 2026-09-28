@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events';
 import ts from 'typescript';
 import * as config from '../src/game/config/audio.ts';
 import * as keys from '../src/game/flow/SceneKeys.ts';
-import * as anomalyClock from '../src/game/anomalies/AnomalyOpportunityClock.ts';
+import * as eventRotation from '../src/game/arcade/WorldEventRotation.ts';
 
 // Execute the production controllers with controllable browser audio promises.
 const compiled = path => ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
@@ -32,7 +32,7 @@ function fixture() {
   const document = new EventTarget();
   const lifecycle = { exports: {} };
   const dependencies = {
-    '../anomalies/AnomalyOpportunityClock.ts': anomalyClock,
+    '../arcade/WorldEventRotation.ts': eventRotation,
     '../config/audio': config, '../flow/SceneKeys': keys, './SceneKeys': keys,
     '../mods/modBalance.ts': { normalizeRunProtocolId: x => x },
     './SaveSystem': { SaveSystem: { get: () => ({ settings }) } },

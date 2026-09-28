@@ -19,7 +19,7 @@
       S.setSettings({masterVolume:0,contextualTutorials:false});
       S.updateTutorialProgress(p=>{p.firstRunStage='complete';p.firstRunWelcomePending=false;});
       S.addFluxCores(1000);
-      const cases=[['normal',4]];
+      const cases=[['normal',1],['overdrive',1],['supreme',1]];
       for(const [mode,round] of cases){
         for(const s of game.scene.getScenes(false))if(s.sys.isActive()||s.sys.isPaused()||s.sys.isSleeping())game.scene.stop(s.scene.key);
         await wait(100);game.scene.start('menu');await wait(100);
@@ -40,67 +40,59 @@
         if(a.state.state==='Paused')a.resumeGameplay();
         await wait(160);
         a.scene.pause();
-        const {SeededRandom}=await import('/src/game/systems/SeededRandom.ts');
-        const seedFor=id=>{
-          for(let seed=1;seed<10000;seed++){
-            const r=new SeededRandom((seed^Math.imul(1,0x6d2b79f5)^0xa1104a1f)>>>0);
-            r.float(72000,138000);
-            if(r.bool(.1)&&(r.next()<.5?'heist':'skybreach')===id)return seed;
-          }
-          throw Error('No selected seed');
-        };
-        for(const [stage,id] of [['arena-teaching','heist'],['waiting-for-garage','skybreach'],['waiting-for-store','heist']]){
-          S.updateTutorialProgress(p=>{p.firstRunStage=stage;p.replaySequenceId='onboarding.tactics';});
-          a.anomalyController.destroy();a.anomalyController=null;a.anomalyOpportunityMs=0;
-          const seed=seedFor(id);a.createAnomalyController(1,seed);
-          const c=a.anomalyController;
-          check(c.options.enabled,stage+': no teaching/replay gate');
-          // Due now, but the actual seeded chance, type choice, and real placement still run.
-          c.update(16);
-          check(c.state==='charging'&&c.activeAnomalyId===id,stage+': natural '+id+' signal at round 1');
-          for(let k=0;k<c.chargeTarget;k++)c.handleEnemyKilled(c.visual.x,c.visual.y);
-          check(c.state==='portal-ready'&&c.cost>=35&&c.cost<=90,stage+': kill charge opens valid portal');
-          c.stop('round-ended');
-          check(c.remainingOpportunityMs===330000,stage+': retired signal starts existing cooldown');
-          c.update(250);c.stop('round-ended');
-          check(c.remainingOpportunityMs===329750,stage+': repeated cleanup does not reset cooldown');
-          report.cases.push({stage,id,seed,cost:c.cost});
+        S.updateTutorialProgress(p=>{p.firstRunStage='arena-teaching';p.replaySequenceId='onboarding.tactics';});
+        a.createArcadeController(round,550055);a.createAnomalyController(round,550055);
+        const {WorldEventRotation}=await import(dep('WorldEventRotation'));
+        const {ARCADE_EVENT_DEFINITIONS}=await import(dep('ARCADE_EVENT_DEFINITIONS'));
+        const {ANOMALY_DEFINITIONS}=await import(dep('ANOMALY_DEFINITIONS'));
+        const pool=[...ARCADE_EVENT_DEFINITIONS.map(({id})=>({kind:'arcade',id})),...ANOMALY_DEFINITIONS.map(({id})=>({kind:'anomaly',id}))];
+        check(pool.length===8,mode+': all eight entries in shared pool');
+        const seeds={};
+        for(let seed=1;seed<1000&&Object.keys(seeds).length<pool.length;seed++){
+          new WorldEventRotation(seed,pool,{remainingMs:0,drawIndex:1}).update(1,true,false,choice=>{seeds[choice.id]??=seed;return true;});
         }
-        a.anomalyController.destroy();a.anomalyController=null;a.anomalyOpportunityMs=60000;
-        a.createAnomalyController(4,550055);
-        let c=a.anomalyController;
-        for(let i=0;i<80;i++)c.update(250);
-        check(c.remainingOpportunityMs===40000,'20 seconds reduce carried delay');
-        const oldBoss=a.bossEncounter;a.bossEncounter={};
-        for(let i=0;i<80;i++)c.update(250);
-        check(c.remainingOpportunityMs===40000,'boss exclusion holds timer');a.bossEncounter=oldBoss;
-        const oldArcade=a.arcadeController;a.arcadeController={activeEventId:'redline'};
-        for(let i=0;i<80;i++)c.update(250);
-        check(c.remainingOpportunityMs===40000,'Arcade event holds timer');a.arcadeController=oldArcade;
-        c.stop('round-ended');c.destroy();
-        check(c.remainingOpportunityMs===40000,'waiting timer survives stop and destroy');
+        for(const choice of pool){
+          a.arcadeController.stop('replaced');a.anomalyController.stop('round-ended');
+          a.worldEventRotation=new WorldEventRotation(seeds[choice.id],pool,{remainingMs:0,drawIndex:1});
+          a.updateWorldEventRotation(16);
+          for(let i=0;i<20&&a.worldEventRotation.snapshot.pending;i++)a.updateWorldEventRotation(250);
+          const active=choice.kind==='arcade'?a.arcadeController.activeEventId:a.anomalyController.activeAnomalyId;
+          check(active===choice.id,mode+': shared draw starts '+choice.id+' at round 1 during unfinished/replayed teaching');
+          check(a.worldEventRotation.snapshot.remainingMs===105000,mode+': common cooldown for '+choice.id);
+          const before=JSON.stringify(a.worldEventRotation.snapshot);
+          a.updateWorldEventRotation(250);
+          check(JSON.stringify(a.worldEventRotation.snapshot)===before,mode+': '+choice.id+' blocks overlapping events');
+          if(choice.kind==='anomaly'){
+            const c=a.anomalyController;
+            for(let k=0;k<c.chargeTarget;k++)c.handleEnemyKilled(c.visual.x,c.visual.y);
+            check(c.state==='portal-ready'&&c.cost>=35&&c.cost<=90,mode+': '+choice.id+' keeps kill charge and valid pricing');
+          }
+          report.cases.push({mode,round,id:choice.id,seed:seeds[choice.id]});
+        }
+        a.arcadeController.stop('replaced');a.anomalyController.stop('round-ended');
+        a.worldEventRotation=new WorldEventRotation(550055,pool,{remainingMs:40000,drawIndex:5,pending:'anomaly:skybreach'});
+        const oldBoss=a.bossEncounter;a.bossEncounter={};a.updateWorldEventRotation(250);a.bossEncounter=oldBoss;
+        check(a.worldEventRotation.snapshot.remainingMs===40000,mode+': boss holds shared timer');
         S.updateTutorialProgress(p=>{p.firstRunStage='complete';p.replaySequenceId=null;});
         const def=a.roundManager.currentDefinition();
-        const payload={...session,runStartedAt:a.runStartedAt,completedRound:4,completedSeed:def.seed,completedTemplate:def.template,
-          nextRound:5,nextSeed:def.seed+1,nextTemplate:def.template,creditsGained:0,coreTokensGained:0,plasmaChipsGained:0,fluxCoresGained:0,
+        const payload={...session,runStartedAt:a.runStartedAt,completedRound:1,completedSeed:def.seed,completedTemplate:def.template,
+          nextRound:2,nextSeed:def.seed+1,nextTemplate:def.template,creditsGained:0,coreTokensGained:0,plasmaChipsGained:0,fluxCoresGained:0,
           bossDefeated:null,modFocus:null,contract:null,creditsSpentBeforeRun:0,upgradeCompletionPercentage:0,accountProgressionTier:'new',runCreditsEarned:0};
         a.presentCompletedRound(payload);
         await until(()=>game.scene.isActive('round-finished'),'debrief');
         const finish=game.scene.keys['round-finished'];
-        const saved=game.registry.get('round-finished');
-        check(saved.anomalyOpportunityMs===40000,'debrief carries remaining countdown');
+        const saved=game.registry.get('round-finished').worldEventRotation;
+        check(saved.remainingMs===40000&&saved.pending==='anomaly:skybreach'&&saved.drawIndex===5,mode+': full rotation snapshot reaches debrief');
         const flatten=o=>[o,...(o.list||[]).flatMap(flatten)];
         const label=finish.children.list.flatMap(flatten).find(o=>o.text==='CONTINUE TO NEXT ROUND');
-        check(!!label,'actual Continue action found');
+        check(!!label,mode+': actual Continue action found');
         const button=label.parentContainer;
-        const hit=button.list.find(o=>o.input?.enabled);
-        (hit||button).emit('pointerdown');
-        await until(()=>game.scene.isActive('arena')&&game.scene.keys.arena.roundManager?.round===5,'Continue to boss round');
-        const bossArena=game.scene.keys.arena;
-        check(bossArena.anomalyOpportunityMs===40000,'Continue/Loading/Arena keep countdown through boss round');
-        check(bossArena.bossEncounter||bossArena.bossFlowPhase!=='none','boss round remains boss-owned');
-        game.scene.stop('arena');
-        navigator.getGamepads=pads;
+        (button.list.find(o=>o.input?.enabled)||button).emit('pointerdown');
+        await until(()=>game.scene.isActive('arena')&&game.scene.keys.arena.roundManager?.round===2,'Continue to round 2');
+        const next=game.scene.keys.arena.worldEventRotation.snapshot;
+        check(next.remainingMs>39000&&next.remainingMs<=40000&&next.pending==='anomaly:skybreach'&&next.drawIndex===5,
+          mode+': Continue/Loading/Arena preserve delay, selection and random cursor');
+        game.scene.stop('arena');navigator.getGamepads=pads;
       }
     }catch(error){report.errors.push(String(error.stack||error));}
     finally{report.running=false;report.finishedAt=new Date().toISOString();}

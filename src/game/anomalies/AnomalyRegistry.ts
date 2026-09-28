@@ -4,12 +4,7 @@ import type { RunProtocolId } from '../mods/types.ts';
 export { ANOMALY_ENTRY_COSTS } from './AnomalyPricing.ts';
 
 export const ANOMALY_SCHEDULING = {
-  minimumOpportunityMs: 72_000,
-  maximumOpportunityMs: 138_000,
-  retryAfterMissMs: 105_000,
   portalLifetimeMs: 50_000,
-  cooldownMs: 330_000,
-  opportunityChance: { normal: 0.1, overdrive: 0.14, supreme: 0.18 },
   locationClearance: 112,
   interactionRadius: 96,
   transitionDurationMs: 820
@@ -43,7 +38,5 @@ export const ANOMALY_BY_ID = new Map<AnomalyId, AnomalyDefinition>(
   ANOMALY_DEFINITIONS.map((definition) => [definition.id, definition])
 );
 
-export const getEligibleAnomalies = (round: number, protocol: RunProtocolId): AnomalyDefinition[] =>
-  ANOMALY_DEFINITIONS.filter((definition) => round >= definition.minimumRound
-    && (!definition.requiredProtocols || definition.requiredProtocols.includes(protocol))
-    && (!definition.supremeOnly || protocol.startsWith('supreme-')));
+export const getEligibleAnomalies = (_round: number, _protocol: RunProtocolId): AnomalyDefinition[] =>
+  [...ANOMALY_DEFINITIONS];

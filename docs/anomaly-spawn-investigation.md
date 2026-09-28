@@ -1,5 +1,7 @@
 # Anomaly opportunity investigation
 
+**Historical investigation:** the subsequent [equal Arcade/anomaly rotation](world-event-rotation.md) supersedes the timing, odds, and separate countdown implementation described here. This report retains the findings and evidence from the preceding fix. The browser fixture now validates the shared rotation.
+
 The SkyBreach implementation is committed as `ad997c4bb1db7c41a70ecbcad99bbb1dea488338`. Its addition did not change the existing anomaly scheduling values. The follow-up removes the unwanted teaching and minimum-round gates and preserves anomaly opportunity time across rounds. Both anomalies are now eligible from the first ordinary round regardless of unfinished teaching or replay state. They remain optional, random activities in the normal event rotation, with mutual exclusion against active Arcade events and bosses.
 
 ## Restrictions found before the correction

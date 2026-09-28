@@ -1,0 +1,534 @@
+{
+    "startedAt":  "2026-09-28T19:24:26.825Z",
+    "finishedAt":  "2026-09-28T19:24:33.124Z",
+    "controls":  "Isolated DEV profiles; due countdowns; selected seeds; real event controllers and layout validation; assisted kill charging; synthetic debrief payloads; actual Continue actions",
+    "checks":  [
+                   {
+                       "ok":  true,
+                       "label":  "isolated profile"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: all eight entries in shared pool"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: shared draw starts golden-hunt at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: common cooldown for golden-hunt"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: golden-hunt blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: shared draw starts mini-boss at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: common cooldown for mini-boss"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: mini-boss blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: shared draw starts neon-circuit at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: common cooldown for neon-circuit"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: neon-circuit blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: shared draw starts hot-package at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: common cooldown for hot-package"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: hot-package blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: shared draw starts packet-snatcher at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: common cooldown for packet-snatcher"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: packet-snatcher blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: shared draw starts redline at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: common cooldown for redline"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: redline blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: shared draw starts heist at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: common cooldown for heist"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: heist blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: heist keeps kill charge and valid pricing"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: shared draw starts skybreach at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: common cooldown for skybreach"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: skybreach blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: skybreach keeps kill charge and valid pricing"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: boss holds shared timer"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: full rotation snapshot reaches debrief"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: actual Continue action found"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "normal: Continue/Loading/Arena preserve delay, selection and random cursor"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: all eight entries in shared pool"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: shared draw starts golden-hunt at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: common cooldown for golden-hunt"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: golden-hunt blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: shared draw starts mini-boss at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: common cooldown for mini-boss"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: mini-boss blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: shared draw starts neon-circuit at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: common cooldown for neon-circuit"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: neon-circuit blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: shared draw starts hot-package at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: common cooldown for hot-package"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: hot-package blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: shared draw starts packet-snatcher at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: common cooldown for packet-snatcher"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: packet-snatcher blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: shared draw starts redline at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: common cooldown for redline"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: redline blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: shared draw starts heist at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: common cooldown for heist"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: heist blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: heist keeps kill charge and valid pricing"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: shared draw starts skybreach at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: common cooldown for skybreach"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: skybreach blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: skybreach keeps kill charge and valid pricing"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: boss holds shared timer"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: full rotation snapshot reaches debrief"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: actual Continue action found"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "overdrive: Continue/Loading/Arena preserve delay, selection and random cursor"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: all eight entries in shared pool"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: shared draw starts golden-hunt at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: common cooldown for golden-hunt"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: golden-hunt blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: shared draw starts mini-boss at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: common cooldown for mini-boss"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: mini-boss blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: shared draw starts neon-circuit at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: common cooldown for neon-circuit"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: neon-circuit blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: shared draw starts hot-package at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: common cooldown for hot-package"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: hot-package blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: shared draw starts packet-snatcher at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: common cooldown for packet-snatcher"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: packet-snatcher blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: shared draw starts redline at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: common cooldown for redline"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: redline blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: shared draw starts heist at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: common cooldown for heist"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: heist blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: heist keeps kill charge and valid pricing"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: shared draw starts skybreach at round 1 during unfinished/replayed teaching"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: common cooldown for skybreach"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: skybreach blocks overlapping events"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: skybreach keeps kill charge and valid pricing"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: boss holds shared timer"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: full rotation snapshot reaches debrief"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: actual Continue action found"
+                   },
+                   {
+                       "ok":  true,
+                       "label":  "supreme: Continue/Loading/Arena preserve delay, selection and random cursor"
+                   }
+               ],
+    "cases":  [
+                  {
+                      "mode":  "normal",
+                      "round":  1,
+                      "id":  "golden-hunt",
+                      "seed":  4
+                  },
+                  {
+                      "mode":  "normal",
+                      "round":  1,
+                      "id":  "mini-boss",
+                      "seed":  2
+                  },
+                  {
+                      "mode":  "normal",
+                      "round":  1,
+                      "id":  "neon-circuit",
+                      "seed":  8
+                  },
+                  {
+                      "mode":  "normal",
+                      "round":  1,
+                      "id":  "hot-package",
+                      "seed":  1
+                  },
+                  {
+                      "mode":  "normal",
+                      "round":  1,
+                      "id":  "packet-snatcher",
+                      "seed":  12
+                  },
+                  {
+                      "mode":  "normal",
+                      "round":  1,
+                      "id":  "redline",
+                      "seed":  5
+                  },
+                  {
+                      "mode":  "normal",
+                      "round":  1,
+                      "id":  "heist",
+                      "seed":  3
+                  },
+                  {
+                      "mode":  "normal",
+                      "round":  1,
+                      "id":  "skybreach",
+                      "seed":  14
+                  },
+                  {
+                      "mode":  "overdrive",
+                      "round":  1,
+                      "id":  "golden-hunt",
+                      "seed":  4
+                  },
+                  {
+                      "mode":  "overdrive",
+                      "round":  1,
+                      "id":  "mini-boss",
+                      "seed":  2
+                  },
+                  {
+                      "mode":  "overdrive",
+                      "round":  1,
+                      "id":  "neon-circuit",
+                      "seed":  8
+                  },
+                  {
+                      "mode":  "overdrive",
+                      "round":  1,
+                      "id":  "hot-package",
+                      "seed":  1
+                  },
+                  {
+                      "mode":  "overdrive",
+                      "round":  1,
+                      "id":  "packet-snatcher",
+                      "seed":  12
+                  },
+                  {
+                      "mode":  "overdrive",
+                      "round":  1,
+                      "id":  "redline",
+                      "seed":  5
+                  },
+                  {
+                      "mode":  "overdrive",
+                      "round":  1,
+                      "id":  "heist",
+                      "seed":  3
+                  },
+                  {
+                      "mode":  "overdrive",
+                      "round":  1,
+                      "id":  "skybreach",
+                      "seed":  14
+                  },
+                  {
+                      "mode":  "supreme",
+                      "round":  1,
+                      "id":  "golden-hunt",
+                      "seed":  4
+                  },
+                  {
+                      "mode":  "supreme",
+                      "round":  1,
+                      "id":  "mini-boss",
+                      "seed":  2
+                  },
+                  {
+                      "mode":  "supreme",
+                      "round":  1,
+                      "id":  "neon-circuit",
+                      "seed":  8
+                  },
+                  {
+                      "mode":  "supreme",
+                      "round":  1,
+                      "id":  "hot-package",
+                      "seed":  1
+                  },
+                  {
+                      "mode":  "supreme",
+                      "round":  1,
+                      "id":  "packet-snatcher",
+                      "seed":  12
+                  },
+                  {
+                      "mode":  "supreme",
+                      "round":  1,
+                      "id":  "redline",
+                      "seed":  5
+                  },
+                  {
+                      "mode":  "supreme",
+                      "round":  1,
+                      "id":  "heist",
+                      "seed":  3
+                  },
+                  {
+                      "mode":  "supreme",
+                      "round":  1,
+                      "id":  "skybreach",
+                      "seed":  14
+                  }
+              ],
+    "errors":  [
+
+               ],
+    "unitTests":  795,
+    "buildPassed":  true
+}

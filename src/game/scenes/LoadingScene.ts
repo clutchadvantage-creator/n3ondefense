@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { normalizeAnomalyOpportunityMs } from '../anomalies/AnomalyOpportunityClock.ts';
+import { normalizeWorldEventRotation } from '../arcade/WorldEventRotation.ts';
 import type { ArenaSessionState } from '../types';
 import { RunTransitionManager, type ArenaTransitionRequest } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
@@ -281,7 +281,7 @@ export class LoadingScene extends Phaser.Scene {
       contract: candidate.contract ?? null, creditsSpentBeforeRun: candidate.creditsSpentBeforeRun ?? 0,
       upgradeCompletionPercentage: candidate.upgradeCompletionPercentage ?? 0,
       accountProgressionTier: candidate.accountProgressionTier ?? 'new', runCreditsEarned: candidate.runCreditsEarned ?? 0,
-      anomalyOpportunityMs: normalizeAnomalyOpportunityMs(candidate.anomalyOpportunityMs)
+      worldEventRotation: normalizeWorldEventRotation(candidate.worldEventRotation)
     };
   }
 }

@@ -30,13 +30,11 @@ test('new and legacy profiles receive persistent N3ON Arcade challenge counters'
   assert.equal(legacy.progress.neonCircuitsCompleted, 0);
 });
 
-test('Arcade registry centralizes scheduling and registers all six events with physical reward profiles', () => {
+test('Arcade registry registers all six events with physical reward profiles', () => {
   const registry = source('../src/game/arcade/ArcadeEventRegistry.ts');
   for (const eventId of ['golden-hunt', 'mini-boss', 'neon-circuit', 'hot-package', 'packet-snatcher', 'redline']) {
     assert.match(registry, new RegExp(`id: '${eventId}'`));
   }
-  assert.match(registry, /recentHistorySize: 2/);
-  assert.match(registry, /eventCooldownMs: 105_000/);
   assert.equal((registry.match(/reward: randomRewardPool\(/g) ?? []).length, 6);
   for (const rewardKind of ['credits', 'core-tokens', 'flux-cores', 'plasma-chips', 'mod']) {
     assert.match(registry, new RegExp(`kind: '${rewardKind}'`));
@@ -273,11 +271,8 @@ test('Neon Circuit plays the pooled arena gate cue once at each authoritative ch
   assert.match(audio, /case 'circuitGate':[\s\S]*?this\.playPresentationSfx\(name\)/);
 });
 
-test('Arena integration suppresses Arcade during Teaching and preserves live combat systems', () => {
+test('Arena integrates Arcade with live combat systems', () => {
   const arena = source('../src/game/scenes/ArenaScene.ts');
-  assert.match(arena, /firstRunStage === 'complete'/);
-  assert.match(arena, /tutorialProgress\.replaySequenceId === null/);
-  assert.match(arena, /!this\.tutorialDirector\?\.isActive\(\).*this\.arcadeController\?\.update\(delta\)/);
   assert.match(arena, /this\.arcadeController\?\.handleGameplayEvent\(\{ type: 'enemy-killed', enemy \}\)/);
   assert.match(arena, /this\.tryAwardMod\('milestone', isGuaranteedMilestone\(completedRound\)\)/);
   assert.match(arena, /spawnPhysicalRewards:/);

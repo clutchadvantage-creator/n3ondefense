@@ -17,7 +17,6 @@ test('Anomaly registry keeps the first event data-driven and entry prices on the
   assert.deepEqual([...ANOMALY_ENTRY_COSTS], Array.from({ length: 56 }, (_, i) => 35 + i));
   assert.deepEqual(ANOMALY_DEFINITIONS.map(d => d.id), ['heist', 'skybreach']);
   assert.equal(ANOMALY_DEFINITIONS[0].id, 'heist');
-  assert.ok(ANOMALY_SCHEDULING.cooldownMs > ANOMALY_SCHEDULING.maximumOpportunityMs);
   assert.ok(ANOMALY_SCHEDULING.interactionRadius > 0);
 });
 

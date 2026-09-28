@@ -392,8 +392,8 @@ export interface ArenaReward {
 }
 
 export interface ArenaSessionState {
-  /** Deployment-only anomaly countdown; not persistent account progression. */
-  anomalyOpportunityMs?: number;
+  /** Deployment-only shared event rotation; not persistent account progression. */
+  worldEventRotation?: import('./arcade/WorldEventRotation.ts').WorldEventRotationState;
   baseSeed: number;
   round: number;
   objectiveMode: ObjectiveMode;
@@ -410,7 +410,7 @@ export interface ArenaSessionState {
 }
 
 export interface RoundFinishedPayload {
-  anomalyOpportunityMs?: number;
+  worldEventRotation?: import('./arcade/WorldEventRotation.ts').WorldEventRotationState;
   modeCompletion?: boolean;
   baseSeed: number;
   completedRound: number;

@@ -5,10 +5,7 @@ import { SeededRandom } from '../systems/SeededRandom.ts';
 import { ArcadeHudView } from './ArcadeHudView.ts';
 import {
   ARCADE_EVENT_DEFINITIONS,
-  ARCADE_SCHEDULING,
-  chooseWeightedArcadeDefinition,
-  createArcadeEvent,
-  getEligibleArcadeDefinitions
+  createArcadeEvent
 } from './ArcadeEventRegistry.ts';
 import { ArcadeRewardService } from './ArcadeRewardService.ts';
 import type {
@@ -55,12 +52,10 @@ export class N3ONArcadeController {
   private readonly random: SeededRandom;
   private readonly hud: ArcadeHudView;
   private readonly rewards: ArcadeRewardService;
-  private readonly recent: ArcadeEventId[] = [];
   private active: ArcadeEvent | null = null;
   private activeDefinition: ArcadeEventDefinition | null = null;
   private activeElapsedMs = 0;
   private activeStartedAt = 0;
-  private nextOpportunityAt = Number.POSITIVE_INFINITY;
   private pendingOutcome: ArcadeEventOutcome | null = null;
   private destroyed = false;
 
@@ -71,12 +66,6 @@ export class N3ONArcadeController {
     this.random = new SeededRandom((context.seed ^ Math.imul(context.round, 0x51f15e11) ^ 0xa7cade11) >>> 0);
     this.hud = new ArcadeHudView(context.scene);
     this.rewards = new ArcadeRewardService(context);
-    if (options.enabled && (context.difficultyPosition ?? context.round) >= ARCADE_SCHEDULING.minimumRound) {
-      this.nextOpportunityAt = this.random.float(
-        ARCADE_SCHEDULING.initialOpportunityMinimumMs,
-        ARCADE_SCHEDULING.initialOpportunityMaximumMs
-      );
-    }
   }
 
   update(deltaMs: number): void {
@@ -92,20 +81,6 @@ export class N3ONArcadeController {
       this.hud.showObjective(this.active.objectiveText(this.activeElapsedMs));
       return;
     }
-    if (!this.options.enabled || this.activeElapsedMs < this.nextOpportunityAt) return;
-    const chance = ARCADE_SCHEDULING.opportunityChance[this.context.modeFamily];
-    if (!this.random.bool(chance)) {
-      this.nextOpportunityAt = this.activeElapsedMs + ARCADE_SCHEDULING.retryAfterMissMs;
-      return;
-    }
-    const definition = chooseWeightedArcadeDefinition(
-      getEligibleArcadeDefinitions(this.context.difficultyPosition ?? this.context.round),
-      this.random.next(),
-      this.recent
-    );
-    if (!definition || !this.startDefinition(definition)) {
-      this.nextOpportunityAt = this.activeElapsedMs + ARCADE_SCHEDULING.retryAfterMissMs;
-    }
   }
 
   handleGameplayEvent(event: ArcadeGameplayEvent): void {
@@ -113,11 +88,13 @@ export class N3ONArcadeController {
     this.pendingOutcome = this.active.handleGameplayEvent(event, this.activeElapsedMs);
   }
 
-  force(eventId: ArcadeEventId): boolean {
-    if (this.destroyed || this.active) return false;
+  tryStart(eventId: ArcadeEventId): boolean {
+    if (!this.options.enabled || this.destroyed || this.active) return false;
     const definition = ARCADE_EVENT_DEFINITIONS.find((candidate) => candidate.id === eventId);
     return Boolean(definition && this.startDefinition(definition));
   }
+
+  force(eventId: ArcadeEventId): boolean { return this.tryStart(eventId); }
 
   stop(reason: ArcadeStopReason): void {
     if (!this.active || !this.activeDefinition) return;
@@ -219,9 +196,6 @@ export class N3ONArcadeController {
     this.activeDefinition = null;
     this.pendingOutcome = null;
     this.hud.hideObjective();
-    this.recent.push(definition.id);
-    while (this.recent.length > ARCADE_SCHEDULING.recentHistorySize) this.recent.shift();
-    this.nextOpportunityAt = this.activeElapsedMs + ARCADE_SCHEDULING.eventCooldownMs;
     this.hud.announce(
       outcome.success ? 'N3ON ARCADE COMPLETE' : 'N3ON ARCADE FAILED',
       outcome.success ? `${definition.displayName} CLEARED // ${rewardLabel}` : `${definition.displayName} EXPIRED`,

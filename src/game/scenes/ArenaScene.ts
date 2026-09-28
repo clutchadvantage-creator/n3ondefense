@@ -5,7 +5,9 @@ import { WeeklyCompletionTracker } from '../progression/WeeklyCompletionTracker.
 import type { WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import { shakeGameplayCamera } from '../vfx/GameplayCameraShake.ts';
 import Phaser from 'phaser';
-import { normalizeAnomalyOpportunityMs } from '../anomalies/AnomalyOpportunityClock.ts';
+import { normalizeWorldEventRotation, WorldEventRotation } from '../arcade/WorldEventRotation.ts';
+import { ARCADE_EVENT_DEFINITIONS } from '../arcade/ArcadeEventRegistry.ts';
+import { ANOMALY_DEFINITIONS } from '../anomalies/AnomalyRegistry.ts';
 import { clearOfBombsites, selectSafeEnemySpawn, ENEMY_SPAWN_SAFETY } from '../arena/EnemySpawnSafety.ts';
 import { FlyingDrone } from '../enemies/drone/FlyingDrone.ts';
 import type { DroneVariant } from '../enemies/drone/DroneFlight.ts';
@@ -565,7 +567,7 @@ export class ArenaScene extends Phaser.Scene {
   private fluxCores: FluxCoreSystem | null = null;
   private arcadeController: N3ONArcadeController | null = null;
   private anomalyController: AnomalyController | null = null;
-  private anomalyOpportunityMs: number | undefined;
+  private worldEventRotation: WorldEventRotation | null = null;
   private readonly anomalyReturnLifecycle = new AnomalyReturnLifecycle();
   private pendingAnomalyReturn: AnomalyReturnResult | null = null;
   private anomalyReturnAwaitingFirstUpdate = false;
@@ -980,7 +982,6 @@ export class ArenaScene extends Phaser.Scene {
     const sessionFromData = this.parseSessionData(this.extractSessionData(data));
     const sessionFromRegistry = this.parseSessionData(this.registry.get('arena-session'));
     const session = sessionFromData ?? sessionFromRegistry;
-    this.anomalyOpportunityMs = normalizeAnomalyOpportunityMs(session?.anomalyOpportunityMs);
     this.protocol = getCampaignProtocol(RUN_PROTOCOLS[session?.protocol ?? 'normal'].family,
       isCampaignRound(session?.round ?? 1) ? session?.round ?? 1 : 1);
     this.modFocus = session?.modFocus ?? null;
@@ -1024,6 +1025,10 @@ export class ArenaScene extends Phaser.Scene {
       this.registry.remove('arena-session');
     }
 
+    this.worldEventRotation = new WorldEventRotation(this.roundManager.seedBase, [
+      ...ARCADE_EVENT_DEFINITIONS.map(({ id }) => ({ kind: 'arcade' as const, id })),
+      ...ANOMALY_DEFINITIONS.map(({ id }) => ({ kind: 'anomaly' as const, id }))
+    ], normalizeWorldEventRotation(session?.worldEventRotation));
     GameplayTelemetryRecorder.beginRun({
       runId: `${this.runStartedAt}-${this.roundManager.seedBase}`,
       startedAt: this.runStartedAt,
@@ -1189,7 +1194,7 @@ export class ArenaScene extends Phaser.Scene {
     if (candidate.objectiveMode !== 'open' && candidate.objectiveMode !== 'sequential') return undefined;
     return {
       baseSeed: Math.floor(candidate.baseSeed),
-      anomalyOpportunityMs: normalizeAnomalyOpportunityMs(candidate.anomalyOpportunityMs),
+      worldEventRotation: normalizeWorldEventRotation(candidate.worldEventRotation),
       round: candidate.round!,
       objectiveMode: candidate.objectiveMode,
       protocol: normalizeRunProtocolId(candidate.protocol),
@@ -1717,6 +1722,7 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
+    this.updateWorldEventRotation(delta);
     this.anomalyController?.update(delta);
     if (this.anomalyController?.blocksArenaGameplay) {
       if (this.echo?.timeline.recording || this.echo?.timeline.replaying || this.echo?.timeline.cooldownMs
@@ -1818,7 +1824,7 @@ export class ArenaScene extends Phaser.Scene {
     this.bombletHazard?.update(now, this.player, hazardTargets, laserDangerWindow);
     this.updateEnemies(now, dt);
     if (!this.anomalyController || this.anomalyController.state === 'waiting' || this.anomalyController.state === 'resolved') {
-      if (!this.tutorialDirector?.isActive()) this.arcadeController?.update(delta);
+      this.arcadeController?.update(delta);
     }
     this.bombsiteMods.update(now, delta, this.bombSites.getActiveBombSites(), this.enemies, this.player);
     this.supremeModEffects?.update(now, this.enemies, this.bombSites.getActiveBombSites(), this.player);
@@ -5232,8 +5238,6 @@ export class ArenaScene extends Phaser.Scene {
 
   private createArcadeController(round: number, seed: number): void {
     this.arcadeController?.destroy('replaced');
-    const tutorialProgress = SaveSystem.getTutorialProgress();
-    const teachingComplete = tutorialProgress.firstRunStage === 'complete' && tutorialProgress.replaySequenceId === null;
     this.arcadeController = new N3ONArcadeController({
       scene: this,
       player: this.player,
@@ -5305,12 +5309,26 @@ export class ArenaScene extends Phaser.Scene {
         GameplayTelemetryRecorder.recordArcadeEvent(event);
         SaveSystem.recordArcadeMetric(event);
       }
-    }, { enabled: teachingComplete });
+    }, { enabled: true });
+  }
+
+  private updateWorldEventRotation(deltaMs: number): void {
+    const anomalyState = this.anomalyController?.state;
+    const active = Boolean(this.arcadeController?.activeEventId)
+      || (anomalyState !== undefined && anomalyState !== 'waiting' && anomalyState !== 'resolved');
+    this.worldEventRotation?.update(deltaMs,
+      !this.bossEncounter && !this.supremeFinale && this.roundRuntime.phase === 'active'
+      && !this.tutorialHardPaused && !this.legendaryRevealInProgress
+      && this.state.state !== RoundState.Paused && this.state.state !== RoundState.Victory
+      && this.state.state !== RoundState.Defeat,
+      active,
+      choice => choice.kind === 'arcade'
+        ? this.arcadeController?.tryStart(choice.id) ?? false
+        : this.anomalyController?.tryStart(choice.id) ?? false);
   }
 
   private createAnomalyController(round: number, seed: number): void {
     this.anomalyController?.destroy('round-ended');
-    this.anomalyOpportunityMs = this.anomalyController?.remainingOpportunityMs ?? this.anomalyOpportunityMs;
     this.anomalyController = new AnomalyController({
       scene: this,
       player: this.player,
@@ -5334,7 +5352,6 @@ export class ArenaScene extends Phaser.Scene {
       emitMetric: (event) => recordAnomalyMetric(event)
     }, {
       enabled: true,
-      remainingOpportunityMs: this.anomalyOpportunityMs,
       modeFamily: this.currentModeFamily(),
       particlesEnabled: this.particlesEnabled,
       audio: createAnomalyAudioHooks(this.audio)
@@ -6517,7 +6534,7 @@ export class ArenaScene extends Phaser.Scene {
     const modeCompletion = payload.completedRound === 30 && mode !== 'supreme';
     const finalizedPayload: RoundFinishedPayload = {
       ...payload,
-      anomalyOpportunityMs: this.anomalyController?.remainingOpportunityMs ?? this.anomalyOpportunityMs,
+      worldEventRotation: this.worldEventRotation?.snapshot,
       nextProtocol: getCampaignProtocol(mode, payload.nextRound),
       modeCompletion,
       supremeOverdriveUnlocked: modeCompletion && mode === 'overdrive'
@@ -9129,7 +9146,6 @@ export class ArenaScene extends Phaser.Scene {
     this.retireRoundOwner('arcade-controller', () => this.arcadeController?.destroy('replaced'));
     this.arcadeController = null;
     this.retireRoundOwner('anomaly-controller', () => this.anomalyController?.destroy('round-ended'));
-    this.anomalyOpportunityMs = this.anomalyController?.remainingOpportunityMs ?? this.anomalyOpportunityMs;
     this.anomalyController = null;
     this.anomalyReturnLifecycle.reset();
     this.pendingAnomalyReturn = null;
