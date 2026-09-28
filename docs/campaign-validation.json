@@ -1,7 +1,7 @@
 {
   "baseline": "e38bcedde97e6487fc8582eabe1cb3f79c7a1f2f",
-  "scope": "Short assisted local browser checks. Online transport is mocked; no external submissions. No campaign soak or production-backend deployment.",
-  "browserAssertions": 117,
+  "scope": "Short assisted local browser checks. Online transport is mocked; no external submissions. No campaign soak or production-backend deployment by the coding agent. Boss captures center the camera for inspection at the unchanged .9 zoom.",
+  "browserAssertions": 166,
   "fixtures": {
     "boundaries": {
       "source": "artifacts/campaign-boundaries-final.json",
@@ -317,7 +317,7 @@
     },
     "online": {
       "source": "artifacts/campaign-online.json",
-      "assertions": 19,
+      "assertions": 23,
       "checks": [
         {
           "ok": true,
@@ -377,6 +377,22 @@
         },
         {
           "ok": true,
+          "label": "scene cancellation prevents late run activation"
+        },
+        {
+          "ok": true,
+          "label": "latest authorization succeeds"
+        },
+        {
+          "ok": true,
+          "label": "stale response cannot overwrite a newer active run"
+        },
+        {
+          "ok": true,
+          "label": "offline-started play has no uploadable active run"
+        },
+        {
+          "ok": true,
           "label": "online screen defaults to Normal"
         },
         {
@@ -394,6 +410,238 @@
         {
           "ok": true,
           "label": "leaderboard scene retires its objects"
+        }
+      ],
+      "frames": [],
+      "errors": []
+    },
+    "launch": {
+      "source": "artifacts/campaign-launch.json",
+      "assertions": 8,
+      "checks": [
+        {
+          "ok": true,
+          "label": "isolated launch profile"
+        },
+        {
+          "ok": true,
+          "label": "Battle cannot launch or authorize a run"
+        },
+        {
+          "ok": true,
+          "label": "Battle flashes red and dispatches unavailable sound"
+        },
+        {
+          "ok": true,
+          "label": "Start Game automatically requests one authorization"
+        },
+        {
+          "ok": true,
+          "label": "authorized seed and selected local round reach Loading"
+        },
+        {
+          "ok": true,
+          "label": "offline service still launches playable campaign"
+        },
+        {
+          "ok": true,
+          "label": "offline starts stay local"
+        },
+        {
+          "ok": true,
+          "label": "leaving menu cancels pending deployment handoff"
+        }
+      ],
+      "frames": [],
+      "errors": []
+    },
+    "bosses": {
+      "source": "artifacts/campaign-recovered-bosses.json",
+      "assertions": 16,
+      "checks": [
+        {
+          "ok": true,
+          "label": "isolated review profile"
+        },
+        {
+          "ok": true,
+          "label": "artillery: recovered chassis loaded"
+        },
+        {
+          "ok": true,
+          "label": "artillery: 68-pixel world collider (68)"
+        },
+        {
+          "ok": true,
+          "label": "artillery: unchanged gameplay zoom"
+        },
+        {
+          "ok": true,
+          "label": "artillery: live combat and presentation"
+        },
+        {
+          "ok": true,
+          "label": "artillery: scene objects retired"
+        },
+        {
+          "ok": true,
+          "label": "storm-mage: recovered chassis loaded"
+        },
+        {
+          "ok": true,
+          "label": "storm-mage: 68-pixel world collider (68)"
+        },
+        {
+          "ok": true,
+          "label": "storm-mage: unchanged gameplay zoom"
+        },
+        {
+          "ok": true,
+          "label": "storm-mage: live combat and presentation"
+        },
+        {
+          "ok": true,
+          "label": "storm-mage: scene objects retired"
+        },
+        {
+          "ok": true,
+          "label": "void-brawler: recovered chassis loaded"
+        },
+        {
+          "ok": true,
+          "label": "void-brawler: 68-pixel world collider (68)"
+        },
+        {
+          "ok": true,
+          "label": "void-brawler: unchanged gameplay zoom"
+        },
+        {
+          "ok": true,
+          "label": "void-brawler: live combat and presentation"
+        },
+        {
+          "ok": true,
+          "label": "void-brawler: scene objects retired"
+        }
+      ],
+      "frames": [
+        {
+          "archetype": "artillery",
+          "round": 5,
+          "roots": 480,
+          "frames": 239,
+          "meanMs": 16.66652719664025,
+          "p95Ms": 16.899999998509884,
+          "maxMs": 17
+        },
+        {
+          "archetype": "storm-mage",
+          "round": 10,
+          "roots": 546,
+          "frames": 239,
+          "meanMs": 16.6669456067195,
+          "p95Ms": 16.899999998509884,
+          "maxMs": 17
+        },
+        {
+          "archetype": "void-brawler",
+          "round": 15,
+          "roots": 617,
+          "frames": 239,
+          "meanMs": 16.66652719664025,
+          "p95Ms": 16.80000000447035,
+          "maxMs": 17
+        }
+      ],
+      "errors": []
+    },
+    "ending": {
+      "source": "artifacts/campaign-ending.json",
+      "assertions": 21,
+      "checks": [
+        {
+          "ok": true,
+          "label": "isolated test profile"
+        },
+        {
+          "ok": true,
+          "label": "fresh profile later modes locked"
+        },
+        {
+          "ok": true,
+          "label": "failed package persistence rolls back cards and claim"
+        },
+        {
+          "ok": true,
+          "label": "training grants three distinct Commons"
+        },
+        {
+          "ok": true,
+          "label": "training reward cannot repeat"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: local round and family"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: combat position"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: boss replaces ordinary arena"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: physical rewards collected"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: boss unlocks all earlier starts"
+        },
+        {
+          "ok": true,
+          "label": "Trinity starts incomplete"
+        },
+        {
+          "ok": true,
+          "label": "Trinity 1 deaths cannot complete campaign"
+        },
+        {
+          "ok": true,
+          "label": "Trinity 2 deaths cannot complete campaign"
+        },
+        {
+          "ok": true,
+          "label": "third Trinity death persists Supreme completion"
+        },
+        {
+          "ok": true,
+          "label": "authored ending and credits constructed after Trinity"
+        },
+        {
+          "ok": true,
+          "label": "ending Continue reaches terminal Supreme debrief"
+        },
+        {
+          "ok": true,
+          "label": "all Supreme starts remain replayable after credits"
+        },
+        {
+          "ok": true,
+          "label": "supreme 30: retired scene roots"
+        },
+        {
+          "ok": true,
+          "label": "reload profile through persisted save"
+        },
+        {
+          "ok": true,
+          "label": "reload neither repeats nor loses package cards"
+        },
+        {
+          "ok": true,
+          "label": "all eligible one-time package claims survive reload"
         }
       ],
       "frames": [],

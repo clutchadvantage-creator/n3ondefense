@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { LYRA_MESSAGES, LYRA_RECORDINGS } from '../src/game/lyra/LyraRegistry.ts';
+import { LYRA_VOICE_ENABLED } from '../src/game/lyra/LyraAvailability.ts';
 import { TUTORIAL_SEQUENCES } from '../src/game/tutorial/TutorialRegistry.ts';
 import { resolveTutorialCopy } from '../src/game/tutorial/TutorialCopy.ts';
 import { DEFAULT_ABILITY_BINDINGS } from '../src/game/config/controls.ts';
@@ -44,7 +45,9 @@ const quote = text => text.split('\n').map(line => '> ' + line).join('\n');
 const lines = [
   '# LYRA — remaining custom voice recordings', '',
   `The current English catalog contains **${report.registered} message IDs: ${report.recorded} have working custom recordings and ${missing.length} have no matching custom recording**. The following is generated from the actual message registry, tutorial text resolver, recording map, and files in \`${directory}/\`.`, '',
-  'Missing recordings use local browser TTS when LYRA voice and Browser TTS are enabled and a suitable local voice exists. Otherwise they use the existing text-only fallback. This is a coverage inventory, not a claim that every message played during a test session.', '',
+  LYRA_VOICE_ENABLED
+    ? 'Missing recordings use local browser TTS when LYRA voice and Browser TTS are enabled and a suitable local voice exists. Otherwise they use the existing text-only fallback. This is a coverage inventory, not a claim that every message played during a test session.'
+    : '**Voice is temporarily disabled game-wide:** custom LYRA recordings and browser TTS are paused while the voice product is revised. Teaching remains text-only. Assets and saved preferences are preserved; the release switch is `LYRA_VOICE_ENABLED` in `src/game/lyra/LyraAvailability.ts`. The inventory below remains useful for preparing replacement recordings.', '',
   '## Recording list — every message without custom VO', '',
   'Record the quoted text for each ID. Suggested filenames are organizational suggestions; new files must also be registered in `LYRA_RECORDINGS` before the game uses them. Keep files in `public/assets/audio/lyra/`.', ''
 ];

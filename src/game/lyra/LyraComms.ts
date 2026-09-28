@@ -5,6 +5,7 @@ import { LyraQueue } from './LyraQueue.ts';
 import { LYRA_MESSAGE_BY_ID, LYRA_MESSAGES, LYRA_RECORDINGS } from './LyraRegistry.ts';
 import { BrowserTTSProvider, RecordedAudioProvider, TextOnlyFallback } from './LyraVoiceProviders.ts';
 import { normalizeLyraSettings, type LyraContext, type LyraMessage, type LyraPlayback, type LyraSettings } from './LyraTypes.ts';
+import { LYRA_VOICE_ENABLED } from './LyraAvailability.ts';
 
 export class LyraComms {
   private static instance: LyraComms | undefined;
@@ -12,7 +13,7 @@ export class LyraComms {
   readonly tts = new BrowserTTSProvider();
   private readonly recorded = new RecordedAudioProvider(LYRA_RECORDINGS, `${import.meta.env.BASE_URL}assets/audio/lyra/`);
   private readonly textOnly = new TextOnlyFallback();
-  private settings = normalizeLyraSettings(undefined);
+  private settings = normalizeLyraSettings({ voice: LYRA_VOICE_ENABLED, browserTts: LYRA_VOICE_ENABLED });
   private profile = '';
   private seen = new Set<string>();
   private playback: LyraPlayback | null = null;
@@ -107,6 +108,8 @@ export class LyraComms {
       this.queue.setContext({ ...this.activeContext });
     }
     const next = normalizeLyraSettings({ ...save.settings.lyra, ...this.devSettings });
+    // Apply after profile/DEV overrides without rewriting either saved preference.
+    if (!LYRA_VOICE_ENABLED) { next.voice = false; next.browserTts = false; }
     next.volume *= save.settings.masterVolume;
     if ((!next.voice || next.volume === 0 || (!next.browserTts && this.settings.browserTts)) && this.playback) {
       this.stopVoice(); this.completeSpeech();
@@ -137,7 +140,7 @@ export class LyraComms {
     this.provider = 'text-only'; this.voiceStarted = false;
     this.readUntil = this.startedAt + (message.durationMs ?? Math.min(12000, Math.max(3500, message.text.length * 48)));
     this.present();
-    if (!this.settings.voice || this.settings.volume === 0) { this.completeSpeech(); return; }
+    if (!LYRA_VOICE_ENABLED || !this.settings.voice || this.settings.volume === 0) { this.completeSpeech(); return; }
     const providers = message.voiceSource === 'recorded' ? [this.recorded, this.textOnly]
       : message.voiceSource === 'tts' ? [this.tts, this.textOnly] : [this.recorded, this.tts, this.textOnly];
     const providerNames = message.voiceSource === 'recorded' ? ['recorded', 'text-only']

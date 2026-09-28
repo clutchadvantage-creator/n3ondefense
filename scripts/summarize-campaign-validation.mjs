@@ -4,6 +4,8 @@ const fixtures = {};
 for (const [name, path] of Object.entries({
   boundaries: 'artifacts/campaign-boundaries-final.json',
   online: 'artifacts/campaign-online.json',
+  launch: 'artifacts/campaign-launch.json',
+  bosses: 'artifacts/campaign-recovered-bosses.json',
   ending: 'artifacts/campaign-ending.json',
   regression: 'artifacts/campaign-regression.json'
 })) {
@@ -13,7 +15,7 @@ for (const [name, path] of Object.entries({
 }
 await writeFile('docs/campaign-validation.json', JSON.stringify({
   baseline: 'e38bcedde97e6487fc8582eabe1cb3f79c7a1f2f',
-  scope: 'Short assisted local browser checks. Online transport is mocked; no external submissions. No campaign soak or production-backend deployment.',
+  scope: 'Short assisted local browser checks. Online transport is mocked; no external submissions. No campaign soak or production-backend deployment by the coding agent. Boss captures center the camera for inspection at the unchanged .9 zoom.',
   browserAssertions: Object.values(fixtures).reduce((sum, fixture) => sum + fixture.assertions, 0),
   fixtures
 }, null, 2) + '\n');

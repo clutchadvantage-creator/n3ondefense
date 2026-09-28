@@ -55,6 +55,27 @@
       const queue = Queue.due().filter(item => runIds.has(item.runId));
       check(queue.length === 2, 'duplicate successful-round notification does not duplicate milestone');
       check(queue.every(item => item.body.highest_round === 10 && item.body.boss_rounds_completed === 1), 'death on 11 preserves cleared round 10 and one boss');
+      const originalStart = Client.startRun;
+      const delayed = [];
+      Client.startRun = async () => new Promise(resolve => delayed.push(resolve));
+      try {
+        const aborted = new AbortController();
+        const pending = Runs.beginRun(profile.id, profile.name, 'normal', [], 1, aborted.signal);
+        while (!delayed.length) await new Promise(r => setTimeout(r, 5));
+        aborted.abort();
+        delayed.shift()({ run_id: 'cancelled', seed: 456, run_token: 'test', run_token_expires_in_seconds: 999, status: 'pending' });
+        check(!(await pending).ok && !Runs.isOnlineRunActive(), 'scene cancellation prevents late run activation');
+        const stale = Runs.beginRun(profile.id, profile.name);
+        while (!delayed.length) await new Promise(r => setTimeout(r, 5));
+        const latest = Runs.beginRun(profile.id, profile.name);
+        while (delayed.length < 2) await new Promise(r => setTimeout(r, 5));
+        delayed[1]({ run_id: 'latest', seed: 789, run_token: 'test', run_token_expires_in_seconds: 999, status: 'pending' });
+        check((await latest).seed === 789, 'latest authorization succeeds');
+        delayed[0]({ run_id: 'stale', seed: 456, run_token: 'test', run_token_expires_in_seconds: 999, status: 'pending' });
+        check(!(await stale).ok && Runs.active.runId === 'latest', 'stale response cannot overwrite a newer active run');
+        Runs.beginLocalRun();
+        check(!Runs.isOnlineRunActive(), 'offline-started play has no uploadable active run');
+      } finally { Client.startRun = originalStart; Runs.beginLocalRun(); }
       // Render the real mode control with the mocked, empty service.
       const game = globalThis.n3onGame;
       game.scene.start('online-leaderboards');

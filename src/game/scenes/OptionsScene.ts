@@ -4,6 +4,7 @@ import { ABILITY_ACTIONS, DEFAULT_ABILITY_BINDINGS, RESERVED_ABILITY_BINDINGS, b
 import { SceneKeys, type SceneKeyValue } from '../flow/SceneKeys';
 import { AudioManager } from '../systems/AudioManager';
 import { SaveSystem } from '../systems/SaveSystem';
+import { LYRA_VOICE_ENABLED } from '../lyra/LyraAvailability.ts';
 import { pickJsonFile, showConfirmDialog, showInfoModal, type LocalModalHandle } from '../utils/localSaveUi';
 import { createButton, disableButton, playButtonJiggle } from '../utils/ui';
 import { getGameUiRoot } from '../../ui/getGameUiRoot';
@@ -355,21 +356,26 @@ export class OptionsScene extends Phaser.Scene {
     y += 44;
     this.audioCategoryTop = y - 26;
     const lyra = { ...save.settings.lyra };
-    this.addSectionHeader(container, centerX, y, 'LYRA COMMUNICATIONS', 'VOICE & ACCESSIBILITY');
+    this.addSectionHeader(container, centerX, y, 'LYRA COMMUNICATIONS', LYRA_VOICE_ENABLED ? 'VOICE & ACCESSIBILITY' : 'TEXT ONLY // VOICE TEMPORARILY DISABLED');
     y += 42;
     const voiceTrackWidth = Math.min(250, innerWidth * .38);
     const voiceTrackX = innerRight - voiceTrackWidth / 2 - 42;
     const persistLyra = (): void => { SaveSystem.setSettings({ lyra: { ...lyra } }); };
     const voiceLabelWidth = Math.max(100, voiceTrackX - voiceTrackWidth / 2 - innerLeft - 28);
-    this.createSlider(container, innerLeft + 15, voiceTrackX, y, 'LYRA VOICE VOLUME', lyra.volume, voiceTrackWidth, value => { lyra.volume = value; persistLyra(); }, voiceLabelWidth);
-    y += 45;
-    this.createSlider(container, innerLeft + 15, voiceTrackX, y, 'MUSIC DUCKING', lyra.ducking / .5, voiceTrackWidth, value => { lyra.ducking = value * .5; persistLyra(); }, voiceLabelWidth);
-    y += 45;
+    if (LYRA_VOICE_ENABLED) {
+      this.createSlider(container, innerLeft + 15, voiceTrackX, y, 'LYRA VOICE VOLUME', lyra.volume, voiceTrackWidth, value => { lyra.volume = value; persistLyra(); }, voiceLabelWidth);
+      y += 45;
+      this.createSlider(container, innerLeft + 15, voiceTrackX, y, 'MUSIC DUCKING', lyra.ducking / .5, voiceTrackWidth, value => { lyra.ducking = value * .5; persistLyra(); }, voiceLabelWidth);
+      y += 45;
+    }
     for (const [key, title] of [['voice', 'LYRA VOICE'], ['browserTts', 'LOCAL SPEECH FALLBACK'], ['subtitles', 'LYRA SUBTITLES'], ['ambient', 'AMBIENT COMMENTS']] as const) {
-      const button = this.addTabButton(container, centerX, y, `${title}: ${lyra[key] ? 'ON' : 'OFF'}`, () => {
+      const voiceUnavailable = !LYRA_VOICE_ENABLED && (key === 'voice' || key === 'browserTts');
+      const button = this.addTabButton(container, centerX, y, voiceUnavailable ? `${title}: OFF (TEMPORARY)` : `${title}: ${lyra[key] ? 'ON' : 'OFF'}`, () => {
+        if (voiceUnavailable) return false;
         lyra[key] = !lyra[key]; persistLyra();
         (button.getByName('button-label') as Phaser.GameObjects.Text).setText(`${title}: ${lyra[key] ? 'ON' : 'OFF'}`);
       }, Math.min(innerWidth, 430));
+      if (voiceUnavailable) disableButton(button);
       this.registerScrollTarget('audio', button, y, 22); y += 46;
     }
     container.add(this.add.text(centerX, y, 'Required training text stays visible. Contextual guidance: Gameplay tab.', {

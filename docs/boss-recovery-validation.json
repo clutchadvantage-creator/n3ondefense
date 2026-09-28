@@ -1,0 +1,270 @@
+{
+  "sourceCommit": "7e1622012103f7120bc9e2305c6e28aa9f8cbf8e",
+  "scope": "12 generated layouts, three four-second assisted boss samples, no campaign soak; captures use review framing at .9 zoom.",
+  "cases": [
+    {
+      "ok": true,
+      "label": "isolated review profile"
+    },
+    {
+      "ok": true,
+      "label": "artillery: recovered chassis loaded"
+    },
+    {
+      "ok": true,
+      "label": "artillery: 68-pixel world collider (68)"
+    },
+    {
+      "ok": true,
+      "label": "artillery: unchanged gameplay zoom"
+    },
+    {
+      "ok": true,
+      "label": "artillery: live combat and presentation"
+    },
+    {
+      "ok": true,
+      "label": "artillery: scene objects retired"
+    },
+    {
+      "ok": true,
+      "label": "storm-mage: recovered chassis loaded"
+    },
+    {
+      "ok": true,
+      "label": "storm-mage: 68-pixel world collider (68)"
+    },
+    {
+      "ok": true,
+      "label": "storm-mage: unchanged gameplay zoom"
+    },
+    {
+      "ok": true,
+      "label": "storm-mage: live combat and presentation"
+    },
+    {
+      "ok": true,
+      "label": "storm-mage: scene objects retired"
+    },
+    {
+      "ok": true,
+      "label": "void-brawler: recovered chassis loaded"
+    },
+    {
+      "ok": true,
+      "label": "void-brawler: 68-pixel world collider (68)"
+    },
+    {
+      "ok": true,
+      "label": "void-brawler: unchanged gameplay zoom"
+    },
+    {
+      "ok": true,
+      "label": "void-brawler: live combat and presentation"
+    },
+    {
+      "ok": true,
+      "label": "void-brawler: scene objects retired"
+    }
+  ],
+  "frames": [
+    {
+      "archetype": "artillery",
+      "round": 5,
+      "roots": 480,
+      "frames": 239,
+      "meanMs": 16.66652719664025,
+      "p95Ms": 16.899999998509884,
+      "maxMs": 17
+    },
+    {
+      "archetype": "storm-mage",
+      "round": 10,
+      "roots": 546,
+      "frames": 239,
+      "meanMs": 16.6669456067195,
+      "p95Ms": 16.899999998509884,
+      "maxMs": 17
+    },
+    {
+      "archetype": "void-brawler",
+      "round": 15,
+      "roots": 617,
+      "frames": 239,
+      "meanMs": 16.66652719664025,
+      "p95Ms": 16.80000000447035,
+      "maxMs": 17
+    }
+  ],
+  "topology": [
+    {
+      "requested": "open-field",
+      "accepted": "open-field",
+      "seed": 1,
+      "round": 1,
+      "frames": 992,
+      "routes": 3,
+      "unreachable": 0,
+      "rejected": 0,
+      "maxHeldFrames": 0,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333334231
+    },
+    {
+      "requested": "islands",
+      "accepted": "crossroads",
+      "seed": 1,
+      "round": 14,
+      "frames": 2448,
+      "routes": 6,
+      "unreachable": 0,
+      "rejected": 0,
+      "maxHeldFrames": 0,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333334403
+    },
+    {
+      "requested": "fortress",
+      "accepted": "split",
+      "seed": 1,
+      "round": 29,
+      "frames": 2454,
+      "routes": 6,
+      "unreachable": 0,
+      "rejected": 0,
+      "maxHeldFrames": 0,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333334405
+    },
+    {
+      "requested": "ring",
+      "accepted": "ring",
+      "seed": 1,
+      "round": 1,
+      "frames": 856,
+      "routes": 3,
+      "unreachable": 0,
+      "rejected": 0,
+      "maxHeldFrames": 0,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333333652
+    },
+    {
+      "requested": "split",
+      "accepted": "split",
+      "seed": 1,
+      "round": 14,
+      "frames": 1690,
+      "routes": 6,
+      "unreachable": 0,
+      "rejected": 7,
+      "maxHeldFrames": 3,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333334409
+    },
+    {
+      "requested": "hub-spoke",
+      "accepted": "split",
+      "seed": 1,
+      "round": 29,
+      "frames": 2454,
+      "routes": 6,
+      "unreachable": 0,
+      "rejected": 0,
+      "maxHeldFrames": 0,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333334405
+    },
+    {
+      "requested": "canyon",
+      "accepted": "canyon",
+      "seed": 1,
+      "round": 1,
+      "frames": 304,
+      "routes": 3,
+      "unreachable": 0,
+      "rejected": 0,
+      "maxHeldFrames": 0,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333333627
+    },
+    {
+      "requested": "maze",
+      "accepted": "maze",
+      "seed": 1,
+      "round": 14,
+      "frames": 5332,
+      "routes": 6,
+      "unreachable": 0,
+      "rejected": 9,
+      "maxHeldFrames": 5,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333337341
+    },
+    {
+      "requested": "chambers",
+      "accepted": "split",
+      "seed": 1,
+      "round": 29,
+      "frames": 2454,
+      "routes": 6,
+      "unreachable": 0,
+      "rejected": 0,
+      "maxHeldFrames": 0,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333334405
+    },
+    {
+      "requested": "asymmetric-clusters",
+      "accepted": "asymmetric-clusters",
+      "seed": 1,
+      "round": 1,
+      "frames": 664,
+      "routes": 3,
+      "unreachable": 0,
+      "rejected": 0,
+      "maxHeldFrames": 0,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333333655
+    },
+    {
+      "requested": "crossroads",
+      "accepted": "crossroads",
+      "seed": 1,
+      "round": 14,
+      "frames": 2448,
+      "routes": 6,
+      "unreachable": 0,
+      "rejected": 0,
+      "maxHeldFrames": 0,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333334403
+    },
+    {
+      "requested": "perimeter",
+      "accepted": "perimeter",
+      "seed": 1,
+      "round": 29,
+      "frames": 4220,
+      "routes": 6,
+      "unreachable": 0,
+      "rejected": 4,
+      "maxHeldFrames": 3,
+      "skate": 0,
+      "footIntersections": 0,
+      "maxFootStep": 13.333333333337269
+    }
+  ],
+  "errors": []
+}

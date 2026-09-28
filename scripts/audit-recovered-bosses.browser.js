@@ -9,20 +9,26 @@
     try {
       const dependency = async (url, symbol) => (await fetch(url).then(r => r.text())).match(new RegExp(`import\\s*\\{[^}]*\\b${symbol}\\b[^}]*\\}\\s*from\\s*["']([^"']+)`))[1];
       const { SaveSystem: Save } = await import(await dependency('/src/game/scenes/ArenaScene.ts', 'SaveSystem'));
+      const { RoundManager } = await import(await dependency('/src/game/scenes/ArenaScene.ts', 'RoundManager'));
+      const { selectBossArchetype } = await import(await dependency('/src/game/scenes/ArenaScene.ts', 'selectBossArchetype'));
       await stop(); check(Save.createProfile('Boss review ' + Date.now().toString().slice(-6)).ok, 'isolated review profile');
       Save.setSettings({ masterVolume: 0, contextualTutorials: false });
       Save.updateTutorialProgress(p => { p.firstRunStage = 'complete'; p.firstRunWelcomePending = false; });
       for (const round of [5, 10, 15]) {
         report.current = 'boss ' + round;
-        game.scene.start('arena', { baseSeed: 550055 + round, round, protocol: 'normal', objectiveMode: 'open', equippedMods: [], modsEarned: [] });
+        const desired = ['artillery', 'storm-mage', 'void-brawler'][round / 5 - 1];
+        let baseSeed = 1;
+        while (selectBossArchetype(round, new RoundManager(baseSeed, 'open', round, 'normal').currentDefinition().seed) !== desired) baseSeed++;
+        game.scene.start('arena', { baseSeed, round, protocol: 'normal', objectiveMode: 'open', equippedMods: [], modsEarned: [] });
         const arena = game.scene.keys.arena;
         await until(() => arena.bossIntroOverlay?.ready);
         arena.player.invulnUntil = Infinity; arena.playerInput.adoptDevice('gamepad'); arena.pointerLockInitialGate = false;
         arena.bossIntroOverlay.ready.element.click();
         await until(() => arena.bossFlowPhase === 'combat');
+        await wait(120); // Arcade updates scaled body dimensions on its first step.
         const boss = arena.bossEncounter.boss;
         check(boss.texture.key === `rwg-${boss.archetype}-chassis`, `${boss.archetype}: recovered chassis loaded`);
-        check(Math.abs(boss.body.halfWidth - 34) < .01, `${boss.archetype}: 68-pixel world collider`);
+        check(Math.abs(boss.body.halfWidth - 34) < .01, `${boss.archetype}: 68-pixel world collider (${boss.body.halfWidth * 2})`);
         check(arena.cameras.main.zoom === .9, `${boss.archetype}: unchanged gameplay zoom`);
         const roots = arena.children.list.length;
         arena.cameras.main.stopFollow(); arena.cameras.main.centerOn(boss.x, boss.y);
@@ -33,6 +39,9 @@
         const sorted = intervals.slice(1).sort((a,b) => a-b);
         report.frames.push({ archetype: boss.archetype, round, roots, frames: sorted.length, meanMs: sorted.reduce((a,b) => a+b,0)/sorted.length, p95Ms: sorted[Math.ceil(sorted.length*.95)-1], maxMs: sorted.at(-1) });
         check(sorted.length > 30 && boss.active && boss.hp > 0, `${boss.archetype}: live combat and presentation`);
+        // Review framing only: retain .9 zoom, center the moving boss for capture.
+        arena.cameras.main.removeBounds().centerOn(boss.x, boss.y);
+        await wait(35);
         await new Promise(resolve => game.renderer.snapshot(img => { report.screenshots.push({ archetype: boss.archetype, data: img.src }); resolve(); }));
         await stop();
         check(arena.children.list.length === 0 && !boss.active, `${boss.archetype}: scene objects retired`);

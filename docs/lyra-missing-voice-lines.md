@@ -2,7 +2,7 @@
 
 The current English catalog contains **66 message IDs: 31 have working custom recordings and 35 have no matching custom recording**. The following is generated from the actual message registry, tutorial text resolver, recording map, and files in `public/assets/audio/lyra/`.
 
-Missing recordings use local browser TTS when LYRA voice and Browser TTS are enabled and a suitable local voice exists. Otherwise they use the existing text-only fallback. This is a coverage inventory, not a claim that every message played during a test session.
+**Voice is temporarily disabled game-wide:** custom LYRA recordings and browser TTS are paused while the voice product is revised. Teaching remains text-only. Assets and saved preferences are preserved; the release switch is `LYRA_VOICE_ENABLED` in `src/game/lyra/LyraAvailability.ts`. The inventory below remains useful for preparing replacement recordings.
 
 ## Recording list — every message without custom VO
 

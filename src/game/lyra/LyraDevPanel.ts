@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import type { LyraComms } from './LyraComms.ts';
 import { LYRA_MESSAGES } from './LyraRegistry.ts';
 import { SaveSystem } from '../systems/SaveSystem.ts';
+import { LYRA_VOICE_ENABLED } from './LyraAvailability.ts';
 import { createTutorialProgress, requestTutorialReplay } from '../tutorial/TutorialProgress.ts';
 
 /** Dynamically imported only in DEV; no debug controls in the production bundle. */
@@ -41,7 +42,9 @@ export function installLyraDevPanel(game: Phaser.Game, comms: LyraComms): void {
     comms.queue.submit({ ...message, text: message.recordedText ?? message.text,
       voiceSource, condition: undefined, scenes: undefined, once: undefined, tutorial: false, priority: 100 });
   };
-  const note = document.createElement('p'); note.textContent = 'Preview in Menu or Garage. Voice settings and gameplay safety gates still apply.'; content.append(note);
+  const note = document.createElement('p'); note.textContent = LYRA_VOICE_ENABLED
+    ? 'Preview in Menu or Garage. Voice settings and gameplay safety gates still apply.'
+    : 'Voice temporarily disabled. Previews use text only; saved voice preferences are retained.'; content.append(note);
   button('Preview provider chain', () => preview());
   button('Preview recorded file', () => preview('recorded'));
   button('Preview local TTS', () => preview('tts'));
