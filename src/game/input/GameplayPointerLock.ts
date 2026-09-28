@@ -16,12 +16,19 @@ export class GameplayPointerLock {
 
   constructor(private readonly game: Phaser.Game, private readonly callbacks: PointerLockCallbacks) {
     this.canvas = game.canvas;
+    // Loading may already own capture before this controller subscribes.
+    // Remember it so the first Escape/unlock still reaches the pause callback.
+    this.wasLocked = this.locked;
     const rect = this.canvas.getBoundingClientRect();
     this.aimX = rect.width * 0.5;
     this.aimY = rect.height * 0.5;
     this.overlay = document.createElement('button');
     this.overlay.type = 'button';
     this.overlay.className = 'gameplay-pointer-lock';
+    // Scene owners explicitly show a capture prompt when gameplay needs it.
+    // Boss intros can be built before this controller; an empty visible button
+    // here would intercept their READY command across the entire canvas.
+    this.overlay.hidden = true;
     this.overlay.addEventListener('click', this.request);
     document.querySelector('#game-root')?.append(this.overlay);
     document.addEventListener('pointerlockchange', this.handleChange);

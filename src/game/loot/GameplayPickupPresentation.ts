@@ -99,6 +99,43 @@ export class GameplayPickupPresentation {
     flux.electricity.strokePath();
   }
 
+  /** Shared collection feedback; scene-specific reward accounting stays with its owner. */
+  showCollectionLabel(type: PickupType, x: number, y: number): void {
+    const label = type === 'fluxCore' ? 'FLUX CORE' : type === 'ricochet' ? 'RICOCHET ROUNDS'
+      : type === 'grenadeRounds' ? 'GRENADE ROUNDS' : type === 'scattershot' ? 'SCATTERSHOT ROUNDS' : type;
+    const text = this.scene.add.text(x, y - 24, `+${label}`, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#96ffe4'
+    }).setOrigin(.5);
+    this.scene.tweens.add({ targets: text, y: text.y - 20, alpha: 0, duration: 620, onComplete: () => text.destroy() });
+  }
+
+  /** Arena's physical-loot launch, reused by anomaly containers. No spawn sound. */
+  launch(sprite: Phaser.GameObjects.Container, landingX: number, landingY: number,
+    index: number, compact = false, onLanded?: () => void): void {
+    const startX = sprite.x;
+    const startY = sprite.y;
+    const duration = compact ? 170 : 290;
+    this.scene.tweens.add({
+      targets: sprite,
+      x: Phaser.Math.Linear(startX, landingX, 0.48),
+      y: Math.min(startY, landingY) - (compact ? 30 : 74) - index % 3 * (compact ? 4 : 12),
+      duration,
+      delay: compact ? Math.min(75, index * 8) : Math.min(230, index * 24),
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        if (!sprite.active) return;
+        this.scene.tweens.add({
+          targets: sprite,
+          x: landingX,
+          y: landingY,
+          duration: compact ? 190 : 330,
+          ease: 'Bounce.easeOut',
+          onComplete: () => { if (sprite.active) onLanded?.(); }
+        });
+      }
+    });
+  }
+
   private createFluxCore(x: number, y: number, color: number): Phaser.GameObjects.Container {
     const container = this.scene.add.container(x, y).setDepth(8);
     const glow = this.scene.add.circle(0, -1, 10, color, 0.23).setBlendMode(Phaser.BlendModes.ADD);

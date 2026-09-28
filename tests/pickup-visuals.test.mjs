@@ -7,6 +7,7 @@ import { RICOCHET_MAX_WALL_BOUNCES, reflectRicochetVelocity } from '../src/game/
 
 const arena = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
 const presentation = readFileSync(new URL('../src/game/loot/GameplayPickupPresentation.ts', import.meta.url), 'utf8');
+const motion = readFileSync(new URL('../src/game/loot/GameplayPickupMotion.ts', import.meta.url), 'utf8');
 
 test('Every pickup type uses the same compact neon shell with a distinct center icon', () => {
   assert.match(presentation, /const visualColor = type === 'credits' \? 0xf5ff58 : color/);
@@ -52,21 +53,21 @@ test('Pickup accents use bounded shared-frame animation and preserve Loot Satell
 });
 
 test('Pickups drift, respect arena geometry, and softly separate without physics bodies', () => {
-  assert.match(arena, /private readonly pickupMotion = new WeakMap/);
+  assert.match(arena, /private readonly pickupMotion = new GameplayPickupMotion/);
   assert.match(arena, /this\.updateFloatingPickupMotion\(now, dt\)/);
   assert.match(arena, /this\.separateFloatingPickups\(\)/);
-  assert.match(arena, /const PICKUP_FLOAT_DRIFT_MIN = 12\.5/);
-  assert.match(arena, /const PICKUP_FLOAT_MAX_SPEED = 20/);
-  assert.match(arena, /const driftSpeed = PICKUP_FLOAT_DRIFT_MIN \+ motionSeed % PICKUP_FLOAT_DRIFT_RANGE/);
-  assert.match(arena, /-PICKUP_FLOAT_MAX_SPEED, PICKUP_FLOAT_MAX_SPEED/);
+  assert.match(motion, /const PICKUP_FLOAT_DRIFT_MIN = 12\.5/);
+  assert.match(motion, /const PICKUP_FLOAT_MAX_SPEED = 20/);
+  assert.match(motion, /const driftSpeed = PICKUP_FLOAT_DRIFT_MIN \+ motionSeed % PICKUP_FLOAT_DRIFT_RANGE/);
+  assert.match(motion, /-PICKUP_FLOAT_MAX_SPEED, PICKUP_FLOAT_MAX_SPEED/);
   assert.match(presentation, /setY\(Math\.sin\(now \* 0\.003 \+ visual\.phase\) \* 2\.2\)/);
-  assert.match(arena, /motion\.velocityX = Phaser\.Math\.Clamp/);
-  assert.match(arena, /for \(const wall of this\.wallRects\)/);
-  assert.match(arena, /const separationDistance = 35/);
-  assert.match(arena, /const PICKUP_SEPARATION_PUSH = 0\.2/);
-  assert.match(arena, /const PICKUP_BOUNCE_TRANSFER = 0\.5/);
-  assert.match(arena, /const PICKUP_BOUNCE_KICK = 2/);
-  assert.match(arena, /const impulse = \(secondNormalSpeed - firstNormalSpeed\) \* PICKUP_BOUNCE_TRANSFER/);
+  assert.match(motion, /motion\.velocityX = clamp/);
+  assert.match(motion, /for \(const wall of walls\)/);
+  assert.match(motion, /const separationDistance = 35/);
+  assert.match(motion, /const PICKUP_SEPARATION_PUSH = 0\.2/);
+  assert.match(motion, /const PICKUP_BOUNCE_TRANSFER = 0\.5/);
+  assert.match(motion, /const PICKUP_BOUNCE_KICK = 2/);
+  assert.match(motion, /const impulse = \(secondNormalSpeed - firstNormalSpeed\) \* PICKUP_BOUNCE_TRANSFER/);
   const motionUpdater = arena.match(/private updateFloatingPickupMotion\([\s\S]*?\n  \}/)?.[0] ?? '';
   assert.doesNotMatch(motionUpdater, /physics\.add|add\.overlap|add\.collider/);
 });

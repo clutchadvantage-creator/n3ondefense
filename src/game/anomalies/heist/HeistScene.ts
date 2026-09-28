@@ -70,6 +70,7 @@ import { getHeistCampaignPositions } from './HeistCampaignProgression.ts';
 import { isCampaignRound } from '../../progression/CampaignProgression.ts';
 import { isValidAnomalyEntryCost } from '../AnomalyPricing.ts';
 import { HeistLootPickupSystem } from './HeistLootPickupSystem.ts';
+import { GameplayPickupMotion, collectOrAttractPickup, energyPickupBlocked } from '../../loot/GameplayPickupMotion.ts';
 import { HeistTrapSystem } from './HeistTrapSystem.ts';
 import { HeistPerformanceProfiler } from './HeistPerformanceProfiler.ts';
 import { followGameplayPlayer } from '../../systems/GameplayCamera.ts';
@@ -78,11 +79,10 @@ import { ArenaSmashableSystem } from '../../arena/ArenaSmashableSystem.ts';
 import type { ArenaSmashableLoot } from '../../arena/ArenaSmashableDefinitions.ts';
 import { createHeistSmashablePlacements } from './HeistSmashablePlacement.ts';
 import {
-  GAMEPLAY_PICKUP_COLOR_BY_TYPE,
   GAMEPLAY_PICKUP_SFX_BY_TYPE,
   GameplayPickupPresentation
 } from '../../loot/GameplayPickupPresentation.ts';
-import type { PickupType } from '../../types.ts';
+import type { PickupType, RectSpec } from '../../types.ts';
 
 type HeistPhase = 'inbound' | 'vault-opening' | 'looting' | 'egress-delay' | 'egress-ready' | 'escape' | 'returning';
 type ProjectileOwner = 'player' | 'enemy' | 'turret';
@@ -171,6 +171,10 @@ export class HeistScene extends Phaser.Scene {
   private campaignPositions!: ReturnType<typeof getHeistCampaignPositions>;
   private lootPickups!: HeistLootPickupSystem;
   private pickupPresentation!: GameplayPickupPresentation;
+  private readonly pickupMotion = new GameplayPickupMotion();
+  private readonly pickupMotionRoots: Phaser.GameObjects.Container[] = [];
+  private pickupClosedDoorWalls: RectSpec[] = [];
+  private readonly pickupBounds = { x: 0, y: 0, w: HEIST_WORLD.width, h: HEIST_WORLD.height };
   private pendingLoot: PendingAnomalyLoot = emptyLoot();
   private phase: HeistPhase = 'inbound';
   private elapsedMs = 0;
@@ -332,12 +336,17 @@ export class HeistScene extends Phaser.Scene {
       this,
       () => this.modRuntime.hasInfusion('pickup-orbit')
     );
-    this.lootPickups = new HeistLootPickupSystem(this, this.rewards, this.pickupPresentation);
+    this.lootPickups = new HeistLootPickupSystem(this, this.rewards, this.pickupPresentation,
+      this.pickupMotion, this.pickupBounds, (x, y) => this.pointBlocked(x, y));
     this.pendingLoot = this.rewards.createEmpty();
     this.physics.world.setBounds(0, 0, HEIST_WORLD.width, HEIST_WORLD.height);
     this.cameras.main.setBounds(0, 0, HEIST_WORLD.width, HEIST_WORLD.height);
     this.cameras.main.setBackgroundColor(0x02050a);
     this.facility = createHeistFacility(this, (data.seed ^ Math.imul(data.round, 0x45d9f3b)) >>> 0);
+    this.pickupClosedDoorWalls = [...this.facility.wallRects, ...this.facility.vaultDoors.getChildren().map(door => {
+      const body = (door as Phaser.Physics.Arcade.Image).body as Phaser.Physics.Arcade.StaticBody;
+      return { x: body.x, y: body.y, w: body.width, h: body.height };
+    })];
     this.createEnvironmentSmashables();
     if (import.meta.env.DEV) console.debug('[HEIST lifecycle] facility-ready', {
       elapsedMs: performance.now() - devCreateStartedAt,
@@ -428,6 +437,7 @@ export class HeistScene extends Phaser.Scene {
     this.projectiles.length = 0;
     this.containers.length = 0;
     this.pickups.length = 0;
+    this.pickupMotionRoots.length = 0;
     this.environmentSmashables = null;
     this.fences.length = 0;
     this.turrets.length = 0;
@@ -642,7 +652,13 @@ export class HeistScene extends Phaser.Scene {
     this.updateFences(now, dt);
     this.updateTurrets(now);
     profiler?.mark('deployables');
-    this.updatePickups(now);
+    this.pickupMotionRoots.length = 0;
+    for (const pickup of this.pickups) this.pickupMotionRoots.push(pickup.root);
+    this.lootPickups.appendMotionTargets(this.pickupMotionRoots);
+    const pickupWalls = this.facility.vaultDoor.body?.enable ? this.pickupClosedDoorWalls : this.facility.wallRects;
+    this.pickupMotion.update(this.pickupMotionRoots, root => root, this.pickupBounds, pickupWalls, now, dt);
+    this.pickupMotion.separate(this.pickupMotionRoots, root => root, this.pickupBounds, pickupWalls);
+    this.updatePickups(now, dt);
     const pickupField = this.modRuntime.magneticServiceField(this.player.stats.pickupRadius);
     this.lootPickups.update(now, dt, this.player.x, this.player.y, this.player.stats.pickupRadius,
       pickupField.attractionRadius, pickupField.pullSpeed,
@@ -817,11 +833,17 @@ export class HeistScene extends Phaser.Scene {
     for (const entry of this.facility.supportPoints) {
       this.pickups.push({
         kind: entry.kind,
-        root: this.pickupPresentation.create(entry.kind, entry.x, entry.y).setDepth(8),
+        root: this.createGameplayPickup(entry.kind, entry.x, entry.y),
         expiresAt: Number.POSITIVE_INFINITY,
         source: 'support'
       });
     }
+  }
+
+  private createGameplayPickup(type: PickupType, x: number, y: number): Phaser.GameObjects.Container {
+    const root = this.pickupPresentation.create(type, x, y);
+    this.pickupMotion.register(root, type);
+    return root;
   }
 
   private createEnvironmentSmashables(): void {
@@ -844,12 +866,9 @@ export class HeistScene extends Phaser.Scene {
           : type === 'fluxCore' ? { kind: 'fluxCores', amount: 1 } : undefined;
     if (provisionalReward) {
       this.lootPickups.spawn(x, y, provisionalReward, 3_000 + this.enemyLootSequence++);
-      this.audio.play('loot-spawn');
       return;
     }
-    const root = this.pickupPresentation.create(type, x, y, GAMEPLAY_PICKUP_COLOR_BY_TYPE[type]).setDepth(8);
-    root.setScale(0.72);
-    this.tweens.add({ targets: root, scale: 1, duration: 180, ease: 'Back.Out' });
+    const root = this.createGameplayPickup(type, x, y);
     this.pickups.push({
       kind: type,
       root,
@@ -857,7 +876,6 @@ export class HeistScene extends Phaser.Scene {
       source: 'smashable',
       provisionalReward
     });
-    this.audio.play('loot-spawn');
   }
 
   private updatePlayerMovement(now: number): void {
@@ -1545,7 +1563,8 @@ export class HeistScene extends Phaser.Scene {
     }
   }
 
-  private updatePickups(now: number): void {
+  private updatePickups(now: number, dt: number): void {
+    const field = this.modRuntime.magneticServiceField(this.player.stats.pickupRadius);
     for (let index = this.pickups.length - 1; index >= 0; index -= 1) {
       const pickup = this.pickups[index];
       if (!pickup.root.active || now > pickup.expiresAt) {
@@ -1554,9 +1573,10 @@ export class HeistScene extends Phaser.Scene {
         continue;
       }
       this.pickupPresentation.update(pickup.root, now);
-      const dx = pickup.root.x - this.player.x;
-      const dy = pickup.root.y - this.player.y;
-      if (dx * dx + dy * dy > this.player.stats.pickupRadius ** 2) continue;
+      const blocked = pickup.kind === 'energy' && energyPickupBlocked(this.player.energy,
+        this.player.energyStats.max, this.session.protocol !== 'normal');
+      if (!collectOrAttractPickup(pickup.root, this.player.x, this.player.y, this.player.stats.pickupRadius,
+        field.attractionRadius, field.pullSpeed, dt, !blocked)) continue;
       this.collectGameplayPickup(pickup, now);
       pickup.root.destroy(true);
       this.pickups.splice(index, 1);
@@ -1611,15 +1631,7 @@ export class HeistScene extends Phaser.Scene {
         this.modRuntime.multiplier('buffDuration'));
       this.turretWeaponSync.inherit(type, now, activation.activeUntil, this.modRuntime.turretWeaponSyncEnabled());
     }
-    const label = pickup.provisionalReward ? this.rewards.label(pickup.provisionalReward)
-      : `+${type === 'ricochet' ? 'RICOCHET ROUNDS' : type === 'grenadeRounds' ? 'GRENADE ROUNDS'
-        : type === 'scattershot' ? 'SCATTERSHOT ROUNDS' : type.toUpperCase()}`;
-    const text = this.add.text(this.player.x, this.player.y - 25, label, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#96ffe4',
-      stroke: '#020711', strokeThickness: 3
-    }).setOrigin(0.5).setDepth(13);
-    this.tweens.add({ targets: text, y: text.y - 24, alpha: 0, duration: 620,
-      onComplete: () => text.destroy() });
+    this.pickupPresentation.showCollectionLabel(type, this.player.x, this.player.y);
   }
 
   private updateMission(now: number): void {
@@ -1794,7 +1806,6 @@ export class HeistScene extends Phaser.Scene {
     this.containersOpened += 1;
     const reward = this.rewards.rollContainer();
     this.audio.play('loot-container-break');
-    this.audio.play('loot-spawn');
     this.emitMetric('anomaly_container_opened', { progress: this.containersOpened, target: this.containers.length });
     this.createContainerBurst(container);
     this.lootPickups.spawn(container.root.x, container.root.y, reward, container.index);
@@ -1818,7 +1829,8 @@ export class HeistScene extends Phaser.Scene {
           : reward.kind === 'fluxCores' ? 'fluxCore' : 'plasmaChip';
       this.coreAudio.playSfx(GAMEPLAY_PICKUP_SFX_BY_TYPE[pickupType]);
     }
-    this.lootPickups.showCollectionLabel(reward, x, y);
+    this.lootPickups.showCollectionLabel(reward, reward.kind === 'mod' ? x : this.player.x,
+      reward.kind === 'mod' ? y : this.player.y);
   }
 
   private drawContainerCracks(container: HeistContainer): void {
@@ -2366,7 +2378,6 @@ export class HeistScene extends Phaser.Scene {
     if (enemy.name === 'heist-mini-boss' && enemy.hp <= 0) {
       this.miniBossKilled = true;
       const premiumDrop = this.rewards.rollMiniBossReward();
-      this.audio.play('loot-spawn');
       this.lootPickups.spawn(enemy.x, enemy.y, premiumDrop, 1000 + this.containersOpened);
     }
     if (enemy.hp <= 0) {
@@ -2408,7 +2419,7 @@ export class HeistScene extends Phaser.Scene {
           : undefined;
       this.pickups.push({
         kind,
-        root: this.pickupPresentation.create(kind, enemy.x, enemy.y, GAMEPLAY_PICKUP_COLOR_BY_TYPE[kind]).setDepth(8),
+        root: this.createGameplayPickup(kind, enemy.x, enemy.y),
         expiresAt: this.time.now + PICKUP_BALANCE.lifetimeMs,
         source: 'enemy',
         provisionalReward
@@ -2416,7 +2427,6 @@ export class HeistScene extends Phaser.Scene {
     }
     if (this.random.next() >= HEIST_BALANCE.enemyAnomalyLootChance) return;
     const reward = this.rewards.rollEnemyBonus();
-    this.audio.play('loot-spawn');
     this.lootPickups.spawn(enemy.x + 18, enemy.y - 12, reward, 2_000 + this.enemyLootSequence++);
   }
 
@@ -2644,6 +2654,8 @@ export class HeistScene extends Phaser.Scene {
     this.hudRadarContacts.length = 0;
     this.containers.length = 0;
     this.pickups.length = 0;
+    this.pickupMotionRoots.length = 0;
+    this.pickupClosedDoorWalls.length = 0;
     this.fences.length = 0;
     this.turrets.length = 0;
     this.mines.length = 0;

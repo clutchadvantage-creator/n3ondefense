@@ -1,3 +1,4 @@
+import { GameplayPickupMotion, collectOrAttractPickup, energyPickupBlocked, findGameplayPickupLanding } from '../loot/GameplayPickupMotion.ts';
 import { HudInformationSystem } from '../ui/HudInformationSystem.ts';
 import { WeeklyCompletionTracker } from '../progression/WeeklyCompletionTracker.ts';
 import type { WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
@@ -241,12 +242,6 @@ interface Pickup {
   arcadeEventId?: ArcadeEventId;
 }
 
-interface PickupMotion {
-  velocityX: number;
-  velocityY: number;
-  phase: number;
-}
-
 interface ModPickup {
   definition: ModDefinition;
   source: ModDropSource;
@@ -441,12 +436,6 @@ const ROUND_PHASE_LABELS: Record<RoundState, string> = {
 const ENEMY_NAVIGATION_PADDING = ARENA_GENERATION_CONFIG.enemyNavigationPadding;
 const ENEMY_SEPARATION_RADIUS = 31;
 const SPECIAL_AMMO_HIT_QUERY_RADIUS = 32;
-const PICKUP_FLOAT_DRIFT_MIN = 12.5;
-const PICKUP_FLOAT_DRIFT_RANGE = 4.5;
-const PICKUP_FLOAT_MAX_SPEED = 20;
-const PICKUP_SEPARATION_PUSH = 0.2;
-const PICKUP_BOUNCE_TRANSFER = 0.5;
-const PICKUP_BOUNCE_KICK = 2;
 const BOMBSITE_EXPLOSION_VISUAL_RADIUS = 520;
 export class ArenaScene extends Phaser.Scene {
   private readonly state = new GameStateMachine(RoundState.PrePlant);
@@ -515,7 +504,7 @@ export class ArenaScene extends Phaser.Scene {
   private pickups: Pickup[] = [];
   private modPickups: ModPickup[] = [];
   private pickupPresentation!: GameplayPickupPresentation;
-  private readonly pickupMotion = new WeakMap<Phaser.GameObjects.Container, PickupMotion>();
+  private readonly pickupMotion = new GameplayPickupMotion();
   private fences: Fence[] = [];
   private turrets: Turret[] = [];
   private mines: Mine[] = [];
@@ -1090,6 +1079,9 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.aimSettings = normalizeAimSettings(SaveSystem.get().settings.aim);
     this.pointerLock.setSensitivity(this.aimSettings.mouseSensitivity);
+    // Loading can capture the mouse before create(). Boss initialization runs
+    // before this controller exists, so release that inherited capture here too.
+    if (this.bossFlowPhase === 'intro') this.pointerLock.release();
     this.beginPendingStartupPresentation();
     if(import.meta.env.DEV){
       const debugGlobal=globalThis as typeof globalThis&{
@@ -1282,23 +1274,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.bombSites = new BombSiteManager(def.objectiveMode, OBJECTIVE_CONFIG.maxActiveBombs);
     this.bombSites.initialize(this, this.layout.bombSites, this.layout.theme);
-    this.bombsiteMods = new BombsiteModSystem(this, this.modRuntime, {
-      reduceCountdown: (site, amountMs) => this.bombSites.reduceCountdown(site, amountMs),
-      interruptDefuse: (site) => this.bombSites.interruptDefuse(site, true),
-      damagePlayer: (amount) => {
-        const hit = this.player.takeDamage(amount);
-        if (hit) GameplayTelemetryRecorder.recordPlayerDamage('bombsite-reactor', amount);
-        return hit;
-      },
-      announce: (message) => this.showModBanner(message),
-      playCue: (cue) => {
-        if (cue === 'heavy') this.audio.playSfx('bomblet');
-        else if (cue === 'warning') this.audio.playSfx('defuseAlarm');
-        else if (cue === 'gravity') this.audio.playSfx('shieldOn');
-        else this.audio.playSfx('beep');
-      },
-      playTotemCue: (cue) => this.audio.playSfx(cue === 'entrance' ? 'totemEntrance' : 'totemPulse')
-    });
+    this.initializeBombsiteMods();
     this.supremeModEffects = new SupremeModEffectSystem(this, this.modRuntime, {
       playPulseCue: () => this.audio.playSfx('totemPulse')
     });
@@ -1543,6 +1519,27 @@ export class ArenaScene extends Phaser.Scene {
         fontFamily: 'monospace', fontSize: '13px', color: '#bffcff', backgroundColor: '#06101ccc'
       }).setOrigin(0, 1).setScrollFactor(0).setDepth(2200).setVisible(false);
     }
+  }
+
+  /** Every encounter owns a fresh query layer, including bosses with no sites. */
+  private initializeBombsiteMods(): void {
+    this.bombsiteMods = new BombsiteModSystem(this, this.modRuntime, {
+      reduceCountdown: (site, amountMs) => this.bombSites.reduceCountdown(site, amountMs),
+      interruptDefuse: (site) => this.bombSites.interruptDefuse(site, true),
+      damagePlayer: (amount) => {
+        const hit = this.player.takeDamage(amount);
+        if (hit) GameplayTelemetryRecorder.recordPlayerDamage('bombsite-reactor', amount);
+        return hit;
+      },
+      announce: (message) => this.showModBanner(message),
+      playCue: (cue) => {
+        if (cue === 'heavy') this.audio.playSfx('bomblet');
+        else if (cue === 'warning') this.audio.playSfx('defuseAlarm');
+        else if (cue === 'gravity') this.audio.playSfx('shieldOn');
+        else this.audio.playSfx('beep');
+      },
+      playTotemCue: (cue) => this.audio.playSfx(cue === 'entrance' ? 'totemEntrance' : 'totemPulse')
+    });
   }
 
   private registerBombSiteEvents(): void {
@@ -4699,9 +4696,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private updatePickups(now: number, dt: number): void {
     const collectionRadius = this.player.stats.pickupRadius;
-    const collectionRadiusSquared = collectionRadius * collectionRadius;
     const magneticField = this.modRuntime.magneticServiceField(collectionRadius);
-    const attractionRadiusSquared = magneticField.attractionRadius * magneticField.attractionRadius;
     this.updateFloatingPickupMotion(now, dt);
     this.separateFloatingPickups();
     let writeIndex = 0;
@@ -4715,32 +4710,15 @@ export class ArenaScene extends Phaser.Scene {
         p.sprite.destroy();
         continue;
       }
-      const dx = this.player.x - p.sprite.x;
-      const dy = this.player.y - p.sprite.y;
-      const distanceSquared = dx * dx + dy * dy;
       const energyCollectionBlocked = p.type === 'energy'
-        && (this.isOverdriveProtocol()
-          ? this.player.energy >= this.player.energyStats.max * 2
-          : this.player.energy > this.player.energyStats.max * (1 - PICKUP_BALANCE.energyAutoCollectMissingFraction));
-      if (now >= (p.collectibleAt ?? 0) && distanceSquared < collectionRadiusSquared) {
-        if (energyCollectionBlocked) {
-          this.pickups[writeIndex] = p;
-          writeIndex += 1;
-          continue;
-        }
+        && energyPickupBlocked(this.player.energy, this.player.energyStats.max, this.isOverdriveProtocol());
+      if (collectOrAttractPickup(p.sprite, this.player.x, this.player.y, collectionRadius,
+        magneticField.attractionRadius, magneticField.pullSpeed, dt, now >= (p.collectibleAt ?? 0) && !energyCollectionBlocked)) {
         this.collectPickup(p.type, p.source, p.amount);
         if (p.arcadeEventId) this.recordArcadeLootMetric('arcade_pickup_collected', p.arcadeEventId, p.type, p.amount ?? 1);
         if (p.source === 'boss-loot') bossLootChanged = true;
         p.sprite.destroy();
         continue;
-      }
-      if (now >= (p.collectibleAt ?? 0) && !energyCollectionBlocked && magneticField.pullSpeed > 0 && distanceSquared < attractionRadiusSquared) {
-        const d = Math.sqrt(distanceSquared);
-        const step = Math.min(Math.max(0, d - collectionRadius * 0.7), magneticField.pullSpeed * dt);
-        if (step > 0 && d > 0) {
-          p.sprite.x += (dx / d) * step;
-          p.sprite.y += (dy / d) * step;
-        }
       }
       this.pickups[writeIndex] = p;
       writeIndex += 1;
@@ -4750,126 +4728,11 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateFloatingPickupMotion(now: number, dt: number): void {
-    const bounds = this.layout.generation.bounds;
-    const padding = 24;
-    const minimumX = bounds.x + padding;
-    const maximumX = bounds.x + bounds.w - padding;
-    const minimumY = bounds.y + padding;
-    const maximumY = bounds.y + bounds.h - padding;
-
-    for (const pickup of this.pickups) {
-      const motion = this.pickupMotion.get(pickup.sprite);
-      if (!motion) continue;
-
-      const breezeX = Math.sin(now * 0.00072 + motion.phase) * 2.8;
-      const breezeY = Math.cos(now * 0.00061 + motion.phase * 1.37) * 2.5;
-      motion.velocityX = Phaser.Math.Clamp((motion.velocityX + breezeX * dt) * Math.pow(0.994, dt * 60), -PICKUP_FLOAT_MAX_SPEED, PICKUP_FLOAT_MAX_SPEED);
-      motion.velocityY = Phaser.Math.Clamp((motion.velocityY + breezeY * dt) * Math.pow(0.994, dt * 60), -PICKUP_FLOAT_MAX_SPEED, PICKUP_FLOAT_MAX_SPEED);
-
-      const previousX = pickup.sprite.x;
-      const previousY = pickup.sprite.y;
-      pickup.sprite.x += motion.velocityX * dt;
-      pickup.sprite.y += motion.velocityY * dt;
-
-      if (pickup.sprite.x <= minimumX || pickup.sprite.x >= maximumX) {
-        pickup.sprite.x = Phaser.Math.Clamp(pickup.sprite.x, minimumX, maximumX);
-        motion.velocityX *= -0.82;
-      }
-      if (pickup.sprite.y <= minimumY || pickup.sprite.y >= maximumY) {
-        pickup.sprite.y = Phaser.Math.Clamp(pickup.sprite.y, minimumY, maximumY);
-        motion.velocityY *= -0.82;
-      }
-
-      for (const wall of this.wallRects) {
-        const left = wall.x - padding;
-        const right = wall.x + wall.w + padding;
-        const top = wall.y - padding;
-        const bottom = wall.y + wall.h + padding;
-        if (pickup.sprite.x <= left || pickup.sprite.x >= right || pickup.sprite.y <= top || pickup.sprite.y >= bottom) continue;
-        pickup.sprite.setPosition(previousX, previousY);
-        motion.velocityX *= -0.72;
-        motion.velocityY *= -0.72;
-        break;
-      }
-    }
+    this.pickupMotion.update(this.pickups, pickup => pickup.sprite, this.layout.generation.bounds, this.wallRects, now, dt);
   }
 
   private separateFloatingPickups(): void {
-    const separationDistance = 35;
-    const separationDistanceSquared = separationDistance * separationDistance;
-    for (let firstIndex = 0; firstIndex < this.pickups.length; firstIndex += 1) {
-      const first = this.pickups[firstIndex];
-      const firstMotion = this.pickupMotion.get(first.sprite);
-      if (!firstMotion) continue;
-      for (let secondIndex = firstIndex + 1; secondIndex < this.pickups.length; secondIndex += 1) {
-        const second = this.pickups[secondIndex];
-        const secondMotion = this.pickupMotion.get(second.sprite);
-        if (!secondMotion) continue;
-        let dx = second.sprite.x - first.sprite.x;
-        let dy = second.sprite.y - first.sprite.y;
-        let distanceSquared = dx * dx + dy * dy;
-        if (distanceSquared >= separationDistanceSquared) continue;
-        if (distanceSquared < 0.0001) {
-          const fallbackAngle = (firstIndex * 2.399 + secondIndex * 1.713) % (Math.PI * 2);
-          dx = Math.cos(fallbackAngle);
-          dy = Math.sin(fallbackAngle);
-          distanceSquared = 1;
-        }
-        const distance = Math.sqrt(distanceSquared);
-        const normalX = dx / distance;
-        const normalY = dy / distance;
-        const push = (separationDistance - distance) * PICKUP_SEPARATION_PUSH;
-        first.sprite.x -= normalX * push;
-        first.sprite.y -= normalY * push;
-        second.sprite.x += normalX * push;
-        second.sprite.y += normalY * push;
-
-        const firstNormalSpeed = firstMotion.velocityX * normalX + firstMotion.velocityY * normalY;
-        const secondNormalSpeed = secondMotion.velocityX * normalX + secondMotion.velocityY * normalY;
-        const impulse = (secondNormalSpeed - firstNormalSpeed) * PICKUP_BOUNCE_TRANSFER;
-        firstMotion.velocityX += normalX * impulse - normalX * PICKUP_BOUNCE_KICK;
-        firstMotion.velocityY += normalY * impulse - normalY * PICKUP_BOUNCE_KICK;
-        secondMotion.velocityX -= normalX * impulse - normalX * PICKUP_BOUNCE_KICK;
-        secondMotion.velocityY -= normalY * impulse - normalY * PICKUP_BOUNCE_KICK;
-      }
-    }
-
-    // Separation can nudge a crowded pickup toward geometry, so finish by projecting it
-    // back to the nearest safe edge instead of letting a floating cluster enter a wall.
-    const bounds = this.layout.generation.bounds;
-    const padding = 24;
-    for (const pickup of this.pickups) {
-      const motion = this.pickupMotion.get(pickup.sprite);
-      if (!motion) continue;
-      pickup.sprite.x = Phaser.Math.Clamp(pickup.sprite.x, bounds.x + padding, bounds.x + bounds.w - padding);
-      pickup.sprite.y = Phaser.Math.Clamp(pickup.sprite.y, bounds.y + padding, bounds.y + bounds.h - padding);
-      for (const wall of this.wallRects) {
-        const left = wall.x - padding;
-        const right = wall.x + wall.w + padding;
-        const top = wall.y - padding;
-        const bottom = wall.y + wall.h + padding;
-        if (pickup.sprite.x <= left || pickup.sprite.x >= right || pickup.sprite.y <= top || pickup.sprite.y >= bottom) continue;
-        const distanceLeft = pickup.sprite.x - left;
-        const distanceRight = right - pickup.sprite.x;
-        const distanceTop = pickup.sprite.y - top;
-        const distanceBottom = bottom - pickup.sprite.y;
-        const nearestEdge = Math.min(distanceLeft, distanceRight, distanceTop, distanceBottom);
-        if (nearestEdge === distanceLeft) {
-          pickup.sprite.x = left;
-          motion.velocityX = -Math.abs(motion.velocityX);
-        } else if (nearestEdge === distanceRight) {
-          pickup.sprite.x = right;
-          motion.velocityX = Math.abs(motion.velocityX);
-        } else if (nearestEdge === distanceTop) {
-          pickup.sprite.y = top;
-          motion.velocityY = -Math.abs(motion.velocityY);
-        } else {
-          pickup.sprite.y = bottom;
-          motion.velocityY = Math.abs(motion.velocityY);
-        }
-        break;
-      }
-    }
+    this.pickupMotion.separate(this.pickups, pickup => pickup.sprite, this.layout.generation.bounds, this.wallRects);
   }
 
   private infusionSpectrumColor(offset = 0): number {
@@ -5196,17 +5059,7 @@ export class ArenaScene extends Phaser.Scene {
     if (type === 'fluxCore') this.roundFluxCores += explicitAmount ?? 1;
     GameplayTelemetryRecorder.recordPickupCollected(type, source, requestedRestoration, appliedRestoration);
 
-    const pickupLabel = type === 'fluxCore' ? 'FLUX CORE'
-      : type === 'ricochet' ? 'RICOCHET ROUNDS'
-        : type === 'grenadeRounds' ? 'GRENADE ROUNDS'
-          : type === 'scattershot' ? 'SCATTERSHOT ROUNDS'
-            : type;
-    const t = this.add.text(this.player.x, this.player.y - 24, `+${pickupLabel}`, {
-      fontFamily: 'Rajdhani, sans-serif',
-      fontSize: '18px',
-      color: '#96ffe4'
-    }).setOrigin(0.5);
-    this.tweens.add({ targets: t, y: t.y - 20, alpha: 0, duration: 620, onComplete: () => t.destroy() });
+    this.pickupPresentation.showCollectionLabel(type, this.player.x, this.player.y);
   }
 
   private killEnemy(enemy: Enemy): void {
@@ -5363,40 +5216,12 @@ export class ArenaScene extends Phaser.Scene {
     compact = false,
     onLanded?: () => void
   ): void {
-    const startX = sprite.x;
-    const startY = sprite.y;
-    const duration = compact ? 170 : 290;
-    this.tweens.add({
-      targets: sprite,
-      x: Phaser.Math.Linear(startX, landingX, 0.48),
-      y: Math.min(startY, landingY) - (compact ? 30 : 74) - index % 3 * (compact ? 4 : 12),
-      duration,
-      delay: compact ? Math.min(75, index * 8) : Math.min(230, index * 24),
-      ease: 'Quad.easeOut',
-      onComplete: () => {
-        if (!sprite.active) return;
-        this.tweens.add({
-          targets: sprite,
-          x: landingX,
-          y: landingY,
-          duration: compact ? 190 : 330,
-          ease: 'Bounce.easeOut',
-          onComplete: () => { if (sprite.active) onLanded?.(); }
-        });
-      }
-    });
+    this.pickupPresentation.launch(sprite, landingX, landingY, index, compact, onLanded);
   }
 
   private findPhysicalLootLanding(originX: number, originY: number, angle: number, distance: number): { x: number; y: number } {
-    const bounds = this.layout.generation.bounds;
-    for (let attempt = 0; attempt < 14; attempt += 1) {
-      const candidateAngle = angle + attempt * 0.47;
-      const candidateDistance = Math.max(24, distance - attempt * 3);
-      const x = Phaser.Math.Clamp(originX + Math.cos(candidateAngle) * candidateDistance, bounds.x + 36, bounds.x + bounds.w - 36);
-      const y = Phaser.Math.Clamp(originY + Math.sin(candidateAngle) * candidateDistance, bounds.y + 36, bounds.y + bounds.h - 36);
-      if (!this.hitWall(x, y) && !this.isNearBombSite(x, y, 42)) return { x, y };
-    }
-    return { x: originX, y: originY };
+    return findGameplayPickupLanding(originX, originY, angle, distance, this.layout.generation.bounds,
+      (x, y) => this.hitWall(x, y) || this.isNearBombSite(x, y, 42));
   }
 
   private recordArcadeLootMetric(
@@ -6465,14 +6290,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private createPickupSprite(type: PickupType, x: number, y: number, color: number): Phaser.GameObjects.Container {
     const container = this.pickupPresentation.create(type, x, y, color);
-    const motionSeed = Math.abs(x * 0.037 + y * 0.053 + type.length * 1.731);
-    const driftAngle = motionSeed % (Math.PI * 2);
-    const driftSpeed = PICKUP_FLOAT_DRIFT_MIN + motionSeed % PICKUP_FLOAT_DRIFT_RANGE;
-    this.pickupMotion.set(container, {
-      velocityX: Math.cos(driftAngle) * driftSpeed,
-      velocityY: Math.sin(driftAngle) * driftSpeed,
-      phase: motionSeed % (Math.PI * 2)
-    });
+    this.pickupMotion.register(container, type);
     return container;
   }
 
@@ -6771,6 +6589,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.bombSites = new BombSiteManager('open', 1);
     this.bombSites.initialize(this, [], this.layout.theme);
+    this.initializeBombsiteMods();
     this.laserSecurity = new LaserSecuritySystem(
       this,
       difficultyPosition,

@@ -11,6 +11,7 @@ import { createBaseOperativeFrameSvgDataUri } from '../../ui/stores/BaseOperativ
 import { createDetailedEnemyRobotTextures } from '../enemies/EnemyArtTextures.ts';
 import { createDetailedBossTextures } from '../bosses/BossArtTextures.ts';
 import { preloadBossModels } from '../bosses/BossModelAssets.ts';
+import { STARTUP_INTRO_VIDEO, StartupIntro } from '../ui/StartupIntro.ts';
 import { createMechanicalDebrisTextures } from '../vfx/MechanicalDestructionVfx.ts';
 import { createMineFrameSvgDataUri } from '../cosmetics/MineFrameArt.ts';
 import {
@@ -19,11 +20,19 @@ import {
 } from '../cosmetics/PremiumProjectileShapeArt.ts';
 
 export class BootScene extends Phaser.Scene {
+  private startupIntro: StartupIntro | null = null;
   constructor() {
     super(SceneKeys.Boot);
   }
 
   preload(): void {
+    const mount = document.querySelector<HTMLElement>('#game-root');
+    if (mount) this.startupIntro = new StartupIntro(mount,
+      STARTUP_INTRO_VIDEO ? publicAssetUrl(STARTUP_INTRO_VIDEO) : null);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.startupIntro?.destroy();
+      this.startupIntro = null;
+    });
     preloadBossModels(this);
     this.load.audio('sfx-boost', publicAssetUrl('assets/audio/soundeffects/boostsound.mp3'));
     for (const frame of COSMETICS) {
@@ -61,7 +70,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
-    const g = this.add.graphics();
+    // Texture construction must never render its final scratch shape onscreen.
+    const g = this.add.graphics().setVisible(false);
 
     g.clear();
     g.fillStyle(0xffffff, 1);
@@ -486,6 +496,7 @@ export class BootScene extends Phaser.Scene {
       graphics.fillStyle(recess, 1).fillCircle(24, 24, 2);
     });
 
+    g.destroy();
     const [splashModule, leaderboardModule, onlineLeaderboardModule, profileModule, menuModule, arenaModule, heistModule, legendaryRevealModule, supremeMilestoneModule, upgradeModule, cosmeticModule, modModule, garageModule, resultModule, optionsModule, roundFinishedModule, loadingModule, profileLoadingModule] = await Promise.all([
       import('./SplashScene'),
       import('./LeaderboardsScene'),
@@ -526,6 +537,7 @@ export class BootScene extends Phaser.Scene {
     this.scene.add(SceneKeys.RoundFinished, roundFinishedModule.RoundFinishedScene, false);
     this.scene.add(SceneKeys.Loading, loadingModule.LoadingScene, false);
 
-    this.scene.start(SceneKeys.Splash);
+    await this.startupIntro?.ready;
+    if (this.sys.isActive()) this.scene.start(SceneKeys.Splash);
   }
 }
