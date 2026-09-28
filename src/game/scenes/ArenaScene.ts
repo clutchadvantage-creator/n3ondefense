@@ -118,7 +118,7 @@ import { createArenaFireTrapPlacements, resolveArenaFloorFirePlacement } from '.
 import { SharedFireTrapSystem } from '../hazards/SharedFireTrapSystem.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
-import { completeFirstRunTeachingRound } from '../tutorial/TutorialProgress.ts';
+import { completeFirstRunTeachingRound, isInitialCombatTrainingPending } from '../tutorial/TutorialProgress.ts';
 import type { TutorialMode, TutorialTargetBounds } from '../tutorial/TutorialTypes.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { nextPickupBuffStack, resourcePickupCap } from '../player/OverdriveRules.ts';
@@ -5318,6 +5318,7 @@ export class ArenaScene extends Phaser.Scene {
       || (anomalyState !== undefined && anomalyState !== 'waiting' && anomalyState !== 'resolved');
     this.worldEventRotation?.update(deltaMs,
       !this.bossEncounter && !this.supremeFinale && this.roundRuntime.phase === 'active'
+      && !isInitialCombatTrainingPending(SaveSystem.getTutorialProgress(), SaveSystem.getCampaignProgress())
       && !this.tutorialHardPaused && !this.legendaryRevealInProgress
       && this.state.state !== RoundState.Paused && this.state.state !== RoundState.Victory
       && this.state.state !== RoundState.Defeat,

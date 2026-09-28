@@ -1,4 +1,4 @@
-// Short DOM lifecycle check. Optional video events are simulated; authored media is pending.
+// Authored media playback plus short fallback/skip/cleanup checks.
 (() => {
   const report = globalThis.__n3onLayoutAudit = { running: true, current: 'startup intro', cases: [], errors: [] };
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -8,7 +8,13 @@
     const mount = document.createElement('div'); document.body.append(mount);
     let intro;
     try {
-      check(STARTUP_INTRO_VIDEO===null, 'pending animation uses fallback without a missing-media request');
+      check(STARTUP_INTRO_VIDEO==='assets/video/runtwerkxgaming-intro.mp4', 'authored animation configured');
+      intro=new StartupIntro(mount,'/'+STARTUP_INTRO_VIDEO);
+      const authored=mount.querySelector('video');
+      await intro.ready;
+      check(authored.ended && authored.videoWidth>0 && authored.currentTime>0, 'real MP4 decodes and plays to natural completion');
+      report.media={duration:authored.duration,width:authored.videoWidth,height:authored.videoHeight,muted:authored.muted};
+      intro.destroy();check(mount.childElementCount===0,'authored video releases overlay');
       const started=performance.now();intro=new StartupIntro(mount);
       check(mount.textContent==='RuntWerkxGamingPRESENTS' && !mount.querySelector('video'), 'branded fallback is mounted');
       await intro.ready;
@@ -17,7 +23,7 @@
       intro.destroy();intro.destroy();check(mount.childElementCount===0, 'idempotent owner cleanup');
       intro=new StartupIntro(mount);intro.destroy();await intro.ready;
       check(mount.childElementCount===0, 'early shutdown releases pending readiness');
-      // Keep browser decoding/network out of the pending authored-media checks.
+      // Failure and skip controls are simulated separately from real playback.
       const play=HTMLMediaElement.prototype.play, load=HTMLMediaElement.prototype.load;
       try {
         HTMLMediaElement.prototype.play=()=>Promise.resolve();HTMLMediaElement.prototype.load=()=>{};

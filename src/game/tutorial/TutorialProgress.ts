@@ -1,5 +1,18 @@
 import type { FirstRunTeachingStage, TutorialProgressState } from '../save/LocalSaveTypes.ts';
 import type { TutorialSequenceDefinition } from './TutorialTypes.ts';
+import type { CampaignProgress } from '../progression/CampaignProgression.ts';
+
+/** Only first-time combat teaching suppresses world events. Existing completion,
+ * migrated access, workstation lessons, and voluntary replay never re-lock them. */
+export const isInitialCombatTrainingPending = (state: TutorialProgressState, campaign: CampaignProgress): boolean => {
+  if (state.lyraCurriculum !== 4 || (state.trainingRoundsCompleted ?? 0) >= 3
+    || campaign.packages.training.eligible || campaign.packages.training.claimed
+    || campaign.modes.normal.highestCompletedRound >= 3
+    || campaign.modes.overdrive.highestCompletedRound > 0 || campaign.modes.supreme.highestCompletedRound > 0
+    || campaign.legacyModeAccess.overdrive || campaign.legacyModeAccess.supreme) return false;
+  return state.firstRunStage === 'welcome-main-menu' || state.firstRunStage === 'waiting-for-start-local'
+    || state.firstRunStage === 'arena-teaching';
+};
 
 export const createTutorialProgress = (): TutorialProgressState => ({
   version: 3,

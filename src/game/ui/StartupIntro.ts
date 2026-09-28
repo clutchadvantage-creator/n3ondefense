@@ -1,6 +1,5 @@
-/** Temporary title card until the authored animation is supplied. Set this to
- * 'assets/video/runtwerkxgaming-intro.mp4' when the final asset is installed. */
-export const STARTUP_INTRO_VIDEO: string | null = null;
+/** Authored studio intro. The title card remains the media-failure fallback. */
+export const STARTUP_INTRO_VIDEO: string | null = 'assets/video/runtwerkxgaming-intro.mp4';
 
 /** Boot owns this overlay; it stays above texture preparation until both the
  * intro and asset setup finish. No gameplay input or saved preferences change. */

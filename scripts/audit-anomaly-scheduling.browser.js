@@ -40,7 +40,11 @@
         if(a.state.state==='Paused')a.resumeGameplay();
         await wait(160);
         a.scene.pause();
-        S.updateTutorialProgress(p=>{p.firstRunStage='arena-teaching';p.replaySequenceId='onboarding.tactics';});
+        S.updateTutorialProgress(p=>{p.firstRunStage='arena-teaching';p.trainingRoundsCompleted=0;p.replaySequenceId=null;});
+        const freshClock=JSON.stringify(a.worldEventRotation.snapshot);
+        for(let i=0;i<240;i++)a.updateWorldEventRotation(250);
+        check(JSON.stringify(a.worldEventRotation.snapshot)===freshClock,mode+': new-player training holds events and countdown');
+        S.updateTutorialProgress(p=>{p.trainingRoundsCompleted=3;p.firstRunStage='waiting-for-garage';p.replaySequenceId='onboarding.tactics';});
         a.createArcadeController(round,550055);a.createAnomalyController(round,550055);
         const {WorldEventRotation}=await import(dep('WorldEventRotation'));
         const {ARCADE_EVENT_DEFINITIONS}=await import(dep('ARCADE_EVENT_DEFINITIONS'));
@@ -57,7 +61,7 @@
           a.updateWorldEventRotation(16);
           for(let i=0;i<20&&a.worldEventRotation.snapshot.pending;i++)a.updateWorldEventRotation(250);
           const active=choice.kind==='arcade'?a.arcadeController.activeEventId:a.anomalyController.activeAnomalyId;
-          check(active===choice.id,mode+': shared draw starts '+choice.id+' at round 1 during unfinished/replayed teaching');
+          check(active===choice.id,mode+': shared draw starts '+choice.id+' at round 1 after combat training with unfinished/replayed menu teaching');
           check(a.worldEventRotation.snapshot.remainingMs===105000,mode+': common cooldown for '+choice.id);
           const before=JSON.stringify(a.worldEventRotation.snapshot);
           a.updateWorldEventRotation(250);
