@@ -1750,34 +1750,8 @@ export class ArenaScene extends Phaser.Scene {
       const bossCombatAtFrameStart = this.bossFlowPhase === 'combat';
       if (this.bossFlowPhase === 'combat') this.bossEncounter?.update(delta, this.player);
       if (this.bossFlowPhase === 'combat') this.supremeFinale?.update(delta, this.player);
-      if (this.gasHazard?.visualGasActive) {
-        for (const boss of this.activeMajorBosses()) {
-          this.gasHazard.carveVisualTunnel(
-            boss.x,
-            boss.y,
-            Math.max(GAS_HAZARD_BALANCE.enemyTunnelRadius, boss.hazardRadius + 10)
-          );
-        }
-      }
+      if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
       if (this.bossFlowPhase === 'combat') {
-        const bossHazardTargets = this.getHazardDamageTargets();
-        const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
-        this.updateArenaFireTraps(now);
-        this.gasHazard?.update(
-          now,
-          this.player,
-          this.modRuntime.multiplier('gasDamageTaken') * this.currentModeBalance().hazardDamageMultiplier
-        );
-        if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
-        const gasSuppressesLasers = this.gasHazard?.isLaserSuppressed(now) ?? false;
-        this.fluxCores?.update(now, this.player, gasSuppressesLasers);
-        const fluxSuppressesLasers = this.fluxCores?.isLaserSuppressed(now) ?? false;
-        const securityLasersSuppressed = gasSuppressesLasers || fluxSuppressesLasers;
-        const laserDangerWindow = this.laserSecurity?.isDangerWindow(now, securityLasersSuppressed) ?? false;
-        this.laserSecurity?.update(now, dt, this.player, bossHazardTargets, playerLaserImmune, securityLasersSuppressed);
-        if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
-        this.bombletHazard?.update(now, this.player, bossHazardTargets, laserDangerWindow);
-        if (bossCombatAtFrameStart && this.bossFlowPhase !== 'combat') return;
         if (!this.supremeFinale) this.updateBossSupportWave(now);
         this.updateBossSupportEnemies(now);
       }
@@ -6553,7 +6527,6 @@ export class ArenaScene extends Phaser.Scene {
 
   private initializeBossRound(payload: RoundFinishedPayload, terminalEncounter: boolean): void {
     const difficultyPosition = getCampaignCombatPosition(this.currentModeFamily(), payload.completedRound);
-    const hazards = getCampaignHazardAvailability(this.currentModeFamily(), payload.completedRound);
     this.prepareCombatRuntime(payload.completedRound);
     this.pendingRoundPayload = payload;
     this.bossRound = payload.completedRound;
@@ -6581,7 +6554,6 @@ export class ArenaScene extends Phaser.Scene {
     this.layout = ArenaGenerator.generate(bossSeed, terminalEncounter ? 'open-field' : arenaByBoss[archetype], this.bossRound, 1);
     this.drawProceduralArena(this.layout);
     this.createArenaSmashables();
-    this.createArenaFireTraps(this.bossRound);
     this.pathfinder = new GridPathfinder(WORLD_WIDTH, WORLD_HEIGHT, 32, this.getBlockers(), ENEMY_NAVIGATION_PADDING);
     this.createOrMovePlayer();
     this.modRuntime.beginRound(1);
@@ -6590,74 +6562,8 @@ export class ArenaScene extends Phaser.Scene {
     this.bombSites = new BombSiteManager('open', 1);
     this.bombSites.initialize(this, [], this.layout.theme);
     this.initializeBombsiteMods();
-    this.laserSecurity = new LaserSecuritySystem(
-      this,
-      difficultyPosition,
-      this.layout.theme,
-      (damage) => {
-        GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
-      },
-      (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop(),
-      this.currentModeBalance().hazardDamageMultiplier
-    );
-    if (hazards.bomblets) this.bombletHazard = new BombletHazardSystem(
-      this,
-      difficultyPosition,
-      bossSeed,
-      this.layout.theme,
-      this.layout.generation.bounds,
-      (x, y) => this.hitWall(x, y),
-      this.particlesEnabled,
-      (damage) => {
-        GameplayTelemetryRecorder.recordPlayerDamage('bomblet', damage);
-      },
-      (x, y, blastRadius, shouldPlaySound, explosionPalette) => {
-        if (shouldPlaySound) this.audio.playSfx('bomblet');
-        this.mineExplosionVfx.emitBomblet(x, y, blastRadius, explosionPalette, this.time.now);
-        this.arenaSmashables?.damageArea(x, y, blastRadius, 9999);
-        this.fluxCores?.damageArea(x, y, blastRadius, 9999, 'bomblet');
-        this.gasHazard?.carveVisualBlast(
-          x,
-          y,
-          blastRadius * GAS_HAZARD_BALANCE.bombletTunnelRadiusMultiplier
-        );
-      },
-      this.currentModeBalance().hazardDamageMultiplier
-    );
-    if (hazards.gas) {
-      this.gasHazard = new GasHazardSystem(
-        this,
-        difficultyPosition,
-        bossSeed,
-        this.layout.generation.bounds,
-        (x, y) => this.hitWall(x, y),
-        this.particlesEnabled,
-        (damage) => {
-          GameplayTelemetryRecorder.recordPlayerDamage('gas', damage);
-        },
-        () => this.audio.playSfx('gasFizz'),
-        () => this.audio.playSfx('gasCanImpact')
-      );
-    }
-    this.fluxCores = new FluxCoreSystem(
-      this,
-      difficultyPosition,
-      bossSeed,
-      this.layout.theme,
-      this.layout.generation.bounds,
-      (x, y, halfWidth, halfHeight) => this.intersectsWallGeometry(x, y, halfWidth, halfHeight),
-      (x, y, halfWidth, halfHeight) => this.intersectsBombSiteGeometry(x, y, halfWidth, halfHeight),
-      this.particlesEnabled,
-      (event) => {
-        this.audio.playSfx('bomblet');
-        if (event.droppedCore) this.dropFluxCorePickup(event.x, event.y, event.color);
-      },
-      (strength) => this.audio.setFluxCoreProximity(strength),
-      () => this.audio.playSfx('defuseAlarm'),
-      () => {
-        if (!(this.gasHazard?.isLaserSuppressed(this.time.now) ?? false)) this.audio.playSfx('lasersOff');
-      }
-    );
+    // Boss arenas contain only boss attacks and their shooter support. The
+    // round lifecycle has already retired all ordinary arena hazard owners.
 
     GameplayTelemetryRecorder.beginEncounter({
       kind: 'boss',

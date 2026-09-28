@@ -60,7 +60,7 @@ try {
     if(!S.createProfile('Boss input '+Date.now().toString().slice(-6)).ok)throw Error('Profile setup failed');
     S.setSettings({masterVolume:0,contextualTutorials:false});S.updateTutorialProgress(p=>{p.firstRunStage='complete';p.firstRunWelcomePending=false;});
   })()`);
-  for (const [mode, round, startKind] of [['normal',5,'mouse'],['normal',4,'mouse'],['normal',5,'mouse'],['overdrive',5,'mouse'],['supreme',5,'controller'],['supreme',30,'mouse']]) {
+  for (const [mode, round, startKind] of [['normal',5,'mouse'],['normal',16,'mouse'],['normal',5,'mouse'],['overdrive',5,'mouse'],['supreme',5,'controller'],['supreme',30,'mouse'],['supreme',30,'terminal']]) {
     const label = `${mode} ${round} ${startKind}`;
     console.log('Checking ' + label);
     await evaluate(`(async()=>{
@@ -80,6 +80,9 @@ try {
       globalThis.oldBombsiteOwner=globalThis.currentBombsiteOwner;globalThis.currentBombsiteOwner=a.bombsiteMods;void 0;}`);
     check(await evaluate('!!a.bombsiteMods && a.bombsiteMods!==oldBombsiteOwner'), label + ': fresh bombsite effects owner');
     if (round % 5 === 0) {
+      if (startKind === 'terminal') { await evaluate('forceSupremeFinale();void 0;'); await wait(100); }
+      check(await evaluate('a.bombSites.sites.length===0'), label + ': no playable bombsites');
+      check(await evaluate('!a.laserSecurity && !a.gasHazard && !a.bombletHazard && !a.arenaFireTraps && !a.fluxCores'), label + ': no arena hazard owners');
       const point = await buttonPoint();
       report.samples.push(await evaluate(`({label:${JSON.stringify(label)},phase:a.bossFlowPhase,lockedDuringIntro:!!document.pointerLockElement,capturePromptHidden:a.pointerLock.overlay.hidden})`));
       check(await evaluate('!document.pointerLockElement'), label + ': Loading mouse capture released for intro');
@@ -95,6 +98,10 @@ try {
       } else await click(point);
       await until('a.bossFlowPhase==="combat" && a.state.state!=="Paused"', label + ' starts without pause');
       check(true, label + ': immediate fight start without pause/unpause');
+      if (startKind !== 'terminal') {
+        await evaluate('a.nextBossSupportEnemyWaveAt=0;a.updateBossSupportWave(a.time.now);');
+        check(await evaluate('a.bossSupportEnemies.size>0 && [...a.bossSupportEnemies].every(e=>e.stats.type==="shooter" && e.stats.size===24 && !e.airborne)'), label + ': standard medium shooter support');
+      }
       if (startKind === 'controller') {
         check(await evaluate('a.playerInput.activeDevice==="gamepad"'), label + ': controller confirm');
         await evaluate('navigator.getGamepads=originalPads');
@@ -104,6 +111,7 @@ try {
         await click({x:620,y:350});
       }
     } else {
+      check(await evaluate('a.bombSites.sites.length>0 && !!a.laserSecurity && !!a.fluxCores && !!a.gasHazard && !!a.arenaFireTraps && !!a.bombletHazard'), label + ': ordinary objectives and late-Normal hazards retained');
       check(await evaluate('a.pointerLock.locked || !a.pointerLock.overlay.hidden'), label + ': ordinary capture or explicit click-to-play');
       if (!(await evaluate('a.pointerLock.locked'))) await click({x:620,y:350});
       await until('a.state.state!=="Paused"', label + ' ordinary start');
@@ -142,6 +150,7 @@ try {
     await wait(1600);
     const sample=await evaluate(`({label:${JSON.stringify(label)},shots,attacks,turrets:a.turrets.length,enemyCount:a.enemies.length,state:a.state.state})`);
     report.samples.push(sample);check(sample.shots>0, label + ': turret acquires target and registers projectiles');
+    if (round % 5 === 0) check(await evaluate('!a.laserSecurity && !a.gasHazard && !a.bombletHazard && !a.arenaFireTraps && !a.fluxCores'), label + ': arena hazards stay absent during combat');
     const position=await evaluate('({x:a.player.x,y:a.player.y})');
     await key('KeyD','d',68,150);
     check(await evaluate(`Math.hypot(a.player.x-${position.x},a.player.y-${position.y})>0`), label + ': keyboard movement');
