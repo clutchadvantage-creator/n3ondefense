@@ -49,7 +49,7 @@ body {
 }
 
 .startup-intro {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 20000;
   display: grid;
@@ -59,7 +59,7 @@ body {
   color: #e7f7ff;
 }
 
-.startup-intro-video { position: absolute; width: 100%; height: 100%; object-fit: contain; visibility: hidden; }
+.startup-intro-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; visibility: hidden; }
 .startup-intro-playing .startup-intro-video { visibility: visible; background: #000; }
 .startup-intro-skip {
   position: absolute; bottom: 24px; right: 24px;

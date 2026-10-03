@@ -4,6 +4,8 @@ Startup plays `public/assets/video/runtwerkxgaming-intro.mp4` for 4.5 seconds af
 
 Playback remains inline and muted for browser autoplay, with Skip Intro and bounded load/playback waits. Boot shutdown removes the overlay, listeners, timeout and video source. Existing same-session splash skipping and Options splash replay are unchanged. Boot's texture-generation Graphics object remains hidden and is destroyed before awaiting scene imports.
 
+The intro covers the full browser viewport. The video is centered and scaled to cover it without stretching or letterboxing; different screen aspect ratios crop the outer edges. The 4.5-second cutoff is unchanged.
+
 Run the short browser checks in the isolated DEV browser:
 
 ```powershell
