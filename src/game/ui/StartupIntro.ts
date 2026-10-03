@@ -1,4 +1,4 @@
-/** Authored studio intro. The title card remains the media-failure fallback. */
+/** Authored studio intro. Missing or failed media proceeds directly to the splash. */
 export const STARTUP_INTRO_VIDEO: string | null = 'assets/video/runtwerkxgaming-intro.mp4';
 
 /** Boot owns this overlay; it stays above texture preparation until both the
@@ -18,20 +18,12 @@ export class StartupIntro {
     this.root = document.createElement('div');
     this.root.className = 'startup-intro';
     this.root.setAttribute('aria-label', 'RuntWerkxGaming');
-    const title = document.createElement('div');
-    title.className = 'startup-intro-title';
-    const name = document.createElement('strong');
-    name.textContent = 'RuntWerkxGaming';
-    const subtitle = document.createElement('span');
-    subtitle.textContent = 'PRESENTS';
-    title.append(name, subtitle);
-    this.root.append(title);
     mount.append(this.root);
 
     if (!videoUrl) {
       this.video = null;
       this.skip = null;
-      this.timer = setTimeout(this.finish, 1600);
+      this.finish();
       return;
     }
     this.video = document.createElement('video');
@@ -64,10 +56,8 @@ export class StartupIntro {
 
   private readonly onFailure = (): void => {
     if (this.disposed || this.finished) return;
-    this.video?.pause();
     this.root.classList.remove('startup-intro-playing');
-    clearTimeout(this.timer);
-    this.timer = setTimeout(this.finish, 1600);
+    this.finish();
   };
 
   private readonly finish = (): void => {
@@ -75,6 +65,7 @@ export class StartupIntro {
     this.finished = true;
     clearTimeout(this.timer);
     this.video?.pause();
+    if (this.skip) this.skip.hidden = true;
     this.resolveReady();
   };
 

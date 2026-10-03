@@ -1223,7 +1223,11 @@ export class AudioManager {
         foreground = nextForeground;
         this.refreshMix();
       }
-      const next = RunTransitionManager.hasActiveRun(game) ? 'gameplay' : foreground ? 'menu' : 'silent';
+      // Scene.start stops the outgoing menu before the incoming menu finishes
+      // preload. Keep the game-owned track through that empty-scene interval.
+      // Initial Boot stays silent; game destruction still stops every voice.
+      const next = RunTransitionManager.hasActiveRun(game) ? 'gameplay'
+        : foreground || this.musicContext === 'menu' ? 'menu' : 'silent';
       if (next !== this.musicContext) {
         this.musicContext = next;
         this.musicErrorCount = 0;

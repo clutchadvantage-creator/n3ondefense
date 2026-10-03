@@ -101,6 +101,35 @@ test('central music ownership survives paused/sleeping menus, results and deploy
   f.game.events.emit('destroy'); assert.equal(f.playing(), 0); assert.equal(f.game.events.listenerCount('poststep'), 0);
 });
 
+test('profile-to-menu preload gaps retain playback without a pause, restart or new fade', async () => {
+  const f = fixture();
+  f.game.scene.scenes = [f.scene('boot')]; await f.frame();
+  assert.equal(f.playing(), 0, 'initial Boot remains silent');
+  f.game.scene.scenes = [f.scene('local-profiles')]; await f.frame();
+  const menu = f.audio.menuMusicAudio;
+  menu.currentTime = 23;
+  f.audio.musicFadeAudio = null; // Initial fade has completed.
+  await f.frame();
+  const volume = menu.volume;
+  let pauses = 0, plays = 0;
+  const pause = menu.pause.bind(menu), play = menu.play.bind(menu);
+  menu.pause = () => { pauses++; pause(); };
+  menu.play = () => { plays++; return play(); };
+  for (const scenes of [[], [], [f.scene('menu')], [], [f.scene('options')]]) {
+    f.game.scene.scenes = scenes; await f.frame();
+    assert.equal(f.audio.menuMusicAudio, menu);
+    assert.equal(f.audio.musicContext, 'menu');
+    assert.equal(menu.currentTime, 23);
+    assert.equal(menu.volume, volume);
+    assert.equal(f.playing(), 1);
+  }
+  f.settings.musicVolume = .2;
+  f.game.scene.scenes = [f.scene('local-profiles')]; await f.frame();
+  assert.ok(menu.volume < volume, 'selected profile volume still applies');
+  assert.equal(pauses, 0); assert.equal(plays, 0);
+  f.game.events.emit('destroy'); assert.equal(f.playing(), 0);
+});
+
 test('menu track completion wraps in order and retired callbacks cannot restart either playlist', async () => {
   const f = fixture(); await f.frame(); const first = f.audio.menuMusicAudio;
   first.dispatchEvent(new Event('ended')); await flush();

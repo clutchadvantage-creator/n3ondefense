@@ -59,32 +59,14 @@ body {
   color: #e7f7ff;
 }
 
-.startup-intro-title {
-  display: grid;
-  gap: 18px;
-  text-align: center;
-  animation: startup-title-enter 450ms ease-out both;
-}
-.startup-intro-title strong {
-  font: 600 clamp(22px, 5vw, 58px) 'Rajdhani', sans-serif;
-  letter-spacing: .035em;
-}
-.startup-intro-title span {
-  font: 500 12px 'Rajdhani', sans-serif;
-  letter-spacing: .4em;
-  color: #8ba8ba;
-}
 .startup-intro-video { position: absolute; width: 100%; height: 100%; object-fit: contain; visibility: hidden; }
 .startup-intro-playing .startup-intro-video { visibility: visible; background: #000; }
-.startup-intro-playing .startup-intro-title { visibility: hidden; }
 .startup-intro-skip {
   position: absolute; bottom: 24px; right: 24px;
   padding: 10px 16px; border: 1px solid #748e9f;
   background: #02050acc; color: #e7f7ff; cursor: pointer;
 }
 .startup-intro-skip:focus-visible { outline: 2px solid #62f2ff; outline-offset: 4px; }
-@keyframes startup-title-enter { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .startup-intro-title { animation: none; } }
 
 @keyframes ui-button-jello-jiggle {
   0% { scale: 1 1; rotate: 0deg; }
