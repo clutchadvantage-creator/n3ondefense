@@ -4,17 +4,22 @@
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const check = (ok, label) => { report.cases.push({ok:!!ok,label}); if (!ok) throw Error(label); };
   report.promise = (async () => {
-    const {StartupIntro, STARTUP_INTRO_VIDEO} = await import('/src/game/ui/StartupIntro.ts');
+    const {StartupIntro, STARTUP_INTRO_VIDEO, STARTUP_INTRO_DURATION_MS} = await import('/src/game/ui/StartupIntro.ts');
     const mount = document.createElement('div'); document.body.append(mount);
     let intro;
     try {
       check(STARTUP_INTRO_VIDEO==='assets/video/runtwerkxgaming-intro.mp4', 'authored animation configured');
       intro=new StartupIntro(mount,'/'+STARTUP_INTRO_VIDEO);
       const authored=mount.querySelector('video');
+      let playingAt;
+      authored.addEventListener('playing',()=>{playingAt=performance.now();},{once:true});
       check(!mount.querySelector('.startup-intro-title') && !mount.textContent.includes('PRESENTS'), 'old title card is absent before playback');
       await intro.ready;
-      check(authored.ended && authored.videoWidth>0 && authored.currentTime>0, 'real MP4 decodes and plays to natural completion');
-      report.media={duration:authored.duration,width:authored.videoWidth,height:authored.videoHeight,muted:authored.muted};
+      const playbackMs=performance.now()-playingAt;
+      check(STARTUP_INTRO_DURATION_MS===4500, 'intro cutoff is configured for 4.5 seconds');
+      check(authored.paused && !authored.ended && authored.videoWidth>0 && authored.currentTime>0, 'real MP4 is cut before its trailing frames');
+      check(playbackMs>=4450 && playbackMs<4750, 'intro resolves 4.5 seconds after playback starts');
+      report.media={duration:authored.duration,cutAt:authored.currentTime,playbackMs,width:authored.videoWidth,height:authored.videoHeight,muted:authored.muted};
       intro.destroy();check(mount.childElementCount===0,'authored video releases overlay');
       intro=new StartupIntro(mount);
       check(mount.textContent==='' && !mount.querySelector('video'), 'missing media leaves only the dark boot surface');

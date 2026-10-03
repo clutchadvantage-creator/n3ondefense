@@ -1,5 +1,6 @@
 /** Authored studio intro. Missing or failed media proceeds directly to the splash. */
 export const STARTUP_INTRO_VIDEO: string | null = 'assets/video/runtwerkxgaming-intro.mp4';
+export const STARTUP_INTRO_DURATION_MS = 4500;
 
 /** Boot owns this overlay; it stays above texture preparation until both the
  * intro and asset setup finish. No gameplay input or saved preferences change. */
@@ -50,8 +51,9 @@ export class StartupIntro {
     if (this.disposed || this.finished) return;
     this.root.classList.add('startup-intro-playing');
     clearTimeout(this.timer);
-    // A broken/stalled optional video must never trap startup indefinitely.
-    this.timer = setTimeout(this.finish, 45000);
+    // Start the cutoff when playback begins, not while the file is loading.
+    // Skip the video's tail and hand directly back to Boot's splash transition.
+    this.timer = setTimeout(this.finish, STARTUP_INTRO_DURATION_MS);
   };
 
   private readonly onFailure = (): void => {

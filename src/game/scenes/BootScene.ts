@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import splashImageUrl from '../../assets/splashimage.png';
 import { COLORS } from '../config/constants';
 import { SceneKeys } from '../flow/SceneKeys';
 import { publicAssetUrl } from '../utils/assetUrl';
@@ -26,6 +27,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // Prepare the next screen while the intro plays so its handoff needs no fetch.
+    this.load.image('n3on-splash', splashImageUrl);
     const mount = document.querySelector<HTMLElement>('#game-root');
     if (mount) this.startupIntro = new StartupIntro(mount,
       STARTUP_INTRO_VIDEO ? publicAssetUrl(STARTUP_INTRO_VIDEO) : null);
