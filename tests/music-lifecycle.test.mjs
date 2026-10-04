@@ -25,7 +25,7 @@ function fixture() {
       this.paused = false; return Promise.resolve();
     }
     pause() { this.paused = true; }
-    load() {}
+    load() { this.loadCount = (this.loadCount ?? 0) + 1; }
     removeAttribute(name) { if (name === 'src') this.src = ''; }
   }
   const settings = { masterVolume: .6, musicVolume: .5, sfxVolume: .5, soundVolumes: config.createDefaultSoundVolumes() };
@@ -65,6 +65,68 @@ test('HEIST entered during a pending gameplay start still resumes the requested 
   resolve(); await flush(); gameplay.play = play;
   f.audio.exitHeistMusic(); await flush();
   assert.equal(gameplay.paused, false); assert.equal(f.playing(), 1);
+});
+
+test('radio pause survives Options, menu changes, new gameplay and user gestures until Play', async () => {
+  const f=fixture();await f.frame();f.audio.menuMusicAudio.currentTime=23;
+  f.audio.pauseMusicByUser();
+  for(const key of ['options','menu','arena','options']){
+    f.game.scene.scenes=[f.scene(key)];await f.frame();
+    f.document.dispatchEvent(new Event('pointerdown'));await flush();
+    assert.equal(f.playing(),0);assert.equal(f.audio.musicPlayerState().paused,true);
+  }
+  f.audio.playMusic();await flush();assert.equal(f.playing(),1);
+  assert.equal(f.audio.menuMusicAudio.currentTime,23,'pause/play retains playhead');
+  assert.equal(f.audio.musicPlayerState().paused,false);
+});
+
+test('radio skips within the current playlist, updates titles and retains manual pause', async () => {
+  const f=fixture();await f.frame();
+  const first=f.audio.musicPlayerState().title;
+  f.audio.nextMusicTrack();await flush();assert.notEqual(f.audio.musicPlayerState().title,first);
+  f.audio.previousMusicTrack();await flush();assert.equal(f.audio.musicPlayerState().title,first);
+  f.game.scene.scenes=[f.scene('arena')];await f.frame();
+  const menuIndex=f.audio.menuPlaylistIndex;
+  f.audio.playlist=['music/N3onRain.mp3','music/Didgeridoo DubV2.mp3'];f.audio.playlistIndex=0;
+  f.audio.pauseMusicByUser();f.audio.nextMusicTrack();await flush();
+  assert.equal(f.audio.musicPlayerState().title,'Didgeridoo Dub V2');
+  assert.equal(f.playing(),0);assert.equal(f.audio.menuPlaylistIndex,menuIndex);
+  f.audio.previousMusicTrack();await flush();assert.equal(f.audio.musicPlayerState().title,'Rain on Concrete');
+  f.audio.playMusic();await flush();assert.equal(f.playing(),1);
+  f.audio.musicAudio.dispatchEvent(new Event('ended'));await flush();
+  assert.equal(f.audio.musicPlayerState().title,'Didgeridoo Dub V2');
+});
+
+test('HEIST radio pauses its own voice and rejects skips without changing the retained playlist', async () => {
+  const f=fixture();f.game.scene.scenes=[f.scene('arena')];await f.frame();
+  const track=f.audio.musicAudio;track.currentTime=31;
+  f.audio.enterHeistMusic();await flush();
+  assert.equal(f.audio.musicPlayerState().channel,'HEIST');assert.equal(f.audio.musicPlayerState().canSkip,false);
+  f.audio.nextMusicTrack();f.audio.previousMusicTrack();assert.equal(f.audio.musicAudio,track);
+  f.audio.pauseMusicByUser();assert.equal(f.playing(),0);
+  f.audio.resumeFromUserGesture();await flush();assert.equal(f.playing(),0);
+  f.audio.playMusic();await flush();assert.equal(f.playing(),1);assert.equal(track.paused,true);
+  f.audio.exitHeistMusic();await flush();assert.equal(track.currentTime,31);assert.equal(track.paused,false);assert.equal(f.playing(),1);
+  f.audio.pauseMusicByUser();f.audio.enterHeistMusic();await flush();assert.equal(f.playing(),0);
+  f.audio.exitHeistMusic();await flush();assert.equal(f.playing(),0);
+});
+
+test('late play completion cannot undo a manual radio pause for either music voice', async () => {
+  for(const heist of [false,true]){
+    const f=fixture();f.game.scene.scenes=[f.scene('arena')];await f.frame();
+    const audio=heist?f.audio.heistMusicAudio:f.audio.musicAudio;audio.pause();
+    let finish;audio.play=()=>new Promise(resolve=>{finish=()=>{audio.paused=false;resolve();};});
+    if(heist)f.audio.enterHeistMusic();else f.audio.playMusic();
+    f.audio.pauseMusicByUser();finish();await flush();assert.equal(f.playing(),0);
+  }
+});
+
+test('HEIST autoplay failure can be retried by a user gesture and paused safely', async () => {
+  const f=fixture();f.game.scene.scenes=[f.scene('arena')];await f.frame();
+  f.blockNext();f.audio.enterHeistMusic();await flush();
+  assert.equal(f.audio.musicRetryPending,true);assert.equal(f.playing(),0);
+  f.audio.resumeFromUserGesture();await flush();assert.equal(f.playing(),1);
+  f.audio.pauseMusicByUser();f.audio.exitHeistMusic();await flush();assert.equal(f.playing(),0);
 });
 
 test('an older request for the same retained voice cannot overwrite a newer playback result', async () => {
@@ -133,9 +195,19 @@ test('profile-to-menu preload gaps retain playback without a pause, restart or n
 test('menu track completion wraps in order and retired callbacks cannot restart either playlist', async () => {
   const f = fixture(); await f.frame(); const first = f.audio.menuMusicAudio;
   first.dispatchEvent(new Event('ended')); await flush();
-  const second = f.audio.menuMusicAudio; assert.match(second.src, /Neon Dub Pulse/); assert.equal(first.paused, true); assert.equal(first.src, '');
+  const second = f.audio.menuMusicAudio; assert.match(second.src, /Neon Dub Pulse/); assert.equal(first.paused, true); assert.match(first.src, /Neon Serenity/);
   first.dispatchEvent(new Event('error')); first.dispatchEvent(new Event('ended')); await flush(); assert.equal(f.audio.menuMusicAudio, second);
   second.dispatchEvent(new Event('ended')); await flush(); assert.match(f.audio.menuMusicAudio.src, /Neon Serenity/); assert.equal(f.playing(), 1);
+  assert.equal(f.audio.menuMusicAudio, first, 'wrap reuses the buffered first song');
+  assert.equal(first.currentTime, 0);
+  assert.equal(first.loadCount, 1); assert.equal(second.loadCount, 1);
+  for (let i = 0; i < 6; i++) {
+    const old = f.audio.menuMusicAudio; old.currentTime = old.duration;
+    old.dispatchEvent(new Event('ended')); await flush();
+    assert.equal(old.paused, true); assert.equal(f.playing(), 1);
+    assert.equal(f.audio.menuMusicAudio.currentTime, 0);
+    assert.equal(first.loadCount, 1); assert.equal(second.loadCount, 1);
+  }
   f.game.scene.scenes = [f.scene('arena')]; await f.frame();
   f.audio.menuMusicAudio.dispatchEvent(new Event('ended')); await flush(); assert.equal(f.audio.menuMusicAudio.paused, true); assert.equal(f.playing(), 1);
   f.audio.enterHeistMusic(); await flush(); f.audio.musicAudio.dispatchEvent(new Event('ended')); await flush();

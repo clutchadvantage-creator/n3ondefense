@@ -6,7 +6,7 @@ import { AudioManager } from '../systems/AudioManager';
 import { SaveSystem } from '../systems/SaveSystem';
 import { LYRA_VOICE_ENABLED } from '../lyra/LyraAvailability.ts';
 import { pickJsonFile, showConfirmDialog, showInfoModal, type LocalModalHandle } from '../utils/localSaveUi';
-import { createButton, disableButton, playButtonJiggle } from '../utils/ui';
+import { createButton, disableButton, enableButton, playButtonJiggle } from '../utils/ui';
 import { getGameUiRoot } from '../../ui/getGameUiRoot';
 import { mountFeedbackReportUi, type FeedbackReportHandle } from '../../ui/feedback/FeedbackReportUi';
 import {
@@ -348,13 +348,15 @@ export class OptionsScene extends Phaser.Scene {
     }, Math.max(130, globalTrackX - globalTrackWidth * 0.5 - globalLabelX - 18));
 
     y = globalPanelTop + globalPanelHeight + 34;
-    this.addSectionHeader(global, centerX, y, 'INDIVIDUAL SOUNDS', `${SFX_DEFINITIONS.length} MIX CHANNELS`);
+    this.addSectionHeader(global, centerX, y, 'MUSIC & SOUND', `${SFX_DEFINITIONS.length} MIX CHANNELS`);
     const twoColumns = width >= 780;
     const columnGap = twoColumns ? 34 : 0;
     const columnCount = twoColumns ? 2 : 1;
     const columnWidth = (innerWidth - columnGap * (columnCount - 1)) / columnCount;
     y += 44;
     this.audioCategoryTop = y - 26;
+    this.createMusicPlayer(container, centerX, y, innerWidth);
+    y += 188;
     const lyra = { ...save.settings.lyra };
     this.addSectionHeader(container, centerX, y, 'LYRA COMMUNICATIONS', LYRA_VOICE_ENABLED ? 'VOICE & ACCESSIBILITY' : 'TEXT ONLY // VOICE TEMPORARILY DISABLED');
     y += 42;
@@ -421,6 +423,40 @@ export class OptionsScene extends Phaser.Scene {
     const contentBottom = y + 18;
     container.bringToTop(global);
     this.configureTabScrolling('audio', container, contentBottom);
+  }
+
+  private createMusicPlayer(container: Phaser.GameObjects.Container, x: number, y: number, width: number): void {
+    const audio = AudioManager.get();
+    container.add(this.add.rectangle(x, y + 65, width, 164, 0x0b1725, .95).setStrokeStyle(1, 0x3a9db2, .65));
+    const status = this.add.text(x, y, '', { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#69f4ff', align: 'center' }).setOrigin(.5).setName('music-player-status');
+    const title = this.add.text(x, y + 39, '', { fontFamily: 'Orbitron, sans-serif', fontSize: `${width < 600 ? 17 : 21}px`, color: '#e5f8ff', align: 'center', wordWrap: { width: width - 40 } }).setOrigin(.5).setMaxLines(2).setName('music-player-title');
+    const buttonWidth = Math.min(170, (width - 44) / 3), buttonY = y + 106;
+    const button = (offset: number, label: string, id: string, action: () => void) => {
+      const control = createButton(this, x + offset * (buttonWidth + 10), buttonY, label, () => { action(); refresh(); }, buttonWidth, 'menu', {
+        focusId: `options:audio:music:${id}`, focusLabel: `Music ${id}`, focusShortcut: undefined
+      });
+      container.add(control); this.registerScrollTarget('audio', control, buttonY, 22); return control;
+    };
+    const previous = button(-1, 'PREVIOUS', 'previous', () => audio.previousMusicTrack());
+    const playPause = button(0, 'PLAY', 'play-pause', () => {
+      const state = audio.musicPlayerState();
+      if (state.playing || state.loading) audio.pauseMusicByUser(); else audio.playMusic();
+    });
+    const next = button(1, 'NEXT', 'next', () => audio.nextMusicTrack());
+    container.add([status, title]);
+    let last = '';
+    const refresh = () => {
+      const state = audio.musicPlayerState();
+      const key = JSON.stringify(state); if (key === last) return; last = key;
+      title.setText(state.title);
+      status.setText(`RWG RADIO // ${state.channel} // ${state.paused ? 'PAUSED' : state.loading ? 'TUNING' : state.playing ? 'PLAYING' : 'READY'}${state.channel === 'HEIST' ? ' // SINGLE TRACK' : ''}`);
+      (playPause.getByName('button-label') as Phaser.GameObjects.Text).setText(state.playing || state.loading ? 'PAUSE' : 'PLAY');
+      for (const control of [previous, next]) (state.canSkip ? enableButton : disableButton)(control);
+      (state.available ? enableButton : disableButton)(playPause);
+      if (this.activeTab === 'audio') this.applyTabScroll('audio');
+    };
+    refresh();
+    this.time.addEvent({ delay: 200, loop: true, callback: refresh });
   }
 
   private createGameplayTab(container: Phaser.GameObjects.Container, save: ReturnType<typeof SaveSystem.get>): void {

@@ -169,8 +169,10 @@ export class AudioManager {
     'music/Neon Dub Pulse.mp3'
   ].map(audioAssetUrl);
   private menuMusicAudio: HTMLAudioElement | null = null;
+  private readonly menuMusicVoices: HTMLAudioElement[] = [];
   private menuPlaylistIndex = 0;
   private musicContext: 'silent' | 'menu' | 'gameplay' = 'silent';
+  private musicPausedByUser = false;
   private musicLifecycleCleanup: (() => void) | null = null;
   private musicRetryPending = false;
   private musicPlayPending: HTMLAudioElement | null = null;
@@ -533,7 +535,21 @@ export class AudioManager {
     if (!audio) return;
     try { audio.currentTime = 0; } catch { /* Metadata can still be loading. */ }
     audio.volume = this.clampVolume(this.getVolume('music'));
-    void audio.play().catch(() => undefined);
+    this.startHeistMusic();
+  }
+
+  private startHeistMusic(): void {
+    const audio = this.heistMusicAudio;
+    if (!audio || !this.heistMusicRequested || this.musicPausedByUser || !audio.paused || this.musicPlayPending === audio) return;
+    const generation = ++this.musicPlaybackGeneration;
+    this.musicPlayPending = audio;
+    this.musicRetryPending = false;
+    void audio.play().then(() => {
+      if (!this.heistMusicRequested || this.musicPausedByUser) audio.pause();
+    }).catch(error => {
+      if (generation === this.musicPlaybackGeneration && this.heistMusicRequested)
+        this.musicRetryPending = error?.name === 'NotAllowedError';
+    }).finally(() => { if (generation === this.musicPlaybackGeneration) this.musicPlayPending = null; });
   }
 
   exitHeistMusic(): void {
@@ -1193,24 +1209,31 @@ export class AudioManager {
   }
 
   private mountMenuTrack(): void {
-    if (this.menuMusicAudio) {
-      this.menuMusicAudio.pause();
-      this.menuMusicAudio.removeAttribute('src');
-      this.menuMusicAudio.load();
+    this.menuMusicAudio?.pause();
+    // Keep both songs buffered, including the wrap from the second to the first.
+    // Creating a fresh element at every ending forces another media load.
+    if (this.menuMusicVoices.length === 0) {
+      for (const url of this.menuPlaylist) {
+        const audio = new Audio(url);
+        audio.preload = 'auto';
+        audio.loop = false;
+        audio.addEventListener('ended', () => {
+          if (this.menuMusicAudio !== audio || this.musicContext !== 'menu') return;
+          this.musicErrorCount = 0;
+          this.nextMusicTrack();
+        });
+        audio.addEventListener('error', () => {
+          if (this.menuMusicAudio !== audio || this.musicContext !== 'menu') return;
+          if (++this.musicErrorCount < this.menuPlaylist.length) this.nextMusicTrack();
+        });
+        this.menuMusicVoices.push(audio);
+        audio.load();
+      }
     }
-    const audio = new Audio(this.menuPlaylist[this.menuPlaylistIndex]);
-    audio.preload = 'auto';
-    audio.loop = false;
+    const audio = this.menuMusicVoices[this.menuPlaylistIndex];
     this.menuMusicAudio = audio;
-    audio.addEventListener('ended', () => {
-      if (this.menuMusicAudio !== audio || this.musicContext !== 'menu') return;
-      this.musicErrorCount = 0;
-      this.nextMusicTrack();
-    });
-    audio.addEventListener('error', () => {
-      if (this.menuMusicAudio !== audio || this.musicContext !== 'menu') return;
-      if (++this.musicErrorCount < this.menuPlaylist.length) this.nextMusicTrack();
-    });
+    if (audio.error) audio.load(); // Retry a failed background preload when selected.
+    try { audio.currentTime = 0; } catch { /* Metadata may still be loading. */ }
   }
 
   /** One game-owned observer, independent of which menu happens to be visible.
@@ -1321,7 +1344,35 @@ export class AudioManager {
   }
 
   playMusic(): void {
+    this.musicPausedByUser = false;
+    this.musicErrorCount = 0;
+    if (this.heistMusicRequested) this.resumeArenaMusicAfterHeist = true;
     this.startMusicLoop();
+  }
+
+  pauseMusicByUser(): void {
+    this.musicPausedByUser = true;
+    this.pauseMusic();
+    this.heistMusicAudio?.pause();
+  }
+
+  musicPlayerState() {
+    const heist = this.heistMusicRequested;
+    const audio = heist ? this.heistMusicAudio : this.currentPlaylistAudio();
+    const url = audio?.src || (this.musicContext === 'menu' ? this.menuPlaylist[this.menuPlaylistIndex] : this.getCurrentTrackUrl());
+    const file = decodeURIComponent(url.split('/').pop() ?? '').replace(/\.mp3$/i, '');
+    const title = heist ? 'HEIST Anomaly' : file.startsWith('N3onRain')
+      ? `Rain on Concrete${file.endsWith('V2') ? ' V2' : ''}`
+      : file.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([a-z])(\d)/g, '$1 $2');
+    return {
+      title: this.musicContext === 'silent' && !heist ? 'No active soundtrack' : title,
+      channel: heist ? 'HEIST' : this.musicContext === 'gameplay' ? 'GAMEPLAY' : 'MENU',
+      paused: this.musicPausedByUser,
+      playing: this.isMusicPlaying(),
+      loading: this.musicPlayPending !== null,
+      canSkip: !heist && this.musicContext !== 'silent',
+      available: heist || this.musicContext !== 'silent'
+    };
   }
 
   pauseMusic(): void {
@@ -1335,6 +1386,7 @@ export class AudioManager {
   }
 
   nextMusicTrack(): void {
+    if (this.heistMusicRequested || this.musicContext === 'silent') return;
     if (this.musicContext === 'menu') {
       this.menuPlaylistIndex = (this.menuPlaylistIndex + 1) % this.menuPlaylist.length;
       this.mountMenuTrack();
@@ -1347,6 +1399,7 @@ export class AudioManager {
   }
 
   previousMusicTrack(): void {
+    if (this.heistMusicRequested || this.musicContext === 'silent') return;
     if (this.musicContext === 'menu') {
       this.menuPlaylistIndex = (this.menuPlaylistIndex - 1 + this.menuPlaylist.length) % this.menuPlaylist.length;
       this.mountMenuTrack();
@@ -1390,7 +1443,8 @@ export class AudioManager {
   }
 
   startMusicLoop(): void {
-    if (this.musicContext === 'silent' || this.heistMusicRequested) return;
+    if (this.musicPausedByUser || this.musicContext === 'silent') return;
+    if (this.heistMusicRequested) { this.startHeistMusic(); return; }
     if (this.musicContext === 'menu' && !this.menuMusicAudio) this.mountMenuTrack();
     if (this.musicContext === 'gameplay' && !this.musicAudio) {
       this.mountTrack(this.getCurrentTrackUrl());
@@ -1405,7 +1459,7 @@ export class AudioManager {
     this.musicRetryPending = false;
     audio.volume = 0;
     void audio.play().then(() => {
-      if (this.currentPlaylistAudio() !== audio || this.heistMusicRequested) { audio.pause(); return; }
+      if (this.currentPlaylistAudio() !== audio || this.heistMusicRequested || this.musicPausedByUser) { audio.pause(); return; }
       if (generation !== this.musicPlaybackGeneration) return;
       this.musicStarted = audio === this.musicAudio;
       this.musicFadeAudio = audio;
