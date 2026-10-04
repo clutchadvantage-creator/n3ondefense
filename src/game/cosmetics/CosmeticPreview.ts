@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { getCosmeticDisplayColor, resolveOperativeFrameAppearance } from '../../data/cosmetics.ts';
+import { getCosmeticById, getCosmeticDisplayColor, getProjectileDisplayColor, resolveOperativeFrameAppearance } from '../../data/cosmetics.ts';
 import type { CosmeticOption } from '../types.ts';
 import { createPremiumTurretVisual } from './PremiumTurretVisual.ts';
 
@@ -10,6 +10,7 @@ export interface CosmeticPreviewOptions {
   operatorFrameId?: string | null;
   operativeColorId?: string | null;
   projectileTextureKey?: string;
+  projectileShapeId?: string | null;
 }
 
 export interface CosmeticPreviewHandle {
@@ -219,9 +220,14 @@ export const createCosmeticPreview = (
         item.preserveNativePalette ? null : initialColor
       );
       break;
-    case 'projectileColor':
-      addImage(item.previewIcon ?? options.projectileTextureKey ?? 'projectile-pulse', maxWidth, maxHeight * 0.72);
+    case 'projectileColor': {
+      const native = item.colorMode === 'native';
+      const shape = getCosmeticById(options.projectileShapeId);
+      addImage(item.previewIcon ?? options.projectileTextureKey ?? 'projectile-pulse', maxWidth, maxHeight * 0.72,
+        native && shape?.preserveNativePalette ? null
+          : native ? getProjectileDisplayColor(options.projectileShapeId, item.id, scene.time.now) : initialColor);
       break;
+    }
     case 'dashTrail': {
       const effect = item.dashTrailEffect ?? 'ion';
       const wake = scene.add.graphics();

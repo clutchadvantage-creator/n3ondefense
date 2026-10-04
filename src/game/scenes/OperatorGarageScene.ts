@@ -1925,7 +1925,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     const operatorFrameId = SaveSystem.getEquippedCosmeticId('playerShape');
     const operativeColorId = SaveSystem.getEquippedCosmeticId('playerColor');
     const projectileTextureKey = getCosmeticTextureKey(SaveSystem.getEquippedCosmeticId('projectileShape'), 'projectile-pulse');
-    const preview = createCosmeticPreview(this, item, x, y, { maxWidth, maxHeight, operatorTextureKey, operatorFrameId, operativeColorId, projectileTextureKey });
+    const preview = createCosmeticPreview(this, item, x, y, { maxWidth, maxHeight, operatorTextureKey, operatorFrameId, operativeColorId,
+      projectileTextureKey, projectileShapeId: SaveSystem.getEquippedCosmeticId('projectileShape') });
     const dynamicColor = item.category === 'playerShape' ? getCosmeticById(operativeColorId) : item;
     if (dynamicColor?.colorMode === 'prism' || preview.update) this.cosmeticPreviewColorTargets.push({ item: dynamicColor ?? item, setColor: preview.setColor, update: preview.update });
     return preview.container;

@@ -100,6 +100,9 @@ export const COSMETICS: CosmeticOption[] = [
   },
 
   { id: 'projectile-cyan', category: 'projectileColor', label: 'Pulse Cyan', currency: 'credits', cost: 0, color: 0x4ef9ff },
+  { id: 'projectile-native', category: 'projectileColor', label: 'Native Palette', currency: 'credits', cost: 0,
+    color: 0x4ef9ff, accentColor: 0xff9b3d, colorMode: 'native',
+    description: 'Uses the equipped projectile shape\'s original shop colors and preserves authored multicolor artwork.' },
   { id: 'projectile-orange', category: 'projectileColor', label: 'Thermal Orange', currency: 'credits', cost: 650, color: 0xff9b3d },
   { id: 'projectile-red', category: 'projectileColor', label: 'Crimson Arc', currency: 'credits', cost: 725, color: 0xff3d58 },
   { id: 'projectile-lime', category: 'projectileColor', label: 'Reactor Lime', currency: 'credits', cost: 575, color: 0x72ff72 },
@@ -283,6 +286,15 @@ export const isPrismCosmetic = (item: CosmeticOption | undefined): boolean => it
 
 export const getCosmeticDisplayColor = (item: CosmeticOption, timeMs: number): number =>
   isPrismCosmetic(item) ? getPrismColor(timeMs, prismCategoryPhase[item.category] ?? 0) : item.color;
+
+/** Native selection follows the equipped shape; white base textures receive its authored shop tint. */
+export const getProjectileDisplayColor = (shapeId: string | null | undefined, colorId: string | null | undefined, timeMs: number): number => {
+  const color = getCosmeticById(colorId);
+  const shape = getCosmeticById(shapeId);
+  if (color?.category === 'projectileColor' && color.colorMode === 'native')
+    return shape?.category === 'projectileShape' ? shape.color : 0x4ef9ff;
+  return color?.category === 'projectileColor' ? getCosmeticDisplayColor(color, timeMs) : 0x4ef9ff;
+};
 
 export const getCosmeticTextureKey = (id: string | null, fallback: string): string =>
   getCosmeticById(id)?.textureKey ?? fallback;

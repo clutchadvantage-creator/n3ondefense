@@ -1,4 +1,4 @@
-import { getCosmeticById, getCosmeticDisplayColor, isPrismCosmetic, resolveOperativeFrameAppearance } from '../../data/cosmetics';
+import { getCosmeticById, getCosmeticDisplayColor, getProjectileDisplayColor, isPrismCosmetic, resolveOperativeFrameAppearance } from '../../data/cosmetics';
 import { PlayerProfileStore } from '../state/PlayerProfileStore';
 import { resolveWeeklyOperationDecks, type WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import type { CosmeticOption, GameSaveData } from '../types';
@@ -175,6 +175,8 @@ export class SaveSystem {
 
   static getCosmeticColor(category: CosmeticOption['category'], timeMs = Date.now()): number {
     const save = PlayerProfileStore.getActiveSave();
+    if (category === 'projectileColor') return getProjectileDisplayColor(
+      save.cosmetics.equipped.projectileShape, save.cosmetics.equipped.projectileColor, timeMs);
     const chosenId = save.cosmetics.equipped[category];
     const item = getCosmeticById(chosenId);
     return item ? getCosmeticDisplayColor(item, timeMs) : 0x4ef9ff;

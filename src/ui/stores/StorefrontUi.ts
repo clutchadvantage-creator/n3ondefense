@@ -7,6 +7,7 @@ import { AudioManager } from '../../game/systems/AudioManager.ts';
 import { createPremiumOperativeFrameSvg } from './PremiumOperativeFrameSvg.ts';
 import { createBaseOperativeFrameSvg } from './BaseOperativeFrameSvg.ts';
 import { createPremiumTurretSkinSvg } from './PremiumTurretSkinSvg.ts';
+import { createStandardTurretSvg } from './StandardTurretSvg.ts';
 import { createMineFrameSvg } from '../../game/cosmetics/MineFrameArt.ts';
 import { createPremiumProjectileShapeSvg } from '../../game/cosmetics/PremiumProjectileShapeArt.ts';
 import './storefront.css';
@@ -759,6 +760,10 @@ export class StorefrontUi {
         visual.append(detailedTurret);
       }
     }
+    if (item.category === 'turretSkin' && !item.turretSkinEffect) {
+      visual.classList.add('standard-turret-art');
+      visual.replaceChildren(createStandardTurretSvg());
+    }
     if (item.category === 'mineFrame') {
       visual.classList.add('premium-mine-frame-art');
       visual.append(createMineFrameSvg(item.mineFrameEffect ?? 'default', item.color, item.accentColor ?? item.color));
@@ -785,7 +790,7 @@ export class StorefrontUi {
       projectileShape: 'Preview the silhouette used by your operative weapon projectiles.',
       trailColor: 'A repeating motion pass previews the wake left behind moving objects.',
       bombColor: 'A safe holographic charge pulse previews the detonation palette.',
-      turretSkin: 'A rotating sentinel model previews this defensive skin.',
+      turretSkin: 'The in-game turret frame previews this defensive skin.',
       mineFrame: 'An armed-state hologram previews this mine chassis without changing its combat footprint.',
       fenceStyle: 'An energized lattice previews this fence style and current flow.',
       dashTrail: 'A short dash cycle previews the high-speed trail effect.'
