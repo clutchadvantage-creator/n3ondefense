@@ -1,10 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SkyBreachDirector, SKY_FLIGHT, formationSlots, DreadnoughtScheduler, DREADNOUGHT_WEAPONS,
-  attackWeapons, coreExposed } from '../src/game/anomalies/skybreach/SkyBreachDirector.ts';
+  attackWeapons, coreExposed, tankGroupSlots } from '../src/game/anomalies/skybreach/SkyBreachDirector.ts';
 import { skyBreachDifficulty } from '../src/game/anomalies/skybreach/SkyBreachDifficulty.ts';
 import { getCampaignProtocol } from '../src/game/progression/CampaignProgression.ts';
 import { getProtocolModeBalance } from '../src/game/config/modeBalance.ts';
+
+test('tank patrols contain three separated vehicles in a compact wedge',()=>{
+  for(const height of [900,1260]){
+    const slots=tankGroupSlots(height);
+    assert.equal(slots.length,3);
+    assert.equal(slots[1].y,slots[2].y);
+    assert.ok(slots[0].y>slots[1].y);
+    assert.ok(slots.every(s=>s.y>height*.5&&s.y<height*.8));
+    for(let i=0;i<slots.length;i++)for(let j=i+1;j<slots.length;j++)
+      assert.ok(Math.hypot(slots[i].offsetX-slots[j].offsetX,slots[i].y-slots[j].y)>=90);
+  }
+});
 
 test('SkyBreach director visits every authored module once, with recovery and a finite final approach',()=>{
   const director=new SkyBreachDirector(),entered=[],waves=[];

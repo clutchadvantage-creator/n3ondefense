@@ -1,6 +1,12 @@
 /** Authored flight, in active simulation time. No timers survive scene retirement. */
 export type SkyRole = 'drone' | 'tank' | 'interceptor' | 'strike' | 'zeppelin' | 'aa';
 export type Formation = 'line' | 'v' | 'staggered' | 'dual-column' | 'split' | 'crossing' | 'diagonal';
+/** A compact ground patrol: one lead vehicle and two abreast behind it. */
+export const tankGroupSlots = (height:number) => [
+  { offsetX:0,y:height*.58+80 },
+  { offsetX:-48,y:height*.58 },
+  { offsetX:48,y:height*.58 }
+];
 export interface FlightModule {
   name: string; duration: number; role?: SkyRole; formation?: Formation;
   secondary?: SkyRole; artillery?: boolean; recovery?: boolean; emplacements?: boolean;

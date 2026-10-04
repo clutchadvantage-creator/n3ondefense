@@ -35,7 +35,7 @@ test('HUD and reticle settings clamp malformed imported values and preserve vali
   assert.deepEqual(normalizeHudSettings({
     scale: 99, panelOpacity: -2, backgroundOpacity: 0.63, glow: 'high', animation: 'reduced', edgePosition: -4, textScale: 0.1
   }), {
-    tacticalInformation: true, tacticalTextSize: 'medium',
+    tacticalInformation: true, tacticalTextSize: 'medium', notificationTrayOpacity: 1,
     scale: 1.4, panelOpacity: 0.2, backgroundOpacity: 0.63, glow: 'high', animation: 'reduced', edgePosition: 0, textScale: 0.85
   });
   assert.deepEqual(normalizeAimSettings({
@@ -52,6 +52,16 @@ test('legacy pixel edge margins migrate to the normalized HUD edge position', ()
   assert.equal(normalizeHudSettings({ edgeMargin: 18 }).edgePosition, 0.5);
   assert.equal(normalizeHudSettings({ edgeMargin: 36 }).edgePosition, 0);
   assert.equal(normalizeHudSettings({ edgeMargin: 36, edgePosition: 0.8 }).edgePosition, 0.8);
+});
+
+test('notification tray opacity defaults safely and survives profile normalization', () => {
+  assert.equal(normalizeHudSettings({}).notificationTrayOpacity,1);
+  assert.equal(normalizeHudSettings({notificationTrayOpacity:NaN}).notificationTrayOpacity,1);
+  assert.equal(normalizeHudSettings({notificationTrayOpacity:-2}).notificationTrayOpacity,0);
+  assert.equal(normalizeHudSettings({notificationTrayOpacity:3}).notificationTrayOpacity,1);
+  const save=createDefaultLocalSave('tray','Tray');
+  save.settings.hud.notificationTrayOpacity=.35;
+  assert.equal(normalizeLocalSave(JSON.parse(JSON.stringify(save))).settings.hud.notificationTrayOpacity,.35);
 });
 
 test('Options preview and Arena use the same reticle renderer while sensitivity remains pointer-lock only', () => {

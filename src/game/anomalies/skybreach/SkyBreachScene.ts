@@ -6,7 +6,7 @@ import { ENEMY_ROBOT_FRAMES } from '../../enemies/EnemyRobotFrames.ts';
 import { SkyBreachWorld } from './SkyBreachArt.ts';
 import { skyBreachDifficulty } from './SkyBreachDifficulty.ts';
 import { SkyBreachDirector, DreadnoughtScheduler, DREADNOUGHT_WEAPONS, attackWeapons, coreExposed,
-  formationSlots, type FlightModule, type SkyRole, type HardpointId } from './SkyBreachDirector.ts';
+  formationSlots, tankGroupSlots, type FlightModule, type SkyRole, type HardpointId } from './SkyBreachDirector.ts';
 import { createArtilleryMarker } from '../../bosses/ArtilleryMarker.ts';
 import { BOSS_BALANCE, getBossRewards } from '../../config/bossBalance.ts';
 import { rollModDrop } from '../../mods/ModDropService.ts';
@@ -24,7 +24,7 @@ interface FlightState {
   role: SkyRole; pattern: Formation; age: number; originX: number; vx: number; vy: number; shotAt: number;
   warningAt: number; aim: number; nextDronesAt: number; warning: Phaser.GameObjects.Line;
   decorations: Phaser.GameObjects.Image[];
-  steering: FlightSteering; lane: number;
+  steering: FlightSteering; lane: number; laneOffset: number;
 }
 interface Hardpoint { id: HardpointId; enemy: Enemy; dx: number; dy: number; wreck: Phaser.GameObjects.Image; smoke: Phaser.GameObjects.Image }
 interface Strike extends ReturnType<typeof createArtilleryMarker> {
@@ -176,9 +176,22 @@ export class SkyBreachScene extends AnomalyCombatScene {
     if(module.secondary)this.spawnFormation(module.secondary,'split',Math.max(2,this.difficulty.formationCount-2),sequence%2===0);
   }
   private spawnFormation(role:SkyRole,pattern:Parameters<typeof formationSlots>[0],count:number,mirror=false):void {
-    for(const [index,slot] of formationSlots(pattern,count,this.pickupBounds.w,this.pickupBounds.h,mirror).entries()) {
+    if(role==='tank'){
+      const lane=mirror?1:-1,slots=tankGroupSlots(this.pickupBounds.h);
+      // Keep each patrol intact and leave a visible gap before another uses its road.
+      if(this.flights.size+slots.length>this.difficulty.activeCap)return;
+      for(const [enemy,f] of this.flights)if(f.role==='tank'&&f.lane===lane&&enemy.active&&enemy.hp>0
+        &&enemy.y<slots[0].y+240)return;
+      for(const slot of slots){
+        const enemy=this.spawnAircraft(role,this.world.groundLaneX(lane),slot.y);
+        this.flights.get(enemy)!.laneOffset=slot.offsetX;
+        enemy.x+=slot.offsetX;
+      }
+      return;
+    }
+    for(const slot of formationSlots(pattern,count,this.pickupBounds.w,this.pickupBounds.h,mirror)) {
       if(this.flights.size>=this.difficulty.activeCap)break;
-      this.spawnAircraft(role,slot.x,role==='tank'?this.pickupBounds.h*.58+Math.floor(index/2)*75:slot.y,slot.vx,slot.vy,pattern);
+      this.spawnAircraft(role,slot.x,slot.y,slot.vx,slot.vy,pattern);
     }
   }
   private spawnAircraft(role:SkyRole,x:number,y:number,vx=0,vy=1,pattern:Formation='line'):Enemy {
@@ -197,7 +210,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
     else if(role==='interceptor'||role==='strike')enemy.setDisplaySize(role==='strike'?78:64,role==='strike'?78:64);
     enemy.setName(`sky-${role}`);
     this.enemies.push(enemy);
-    this.flights.set(enemy,{role,pattern,age:0,originX:x,vx,vy,lane,steering:createFlightSteering(++this.flightSequence*2.399963,vx),shotAt:this.missionTime+1100,warningAt:0,aim:0,
+    this.flights.set(enemy,{role,pattern,age:0,originX:x,vx,vy,lane,laneOffset:0,steering:createFlightSteering(++this.flightSequence*2.399963,vx),shotAt:this.missionTime+1100,warningAt:0,aim:0,
       nextDronesAt:this.missionTime+6500,warning:this.add.line(0,0,0,0,0,0,0xffb55c,.7).setOrigin(0).setDepth(8).setVisible(false),
       decorations:role==='zeppelin'?[-1,1].map(()=>this.add.image(x,y,'sky-rotor').setDisplaySize(32,32).setDepth(8))
         :role==='aa'?[this.add.image(x,y,'sky-aa-platform').setDisplaySize(136,172).setDepth(3)]:[]});
@@ -234,7 +247,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
         const separation=droneSeparation(enemy.x,enemy.y,other.x,other.y,f.steering.phase-peer.steering.phase);
         separateX+=separation.x;separateY+=separation.y;
       }
-      if(f.role==='tank')enemy.x=this.world.groundLaneX(f.lane);
+      if(f.role==='tank')enemy.x=this.world.groundLaneX(f.lane)+f.laneOffset;
       const motion=steerFlight(f.steering,f.role,f.pattern,dt,enemy.x,enemy.y,this.player.x,this.player.y,
         this.pickupBounds.w,this.pickupBounds.h,speed,separateX,separateY);
       enemy.setVelocity(motion.x,motion.y);

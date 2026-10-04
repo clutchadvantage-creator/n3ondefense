@@ -28,6 +28,7 @@ export class MechanicalNotificationView {
   readonly panel: Phaser.GameObjects.Container;
   readonly needle: Phaser.GameObjects.Rectangle;
   readonly progressBar: Phaser.GameObjects.Rectangle;
+  private readonly frame: Phaser.GameObjects.RenderTexture;
   private readonly maskSource: Phaser.GameObjects.Graphics;
   private readonly mask: Phaser.Display.Masks.GeometryMask;
   private readonly motifs = new Map<HudNotificationAnimation, Phaser.GameObjects.RenderTexture>();
@@ -53,7 +54,7 @@ export class MechanicalNotificationView {
     const bake = (draw: (g: Phaser.GameObjects.Graphics) => void, x: number, y: number, w: number, h: number) => {
       const g = scene.make.graphics({}, false); draw(g); return bakeStaticGraphics(scene, g, { x, y, w, h });
     };
-    const frame = bake(g => {
+    const frame = this.frame = bake(g => {
       const p = [{ x: 12, y: 18 }, { x: 16, y: 4 }, { x: 107, y: 4 }, { x: 121, y: 18 },
         { x: W - 14, y: 18 }, { x: W, y: 32 }, { x: W, y: H }, { x: 0, y: H }, { x: 0, y: 32 }];
       g.fillStyle(0x07121c, 1).fillPoints(p, true).lineStyle(1.5, 0x428998, .95).strokePoints(p, true);
@@ -133,6 +134,8 @@ export class MechanicalNotificationView {
   }
 
   layout(settings: HudSettings): void {
+    this.frame.setAlpha(settings.notificationTrayOpacity);
+    for (const rail of this.rails) rail.setAlpha(settings.notificationTrayOpacity);
     this.message.setFontSize({ small: 16, medium: 18, large: 21 }[settings.tacticalTextSize]);
     const { width, height } = this.scene.scale, hud = calculateHudLayout(width, height, settings), deck = hud.abilities;
     const scale = Math.min(1.15, (deck.width - 20) / W, Math.max(100, deck.y - hud.objective.height - 24) / H);

@@ -649,7 +649,7 @@ export class OptionsScene extends Phaser.Scene {
     this.addSectionHeader(container, centerX, headerY, 'HUD CUSTOMIZATION', 'PERIMETER DISPLAY CALIBRATION');
     const panelTop = headerY + 25;
     const stacked = innerWidth < 760;
-    const panelHeight = stacked ? 810 : 418;
+    const panelHeight = stacked ? 854 : 462;
     container.add(this.add.rectangle(centerX, panelTop + panelHeight * 0.5, innerWidth, panelHeight, 0x091522, 0.9)
       .setStrokeStyle(1, 0x3a9db2, 0.58));
     const controlWidth = Math.min(510, stacked ? innerWidth - 42 : innerWidth * 0.56);
@@ -658,7 +658,7 @@ export class OptionsScene extends Phaser.Scene {
     const trackX = controlLeft + controlWidth - trackWidth * 0.5 - 42;
     const labelWidth = Math.max(115, trackX - trackWidth * 0.5 - controlLeft - 12);
     const previewX = stacked ? centerX : centerX + innerWidth * 0.29;
-    const previewY = stacked ? panelTop + 535 : panelTop + 176;
+    const previewY = stacked ? panelTop + 579 : panelTop + 176;
     const preview = this.createHudPreview(container, previewX, previewY, hud);
     const commitHud = (): void => {
       SaveSystem.setSettings({ hud: { ...hud } });
@@ -692,12 +692,16 @@ export class OptionsScene extends Phaser.Scene {
       SaveSystem.setSettings({ buttonJiggle });
       this.scheduleSettingsPersist();
     }, (value) => `${Math.round(value * 100)}%`, labelWidth);
-    const resetY = stacked ? panelTop + 735 : panelTop + 350;
+    const trayTransparency = this.createRangeSlider(container, 'interface', controlLeft, trackX, panelTop + 394, 'TRAY TRANSPARENCY', 1 - hud.notificationTrayOpacity, 0, 1, trackWidth, (value) => {
+      hud = { ...hud, notificationTrayOpacity: 1 - value }; commitHud();
+    }, (value) => `${Math.round(value * 100)}%`, labelWidth);
+    const resetY = stacked ? panelTop + 779 : panelTop + 350;
     const reset = this.addTabButton(container, previewX, resetY, 'Reset HUD Settings', () => {
       hud = normalizeHudSettings(DEFAULT_HUD_SETTINGS);
       hudScale.setValue?.(hud.scale);
       panelOpacity.setValue?.(hud.panelOpacity);
       backgroundOpacity.setValue?.(hud.backgroundOpacity);
+      trayTransparency.setValue?.(1 - hud.notificationTrayOpacity);
       textScale.setValue?.(hud.textScale);
       edgePosition.setValue?.(hud.edgePosition);
       glow.setValue(hud.glow);
@@ -1451,6 +1455,7 @@ export class OptionsScene extends Phaser.Scene {
     drawHudResourceIcon(resourceIcon, 'coreTokens', 0xffc86b);
     const resource = this.add.text(96, -61, '248', { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#ffd48c' }).setOrigin(0, 0.5);
     const radar = this.add.graphics();
+    const trayText = this.add.text(43, -9, 'NOTIFICATION TRAY', { fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', color: '#dffcff' }).setOrigin(.5);
     radar.lineStyle(1, 0x56edff, 0.58).strokeCircle(-103, 54, 32).lineStyle(1, 0x56edff, 0.2).lineBetween(-135, 54, -71, 54).lineBetween(-103, 22, -103, 86);
     const abilities: Phaser.GameObjects.Graphics[] = [];
     (['fence', 'turret', 'mine', 'shield'] as const).forEach((id, index) => {
@@ -1459,7 +1464,7 @@ export class OptionsScene extends Phaser.Scene {
       abilities.push(icon);
     });
     const detail = this.add.text(0, 111, '', { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#89adba' }).setOrigin(0.5);
-    root.add([back, frame, title, hp, energy, objective, resourceIcon, resource, radar, ...abilities, detail]);
+    root.add([back, frame, title, hp, energy, objective, resourceIcon, resource, radar, ...abilities, detail, trayText]);
     container.add(root);
     const redraw = (rawSettings: HudSettings): void => {
       const settings = normalizeHudSettings(rawSettings);
@@ -1467,6 +1472,8 @@ export class OptionsScene extends Phaser.Scene {
       root.setAlpha(1).setY(y);
       const glow = glowMultiplier(settings.glow);
       frame.clear();
+      frame.fillStyle(0x07121c, settings.notificationTrayOpacity).fillRect(-52, -25, 190, 37);
+      frame.lineStyle(1, 0x63f7ff, settings.notificationTrayOpacity * .7).strokeRect(-52, -25, 190, 37);
       frame.fillStyle(0x06111b, 0.76 * settings.panelOpacity).fillRoundedRect(-139, -91, 278, 64, 5);
       frame.fillStyle(0x0a1d29, 0.48 * settings.backgroundOpacity).fillRect(-132, -82, 264, 46);
       frame.lineStyle(1 + glow * 0.5, 0x56edff, 0.48 + glow * 0.16).strokeRoundedRect(-139, -91, 278, 64, 5);
