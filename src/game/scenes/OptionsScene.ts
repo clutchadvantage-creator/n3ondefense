@@ -192,7 +192,7 @@ export class OptionsScene extends Phaser.Scene {
       onClose: () => { if (this.resizePending) this.handleOptionsResize(); }
     });
     this.createBackground(width, height, centerX);
-    createButton(this, safeX + 48, height < 650 ? 30 : 36, 'BACK', () => this.handleEscReturn(), 96)
+    createButton(this, safeX + 48, height < 650 ? 30 : 36, 'BACK', () => this.handleEscReturn(), 96, 'menu', { fontSize: 18 })
       .setDepth(130);
     this.createContentViewport();
     this.createTabBar(centerX, contentWidth, height);
@@ -283,7 +283,7 @@ export class OptionsScene extends Phaser.Scene {
       const background = this.add.rectangle(x, y, tabWidth, tabHeight, 0x101c2b, 0.96)
         .setStrokeStyle(1, 0x397a8d, 0.72).setInteractive({ useHandCursor: true }).setDepth(120);
       const label = this.add.text(x, y, definition.label, {
-        fontFamily: 'Orbitron, sans-serif', fontSize: `${contentWidth < 720 ? 12 : 15}px`, color: '#86adba'
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${contentWidth < 720 ? 14 : 16}px`, color: '#86adba'
       }).setOrigin(0.5).setDepth(121);
       background.on('pointerover', () => {
         AudioManager.get().playSfx('menuHover');
@@ -325,9 +325,10 @@ export class OptionsScene extends Phaser.Scene {
     const global = this.add.container(0, 0);
     this.audioGlobalPanel = global;
     container.add(global);
-    global.add(this.add.rectangle(centerX, top + 135, width, 270, 0x08131f, 1));
+    const globalBackdrop = this.add.rectangle(centerX, top, width, 1, 0x08131f, 1).setOrigin(.5, 0);
+    global.add(globalBackdrop);
     this.addSectionHeader(global, centerX, y, 'GLOBAL AUDIO', 'PRIMARY MIXER');
-    const globalPanelTop = y + 25;
+    const globalPanelTop = y + 54;
     const globalPanelHeight = 164;
     global.add(this.add.rectangle(centerX, globalPanelTop + globalPanelHeight * 0.5, innerWidth, globalPanelHeight, 0x0b1725, 0.88)
       .setStrokeStyle(1, 0x3a9db2, 0.48));
@@ -349,17 +350,18 @@ export class OptionsScene extends Phaser.Scene {
 
     y = globalPanelTop + globalPanelHeight + 34;
     this.addSectionHeader(global, centerX, y, 'MUSIC & SOUND', `${SFX_DEFINITIONS.length} MIX CHANNELS`);
-    const twoColumns = width >= 780;
+    const twoColumns = width >= 1000;
     const columnGap = twoColumns ? 34 : 0;
     const columnCount = twoColumns ? 2 : 1;
     const columnWidth = (innerWidth - columnGap * (columnCount - 1)) / columnCount;
-    y += 44;
+    y += 72;
     this.audioCategoryTop = y - 26;
+    globalBackdrop.setSize(width, this.audioCategoryTop - top);
     this.createMusicPlayer(container, centerX, y, innerWidth);
     y += 188;
     const lyra = { ...save.settings.lyra };
     this.addSectionHeader(container, centerX, y, 'LYRA COMMUNICATIONS', LYRA_VOICE_ENABLED ? 'VOICE & ACCESSIBILITY' : 'TEXT ONLY // VOICE TEMPORARILY DISABLED');
-    y += 42;
+    y += 72;
     const voiceTrackWidth = Math.min(250, innerWidth * .38);
     const voiceTrackX = innerRight - voiceTrackWidth / 2 - 42;
     const persistLyra = (): void => { SaveSystem.setSettings({ lyra: { ...lyra } }); };
@@ -381,7 +383,7 @@ export class OptionsScene extends Phaser.Scene {
       this.registerScrollTarget('audio', button, y, 22); y += 46;
     }
     container.add(this.add.text(centerX, y, 'Required training text stays visible. Contextual guidance: Gameplay tab.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#a9d9e2', wordWrap: { width: innerWidth - 20 }, align: 'center'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9d9e2', wordWrap: { width: innerWidth - 20 }, align: 'center'
     }).setOrigin(.5));
     y += 46;
     for (const category of SFX_CATEGORIES) {
@@ -399,7 +401,7 @@ export class OptionsScene extends Phaser.Scene {
           state.offset = Math.min(offset, state.max);
           this.selectTab('audio');
           UiNavigationController.get().phaserLayer(this).manager.focus(focusId);
-        }, innerWidth, 'menu', { focusId, focusLabel: category.label });
+        }, innerWidth, 'menu', { focusId, focusLabel: category.label, fontSize: 18 });
       container.add(header);
       this.registerScrollTarget('audio', header, y, 22);
       y += 46;
@@ -413,12 +415,12 @@ export class OptionsScene extends Phaser.Scene {
         const trackWidth = Phaser.Math.Clamp(columnWidth * (twoColumns ? 0.36 : 0.46), 130, 210);
         const trackX = columnLeft + columnWidth - trackWidth * 0.5 - 42;
         const labelX = columnLeft + 15;
-        this.createSlider(container, labelX, trackX, y + row * 43,
+        this.createSlider(container, labelX, trackX, y + row * 56,
           definition.label.toUpperCase(), save.settings.soundVolumes[definition.key], trackWidth,
           value => this.updateSoundVolume(definition.key, value),
           Math.max(100, trackX - trackWidth * 0.5 - labelX - 12));
       });
-      y += rowCount * 43 + 12;
+      y += rowCount * 56 + 12;
     }
     const contentBottom = y + 18;
     container.bringToTop(global);
@@ -428,12 +430,12 @@ export class OptionsScene extends Phaser.Scene {
   private createMusicPlayer(container: Phaser.GameObjects.Container, x: number, y: number, width: number): void {
     const audio = AudioManager.get();
     container.add(this.add.rectangle(x, y + 65, width, 164, 0x0b1725, .95).setStrokeStyle(1, 0x3a9db2, .65));
-    const status = this.add.text(x, y, '', { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#69f4ff', align: 'center' }).setOrigin(.5).setName('music-player-status');
+    const status = this.add.text(x, y, '', { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#69f4ff', align: 'center' }).setOrigin(.5).setName('music-player-status');
     const title = this.add.text(x, y + 39, '', { fontFamily: 'Orbitron, sans-serif', fontSize: `${width < 600 ? 17 : 21}px`, color: '#e5f8ff', align: 'center', wordWrap: { width: width - 40 } }).setOrigin(.5).setMaxLines(2).setName('music-player-title');
     const buttonWidth = Math.min(170, (width - 44) / 3), buttonY = y + 106;
     const button = (offset: number, label: string, id: string, action: () => void) => {
       const control = createButton(this, x + offset * (buttonWidth + 10), buttonY, label, () => { action(); refresh(); }, buttonWidth, 'menu', {
-        focusId: `options:audio:music:${id}`, focusLabel: `Music ${id}`, focusShortcut: undefined
+        focusId: `options:audio:music:${id}`, focusLabel: `Music ${id}`, focusShortcut: undefined, fontSize: 18
       });
       container.add(control); this.registerScrollTarget('audio', control, buttonY, 22); return control;
     };
@@ -456,7 +458,8 @@ export class OptionsScene extends Phaser.Scene {
       if (this.activeTab === 'audio') this.applyTabScroll('audio');
     };
     refresh();
-    this.time.addEvent({ delay: 200, loop: true, callback: refresh });
+    const refreshTimer = this.time.addEvent({ delay: 200, loop: true, callback: refresh });
+    playPause.once(Phaser.GameObjects.Events.DESTROY, () => refreshTimer.remove());
   }
 
   private createGameplayTab(container: Phaser.GameObjects.Container, save: ReturnType<typeof SaveSystem.get>): void {
@@ -467,7 +470,7 @@ export class OptionsScene extends Phaser.Scene {
     this.addSectionHeader(container, centerX, y, 'AIMING & CONTROLS', 'RETICLE / INPUT CALIBRATION');
 
     let aim = normalizeAimSettings(save.settings.aim);
-    const panelTop = y + 25;
+    const panelTop = y + 54;
     const stacked = innerWidth < 760;
     const panelHeight = stacked ? 580 : 330;
     container.add(this.add.rectangle(centerX, panelTop + panelHeight * 0.5, innerWidth, panelHeight, 0x091522, 0.9)
@@ -526,10 +529,10 @@ export class OptionsScene extends Phaser.Scene {
 
     y = panelTop + panelHeight + 22;
     this.addSectionHeader(container, centerX, y, 'CONTROLLER', 'STANDARD GAMEPAD CALIBRATION');
-    const controllerBottom = this.createControllerSettingsPanel(container, centerX, y + 32, innerWidth, save.settings.controller);
+    const controllerBottom = this.createControllerSettingsPanel(container, centerX, y + 60, innerWidth, save.settings.controller);
     y = controllerBottom + 22;
     this.addSectionHeader(container, centerX, y, 'CONTROLS / GAMEPLAY REFERENCE', 'CURRENT PROFILE BINDINGS');
-    const referenceBottom = this.createGameplayReferencePanel(container, centerX, y + 34, innerWidth);
+    const referenceBottom = this.createGameplayReferencePanel(container, centerX, y + 60, innerWidth);
     const keybindBottom = this.createKeybindPanel(container, centerX, referenceBottom + 12, innerWidth);
     const tutorialBottom = this.createTutorialSettingsPanel(container, centerX, keybindBottom + 18, innerWidth, save.settings.contextualTutorials);
     this.configureTabScrolling('gameplay', container, tutorialBottom + 22);
@@ -552,7 +555,7 @@ export class OptionsScene extends Phaser.Scene {
     container.add(this.add.rectangle(centerX, topY + panelHeight * 0.5, panelWidth, panelHeight, 0x091522, 0.9)
       .setStrokeStyle(1, 0x3a9db2, 0.58));
     container.add(this.add.text(centerX, topY + 12, 'Xbox / XInput, PlayStation, and standard browser-mapped controllers', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#91bdca', align: 'center'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9cbd6', align: 'center', wordWrap: { width: panelWidth - 40 }
     }).setOrigin(0.5, 0));
 
     let controller = normalizeControllerSettings(initial);
@@ -596,27 +599,27 @@ export class OptionsScene extends Phaser.Scene {
     const rowGap = 48;
     const columns = compact ? 1 : 2;
     const replayRows = Math.ceil(TUTORIAL_REPLAY_GROUPS.length / columns);
-    const panelHeight = 118 + replayRows * rowGap + 58;
+    const panelHeight = 152 + replayRows * rowGap + 58;
     container.add(this.add.rectangle(centerX, topY + panelHeight * 0.5, panelWidth, panelHeight, 0x091522, 0.9)
       .setStrokeStyle(1, 0x3a9db2, 0.58));
     container.add(this.add.text(centerX, topY + 15, 'TRAINING & CONTEXTUAL GUIDANCE', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '17px', color: '#69f4ff'
+      fontFamily: 'Orbitron, sans-serif', fontSize: '19px', color: '#69f4ff'
     }).setOrigin(0.5, 0));
     container.add(this.add.text(centerX, topY + 42, 'Replay a module on its next relevant screen. Live training uses your current key bindings.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#9fc7d5', align: 'center'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#9fc7d5', align: 'center', wordWrap: { width: panelWidth - 40 }
     }).setOrigin(0.5, 0));
 
     let contextual = initialContextual;
-    const toggle = this.addTabButton(container, centerX, topY + 82, `CONTEXTUAL TIPS: ${contextual ? 'ON' : 'OFF'}`, () => {
+    const toggle = this.addTabButton(container, centerX, topY + 116, `CONTEXTUAL TIPS: ${contextual ? 'ON' : 'OFF'}`, () => {
       contextual = !contextual;
       SaveSystem.setSettings({ contextualTutorials: contextual });
       const label = toggle.getByName('button-label') as Phaser.GameObjects.Text | null;
       label?.setText(`CONTEXTUAL TIPS: ${contextual ? 'ON' : 'OFF'}`);
     }, Math.min(330, panelWidth - 44));
-    this.registerScrollTarget('gameplay', toggle, topY + 82, 22);
+    this.registerScrollTarget('gameplay', toggle, topY + 116, 22);
 
     const buttonWidth = compact ? panelWidth - 42 : (panelWidth - 58) / 2;
-    const startY = topY + 128;
+    const startY = topY + 162;
     TUTORIAL_REPLAY_GROUPS.forEach((group, index) => {
       const column = index % columns;
       const row = Math.floor(index / columns);
@@ -655,23 +658,22 @@ export class OptionsScene extends Phaser.Scene {
 
   private createGameplayReferencePanel(container: Phaser.GameObjects.Container, centerX: number, topY: number, contentWidth: number): number {
     const panelWidth = Math.min(contentWidth, 900);
-    const compact = this.viewport.height < 620;
-    const panelHeight = compact ? 82 : 108;
-    container.add(this.add.rectangle(centerX, topY + panelHeight * 0.5, panelWidth, panelHeight, 0x091522, 0.9)
-      .setStrokeStyle(1, 0x3a9db2, 0.58));
-    container.add(this.add.text(centerX, topY + 13, 'CORE CONTROLS', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 13 : 16}px`, color: '#69f4ff'
-    }).setOrigin(0.5, 0));
-    container.add(this.add.text(centerX, topY + (compact ? 34 : 39), 'WASD  MOVE    ·    MOUSE  AIM    ·    LMB  FIRE    ·    E  PLANT / INTERACT    ·    1 / 2 / 3  SELECT ABILITY    ·    ESC  PAUSE', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 12 : 15}px`, color: '#dff8ff', align: 'center', fontStyle: 'bold',
+    const heading = this.add.text(centerX, topY + 14, 'CORE CONTROLS', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: '19px', color: '#69f4ff'
+    }).setOrigin(0.5, 0);
+    const controls = this.add.text(centerX, heading.y + heading.height + 14, 'WASD  MOVE    ·    MOUSE  AIM    ·    LMB  FIRE    ·    E  PLANT / INTERACT    ·    1 / 2 / 3  SELECT ABILITY    ·    ESC  PAUSE', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', color: '#dff8ff', align: 'center', fontStyle: 'bold',
       wordWrap: { width: panelWidth - 34, useAdvancedWrap: true }
-    }).setOrigin(0.5, 0).setMaxLines(2));
+    }).setOrigin(0.5, 0);
     const bindings = SaveSystem.get().settings.abilityBindings;
     const abilities = ABILITY_ACTIONS.map(({ action, label }) => `${bindingLabel(bindings[action])} ${label.toUpperCase()}`).join('    ·    ');
-    container.add(this.add.text(centerX, topY + (compact ? 62 : 78), abilities, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 11 : 14}px`, color: '#ffb9e5', align: 'center',
+    const abilityText = this.add.text(centerX, controls.y + controls.height + 16, abilities, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#ffb9e5', align: 'center',
       wordWrap: { width: panelWidth - 34, useAdvancedWrap: true }
-    }).setOrigin(0.5, 0).setMaxLines(2));
+    }).setOrigin(0.5, 0);
+    const panelHeight = abilityText.y + abilityText.height + 18 - topY;
+    container.add(this.add.rectangle(centerX, topY + panelHeight * .5, panelWidth, panelHeight, 0x091522, .9).setStrokeStyle(1, 0x3a9db2, .58));
+    container.add([heading, controls, abilityText]);
     return topY + panelHeight;
   }
 
@@ -683,9 +685,9 @@ export class OptionsScene extends Phaser.Scene {
     let buttonJiggle = Phaser.Math.Clamp(save.settings.buttonJiggle, 0, 1);
     const headerY = top + 26;
     this.addSectionHeader(container, centerX, headerY, 'HUD CUSTOMIZATION', 'PERIMETER DISPLAY CALIBRATION');
-    const panelTop = headerY + 25;
+    const panelTop = headerY + 54;
     const stacked = innerWidth < 760;
-    const panelHeight = stacked ? 854 : 462;
+    const panelHeight = stacked ? 884 : 492;
     container.add(this.add.rectangle(centerX, panelTop + panelHeight * 0.5, innerWidth, panelHeight, 0x091522, 0.9)
       .setStrokeStyle(1, 0x3a9db2, 0.58));
     const controlWidth = Math.min(510, stacked ? innerWidth - 42 : innerWidth * 0.56);
@@ -749,8 +751,8 @@ export class OptionsScene extends Phaser.Scene {
     }, Phaser.Math.Clamp(innerWidth * 0.36, 195, 270));
     this.registerScrollTarget('interface', reset, resetY, 22);
     container.add(this.add.text(centerX, panelTop + panelHeight - 21, 'Critical health, objective, and cooldown warnings remain readable at every presentation level.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#789baa', align: 'center'
-    }).setOrigin(0.5));
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9cbd6', align: 'center', wordWrap: { width: innerWidth - 40 }
+    }).setOrigin(0.5, 1));
     const shakeY = panelTop + panelHeight + 38;
     let screenShake = save.settings.screenShake;
     const shake = this.addTabButton(container, centerX, shakeY, `CAMERA SHAKE: ${screenShake ? 'ON' : 'OFF'}`, () => {
@@ -761,9 +763,9 @@ export class OptionsScene extends Phaser.Scene {
     }, 300);
     this.registerScrollTarget('interface', shake, shakeY, 22);
     container.add(this.add.text(centerX, shakeY + 29, 'Explosion and impact motion. Attack warnings and effects remain visible.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#9fc7d5', align: 'center'
-    }).setOrigin(0.5));
-    const tacticalY = shakeY + 92;
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#9fc7d5', align: 'center', wordWrap: { width: innerWidth - 40 }
+    }).setOrigin(0.5, 0));
+    const tacticalY = shakeY + 112;
     const tactical = this.addTabButton(container, centerX, tacticalY, `TACTICAL INFORMATION: ${hud.tacticalInformation ? 'ON' : 'OFF'}`, () => {
       hud = { ...hud, tacticalInformation: !hud.tacticalInformation }; commitHud();
       (tactical.getByName('button-label') as Phaser.GameObjects.Text).setText(`TACTICAL INFORMATION: ${hud.tacticalInformation ? 'ON' : 'OFF'}`);
@@ -774,10 +776,10 @@ export class OptionsScene extends Phaser.Scene {
         hud = { ...hud, tacticalTextSize: value }; commitHud();
       });
     container.add(this.add.text(centerX, tacticalY + 91, 'Auxiliary hazard timers only. Health, objectives, weapons and entry prompts stay visible.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#9fc7d5', align: 'center',
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#9fc7d5', align: 'center',
       wordWrap: { width: innerWidth - 32, useAdvancedWrap: true }
-    }).setOrigin(.5));
-    this.configureTabScrolling('interface', container, tacticalY + 130);
+    }).setOrigin(.5, 0));
+    this.configureTabScrolling('interface', container, tacticalY + 160);
   }
 
   private createProfileTab(container: Phaser.GameObjects.Container): void {
@@ -798,7 +800,7 @@ export class OptionsScene extends Phaser.Scene {
     const storageMessage = SaveSystem.getStorageMessage();
     if (storageMessage) {
       container.add(this.add.text(centerX, panelTop + 91, storageMessage, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#ff9aa8', align: 'center',
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#ff9aa8', align: 'center',
         wordWrap: { width: panelWidth - 48, useAdvancedWrap: true }
       }).setOrigin(0.5));
     }
@@ -819,7 +821,7 @@ export class OptionsScene extends Phaser.Scene {
     container.add(this.add.text(centerX, panelTop + panelHeight - 26, inRun
       ? 'Return to Main Menu before switching or replacing a profile.'
       : 'Settings and progression are saved to this browser-local profile.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#9fcbe0'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', color: '#9fcbe0'
     }).setOrigin(0.5));
   }
 
@@ -846,17 +848,17 @@ export class OptionsScene extends Phaser.Scene {
     this.addTabButton(container, centerX, centerY - 4, 'Suggestions / Bug Reports', () => this.feedbackReportUi?.open(), 310);
     this.addTabButton(container, centerX, centerY + 48, 'Back to Main Menu', () => this.returnToMainMenu(), 310);
     container.add(this.add.text(centerX, centerY + 104, 'ESC returns to the screen that opened Options.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#718f9c'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9cbd6'
     }).setOrigin(0.5));
   }
 
   private addSectionHeader(container: Phaser.GameObjects.Container, x: number, y: number, title: string, detail: string): void {
     container.add(this.add.text(x, y, title, {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '21px', color: '#69f4ff'
-    }).setOrigin(0.5));
-    container.add(this.add.text(x + Math.min(330, this.viewport.width * 0.34), y + 1, detail, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#668a98'
-    }).setOrigin(1, 0.5));
+      fontFamily: 'Orbitron, sans-serif', fontSize: '22px', color: '#69f4ff'
+    }).setOrigin(0.5).setName('options-section-title'));
+    container.add(this.add.text(x, y + 28, detail, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9cbd6'
+    }).setOrigin(0.5).setName('options-section-detail'));
   }
 
   private addTabButton(
@@ -867,7 +869,7 @@ export class OptionsScene extends Phaser.Scene {
     onClick: () => unknown,
     width: number
   ): Phaser.GameObjects.Container {
-    const button = createButton(this, x, y, label, onClick, width);
+    const button = createButton(this, x, y, label, onClick, width, 'menu', { fontSize: 18 });
     container.add(button);
     return button;
   }
@@ -959,7 +961,8 @@ export class OptionsScene extends Phaser.Scene {
     const state = this.scrollStates.get(tab);
     if (!state) return;
     state.container.y = -state.offset;
-    if (tab === 'audio') this.audioGlobalPanel?.setY(state.offset);
+    const pinAudioMixer = tab === 'audio' && this.viewport.height >= 600;
+    if (tab === 'audio') this.audioGlobalPanel?.setY(pinAudioMixer ? state.offset : 0);
     if (tab === this.activeTab && this.scrollThumb) {
       const trackHeight = Math.max(120, this.viewport.height - 28);
       const thumbHeight = Math.max(46, trackHeight * (this.viewport.height / Math.max(this.viewport.height, state.contentHeight)));
@@ -969,10 +972,10 @@ export class OptionsScene extends Phaser.Scene {
       this.scrollThumb.y = this.scrollTrackTop + thumbHeight * 0.5 + this.scrollTrackRange * ratio;
     }
     for (const entry of state.targets) {
-      const pinned = tab === 'audio' && entry.centerY < this.audioCategoryTop;
+      const pinned = pinAudioMixer && entry.centerY < this.audioCategoryTop;
       const visibleY = entry.centerY - (pinned ? 0 : state.offset);
       const enabled = this.activeTab === tab
-        && visibleY - entry.halfHeight >= (tab === 'audio' && !pinned ? this.audioCategoryTop : this.viewport.top) + 3
+        && visibleY - entry.halfHeight >= (pinAudioMixer && !pinned ? this.audioCategoryTop : this.viewport.top) + 3
         && visibleY + entry.halfHeight <= this.viewport.bottom - 3;
       this.setGameObjectInputEnabled(entry.target, enabled);
     }
@@ -996,7 +999,7 @@ export class OptionsScene extends Phaser.Scene {
     const panelWidth = Math.min(contentWidth, 900);
     // This tab scrolls, so keep the control grid's geometry stable instead of
     // squeezing the footer upward into the Dash row on short viewports.
-    const panelHeight = 300;
+    const panelHeight = 330;
     const panelCenterY = topY + panelHeight * 0.5;
     container.add(this.add.rectangle(centerX, panelCenterY, panelWidth, panelHeight, 0x0b1422, 0.92)
       .setStrokeStyle(2, 0x53dfff, 0.72));
@@ -1005,7 +1008,7 @@ export class OptionsScene extends Phaser.Scene {
     }).setOrigin(0.5));
 
     const status = this.add.text(centerX, topY + 59, 'Select a binding, then press a key, mouse, or unused controller button. Core controls remain reserved.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#a9cfe0', align: 'center', lineSpacing: 3,
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9cfe0', align: 'center', lineSpacing: 3,
       wordWrap: { width: panelWidth - 64, useAdvancedWrap: true }
     }).setOrigin(0.5, 0);
     container.add(status);
@@ -1018,11 +1021,11 @@ export class OptionsScene extends Phaser.Scene {
       const x = centerX + (column === 0 ? -panelWidth * 0.25 : panelWidth * 0.25);
       const y = topY + 126 + row * 40;
       const actionLabel = this.add.text(x - 104, y, label.toUpperCase(), {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#dff8ff'
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', color: '#dff8ff'
       }).setOrigin(0, 0.5);
       const background = this.add.rectangle(x + 62, y, 164, 29, 0x14223a, 0.98).setStrokeStyle(1, 0xff7adf, 0.8);
       const value = this.add.text(x + 62, y, bindingLabel(bindings[action]), {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#fff0ba'
+        fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#fff0ba'
       }).setOrigin(0.5);
       valueLabels.set(action, value);
       const hit = this.add.rectangle(x + 62, y, 164, 31, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
@@ -1048,7 +1051,7 @@ export class OptionsScene extends Phaser.Scene {
 
     const resetY = topY + 250;
     const reset = this.add.text(centerX + panelWidth * 0.25 + 62, resetY, 'RESET DEFAULTS', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#ffcf91', backgroundColor: '#172238', padding: { x: 18, y: 5 }
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#ffcf91', backgroundColor: '#172238', padding: { x: 18, y: 5 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     reset.on('pointerover', () => {
       AudioManager.get().playSfx('menuHover');
@@ -1081,9 +1084,9 @@ export class OptionsScene extends Phaser.Scene {
     container.add(reset);
     this.registerScrollTarget('gameplay', reset, resetY, 18);
     container.add(this.add.text(centerX, topY + 279, 'ECHO: Press once to record. Press again to return and replay. Auto-completes after 4 seconds.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#a9cfe0', align: 'center',
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9cfe0', align: 'center',
       wordWrap: { width: panelWidth - 32 }
-    }).setOrigin(0.5));
+    }).setOrigin(0.5, 0));
     return topY + panelHeight;
   }
 
@@ -1291,14 +1294,14 @@ export class OptionsScene extends Phaser.Scene {
     const minX = trackX - trackWidth * 0.5;
     const maxX = trackX + trackWidth * 0.5;
     const labelText = this.add.text(labelX, y, label, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#dbf5ff',
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', color: '#dbf5ff',
       wordWrap: { width: labelWidth, useAdvancedWrap: true }
     }).setOrigin(0, 0.5).setMaxLines(2);
     const track = this.add.rectangle(trackX, y, trackWidth, 10, 0x1e2b45, 1).setStrokeStyle(1, 0x53dfff, 0.9);
     const fill = this.add.rectangle(minX, y, 0, 8, 0x5be7ff, 1).setOrigin(0, 0.5);
     const knob = this.add.circle(minX, y, 10, 0xff7adf, 1).setStrokeStyle(1, 0xffffff, 0.9);
     const valueText = this.add.text(maxX + 39, y, '', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#ffeeb8'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#ffeeb8'
     }).setOrigin(0.5);
     const hit = this.add.rectangle(trackX, y, trackWidth + 24, 34, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
     let currentValue = Phaser.Math.Clamp(initial, minimum, maximum);
@@ -1353,16 +1356,16 @@ export class OptionsScene extends Phaser.Scene {
     const controlX = leftX + labelWidth + (width - labelWidth) * 0.5;
     const controlWidth = Math.max(160, width - labelWidth - 8);
     container.add(this.add.text(leftX, y, label, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#dbf5ff'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', color: '#dbf5ff'
     }).setOrigin(0, 0.5));
     const back = this.add.rectangle(controlX, y, controlWidth, 31, 0x101d31, 0.96).setStrokeStyle(1, 0x4fcfe9, 0.68);
     const valueText = this.add.text(controlX, y, '', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: '13px', color: '#fff0ba'
+      fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#fff0ba'
     }).setOrigin(0.5);
     const previous = this.add.rectangle(controlX - controlWidth * 0.5 + 18, y, 35, 31, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
     const next = this.add.rectangle(controlX + controlWidth * 0.5 - 18, y, 35, 31, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
-    const previousText = this.add.text(previous.x, y, '<', { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: '#65efff' }).setOrigin(0.5);
-    const nextText = this.add.text(next.x, y, '>', { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: '#65efff' }).setOrigin(0.5);
+    const previousText = this.add.text(previous.x, y, '<', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#65efff' }).setOrigin(0.5);
+    const nextText = this.add.text(next.x, y, '>', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#65efff' }).setOrigin(0.5);
     let current = values.includes(initial) ? initial : values[0];
     const setValue = (value: T): void => {
       current = values.includes(value) ? value : values[0];
@@ -1408,7 +1411,7 @@ export class OptionsScene extends Phaser.Scene {
     onChange: (value: ReticleColor) => void
   ): { setValue: (value: ReticleColor) => void } {
     container.add(this.add.text(leftX, y, 'RETICLE COLOR', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#dbf5ff'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', color: '#dbf5ff'
     }).setOrigin(0, 0.5));
     const startX = leftX + Math.min(190, width * 0.46);
     const spacing = Math.min(38, (width - (startX - leftX) - 12) / RETICLE_COLOR_IDS.length);
@@ -1461,9 +1464,9 @@ export class OptionsScene extends Phaser.Scene {
     grid.lineStyle(1, 0x2b7080, 0.16);
     for (let n = -120; n <= 120; n += 30) grid.lineBetween(n, -78, n, 78);
     for (let n = -60; n <= 60; n += 30) grid.lineBetween(-120, n, 120, n);
-    const title = this.add.text(0, -91, 'LIVE RETICLE PREVIEW', { fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#69f4ff' }).setOrigin(0.5);
+    const title = this.add.text(0, -91, 'LIVE RETICLE PREVIEW', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#69f4ff' }).setOrigin(0.5);
     const graphic = this.add.graphics();
-    const detail = this.add.text(0, 91, '', { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#89adba' }).setOrigin(0.5);
+    const detail = this.add.text(0, 91, '', { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#89adba' }).setOrigin(0.5);
     root.add([frame, grid, title, graphic, detail]);
     container.add(root);
     const redraw = (settings: AimSettings): void => {
@@ -1483,15 +1486,15 @@ export class OptionsScene extends Phaser.Scene {
     const root = this.add.container(x, y);
     const back = this.add.rectangle(0, 0, 330, 270, 0x040a12, 0.9).setStrokeStyle(1, 0x3dd9ef, 0.58);
     const frame = this.add.graphics();
-    const title = this.add.text(0, -118, 'LIVE HUD PREVIEW', { fontFamily: 'Orbitron, sans-serif', fontSize: '14px', color: '#69f4ff' }).setOrigin(0.5);
-    const hp = this.add.rectangle(-118, -70, 105, 8, 0xff5578, 1).setOrigin(0, 0.5);
-    const energy = this.add.rectangle(-118, -51, 82, 8, 0x42f2ff, 1).setOrigin(0, 0.5);
-    const objective = this.add.text(0, -65, 'SITE B // DEFEND\n00:42', { fontFamily: 'Orbitron, sans-serif', fontSize: '12px', color: '#dffcff', align: 'center' }).setOrigin(0.5);
+    const title = this.add.text(0, -118, 'LIVE HUD PREVIEW', { fontFamily: 'Orbitron, sans-serif', fontSize: '18px', color: '#69f4ff' }).setOrigin(0.5);
+    const hp = this.add.rectangle(-118, -76, 45, 8, 0xff5578, 1).setOrigin(0, 0.5);
+    const energy = this.add.rectangle(-118, -56, 35, 8, 0x42f2ff, 1).setOrigin(0, 0.5);
+    const objective = this.add.text(20, -73, 'SITE B // DEFEND\n00:42', { fontFamily: 'Orbitron, sans-serif', fontSize: '13px', color: '#dffcff', align: 'center' }).setOrigin(0.5);
     const resourceIcon = this.add.graphics().setPosition(79, -61);
     drawHudResourceIcon(resourceIcon, 'coreTokens', 0xffc86b);
-    const resource = this.add.text(96, -61, '248', { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', color: '#ffd48c' }).setOrigin(0, 0.5);
+    const resource = this.add.text(96, -61, '248', { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#ffd48c' }).setOrigin(0, 0.5);
     const radar = this.add.graphics();
-    const trayText = this.add.text(43, -9, 'NOTIFICATION TRAY', { fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', color: '#dffcff' }).setOrigin(.5);
+    const trayText = this.add.text(43, -9, 'NOTIFICATION TRAY', { fontFamily: 'Rajdhani, sans-serif', fontSize: '16px', color: '#dffcff' }).setOrigin(.5);
     radar.lineStyle(1, 0x56edff, 0.58).strokeCircle(-103, 54, 32).lineStyle(1, 0x56edff, 0.2).lineBetween(-135, 54, -71, 54).lineBetween(-103, 22, -103, 86);
     const abilities: Phaser.GameObjects.Graphics[] = [];
     (['fence', 'turret', 'mine', 'shield'] as const).forEach((id, index) => {
@@ -1499,7 +1502,7 @@ export class OptionsScene extends Phaser.Scene {
       drawHudAbilityIcon(icon, id);
       abilities.push(icon);
     });
-    const detail = this.add.text(0, 111, '', { fontFamily: 'Rajdhani, sans-serif', fontSize: '13px', color: '#89adba' }).setOrigin(0.5);
+    const detail = this.add.text(0, 111, '', { fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9cbd6', align: 'center', wordWrap: { width: 304 } }).setOrigin(0.5);
     root.add([back, frame, title, hp, energy, objective, resourceIcon, resource, radar, ...abilities, detail, trayText]);
     container.add(root);
     const redraw = (rawSettings: HudSettings): void => {
@@ -1517,14 +1520,14 @@ export class OptionsScene extends Phaser.Scene {
       frame.lineStyle(1 + glow * 0.45, 0xff61cf, 0.5 + glow * 0.14).strokeRoundedRect(-52, 15, 190, 76, 5);
       const previewScale = Phaser.Math.Linear(0.86, 1.08, (settings.scale - 0.75) / 0.65);
       const inset = (1 - settings.edgePosition) * 8;
-      hp.setPosition(-118 + inset, -70);
-      energy.setPosition(-118 + inset, -51);
-      resourceIcon.setPosition(79 - inset, -61);
-      resource.setPosition(96 - inset, -61);
+      hp.setPosition(-126 + inset, -76);
+      energy.setPosition(-126 + inset, -56);
+      resourceIcon.setPosition(64 - inset, -40);
+      resource.setPosition(82 - inset, -40);
       radar.setPosition(inset, 0);
       abilities.forEach((icon, index) => icon.setPosition(-27 + index * 52 - inset * 0.45, 52));
       for (const object of [hp, energy, objective, resourceIcon, resource, radar, ...abilities]) object.setScale(previewScale);
-      objective.setFontSize(Math.round(12 * settings.textScale));
+      objective.setFontSize(Math.round(13 * settings.textScale));
       resource.setFontSize(Math.round(14 * settings.textScale));
       detail.setText(`${Math.round(settings.scale * 100)}% SCALE // ${Math.round(settings.textScale * 100)}% TEXT // ${Math.round(settings.edgePosition * 100)}% EDGE // ${settings.glow.toUpperCase()} GLOW`);
       if (settings.animation !== 'off') {
@@ -1549,14 +1552,14 @@ export class OptionsScene extends Phaser.Scene {
     const minX = trackX - trackWidth * 0.5;
     const maxX = trackX + trackWidth * 0.5;
     const labelText = this.add.text(labelX, y, label, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#dbf5ff',
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', color: '#dbf5ff',
       wordWrap: { width: labelWidth, useAdvancedWrap: true }
     }).setOrigin(0, 0.5).setMaxLines(2);
     const track = this.add.rectangle(trackX, y, trackWidth, 10, 0x1e2b45, 1).setStrokeStyle(1, 0x53dfff, 0.9);
     const fill = this.add.rectangle(minX, y, trackWidth * initial, 8, 0x5be7ff, 1).setOrigin(0, 0.5);
     const knob = this.add.circle(minX + trackWidth * initial, y, 10, 0xff7adf, 1).setStrokeStyle(1, 0xffffff, 0.9);
     const valueText = this.add.text(maxX + 32, y, `${Math.round(initial * 100)}%`, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '17px', color: '#ffeeb8'
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', color: '#ffeeb8'
     }).setOrigin(0.5);
     const hit = this.add.rectangle(trackX, y, trackWidth + 24, 34, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
 
