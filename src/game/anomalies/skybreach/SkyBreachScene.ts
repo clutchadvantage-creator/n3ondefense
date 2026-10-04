@@ -16,13 +16,15 @@ import type { RectSpec, PickupType } from '../../types.ts';
 import type { EchoDamageStamp } from '../../echo/EchoRules.ts';
 import { SupremeModEffectSystem } from '../../mods/SupremeModEffectSystem.ts';
 import { MOD_BALANCE } from '../../mods/modBalance.ts';
-import { flightVelocity, skyForwardAim, SKY_DURABILITY } from './SkyBreachMotion.ts';
+import { createFlightSteering, droneSeparation, steerFlight, skyForwardAim, SKY_DURABILITY, type FlightSteering } from './SkyBreachMotion.ts';
+import { MechanicalDestructionVfx } from '../../vfx/MechanicalDestructionVfx.ts';
 import type { Formation } from './SkyBreachDirector.ts';
 
 interface FlightState {
   role: SkyRole; pattern: Formation; age: number; originX: number; vx: number; vy: number; shotAt: number;
   warningAt: number; aim: number; nextDronesAt: number; warning: Phaser.GameObjects.Line;
   decorations: Phaser.GameObjects.Image[];
+  steering: FlightSteering; lane: number;
 }
 interface Hardpoint { id: HardpointId; enemy: Enemy; dx: number; dy: number; wreck: Phaser.GameObjects.Image; smoke: Phaser.GameObjects.Image }
 interface Strike extends ReturnType<typeof createArtilleryMarker> {
@@ -61,6 +63,9 @@ export class SkyBreachScene extends AnomalyCombatScene {
   private moduleLabel = 'ENTERING HOSTILE AIRSPACE';
   private supremeEffects: SupremeModEffectSystem|null = null;
   private readonly flightTargets: Enemy[] = [];
+  private mechanicalDestruction!: MechanicalDestructionVfx;
+  private flightSequence = 0;
+  private nextHitSound = 0;
 
   constructor() { super(SceneKeys.SkyBreach); }
   protected override get anomalyId(): 'skybreach' { return 'skybreach'; }
@@ -80,6 +85,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
     this.director=new SkyBreachDirector();this.scheduler=new DreadnoughtScheduler();
     this.missionTime=0;this.nextArtillery=0;this.bossStarted=false;this.bossOpen=false;
     this.zeppelinDeployed=false;this.nextCoreVolley=0;
+    this.flightSequence=0;this.nextHitSound=0;
     this.destructionAt=0;this.destructionStep=0;this.rewardDropped=false;this.bossBursts.length=0;
     this.core=null;this.hull=null;this.coreDoors=[];this.moduleLabel='ENTERING HOSTILE AIRSPACE';
     this.difficulty=skyBreachDifficulty(this.session);
@@ -108,11 +114,14 @@ export class SkyBreachScene extends AnomalyCombatScene {
     this.world.resize(this.scale.width/c.zoom,this.scale.height/c.zoom);
   }
   protected override initializeMission():void {
+    this.mechanicalDestruction=new MechanicalDestructionVfx(this,this.fxCirclePool,SaveSystem.get().settings.particles);
+    this.mechanicalDestruction.prewarm(48);
     this.supremeEffects=new SupremeModEffectSystem(this,this.modRuntime,{playPulseCue:()=>this.coreAudio.playSfx('shieldOn')});
     this.announce('SKYBREACH // FLIGHT LINK ESTABLISHED','FORWARD FIRE // FENCES OFFLINE // EARNINGS PROVISIONAL');
   }
   protected override updateWorld(_now:number,dt:number):void {
     this.activeDelta=dt;this.missionTime+=dt*1000;this.world.update(dt,this.pickupBounds.h);
+    this.mechanicalDestruction?.update(this.missionTime,dt*1000);
     const angle=this.player.rotation-Math.PI/2;
     this.exhaust.setPosition(this.player.x-Math.cos(angle)*26,this.player.y-Math.sin(angle)*26)
       .setRotation(this.player.rotation).setAlpha(.65+Math.sin(this.missionTime*.035)*.15)
@@ -167,9 +176,9 @@ export class SkyBreachScene extends AnomalyCombatScene {
     if(module.secondary)this.spawnFormation(module.secondary,'split',Math.max(2,this.difficulty.formationCount-2),sequence%2===0);
   }
   private spawnFormation(role:SkyRole,pattern:Parameters<typeof formationSlots>[0],count:number,mirror=false):void {
-    for(const slot of formationSlots(pattern,count,this.pickupBounds.w,this.pickupBounds.h,mirror)) {
+    for(const [index,slot] of formationSlots(pattern,count,this.pickupBounds.w,this.pickupBounds.h,mirror).entries()) {
       if(this.flights.size>=this.difficulty.activeCap)break;
-      this.spawnAircraft(role,slot.x,slot.y,slot.vx,slot.vy,pattern);
+      this.spawnAircraft(role,slot.x,role==='tank'?this.pickupBounds.h*.58+Math.floor(index/2)*75:slot.y,slot.vx,slot.vy,pattern);
     }
   }
   private spawnAircraft(role:SkyRole,x:number,y:number,vx=0,vy=1,pattern:Formation='line'):Enemy {
@@ -180,12 +189,15 @@ export class SkyBreachScene extends AnomalyCombatScene {
       valueCredits:Math.round(base.valueCredits*this.difficulty.rewardMultiplier*this.modRuntime.multiplier('creditValue'))};
     const key=role==='drone'||role==='tank'?ENEMY_ROBOT_FRAMES[role].textureKey:`sky-${role}`;
     const enemy=new Enemy(this,x,y,key,stats).setVisualTintOverride(null);
+    const lane=x<this.pickupBounds.w/2?-1:1;
+    if(role==='tank')enemy.setPosition(this.world.groundLaneX(lane),y).setDepth(-19);
+    else enemy.setDepth(role==='aa'?4:6);
     if(role==='zeppelin')enemy.setDisplaySize(210,146);
     else if(role==='aa')enemy.setDisplaySize(72,72);
     else if(role==='interceptor'||role==='strike')enemy.setDisplaySize(role==='strike'?78:64,role==='strike'?78:64);
     enemy.setName(`sky-${role}`);
     this.enemies.push(enemy);
-    this.flights.set(enemy,{role,pattern,age:0,originX:x,vx,vy,shotAt:this.missionTime+1100,warningAt:0,aim:0,
+    this.flights.set(enemy,{role,pattern,age:0,originX:x,vx,vy,lane,steering:createFlightSteering(++this.flightSequence*2.399963,vx),shotAt:this.missionTime+1100,warningAt:0,aim:0,
       nextDronesAt:this.missionTime+6500,warning:this.add.line(0,0,0,0,0,0,0xffb55c,.7).setOrigin(0).setDepth(8).setVisible(false),
       decorations:role==='zeppelin'?[-1,1].map(()=>this.add.image(x,y,'sky-rotor').setDisplaySize(32,32).setDepth(8))
         :role==='aa'?[this.add.image(x,y,'sky-aa-platform').setDisplaySize(136,172).setDepth(3)]:[]});
@@ -200,17 +212,32 @@ export class SkyBreachScene extends AnomalyCombatScene {
       const enemy=this.enemies[i];
       if(enemy===this.core||this.hardpoints.some(h=>h.enemy===enemy))continue;
       const f=this.flights.get(enemy);if(!f)continue;
-      if(!enemy.active||enemy.hp<=0){f.warning.destroy();for(const d of f.decorations)d.destroy();this.flights.delete(enemy);super.removeEnemy(enemy,i);continue;}
+      if(!enemy.active||enemy.hp<=0){
+        if(enemy.hp<=0)this.mechanicalDestruction.emitEnemy(enemy.stats.type,enemy.x,enemy.y,enemy.stats.color,this.missionTime);
+        f.warning.destroy();for(const d of f.decorations)d.destroy();this.flights.delete(enemy);super.removeEnemy(enemy,i);continue;
+      }
       f.age+=dt;enemy.updateDamageFlash(now);enemy.updateMechanicalPresentation(now);
-      if(f.age>34||enemy.y>this.pickupBounds.h+90||enemy.x<-110||enemy.x>this.pickupBounds.w+110){
+      // Ground emplacements pass with the scrolling terrain. Aircraft always return.
+      if((f.role==='tank'||f.role==='aa')&&enemy.y>this.pickupBounds.h+110){
         f.warning.destroy();for(const d of f.decorations)d.destroy();this.flights.delete(enemy);enemy.destroy();this.enemies.splice(i,1);continue;
       }
       const dx=this.player.x-enemy.x,dy=this.player.y-enemy.y;
       const aim=Math.atan2(dy,dx),speed=enemy.effectiveSpeed(enemy.stats.speed,now);
-      if(now<enemy.disabledUntil){enemy.setVelocity(0,0);f.warning.setVisible(false);f.warningAt=0;continue;}
-      const motion=flightVelocity(f.role,f.pattern,f.age,f.vx,Math.round(f.originX/70),speed,enemy.y,dx);
-      const ground=f.role==='tank'||f.role==='aa'||f.role==='zeppelin';
-      enemy.setVelocity(ground?enemy.effectiveSpeed(motion.x,now):motion.x,ground?enemy.effectiveSpeed(motion.y,now):motion.y);
+      if(now<enemy.disabledUntil){
+        enemy.setVelocity(0,0);f.steering.velocityX=0;f.steering.velocityY=0;
+        f.warning.setVisible(false);f.warningAt=0;continue;
+      }
+      let separateX=0,separateY=0;
+      if(f.role==='drone')for(const other of this.flightTargets){
+        if(other===enemy||!other.active||other.hp<=0)continue;
+        const peer=this.flights.get(other);if(peer?.role!=='drone')continue;
+        const separation=droneSeparation(enemy.x,enemy.y,other.x,other.y,f.steering.phase-peer.steering.phase);
+        separateX+=separation.x;separateY+=separation.y;
+      }
+      if(f.role==='tank')enemy.x=this.world.groundLaneX(f.lane);
+      const motion=steerFlight(f.steering,f.role,f.pattern,dt,enemy.x,enemy.y,this.player.x,this.player.y,
+        this.pickupBounds.w,this.pickupBounds.h,speed,separateX,separateY);
+      enemy.setVelocity(motion.x,motion.y);
       enemy.setRotation(f.role==='zeppelin'?0:f.role==='tank'?aim+Math.PI/2:f.role==='aa'?aim-Math.PI/2:Math.atan2(motion.y,motion.x)+Math.PI/2);
       f.decorations.forEach((d,i)=>f.role==='aa'?d.setPosition(enemy.x,enemy.y):d.setPosition(enemy.x+(i?1:-1)*46,enemy.y+20).setRotation(this.missionTime*.022));
       if(Math.hypot(dx,dy)<enemy.stats.size*.5+12&&now-enemy.lastAttackMs>850){enemy.lastAttackMs=now;this.damagePlayer(enemy.stats.damage);}
@@ -255,7 +282,11 @@ export class SkyBreachScene extends AnomalyCombatScene {
   protected override damageEnemy(enemy:Enemy,amount:number,echo?:EchoDamageStamp):void {
     if(enemy===this.core&&!this.bossOpen)return;
     // Keep shared Split Current/Echo handling and all projectile damage calculations.
+    const before=enemy.hp;
     super.damageEnemy(enemy,amount,echo);
+    if(enemy.hp<before&&this.missionTime>=this.nextHitSound){
+      this.nextHitSound=this.missionTime+85;this.coreAudio.playSfx('hit');
+    }
   }
   protected override weaponContextMultiplier(now:number):number { return this.modRuntime.supremePickupSurgeDamageMultiplier(now); }
   protected override onGameplayPickupCollected(type:PickupType,now:number):void {
@@ -321,6 +352,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
       h.smoke.setPosition(h.wreck.x+Math.sin(this.missionTime*.002)*9,h.wreck.y-22)
         .setAlpha((1-Math.max(0,h.enemy.hp/h.enemy.stats.hp))*.6).setRotation(Math.sin(this.missionTime*.001)*.12);
       if(h.enemy.hp<=0&&this.aliveWeapons.delete(h.id)){
+        this.mechanicalDestruction.emitEnemy('tank',h.enemy.x,h.enemy.y,h.enemy.stats.color,this.missionTime);
         h.wreck.setVisible(true);h.enemy.setVisible(false).setActive(false);(h.enemy.body as Phaser.Physics.Arcade.Body).enable=false;
         this.mineExplosionVfx.emit(h.wreck.x,h.wreck.y,52,EXPLOSION,this.time.now,false);
         this.coreAudio.playSfx('enemyDeath');
@@ -433,6 +465,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
   }
   protected override cleanup():void {
     // Phaser has already destroyed scene-owned render objects and Arcade bodies.
+    this.mechanicalDestruction?.discardReferences();
     this.flights.clear();this.escortArt.clear();this.hardpoints.length=0;this.aliveWeapons.clear();this.strikes.length=0;
     this.coreDoors.length=0;this.hull=null;this.core=null;this.bossBursts.length=0;
     this.flightTargets.length=0;this.supremeEffects=null;

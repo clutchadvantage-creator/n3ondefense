@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { normalizeAccessCards, accessCardUseError, ACCESS_CARD_PRICE, ACCESS_CARD_DAILY_LIMIT } from '../src/game/anomalies/AnomalyAccessCards.ts';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import { WorldEventRotation } from '../src/game/arcade/WorldEventRotation.ts';
-import { flightVelocity, skyForwardAim } from '../src/game/anomalies/skybreach/SkyBreachMotion.ts';
+import { skyForwardAim } from '../src/game/anomalies/skybreach/SkyBreachMotion.ts';
 
 const now = Date.parse('2026-10-04T23:59:59Z');
 test('card ownership survives UTC daily rollover while both combined counters reset', () => {
@@ -49,19 +49,4 @@ test('Sky forward fire banks only with bounded lateral movement', () => {
   assert.deepEqual(skyForwardAim(100,500,0),{x:100,y:320});
   assert.deepEqual(skyForwardAim(100,500,10),{x:145,y:320});
   assert.deepEqual(skyForwardAim(100,500,-10),{x:55,y:320});
-});
-test('air patterns change through attack and peel-off while ground units remain mounted', () => {
-  for(const role of ['tank','aa'])for(const age of [0,3,10,30]){
-    const v=flightVelocity(role,'split',age,-1,1,120,200,400);
-    assert.equal(v.x,0);assert.ok(v.y>0&&v.y<60);
-  }
-  const signatures=new Set();
-  for(const pattern of ['line','v','staggered','split','crossing','diagonal']){
-    const sequence=[0,2,4,8,10].map(age=>flightVelocity('interceptor',pattern,age,1,1,120,200,400));
-    assert.ok(sequence.every(v=>Number.isFinite(v.x+v.y)&&Math.abs(v.x)<=126&&v.y>0));
-    signatures.add(JSON.stringify(sequence));assert.equal(sequence.at(-1).y,150);
-  }
-  assert.equal(signatures.size,6);
-  assert.equal(flightVelocity('strike','line',1,1,1,120,200,400).x,0);
-  assert.notEqual(flightVelocity('strike','line',4,1,1,120,200,400).x,0);
 });

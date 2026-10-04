@@ -218,6 +218,12 @@ export class SkyBreachWorld {
     for(const layer of this.layers)layer.setSize(width,height);
     this.edgeClouds.setSize(width,height);
   }
+  /** Existing industrial texture repeats a road every 512px beneath the cloud decks. */
+  groundLaneX(lane:number):number {
+    const ground=this.layers[0],firstRoad=ground.x-ground.width/2+256;
+    const road=Math.round((ground.x+lane*512-firstRoad)/512);
+    return firstRoad+road*512-ground.tilePositionX;
+  }
   update(dt:number,height:number):void {
     this.scroll+=dt;
     this.layers.forEach((layer,i)=>{layer.tilePositionY-=dt*(14+i*20);layer.tilePositionX=Math.sin(this.scroll/30+i)*30;});
