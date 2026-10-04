@@ -17,6 +17,7 @@ const audioCode = compiled('../src/game/systems/AudioManager.ts');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function fixture() {
   const voices = [];
+  let now = 1000;
   let rejectNextPlay = false;
   class Audio extends EventTarget {
     constructor(src) { super(); this.src = src; this.paused = true; this.ended = false; this.currentTime = 0; this.duration = 100; this.volume = 1; voices.push(this); }
@@ -39,7 +40,7 @@ function fixture() {
     '../utils/assetUrl': { publicAssetUrl: x => x },
     './DroneAudioPool': { DroneAudioPool: class {} }
   };
-  const globals = { performance: { now: () => 1000 }, document, Audio, AudioContext: class { state = 'running'; }, console };
+  const globals = { performance: { now: () => now }, document, Audio, AudioContext: class { state = 'running'; }, console };
   const require = key => { if (!dependencies[key]) throw Error('Unexpected dependency ' + key); return dependencies[key]; };
   vm.runInNewContext(lifecycleCode, { ...globals, exports: lifecycle.exports, require });
   dependencies['../flow/RunTransitionManager'] = lifecycle.exports;
@@ -52,8 +53,25 @@ function fixture() {
   audio.bindMusicLifecycle(game);
   const frame = async () => { events.emit('poststep'); await flush(); };
   const playing = () => audio.musicDiagnostics().voices.filter(v => v.playing).length;
-  return { audio, game, scene, frame, playing, settings, voices, document, lifecycle: lifecycle.exports.RunTransitionManager, blockNext: () => { rejectNextPlay = true; } };
+  return { audio, game, scene, frame, playing, settings, voices, document, advanceTime: ms => { now += ms; }, lifecycle: lifecycle.exports.RunTransitionManager, blockNext: () => { rejectNextPlay = true; } };
 }
+
+test('menu music becomes audible after both songs finish even while game rendering sleeps', async () => {
+  const f = fixture(); await f.frame(); const first = f.audio.menuMusicAudio;
+  for (let i = 0; i < 4; i++) {
+    const old = f.audio.menuMusicAudio;
+    old.currentTime = old.duration; old.dispatchEvent(new Event('ended')); await flush();
+    const current = f.audio.menuMusicAudio;
+    assert.notEqual(current, old); assert.equal(current.paused, false);
+    f.advanceTime(300); current.currentTime = .3;
+    current.dispatchEvent(new Event('timeupdate'));
+    assert.equal(current.volume, .3, 'audio time updates must restore volume without a game poststep');
+    if (i % 2 === 1) assert.equal(current, first, 'second song wraps back to first');
+  }
+  f.audio.pauseMusicByUser();
+  f.advanceTime(300); first.dispatchEvent(new Event('timeupdate'));
+  assert.equal(f.playing(), 0, 'background fade updates cannot undo manual pause');
+});
 
 test('HEIST entered during a pending gameplay start still resumes the requested soundtrack', async () => {
   const f = fixture(); f.game.scene.scenes = [f.scene('arena')]; await f.frame();

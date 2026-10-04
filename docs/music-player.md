@@ -13,6 +13,8 @@ and Next controls supporting mouse and controller navigation.
 - Existing volume sliders continue to control music volume.
 - Both menu songs are preloaded and reused when the playlist wraps, avoiding a
   fresh media load at each ending. The source files have no long silent tails.
+- Playback time updates also advance music fades when the game stops rendering.
+  This prevents the first song restarting silently after a completed menu cycle.
 
 Validation: the music lifecycle tests cover manual pause, track navigation,
 scene changes, pending playback, and HEIST autoplay recovery. The browser audit
@@ -20,3 +22,8 @@ in `scripts/audit-music-player.browser.js` exercises the real Options controls
 using an isolated test profile, including four automatic menu song transitions.
 Compact and desktop layouts were checked at
 768×900 and 1440×900.
+
+`scripts/audit-menu-loop.browser.js` plays both complete menu tracks at 4× speed
+without seeking through them, with the rendering loop asleep. It checks playback
+position and restored volume after both transitions, including the return to the
+first song. Its result is available as `globalThis.__menuLoopAudit`.

@@ -1195,6 +1195,7 @@ export class AudioManager {
     audio.preload = 'auto';
     audio.loop = false;
     audio.volume = this.clampVolume(this.getVolume('music'));
+    this.bindMusicFadeClock(audio);
     audio.addEventListener('ended', () => {
       if (this.musicAudio !== audio || this.musicContext !== 'gameplay' || this.heistMusicRequested) return;
       this.musicErrorCount = 0;
@@ -1217,6 +1218,7 @@ export class AudioManager {
         const audio = new Audio(url);
         audio.preload = 'auto';
         audio.loop = false;
+        this.bindMusicFadeClock(audio);
         audio.addEventListener('ended', () => {
           if (this.menuMusicAudio !== audio || this.musicContext !== 'menu') return;
           this.musicErrorCount = 0;
@@ -1293,6 +1295,14 @@ export class AudioManager {
 
   private currentPlaylistAudio(): HTMLAudioElement | null {
     return this.musicContext === 'menu' ? this.menuMusicAudio : this.musicContext === 'gameplay' ? this.musicAudio : null;
+  }
+
+  private bindMusicFadeClock(audio: HTMLAudioElement): void {
+    // Media keeps playing when Phaser's rendering loop sleeps. Its own clock
+    // must finish the next song's fade-in instead of leaving it at volume zero.
+    audio.addEventListener('timeupdate', () => {
+      if (this.currentPlaylistAudio() === audio) this.updateMusicFade();
+    });
   }
 
   private updateMusicFade(): void {
