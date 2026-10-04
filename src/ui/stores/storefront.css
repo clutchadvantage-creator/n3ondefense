@@ -32,8 +32,13 @@
 .store-categories,.store-grid-panel,.store-details { min-height:0; box-sizing:border-box; }
 .store-categories { position:relative; padding:28px 16px 22px; border-right:1px solid rgba(95,207,239,.24); background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 5%,rgba(3,10,19,.78)),rgba(3,10,19,.74)); overflow:auto; }
 .store-categories h2,.store-panel-heading h2 { margin:0 8px 14px; color:#87a9bd; font:700 .72rem 'Orbitron'; letter-spacing:.18em; }
-.store-categories button { width:100%; min-height:54px; display:grid; grid-template-columns:8px minmax(0,1fr) auto; gap:11px; align-items:center; margin:0 0 9px; padding:10px 12px; border:1px solid transparent; background:transparent; color:#bad3e2; text-align:left; font:600 .95rem/1.25 'Rajdhani'; cursor:pointer; }
-.store-categories button.has-system-icon { grid-template-columns:6px 24px minmax(0,1fr) auto;gap:8px; }
+.store-categories button { box-sizing:border-box; width:100%; min-height:54px; display:block; margin:0 0 9px; padding:10px 12px; border:1px solid transparent; background:transparent; color:#bad3e2; text-align:left; font:600 .95rem/1.25 'Rajdhani'; cursor:pointer; }
+/* Keep totals below their labels so every category fits the narrow sidebar. */
+.store-categories button.has-system-icon { display:grid; grid-template-columns:6px 24px minmax(0,1fr); grid-template-areas:'indicator icon label' 'indicator icon count'; gap:3px 8px; align-items:center; }
+.store-categories button.has-system-icon > i { grid-area:indicator; }
+.store-categories button.has-system-icon > .store-category-icon { grid-area:icon; }
+.store-categories button.has-system-icon > span { grid-area:label; min-width:0; overflow-wrap:anywhere; }
+.store-categories button.has-system-icon > small { grid-area:count; white-space:nowrap; }
 .store-category-icon { width:23px;height:23px;fill:none;stroke:#5ef4ff;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;opacity:.68;filter:drop-shadow(0 0 4px rgba(94,244,255,.26)); }
 .store-categories button:hover .store-category-icon,.store-categories button:focus-visible .store-category-icon,.store-categories button.active .store-category-icon { opacity:1;filter:drop-shadow(0 0 7px rgba(94,244,255,.55)); }
 .store-categories button i { width:6px; height:22px; background:#32536a; }.store-categories button small { color:#6f8da1;font-size:.7rem; }
