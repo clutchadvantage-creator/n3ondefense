@@ -60,13 +60,18 @@ export class WorldEventRotation {
     // Rerolling here would bias the pool against events with larger footprints.
     this.state.pending = key(choice);
     if (start(choice)) {
-      this.state.lastStarted = key(choice);
+      // A portal is an offer. Its actual destination is recorded upon entry.
+      if (choice.kind === 'arcade') this.state.lastStarted = key(choice);
       this.state.pending = undefined;
       this.state.remainingMs = WORLD_EVENT_TIMING.cooldownMs;
     } else this.state.remainingMs = WORLD_EVENT_TIMING.placementRetryMs;
   }
 
   get snapshot(): WorldEventRotationState { return { ...this.state }; }
+
+  recordAnomalyEntry(id: AnomalyId): void {
+    this.state.lastStarted = `anomaly:${id}`;
+  }
 
   private roll(): number {
     const random = new SeededRandom((this.seed ^ Math.imul(++this.state.drawIndex, 0x9e3779b1) ^ 0x7a11cade) >>> 0);

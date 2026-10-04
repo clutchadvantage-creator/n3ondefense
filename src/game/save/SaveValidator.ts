@@ -14,6 +14,7 @@ import { DEFAULT_CONTROLLER_SETTINGS, normalizeControllerSettings } from '../con
 import { DEFAULT_LYRA_SETTINGS, normalizeLyraSettings } from '../lyra/LyraTypes.ts';
 import { normalizeCampaignProgress } from '../progression/CampaignSaveNormalizer.ts';
 import { migrateLegacyCampaignProgress } from '../progression/CampaignLegacyMigration.ts';
+import { normalizeAccessCards } from '../anomalies/AnomalyAccessCards.ts';
 
 const defaultSettings: LocalPlayerSettings = {
   lyra: { ...DEFAULT_LYRA_SETTINGS },
@@ -248,6 +249,7 @@ export const createDefaultLocalSave = (profileId: string, profileName: string, s
   const legacyTokens = typeof source?.coreTokens === 'number' ? source.coreTokens : 0;
   const progress = normalizeProgress(source?.progress);
   const save: LocalPlayerSave = {
+    accessCards: normalizeAccessCards(source?.accessCards),
     version: CURRENT_SAVE_VERSION,
     profile: {
       id: profileId,
@@ -364,7 +366,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === 12 || version === 13 || version === 14 || version === 15 || version === 16 || version === 17 || version === 18 || version === CURRENT_SAVE_VERSION) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === 12 || version === 13 || version === 14 || version === 15 || version === 16 || version === 17 || version === 18 || version === 19 || version === CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;
@@ -404,6 +406,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
   if (!current.profile.createdAt || !current.profile.lastPlayedAt) return null;
   if (!Object.keys(current.upgrades ?? {}).every((id) => upgradeIds.has(id))) return null;
 
+  current.accessCards = normalizeAccessCards(input.accessCards);
   current.mods = normalizeModCollection(current.mods);
   current.garage = normalizeGarageState(current.garage);
   current.protocol = normalizeProtocolPreference(current.protocol, current.progress?.normalHighestRound ?? 0, version >= 19 ? current.progress?.campaign : undefined);

@@ -10,6 +10,9 @@ import { createPremiumTurretSkinSvg } from './PremiumTurretSkinSvg.ts';
 import { createMineFrameSvg } from '../../game/cosmetics/MineFrameArt.ts';
 import { createPremiumProjectileShapeSvg } from '../../game/cosmetics/PremiumProjectileShapeArt.ts';
 import './storefront.css';
+import { createAccessCardView } from '../AnomalyAccessCardView.ts';
+import { ACCESS_CARD_TYPES, ACCESS_CARD_PRICE, ACCESS_CARD_DAILY_LIMIT, type AnomalyAccessCards } from '../../game/anomalies/AnomalyAccessCards.ts';
+import type { AnomalyId } from '../../game/anomalies/types.ts';
 
 export type StoreMode = 'cosmetics' | 'upgrades';
 
@@ -31,6 +34,8 @@ interface StoreScrollState {
 }
 
 export interface StorefrontUiOptions {
+  getAccessCards?(): AnomalyAccessCards;
+  onPurchaseAccessCard?(id: AnomalyId): StoreActionResult;
   root: HTMLElement;
   mode: StoreMode;
   cosmetics?: CosmeticOption[];
@@ -63,6 +68,7 @@ export class StorefrontUi {
   private dialogOpen = false;
   private walletFeedback: { credits: number; coreTokens: number; plasmaChips: number } | null = null;
   private screen: HTMLElement | null = null;
+  private cardDayTimer: number | undefined;
   private readonly keyHandler = (event: KeyboardEvent): void => this.handleKey(event);
 
   constructor(options: StorefrontUiOptions) {
@@ -73,9 +79,20 @@ export class StorefrontUi {
     this.options.root.querySelector<HTMLElement>('.storefront-screen')?.remove();
     window.addEventListener('keydown', this.keyHandler);
     this.render();
+    if (options.getAccessCards) {
+      let day = options.getAccessCards().day;
+      this.cardDayTimer = window.setInterval(() => {
+        const current = options.getAccessCards!().day;
+        if (current !== day) {
+          day = current;
+          if (this.selectedCategory === 'access-cards') this.render();
+        }
+      }, 1000);
+    }
   }
 
   destroy(): void {
+    window.clearInterval(this.cardDayTimer);
     window.removeEventListener('keydown', this.keyHandler);
     this.screen?.remove();
     this.screen = null;
@@ -101,7 +118,7 @@ export class StorefrontUi {
     const values = this.options.mode === 'cosmetics'
       ? (this.options.cosmetics ?? []).map((item) => item.category)
       : (this.options.upgrades ?? []).map((item) => item.category);
-    return [...new Set(values)];
+    return [...new Set(values), ...(this.options.mode === 'upgrades' && this.options.onPurchaseAccessCard ? ['access-cards'] : [])];
   }
 
   private getVisibleItems(): Array<CosmeticOption | UpgradeDefinition> {
@@ -253,8 +270,36 @@ export class StorefrontUi {
   private renderBody(snapshot: StoreSnapshot): HTMLElement {
     const body = document.createElement('div');
     body.className = 'store-body';
-    body.append(this.renderCategories(snapshot), this.renderGrid(snapshot), this.renderDetails(snapshot));
+    body.append(this.renderCategories(snapshot));
+    if (this.selectedCategory === 'access-cards') body.append(this.renderAccessCards(snapshot));
+    else body.append(this.renderGrid(snapshot), this.renderDetails(snapshot));
     return body;
+  }
+
+  private renderAccessCards(snapshot: StoreSnapshot): HTMLElement {
+    const panel = document.createElement('section'); panel.className = 'access-card-panel';
+    const state = this.options.getAccessCards!();
+    const heading = document.createElement('h2'); heading.textContent = 'ANOMALY ACCESS CARDS';
+    const detail = document.createElement('p');
+    detail.textContent = 'Consumable clearance. Choose an anomaly at an existing portal and bypass its Flux fee. Cards never spawn portals and cannot repeat the last event played.';
+    const limits = document.createElement('p');
+    limits.textContent = `Today: ${state.purchases} / 3 purchased · ${state.uses} / 3 used · Resets at 00:00 UTC`;
+    const feedback = document.createElement('p'); feedback.setAttribute('role', 'status'); feedback.textContent = this.message;
+    const grid = document.createElement('div'); grid.className = 'access-card-grid';
+    for (const id of ACCESS_CARD_TYPES) {
+      const tile = document.createElement('div'); tile.append(createAccessCardView(id, state.owned[id]));
+      const buy = document.createElement('button'); buy.type = 'button';
+      buy.textContent = state.purchases >= ACCESS_CARD_DAILY_LIMIT ? 'DAILY PURCHASE LIMIT REACHED' : `BUY · ${ACCESS_CARD_PRICE.toLocaleString()} CREDITS`;
+      buy.disabled = state.purchases >= ACCESS_CARD_DAILY_LIMIT || snapshot.credits < ACCESS_CARD_PRICE;
+      buy.dataset.controllerFocusId = `buy-access-${id}`;
+      buy.addEventListener('click', () => {
+        const result = this.options.onPurchaseAccessCard!(id);
+        this.message = result.message ?? (result.ok ? 'CARD PURCHASED' : 'PURCHASE UNAVAILABLE');
+        this.render();
+      });
+      tile.append(buy); grid.append(tile);
+    }
+    panel.append(heading, detail, limits, feedback, grid); return panel;
   }
 
   private renderCategories(snapshot: StoreSnapshot): HTMLElement {
@@ -264,6 +309,15 @@ export class StorefrontUi {
     heading.textContent = this.options.mode === 'cosmetics' ? 'CATEGORIES' : 'SYSTEMS';
     nav.append(heading);
     for (const category of this.getCategories()) {
+      if (category === 'access-cards') {
+        const button = document.createElement('button'); button.type = 'button';
+        button.className = `store-category-tab${category === this.selectedCategory ? ' active' : ''}`;
+        button.textContent = 'ACCESS CARDS'; button.setAttribute('role','tab');
+        button.setAttribute('aria-selected', String(category === this.selectedCategory));
+        button.dataset.controllerTabGroup = 'store-category'; button.dataset.controllerFocusId = 'store-category-access-cards';
+        button.addEventListener('click', () => { this.selectedCategory = category; this.message = ''; this.render(false); });
+        nav.append(button); continue;
+      }
       let complete: number;
       let total: number;
       if (this.options.mode === 'cosmetics') {

@@ -37,6 +37,8 @@ import { walletState, type WalletChangeListener, type WalletSnapshot } from '../
 import { resolveOperationsConfiguration, selectOperationsCheckpoint } from '../progression/OperationsConfiguration.ts';
 import { getPendingCampaignPackages, recordCampaignTrainingCompletion, recordCampaignVictory, type CampaignEncounterKind } from '../progression/CampaignProgression.ts';
 import { prepareCampaignRewardPackages, type PreparedCampaignPackages } from '../progression/CampaignRewardPackages.ts';
+import { ACCESS_CARD_PRICE, ACCESS_CARD_DAILY_LIMIT, ACCESS_CARD_TYPES, normalizeAccessCards, accessCardUseError } from '../anomalies/AnomalyAccessCards.ts';
+import type { AnomalyId } from '../anomalies/types.ts';
 
 export interface PurchaseResult {
   ok: boolean;
@@ -72,6 +74,41 @@ export class PlayerProfileStore {
 
   static getWalletSnapshot(): WalletSnapshot {
     return PlayerProfileStore.walletSnapshot(PlayerProfileStore.getActiveSave());
+  }
+
+  static getAccessCards() { return normalizeAccessCards(PlayerProfileStore.getActiveSave().accessCards); }
+
+  static purchaseAccessCard(id: AnomalyId): PurchaseResult {
+    return PlayerProfileStore.accessCardTransaction(id, false);
+  }
+
+  static useAccessCard(id: AnomalyId, lastStarted?: string): PurchaseResult {
+    return PlayerProfileStore.accessCardTransaction(id, true, lastStarted);
+  }
+
+  private static accessCardTransaction(id: AnomalyId, use: boolean, lastStarted?: string): PurchaseResult {
+    if (!ACCESS_CARD_TYPES.includes(id)) return { ok: false, message: 'UNKNOWN ACCESS CARD' };
+    const previous = PlayerProfileStore.getActiveSave();
+    const candidate = structuredClone(previous);
+    candidate.accessCards = normalizeAccessCards(candidate.accessCards);
+    const cards = candidate.accessCards;
+    if (use) {
+      const error = accessCardUseError(cards, id, lastStarted);
+      if (error) return { ok: false, message: error };
+      cards.owned[id]--; cards.uses++;
+    } else {
+      if (cards.purchases >= ACCESS_CARD_DAILY_LIMIT) return { ok: false, message: 'DAILY PURCHASE LIMIT REACHED' };
+      if (!spendCreditsAtomic(candidate.wallet, candidate.progress, ACCESS_CARD_PRICE, 'other'))
+        return { ok: false, message: 'NEED 50,000 CREDITS' };
+      cards.owned[id]++; cards.purchases++;
+    }
+    PlayerProfileStore.activeSave = candidate;
+    if (!PlayerProfileStore.save(true)) {
+      PlayerProfileStore.activeSave = previous;
+      walletState.publish(PlayerProfileStore.walletSnapshot(previous));
+      return { ok: false, message: 'LOCAL SAVING UNAVAILABLE — CARD TRANSACTION CANCELLED' };
+    }
+    return { ok: true, message: use ? 'ACCESS GRANTED' : 'ACCESS CARD PURCHASED' };
   }
 
   static subscribeWalletChanges(listener: WalletChangeListener, emitCurrent = true): () => void {
@@ -900,7 +937,7 @@ export class PlayerProfileStore {
     PlayerProfileStore.save();
   }
 
-  static save(): boolean {
+  static save(requirePersistent = false): boolean {
     const save = PlayerProfileStore.getActiveSave();
     const now = Date.now();
     const deltaSeconds = Math.max(0, Math.floor((now - PlayerProfileStore.lastPlaytimeCommitAt) / 1000));
@@ -910,7 +947,7 @@ export class PlayerProfileStore {
     }
     save.metadata.updatedAt = new Date().toISOString();
     save.metadata.saveRevision += 1;
-    const result = LocalSaveManager.importProfile(save, 'replace', save.profile.id);
+    const result = LocalSaveManager.importProfile(save, 'replace', save.profile.id, requirePersistent);
     if (!result.ok) {
       PlayerProfileStore.markNotice('LOCAL SAVING UNAVAILABLE');
     } else {

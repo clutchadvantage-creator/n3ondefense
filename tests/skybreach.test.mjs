@@ -11,12 +11,12 @@ test('SkyBreach director visits every authored module once, with recovery and a 
   for(let i=0;i<3000;i++)director.update(.1,(m,n)=>entered.push(n),m=>waves.push(m));
   assert.deepEqual(entered,SKY_FLIGHT.map((_,i)=>i));
   assert.ok(director.complete);
-  assert.ok(waves.length>20&&waves.length<40);
+  assert.ok(waves.length>=40&&waves.length<=60);
   assert.ok(waves.every(m=>!m.recovery));
-  assert.equal(waves.filter(m=>m.role==='zeppelin').length,1);
+  assert.ok(waves.filter(m=>m.role==='zeppelin').length>1,'heavy encounter keeps sending escorts');
   const length=waves.length;director.update(.1,()=>assert.fail('reentered finished flight'),m=>waves.push(m));
   assert.equal(waves.length,length);
-  assert.ok(SKY_FLIGHT.reduce((s,m)=>s+m.duration,0)>=240);
+  assert.ok(SKY_FLIGHT.reduce((s,m)=>s+m.duration,0)>=220);
 });
 
 test('Paused flight does not advance modules or spawn catch-up waves',()=>{
@@ -71,5 +71,5 @@ test('SkyBreach difficulty inherits the entering contract/curve while rewards re
   const mode=getProtocolModeBalance('normal');
   assert.ok(Math.abs(inherited.health-2.55*mode.enemyHealthMultiplier)<1e-9);
   assert.equal(inherited.damage,1.4*mode.enemyDamageMultiplier);
-  assert.equal(inherited.rewardMultiplier,1.6);assert.equal(inherited.activeCap,11);
+  assert.equal(inherited.rewardMultiplier,1.6);assert.equal(inherited.activeCap,14);
 });

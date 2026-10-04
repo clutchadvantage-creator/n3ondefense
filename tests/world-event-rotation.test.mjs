@@ -51,6 +51,7 @@ test('no immediate repeats across serialized round handoffs; an event may return
   const starts = [];
   for (let i = 0; i < 20; i++) {
     rotation.update(1, true, false, entry => { starts.push(entry.id); return true; });
+    rotation.recordAnomalyEntry(starts.at(-1));
     const state = normalizeWorldEventRotation(JSON.parse(JSON.stringify(rotation.snapshot)));
     assert.equal(state.lastStarted, `anomaly:${starts.at(-1)}`);
     rotation = new WorldEventRotation(4, pool.slice(-2), { ...state, remainingMs: 0 });

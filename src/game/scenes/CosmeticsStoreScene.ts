@@ -37,6 +37,8 @@ export class CosmeticsStoreScene extends Phaser.Scene {
     this.storefront = new StorefrontUi({
       root: getGameUiRoot(),
       mode: 'cosmetics',
+      getAccessCards: () => SaveSystem.getAccessCards(),
+      onPurchaseAccessCard: id => SaveSystem.purchaseAccessCard(id),
       cosmetics: COSMETICS,
       upgrades: UPGRADE_DEFINITIONS,
       particlesEnabled: save.settings.particles,

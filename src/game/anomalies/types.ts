@@ -94,6 +94,9 @@ export interface AnomalyRuntimeContext {
   interactionPrompt(): string;
   availableFluxCores(): number;
   spendFluxCores(amount: number): boolean;
+  lastStartedEvent?(): string | undefined;
+  recordAnomalyEntry?(id: AnomalyId): void;
+  setEntryChoiceOpen?(open: boolean): void;
   beginTransition(request: AnomalyEntryRequest): void;
   emitMetric(event: AnomalyMetricEvent): void;
 }

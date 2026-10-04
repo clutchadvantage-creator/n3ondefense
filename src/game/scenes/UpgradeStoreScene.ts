@@ -40,6 +40,8 @@ export class UpgradeStoreScene extends Phaser.Scene {
     this.storefront = new StorefrontUi({
       root: getGameUiRoot(),
       mode: 'upgrades',
+      getAccessCards: () => SaveSystem.getAccessCards(),
+      onPurchaseAccessCard: id => SaveSystem.purchaseAccessCard(id),
       upgrades: UPGRADE_DEFINITIONS,
       cosmetics: COSMETICS,
       particlesEnabled: save.settings.particles,

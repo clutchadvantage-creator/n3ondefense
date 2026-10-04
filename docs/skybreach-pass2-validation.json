@@ -1,0 +1,285 @@
+{
+  "automatedTests": {
+    "passed": 806,
+    "failed": 0
+  },
+  "productionBuild": "passed",
+  "method": "Assisted local DEV browser; not an unassisted balance assessment",
+  "runs": [
+    {
+      "fixture": "sky-pass2-browser",
+      "checks": 216,
+      "passed": true,
+      "errors": [],
+      "cases": [],
+      "samples": [
+        {
+          "mode": "normal",
+          "round": 4,
+          "difficulty": {
+            "localRound": 4,
+            "rewardPosition": 4,
+            "difficultyPosition": 4,
+            "health": 0.9082,
+            "damage": 0.7956,
+            "speed": 1.036,
+            "pressure": 1,
+            "activeCap": 14,
+            "formationCount": 3,
+            "bossHealth": 5472,
+            "bossDamage": 0.78,
+            "rewardMultiplier": 1
+          },
+          "frames": 180,
+          "mean": 16.604444444179535,
+          "p95": 17.700000047683716,
+          "highRatePlayerProjectiles": 17,
+          "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":756,\"height\":488,\"scrollX\":1407,\"scrollY\":293,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+        },
+        {
+          "mode": "overdrive",
+          "round": 16,
+          "difficulty": {
+            "localRound": 16,
+            "rewardPosition": 46,
+            "difficultyPosition": 46,
+            "health": 2.1,
+            "damage": 1.65,
+            "speed": 1.28,
+            "pressure": 1,
+            "activeCap": 24,
+            "formationCount": 4,
+            "bossHealth": 22400,
+            "bossDamage": 1.48,
+            "rewardMultiplier": 1
+          },
+          "frames": 180,
+          "mean": 16.60166666640176,
+          "p95": 18,
+          "highRatePlayerProjectiles": 17,
+          "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":756,\"height\":488,\"scrollX\":822,\"scrollY\":27.111111111111086,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+        },
+        {
+          "mode": "supreme",
+          "round": 26,
+          "difficulty": {
+            "localRound": 26,
+            "rewardPosition": 86,
+            "difficultyPosition": 136,
+            "health": 4.513320000000001,
+            "damage": 2.6202,
+            "speed": 1.4336000000000002,
+            "pressure": 1.22,
+            "activeCap": 24,
+            "formationCount": 7,
+            "bossHealth": 31360,
+            "bossDamage": 1.8055999999999999,
+            "rewardMultiplier": 1.9500000000000002
+          },
+          "frames": 180,
+          "mean": 16.612777777512868,
+          "p95": 17.700000047683716,
+          "highRatePlayerProjectiles": 17,
+          "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":756,\"height\":488,\"scrollX\":79,\"scrollY\":556,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+        }
+      ]
+    },
+    {
+      "fixture": "access-cards-browser",
+      "checks": 22,
+      "passed": true,
+      "errors": [],
+      "cases": [
+        {
+          "name": "store persistence, failure rollback, caps and daily reset",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "fixture": "sky-cards-rotation-browser",
+      "checks": 94,
+      "passed": true,
+      "errors": [],
+      "cases": [
+        {
+          "mode": "normal",
+          "round": 1,
+          "id": "golden-hunt",
+          "seed": 4
+        },
+        {
+          "mode": "normal",
+          "round": 1,
+          "id": "mini-boss",
+          "seed": 2
+        },
+        {
+          "mode": "normal",
+          "round": 1,
+          "id": "neon-circuit",
+          "seed": 8
+        },
+        {
+          "mode": "normal",
+          "round": 1,
+          "id": "hot-package",
+          "seed": 1
+        },
+        {
+          "mode": "normal",
+          "round": 1,
+          "id": "packet-snatcher",
+          "seed": 12
+        },
+        {
+          "mode": "normal",
+          "round": 1,
+          "id": "redline",
+          "seed": 5
+        },
+        {
+          "mode": "normal",
+          "round": 1,
+          "id": "heist",
+          "seed": 3
+        },
+        {
+          "mode": "normal",
+          "round": 1,
+          "id": "skybreach",
+          "seed": 14
+        },
+        {
+          "mode": "overdrive",
+          "round": 1,
+          "id": "golden-hunt",
+          "seed": 4
+        },
+        {
+          "mode": "overdrive",
+          "round": 1,
+          "id": "mini-boss",
+          "seed": 2
+        },
+        {
+          "mode": "overdrive",
+          "round": 1,
+          "id": "neon-circuit",
+          "seed": 8
+        },
+        {
+          "mode": "overdrive",
+          "round": 1,
+          "id": "hot-package",
+          "seed": 1
+        },
+        {
+          "mode": "overdrive",
+          "round": 1,
+          "id": "packet-snatcher",
+          "seed": 12
+        },
+        {
+          "mode": "overdrive",
+          "round": 1,
+          "id": "redline",
+          "seed": 5
+        },
+        {
+          "mode": "overdrive",
+          "round": 1,
+          "id": "heist",
+          "seed": 3
+        },
+        {
+          "mode": "overdrive",
+          "round": 1,
+          "id": "skybreach",
+          "seed": 14
+        },
+        {
+          "mode": "supreme",
+          "round": 1,
+          "id": "golden-hunt",
+          "seed": 4
+        },
+        {
+          "mode": "supreme",
+          "round": 1,
+          "id": "mini-boss",
+          "seed": 2
+        },
+        {
+          "mode": "supreme",
+          "round": 1,
+          "id": "neon-circuit",
+          "seed": 8
+        },
+        {
+          "mode": "supreme",
+          "round": 1,
+          "id": "hot-package",
+          "seed": 1
+        },
+        {
+          "mode": "supreme",
+          "round": 1,
+          "id": "packet-snatcher",
+          "seed": 12
+        },
+        {
+          "mode": "supreme",
+          "round": 1,
+          "id": "redline",
+          "seed": 5
+        },
+        {
+          "mode": "supreme",
+          "round": 1,
+          "id": "heist",
+          "seed": 3
+        },
+        {
+          "mode": "supreme",
+          "round": 1,
+          "id": "skybreach",
+          "seed": 14
+        }
+      ],
+      "samples": []
+    },
+    {
+      "fixture": "sky-pass2-final-browser",
+      "checks": 103,
+      "passed": true,
+      "errors": [],
+      "cases": [],
+      "samples": [
+        {
+          "mode": "normal",
+          "round": 4,
+          "difficulty": {
+            "localRound": 4,
+            "rewardPosition": 4,
+            "difficultyPosition": 4,
+            "health": 0.9082,
+            "damage": 0.7956,
+            "speed": 1.036,
+            "pressure": 1,
+            "activeCap": 14,
+            "formationCount": 3,
+            "bossHealth": 5472,
+            "bossDamage": 0.78,
+            "rewardMultiplier": 1
+          },
+          "frames": 180,
+          "mean": 16.58888888888889,
+          "p95": 18,
+          "highRatePlayerProjectiles": 18,
+          "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":756,\"height\":488,\"scrollX\":1425,\"scrollY\":288,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+        }
+      ]
+    }
+  ]
+}

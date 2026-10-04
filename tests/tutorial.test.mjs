@@ -76,7 +76,7 @@ test('older profiles safely migrate into optional tutorial and contextual-tip de
   delete legacy.settings.contextualTutorials;
   const migrated = normalizeLocalSave(legacy);
   assert.ok(migrated);
-  assert.equal(migrated.version, 19);
+  assert.equal(migrated.version, 20);
   assert.equal(migrated.settings.contextualTutorials, true);
   assert.deepEqual(migrated.tutorials.completedSequences, []);
   assert.equal(migrated.tutorials.replaySequenceId, null);

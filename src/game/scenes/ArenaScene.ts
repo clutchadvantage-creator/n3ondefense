@@ -118,7 +118,7 @@ import { createArenaFireTrapPlacements, resolveArenaFloorFirePlacement } from '.
 import { SharedFireTrapSystem } from '../hazards/SharedFireTrapSystem.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
-import { completeFirstRunTeachingRound, isInitialCombatTrainingPending } from '../tutorial/TutorialProgress.ts';
+import { completeFirstRunTeachingRound } from '../tutorial/TutorialProgress.ts';
 import type { TutorialMode, TutorialTargetBounds } from '../tutorial/TutorialTypes.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { nextPickupBuffStack, resourcePickupCap } from '../player/OverdriveRules.ts';
@@ -568,6 +568,7 @@ export class ArenaScene extends Phaser.Scene {
   private arcadeController: N3ONArcadeController | null = null;
   private anomalyController: AnomalyController | null = null;
   private worldEventRotation: WorldEventRotation | null = null;
+  private anomalyEntryChoiceOpen = false;
   private readonly anomalyReturnLifecycle = new AnomalyReturnLifecycle();
   private pendingAnomalyReturn: AnomalyReturnResult | null = null;
   private anomalyReturnAwaitingFirstUpdate = false;
@@ -971,6 +972,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   create(data?: ArenaSessionState | { session?: ArenaSessionState; transitionReason?: ArenaTransitionReason }): void {
+    this.anomalyEntryChoiceOpen = false;
     RunTransitionManager.markStep(this, 'arena-create-enter');
     this.cameras.main.setBackgroundColor(COLORS.bg);
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -5318,7 +5320,6 @@ export class ArenaScene extends Phaser.Scene {
       || (anomalyState !== undefined && anomalyState !== 'waiting' && anomalyState !== 'resolved');
     this.worldEventRotation?.update(deltaMs,
       !this.bossEncounter && !this.supremeFinale && this.roundRuntime.phase === 'active'
-      && !isInitialCombatTrainingPending(SaveSystem.getTutorialProgress(), SaveSystem.getCampaignProgress())
       && !this.tutorialHardPaused && !this.legendaryRevealInProgress
       && this.state.state !== RoundState.Paused && this.state.state !== RoundState.Victory
       && this.state.state !== RoundState.Defeat,
@@ -5349,6 +5350,19 @@ export class ArenaScene extends Phaser.Scene {
       interactionPrompt: () => this.playerInput.prompt('interact', 'E'),
       availableFluxCores: () => this.hudWalletFluxCores + this.roundFluxCores,
       spendFluxCores: (amount) => this.spendAnomalyEntryCost(amount),
+      lastStartedEvent: () => this.worldEventRotation?.snapshot.lastStarted,
+      recordAnomalyEntry: id => this.worldEventRotation?.recordAnomalyEntry(id),
+      setEntryChoiceOpen: open => {
+        this.anomalyEntryChoiceOpen=open;
+        this.clearGameplayInput();
+        if(open){
+          this.scene.pause();this.setMenuCursorMode();this.pointerLock?.release();this.pointerLock?.hidePrompt();
+          this.audio.pauseEventPresentationLoops();
+        }else{
+          this.scene.resume();this.setGameplayCursorMode();this.audio.resumeEventPresentationLoops();
+          if(this.playerInput.activeDevice!=='gamepad')this.pointerLock?.requestLock();
+        }
+      },
       beginTransition: (request) => this.beginAnomalyTransition(request),
       emitMetric: (event) => recordAnomalyMetric(event)
     }, {
@@ -8331,6 +8345,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private pauseForPointerLock(reason: 'initial' | 'unlock' | 'blur' | 'hidden' | 'error'): void {
+    if (this.anomalyEntryChoiceOpen) { this.pointerLock?.hidePrompt(); return; }
     if (this.state.state === RoundState.Victory || this.state.state === RoundState.Defeat) return;
     if (this.bossFlowPhase === 'loot-collection') {
       this.pointerLock?.hidePrompt();

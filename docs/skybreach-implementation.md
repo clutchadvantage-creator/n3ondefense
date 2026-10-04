@@ -1,5 +1,7 @@
 # SkyBreach — first implementation pass
 
+**Historical first pass:** [SkyBreach Pass 2 and Access Cards](skybreach-pass2.md) supersedes the free aim, fence support, pacing, scale, durability, and portal-entry behavior below.
+
 SkyBreach is a second paid anomaly in the existing Arena opportunity registry. It suspends the current Arena, runs an aerial encounter, and returns through the same guarded success/failure lifecycle as HEIST. It does not advance campaign rounds or award a campaign boss checkpoint. LYRA, recorded voice, and TTS remain disabled.
 
 ## Architecture and reuse

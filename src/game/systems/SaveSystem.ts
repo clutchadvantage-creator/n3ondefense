@@ -227,6 +227,9 @@ export class SaveSystem {
   static getHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.highestRound; }
   static getNormalHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.normalHighestRound; }
   static getCampaignProgress() { return PlayerProfileStore.getActiveSave().progress.campaign; }
+  static getAccessCards() { return PlayerProfileStore.getAccessCards(); }
+  static purchaseAccessCard(id: import('../anomalies/types.ts').AnomalyId) { return PlayerProfileStore.purchaseAccessCard(id); }
+  static useAccessCard(id: import('../anomalies/types.ts').AnomalyId, lastStarted?: string) { return PlayerProfileStore.useAccessCard(id, lastStarted); }
   static getSupremeHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.supremeHighestRound; }
   static hasCompletedSupremeOverdrive(): boolean { return PlayerProfileStore.getActiveSave().progress.supremeOverdriveCompleted; }
   static getWeeklyOperations(nowMs = Date.now()) { return PlayerProfileStore.getWeeklyOperations(nowMs); }

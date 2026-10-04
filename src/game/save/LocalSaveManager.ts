@@ -297,13 +297,13 @@ export class LocalSaveManager {
     return { ok: true, preview };
   }
 
-  static importProfile(raw: unknown, mode: 'new' | 'replace', targetProfileId?: string): SaveOperationResult {
+  static importProfile(raw: unknown, mode: 'new' | 'replace', targetProfileId?: string, requirePersistent = false): SaveOperationResult {
     const migrated = migrateUnknownSave(raw, getExistingNames(LocalSaveManager.ensureLoaded()));
     if (!migrated) return { ok: false, message: 'That file could not be imported.' };
 
     if (mode === 'replace' && targetProfileId) {
       migrated.profile.id = targetProfileId;
-      const replaceResult = LocalSaveManager.writeProfile(migrated, true);
+      const replaceResult = LocalSaveManager.writeProfile(migrated, true, requirePersistent);
       if (!replaceResult.ok) return replaceResult;
       LocalSaveManager.index.activeProfileId = targetProfileId;
       writeIndex(LocalSaveManager.index);
@@ -362,14 +362,25 @@ export class LocalSaveManager {
     return normalizeLocalSave(parseJson(readStorage(profileKey(profileId))));
   }
 
-  private static writeProfile(save: LocalPlayerSave, createBackup: boolean): SaveOperationResult {
+  private static writeProfile(save: LocalPlayerSave, createBackup: boolean, requirePersistent = false): SaveOperationResult {
     const currentRaw = readStorage(profileKey(save.profile.id));
     const current = normalizeLocalSave(parseJson(currentRaw));
     if (createBackup && currentRaw && current) {
       writeStorage(backupKey(save.profile.id), currentRaw);
     }
 
-    writeStorage(profileKey(save.profile.id), JSON.stringify(save));
+    const serialized = JSON.stringify(save);
+    if (requirePersistent) {
+      // Consumables must reach durable storage before granting ownership/entry.
+      // A readable older save or the session-only fallback is not a successful write.
+      try {
+        window.localStorage.setItem(profileKey(save.profile.id), serialized);
+        if (window.localStorage.getItem(profileKey(save.profile.id)) !== serialized)
+          return { ok: false, message: 'The browser rejected the save write.' };
+      } catch {
+        return { ok: false, message: 'The browser rejected the save write.' };
+      }
+    } else writeStorage(profileKey(save.profile.id), serialized);
     const verified = normalizeLocalSave(parseJson(readStorage(profileKey(save.profile.id))));
     if (!verified) {
       if (currentRaw && current) {

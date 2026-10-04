@@ -117,6 +117,38 @@ export function ensureSkyArt(scene: Phaser.Scene): void {
   bake('sky-zeppelin',360,250,zeppelin);
   bake('sky-dreadnought',900,420,dreadnought);
   for(const type of ['cannon','missile','core'])bake(`sky-${type}`,128,128,c=>hardpoint(c,type));
+  bake('sky-aa',128,128,c=>{
+    hardpoint(c,'cannon');
+    // Armored twin barrel, range-finder and amber clearance lights.
+    c.resetTransform();c.translate(64,64);
+    polygon(c,[-27,-15,-19,-29,19,-29,27,-15,24,18,-24,18],metal(c,-27,54));
+    vent(c,-17,-16,34,6);lamp(c,-22,10,9,4,'#ffbe67');lamp(c,13,10,9,4,'#ffbe67');
+  });
+  bake('sky-aa-platform',180,220,c=>{
+    polygon(c,[24,12,156,12,174,34,174,191,149,212,29,212,6,186,6,36],metal(c,6,168));
+    polygon(c,[29,29,150,29,155,181,139,196,36,196,22,179], '#102335');
+    c.strokeStyle='#637e8d';c.lineWidth=3;c.beginPath();c.arc(90,110,50,0,Math.PI*2);c.stroke();
+    for(const x of [13,159])for(let y=45;y<184;y+=22)lamp(c,x,y,7,8,'#dc973f');
+    vent(c,56,37,68,5);vent(c,56,166,68,5);
+    c.strokeStyle='#7eacb7';c.setLineDash([9,7]);c.strokeRect(37,67,106,86);
+  });
+  bake('sky-superstructure',320,640,c=>{
+    polygon(c,[20,40,256,40,300,90,300,580,251,623,16,623,3,570,3,90],metal(c,0,300,'#334b5d'));
+    for(let row=0;row<4;row++){
+      const y=74+row*127;
+      polygon(c,[30,y,240,y,271,y+24,271,y+102,31,y+102], '#102234');
+      vent(c,49,y+18,91,14);vent(c,159,y+18,73,14);
+      for(let j=0;j<5;j++)lamp(c,47+j*39,y+88,15,3,row%2?'#578997':'#a97743');
+    }
+    // Elevated service bridges, cabling and antenna masts.
+    c.strokeStyle='#63808c';c.lineWidth=3;
+    for(const x of [39,232]){c.beginPath();c.moveTo(x,92);c.lineTo(x,0);c.stroke();lamp(c,x-3,9,6,6,'#eb8863');}
+    for(const y of [182,434]){
+      c.fillStyle='#334c5d';c.fillRect(12,y,290,17);
+      c.strokeStyle='#7b929a';for(let x=18;x<293;x+=17)c.strokeRect(x,y-4,12,25);
+    }
+    c.strokeStyle='#08111f';c.lineWidth=5;c.strokeRect(15,56,271,553);
+  });
   bake('sky-rotor',64,64,c=>{
     c.translate(32,32);c.strokeStyle='#91a6b3';c.lineWidth=2;c.beginPath();c.arc(0,0,29,0,Math.PI*2);c.stroke();
     for(let i=0;i<4;i++){c.rotate(Math.PI/2);polygon(c,[-3,-3,2,-26,8,-23,6,3],metal(c,-3,12));}
@@ -165,6 +197,8 @@ export function ensureSkyArt(scene: Phaser.Scene): void {
 export class SkyBreachWorld {
   private readonly layers: Phaser.GameObjects.TileSprite[];
   private readonly platforms: Phaser.GameObjects.Image[];
+  private readonly structures: Phaser.GameObjects.Image[];
+  private readonly edgeClouds: Phaser.GameObjects.TileSprite;
   private scroll = 0;
   constructor(scene:Phaser.Scene, width:number,height:number) {
     ensureSkyArt(scene);
@@ -173,12 +207,22 @@ export class SkyBreachWorld {
       scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-18).setAlpha(.8),
       scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-12).setAlpha(.4).setTileScale(1.7)
     ];
+    this.structures=[-1,1].flatMap(side=>Array.from({length:4},(_,i)=>scene.add.image(
+      side<0?-42:width+42,i*height/3-180,'sky-superstructure')
+      .setDisplaySize(240,480).setFlipX(side>0).setAlpha(.76).setDepth(-17)));
+    this.edgeClouds=scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-11).setAlpha(.18).setTileScale(2.3);
     this.platforms=[.13,.86,.32].map((x,i)=>scene.add.image(width*x,-i*height*.48,'sky-platform')
       .setDisplaySize(100,136).setAlpha(.45).setDepth(-16));
   }
+  resize(width:number,height:number):void {
+    for(const layer of this.layers)layer.setSize(width,height);
+    this.edgeClouds.setSize(width,height);
+  }
   update(dt:number,height:number):void {
     this.scroll+=dt;
-    this.layers.forEach((layer,i)=>{layer.tilePositionY-=dt*(12+i*17);layer.tilePositionX=Math.sin(this.scroll/30+i)*30;});
-    this.platforms.forEach(p=>{p.y+=dt*42;if(p.y>height+160)p.y=-200;});
+    this.layers.forEach((layer,i)=>{layer.tilePositionY-=dt*(14+i*20);layer.tilePositionX=Math.sin(this.scroll/30+i)*30;});
+    this.platforms.forEach(p=>{p.y+=dt*49;if(p.y>height+160)p.y=-200;});
+    this.structures.forEach(p=>{p.y+=dt*36;if(p.y>height+300)p.y-=height+640;});
+    this.edgeClouds.tilePositionY-=dt*64;
   }
 }

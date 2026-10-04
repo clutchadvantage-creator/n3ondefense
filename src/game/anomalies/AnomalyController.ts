@@ -10,6 +10,10 @@ import {
 } from './AnomalyRegistry.ts';
 import type { AnomalyDefinition, AnomalyId, AnomalyRuntimeContext, AnomalyState } from './types.ts';
 import { ANOMALY_ENTRY_PRICING, isValidAnomalyEntryCost, normalizeAnomalyEntryCost, rollAnomalyEntryCost } from './AnomalyPricing.ts';
+import { SaveSystem } from '../systems/SaveSystem.ts';
+import { AnomalyEntryDialog } from '../../ui/AnomalyEntryDialog.ts';
+import { accessCardUseError } from './AnomalyAccessCards.ts';
+import { ANOMALY_SCENES } from './AnomalyScenes.ts';
 
 export interface AnomalyControllerOptions {
   enabled: boolean;
@@ -36,6 +40,7 @@ export class AnomalyController {
   private cost: number = ANOMALY_ENTRY_PRICING.defaultCost;
   private forcedCost: number | null = null;
   private destroyed = false;
+  private entryDialog: AnomalyEntryDialog | null = null;
 
   constructor(private readonly context: AnomalyRuntimeContext, private readonly options: AnomalyControllerOptions) {
     this.random = new SeededRandom((context.seed ^ Math.imul(context.round, 0x6d2b79f5) ^ 0xa1104a1f) >>> 0);
@@ -82,7 +87,7 @@ export class AnomalyController {
           this.hud.show('DIMENSIONAL BREACH FORMING', 'STAND CLEAR // TRANSIT FIELD UNSTABLE', 0x63f7ff);
         } else {
           this.hud.show(`ANOMALY // ${this.definition?.displayName ?? 'UNKNOWN'}`, `${this.context.interactionPrompt()} ENTER // ${this.cost} FLUX CORES`, 0xff5bd8);
-          if (this.context.isInteractPressed()) this.tryEnter();
+          if (this.context.isInteractPressed()) this.openEntryChoices();
         }
       } else {
         this.hud.show('ANOMALY AVAILABLE', `${this.definition?.displayName ?? 'HEIST'} // ${this.cost} FLUX CORES`, 0xff5bd8);
@@ -207,10 +212,35 @@ export class AnomalyController {
     });
   }
 
-  private tryEnter(options: { bypassCost?: boolean; source?: 'dev-hotkey' } = {}): boolean {
+  private openEntryChoices(): void {
+    if (this.entryDialog || !this.definition || !this.context.isGameplayEligible()) return;
+    this.context.setEntryChoiceOpen?.(true);
+    this.entryDialog = new AnomalyEntryDialog(this.definition.id,this.cost,this.context.availableFluxCores(),
+      SaveSystem.getAccessCards(),this.context.lastStartedEvent?.(),()=>this.closeEntryChoices(),card=>{
+        if(card){
+          const error=accessCardUseError(SaveSystem.getAccessCards(),card,this.context.lastStartedEvent?.());
+          if(error)return {ok:false,message:error};
+        }
+        const ok=this.tryEnter({card});
+        if(ok)this.closeEntryChoices();
+        return {ok,message:ok?'ACCESS GRANTED':'ENTRY UNAVAILABLE — CHECK BALANCE AND LOCAL SAVING'};
+      });
+  }
+
+  private closeEntryChoices(resume=true):void {
+    if(!this.entryDialog)return;
+    this.entryDialog.destroy();this.entryDialog=null;
+    if(resume)this.context.setEntryChoiceOpen?.(false);
+  }
+
+  private tryEnter(options: { bypassCost?: boolean; source?: 'dev-hotkey'; card?: AnomalyId } = {}): boolean {
     if (this.stateValue !== 'portal-ready' || !this.definition || !this.visual || !this.visual.readyForInteraction) return false;
     if (!isValidAnomalyEntryCost(this.cost)) return false;
-    if (!options.bypassCost
+    const destination=options.card??this.definition.id;
+    if(!this.context.isGameplayEligible() || !this.context.scene.scene.get(ANOMALY_SCENES[destination]))return false;
+    if(this.context.lastStartedEvent?.()===`anomaly:${destination}`)return false;
+    if(options.card && !SaveSystem.useAccessCard(options.card,this.context.lastStartedEvent?.()).ok)return false;
+    if (!options.bypassCost && !options.card
       && (this.context.availableFluxCores() < this.cost || !this.context.spendFluxCores(this.cost))) {
       this.hud.show('ACCESS DENIED', `INSUFFICIENT FLUX CORES // ${this.context.availableFluxCores()} / ${this.cost}`, 0xff5f7c, 1800);
       this.context.emitMetric({ name: 'anomaly_entry_denied', anomalyId: this.definition.id, round: this.context.round,
@@ -219,12 +249,14 @@ export class AnomalyController {
     }
     if (options.bypassCost && import.meta.env.DEV) console.debug('[ANOMALY DEV] Portal cost bypassed via F9');
     this.stateValue = 'transitioning';
+    this.definition=ANOMALY_BY_ID.get(destination)!;
+    this.context.recordAnomalyEntry?.(destination);
     this.transitionStartedAt = this.context.scene.time.now;
     this.context.player.setVelocity(0, 0);
     this.audio.play('portal-entry');
     this.context.emitMetric({ name: 'anomaly_entry_confirmed', anomalyId: this.definition.id, round: this.context.round,
       protocol: this.context.protocol, elapsedMs: this.elapsedMs - this.spawnedAt, cost: this.cost,
-      reason: options.source });
+      reason: options.card ? 'access-card' : options.source });
     this.hud.show('ANOMALY TRANSIT LOCKED', `ARENA STATE SUSPENDING // ${this.definition.displayName} LINK ESTABLISHED`, 0xff5bd8);
     return true;
   }
@@ -258,6 +290,7 @@ export class AnomalyController {
   }
 
   private resolve(_reason: 'declined' | 'round-ended' | 'scene-shutdown'): void {
+    this.closeEntryChoices(_reason!=='scene-shutdown');
     if (this.stateValue === 'resolved' && !this.visual) return;
     this.visual?.destroy();
     this.visual = null;

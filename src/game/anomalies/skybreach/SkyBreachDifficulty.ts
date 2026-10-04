@@ -20,7 +20,7 @@ export function skyBreachDifficulty(session: HeistSessionData) {
     damage: curve.damageMultiplier * mode.enemyDamageMultiplier,
     speed: curve.speedMultiplier * mode.enemySpeedMultiplier,
     pressure: mode.activePressureMultiplier,
-    activeCap: Math.max(5, Math.min(24, Math.round(curve.activeCount * mode.activePressureMultiplier))),
+    activeCap: Math.max(9, Math.min(24, Math.round(curve.activeCount * mode.activePressureMultiplier) + 3)),
     formationCount: Math.max(3, Math.min(7, Math.round(3 + positions.difficultyPosition / 35))),
     bossHealth: getBossHealth(positions.difficultyPosition, family) * curve.contractHealthMultiplier,
     bossDamage: getBossDamageMultiplier(positions.difficultyPosition, family),

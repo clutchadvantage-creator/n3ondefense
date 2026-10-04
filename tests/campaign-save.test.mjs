@@ -19,7 +19,7 @@ test('new saves cannot unlock modes through old global high-water statistics', (
   save.progress.normalHighestRound = 148;
   save.progress.regularOverdriveCompleted = true;
   const restored = reload(save);
-  assert.equal(restored.version, 19);
+  assert.equal(restored.version, 20);
   assert.equal(isCampaignModeUnlocked(restored.progress.campaign, 'overdrive'), false);
   assert.equal(isCampaignModeUnlocked(restored.progress.campaign, 'supreme'), false);
   assert.deepEqual(getCampaignStartRounds(restored.progress.campaign, 'normal'), [1]);

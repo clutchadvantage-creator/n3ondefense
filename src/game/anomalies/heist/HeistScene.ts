@@ -935,7 +935,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
         duration: 310, onComplete: () => echo.destroy() });
     }
 
-    if (this.inputController.pressed('selectFence')) this.abilityState.selectedAbility = 'fence';
+    if (this.supportsFences && this.inputController.pressed('selectFence')) this.abilityState.selectedAbility = 'fence';
     if (this.inputController.pressed('selectTurret')) this.abilityState.selectedAbility = 'turret';
     if (this.inputController.pressed('selectMine')) this.abilityState.selectedAbility = 'mine';
     this.updateMineSalvoInput(now);
@@ -1017,6 +1017,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
   }
 
   protected placeFence(now: number): void {
+    if (!this.supportsFences) { this.coreAudio.playSfx('unavailable'); return; }
     const cfg = this.session.abilities.fence;
     const aim = this.getAimPoint();
     if (now < this.abilityState.cooldownUntil.fence || this.fences.length >= cfg.maxActive
@@ -2209,7 +2210,8 @@ export class AnomalyCombatScene extends Phaser.Scene {
     const mineCfg = this.session.abilities.mine;
     Object.assign(fenceSlot, { cooldownMs: Math.max(0, this.abilityState.cooldownUntil.fence - now),
       cooldownDurationMs: fenceCfg.cooldownMs, selected: this.abilityState.selectedAbility === 'fence',
-      hasEnergy: this.player.energy >= fenceCfg.energyCost, underLimit: this.fences.length < fenceCfg.maxActive,
+      status: this.supportsFences ? undefined : 'OFFLINE',
+      hasEnergy: this.supportsFences && this.player.energy >= fenceCfg.energyCost, underLimit: this.supportsFences && this.fences.length < fenceCfg.maxActive,
       count: this.fences.length, capacity: fenceCfg.maxActive });
     Object.assign(turretSlot, { cooldownMs: Math.max(0, this.abilityState.cooldownUntil.turret - now),
       cooldownDurationMs: turretCfg.cooldownMs, selected: this.abilityState.selectedAbility === 'turret',
@@ -2245,6 +2247,8 @@ export class AnomalyCombatScene extends Phaser.Scene {
   };
 
   protected setPhase(phase: HeistPhase): void { this.phase = phase; this.phaseStartedAt = this.time.now; }
+
+  protected get supportsFences(): boolean { return true; }
 
   protected getAimPoint(): { x: number; y: number } {
     if (this.inputController.activeDevice === 'gamepad' && this.inputController.controllerAim.magnitude > 0) {
