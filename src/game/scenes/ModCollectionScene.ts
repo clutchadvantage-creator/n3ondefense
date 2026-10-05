@@ -10,7 +10,7 @@ import { SaveSystem } from '../systems/SaveSystem';
 import { disableButton } from '../utils/ui';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { rollModDrop } from '../mods/ModDropService.ts';
-import { getInfusionOperationCost, getInfusionRemovalCost, MOD_INFUSIONS } from '../mods/infusions.ts';
+import { getInfusionOperationCost, getInfusionRemovalCost, MOD_INFUSIONS, MOD_INFUSION_BY_ID } from '../mods/infusions.ts';
 import { getModCopyCounts, getRecyclableUnupgradedDuplicates } from '../mods/ModInventoryService.ts';
 import {
   buildModOperationStatus,
@@ -355,12 +355,14 @@ export class ModCollectionScene extends Phaser.Scene {
       duplicateCount
     });
     const corruptedText = definition.variant === 'corrupted' ? `\n+ ${definition.positiveEffect}\n− ${definition.negativeEffect}` : '';
+    const installedInfusion = card.infusionId ? MOD_INFUSION_BY_ID.get(card.infusionId) : undefined;
     const supremeText = definition.rarity === 'supreme'
       ? `\nSUPREME OVERDRIVE ONLY // UNIVERSAL SLOT // MAX 2 ACTIVE\n${definition.supremeEffects?.map((effect) => effect.label).join('\n') ?? ''}`
       : '';
     const detailCopy = this.add.text(x, detailCardTop + detailCardHeight + 18, `${definition.rarity === 'supreme' ? 'SUPREME CLASS' : definition.category.toUpperCase()} • ${definition.rarity.toUpperCase()}\n${definition.description}${corruptedText}${supremeText}\nUPGRADES ${card.upgradeLevel}/3 • ${owned.duplicates} DUPLICATES`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${compactDetails ? 16 : 18}px`, color: '#e8f8ff', align: 'center', lineSpacing: 3
     }).setOrigin(0.5, 0).setWordWrapWidth(width - 34, true);
+    if (installedInfusion) detailCopy.setText(`${installedInfusion.cosmeticOnly ? 'COSMETIC' : 'SYSTEM INFUSION'} // ${installedInfusion.name}\n${installedInfusion.description}\nMOD EFFECT // ${definition.description}${corruptedText}${supremeText}`);
     const activeSlots = SaveSystem.getModCollection().loadouts.find((loadout) => loadout.id === SaveSystem.getModCollection().activeLoadoutId)?.slots;
     const firstOpenSlot = activeSlots ? (Object.keys(activeSlots) as ModSlot[]).find((slot) => !activeSlots[slot]) : undefined;
     const categorySlot = this.targetSlot
@@ -424,7 +426,7 @@ export class ModCollectionScene extends Phaser.Scene {
     this.bulkRecycleModal = showConfirmDialog(
       this,
       'RECYCLE ALL UNUPGRADED DUPLICATES',
-      `Recycle ${cardCount} rank-0 duplicate card${cardCount === 1 ? '' : 's'} into ${plasmaChips} Plasma Chip${plasmaChips === 1 ? '' : 's'}?\n\nOne copy of every Mod will be kept, and cards with upgrade levels are never recycled. Rank-0 infused cards can be recycled because infusions are cosmetic rather than upgrades.`,
+      `Recycle ${cardCount} rank-0 duplicate card${cardCount === 1 ? '' : 's'} into ${plasmaChips} Plasma Chip${plasmaChips === 1 ? '' : 's'}?\n\nOne copy of every Mod will be kept. Upgraded cards and cards with System Infusions are protected. Cosmetic infusions on recycled cards are removed.`,
       'Recycle All',
       () => {
         this.bulkRecycleModal = null;
@@ -463,20 +465,20 @@ export class ModCollectionScene extends Phaser.Scene {
     const leftRail = this.add.rectangle(panelLeft + 8, height / 2, 3, panelHeight - 52, 0xff65c8, 0.5);
     const rightRail = this.add.rectangle(panelRight - 8, height / 2, 3, panelHeight - 52, 0x55eaff, 0.44);
     root.add([blocker, panelShadow, panelChassis, panelGlass, headerBand, topRail, leftRail, rightRail]);
-    root.add(this.add.text(panelLeft + 26, panelTop + 14, 'INFUSION TERMINAL // COSMETIC CHANNEL', {
+    root.add(this.add.text(panelLeft + 26, panelTop + 14, 'INFUSION TERMINAL // MOD-LINKED SYSTEMS', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#7dcbd7', letterSpacing: 1
     }).setOrigin(0, 0));
-    root.add(this.add.text(width / 2, panelTop + 50, 'SELECT COSMETIC INFUSION', {
+    root.add(this.add.text(width / 2, panelTop + 50, 'SELECT MOD INFUSION', {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${Math.round(Phaser.Math.Clamp(panelWidth * 0.034, 22, 28))}px`, color: '#69f5ff'
     }).setOrigin(0.5));
-    root.add(this.add.text(width / 2, panelTop + 82, `Available Plasma Chips: ${SaveSystem.getModCollection().plasmaChips}`, {
+    root.add(this.add.text(width / 2, panelTop + 82, `Plasma Chips: ${SaveSystem.getModCollection().plasmaChips} // Active systems: ${new ModRuntime(SaveSystem.getModCollection(),undefined,SaveSystem.getPreferredProtocol()).getActiveInfusions().length}/5`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', fontStyle: 'bold', color: '#a7ffe8'
     }).setOrigin(0.5));
-    root.add(this.add.text(width / 2, panelTop + 108, 'Infusions are optional visual and game-feel effects. They never alter combat, health, energy, abilities, rewards, or difficulty.', {
+    root.add(this.add.text(width / 2, panelTop + 108, 'SYSTEM INFUSIONS unlock new interactions. COSMETIC INFUSIONS change visuals only. One infusion per Mod; five equipped Mods; duplicate systems never stack.', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: panelWidth < 620 ? '14px' : '15px', color: '#b4cddd', align: 'center', lineSpacing: 1
     }).setOrigin(0.5, 0).setWordWrapWidth(panelWidth - 72, true).setMaxLines(2));
 
-    const infusionsPerPage = panelHeight >= 560 ? 3 : panelHeight >= 440 ? 2 : 1;
+    const infusionsPerPage = panelHeight >= 560 ? 2 : 1;
     const pageCount = Math.max(1, Math.ceil(MOD_INFUSIONS.length / infusionsPerPage));
     this.infusionPage = Phaser.Math.Clamp(this.infusionPage, 0, pageCount - 1);
     const visibleInfusions = MOD_INFUSIONS.slice(this.infusionPage * infusionsPerPage, (this.infusionPage + 1) * infusionsPerPage);
@@ -485,7 +487,7 @@ export class ModCollectionScene extends Phaser.Scene {
     const rowsTop = panelTop + (panelHeight < 500 ? 142 : 156);
     const rowsBottom = pageY - 34;
     const rowSlotHeight = (rowsBottom - rowsTop) / visibleInfusions.length;
-    const rowHeight = Phaser.Math.Clamp(rowSlotHeight - 10, panelHeight < 500 ? 74 : 88, 112);
+    const rowHeight = Phaser.Math.Clamp(rowSlotHeight - 10, 100, 220);
     const installWidth = Phaser.Math.Clamp(panelWidth * 0.24, 150, 190);
     const installX = panelRight - 26 - installWidth / 2;
     const copyX = panelLeft + 92;
@@ -501,10 +503,13 @@ export class ModCollectionScene extends Phaser.Scene {
       root.add(this.add.rectangle(width / 2, rowY - rowHeight / 2 + 4, panelWidth - 64, 2, rowAccent, installed ? 0.72 : 0.34));
       root.add(this.add.circle(panelLeft + 28, rowY, 3, rowAccent, 0.9));
       root.add(this.add.text(panelLeft + 52, rowY, infusion.icon, { fontFamily: 'Orbitron, sans-serif', fontSize: '34px', color: '#8ff7ff' }).setOrigin(0.5));
-      root.add(this.add.text(copyX, rowY - 30, infusion.name.toUpperCase(), { fontFamily: 'Orbitron, sans-serif', fontSize: '17px', color: installed ? '#7dffb4' : '#e5fbff' }).setOrigin(0, 0.5));
-      root.add(this.add.text(copyX, rowY - 15, infusion.description, {
+      const infusionTitle = this.add.text(copyX, rowY-rowHeight/2+10, infusion.name.toUpperCase(), { fontFamily: 'Orbitron, sans-serif', fontSize: '16px', color: installed ? '#7dffb4' : '#e5fbff' }).setOrigin(0, 0).setWordWrapWidth(copyWidth,true);
+      root.add(infusionTitle);
+      const descriptionY = infusionTitle.y + infusionTitle.height + 8;
+      const descriptionLines = Math.max(1, Math.floor((rowY + rowHeight/2 - 32 - descriptionY)/18));
+      root.add(this.add.text(copyX, descriptionY, `${infusion.cosmeticOnly?'COSMETIC':'SYSTEM INFUSION'} // ${infusion.description}`, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#c0d9e7', lineSpacing: 0
-      }).setOrigin(0, 0).setWordWrapWidth(copyWidth, true).setMaxLines(2));
+      }).setOrigin(0, 0).setWordWrapWidth(copyWidth, true).setMaxLines(descriptionLines));
       root.add(this.add.text(copyX, rowY + rowHeight / 2 - 15, installed
         ? 'INSTALLED'
         : `${replacing ? 'RECONFIGURE' : 'INSTALL'} // ${operationCost} PLASMA CHIPS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', fontStyle: 'bold', color: installed ? '#70ffad' : affordable ? '#ffd98a' : '#ff91a4' }).setOrigin(0, 0.5));
@@ -512,8 +517,8 @@ export class ModCollectionScene extends Phaser.Scene {
         if (installed) return false;
         if (!affordable) return this.finishOperation({ ok: false, message: `Requires ${operationCost} Plasma Chips.` });
         this.confirmInfusionOperation(
-          replacing ? 'RECONFIGURE COSMETIC INFUSION' : 'INSTALL COSMETIC INFUSION',
-          `${replacing ? 'Replace the current infusion with' : 'Install'} ${infusion.name.toUpperCase()}?\n\nExact charge: ${operationCost} Plasma Chips.\nBalance after transaction: ${(SaveSystem.getModCollection().plasmaChips - operationCost).toLocaleString()} Plasma Chips.`,
+          replacing ? 'RECONFIGURE MOD INFUSION' : 'INSTALL MOD INFUSION',
+          `${replacing ? 'Replace the current infusion with' : 'Install'} ${infusion.name.toUpperCase()}?\n\n${infusion.description}\n\nExact charge: ${operationCost} Plasma Chips.\nBalance after transaction: ${(SaveSystem.getModCollection().plasmaChips - operationCost).toLocaleString()} Plasma Chips.`,
           replacing ? 'Confirm Swap' : 'Confirm Install',
           () => this.apply(() => SaveSystem.infuseModCard(card.instanceId, infusion.id))
         );

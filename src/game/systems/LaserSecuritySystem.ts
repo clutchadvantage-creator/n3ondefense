@@ -39,6 +39,20 @@ export class LaserSecuritySystem {
   private audioActive = false;
   private lastVisualDrawAt = Number.NEGATIVE_INFINITY;
   private presentationVisible = false;
+  private liveSegmentCount = 0;
+  private hijackedUntil = 0;
+  setHijackedUntil(until: number): void { this.hijackedUntil = until; }
+  isDangerousAt(x: number, y: number, now: number): boolean {
+    return now >= this.hijackedUntil && this.touchesAnySegment(x, y, 26, this.liveSegmentCount);
+  }
+  /** Existing beam center acts as its clearly marked control relay. No new hazard is spawned. */
+  hijackTarget(x: number, y: number): { x: number; y: number } | null {
+    for (let i = 0; i < this.liveSegmentCount; i++) {
+      const s = this.segments[i], point = { x: (s.x1+s.x2)/2, y: (s.y1+s.y2)/2 };
+      if (Math.hypot(point.x-x, point.y-y) <= 54) return point;
+    }
+    return null;
+  }
 
   constructor(
     scene: Phaser.Scene,
@@ -61,6 +75,7 @@ export class LaserSecuritySystem {
     playerLaserImmune = false,
     suppressed = false
   ): void {
+    this.liveSegmentCount = 0;
     if (suppressed) {
       this.setAudioActive(false);
       this.clearPresentation();
@@ -99,6 +114,7 @@ export class LaserSecuritySystem {
       ? 0
       : Phaser.Math.Clamp((cycleTime - config.telegraphMs) / config.activeMs, 0, 1);
     const segmentCount = this.buildSegments(this.patternIndex, progress);
+    this.liveSegmentCount = segmentCount;
     if (now - this.lastVisualDrawAt >= LASER_VISUAL_FRAME_INTERVAL_MS) {
       this.lastVisualDrawAt = now;
       this.draw(segmentCount, now, telegraphing);
@@ -114,10 +130,10 @@ export class LaserSecuritySystem {
     }
 
     this.setAudioActive(true);
-    const activeWarning = `SECURITY LASERS ACTIVE: ${LASER_PATTERN_NAMES[this.patternIndex]}`;
+    const activeWarning = `${now < this.hijackedUntil ? 'LASERS HIJACKED' : 'SECURITY LASERS ACTIVE'}: ${LASER_PATTERN_NAMES[this.patternIndex]}`;
     if (this.warningText.text !== activeWarning) this.warningText.setText(activeWarning);
     this.warningText.setAlpha(0.72);
-    if (!playerLaserImmune && this.touchesAnySegment(player.x, player.y, config.collisionRadius + 11, segmentCount)) {
+    if (now >= this.hijackedUntil && !playerLaserImmune && this.touchesAnySegment(player.x, player.y, config.collisionRadius + 11, segmentCount)) {
       const damage = getScaledHazardDamage(config.playerDamagePerHit, this.round, config.maximumPlayerDamagePerHit)
         * this.playerDamageMultiplier;
       if (player.takeDamage(damage)) this.onPlayerDamaged?.(damage);
@@ -332,13 +348,14 @@ export class LaserSecuritySystem {
     for (let index = 0; index < segmentCount; index += 1) {
       const segment = this.segments[index];
       const paletteIndex = (this.patternIndex * 2 + index + colorShift) % (LASER_COLORS.length + 3);
-      const color = paletteIndex === 0
+      const color = now < this.hijackedUntil ? 0x70ffb3 : paletteIndex === 0
         ? this.theme.primary
         : paletteIndex === 1
           ? this.theme.secondary
           : paletteIndex === 2
             ? this.theme.accent
             : LASER_COLORS[paletteIndex - 3];
+      this.graphics.lineStyle(2, 0x70ffb3, .8).strokeCircle((segment.x1+segment.x2)/2, (segment.y1+segment.y2)/2, 12);
       if (telegraphing) {
         this.graphics.lineStyle(2, color, 0.3 + Math.sin(now * 0.025 + index) * 0.16);
         this.graphics.lineBetween(segment.x1, segment.y1, segment.x2, segment.y2);

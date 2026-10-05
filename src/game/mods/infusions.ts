@@ -1,5 +1,6 @@
 import type { ModInfusionId } from './types.ts';
 import { MOD_BALANCE } from './modBalance.ts';
+import { SYSTEM_INFUSIONS } from './SystemInfusions.ts';
 
 export interface ModInfusionDefinition {
   id: ModInfusionId;
@@ -7,10 +8,11 @@ export interface ModInfusionDefinition {
   description: string;
   icon: string;
   plasmaCost: number;
-  cosmeticOnly: true;
+  cosmeticOnly: boolean;
 }
 
 export const MOD_INFUSIONS: readonly ModInfusionDefinition[] = [
+  ...SYSTEM_INFUSIONS,
   {
     id: 'enemy-growth',
     name: 'Titan Projection',

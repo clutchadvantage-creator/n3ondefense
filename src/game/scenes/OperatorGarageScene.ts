@@ -30,6 +30,7 @@ import {
 } from '../garage/GarageEnvironment.ts';
 import { getGarageDockModels, getModLibraryEntries, getModLibraryProgress } from '../garage/GarageState.ts';
 import { MOD_DEFINITIONS, MOD_BY_ID } from '../mods/definitions.ts';
+import { ModRuntime } from '../mods/ModRuntime.ts';
 import { filterModDatabaseEntries, getModDatabaseEntry, type ModDatabaseStatusFilter } from '../mods/ModDatabaseService.ts';
 import { ModDatabaseViewer } from '../mods/ModDatabaseViewer.ts';
 import { MOD_RARITY_COLORS, createModCardView } from '../mods/ModCardView.ts';
@@ -228,7 +229,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.add.text(width / 2, 18, 'OPERATOR GARAGE', {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${layout.compact ? 24 : Math.round(38 * headerScale)}px`, color: '#67f7ff', fontStyle: 'bold'
     }).setOrigin(0.5, 0).setDepth(70);
-    this.add.text(width / 2, layout.compact ? 50 : 57 * headerScale, 'LOADOUT WORKSTATION // NEXT DEPLOYMENT', {
+    this.add.text(width / 2, layout.compact ? 50 : 57 * headerScale, `LOADOUT WORKSTATION // SYSTEM INFUSIONS ${new ModRuntime(SaveSystem.getModCollection(),undefined,SaveSystem.getPreferredProtocol()).getActiveInfusions().length}/5`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${layout.compact ? 13 : Math.round(19 * headerScale)}px`, color: '#ff9bd9', letterSpacing: 1
     }).setOrigin(0.5, 0).setDepth(70);
 

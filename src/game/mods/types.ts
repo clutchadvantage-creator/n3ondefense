@@ -2,6 +2,9 @@ export type ModCategory = 'weapon' | 'player' | 'defense' | 'bombSite' | 'utilit
 export type ModRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'supreme';
 export type ModRank = 0 | 1 | 2 | 3;
 export type ModSlot = 'weapon' | 'player' | 'defense' | 'bombSite' | 'wildcard';
+export const NORMAL_MOD_SLOTS: readonly ModSlot[] = ['weapon', 'player', 'defense', 'bombSite', 'wildcard'];
+export type SystemInfusionId = 'relay-jump' | 'gridlink' | 'target-designator' | 'ascension-protocol'
+  | 'detonator-link' | 'cascade' | 'magnetic-redeploy' | 'power-bus' | 'hazard-hijack' | 'fence-rail';
 export type RunProtocolId =
   | 'normal'
   | 'overdrive'
@@ -28,6 +31,7 @@ export type RunProtocolId =
 export type ModDropSource = 'normalEnemy' | 'eliteEnemy' | 'milestone' | 'boss' | 'arcade' | 'anomaly';
 export type ModVariant = 'standard' | 'corrupted';
 export type ModInfusionId =
+  | SystemInfusionId
   | 'enemy-growth'
   | 'detonation-fireworks'
   | 'prismatic-rounds'
@@ -219,8 +223,9 @@ export interface ModRewardRecord {
 export interface EquippedModSnapshot {
   id: string;
   rank: ModRank;
-  /** Cosmetic-only state needed to preserve the exact equipped card across rounds. */
+  /** Exact per-card infusion frozen with the encounter loadout. */
   infusionId?: ModInfusionId;
+  slot?: ModSlot;
   /** Exact per-card calibration state frozen with the encounter loadout. */
   calibrations?: ModStatCalibration[];
 }

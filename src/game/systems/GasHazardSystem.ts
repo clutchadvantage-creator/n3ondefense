@@ -840,7 +840,7 @@ export class GasHazardSystem {
     this.ignitionPresentationVisible = false;
   }
 
-  private hasGasAt(x: number, y: number): boolean {
+  hasGasAt(x: number, y: number): boolean {
     const cellSize = GAS_HAZARD_BALANCE.densityCellSize;
     const column = Math.floor(x / cellSize);
     const row = Math.floor(y / cellSize);

@@ -50,6 +50,7 @@ export const STAR_DEATH_MINE_VISUAL_THEME: MineVisualTheme = {
 export class Mine {
   readonly sprite: Phaser.GameObjects.Container;
   readonly armAt: number;
+  readonly landedAt: number;
   readonly damage: number;
   readonly radius: number;
   armed = false;
@@ -112,6 +113,7 @@ export class Mine {
       .setDepth(6);
     const launchDelay = Math.max(0, launch?.delayMs ?? 0);
     const launchDuration = Math.max(0, launch?.durationMs ?? 0);
+    this.landedAt = scene.time.now + launchDelay + launchDuration;
     this.armAt = scene.time.now + launchDelay + launchDuration + armMs;
     this.damage = damage;
     this.radius = radius;
@@ -133,8 +135,8 @@ export class Mine {
     }
   }
 
-  update(now: number): void {
-    if (!this.armed && now >= this.armAt) {
+  update(now: number, forceArm = false): void {
+    if (!this.armed && (now >= this.armAt || (forceArm && now >= this.landedAt))) {
       this.armed = true;
       this.shell.setFillStyle(this.visualTheme.armedShellFillColor, this.premiumFrame ? 0.12 : 1)
         .setStrokeStyle(this.premiumFrame ? 1.8 : 3, this.visualTheme.armedShellStrokeColor, 1);

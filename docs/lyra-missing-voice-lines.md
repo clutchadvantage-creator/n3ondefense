@@ -20,7 +20,7 @@ Suggested file: `lyra-context-recalibration.mp3`
 ID: `context.infusion`  
 Suggested file: `lyra-context-infusion.mp3`
 
-> Infusion changes this card’s visual finish. Review the appearance and resource cost before committing.
+> System Infusions add new interactions while cosmetic infusions change visuals. Install one per Mod. Only equipped Mods activate their infusions, with five active systems at most.
 
 ### 3. context.supreme
 

@@ -2,6 +2,8 @@ import { MOD_BALANCE } from './modBalance.ts';
 import { MOD_BY_ID } from './definitions.ts';
 import type { EquippedModSnapshot, LocalModCollection, ModInfusionId, ModRank, ModStat, ModStatCalibration, RunProtocolId } from './types.ts';
 import { MOD_INFUSION_BY_ID } from './infusions.ts';
+import { NORMAL_MOD_SLOTS, type ModSlot, type SystemInfusionId } from './types.ts';
+import { SYSTEM_INFUSION_BY_ID } from './SystemInfusions.ts';
 import { isLegendaryModId, isSupremeModId, MAX_EQUIPPED_SUPREME_MODS } from './ModLoadoutRules.ts';
 import { isSupremeProtocol } from '../progression/SupremeProgression.ts';
 import { getEffectiveModModifiers, isNativeModSlotActive } from './PlasmaRecalibration.ts';
@@ -32,6 +34,7 @@ export class ModRuntime {
   private readonly equipped = new Map<string, ModRank>();
   private readonly infusions = new Set<ModInfusionId>();
   private readonly infusionByModId = new Map<string, ModInfusionId>();
+  private readonly slotByModId = new Map<string, ModSlot>();
   private readonly calibrationsByModId = new Map<string, ModStatCalibration[]>();
   private emergencyCapacitorUsed = false;
   private previousHealthRatio = 1;
@@ -42,11 +45,15 @@ export class ModRuntime {
   constructor(mods: LocalModCollection, snapshot?: EquippedModSnapshot[], protocol: RunProtocolId = 'normal') {
     const loadout = mods.loadouts.find((entry) => entry.id === mods.activeLoadoutId) ?? mods.loadouts[0];
     const equippedCardFor = (modId: string) => {
-      const slot = Object.entries(loadout?.slots ?? {}).find(([, equippedId]) => equippedId === modId)?.[0] as keyof typeof loadout.slots | undefined;
+      const slot = NORMAL_MOD_SLOTS.find(slot => loadout?.slots[slot] === modId);
       return slot ? mods.cards.find((entry) => entry.instanceId === loadout.cardSlots[slot] && entry.modId === modId) : undefined;
     };
-    const addInfusion = (modId: string, infusionId: ModInfusionId | undefined): void => {
-      if (!infusionId || !MOD_INFUSION_BY_ID.has(infusionId)) return;
+    const infusionSlots = new Set<ModSlot>();
+    const addInfusion = (modId: string, infusionId: ModInfusionId | undefined, slot?: ModSlot): void => {
+      if (!slot || !NORMAL_MOD_SLOTS.includes(slot) || infusionSlots.has(slot)) return;
+      this.slotByModId.set(modId, slot);
+      infusionSlots.add(slot);
+      if (!infusionId || !MOD_INFUSION_BY_ID.has(infusionId) || this.infusions.has(infusionId)) return;
       this.infusions.add(infusionId);
       this.infusionByModId.set(modId, infusionId);
     };
@@ -58,7 +65,7 @@ export class ModRuntime {
     if (snapshot) {
       let hasLegendary = false;
       let supremeCount = 0;
-      snapshot.forEach(({ id, rank, infusionId, calibrations }) => {
+      snapshot.forEach(({ id, rank, infusionId, calibrations, slot }) => {
         if (!MOD_BY_ID.has(id) || this.equipped.has(id)) return;
         if (isSupremeModId(id) && (!isSupremeProtocol(protocol) || supremeCount >= MAX_EQUIPPED_SUPREME_MODS)) return;
         if (isLegendaryModId(id) && hasLegendary) return;
@@ -67,14 +74,16 @@ export class ModRuntime {
         if (isSupremeModId(id)) supremeCount += 1;
         // Old run snapshots contain only id/rank. Resolve those from the exact
         // currently equipped card so in-progress local sessions remain valid.
-        addInfusion(id, infusionId ?? equippedCardFor(id)?.infusionId);
+        addInfusion(id, infusionId ?? equippedCardFor(id)?.infusionId,
+          slot ?? NORMAL_MOD_SLOTS.find(candidate => loadout?.slots[candidate] === id));
         addCalibrations(id, calibrations ?? equippedCardFor(id)?.calibrations);
       });
       return;
     }
     let hasLegendary = false;
     let supremeCount = 0;
-    for (const modId of Object.values(loadout?.slots ?? {})) {
+    for (const slot of NORMAL_MOD_SLOTS) {
+      const modId = loadout?.slots[slot];
       if (!modId || this.equipped.has(modId)) continue;
       if (isSupremeModId(modId) && (!isSupremeProtocol(protocol) || supremeCount >= MAX_EQUIPPED_SUPREME_MODS)) continue;
       if (isLegendaryModId(modId) && hasLegendary) continue;
@@ -84,7 +93,7 @@ export class ModRuntime {
         this.equipped.set(modId, card?.upgradeLevel ?? owned.rank);
         if (isLegendaryModId(modId)) hasLegendary = true;
         if (isSupremeModId(modId)) supremeCount += 1;
-        addInfusion(modId, card?.infusionId);
+        addInfusion(modId, card?.infusionId, slot);
         addCalibrations(modId, card?.calibrations);
       }
     }
@@ -215,11 +224,16 @@ export class ModRuntime {
     return [1.18, 1.22, 1.27, 1.33][this.rank('supreme-crown-of-stars')];
   }
   hasInfusion(infusionId: ModInfusionId): boolean { return this.infusions.has(infusionId); }
+  hasActiveInfusion(id: SystemInfusionId): boolean { return this.infusions.has(id); }
+  getActiveInfusions(): SystemInfusionId[] {
+    return [...this.infusions].filter((id): id is SystemInfusionId => SYSTEM_INFUSION_BY_ID.has(id as SystemInfusionId));
+  }
   snapshot(): EquippedModSnapshot[] {
     return Array.from(this.equipped, ([id, rank]) => ({
       id,
       rank,
       infusionId: this.infusionByModId.get(id),
+      slot: this.slotByModId.get(id),
       ...(this.calibrationsByModId.has(id) ? { calibrations: this.calibrationsByModId.get(id)!.map((entry) => ({ ...entry })) } : {})
     }));
   }

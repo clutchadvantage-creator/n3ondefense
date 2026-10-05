@@ -149,7 +149,7 @@ test('duplicate filtering exposes only rank-zero excess copies and Garage catego
 
 test('infusion overlay remains input-blocking and uses the same framed command treatment', () => {
   assert.match(scene, /const blocker = .*\.setInteractive\(\)/);
-  assert.match(scene, /INFUSION TERMINAL \/\/ COSMETIC CHANNEL/);
+  assert.match(scene, /INFUSION TERMINAL \/\/ MOD-LINKED SYSTEMS/);
   assert.match(scene, /panelChassis/);
   assert.match(scene, /panelGlass/);
   assert.match(scene, /createModCollectionButton\(this, installX/);

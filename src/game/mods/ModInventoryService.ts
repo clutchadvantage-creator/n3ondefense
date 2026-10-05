@@ -3,6 +3,7 @@ import { MOD_BALANCE } from './modBalance.ts';
 import type { LocalModCollection, ModCardInstance, ModInfusionId, ModLoadoutSlots, ModRank, ModSlot, OwnedModState, RunProtocolId } from './types.ts';
 import { getInfusionOperationCost, getInfusionRemovalCost, MOD_INFUSION_BY_ID } from './infusions.ts';
 import { validateModEquip } from './ModLoadoutRules.ts';
+import { NORMAL_MOD_SLOTS } from './types.ts';
 
 export interface ModOperationResult { ok: boolean; message: string; }
 export interface ModUpgradeCost { credits: number; coreTokens: number }
@@ -84,7 +85,7 @@ export const getRecyclableUnupgradedDuplicates = (mods: LocalModCollection): Mod
     )[0];
     recyclable.push(...unupgraded.filter((card) => card.instanceId !== keeper.instanceId));
   }
-  return recyclable;
+  return recyclable.filter(card => !card.infusionId || MOD_INFUSION_BY_ID.get(card.infusionId)?.cosmeticOnly !== false);
 };
 
 const removeCard = (mods: LocalModCollection, card: ModCardInstance): void => {
@@ -157,16 +158,22 @@ export const infuseModCard = (mods: LocalModCollection, instanceId: string, infu
   const card = mods.cards.find((entry) => entry.instanceId === instanceId);
   if (!card) return { ok: false, message: 'Card not found.' };
   const infusion = MOD_INFUSION_BY_ID.get(infusionId);
-  if (!infusion) return { ok: false, message: 'Unknown cosmetic infusion.' };
+  if (!infusion) return { ok: false, message: 'Unknown infusion.' };
   if (card.infusionId === infusionId) return { ok: false, message: 'That infusion is already installed.' };
+  if (!infusion.cosmeticOnly && mods.loadouts.some(loadout =>
+    NORMAL_MOD_SLOTS.some(slot => loadout.cardSlots[slot] === instanceId)
+    && NORMAL_MOD_SLOTS.some(slot => mods.cards.some(other => other.instanceId === loadout.cardSlots[slot]
+      && other.instanceId !== instanceId && other.infusionId === infusionId)))) {
+    return { ok: false, message: 'That System Infusion is already installed on another Mod in this loadout.' };
+  }
   const replacing = Boolean(card.infusionId);
   const cost = getInfusionOperationCost(card.infusionId, infusionId);
   if (mods.plasmaChips < cost) return { ok: false, message: `Requires ${cost} Plasma Chips.` };
   mods.plasmaChips -= cost;
   card.infusionId = infusionId;
   return { ok: true, message: replacing
-    ? `Cosmetic infusion reconfigured for ${cost} Plasma Chips.`
-    : `Cosmetic infusion installed for ${cost} Plasma Chips.` };
+    ? `Infusion reconfigured for ${cost} Plasma Chips.`
+    : `Infusion installed for ${cost} Plasma Chips.` };
 };
 
 export const removeModInfusion = (mods: LocalModCollection, instanceId: string): ModOperationResult => {
@@ -177,7 +184,7 @@ export const removeModInfusion = (mods: LocalModCollection, instanceId: string):
   if (mods.plasmaChips < cost) return { ok: false, message: `Requires ${cost} Plasma Chips.` };
   mods.plasmaChips -= cost;
   card.infusionId = undefined;
-  return { ok: true, message: `Cosmetic infusion removed for ${cost} Plasma Chips.` };
+  return { ok: true, message: `Infusion removed for ${cost} Plasma Chips.` };
 };
 
 export const rankUpMod = (mods: LocalModCollection, modId: string, credits: number, coreTokens = 0, instanceId?: string): ModOperationResult & { cost?: number; coreTokenCost?: number } => {
@@ -216,6 +223,11 @@ export const equipMod = (
   if (Object.entries(loadout.slots).some(([otherSlot, equipped]) => otherSlot !== slot && equipped === modId)) return { ok: false, message: 'The same mod cannot be equipped twice.' };
   const card = instanceId ? mods.cards.find((entry) => entry.instanceId === instanceId && entry.modId === modId) : mods.cards.find((entry) => entry.modId === modId);
   if (!card) return { ok: false, message: 'That card instance is missing.' };
+  if (card.infusionId && MOD_INFUSION_BY_ID.get(card.infusionId)?.cosmeticOnly === false
+    && NORMAL_MOD_SLOTS.some(otherSlot => otherSlot !== slot && mods.cards.some(other =>
+      other.instanceId === loadout.cardSlots[otherSlot] && other.infusionId === card.infusionId))) {
+    return { ok: false, message: 'That System Infusion is already active on another equipped Mod.' };
+  }
   loadout.slots[slot] = modId;
   loadout.cardSlots[slot] = card.instanceId;
   return { ok: true, message: `${definition.name} equipped.` };

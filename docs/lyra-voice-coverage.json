@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-27T21:53:04.505Z",
+  "generatedAt": "2026-10-05T12:29:19.455Z",
   "language": "en-US",
   "registered": 66,
   "recorded": 31,
@@ -25,7 +25,7 @@
         "mods"
       ],
       "title": "context.infusion",
-      "text": "Infusion changes this card’s visual finish. Review the appearance and resource cost before committing.",
+      "text": "System Infusions add new interactions while cosmetic infusions change visuals. Install one per Mod. Only equipped Mods activate their infusions, with five active systems at most.",
       "file": null,
       "fileExists": false,
       "usesRecordingByDefault": false,
@@ -787,7 +787,7 @@
         "mods"
       ],
       "title": "context.infusion",
-      "text": "Infusion changes this card’s visual finish. Review the appearance and resource cost before committing.",
+      "text": "System Infusions add new interactions while cosmetic infusions change visuals. Install one per Mod. Only equipped Mods activate their infusions, with five active systems at most.",
       "file": null,
       "fileExists": false,
       "usesRecordingByDefault": false,

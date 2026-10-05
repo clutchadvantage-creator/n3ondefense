@@ -19,6 +19,7 @@ export interface EnemyStats {
 }
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
+  faction: 'enemy' | 'player' = 'enemy';
   readonly stats: EnemyStats;
   hp: number;
   lastAttackMs = 0;
@@ -75,7 +76,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.hp = Math.max(0, this.hp - applied);
     this.lastDamageSource = source;
     this.damageTakenBySource[source] = (this.damageTakenBySource[source] ?? 0) + applied;
-    GameplayTelemetryRecorder.recordEnemyDamage(this.stats.type, source, applied, overkill);
+    if (this.faction === 'enemy') GameplayTelemetryRecorder.recordEnemyDamage(this.stats.type, source, applied, overkill);
     this.setTintFill(0xffffff);
     if (!this.damageFlashActive) this.damageFlashUntil = this.scene.time.now + 50;
     this.damageFlashActive = true;

@@ -173,9 +173,9 @@ export const createModCardView = (
   const stat = scene.add.text(0, height * 0.25, describeEffectiveModStats(definition, card, rank), {
     fontFamily: 'Rajdhani, sans-serif', fontSize: `${statFontSize}px`, color: '#d8f2f8', align: 'center', lineSpacing: compact ? 0 : 2
   }).setOrigin(0.5, 0).setWordWrapWidth(width - 18, true).setMaxLines(compact && card.infusionId ? 2 : 3);
-  const infusion = scene.add.text(0, height / 2 - 10, card.infusionId ? `◆ ${MOD_INFUSION_BY_ID.get(card.infusionId)?.name.toUpperCase() ?? 'INFUSED'}` : '', {
+  const infusion = scene.add.text(0, height / 2 - 10, card.infusionId ? `${MOD_INFUSION_BY_ID.get(card.infusionId)?.cosmeticOnly === false ? 'SYS' : '◆'} ${MOD_INFUSION_BY_ID.get(card.infusionId)?.name.toUpperCase() ?? 'INFUSED'}` : '', {
     fontFamily: 'Rajdhani, sans-serif', fontSize: `${infusionFontSize}px`, fontStyle: 'bold', color: '#a5fff0', align: 'center'
-  }).setOrigin(0.5, 1);
+  }).setOrigin(0.5, 1).setWordWrapWidth(width-18,true).setMaxLines(2);
   if (supreme) {
     const badgeWidth = Math.max(compact ? 54 : 68, rarity.displayWidth + (compact ? 18 : 24));
     const badgeHeight = Math.max(compact ? 15 : 19, rarity.displayHeight + 6);

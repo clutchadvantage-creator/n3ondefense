@@ -232,8 +232,9 @@ test('Plasma Chip infusions spend chips and remain cosmetic runtime flags', () =
   assert.equal(new ModRuntime(mods).hasInfusion('detonation-fireworks'), true);
 });
 
-test('every listed infusion is explicitly cosmetic-only with a positive Plasma Chip cost', () => {
-  assert.deepEqual(MOD_INFUSIONS.map((infusion) => infusion.id), [
+test('the original cosmetic infusions retain their identities, visual-only behavior and Plasma Chip costs', () => {
+  const cosmeticInfusions = MOD_INFUSIONS.filter(infusion => infusion.cosmeticOnly);
+  assert.deepEqual(cosmeticInfusions.map((infusion) => infusion.id), [
     'enemy-growth',
     'detonation-fireworks',
     'prismatic-rounds',
@@ -242,7 +243,7 @@ test('every listed infusion is explicitly cosmetic-only with a positive Plasma C
     'ghost-echoes',
     'arcade-pop'
   ]);
-  for (const infusion of MOD_INFUSIONS) {
+  for (const infusion of cosmeticInfusions) {
     assert.equal(infusion.cosmeticOnly, true);
     assert.ok(infusion.plasmaCost >= 300);
     assert.equal(infusion.plasmaCost, MOD_BALANCE.infusionPlasmaCost[infusion.id]);

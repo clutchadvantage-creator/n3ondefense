@@ -16,7 +16,7 @@ export const LYRA_MESSAGES: readonly LyraMessage[] = [
   context('context.arcade', 'Arcade objective online. The notification console tracks your target and remaining time.'),
   context('context.hazard', 'Security hazards are active. Watch their warning zones and move before they fire.'),
   context('context.recalibration', 'Recalibration rolls a replacement stat. Review the cost, then compare the candidate before applying it.', ['garage']),
-  context('context.infusion', 'Infusion changes this card’s visual finish. Review the appearance and resource cost before committing.', ['mods']),
+  context('context.infusion', 'System Infusions add new interactions while cosmetic infusions change visuals. Install one per Mod. Only equipped Mods activate their infusions, with five active systems at most.', ['mods']),
   context('context.supreme', 'Supreme protocols are available. Inspect the requirements in Operations before deploying.', ['garage']),
   { id: 'system.ready', text: 'Systems linked. I am LYRA. Let’s keep your next deployment productive.', mode: 'SYSTEM', priority: P.system, once: 'profile', scenes: ['garage'] },
   { id: 'ambient.garage.1', text: 'A balanced loadout. A reassuring amount of engineering has gone into your survival.', mode: 'AMBIENT', priority: P.ambient, scenes: ['garage'], weight: 2, cooldownMs: 900000 },

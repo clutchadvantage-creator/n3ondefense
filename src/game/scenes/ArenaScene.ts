@@ -32,6 +32,8 @@ import { Fence } from '../abilities/Fence';
 import { MAX_DISTINCT_FENCE_SPLITS, resolveFenceSplitStage } from '../abilities/FenceSplitRules.ts';
 import { Player } from '../entities/Player';
 import { baseEnemyStats, Enemy } from '../enemies/Enemy';
+import { SystemInfusionRuntime, type InfusionPoint, type InfusionTarget } from '../mods/SystemInfusionRuntime.ts';
+import { SYSTEM_INFUSION_TUNING as INFUSION_TUNING } from '../mods/SystemInfusions.ts';
 import { getTankHomingMissileSpeed, steerTankHomingMissile } from '../enemies/HomingMissile.ts';
 import { ENEMY_ROBOT_FRAMES } from '../enemies/EnemyRobotFrames.ts';
 import { BombSiteState, RoundState, type AbilityType, type ArenaLayout, type ArenaReward, type ArenaSessionState, type ArenaTemplate, type BombSiteRuntime, type EnemyType, type PickupType, type RectSpec, type RoundFinishedPayload } from '../types';
@@ -628,6 +630,15 @@ export class ArenaScene extends Phaser.Scene {
   private playerInput!: PlayerInput;
   private pointerLockInitialGate = false;
   private readonly aimWorldPoint = new Phaser.Math.Vector2();
+  private systemInfusions: SystemInfusionRuntime | null = null;
+  private infusionGraphics: Phaser.GameObjects.Graphics | null = null;
+  private infusionHint: Phaser.GameObjects.Text | null = null;
+  private infusionInteracting = false;
+  private ascensionAlly: Enemy | null = null;
+  private ascensionGun: Turret | null = null;
+  private ascensionUntil = 0;
+  private ascensionWallCollider: Phaser.Physics.Arcade.Collider | null = null;
+  private poweredFencePulse = new WeakMap<object, number>();
   private controllerAimDistance = 280;
   private aimSettings: AimSettings = { ...DEFAULT_AIM_SETTINGS, reticle: { ...DEFAULT_AIM_SETTINGS.reticle } };
   private readonly mineSalvoInput = new MineSalvoInput();
@@ -1754,6 +1765,7 @@ export class ArenaScene extends Phaser.Scene {
     this.refreshAimWorldPoint();
     this.updatePrismCosmetics(now);
     this.updatePlayerMovement(now);
+    this.updateSystemInfusions(now, dt);
     this.echo?.update(delta, this.playerInput, now);
     this.updatePlayerShooting(now);
     this.muzzleFlashVfx.update(now);
@@ -2492,6 +2504,12 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePlanting(delta: number): void {
+    if (this.infusionInteracting) {
+      this.audio.stopPlantingLoop();
+      if (this.activePlantingSite) this.bombSites.cancelPlanting(this.activePlantingSite);
+      this.activePlantingSite = null; this.plantingProgressMs = 0;
+      return;
+    }
     const interactPrompt = this.playerInput.prompt('interact', 'E');
     const activeBombCount = this.bombSites.activeBombCount();
 
@@ -3872,6 +3890,10 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       if (p.from === 'enemy') {
+        if (this.ascensionAlly?.active && !this.ascensionAlly.isDead()
+          && Math.hypot(this.ascensionAlly.x-p.sprite.x,this.ascensionAlly.y-p.sprite.y) < 32) {
+          this.ascensionAlly.takeDamage(p.damage);this.retireProjectile(p);continue;
+        }
         if (p.bossAttack === 'artillery-rocket') {
           const playerDx = this.player.x - p.sprite.x;
           const playerDy = this.player.y - p.sprite.y;
@@ -4449,6 +4471,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateAbilities(now: number, dt: number): void {
     for (const turret of this.turrets) {
+      if (turret.hp <= 0 || !turret.sprite.active) continue;
       turret.updateCosmetic(now);
       const playerAmmoMode = this.temporaryAmmo.activeSpecialMode(now);
       const turretAmmoMode = this.turretWeaponSync.activeAmmoMode(
@@ -4463,11 +4486,13 @@ export class ArenaScene extends Phaser.Scene {
       const bossInRange = Boolean(bossTarget?.active && !bossTarget.isDefeated
         && (bossTarget.x - turret.sprite.x) ** 2 + (bossTarget.y - turret.sprite.y) ** 2 <= turret.range * turret.range);
       const fluxTarget = this.fluxCores?.getNearestCombatTarget(turret.sprite.x, turret.sprite.y, turret.range) ?? null;
-      const target: { x: number; y: number } | null = bossInRange ? bossTarget! : enemyTarget ?? fluxTarget;
+      const target: { x: number; y: number } | null = this.systemInfusions?.priorityTarget(turret, now)
+        ?? (bossInRange ? bossTarget! : enemyTarget ?? fluxTarget);
       if (!target) continue;
       const angle = Phaser.Math.Angle.Between(turret.sprite.x, turret.sprite.y, target.x, target.y);
       turret.aimAt(angle);
-      const fieldFireRate = this.bombsiteMods.turretFireRateMultiplier(turret.sprite.x, turret.sprite.y);
+      const fieldFireRate = this.bombsiteMods.turretFireRateMultiplier(turret.sprite.x, turret.sprite.y)
+        * (this.systemInfusions?.isPowered(turret) ? INFUSION_TUNING.power.turretRate : 1);
       // Weapon Sync preserves the turret's own upgraded baseline. Grenade mode
       // no longer adds a second fixed slowdown, and player Rapid Fire is not an
       // input to Turret.canFire.
@@ -4486,6 +4511,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     for (const mine of this.mines) {
+      if (!mine.sprite.active) continue;
       mine.update(now);
       if (!mine.armed) continue;
       const bossTarget = this.nearestActiveBossTarget(mine.sprite.x, mine.sprite.y);
@@ -4512,6 +4538,8 @@ export class ArenaScene extends Phaser.Scene {
       if (mine.detonateAt === 0) continue;
       this.applyMagneticPayload(mine, now);
       if (!mine.readyToDetonate(now)) continue;
+
+      this.systemInfusions?.onMineDetonated(mine, now);
 
       this.gasHazard?.igniteFromMine(
         mine.sprite.x,
@@ -4551,9 +4579,17 @@ export class ArenaScene extends Phaser.Scene {
       mine.armed = false;
     }
 
-    for (const fence of this.fences) {
+    for (const fence of this.systemInfusions?.fences ?? this.fences) {
+      if (!fence.sprite.active || fence.hp <= 0 || now >= fence.expiresAt) continue;
       const fieldDamage = this.bombsiteMods.fenceDamageMultiplier(fence.x1, fence.y1, fence.x2, fence.y2);
-      const effectiveDps = fence.dps * fieldDamage;
+      let pulse = 0;
+      if (this.systemInfusions?.isPowered(fence)) {
+        const accumulated = (this.poweredFencePulse.get(fence) ?? 0) + dt;
+        if (accumulated * 1000 >= INFUSION_TUNING.power.pulseMs) {
+          pulse = accumulated * (INFUSION_TUNING.power.fenceRate - 1);this.poweredFencePulse.set(fence,0);
+        } else this.poweredFencePulse.set(fence,accumulated);
+      } else this.poweredFencePulse.delete(fence);
+      const effectiveDps = fence.dps * fieldDamage * (dt > 0 ? (dt+pulse)/dt : 1);
       this.fluxCores?.damageAlongSegment(fence.x1, fence.y1, fence.x2, fence.y2, 11, effectiveDps * dt);
       for (const enemy of this.enemies) {
         if (enemy.airborne) continue;
@@ -4616,7 +4652,7 @@ export class ArenaScene extends Phaser.Scene {
 
     let mineWriteIndex = 0;
     for (const mine of this.mines) {
-      if (!mine.armed && now >= mine.armAt && !mine.sprite.active) continue;
+      if (!mine.sprite.active) continue;
       this.mines[mineWriteIndex] = mine;
       mineWriteIndex += 1;
     }
@@ -4881,7 +4917,127 @@ export class ArenaScene extends Phaser.Scene {
     effect.destroy();
   }
 
+  private infusionLandingValid(point: InfusionPoint): boolean {
+    const b = this.layout.generation.bounds;
+    return point.x >= b.x+28 && point.y >= b.y+28 && point.x <= b.x+b.w-28 && point.y <= b.y+b.h-28
+      && !this.intersectsWallGeometry(point.x,point.y,24,24)
+      && !(this.gasHazard?.hasGasAt(point.x,point.y) ?? false)
+      && !(this.arenaFireTraps?.isDangerousAt(point.x,point.y) ?? false)
+      && !(this.laserSecurity?.isDangerousAt(point.x,point.y,this.time.now) ?? false);
+  }
+
+  private infusionSegmentClear(a: InfusionPoint, b: InfusionPoint): boolean {
+    // Full body clearance at bounded intervals; long network edges only test on topology changes.
+    const steps = Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/20));
+    for(let i=0;i<=steps;i++)if(this.intersectsWallGeometry(a.x+(b.x-a.x)*i/steps,a.y+(b.y-a.y)*i/steps,20,20))return false;
+    return true;
+  }
+
+  private updateSystemInfusions(now: number, dt: number): void {
+    if (!this.systemInfusions && this.modRuntime.getActiveInfusions().length === 0) return;
+    if (!this.systemInfusions) {
+      this.infusionGraphics = this.add.graphics().setDepth(19);
+      this.infusionHint = this.add.text(0,0,'',{fontFamily:'Rajdhani, sans-serif',fontSize:'18px',color:'#a9ffdf',
+        backgroundColor:'#071822',padding:{x:8,y:5},align:'center'}).setOrigin(.5,1).setDepth(20);
+      this.systemInfusions = new SystemInfusionRuntime({
+        has: id => this.modRuntime.hasActiveInfusion(id), player: this.player,
+        turrets: () => this.turrets, mines: () => this.mines, fences: () => this.fences,
+        targetAt: (point,radius) => {
+          let target: InfusionTarget|null = null, closest = radius;
+          for(const boss of this.activeMajorBosses())if(boss.active&&!boss.isDefeated){const d=Math.hypot(boss.x-point.x,boss.y-point.y)-boss.hazardRadius;if(d<closest){target=boss;closest=d;}}
+          this.enemySeparationGrid.forEachNearby(point.x,point.y,radius,enemy=>{
+            if(enemy.active&&!enemy.isDead()){const d=Math.hypot(enemy.x-point.x,enemy.y-point.y);if(d<closest){target=enemy;closest=d;}}
+          });
+          return target;
+        },
+        validLanding: point => this.infusionLandingValid(point),
+        validMine: (point,mine) => this.isValidPlacement(point.x,point.y)
+          && !this.intersectsWallGeometry(point.x,point.y,18,18)
+          && this.mines.every(other=>other===mine||!other.sprite.active||Math.hypot(other.sprite.x-point.x,other.sprite.y-point.y)>=30),
+        clearSegment: (a,b) => this.infusionSegmentClear(a,b),
+        teleport: point => {
+          this.spawnImpact(this.player.x,this.player.y,0x70ffdf);
+          (this.player.body as Phaser.Physics.Arcade.Body).reset(point.x,point.y);
+          this.player.setVelocity(0,0);this.spawnImpact(point.x,point.y,0x70ffdf);
+        },
+        moveMine: (mine,point) => {this.tweens.killTweensOf((mine as Mine).sprite);(mine as Mine).sprite.setPosition(point.x,point.y);this.spawnImpact(point.x,point.y,COLORS.cyan);},
+        armMine: mine => (mine as Mine).update(this.time.now,true),
+        createLink: (a,b,first,second) => new Fence(this,(a.x+b.x)/2,(a.y+b.y)/2,Math.atan2(b.y-a.y,b.x-a.x),
+          SaveSystem.getCosmeticColor('fenceStyle',this.time.now),Math.hypot(b.x-a.x,b.y-a.y),
+          Math.max(1,Math.min(first.expiresAt,second.expiresAt)-this.time.now),Math.min(first.hp,second.hp),
+          Math.min((first as Fence).dps,(second as Fence).dps),Math.max((first as Fence).slowFactor,(second as Fence).slowFactor)),
+        ascend: (turrets,point,until) => {
+          if(this.ascensionAlly?.active)return false;
+          const damage=turrets.reduce((sum,t)=>sum+(t as Turret).damage,0)*INFUSION_TUNING.ascension.damageScale;
+          this.ascensionAlly=new Enemy(this,point.x,point.y,ENEMY_ROBOT_FRAMES.tank.textureKey,
+            {...baseEnemyStats.tank,hp:turrets.reduce((sum,t)=>sum+t.hp,0),speed:INFUSION_TUNING.ascension.speed,
+              damage,color:0x70ffdf,size:44,valueCredits:0,valueCoreTokens:0});
+          this.ascensionAlly.faction='player';this.ascensionAlly.setCollideWorldBounds(true);
+          this.ascensionWallCollider=this.physics.add.collider(this.ascensionAlly,this.walls);
+          this.ascensionGun=new Turret(this,point.x,point.y,0x70ffdf,1,damage,INFUSION_TUNING.ascension.fireRate,INFUSION_TUNING.ascension.range);
+          this.ascensionGun.takeDamage=amount=>this.ascensionAlly?.takeDamage(amount)??0;
+          this.ascensionGun.sprite.setVisible(false);this.ascensionGun.telemetryId='ascension-ally';this.ascensionUntil=until;
+          this.audio.playSfx('miniBossSpawn');this.spawnImpact(point.x,point.y,0x70ffdf);return true;
+        },
+        boostActive: time => time<this.player.dashUntil,
+        drainBoost: amount => {
+          if(!this.player.canSpendEnergy(amount)){this.player.dashUntil=this.time.now;this.boostVisual.reset();return false;}
+          this.player.spendEnergy(amount);return true;
+        },
+        hazardAt: (point,time) => this.bossEncounter || this.supremeFinale || this.gasHazard?.isLaserSuppressed(time)
+          || this.fluxCores?.isLaserSuppressed(time) ? null : this.laserSecurity?.hijackTarget(point.x,point.y)??null,
+        hijack: until => this.laserSecurity?.setHijackedUntil(until),
+        feedback: (message,point,success) => {
+          this.audio.playSfx(success?'shieldOn':'unavailable');
+          this.showBanner(message);
+          if(success&&point)this.spawnImpact(point.x,point.y,COLORS.cyan);
+        }
+      });
+    }
+    this.infusionInteracting=this.systemInfusions.update(now,dt,this.aimWorldPoint,{
+      pressed:this.playerInput.pressed('interact'),held:this.playerInput.held('interact'),released:this.playerInput.released('interact'),
+      prompt:this.playerInput.prompt('interact','E')
+    }, Boolean(this.tutorialDirector?.isActive()));
+    const graphics=this.infusionGraphics!, point=this.systemInfusions.contextPoint;
+    graphics.clear();graphics.lineStyle(2,this.systemInfusions.placementValid?0x70ffdf:0xff5677,.85);
+    if(point)graphics.strokeCircle(point.x,point.y,29);
+    const target=this.systemInfusions.designatedTarget;if(target)graphics.lineStyle(3,0xff65cb,.95).strokeCircle(target.x,target.y,36);
+    for(const node of this.systemInfusions.reachableNodes)graphics.lineStyle(2,0x70ffdf,.8).strokeCircle(node.x,node.y,18);
+    for(const device of this.systemInfusions.poweredDevices){graphics.lineStyle(2,0x70ffdf,.6).lineBetween(this.player.x,this.player.y,device.sprite.x,device.sprite.y);graphics.strokeCircle(device.sprite.x,device.sprite.y,25);}
+    this.infusionHint!.setText(this.systemInfusions.contextHint).setVisible(Boolean(this.systemInfusions.contextHint))
+      .setPosition(this.player.x,this.player.y-52);
+    this.updateAscensionAlly(now);
+  }
+
+  private updateAscensionAlly(now:number):void {
+    const ally=this.ascensionAlly, gun=this.ascensionGun;if(!ally||!gun)return;
+    if(now>=this.ascensionUntil||!ally.active||ally.isDead()){this.clearAscensionAlly();return;}
+    ally.updateDamageFlash(now);ally.updateMechanicalPresentation(now);
+    gun.sprite.setPosition(ally.x,ally.y);
+    gun.hp=ally.hp;
+    const boss=this.nearestActiveBossTarget(ally.x,ally.y);
+    const target=this.systemInfusions?.priorityTarget(gun,now)
+      ?? (boss?.active&&!boss.isDefeated?boss:this.getNearestEnemy(ally.x,ally.y,INFUSION_TUNING.ascension.range));
+    if(!target){ally.setVelocity(0,0);return;}
+    const angle=Math.atan2(target.y-ally.y,target.x-ally.x),d=Math.hypot(target.x-ally.x,target.y-ally.y);
+    ally.setRotation(angle+Math.PI/2);
+    if(d>180)ally.setVelocity(Math.cos(angle)*INFUSION_TUNING.ascension.speed,Math.sin(angle)*INFUSION_TUNING.ascension.speed);else ally.setVelocity(0,0);
+    if(d<=gun.range&&gun.canFire(now)&&this.infusionSegmentClear(ally,target)){
+      gun.lastShotMs=now;this.spawnTurretAmmoVolley(gun,'normal',angle,gun.damage,now);
+    }
+  }
+
+  private clearAscensionAlly():void {
+    this.ascensionWallCollider?.destroy();this.ascensionWallCollider=null;
+    this.ascensionAlly?.destroy();this.ascensionAlly=null;
+    if(this.ascensionGun){this.ascensionGun.hp=0;this.ascensionGun.destroy();this.ascensionGun=null;}
+  }
+
   private clearRoundInfusionEffects(): void {
+    this.poweredFencePulse = new WeakMap();
+    this.systemInfusions?.reset();this.systemInfusions=null;this.infusionInteracting=false;
+    this.infusionGraphics?.destroy();this.infusionGraphics=null;
+    this.infusionHint?.destroy();this.infusionHint=null;this.clearAscensionAlly();
     for (const timer of this.roundInfusionTimers) timer.remove(false);
     this.roundInfusionTimers.clear();
     for (const effect of this.roundInfusionEffects) {
@@ -4935,7 +5091,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getSecondaryTurretTarget(enemy: Enemy, now: number): Turret | null {
-    if (!['grunt', 'shooter', 'tank', 'star'].includes(enemy.stats.type) || this.turrets.length === 0) return null;
+    if (!['grunt', 'shooter', 'tank', 'star'].includes(enemy.stats.type) || (this.turrets.length === 0 && !this.ascensionGun)) return null;
 
     const previous = this.enemyTurretTargets.get(enemy);
     if (previous && now < previous.reconsiderAt && previous.turret && previous.turret.hp > 0) return previous.turret;
@@ -4947,7 +5103,7 @@ export class ArenaScene extends Phaser.Scene {
           : 0.14;
     let nearestTurret: Turret | null = null;
     let nearestDistanceSquared = 380 * 380;
-    for (const turret of this.turrets) {
+    for (const turret of this.ascensionGun ? [...this.turrets,this.ascensionGun] : this.turrets) {
       if (turret.hp <= 0) continue;
       const dx = turret.sprite.x - enemy.x;
       const dy = turret.sprite.y - enemy.y;

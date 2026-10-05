@@ -163,6 +163,12 @@ const createFloorNozzle = (scene: Phaser.Scene): FireNozzleRuntime => {
  * telegraphs are drawn into two reusable Graphics batches at 20 Hz.
  */
 export class SharedFireTrapSystem {
+  isDangerousAt(x: number, y: number): boolean {
+    return this.nozzles.some(nozzle => (nozzle.state === 'active' || nozzle.state === 'ignition') &&
+      (nozzle.placement.kind === 'floor'
+        ? Math.hypot(x-nozzle.placement.x,y-nozzle.placement.y) <= FLOOR_DAMAGE_RADIUS + 18
+        : this.wallFlameContains(nozzle,x,y)));
+  }
   private readonly nozzles: FireNozzleRuntime[];
   private readonly flameGraphics: Phaser.GameObjects.Graphics;
   private readonly glowGraphics: Phaser.GameObjects.Graphics;
