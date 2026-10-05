@@ -15,6 +15,7 @@ import { preloadBossModels } from '../bosses/BossModelAssets.ts';
 import { STARTUP_INTRO_VIDEO, StartupIntro } from '../ui/StartupIntro.ts';
 import { createMechanicalDebrisTextures } from '../vfx/MechanicalDestructionVfx.ts';
 import { createMineFrameSvgDataUri } from '../cosmetics/MineFrameArt.ts';
+import { createTugLifeWhistleHeroSvg, createTugLifeSteamSvg, TUG_WHISTLE_TEXTURE, TUG_STEAM_TEXTURE } from '../cosmetics/TugLifeWhistleArt.ts';
 import {
   createPremiumProjectileShapeSvgDataUri,
   isPremiumProjectileShape
@@ -27,6 +28,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    this.load.svg(TUG_WHISTLE_TEXTURE, `data:image/svg+xml;base64,${btoa(createTugLifeWhistleHeroSvg())}`, { width: 480, height: 640 });
+    this.load.svg(TUG_STEAM_TEXTURE, `data:image/svg+xml;base64,${btoa(createTugLifeSteamSvg())}`, { width: 160, height: 130 });
     // Prepare the next screen while the intro plays so its handoff needs no fetch.
     this.load.image('n3on-splash', splashImageUrl);
     const mount = document.querySelector<HTMLElement>('#game-root');

@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { TugLifeWhistleVisual } from './TugLifeWhistleVisual.ts';
+import { TUG_WHISTLE_LIFETIME_MS } from './TugLifeWhistleArt.ts';
 import { getCosmeticById, getCosmeticDisplayColor, getProjectileDisplayColor, resolveOperativeFrameAppearance } from '../../data/cosmetics.ts';
 import type { CosmeticOption } from '../types.ts';
 import { createPremiumTurretVisual } from './PremiumTurretVisual.ts';
@@ -82,6 +84,13 @@ export const createCosmeticPreview = (
   const addBombSignaturePreview = (): boolean => {
     if (!item.bombExplosionEffect) return false;
     const size = Math.min(maxWidth, maxHeight);
+    if (item.bombExplosionEffect === 'tug-life') {
+      const visual = new TugLifeWhistleVisual(scene);
+      container.add(visual.root);
+      previewUpdater = time => visual.update(0, size * .4, size * .5, time % TUG_WHISTLE_LIFETIME_MS, false);
+      previewUpdater(scene.time.now);
+      return true;
+    }
     const signature = scene.add.container(0, 0);
     const rotatingLayer = scene.add.container(0, 0);
     const heroLayer = scene.add.container(0, 0);

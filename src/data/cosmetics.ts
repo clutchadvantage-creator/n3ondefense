@@ -189,6 +189,13 @@ export const COSMETICS: CosmeticOption[] = [
     description: 'The bombsite fractures into a neon night swarm. Cyber-bats spiral outward and flap through the blast haze before dissolving.'
   },
   {
+    id: 'bomb-tug-life', category: 'bombColor', label: 'Tug Life // Full Steam',
+    currency: 'credits', cost: 20_000, additionalCosts: { coreTokens: 400, plasmaChips: 90 },
+    color: 0xffcf65, accentColor: 0xf2fcff, priceTier: 'prestige',
+    bombExplosionEffect: 'tug-life', previewEffect: 'gold-whistle-steam',
+    description: 'TUG LIFE COLLECTION. A gilded steam whistle rises under pressure, then blasts billowing white steam with its signature whistle call.'
+  },
+  {
     id: 'bomb-witch-signal',
     category: 'bombColor',
     label: 'Hexcaster Signal',

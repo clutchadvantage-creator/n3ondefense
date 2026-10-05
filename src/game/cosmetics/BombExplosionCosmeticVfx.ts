@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { getCosmeticById } from '../../data/cosmetics.ts';
 import type { BombExplosionCosmeticEffectId } from '../types.ts';
 import { BOMB_EXPLOSION_COSMETIC_DEFINITIONS } from './BombExplosionCosmeticDefinitions.ts';
+import { TugLifeWhistleVisual } from './TugLifeWhistleVisual.ts';
 
 interface BombExplosionCosmeticState {
   active: boolean;
@@ -49,8 +50,9 @@ export class BombExplosionCosmeticVfx {
   private readonly fragmentSin = new Float32Array(SKULL_FRAGMENT_COUNT);
   private readonly renderers: Record<BombExplosionCosmeticEffectId, CosmeticRenderer>;
   private sequence = 0;
+  private readonly whistles = new Map<BombExplosionCosmeticState, TugLifeWhistleVisual>();
 
-  constructor(scene: Phaser.Scene, private readonly particlesEnabled: boolean) {
+  constructor(private readonly scene: Phaser.Scene, private readonly particlesEnabled: boolean) {
     this.maximumActiveEffects = particlesEnabled ? MAX_ACTIVE_EFFECTS : REDUCED_ACTIVE_EFFECTS;
     this.smokeGraphics = scene.add.graphics().setDepth(16).setBlendMode(Phaser.BlendModes.NORMAL);
     this.graphics = scene.add.graphics().setDepth(17).setBlendMode(Phaser.BlendModes.ADD);
@@ -70,6 +72,11 @@ export class BombExplosionCosmeticVfx {
       this.fragmentSin[index] = Math.sin(angle);
     }
     this.renderers = {
+      'tug-life': (state, elapsed, reducedDetail) => {
+        let visual = this.whistles.get(state);
+        if (!visual) { visual = new TugLifeWhistleVisual(this.scene); this.whistles.set(state, visual); }
+        visual.update(state.x, state.y, state.radius, elapsed, reducedDetail);
+      },
       'death-signal': (state, elapsed, reducedDetail) => this.drawDeathSignal(state, elapsed, reducedDetail),
       'neon-bloom': (state, elapsed, reducedDetail) => this.drawNeonBloom(state, elapsed, reducedDetail),
       'neon-bats': (state, elapsed, reducedDetail) => this.drawNeonBats(state, elapsed, reducedDetail),
@@ -116,6 +123,7 @@ export class BombExplosionCosmeticVfx {
   }
 
   update(now: number): void {
+    for (const visual of this.whistles.values()) visual.hide();
     this.smokeGraphics.clear();
     this.graphics.clear();
     let activeCount = 0;
@@ -143,12 +151,15 @@ export class BombExplosionCosmeticVfx {
   }
 
   reset(): void {
+    for (const visual of this.whistles.values()) visual.hide();
     for (const state of this.states) state.active = false;
     this.smokeGraphics.clear();
     this.graphics.clear();
   }
 
   destroy(): void {
+    for (const visual of this.whistles.values()) visual.destroy();
+    this.whistles.clear();
     this.reset();
     this.smokeGraphics.destroy();
     this.graphics.destroy();

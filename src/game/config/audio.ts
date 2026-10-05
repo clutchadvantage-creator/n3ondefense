@@ -72,6 +72,7 @@ export const SFX_DEFINITIONS = [
   { key: 'bombsiteFlower', label: 'Bombsite Flower Signature' },
   { key: 'bombsiteBats', label: 'Bombsite Bat Signature' },
   { key: 'bombsiteWitch', label: 'Bombsite Witch Signature' },
+  { key: 'bombsiteTugLife', label: 'Tug Life Steam Whistle' },
   { key: 'menuHover', label: 'Menu Hover' },
   { key: 'menu', label: 'Menu Select' },
   { key: 'itemLocked', label: 'Locked / Unavailable' },
@@ -90,7 +91,7 @@ export const SFX_CATEGORIES = [
   { id: 'rewards', label: 'Pickups & Rewards', keys: ['pickup', 'healthPickup', 'energyPickup', 'damageBoostPickup', 'speedPickup', 'fireRatePickup', 'creditPickup', 'coreTokenPickup', 'fluxCorePickup', 'ricochetPickup', 'grenadeRoundsPickup', 'scattershotPickup', 'modPickup', 'fluxCore', 'modCollection', 'legendaryMod'] },
   { id: 'arcade', label: 'Arcade Events', keys: ['circuitGate', 'overloadEvent', 'supplyDropEvent', 'dataThiefEntrance', 'dataThiefFail', 'goldenEnemyEvent', 'goldenEnemyEventFail'] },
   { id: 'anomalies', label: 'Anomalies', keys: ['anomalyPortalPower', 'anomalyPortalIdle', 'anomalyPortalTransit', 'heistDoor', 'heistAlarm'] },
-  { id: 'interface', label: 'Interface & Cosmetics', keys: ['bombsiteSkull', 'bombsiteFlower', 'bombsiteBats', 'bombsiteWitch', 'menuHover', 'menu', 'itemLocked', 'runStart'] }
+  { id: 'interface', label: 'Interface & Cosmetics', keys: ['bombsiteSkull', 'bombsiteFlower', 'bombsiteBats', 'bombsiteWitch', 'bombsiteTugLife', 'menuHover', 'menu', 'itemLocked', 'runStart'] }
 ] as const satisfies readonly { id: string; label: string; keys: readonly AudioSfxName[] }[];
 
 export const DEFAULT_AUDIO_VOLUME = 0.25;

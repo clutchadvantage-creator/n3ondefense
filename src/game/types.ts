@@ -282,7 +282,7 @@ export type CosmeticVisualShape =
   | 'tacticalMissile'
   | 'teardrop';
 
-export type BombExplosionCosmeticEffectId = 'death-signal' | 'neon-bloom' | 'neon-bats' | 'witch-signal';
+export type BombExplosionCosmeticEffectId = 'death-signal' | 'neon-bloom' | 'neon-bats' | 'witch-signal' | 'tug-life';
 export type DashTrailCosmeticEffectId = 'ion' | 'fire-smoke' | 'grass-clippings' | 'bubbles' | 'plasma' | 'jet-plume' | 'stars';
 export type TurretSkinCosmeticEffectId =
   | 'void-reactor'

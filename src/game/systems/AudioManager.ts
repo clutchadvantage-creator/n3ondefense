@@ -45,7 +45,8 @@ const PRESENTATION_SFX_SOURCES = {
   bombsiteSkull: 'soundeffects/skullbombsite.mp3',
   bombsiteFlower: 'soundeffects/flowerbombsite.mp3',
   bombsiteBats: 'soundeffects/batbombsite.mp3',
-  bombsiteWitch: 'soundeffects/witchlaugh.mp3'
+  bombsiteWitch: 'soundeffects/witchlaugh.mp3',
+  bombsiteTugLife: 'soundeffects/tuglifebombexplosion.mp3'
 } as const;
 type PresentationSfxName = keyof typeof PRESENTATION_SFX_SOURCES;
 const ARCADE_EVENT_SFX_NAMES = [
@@ -82,7 +83,8 @@ const PRESENTATION_SFX_POOL_SIZES: Record<PresentationSfxName, number> = {
   bombsiteSkull: 2,
   bombsiteFlower: 2,
   bombsiteBats: 2,
-  bombsiteWitch: 2
+  bombsiteWitch: 2,
+  bombsiteTugLife: 2
 };
 const PRESENTATION_SFX_MIN_INTERVAL_MS: Record<PresentationSfxName, number> = {
   gasCanImpact: 70,
@@ -110,7 +112,8 @@ const PRESENTATION_SFX_MIN_INTERVAL_MS: Record<PresentationSfxName, number> = {
   bombsiteSkull: 80,
   bombsiteFlower: 80,
   bombsiteBats: 80,
-  bombsiteWitch: 80
+  bombsiteWitch: 80,
+  bombsiteTugLife: 80
 };
 type AbilityFeedbackSfxName = 'placeTurret' | 'electricFence' | 'placeMine' | 'unavailable';
 const PICKUP_SFX_SOURCES = {
@@ -219,7 +222,7 @@ export class AudioManager {
     dataThiefEntrance: [], dataThiefFail: [],
     goldenEnemyEvent: [], goldenEnemyEventFail: [],
     smashableBreak: [], fireTrap: [],
-    bombsiteSkull: [], bombsiteFlower: [], bombsiteBats: [], bombsiteWitch: []
+    bombsiteSkull: [], bombsiteFlower: [], bombsiteBats: [], bombsiteWitch: [], bombsiteTugLife: []
   };
   private readonly presentationSfxCursors: Record<PresentationSfxName, number> = {
     gasCanImpact: 0, gasFizz: 0, totemEntrance: 0, totemPulse: 0, miniBossSpawn: 0,
@@ -229,7 +232,7 @@ export class AudioManager {
     dataThiefEntrance: 0, dataThiefFail: 0,
     goldenEnemyEvent: 0, goldenEnemyEventFail: 0,
     smashableBreak: 0, fireTrap: 0,
-    bombsiteSkull: 0, bombsiteFlower: 0, bombsiteBats: 0, bombsiteWitch: 0
+    bombsiteSkull: 0, bombsiteFlower: 0, bombsiteBats: 0, bombsiteWitch: 0, bombsiteTugLife: 0
   };
   private readonly lastPresentationSfxAt: Record<PresentationSfxName, number> = {
     gasCanImpact: -Infinity, gasFizz: -Infinity, totemEntrance: -Infinity,
@@ -241,7 +244,7 @@ export class AudioManager {
     dataThiefEntrance: -Infinity, dataThiefFail: -Infinity,
     goldenEnemyEvent: -Infinity, goldenEnemyEventFail: -Infinity,
     smashableBreak: -Infinity, fireTrap: -Infinity,
-    bombsiteSkull: -Infinity, bombsiteFlower: -Infinity, bombsiteBats: -Infinity, bombsiteWitch: -Infinity
+    bombsiteSkull: -Infinity, bombsiteFlower: -Infinity, bombsiteBats: -Infinity, bombsiteWitch: -Infinity, bombsiteTugLife: -Infinity
   };
   private runStartSfx: HTMLAudioElement | null = null;
   private securityLaserAudio: HTMLAudioElement | null = null;
@@ -1909,6 +1912,7 @@ export class AudioManager {
       case 'bombsiteFlower':
       case 'bombsiteBats':
       case 'bombsiteWitch':
+      case 'bombsiteTugLife':
         this.playPresentationSfx(name);
         break;
       case 'anomalyPortalPower':

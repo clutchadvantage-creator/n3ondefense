@@ -6366,7 +6366,9 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.arenaSmashables?.damageArea(site.x, site.y, BOMBSITE_EXPLOSION_VISUAL_RADIUS, 9999);
     if (bombExplosionCosmeticEffect) {
-      this.audio.playSfx(BOMB_EXPLOSION_COSMETIC_DEFINITIONS[bombExplosionCosmeticEffect].sound);
+      const definition = BOMB_EXPLOSION_COSMETIC_DEFINITIONS[bombExplosionCosmeticEffect];
+      if (definition.soundDelayMs) this.scheduleRoundHandoffCall(definition.soundDelayMs, () => this.audio.playSfx(definition.sound));
+      else this.audio.playSfx(BOMB_EXPLOSION_COSMETIC_DEFINITIONS[bombExplosionCosmeticEffect].sound);
     }
 
     if (this.modRuntime.hasInfusion('detonation-fireworks')) this.playDetonationFireworks(site.x, site.y);

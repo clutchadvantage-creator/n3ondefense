@@ -9,10 +9,11 @@ import { createBaseOperativeFrameSvg } from './BaseOperativeFrameSvg.ts';
 import { createPremiumTurretSkinSvg } from './PremiumTurretSkinSvg.ts';
 import { createStandardTurretSvg } from './StandardTurretSvg.ts';
 import { createMineFrameSvg } from '../../game/cosmetics/MineFrameArt.ts';
+import { createTugLifeWhistleSvg } from '../../game/cosmetics/TugLifeWhistleArt.ts';
 import { createPremiumProjectileShapeSvg } from '../../game/cosmetics/PremiumProjectileShapeArt.ts';
 import './storefront.css';
 import { createAccessCardView } from '../AnomalyAccessCardView.ts';
-import { ACCESS_CARD_TYPES, ACCESS_CARD_PRICE, ACCESS_CARD_DAILY_LIMIT, type AnomalyAccessCards } from '../../game/anomalies/AnomalyAccessCards.ts';
+import { ACCESS_CARD_TYPES, ACCESS_CARD_NAMES, ACCESS_CARD_PRICE, ACCESS_CARD_DAILY_LIMIT, type AnomalyAccessCards } from '../../game/anomalies/AnomalyAccessCards.ts';
 import type { AnomalyId } from '../../game/anomalies/types.ts';
 
 export type StoreMode = 'cosmetics' | 'upgrades';
@@ -70,6 +71,8 @@ export class StorefrontUi {
   private walletFeedback: { credits: number; coreTokens: number; plasmaChips: number } | null = null;
   private screen: HTMLElement | null = null;
   private cardDayTimer: number | undefined;
+  private acquiredAccessCard: AnomalyId | null = null;
+  private accessCelebrationTimer: number | undefined;
   private readonly keyHandler = (event: KeyboardEvent): void => this.handleKey(event);
 
   constructor(options: StorefrontUiOptions) {
@@ -94,6 +97,7 @@ export class StorefrontUi {
 
   destroy(): void {
     window.clearInterval(this.cardDayTimer);
+    window.clearTimeout(this.accessCelebrationTimer);
     window.removeEventListener('keydown', this.keyHandler);
     this.screen?.remove();
     this.screen = null;
@@ -285,18 +289,36 @@ export class StorefrontUi {
     detail.textContent = 'Consumable clearance. Choose an anomaly at an existing portal and bypass its Flux fee. Cards never spawn portals and cannot repeat the last event played.';
     const limits = document.createElement('p');
     limits.textContent = `Today: ${state.purchases} / 3 purchased · ${state.uses} / 3 used · Resets at 00:00 UTC`;
-    const feedback = document.createElement('p'); feedback.setAttribute('role', 'status'); feedback.textContent = this.message;
+    const feedback = document.createElement('div'); feedback.setAttribute('role', 'status'); feedback.setAttribute('aria-live', 'polite');
+    if (this.acquiredAccessCard) {
+      feedback.className = 'access-purchase-receipt';
+      const title = document.createElement('h3'); title.textContent = 'ACCESS SECURED';
+      const name = document.createElement('strong'); name.textContent = `+1 ${ACCESS_CARD_NAMES[this.acquiredAccessCard]} ACCESS CARD`;
+      const receipt = document.createElement('p'); receipt.textContent = `${ACCESS_CARD_PRICE.toLocaleString()} Credits spent · ${state.owned[this.acquiredAccessCard]} owned · Ready at your next portal`;
+      const seal = document.createElement('span'); seal.className = 'access-purchase-seal'; seal.textContent = '✓'; seal.setAttribute('aria-hidden', 'true');
+      const copy = document.createElement('div'); copy.append(title, name, receipt);feedback.append(seal, copy);
+    } else feedback.textContent = this.message;
     const grid = document.createElement('div'); grid.className = 'access-card-grid';
     for (const id of ACCESS_CARD_TYPES) {
       const tile = document.createElement('div'); tile.append(createAccessCardView(id, state.owned[id]));
+      if (this.acquiredAccessCard === id) tile.classList.add('access-card-acquired');
       const buy = document.createElement('button'); buy.type = 'button';
       buy.textContent = state.purchases >= ACCESS_CARD_DAILY_LIMIT ? 'DAILY PURCHASE LIMIT REACHED' : `BUY · ${ACCESS_CARD_PRICE.toLocaleString()} CREDITS`;
       buy.disabled = state.purchases >= ACCESS_CARD_DAILY_LIMIT || snapshot.credits < ACCESS_CARD_PRICE;
       buy.dataset.controllerFocusId = `buy-access-${id}`;
+      buy.dataset.menuAudio = 'deferred';
       buy.addEventListener('click', () => {
-        const result = this.options.onPurchaseAccessCard!(id);
-        this.message = result.message ?? (result.ok ? 'CARD PURCHASED' : 'PURCHASE UNAVAILABLE');
-        this.render();
+        this.perform(() => {
+          const result = this.options.onPurchaseAccessCard!(id);
+          window.clearTimeout(this.accessCelebrationTimer);
+          this.acquiredAccessCard = result.ok ? id : null;
+          AudioManager.get().playSfx(result.ok ? 'legendaryMod' : 'itemLocked');
+          if (result.ok) this.accessCelebrationTimer = window.setTimeout(() => {
+            this.acquiredAccessCard = null;
+            if (this.selectedCategory === 'access-cards') this.render();
+          }, 4200);
+          return result;
+        });
       });
       tile.append(buy); grid.append(tile);
     }
@@ -721,6 +743,10 @@ export class StorefrontUi {
     if (item.turretSkinEffect) visual.dataset.turretSkin = item.turretSkinEffect;
     if (item.mineFrameEffect) visual.dataset.mineFrame = item.mineFrameEffect;
     visual.innerHTML = '<i class="trail-a"></i><i class="trail-b"></i><b></b><span></span>';
+    if (item.bombExplosionEffect === 'tug-life') {
+      visual.innerHTML = createTugLifeWhistleSvg();
+      return visual;
+    }
     if (COLOR_PALETTE_CATEGORIES.has(item.category) && !item.bombExplosionEffect) {
       visual.classList.add('cyber-palette-control');
       visual.setAttribute('role', 'img');
