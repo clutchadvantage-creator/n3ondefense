@@ -6,17 +6,18 @@ export const skyForwardAim = (x: number, y: number, lateral: number) => ({
 });
 
 export const SKY_DURABILITY: Record<SkyRole, number> = {
-  drone: 1.35, interceptor: 1.65, strike: 2.8, tank: 1.5, zeppelin: 7, aa: 1.8
+  drone: 1, interceptor: 1, strike: 1, tank: 1, zeppelin: 7, aa: 1
 };
 
 export interface FlightSteering {
   phase: number; side: number; stage: 'attack' | 'bank' | 'climb'; stageAge: number;
   age: number; targetX: number; targetY: number; velocityX: number; velocityY: number; passes: number;
+  group: number; slot: number; bank: number; heading: number;
 }
 const clamp = (v:number,lo:number,hi:number) => Math.max(lo,Math.min(hi,v));
 export const createFlightSteering = (phase:number,direction:number):FlightSteering => ({
   phase,side:Math.sign(direction)|| (Math.sin(phase)>0?1:-1),stage:'attack',stageAge:0,
-  age:0,targetX:0,targetY:0,velocityX:0,velocityY:0,passes:0
+  age:0,targetX:0,targetY:0,velocityX:0,velocityY:0,passes:0,group:Math.sign(direction)||1,slot:0,bank:0,heading:Math.PI/2
 });
 
 /** Bounded acceleration towards a steering velocity; never teleports a physics body. */
@@ -46,21 +47,36 @@ export function steerFlight(s:FlightSteering,role:SkyRole,pattern:Formation,dt:n
   if(role==='aa')return {x:0,y:49};
   if(role==='zeppelin')return accelerate(s,Math.sin(s.age*.45+s.phase)*24,(245-y)*.45,75,dt);
   if(role==='drone') {
+    s.stageAge+=dt;
+    if(s.stageAge>(s.stage==='attack'?3.4:s.stage==='bank'?1.5:2.2)) {
+      s.stage=s.stage==='attack'?'bank':s.stage==='bank'?'climb':'attack';s.stageAge=0;
+      if(s.stage==='attack'){s.passes++;s.side*=-1;}
+    }
     const orbit=s.age*(.28+(s.phase%1)*.13)+s.phase;
-    const tx=clamp(playerX+Math.cos(orbit)*(170+Math.sin(s.phase)*55),110,width-110);
-    const ty=clamp(playerY-150+Math.sin(orbit)*120,180,height-150);
+    const radius=s.stage==='attack'?145:s.stage==='bank'?300:235;
+    const tx=clamp(playerX+Math.cos(orbit)*(radius+Math.sin(s.phase)*55),110,width-110);
+    const ty=clamp(playerY-(s.stage==='attack'?145:260)+Math.sin(orbit)*95,180,height-150);
     let vx=(tx-x)*.7+Math.sin(s.age*2.7+s.phase)*30+Math.sin(s.age*5.1+s.phase)*9+separationX;
     let vy=(ty-y)*.7+Math.sin(s.age*3.3+s.phase*2)*25+separationY;
     const limit=speed*1.1,length=Math.hypot(vx,vy);
     if(length>limit){vx*=limit/length;vy*=limit/length;}
     return accelerate(s,vx,vy,speed*2.4,dt);
   }
+  if(pattern==='corkscrew'&&s.age<18) {
+    // Opposed groups trace intertwined helices while progressing down the corridor.
+    const t=Math.max(0,s.age-2),phase=t*.85+(s.group<0?Math.PI:0)+s.slot*.24;
+    const tx=width/2+Math.cos(phase)*width*.29;
+    const ty=clamp(160+t*height*.035+Math.sin(phase)*100-s.slot*48,115,height-110);
+    const dx=tx-x,dy=ty-y,limit=speed*3.5,d=Math.max(1,Math.hypot(dx,dy));
+    return accelerate(s,dx/d*Math.min(limit,d*2),dy/d*Math.min(limit,d*2),limit*2.2,dt);
+  }
   const heavy=role==='strike';
   // Select targets only at the beginning of a maneuver, rather than homing each frame.
   if(s.stageAge===0){
     if(s.stage==='attack'){
-      s.targetX=clamp(playerX+s.side*(pattern==='crossing'?260:pattern==='diagonal'?160:70),100,width-100);
-      s.targetY=clamp(playerY+120,height*.62,height-100);
+      const flank=pattern==='crossing'||pattern==='scissors'?260:pattern==='diagonal'||pattern==='pincer'?180:70;
+      s.targetX=clamp(playerX+s.side*flank,100,width-100);
+      s.targetY=clamp(playerY+(pattern==='banked-dive'?190:120),height*.62,height-100);
     }else if(s.stage==='bank'){
       s.targetX=s.side>0?width-95:95;s.targetY=clamp(y+100,200,height-75);
     }else {s.targetX=s.side>0?width*.7:width*.3;s.targetY=160+Math.sin(s.phase)*35;}
@@ -72,9 +88,10 @@ export function steerFlight(s:FlightSteering,role:SkyRole,pattern:Formation,dt:n
     if(s.stage==='attack'){s.passes++;s.side*=-1;}
   }
   const runSpeed=speed*(heavy?1.8:3.5);
-  const targetSpeed=runSpeed*(s.stage==='attack'?1:s.stage==='bank'?.72:.9);
+  const targetSpeed=runSpeed*(s.stage==='attack'?(pattern==='banked-dive'?1.15:1):s.stage==='bank'?.72:.9);
   // Perpendicular S-turns give formations different trajectories without replacing their entry slots.
-  const curl=Math.sin(s.age*(pattern==='split'?3.8:2.2)+s.phase)*targetSpeed*(heavy?.09:.2);
+  const curl=Math.sin(s.age*(pattern==='spiral'?1.4:pattern==='split'?3.8:2.2)+s.phase)
+    *targetSpeed*(heavy?.09:pattern==='spiral'?.5:pattern==='escort-break'?.32:.2);
   let vx=distance>1?(dx*targetSpeed-dy*curl)/distance:0;
   let vy=distance>1?(dy*targetSpeed+dx*curl)/distance:0;
   // Strong recovery steering handles knockback or a pass which overshoots the view.
@@ -83,4 +100,20 @@ export function steerFlight(s:FlightSteering,role:SkyRole,pattern:Formation,dt:n
     if(r>0){vx=rx/r*targetSpeed;vy=ry/r*targetSpeed;}
   }
   return accelerate(s,vx,vy,runSpeed*(heavy?1.4:2.8),dt);
+}
+
+/** Smooth pseudo-roll changes wing perspective independently from world heading. */
+export function flightBank(s:FlightSteering,pattern:Formation,dt:number):number {
+  if(dt<=0)return s.bank;
+  const heading=Math.atan2(s.velocityY,s.velocityX);
+  const turn=Math.atan2(Math.sin(heading-s.heading),Math.cos(heading-s.heading));
+  const roll=pattern==='corkscrew'&&s.age<18?Math.sin((s.age-2)*.85+(s.group<0?Math.PI:0))* .85
+    :pattern==='rolling-entry'&&s.age<4?Math.sin(s.age*1.7):clamp(turn/Math.max(dt,.001)*.55,-1,1);
+  s.bank+=(roll-s.bank)*(1-Math.exp(-dt*5));s.heading=heading;
+  return s.bank;
+}
+
+export function dreadnoughtPosition(elapsedMs:number,width:number) {
+  const t=elapsedMs/1000,extent=135+Math.sin(t*.055)*35;
+  return { x:width/2+Math.sin(t*.19)*extent, y:245+Math.sin(t*.11)*18 };
 }

@@ -121,7 +121,7 @@ test('Overdrive improves one authoritative Mod chance and rarity roll without ex
 });
 
 test('Arena applies mode rules at the authoritative pipelines rather than duplicating round curves', () => {
-  assert.match(arenaSource, /applyEnemyHealthMode\(/);
+  assert.match(arenaSource, /scaleArenaEnemyStats\(base, arenaEnemyScaling\(curve, this\.protocol, defensePhase/);
   assert.match(arenaSource, /applyEnemyDamageMode\(/);
   assert.match(arenaSource, /getModeSpawnCadence\(/);
   assert.match(arenaSource, /getEnemyDefuseDuration\(/);

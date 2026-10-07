@@ -87,7 +87,7 @@ import type { PickupType, RectSpec } from '../../types.ts';
 type HeistPhase = 'inbound' | 'vault-opening' | 'looting' | 'egress-delay' | 'egress-ready' | 'escape' | 'returning';
 type ProjectileOwner = 'player' | 'enemy' | 'turret';
 
-interface HeistProjectile {
+export interface HeistProjectile {
   echo?: EchoDamageStamp;
   sprite: Phaser.Physics.Arcade.Image;
   owner: ProjectileOwner;

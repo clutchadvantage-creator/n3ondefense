@@ -205,6 +205,8 @@ export interface HeistSessionData {
   difficulty?: {
     healthMultiplier: number; damageMultiplier: number; speedMultiplier: number;
     activeCount: number; rewardMultiplier: number; contractHealthMultiplier: number;
+    defensePhase?: boolean;
+    bossBenchmark?: ReturnType<typeof import('../config/ArenaCombatScaling.ts').arenaBossBenchmark>;
   };
   dev?: { forceMiniBoss?: boolean | null; instantReturn?: boolean };
 }

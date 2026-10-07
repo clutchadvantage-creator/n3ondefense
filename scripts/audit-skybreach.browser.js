@@ -24,7 +24,7 @@
       check(S.get().credits===50000,'three cards charge 150,000 Credits');
       check(!S.purchaseAccessCard('heist').ok,'combined purchase cap rejects fourth');
       check(S.getAccessCards().owned.heist===1&&S.getAccessCards().owned.skybreach===2,'owned counts');
-      const cases=globalThis.__skyPreview?[['normal',4]]:globalThis.__skyTestModes??[['normal',4],['overdrive',16],['supreme',26]];
+      const cases=globalThis.__skyPreview?[globalThis.__skyTestModes?.[0]??['normal',4]]:globalThis.__skyTestModes??[['normal',4],['overdrive',16],['supreme',26]];
       for(const [mode,round] of cases){
         for(const s of game.scene.getScenes(false))if(s.sys.isActive()||s.sys.isPaused()||s.sys.isSleeping())game.scene.stop(s.scene.key);
         await wait(100);game.scene.start('menu');await wait(100);
@@ -141,10 +141,10 @@
         check(emitted>=12&&emitted<=20,mode+': high fire-rate build respects existing 22/sec ceiling');
         report.samples.at(-1).highRatePlayerProjectiles=emitted;
         if(mode==='normal'){
-          const {SKY_FLIGHT}=await import('/src/game/anomalies/skybreach/SkyBreachDirector.ts');
+          const SKY_FLIGHT=sky.director.modules;
           let boundary=0;
-          sky.zeppelinDeployed=false;
           for(let i=0;i<SKY_FLIGHT.length;i++){
+            sky.airshipAt=0;
             sky.director.elapsed=boundary+.001;sky.director.index=-1;
             await wait(80);sky.director.nextWave=0;await wait(100);
             check(sky.director.index===i,`authored module ${i+1}: ${SKY_FLIGHT[i].name}`);
@@ -162,11 +162,15 @@
         sky.startDreadnought();const coreHp=sky.core.hp;
         if(mode==='normal'){
           const attacks=[];const next=sky.scheduler.next.bind(sky.scheduler);
-          sky.scheduler.next=(...args)=>{const attack=next(...args);if(attack)attacks.push(attack);return attack;};
+          sky.scheduler.next=(...args)=>{const cues=next(...args);attacks.push(...cues.map(c=>c.family));return cues;};
           for(let i=0;i<5;i++){sky.scheduler.nextAt=0;await wait(1800);}
           check(['cannon','missile','broadside','artillery','escorts'].every(a=>attacks.includes(a)),'all five boss attack families execute in live updates');
+          check(sky.hardpoints.every(h=>h.fired>0),'all seven hardpoints, including forward cannons, actually fire');
           sky.scheduler.next=next;
         }
+        const scaling=sky.getScalingDiagnostics();report.samples.at(-1).scaling=scaling;
+        check(sky.hardpoints.every(h=>h.enemy.stats.hp===scaling.bossBenchmark.health),mode+': each hardpoint equals actual Arena boss benchmark');
+        check(sky.core.stats.hp===2*scaling.bossBenchmark.health,mode+': core alone gets twice Arena benchmark');
         sky.damageEnemy(sky.core,1e12);check(sky.core.hp===coreHp,mode+': core rejects early damage');
         sky.damageEnemy(sky.core,1e12,{equivalentDamage:1e12,multiplier:.5});check(sky.core.hp===coreHp,mode+': core rejects Echo before opening');
         const cannon=sky.hardpoints[0].enemy;
@@ -176,6 +180,7 @@
           // Echo applies real damage without triggering the equipped Split Current's secondary kill chain.
           sky.damageEnemy(h.enemy,1e12,{equivalentDamage:1e12,multiplier:.5});sky.updateDreadnought();
           check(!sky.aliveWeapons.has(h.id)&&!h.enemy.active,mode+': disabled '+h.id);
+          check(h.wreck.visible&&h.wreck.texture.key==='sky-wreck',mode+': persistent torn plating '+h.id);
         }
         check(sky.bossBursts.length===0&&sky.strikes.length===0,mode+': destroyed weapons cancel queued fire');
         check(sky.bossOpen,mode+': all seven hardpoints expose core');

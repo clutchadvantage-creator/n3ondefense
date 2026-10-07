@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
-import { AnomalyCombatScene } from '../heist/HeistScene.ts';
+import { AnomalyCombatScene, type HeistProjectile } from '../heist/HeistScene.ts';
 import { SceneKeys } from '../../flow/SceneKeys.ts';
 import { Enemy, baseEnemyStats } from '../../enemies/Enemy.ts';
 import { ENEMY_ROBOT_FRAMES } from '../../enemies/EnemyRobotFrames.ts';
 import { SkyBreachWorld } from './SkyBreachArt.ts';
-import { skyBreachDifficulty } from './SkyBreachDifficulty.ts';
-import { SkyBreachDirector, DreadnoughtScheduler, DREADNOUGHT_WEAPONS, attackWeapons, coreExposed,
-  formationSlots, tankGroupSlots, type FlightModule, type SkyRole, type HardpointId } from './SkyBreachDirector.ts';
+import { skyBreachDifficulty, scaleArenaEnemyStats } from './SkyBreachDifficulty.ts';
+import { SkyBreachDirector, DreadnoughtCrossfire, DREADNOUGHT_WEAPONS, attackWeapons, coreExposed,
+  formationSlots, tankGroupSlots, skyReinforcementPlan, type DreadnoughtAttack, type FlightModule, type SkyRole, type HardpointId } from './SkyBreachDirector.ts';
 import { createArtilleryMarker } from '../../bosses/ArtilleryMarker.ts';
 import { BOSS_BALANCE, getBossRewards } from '../../config/bossBalance.ts';
 import { rollModDrop } from '../../mods/ModDropService.ts';
@@ -16,17 +16,23 @@ import type { RectSpec, PickupType } from '../../types.ts';
 import type { EchoDamageStamp } from '../../echo/EchoRules.ts';
 import { SupremeModEffectSystem } from '../../mods/SupremeModEffectSystem.ts';
 import { MOD_BALANCE } from '../../mods/modBalance.ts';
-import { createFlightSteering, droneSeparation, steerFlight, skyForwardAim, SKY_DURABILITY, type FlightSteering } from './SkyBreachMotion.ts';
+import { createFlightSteering, droneSeparation, steerFlight, skyForwardAim, SKY_DURABILITY, flightBank, dreadnoughtPosition, type FlightSteering } from './SkyBreachMotion.ts';
+import { DroneBurstWeapon } from '../../enemies/drone/DroneFlight.ts';
+import { getTankHomingMissileSpeed, steerTankHomingMissile } from '../../enemies/HomingMissile.ts';
+import { ENEMY_BALANCE, TANK_HOMING_MISSILE_BALANCE } from '../../config/balance/index.ts';
+import { getModeSpawnCadence, applyEnemyDamageMode } from '../../config/modeBalance.ts';
 import { MechanicalDestructionVfx } from '../../vfx/MechanicalDestructionVfx.ts';
+import { HeistPerformanceProfiler } from '../heist/HeistPerformanceProfiler.ts';
 import type { Formation } from './SkyBreachDirector.ts';
 
 interface FlightState {
   role: SkyRole; pattern: Formation; age: number; originX: number; vx: number; vy: number; shotAt: number;
-  warningAt: number; aim: number; nextDronesAt: number; warning: Phaser.GameObjects.Line;
+  warningAt: number; aim: number; nextDronesAt: number; warning: Phaser.GameObjects.Image;
   decorations: Phaser.GameObjects.Image[];
-  steering: FlightSteering; lane: number; laneOffset: number;
+  steering: FlightSteering; lane: number; laneOffset: number; weapon: DroneBurstWeapon; volleys: number;
 }
-interface Hardpoint { id: HardpointId; enemy: Enemy; dx: number; dy: number; wreck: Phaser.GameObjects.Image; smoke: Phaser.GameObjects.Image }
+interface Hardpoint { id: HardpointId; enemy: Enemy; dx: number; dy: number; wreck: Phaser.GameObjects.Image; smoke: Phaser.GameObjects.Image; power: Phaser.GameObjects.Image; fired: number }
+type SkyShot = 'shell'|'kinetic'|'plasma'|'flak'|'missile';
 interface Strike extends ReturnType<typeof createArtilleryMarker> {
   x:number;y:number;radius:number;damage:number;start:number;due:number;owner:Enemy|null;
 }
@@ -38,7 +44,14 @@ export class SkyBreachScene extends AnomalyCombatScene {
   private world!: SkyBreachWorld;
   private difficulty!: ReturnType<typeof skyBreachDifficulty>;
   private director = new SkyBreachDirector();
-  private scheduler = new DreadnoughtScheduler();
+  private scheduler = new DreadnoughtCrossfire();
+  private bossStartedAt = 0;
+  private bossCues: { family:DreadnoughtAttack; at:number }[] = [];
+  private reinforcementPlan: readonly SkyRole[] = [];
+  private reinforcementIndex = 0;
+  private airshipAt = 0;
+  private seekers = new Map<HeistProjectile,{owner:Enemy;hp:number;nextTrailAt:number}>();
+  private readonly skyShots = new Map<HeistProjectile,SkyShot>();
   private readonly flights = new Map<Enemy,FlightState>();
   private readonly hardpoints: Hardpoint[] = [];
   private readonly aliveWeapons = new Set<HardpointId>();
@@ -54,12 +67,11 @@ export class SkyBreachScene extends AnomalyCombatScene {
   private nextArtillery = 0;
   private bossStarted = false;
   private bossOpen = false;
-  private zeppelinDeployed = false;
   private nextCoreVolley = 0;
   private destructionAt = 0;
   private destructionStep = 0;
   private rewardDropped = false;
-  private readonly bossBursts: {owner: Enemy;remaining:number;at:number;angle:number;step:number;damage:number}[] = [];
+  private readonly bossBursts: {owner: Enemy;remaining:number;at:number;angle:number;step:number;damage:number;kind?:SkyShot}[] = [];
   private moduleLabel = 'ENTERING HOSTILE AIRSPACE';
   private supremeEffects: SupremeModEffectSystem|null = null;
   private readonly flightTargets: Enemy[] = [];
@@ -82,9 +94,11 @@ export class SkyBreachScene extends AnomalyCombatScene {
   protected override prepareWorldNavigation(): void {}
 
   protected override createEnvironment(): void {
-    this.director=new SkyBreachDirector();this.scheduler=new DreadnoughtScheduler();
+    this.director=new SkyBreachDirector(this.session.seed);this.scheduler=new DreadnoughtCrossfire();
     this.missionTime=0;this.nextArtillery=0;this.bossStarted=false;this.bossOpen=false;
-    this.zeppelinDeployed=false;this.nextCoreVolley=0;
+    this.nextCoreVolley=0;this.airshipAt=0;this.bossStartedAt=0;this.bossCues=[];
+    this.reinforcementPlan=skyReinforcementPlan(this.session.seed);this.reinforcementIndex=0;
+    this.seekers.clear();this.skyShots.clear();
     this.flightSequence=0;this.nextHitSound=0;
     this.destructionAt=0;this.destructionStep=0;this.rewardDropped=false;this.bossBursts.length=0;
     this.core=null;this.hull=null;this.coreDoors=[];this.moduleLabel='ENTERING HOSTILE AIRSPACE';
@@ -117,6 +131,14 @@ export class SkyBreachScene extends AnomalyCombatScene {
     this.mechanicalDestruction=new MechanicalDestructionVfx(this,this.fxCirclePool,SaveSystem.get().settings.particles);
     this.mechanicalDestruction.prewarm(48);
     this.supremeEffects=new SupremeModEffectSystem(this,this.modRuntime,{playPulseCue:()=>this.coreAudio.playSfx('shieldOn')});
+    if(import.meta.env.DEV) {
+      this.performanceProfiler=new HeistPerformanceProfiler();
+      this.input.keyboard?.on('keydown-F6',this.toggleDevPerformanceOverlay,this);
+      this.events.on(Phaser.Scenes.Events.PRE_RENDER,this.onDevPreRender,this);
+      this.events.on(Phaser.Scenes.Events.RENDER,this.onDevRender,this);
+      this.events.on(Phaser.Scenes.Events.PRE_UPDATE,this.onDevPreUpdate,this);
+      this.events.on(Phaser.Scenes.Events.UPDATE,this.onDevPhysicsUpdateComplete,this);
+    }
     this.announce('SKYBREACH // FLIGHT LINK ESTABLISHED','FORWARD FIRE // FENCES OFFLINE // EARNINGS PROVISIONAL');
   }
   protected override updateWorld(_now:number,dt:number):void {
@@ -150,7 +172,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
         if(module.recovery){this.retireFlights();this.clearThreats();this.recoveryPickups();}
         this.nextArtillery=this.missionTime+3200;
       },(module,sequence)=>this.spawnModule(module,sequence));
-      const module=this.director.complete?null:importModule(this.director.index);
+      const module=this.director.complete?null:this.director.modules[this.director.index];
       if(module?.artillery&&this.missionTime>=this.nextArtillery){
         this.nextArtillery=this.missionTime+6000;
         this.scheduleStrike(this.player.x,this.player.y,68,BOSS_BALANCE.artillery.superDamage*this.difficulty.damage,null);
@@ -169,11 +191,15 @@ export class SkyBreachScene extends AnomalyCombatScene {
     if(module.emplacements&&sequence%2===0&&this.flights.size+2<=this.difficulty.activeCap){
       for(const side of [.12,.88])this.spawnAircraft('aa',this.pickupBounds.w*side,80);
     }
-    if(module.role!=='zeppelin'||!this.zeppelinDeployed){
+    if(module.role!=='zeppelin'||this.canSpawnAirship()){
       this.spawnFormation(module.role,module.formation??'line',module.role==='zeppelin'?1:this.difficulty.formationCount,sequence%2===1);
-      if(module.role==='zeppelin')this.zeppelinDeployed=[...this.flights.values()].some(f=>f.role==='zeppelin');
     }
+    if(module.airship&&this.canSpawnAirship())this.spawnFormation('zeppelin','line',1,sequence%2===1);
     if(module.secondary)this.spawnFormation(module.secondary,'split',Math.max(2,this.difficulty.formationCount-2),sequence%2===0);
+  }
+  private canSpawnAirship():boolean {
+    return this.missionTime>=this.airshipAt && ![...this.flights.values()].some(f=>f.role==='zeppelin')
+      && this.flights.size<this.difficulty.activeCap;
   }
   private spawnFormation(role:SkyRole,pattern:Parameters<typeof formationSlots>[0],count:number,mirror=false):void {
     if(role==='tank'){
@@ -191,14 +217,14 @@ export class SkyBreachScene extends AnomalyCombatScene {
     }
     for(const slot of formationSlots(pattern,count,this.pickupBounds.w,this.pickupBounds.h,mirror)) {
       if(this.flights.size>=this.difficulty.activeCap)break;
-      this.spawnAircraft(role,slot.x,slot.y,slot.vx,slot.vy,pattern);
+      const enemy=this.spawnAircraft(role,role==='zeppelin'?this.pickupBounds.w*(mirror?.68:.32):slot.x,slot.y,slot.vx,slot.vy,pattern);
+      const steering=this.flights.get(enemy)!.steering;steering.group=slot.group;steering.slot=slot.slot;
     }
   }
   private spawnAircraft(role:SkyRole,x:number,y:number,vx=0,vy=1,pattern:Formation='line'):Enemy {
     const base=baseEnemyStats[role==='drone'?'drone':role==='tank'||role==='zeppelin'||role==='aa'?'tank':'shooter'];
     const factor=SKY_DURABILITY[role];
-    const stats={...base,hp:Math.round(base.hp*this.difficulty.health*factor),damage:base.damage*this.difficulty.damage,
-      speed:base.speed*this.difficulty.speed,size:role==='zeppelin'?104:role==='strike'?33:base.size,
+    const stats={...scaleArenaEnemyStats(base,this.difficulty,factor),size:role==='zeppelin'?104:role==='strike'?33:base.size,
       valueCredits:Math.round(base.valueCredits*this.difficulty.rewardMultiplier*this.modRuntime.multiplier('creditValue'))};
     const key=role==='drone'||role==='tank'?ENEMY_ROBOT_FRAMES[role].textureKey:`sky-${role}`;
     const enemy=new Enemy(this,x,y,key,stats).setVisualTintOverride(null);
@@ -211,9 +237,11 @@ export class SkyBreachScene extends AnomalyCombatScene {
     enemy.setName(`sky-${role}`);
     this.enemies.push(enemy);
     this.flights.set(enemy,{role,pattern,age:0,originX:x,vx,vy,lane,laneOffset:0,steering:createFlightSteering(++this.flightSequence*2.399963,vx),shotAt:this.missionTime+1100,warningAt:0,aim:0,
-      nextDronesAt:this.missionTime+6500,warning:this.add.line(0,0,0,0,0,0,0xffb55c,.7).setOrigin(0).setDepth(8).setVisible(false),
+      weapon:new DroneBurstWeapon(),volleys:0,
+      nextDronesAt:this.missionTime+6500,warning:this.add.image(x,y,'sky-lock').setDisplaySize(42,42).setDepth(8).setVisible(false),
       decorations:role==='zeppelin'?[-1,1].map(()=>this.add.image(x,y,'sky-rotor').setDisplaySize(32,32).setDepth(8))
         :role==='aa'?[this.add.image(x,y,'sky-aa-platform').setDisplaySize(136,172).setDepth(3)]:[]});
+    if(role==='zeppelin')this.airshipAt=this.missionTime+28000;
     return enemy;
   }
   protected override updateEnemies(now:number,dt:number):void {
@@ -234,6 +262,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
       if((f.role==='tank'||f.role==='aa')&&enemy.y>this.pickupBounds.h+110){
         f.warning.destroy();for(const d of f.decorations)d.destroy();this.flights.delete(enemy);enemy.destroy();this.enemies.splice(i,1);continue;
       }
+      if(f.role==='tank')enemy.x=this.world.groundLaneX(f.lane)+f.laneOffset;
       const dx=this.player.x-enemy.x,dy=this.player.y-enemy.y;
       const aim=Math.atan2(dy,dx),speed=enemy.effectiveSpeed(enemy.stats.speed,now);
       if(now<enemy.disabledUntil){
@@ -247,24 +276,45 @@ export class SkyBreachScene extends AnomalyCombatScene {
         const separation=droneSeparation(enemy.x,enemy.y,other.x,other.y,f.steering.phase-peer.steering.phase);
         separateX+=separation.x;separateY+=separation.y;
       }
-      if(f.role==='tank')enemy.x=this.world.groundLaneX(f.lane)+f.laneOffset;
       const motion=steerFlight(f.steering,f.role,f.pattern,dt,enemy.x,enemy.y,this.player.x,this.player.y,
         this.pickupBounds.w,this.pickupBounds.h,speed,separateX,separateY);
       enemy.setVelocity(motion.x,motion.y);
       enemy.setRotation(f.role==='zeppelin'?0:f.role==='tank'?aim+Math.PI/2:f.role==='aa'?aim-Math.PI/2:Math.atan2(motion.y,motion.x)+Math.PI/2);
+      if(f.role==='interceptor'||f.role==='strike') {
+        const bank=flightBank(f.steering,f.pattern,dt),frame=Math.max(-2,Math.min(2,Math.round(bank*2)));
+        enemy.setTexture(`sky-${f.role}-bank-${frame}`);
+        const size=f.role==='strike'?78:64;enemy.setDisplaySize(size,size*(1-Math.abs(bank)*.08));
+      }
       f.decorations.forEach((d,i)=>f.role==='aa'?d.setPosition(enemy.x,enemy.y):d.setPosition(enemy.x+(i?1:-1)*46,enemy.y+20).setRotation(this.missionTime*.022));
       if(Math.hypot(dx,dy)<enemy.stats.size*.5+12&&now-enemy.lastAttackMs>850){enemy.lastAttackMs=now;this.damagePlayer(enemy.stats.damage);}
-      if(f.role!=='drone'&&enemy.y>100&&this.missionTime>=f.shotAt){
+      if(f.role==='drone') {
+        f.weapon.update(f.age*1000,aim,Math.hypot(dx,dy)<=ENEMY_BALANCE.drone.attackRange&&f.steering.stage==='attack',
+          getModeSpawnCadence(ENEMY_BALANCE.drone.attackCooldownMs,this.session.protocol),angle=>{
+            if(this.fireSkyShot('kinetic',enemy,angle,320,enemy.stats.damage))f.volleys++;
+          });
+      }else if(f.role==='tank') {
+        if(this.missionTime>=f.shotAt&&Math.hypot(dx,dy)<=TANK_HOMING_MISSILE_BALANCE.launchRange
+          && ![...this.seekers.values()].some(s=>s.owner===enemy)) {
+          if(this.fireSkyShot('missile',enemy,aim,getTankHomingMissileSpeed(this.player.speed),
+            applyEnemyDamageMode(TANK_HOMING_MISSILE_BALANCE.damage,this.session.protocol))) {
+            f.shotAt=this.missionTime+TANK_HOMING_MISSILE_BALANCE.cooldownMs;f.volleys++;
+          }
+        }
+      }else if(enemy.y>100&&this.missionTime>=f.shotAt){
         if((f.role==='strike'||f.role==='aa')&&!f.warningAt){f.warningAt=this.missionTime+900;f.aim=aim;f.warning.setVisible(true);}
         else if(!f.warningAt||this.missionTime>=f.warningAt){
           const angle=f.warningAt?f.aim:aim;const count=f.role==='zeppelin'||f.role==='aa'?3:f.role==='strike'?2:1;
-          for(let j=0;j<count;j++)this.spawnProjectile('enemy',enemy.x,enemy.y,angle+(j-(count-1)/2)*.15,
-            f.role==='strike'?270:220,enemy.stats.damage,f.role==='strike'?0xffb653:0xff658b,3500);
+          const kind:SkyShot=f.role==='zeppelin'?(['plasma','missile','flak'] as const)[f.volleys%3]
+            :f.role==='aa'?'flak':f.role==='strike'?'shell':'kinetic';
+          for(let j=0;j<(kind==='missile'?2:count);j++)this.fireSkyShot(kind,enemy,angle+(j-(count-1)/2)*.18,
+            kind==='shell'?210:kind==='kinetic'?340:230,enemy.stats.damage);
+          f.volleys++;
           f.shotAt=this.missionTime+(f.role==='zeppelin'?1800:2200)/Math.min(1.4,this.difficulty.pressure);
           f.warningAt=0;f.warning.setVisible(false);
         }
       }
-      if(f.warningAt)f.warning.setTo(enemy.x,enemy.y,enemy.x+Math.cos(f.aim)*350,enemy.y+Math.sin(f.aim)*350);
+      if(f.warningAt)f.warning.setPosition(enemy.x+Math.cos(f.aim)*65,enemy.y+Math.sin(f.aim)*65)
+        .setAlpha(.55+.35*Math.sin(this.missionTime*.02)).setRotation(this.missionTime*.001);
       if(f.role==='zeppelin'&&this.missionTime>f.nextDronesAt){
         f.nextDronesAt=this.missionTime+8000;
         if(this.flights.size+2<=this.difficulty.activeCap)for(const s of [-1,1])this.spawnAircraft('drone',enemy.x+s*70,enemy.y+45);
@@ -273,6 +323,51 @@ export class SkyBreachScene extends AnomalyCombatScene {
     }
     for(const h of this.hardpoints)if(h.enemy.active&&h.enemy.hp>0){h.enemy.updateDamageFlash(now);this.drawHealth(h.enemy,52,0xffac67);}
     if(this.core?.active&&this.bossOpen)this.drawHealth(this.core,110,0x62faff);
+  }
+  /** Reuse anomaly projectile pooling/collisions and Arena missile steering, art and trails. */
+  private fireSkyShot(kind:SkyShot,owner:Enemy,angle:number,speed:number,damage:number):boolean {
+    if(this.returning||!owner.active||owner.hp<=0||this.skyShots.size>=160||(kind==='missile'&&this.seekers.size>=12))return false;
+    const offset=owner===this.core?48:owner.stats.size*.65;
+    const x=owner.x+Math.cos(angle)*offset,y=owner.y+Math.sin(angle)*offset;
+    const [width,height]=kind==='shell'?[30,15]:kind==='plasma'?[34,23]:kind==='missile'?[30,14]:kind==='flak'?[18,12]:[17,8];
+    const projectile=this.projectilePool.obtain({owner:'enemy',texture:kind==='missile'?'tank-homing-missile':`sky-shot-${kind}`,
+      width,height,tint:0xffffff,rotation:angle,velocityX:Math.cos(angle)*speed,velocityY:Math.sin(angle)*speed,
+      damage,lifeMs:kind==='missile'?TANK_HOMING_MISSILE_BALANCE.lifetimeMs:4500,
+      trailColor:kind==='plasma'?0x62dfff:0xffba73,critical:false,ricochetsRemaining:0,ammoMode:'normal',previousX:x,previousY:y});
+    projectile.nextTrailAt=Infinity; // Physical rounds have a body; only seekers need continuous exhaust.
+    this.projectiles.push(projectile);this.skyShots.set(projectile,kind);
+    if(kind==='missile')this.seekers.set(projectile,{owner,hp:TANK_HOMING_MISSILE_BALANCE.health,nextTrailAt:0});
+    const hardpoint=this.hardpoints.find(h=>h.enemy===owner);if(hardpoint)hardpoint.fired++;
+    this.muzzleFlashVfx.emit(x,y,angle,kind==='plasma'?0x62dfff:0xffba73,this.time.now,kind==='shell'?1.3:.7);
+    return true;
+  }
+
+  protected override updateProjectiles(now:number,delta:number):void {
+    for(const [projectile,seeker] of this.seekers) {
+      const sprite=projectile.sprite;
+      const angle=steerTankHomingMissile(sprite.rotation,Math.atan2(this.player.y-sprite.y,this.player.x-sprite.x),Math.min(delta,100));
+      const speed=getTankHomingMissileSpeed(this.player.speed);
+      sprite.setRotation(angle).setVelocity(Math.cos(angle)*speed,Math.sin(angle)*speed);
+      if(now>=seeker.nextTrailAt){this.projectileImpactVfx.emitMissileTrail(sprite.x-Math.cos(angle)*14,sprite.y-Math.sin(angle)*14,angle,now);seeker.nextTrailAt=now+50;}
+      for(let i=this.projectiles.length-1;i>=0;i--) {
+        const shot=this.projectiles[i];if(shot.owner==='enemy'||shot.ammoMode==='grenade')continue;
+        if(Math.hypot(shot.sprite.x-sprite.x,shot.sprite.y-sprite.y)<22){seeker.hp-=shot.damage;this.retireProjectile(shot,i);if(seeker.hp<=0)break;}
+      }
+      const distance=Math.hypot(this.player.x-sprite.x,this.player.y-sprite.y);
+      if(seeker.hp<=0||distance<19||projectile.lifeMs<=delta) {
+        if(seeker.hp>0&&distance<TANK_HOMING_MISSILE_BALANCE.blastRadius)this.damagePlayer(projectile.damage);
+        const i=this.projectiles.indexOf(projectile);if(i>=0)this.retireProjectile(projectile,i);
+      }
+    }
+    super.updateProjectiles(now,delta);
+  }
+
+  protected override retireProjectile(projectile:HeistProjectile,index:number):void {
+    const kind=this.skyShots.get(projectile);
+    if(kind==='missile')this.projectileImpactVfx.emitMissileImpact(projectile.sprite.x,projectile.sprite.y,projectile.sprite.rotation,this.time.now);
+    else if(kind==='shell'||kind==='plasma')this.mineExplosionVfx.emit(projectile.sprite.x,projectile.sprite.y,kind==='shell'?22:16,EXPLOSION,this.time.now,false);
+    this.seekers.delete(projectile);this.skyShots.delete(projectile);
+    super.retireProjectile(projectile,index);
   }
   private drawHealth(enemy:Enemy,width:number,color:number):void {
     this.healthBars.fillStyle(0x020812,.9).fillRect(enemy.x-width/2,enemy.y+enemy.displayHeight/2+6,width,5);
@@ -334,20 +429,22 @@ export class SkyBreachScene extends AnomalyCombatScene {
   }
   private startDreadnought():void {
     if(this.bossStarted)return;
-    this.bossStarted=true;this.retireFlights();this.clearThreats();
+    this.bossStarted=true;this.bossStartedAt=this.missionTime;this.retireFlights();this.clearThreats();
+    this.scheduler=new DreadnoughtCrossfire();this.airshipAt=this.missionTime+12000;
     this.hull=this.add.image(this.pickupBounds.w/2,245,'sky-dreadnought').setDisplaySize(710,331).setDepth(5);
     const offsets=[[-95,99],[95,99],[-240,22],[240,22],[-169,-49],[169,-49],[0,-83]];
     DREADNOUGHT_WEAPONS.forEach((id,i)=>{
       const [dx,dy]=offsets[i];const kind=id.startsWith('missile')?'missile':'cannon';
       const e=new Enemy(this,this.hull!.x+dx,this.hull!.y+dy,`sky-${kind}`,{
-        ...baseEnemyStats.tank,hp:Math.max(30,Math.round(this.difficulty.bossHealth*.14)),size:44,speed:0,valueCredits:0,valueCoreTokens:0
+        ...baseEnemyStats.tank,hp:this.difficulty.bossHealth,size:44,speed:0,valueCredits:0,valueCoreTokens:0
       }).setDisplaySize(65,65).setVisualTintOverride(null).setDepth(8);
-      const wreck=this.add.image(e.x,e.y,`sky-${kind}`).setDisplaySize(65,65).setTint(0x28303a).setDepth(6).setVisible(false);
+      const wreck=this.add.image(e.x,e.y,'sky-wreck').setDisplaySize(110,110).setDepth(6).setVisible(false);
+      const power=this.add.image(e.x,e.y,'sky-wreck-power').setDisplaySize(110,110).setDepth(8).setVisible(false);
       const smoke=this.add.image(e.x,e.y,'sky-smoke').setDisplaySize(60,95).setDepth(9).setAlpha(0);
-      e.setName(id);this.enemies.push(e);this.hardpoints.push({id,enemy:e,dx,dy,wreck,smoke});this.aliveWeapons.add(id);
+      e.setName(id);this.enemies.push(e);this.hardpoints.push({id,enemy:e,dx,dy,wreck,smoke,power,fired:0});this.aliveWeapons.add(id);
     });
     this.core=new Enemy(this,this.hull.x,this.hull.y,'sky-core',{
-      ...baseEnemyStats.tank,hp:Math.round(this.difficulty.bossHealth*.75),size:66,speed:0,valueCredits:0,valueCoreTokens:0
+      ...baseEnemyStats.tank,hp:this.difficulty.bossHealth*2,size:66,speed:0,valueCredits:0,valueCoreTokens:0
     }).setDisplaySize(92,92).setVisualTintOverride(null).setDepth(7).setName('dreadnought-core');
     this.enemies.push(this.core);
     this.coreDoors=[-1,1].map(s=>this.add.rectangle(this.hull!.x+s*22,this.hull!.y,43,76,0x1b3043)
@@ -358,10 +455,14 @@ export class SkyBreachScene extends AnomalyCombatScene {
   private updateDreadnought():void {
     if(!this.hull||!this.core)return;
     if(this.destructionAt){this.updateDestruction();return;}
-    this.hull.x=this.pickupBounds.w/2+Math.sin(this.missionTime*.0005)*64;
+    const drift=dreadnoughtPosition(this.missionTime-this.bossStartedAt,this.pickupBounds.w);
+    this.hull.setPosition(drift.x,drift.y);
     this.core.setPosition(this.hull.x,this.hull.y);
     for(const h of this.hardpoints){
       h.wreck.setPosition(this.hull.x+h.dx,this.hull.y+h.dy);
+      const damaged=!this.aliveWeapons.has(h.id),phase=this.missionTime*.013+h.dx;
+      h.power.setPosition(h.wreck.x,h.wreck.y).setVisible(damaged)
+        .setAlpha(Math.sin(phase)> .65?.85:.09+Math.max(0,Math.sin(phase*.31))*.15);
       h.smoke.setPosition(h.wreck.x+Math.sin(this.missionTime*.002)*9,h.wreck.y-22)
         .setAlpha((1-Math.max(0,h.enemy.hp/h.enemy.stats.hp))*.6).setRotation(Math.sin(this.missionTime*.001)*.12);
       if(h.enemy.hp<=0&&this.aliveWeapons.delete(h.id)){
@@ -384,34 +485,72 @@ export class SkyBreachScene extends AnomalyCombatScene {
     if(this.bossOpen&&this.missionTime>=this.nextCoreVolley){
       this.nextCoreVolley=this.missionTime+2200/Math.min(1.3,this.difficulty.pressure);
       const aim=Math.atan2(this.player.y-this.core.y,this.player.x-this.core.x);
-      for(let j=-2;j<=2;j++)this.spawnProjectile('enemy',this.core.x,this.core.y+40,aim+j*.22,230,
-        BOSS_BALANCE.artillery.projectileDamage*this.difficulty.bossDamage,0x62faff,4000);
+      for(let j=-2;j<=2;j++)this.fireSkyShot('plasma',this.core,aim+j*.22,230,
+        BOSS_BALANCE.artillery.projectileDamage*this.difficulty.bossDamage);
     }
-    const attack=this.scheduler.next(this.missionTime,this.aliveWeapons,this.difficulty.pressure);
-    if(attack==='escorts')this.spawnFormation(this.bossOpen?'strike':'drone','split',Math.min(4,this.difficulty.formationCount));
-    else if(attack){
-      const weapons=attackWeapons(attack,this.aliveWeapons);
-      for(const id of weapons){
-        const e=this.hardpoints.find(h=>h.id===id)!.enemy;
-        const aim=Math.atan2(this.player.y-e.y,this.player.x-e.x);
-        if(attack==='artillery'||attack==='missile'){
-          const radius=attack==='artillery'?BOSS_BALANCE.artillery.superRadius:54;
-          this.scheduleStrike(this.player.x+(id.endsWith('left')?-48:id.endsWith('right')?48:0),this.player.y,radius,
-            BOSS_BALANCE.artillery.superDamage*this.difficulty.bossDamage,e);
-        }else if(attack==='broadside'){
-          for(let j=-2;j<=2;j++)this.spawnProjectile('enemy',e.x,e.y,Math.PI/2+j*.18,200,
-            BOSS_BALANCE.artillery.projectileDamage*this.difficulty.bossDamage,0xff6987,4000);
-        }else this.bossBursts.push({owner:e,remaining:7,at:this.missionTime+650,angle:aim-.3,step:.1,
-          damage:BOSS_BALANCE.artillery.projectileDamage*this.difficulty.bossDamage});
-      }
+    for(const cue of this.scheduler.next(this.missionTime,this.aliveWeapons,this.difficulty.pressure))
+      if(this.bossCues.length<4)this.bossCues.push({family:cue.family,at:this.missionTime+cue.delayMs});
+    for(let i=this.bossCues.length-1;i>=0;i--)if(this.missionTime>=this.bossCues[i].at) {
+      this.castBossFamily(this.bossCues[i].family);this.bossCues.splice(i,1);
     }
     for(let i=this.bossBursts.length-1;i>=0;i--){
       const burst=this.bossBursts[i];
       if(!burst.owner.active||burst.owner.hp<=0){this.bossBursts.splice(i,1);continue;}
       if(this.missionTime<burst.at)continue;
-      this.spawnProjectile('enemy',burst.owner.x,burst.owner.y,burst.angle,260,burst.damage,0xffac62,3400);
-      burst.angle+=burst.step;burst.at=this.missionTime+170;if(--burst.remaining<=0)this.bossBursts.splice(i,1);
+      this.fireSkyShot(burst.kind??'kinetic',burst.owner,burst.angle,burst.kind==='shell'?195:385,burst.damage);
+      burst.angle+=burst.step;burst.at=this.missionTime+(burst.kind==='shell'?420:170);if(--burst.remaining<=0)this.bossBursts.splice(i,1);
     }
+  }
+  private castBossFamily(attack:DreadnoughtAttack):void {
+    if(attack==='escorts') {
+      const role=this.reinforcementPlan[this.reinforcementIndex++%this.reinforcementPlan.length];
+      if(role==='zeppelin'&&!this.canSpawnAirship())return;
+      if(role==='aa') {
+        for(const x of [.12,.88])if(this.flights.size<this.difficulty.activeCap)this.spawnAircraft('aa',this.pickupBounds.w*x,120);
+      }else this.spawnFormation(role,role==='interceptor'?'corkscrew':'split',role==='zeppelin'?1:Math.min(4,this.difficulty.formationCount),this.reinforcementIndex%2===0);
+      return;
+    }
+    for(const id of attackWeapons(attack,this.aliveWeapons)) {
+      const hardpoint=this.hardpoints.find(h=>h.id===id)!,e=hardpoint.enemy;
+      if(!e.active||e.hp<=0)continue;
+      const aim=Math.atan2(this.player.y-e.y,this.player.x-e.x),damage=BOSS_BALANCE.artillery.projectileDamage*this.difficulty.bossDamage;
+      if(attack==='artillery') {
+        this.scheduleStrike(this.player.x,this.player.y,BOSS_BALANCE.artillery.superRadius,
+          BOSS_BALANCE.artillery.superDamage*this.difficulty.bossDamage,e);hardpoint.fired++;
+      }else if(attack==='missile') {
+        this.fireSkyShot('missile',e,aim,220,damage);
+      }else if(attack==='broadside') {
+        for(let j=-2;j<=2;j++)this.fireSkyShot(id.endsWith('left')?'plasma':'flak',e,aim+j*.24,210,damage);
+      }else if(this.bossBursts.length<8) {
+        const heavy=id==='cannon-left';
+        this.bossBursts.push({owner:e,remaining:heavy?3:7,at:this.missionTime+400,angle:aim-(heavy?.12:.24),
+          step:heavy?.12:.08,damage,kind:heavy?'shell':'kinetic'});
+        this.muzzleFlashVfx.emit(e.x,e.y+26,aim,0xffb46b,this.time.now,1.2);
+      }
+    }
+  }
+
+  /** Readable DEV evidence; all values originate in the captured Arena context. */
+  getScalingDiagnostics() {
+    return {mode:this.difficulty.mode,entryRound:this.session.round,protocol:this.session.protocol,
+      difficultyPosition:this.difficulty.difficultyPosition,entryCurve:this.difficulty.entryCurve,
+      enemyScaling:{health:this.difficulty.health,damage:this.difficulty.damage,speed:this.difficulty.speed},
+      bossBenchmark:this.difficulty.bossBenchmark,hardpointHealth:this.difficulty.bossHealth,coreHealth:2*this.difficulty.bossHealth,
+      bossDamageMultiplier:this.difficulty.bossDamage,reinforcements:this.reinforcementPlan,
+      weapons:this.hardpoints.map(h=>({id:h.id,hp:h.enemy.hp,maxHp:h.enemy.stats.hp,fired:h.fired})),
+      activeShots:this.skyShots.size,seekers:this.seekers.size,destruction:this.mechanicalDestruction.stats()};
+  }
+  protected override updateDevPerformanceOverlay(now:number):void {
+    if(!this.devPerformanceOverlay?.visible||now<this.nextDevPerformanceOverlayAt)return;
+    this.nextDevPerformanceOverlayAt=now+500;
+    const d=this.difficulty,p=this.performanceProfiler?.snapshot();
+    this.devPerformanceOverlay.setText(`SKYBREACH (F6) // ${d.mode.toUpperCase()} ${this.session.round}\n`
+      + `Enemy HP x${d.health.toFixed(3)} DMG x${d.damage.toFixed(3)} SPEED x${d.speed.toFixed(3)}\n`
+      + `Arena Boss ${d.bossBenchmark.round} / ${d.bossBenchmark.protocol}: ${d.bossHealth} HP\n`
+      + `Hardpoint ${d.bossHealth} each / Core ${d.bossHealth*2}\n`
+      + `Enemy ${this.flights.size}/${d.activeCap} Shot ${this.skyShots.size}/160 Seeker ${this.seekers.size}/12\n`
+      + `Frame ${p?.frameTime.averageMs.toFixed(2)??'-'}ms / update ${p?.updateWork.averageMs.toFixed(2)??'-'}ms\n`
+      + `Render ${p?.renderWork.averageMs.toFixed(2)??'-'}ms / damage stays at entry round`);
   }
   private scheduleStrike(x:number,y:number,radius:number,damage:number,owner:Enemy|null):void {
     if(this.strikes.length>=4||this.returning)return;
@@ -442,7 +581,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
       this.hull!.setTint(0xffffff).setAlpha(1-i*.09);
     }
     if(elapsed<2900)return;
-    this.hull!.setVisible(false);for(const h of this.hardpoints){h.wreck.setVisible(false);h.smoke.setVisible(false);}for(const d of this.coreDoors)d.setVisible(false);
+    this.hull!.setVisible(false);for(const h of this.hardpoints){h.wreck.setVisible(false);h.smoke.setVisible(false);h.power.setVisible(false);}for(const d of this.coreDoors)d.setVisible(false);
     this.dropBossLoot();
   }
   private dropBossLoot():void {
@@ -473,7 +612,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
     this.flights.clear();
   }
   private clearThreats():void {
-    for(const strike of this.strikes)strike.marker.destroy(true);this.strikes.length=0;this.bossBursts.length=0;
+    for(const strike of this.strikes)strike.marker.destroy(true);this.strikes.length=0;this.bossBursts.length=0;this.bossCues.length=0;
     for(let i=this.projectiles.length-1;i>=0;i--)if(this.projectiles[i].owner==='enemy')this.retireProjectile(this.projectiles[i],i);
   }
   protected override cleanup():void {
@@ -482,9 +621,12 @@ export class SkyBreachScene extends AnomalyCombatScene {
     this.flights.clear();this.escortArt.clear();this.hardpoints.length=0;this.aliveWeapons.clear();this.strikes.length=0;
     this.coreDoors.length=0;this.hull=null;this.core=null;this.bossBursts.length=0;
     this.flightTargets.length=0;this.supremeEffects=null;
+    this.seekers.clear();this.skyShots.clear();this.bossCues.length=0;
+    this.input.keyboard?.off('keydown-F6',this.toggleDevPerformanceOverlay,this);
+    this.events.off(Phaser.Scenes.Events.PRE_RENDER,this.onDevPreRender,this);
+    this.events.off(Phaser.Scenes.Events.RENDER,this.onDevRender,this);
+    this.events.off(Phaser.Scenes.Events.PRE_UPDATE,this.onDevPreUpdate,this);
+    this.events.off(Phaser.Scenes.Events.UPDATE,this.onDevPhysicsUpdateComplete,this);
     super.cleanup();
   }
 }
-// Kept outside update so the authored table is one immutable shared object.
-import { SKY_FLIGHT } from './SkyBreachDirector.ts';
-const importModule=(index:number)=>SKY_FLIGHT[index];

@@ -1,5 +1,7 @@
 # SkyBreach movement and combat feedback
 
+Historical pass. The [difficulty parity and combat polish report](skybreach-polish.md) supersedes its scaling, drone offense, flight-pattern, boss and environment details.
+
 The supplied movement guide is choreography reference only. All ships, drones, tanks, platforms, textures, colors, and environment art remain the existing game assets.
 
 ## Behavior

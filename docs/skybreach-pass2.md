@@ -1,5 +1,7 @@
 # SkyBreach Pass 2 and Anomaly Access Cards
 
+The [difficulty parity and combat polish report](skybreach-polish.md) supersedes the SkyBreach scaling, offense, presentation and encounter details below. Access Card behavior remains unchanged.
+
 SkyBreach now uses forward flight combat, denser mixed encounters, mounted AA, a wider view, and a stronger Dreadnought. Access Cards provide destination choice and Flux-fee bypass at an existing portal. LYRA/TTS remain disabled; this pass uses procedural Canvas/SVG artwork and no Blender assets.
 
 ## Flight and combat

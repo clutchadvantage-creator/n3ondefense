@@ -33,6 +33,7 @@ import { MAX_DISTINCT_FENCE_SPLITS, resolveFenceSplitStage } from '../abilities/
 import { Player } from '../entities/Player';
 import { baseEnemyStats, Enemy } from '../enemies/Enemy';
 import { SystemInfusionRuntime, type InfusionPoint, type InfusionTarget } from '../mods/SystemInfusionRuntime.ts';
+import { arenaEnemyScaling, scaleArenaEnemyStats, arenaBossStageScaling, arenaBossBenchmark } from '../config/ArenaCombatScaling.ts';
 import { SYSTEM_INFUSION_TUNING as INFUSION_TUNING } from '../mods/SystemInfusions.ts';
 import { getTankHomingMissileSpeed, steerTankHomingMissile } from '../enemies/HomingMissile.ts';
 import { ENEMY_ROBOT_FRAMES } from '../enemies/EnemyRobotFrames.ts';
@@ -70,7 +71,7 @@ import type { InputDevice } from '../input/ActionInput.ts';
 import { MineSalvoInput, type MineSalvoInputResolution } from '../input/MineSalvoInput.ts';
 import { DEFAULT_AIM_SETTINGS, normalizeAimSettings, type AimSettings } from '../config/interfaceSettings';
 import { normalizeControllerSettings } from '../config/controllerSettings.ts';
-import { applyEnemyDamageMode, applyEnemyHealthMode, getEnemyDefuseDuration, getModeSpawnCadence, getProtocolModeBalance, type RunModeFamily } from '../config/modeBalance.ts';
+import { applyEnemyDamageMode, getEnemyDefuseDuration, getModeSpawnCadence, getProtocolModeBalance, type RunModeFamily } from '../config/modeBalance.ts';
 import { ARENA_GENERATION_CONFIG } from '../config/arenaGeneration.ts';
 import { drawReticle } from '../ui/ReticleRenderer';
 import { createPauseMenuView, type PauseMenuView } from '../ui/PauseMenuUi.ts';
@@ -2678,21 +2679,8 @@ export class ArenaScene extends Phaser.Scene {
       Math.floor(Math.random() * this.layout.enemySpawns.length));
     if (!spawn) return null;
     const curve = getDifficultyCurve(this.currentCombatPosition(), this.bombSites.destroyedCount());
-    const phaseScale = defensePhase ? 1 : 0.9;
-
-    const stats = {
-      ...base,
-      color: base.color,
-      hp: Math.round(applyEnemyHealthMode(
-        base.hp * (1 + (curve.healthMultiplier - 1) * phaseScale) * (getContract(this.contract)?.enemyHealthMultiplier ?? 1),
-        this.protocol
-      )),
-      speed: Math.round(base.speed * curve.speedMultiplier * this.currentModeBalance().enemySpeedMultiplier),
-      damage: Math.round(applyEnemyDamageMode(
-        base.damage * (1 + (curve.damageMultiplier - 1) * phaseScale),
-        this.protocol
-      ))
-    };
+    const stats = scaleArenaEnemyStats(base, arenaEnemyScaling(curve, this.protocol, defensePhase,
+      getContract(this.contract)?.enemyHealthMultiplier ?? 1));
 
     const enemyTexture = ENEMY_ROBOT_FRAMES[type].textureKey;
     const enemy = type === 'drone'
@@ -5643,6 +5631,8 @@ export class ArenaScene extends Phaser.Scene {
       initialInputDevice: this.playerInput.activeDevice,
       difficulty: {
         ...getDifficultyCurve(this.currentCombatPosition(), this.bombSites.destroyedCount()),
+        defensePhase: this.bombSites.activeBombCount() > 0,
+        bossBenchmark: arenaBossBenchmark(this.currentModeFamily(), this.currentCombatRound()),
         activeCount: getConcurrentSpawnPressure(
           getSpawnProfile(this.currentCombatPosition(), this.bombSites.destroyedCount(), this.currentModeFamily()),
           this.bombSites.activeBombCount()
@@ -6791,13 +6781,8 @@ export class ArenaScene extends Phaser.Scene {
       .sort((a, b) => Phaser.Math.Distance.Between(this.player.x, this.player.y, b.x, b.y)
         - Phaser.Math.Distance.Between(this.player.x, this.player.y, a.x, a.y))[0]
       ?? new Phaser.Math.Vector2(WORLD_WIDTH * 0.5, WORLD_HEIGHT * 0.5);
-    const supremeDifficulty = getSupremeStage(this.protocol)?.difficulty;
-    const bossHealthStageDelta = supremeDifficulty
-      ? supremeDifficulty.bossHealthMultiplier / getProtocolModeBalance('supreme').bossHealthMultiplier
-      : 1;
-    const bossDamageStageDelta = supremeDifficulty
-      ? supremeDifficulty.bossDamageMultiplier / getProtocolModeBalance('supreme').bossDamageMultiplier
-      : 1;
+    const { healthMultiplier: bossHealthStageDelta, damageMultiplier: bossDamageStageDelta } =
+      arenaBossStageScaling(this.protocol, this.currentModeFamily());
     const callbacks = {
       fireProjectile: (spec: BossProjectileSpec) => this.spawnBossProjectile(spec),
       damageArea: (x: number, y: number, radius: number, damage: number, attack: BossAttackKind) => this.applyBossAreaDamage(x, y, radius, damage, attack),

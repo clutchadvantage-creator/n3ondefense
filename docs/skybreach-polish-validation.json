@@ -1,0 +1,1053 @@
+{
+  "scope": "SkyBreach difficulty parity and combat polish",
+  "date": "2026-10-05",
+  "tests": 855,
+  "productionBuildPassed": true,
+  "browserChecks": 299,
+  "benchmarks": [
+    {
+      "mode": "normal",
+      "entryRound": 6,
+      "benchmarkRound": 5,
+      "benchmarkProtocol": "normal",
+      "difficultyPosition": 5,
+      "arenaBossHealth": 5472,
+      "hardpointHealth": 5472,
+      "coreHealth": 10944
+    },
+    {
+      "mode": "normal",
+      "entryRound": 8,
+      "benchmarkRound": 10,
+      "benchmarkProtocol": "normal",
+      "difficultyPosition": 10,
+      "arenaBossHealth": 6916,
+      "hardpointHealth": 6916,
+      "coreHealth": 13832
+    },
+    {
+      "mode": "normal",
+      "entryRound": 11,
+      "benchmarkRound": 10,
+      "benchmarkProtocol": "normal",
+      "difficultyPosition": 10,
+      "arenaBossHealth": 6916,
+      "hardpointHealth": 6916,
+      "coreHealth": 13832
+    },
+    {
+      "mode": "normal",
+      "entryRound": 14,
+      "benchmarkRound": 15,
+      "benchmarkProtocol": "normal",
+      "difficultyPosition": 15,
+      "arenaBossHealth": 8360,
+      "hardpointHealth": 8360,
+      "coreHealth": 16720
+    },
+    {
+      "mode": "overdrive",
+      "entryRound": 8,
+      "benchmarkRound": 10,
+      "benchmarkProtocol": "overdrive",
+      "difficultyPosition": 40,
+      "arenaBossHealth": 20500,
+      "hardpointHealth": 20500,
+      "coreHealth": 41000
+    },
+    {
+      "mode": "overdrive",
+      "entryRound": 14,
+      "benchmarkRound": 15,
+      "benchmarkProtocol": "overdrive",
+      "difficultyPosition": 45,
+      "arenaBossHealth": 22400,
+      "hardpointHealth": 22400,
+      "coreHealth": 44800
+    },
+    {
+      "mode": "supreme",
+      "entryRound": 24,
+      "benchmarkRound": 25,
+      "benchmarkProtocol": "supreme-capricornus",
+      "difficultyPosition": 133,
+      "arenaBossHealth": 48384,
+      "hardpointHealth": 48384,
+      "coreHealth": 96768
+    },
+    {
+      "mode": "supreme",
+      "entryRound": 29,
+      "benchmarkRound": 30,
+      "benchmarkProtocol": "supreme-centaurus",
+      "difficultyPosition": 148,
+      "arenaBossHealth": 52640,
+      "hardpointHealth": 52640,
+      "coreHealth": 105280
+    }
+  ],
+  "reports": [
+    {
+      "fixture": "sky-parity-integration",
+      "checks": 251,
+      "assertions": [
+        "isolated profile",
+        "both card types purchased",
+        "three cards charge 150,000 Credits",
+        "combined purchase cap rejects fourth",
+        "owned counts",
+        "normal: force eligible opportunity",
+        "entry choices pause Arena",
+        "opening controller input does not also confirm entry",
+        "entry dialog freezes Arena timer",
+        "cancel spends neither cards nor Flux",
+        "confirmed card begins entry",
+        "entry consumes one card and daily use",
+        "actual redirected destination recorded",
+        "normal: correct card bypass or Flux charge",
+        "normal: Arena sleeps",
+        "normal: shared authoritative build",
+        "normal: player stats preserved",
+        "normal: suspended clock and player remain intact",
+        "normal: aircraft keeps 12px collision radius",
+        "normal: responsive controller movement",
+        "normal: independent aim input cannot turn forward fire",
+        "normal: crosshair hidden",
+        "normal: dash executes",
+        "normal: shield executes",
+        "normal: authoritative turret placed",
+        "normal: mine rack launches",
+        "normal: fence disabled without spending energy",
+        "normal: fence HUD explicitly says offline",
+        "normal: normal uses shared projectile pool",
+        "normal: scattershot uses shared projectile pool",
+        "normal: grenade uses shared projectile pool",
+        "normal: Rapid Fire remains active",
+        "normal: shared fire cadence advances",
+        "normal: all six aircraft/ground roles",
+        "normal: shared artillery telegraph",
+        "normal: AA fires after telegraph",
+        "normal: health pickup restores",
+        "normal: energy pickup restores",
+        "normal: high fire-rate build respects existing 22/sec ceiling",
+        "authored module 1: OUTER AIR PATROL",
+        "module 1 spawns its authored role",
+        "authored module 2: CORKSCREW ASSAULT",
+        "module 2 spawns its authored role",
+        "authored module 3: ARMORED CONVOY",
+        "module 3 spawns its authored role",
+        "authored module 4: ANTI-AIR CORRIDOR",
+        "module 4 spawns its authored role",
+        "authored module 5: DRONE PICKET",
+        "module 5 spawns its authored role",
+        "authored module 6: SERVICE WINDOW",
+        "authored module 7: STRIKE ESCORT",
+        "module 7 spawns its authored role",
+        "authored module 8: WAR ZEPPELIN",
+        "module 8 spawns its authored role",
+        "authored module 9: SIEGE BATTERY",
+        "module 9 spawns its authored role",
+        "authored module 10: ELITE INTERDICTION",
+        "module 10 spawns its authored role",
+        "authored module 11: FINAL APPROACH",
+        "final approach automatically starts Dreadnought",
+        "normal: loot remains provisional",
+        "all five boss attack families execute in live updates",
+        "all seven hardpoints, including forward cannons, actually fire",
+        "normal: each hardpoint equals actual Arena boss benchmark",
+        "normal: core alone gets twice Arena benchmark",
+        "normal: core rejects early damage",
+        "normal: core rejects Echo before opening",
+        "normal: targetable cannon-left",
+        "normal: disabled cannon-left",
+        "normal: persistent torn plating cannon-left",
+        "normal: targetable cannon-right",
+        "normal: disabled cannon-right",
+        "normal: persistent torn plating cannon-right",
+        "normal: targetable broadside-left",
+        "normal: disabled broadside-left",
+        "normal: persistent torn plating broadside-left",
+        "normal: targetable broadside-right",
+        "normal: disabled broadside-right",
+        "normal: persistent torn plating broadside-right",
+        "normal: targetable missile-left",
+        "normal: disabled missile-left",
+        "normal: persistent torn plating missile-left",
+        "normal: targetable missile-right",
+        "normal: disabled missile-right",
+        "normal: persistent torn plating missile-right",
+        "normal: targetable artillery",
+        "normal: disabled artillery",
+        "normal: persistent torn plating artillery",
+        "normal: destroyed weapons cancel queued fire",
+        "normal: all seven hardpoints expose core",
+        "normal: exposed core fires defensive volley",
+        "normal: physical boss burst stays pending",
+        "normal: successful haul committed once",
+        "normal: scene objects and combat references retired",
+        "normal: captured visual roots destroyed",
+        "normal: same Arena player restored",
+        "normal: suspension snapshot retired",
+        "normal: camera zoom and input restored",
+        "post-SkyBreach portal offer",
+        "last actual anomaly card is unavailable",
+        "normal: second opportunity",
+        "normal: second entry begins",
+        "normal: failure discards only pending earnings",
+        "normal: established failure ejection restores playable Arena",
+        "failed anomaly still spends access card",
+        "portal for HEIST card redirect",
+        "HEIST card redirects SkyBreach offer",
+        "HEIST redirect bypasses Flux and consumes third combined use",
+        "HEIST redirect recorded as actual history",
+        "HEIST facility and containers retain existing initialization",
+        "HEIST retains fences and independent aim implementation",
+        "HEIST escrow unchanged",
+        "HEIST commit and return remain functional",
+        "overdrive: force eligible opportunity",
+        "overdrive: paid portal entry",
+        "overdrive: correct card bypass or Flux charge",
+        "overdrive: Arena sleeps",
+        "overdrive: shared authoritative build",
+        "overdrive: player stats preserved",
+        "overdrive: suspended clock and player remain intact",
+        "overdrive: aircraft keeps 12px collision radius",
+        "overdrive: responsive controller movement",
+        "overdrive: independent aim input cannot turn forward fire",
+        "overdrive: crosshair hidden",
+        "overdrive: dash executes",
+        "overdrive: shield executes",
+        "overdrive: authoritative turret placed",
+        "overdrive: mine rack launches",
+        "overdrive: fence disabled without spending energy",
+        "overdrive: fence HUD explicitly says offline",
+        "overdrive: normal uses shared projectile pool",
+        "overdrive: scattershot uses shared projectile pool",
+        "overdrive: grenade uses shared projectile pool",
+        "overdrive: Rapid Fire remains active",
+        "overdrive: shared fire cadence advances",
+        "overdrive: all six aircraft/ground roles",
+        "overdrive: shared artillery telegraph",
+        "overdrive: AA fires after telegraph",
+        "overdrive: health pickup restores",
+        "overdrive: energy pickup restores",
+        "overdrive: high fire-rate build respects existing 22/sec ceiling",
+        "overdrive: loot remains provisional",
+        "overdrive: each hardpoint equals actual Arena boss benchmark",
+        "overdrive: core alone gets twice Arena benchmark",
+        "overdrive: core rejects early damage",
+        "overdrive: core rejects Echo before opening",
+        "overdrive: targetable cannon-left",
+        "overdrive: disabled cannon-left",
+        "overdrive: persistent torn plating cannon-left",
+        "overdrive: targetable cannon-right",
+        "overdrive: disabled cannon-right",
+        "overdrive: persistent torn plating cannon-right",
+        "overdrive: targetable broadside-left",
+        "overdrive: disabled broadside-left",
+        "overdrive: persistent torn plating broadside-left",
+        "overdrive: targetable broadside-right",
+        "overdrive: disabled broadside-right",
+        "overdrive: persistent torn plating broadside-right",
+        "overdrive: targetable missile-left",
+        "overdrive: disabled missile-left",
+        "overdrive: persistent torn plating missile-left",
+        "overdrive: targetable missile-right",
+        "overdrive: disabled missile-right",
+        "overdrive: persistent torn plating missile-right",
+        "overdrive: targetable artillery",
+        "overdrive: disabled artillery",
+        "overdrive: persistent torn plating artillery",
+        "overdrive: destroyed weapons cancel queued fire",
+        "overdrive: all seven hardpoints expose core",
+        "overdrive: exposed core fires defensive volley",
+        "overdrive: physical boss burst stays pending",
+        "overdrive: successful haul committed once",
+        "overdrive: scene objects and combat references retired",
+        "overdrive: captured visual roots destroyed",
+        "overdrive: same Arena player restored",
+        "overdrive: suspension snapshot retired",
+        "overdrive: camera zoom and input restored",
+        "overdrive: second opportunity",
+        "overdrive: second entry begins",
+        "overdrive: failure discards only pending earnings",
+        "overdrive: established failure ejection restores playable Arena",
+        "supreme: force eligible opportunity",
+        "supreme: paid portal entry",
+        "supreme: correct card bypass or Flux charge",
+        "supreme: Arena sleeps",
+        "supreme: shared authoritative build",
+        "supreme: player stats preserved",
+        "supreme: suspended clock and player remain intact",
+        "supreme: aircraft keeps 12px collision radius",
+        "supreme: responsive controller movement",
+        "supreme: independent aim input cannot turn forward fire",
+        "supreme: crosshair hidden",
+        "supreme: dash executes",
+        "supreme: shield executes",
+        "supreme: authoritative turret placed",
+        "supreme: mine rack launches",
+        "supreme: fence disabled without spending energy",
+        "supreme: fence HUD explicitly says offline",
+        "supreme: normal uses shared projectile pool",
+        "supreme: scattershot uses shared projectile pool",
+        "supreme: grenade uses shared projectile pool",
+        "supreme: Rapid Fire remains active",
+        "supreme: shared fire cadence advances",
+        "supreme: all six aircraft/ground roles",
+        "supreme: shared artillery telegraph",
+        "supreme: AA fires after telegraph",
+        "supreme: health pickup restores",
+        "supreme: energy pickup restores",
+        "supreme: Crown of Stars pickup surge",
+        "supreme: Singularity suppression field",
+        "supreme: high fire-rate build respects existing 22/sec ceiling",
+        "supreme: loot remains provisional",
+        "supreme: each hardpoint equals actual Arena boss benchmark",
+        "supreme: core alone gets twice Arena benchmark",
+        "supreme: core rejects early damage",
+        "supreme: core rejects Echo before opening",
+        "supreme: targetable cannon-left",
+        "supreme: disabled cannon-left",
+        "supreme: persistent torn plating cannon-left",
+        "supreme: targetable cannon-right",
+        "supreme: disabled cannon-right",
+        "supreme: persistent torn plating cannon-right",
+        "supreme: targetable broadside-left",
+        "supreme: disabled broadside-left",
+        "supreme: persistent torn plating broadside-left",
+        "supreme: targetable broadside-right",
+        "supreme: disabled broadside-right",
+        "supreme: persistent torn plating broadside-right",
+        "supreme: targetable missile-left",
+        "supreme: disabled missile-left",
+        "supreme: persistent torn plating missile-left",
+        "supreme: targetable missile-right",
+        "supreme: disabled missile-right",
+        "supreme: persistent torn plating missile-right",
+        "supreme: targetable artillery",
+        "supreme: disabled artillery",
+        "supreme: persistent torn plating artillery",
+        "supreme: destroyed weapons cancel queued fire",
+        "supreme: all seven hardpoints expose core",
+        "supreme: exposed core fires defensive volley",
+        "supreme: physical boss burst stays pending",
+        "supreme: successful haul committed once",
+        "supreme: scene objects and combat references retired",
+        "supreme: captured visual roots destroyed",
+        "supreme: same Arena player restored",
+        "supreme: suspension snapshot retired",
+        "supreme: camera zoom and input restored",
+        "supreme: second opportunity",
+        "supreme: second entry begins",
+        "supreme: failure discards only pending earnings",
+        "supreme: established failure ejection restores playable Arena"
+      ],
+      "samples": [
+        {
+          "mode": "normal",
+          "round": 14,
+          "difficulty": {
+            "localRound": 14,
+            "rewardPosition": 14,
+            "difficultyPosition": 14,
+            "mode": "normal",
+            "protocol": "normal",
+            "health": 1.4036440000000001,
+            "damage": 1.045944,
+            "speed": 1.18,
+            "entryCurve": {
+              "healthMultiplier": 1.941,
+              "damageMultiplier": 1.5030000000000001,
+              "speedMultiplier": 1.18,
+              "defensePhase": false,
+              "bossBenchmark": {
+                "mode": "normal",
+                "round": 15,
+                "protocol": "normal",
+                "difficultyPosition": 15,
+                "health": 8360
+              },
+              "activeCount": 24,
+              "rewardMultiplier": 1,
+              "contractHealthMultiplier": 1
+            },
+            "pressure": 1,
+            "activeCap": 24,
+            "formationCount": 3,
+            "bossBenchmark": {
+              "mode": "normal",
+              "round": 15,
+              "protocol": "normal",
+              "difficultyPosition": 15,
+              "health": 8360
+            },
+            "bossHealth": 8360,
+            "bossDamage": 0.8424,
+            "rewardMultiplier": 1
+          },
+          "frames": 180,
+          "mean": 16.628333332803514,
+          "p95": 16.90000009536743,
+          "highRatePlayerProjectiles": 18,
+          "scaling": {
+            "mode": "normal",
+            "entryRound": 14,
+            "protocol": "normal",
+            "difficultyPosition": 14,
+            "entryCurve": {
+              "healthMultiplier": 1.941,
+              "damageMultiplier": 1.5030000000000001,
+              "speedMultiplier": 1.18,
+              "defensePhase": false,
+              "bossBenchmark": {
+                "mode": "normal",
+                "round": 15,
+                "protocol": "normal",
+                "difficultyPosition": 15,
+                "health": 8360
+              },
+              "activeCount": 24,
+              "rewardMultiplier": 1,
+              "contractHealthMultiplier": 1
+            },
+            "enemyScaling": {
+              "health": 1.4036440000000001,
+              "damage": 1.045944,
+              "speed": 1.18
+            },
+            "bossBenchmark": {
+              "mode": "normal",
+              "round": 15,
+              "protocol": "normal",
+              "difficultyPosition": 15,
+              "health": 8360
+            },
+            "hardpointHealth": 8360,
+            "coreHealth": 16720,
+            "bossDamageMultiplier": 0.8424,
+            "reinforcements": [
+              "drone",
+              "interceptor",
+              "zeppelin"
+            ],
+            "weapons": [
+              {
+                "id": "cannon-left",
+                "hp": 8360,
+                "maxHp": 8360,
+                "fired": 12
+              },
+              {
+                "id": "cannon-right",
+                "hp": 8360,
+                "maxHp": 8360,
+                "fired": 28
+              },
+              {
+                "id": "broadside-left",
+                "hp": 8360,
+                "maxHp": 8360,
+                "fired": 15
+              },
+              {
+                "id": "broadside-right",
+                "hp": 8360,
+                "maxHp": 8360,
+                "fired": 15
+              },
+              {
+                "id": "missile-left",
+                "hp": 8360,
+                "maxHp": 8360,
+                "fired": 2
+              },
+              {
+                "id": "missile-right",
+                "hp": 8360,
+                "maxHp": 8360,
+                "fired": 2
+              },
+              {
+                "id": "artillery",
+                "hp": 8360,
+                "maxHp": 8360,
+                "fired": 1
+              }
+            ],
+            "activeShots": 23,
+            "seekers": 0,
+            "destruction": {
+              "activeFragments": 0,
+              "peakFragments": 10,
+              "fragmentCapacity": 168,
+              "fragmentPool": {
+                "created": 48,
+                "reused": 20,
+                "active": 0,
+                "available": 48
+              },
+              "activeBursts": 0,
+              "peakBursts": 3,
+              "allocationMisses": 0,
+              "degradedEffects": 0,
+              "droppedOptionalFragments": 0
+            }
+          },
+          "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":1256,\"height\":628,\"scrollX\":876,\"scrollY\":172,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+        },
+        {
+          "mode": "overdrive",
+          "round": 8,
+          "difficulty": {
+            "localRound": 8,
+            "rewardPosition": 38,
+            "difficultyPosition": 38,
+            "mode": "overdrive",
+            "protocol": "overdrive",
+            "health": 1.9900000000000002,
+            "damage": 1.585,
+            "speed": 1.28,
+            "entryCurve": {
+              "healthMultiplier": 2.1,
+              "damageMultiplier": 1.65,
+              "speedMultiplier": 1.28,
+              "defensePhase": false,
+              "bossBenchmark": {
+                "mode": "overdrive",
+                "round": 10,
+                "protocol": "overdrive",
+                "difficultyPosition": 40,
+                "health": 20500
+              },
+              "activeCount": 26,
+              "rewardMultiplier": 1,
+              "contractHealthMultiplier": 1
+            },
+            "pressure": 1,
+            "activeCap": 24,
+            "formationCount": 4,
+            "bossBenchmark": {
+              "mode": "overdrive",
+              "round": 10,
+              "protocol": "overdrive",
+              "difficultyPosition": 40,
+              "health": 20500
+            },
+            "bossHealth": 20500,
+            "bossDamage": 1.48,
+            "rewardMultiplier": 1
+          },
+          "frames": 180,
+          "mean": 16.64555555515819,
+          "p95": 16.90000009536743,
+          "highRatePlayerProjectiles": 18,
+          "scaling": {
+            "mode": "overdrive",
+            "entryRound": 8,
+            "protocol": "overdrive",
+            "difficultyPosition": 38,
+            "entryCurve": {
+              "healthMultiplier": 2.1,
+              "damageMultiplier": 1.65,
+              "speedMultiplier": 1.28,
+              "defensePhase": false,
+              "bossBenchmark": {
+                "mode": "overdrive",
+                "round": 10,
+                "protocol": "overdrive",
+                "difficultyPosition": 40,
+                "health": 20500
+              },
+              "activeCount": 26,
+              "rewardMultiplier": 1,
+              "contractHealthMultiplier": 1
+            },
+            "enemyScaling": {
+              "health": 1.9900000000000002,
+              "damage": 1.585,
+              "speed": 1.28
+            },
+            "bossBenchmark": {
+              "mode": "overdrive",
+              "round": 10,
+              "protocol": "overdrive",
+              "difficultyPosition": 40,
+              "health": 20500
+            },
+            "hardpointHealth": 20500,
+            "coreHealth": 41000,
+            "bossDamageMultiplier": 1.48,
+            "reinforcements": [
+              "drone",
+              "interceptor",
+              "zeppelin"
+            ],
+            "weapons": [
+              {
+                "id": "cannon-left",
+                "hp": 20500,
+                "maxHp": 20500,
+                "fired": 0
+              },
+              {
+                "id": "cannon-right",
+                "hp": 20500,
+                "maxHp": 20500,
+                "fired": 0
+              },
+              {
+                "id": "broadside-left",
+                "hp": 20500,
+                "maxHp": 20500,
+                "fired": 0
+              },
+              {
+                "id": "broadside-right",
+                "hp": 20500,
+                "maxHp": 20500,
+                "fired": 0
+              },
+              {
+                "id": "missile-left",
+                "hp": 20500,
+                "maxHp": 20500,
+                "fired": 0
+              },
+              {
+                "id": "missile-right",
+                "hp": 20500,
+                "maxHp": 20500,
+                "fired": 0
+              },
+              {
+                "id": "artillery",
+                "hp": 20500,
+                "maxHp": 20500,
+                "fired": 0
+              }
+            ],
+            "activeShots": 0,
+            "seekers": 0,
+            "destruction": {
+              "activeFragments": 0,
+              "peakFragments": 0,
+              "fragmentCapacity": 168,
+              "fragmentPool": {
+                "created": 48,
+                "reused": 0,
+                "active": 0,
+                "available": 48
+              },
+              "activeBursts": 0,
+              "peakBursts": 0,
+              "allocationMisses": 0,
+              "degradedEffects": 0,
+              "droppedOptionalFragments": 0
+            }
+          },
+          "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":1256,\"height\":628,\"scrollX\":69.77777777777771,\"scrollY\":151,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+        },
+        {
+          "mode": "supreme",
+          "round": 24,
+          "difficulty": {
+            "localRound": 24,
+            "rewardPosition": 84,
+            "difficultyPosition": 130,
+            "mode": "supreme",
+            "protocol": "supreme-virgo",
+            "health": 4.104972000000001,
+            "damage": 2.44407,
+            "speed": 1.4208,
+            "entryCurve": {
+              "healthMultiplier": 2.1,
+              "damageMultiplier": 1.65,
+              "speedMultiplier": 1.28,
+              "defensePhase": false,
+              "bossBenchmark": {
+                "mode": "supreme",
+                "round": 25,
+                "protocol": "supreme-capricornus",
+                "difficultyPosition": 133,
+                "health": 48384
+              },
+              "activeCount": 26,
+              "rewardMultiplier": 1.875,
+              "contractHealthMultiplier": 1
+            },
+            "pressure": 1.2000000000000002,
+            "activeCap": 24,
+            "formationCount": 7,
+            "bossBenchmark": {
+              "mode": "supreme",
+              "round": 25,
+              "protocol": "supreme-capricornus",
+              "difficultyPosition": 133,
+              "health": 48384
+            },
+            "bossHealth": 48384,
+            "bossDamage": 2.3236,
+            "rewardMultiplier": 1.875
+          },
+          "frames": 180,
+          "mean": 16.645555555820465,
+          "p95": 16.90000009536743,
+          "highRatePlayerProjectiles": 18,
+          "scaling": {
+            "mode": "supreme",
+            "entryRound": 24,
+            "protocol": "supreme-virgo",
+            "difficultyPosition": 130,
+            "entryCurve": {
+              "healthMultiplier": 2.1,
+              "damageMultiplier": 1.65,
+              "speedMultiplier": 1.28,
+              "defensePhase": false,
+              "bossBenchmark": {
+                "mode": "supreme",
+                "round": 25,
+                "protocol": "supreme-capricornus",
+                "difficultyPosition": 133,
+                "health": 48384
+              },
+              "activeCount": 26,
+              "rewardMultiplier": 1.875,
+              "contractHealthMultiplier": 1
+            },
+            "enemyScaling": {
+              "health": 4.104972000000001,
+              "damage": 2.44407,
+              "speed": 1.4208
+            },
+            "bossBenchmark": {
+              "mode": "supreme",
+              "round": 25,
+              "protocol": "supreme-capricornus",
+              "difficultyPosition": 133,
+              "health": 48384
+            },
+            "hardpointHealth": 48384,
+            "coreHealth": 96768,
+            "bossDamageMultiplier": 2.3236,
+            "reinforcements": [
+              "drone",
+              "interceptor",
+              "tank"
+            ],
+            "weapons": [
+              {
+                "id": "cannon-left",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 0
+              },
+              {
+                "id": "cannon-right",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 0
+              },
+              {
+                "id": "broadside-left",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 0
+              },
+              {
+                "id": "broadside-right",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 0
+              },
+              {
+                "id": "missile-left",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 0
+              },
+              {
+                "id": "missile-right",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 0
+              },
+              {
+                "id": "artillery",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 0
+              }
+            ],
+            "activeShots": 0,
+            "seekers": 0,
+            "destruction": {
+              "activeFragments": 0,
+              "peakFragments": 0,
+              "fragmentCapacity": 168,
+              "fragmentPool": {
+                "created": 48,
+                "reused": 0,
+                "active": 0,
+                "available": 48
+              },
+              "activeBursts": 0,
+              "peakBursts": 0,
+              "allocationMisses": 0,
+              "degradedEffects": 0,
+              "droppedOptionalFragments": 0
+            }
+          },
+          "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":1256,\"height\":628,\"scrollX\":573,\"scrollY\":34.88888888888886,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+        }
+      ]
+    },
+    {
+      "fixture": "sky-polish-supreme-combat",
+      "checks": 41,
+      "assertions": [
+        "SkyBreach active from actual Arena handoff",
+        "F6 shows actual scaling source and separate hardpoint/core health",
+        "drone actual HP matches captured Arena",
+        "drone actual damage matches captured Arena",
+        "tank actual HP matches captured Arena",
+        "tank actual damage matches captured Arena",
+        "interceptor actual HP matches captured Arena",
+        "interceptor actual damage matches captured Arena",
+        "strike actual HP matches captured Arena",
+        "strike actual damage matches captured Arena",
+        "aa actual HP matches captured Arena",
+        "aa actual damage matches captured Arena",
+        "zeppelin actual HP matches captured Arena",
+        "zeppelin actual damage matches captured Arena",
+        "drone acquires player and fires a scaled physical round",
+        "drone round has physical projectile artwork",
+        "drone shot travels toward player",
+        "disabled drone cannot fire",
+        "actual drone projectile reaches shared player-damage path",
+        "ground tank launches Arena-style seeker",
+        "seeker reuses Arena artwork and lifetime",
+        "tank missile retains Arena damage owner",
+        "seeker turns toward moving player with Arena turn limit",
+        "tank cannot launch a second live seeker",
+        "shared player projectile intercepts a tank seeker",
+        "all ordinary and boss fire respects 160-shot ceiling",
+        "seeker count capped at twelve",
+        "threat cleanup releases seeker and pooled projectile references",
+        "airship rotates heavy plasma, seekers and flak",
+        "Corkscrew Assault has opposing groups",
+        "live fighters roll through corkscrew",
+        "live fighters use cached perspective frames",
+        "both corkscrew groups fire while maneuvering",
+        "both front cannons fire in the opening combination",
+        "destroyed hardpoint shows torn machinery",
+        "electrical failures and smoke persist",
+        "destroyed forward weapon cancels its remaining burst",
+        "one destroyed hardpoint does not expose or damage core",
+        "mixed combat remains within projectile bounds",
+        "destruction retains existing fragment cap",
+        "SkyBreach DEV profiler records actual renderer samples"
+      ],
+      "samples": [
+        {
+          "frames": 360,
+          "mean": 16.652499999933774,
+          "p95": 16.899999976158142,
+          "max": 17.09999990463257,
+          "activeEnemies": 24,
+          "diagnostics": {
+            "mode": "supreme",
+            "entryRound": 24,
+            "protocol": "supreme-virgo",
+            "difficultyPosition": 130,
+            "entryCurve": {
+              "healthMultiplier": 2.1,
+              "damageMultiplier": 1.65,
+              "speedMultiplier": 1.28,
+              "defensePhase": false,
+              "bossBenchmark": {
+                "mode": "supreme",
+                "round": 25,
+                "protocol": "supreme-capricornus",
+                "difficultyPosition": 133,
+                "health": 48384
+              },
+              "activeCount": 26,
+              "rewardMultiplier": 1.875,
+              "contractHealthMultiplier": 1
+            },
+            "enemyScaling": {
+              "health": 4.104972000000001,
+              "damage": 2.44407,
+              "speed": 1.4208
+            },
+            "bossBenchmark": {
+              "mode": "supreme",
+              "round": 25,
+              "protocol": "supreme-capricornus",
+              "difficultyPosition": 133,
+              "health": 48384
+            },
+            "hardpointHealth": 48384,
+            "coreHealth": 96768,
+            "bossDamageMultiplier": 2.3236,
+            "reinforcements": [
+              "drone",
+              "interceptor",
+              "tank"
+            ],
+            "weapons": [
+              {
+                "id": "cannon-left",
+                "hp": 0,
+                "maxHp": 48384,
+                "fired": 1
+              },
+              {
+                "id": "cannon-right",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 9
+              },
+              {
+                "id": "broadside-left",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 5
+              },
+              {
+                "id": "broadside-right",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 5
+              },
+              {
+                "id": "missile-left",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 1
+              },
+              {
+                "id": "missile-right",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 1
+              },
+              {
+                "id": "artillery",
+                "hp": 48384,
+                "maxHp": 48384,
+                "fired": 0
+              }
+            ],
+            "activeShots": 53,
+            "seekers": 0,
+            "destruction": {
+              "activeFragments": 0,
+              "peakFragments": 12,
+              "fragmentCapacity": 168,
+              "fragmentPool": {
+                "created": 48,
+                "reused": 12,
+                "active": 0,
+                "available": 48
+              },
+              "activeBursts": 0,
+              "peakBursts": 3,
+              "allocationMisses": 0,
+              "degradedEffects": 0,
+              "droppedOptionalFragments": 0
+            }
+          },
+          "profiler": {
+            "frameTime": {
+              "samples": 360,
+              "averageMs": 16.66641666094462,
+              "p95Ms": 16.68000030517578,
+              "p99Ms": 16.68000030517578,
+              "maximumMs": 16.68000030517578,
+              "framesOver33Ms": 0,
+              "framesOver50Ms": 0
+            },
+            "sampledFrames": 360,
+            "updateWork": {
+              "averageMs": 0.49305555356873404,
+              "maximumMs": 0.8999999761581421
+            },
+            "renderWork": {
+              "averageMs": 2.5502777804931003,
+              "maximumMs": 4.799999952316284,
+              "samples": 360
+            },
+            "physicsUpdateEnvelope": {
+              "averageMs": 0.09361111356152428,
+              "maximumMs": 0.30000007152557373,
+              "samples": 360
+            },
+            "categories": {
+              "presentationInput": {
+                "averageMs": 0.017222222354676988,
+                "maximumMs": 0.20000004768371582,
+                "samples": 360
+              },
+              "facilityAndVfx": {
+                "averageMs": 0.03944444590144687,
+                "maximumMs": 0.20000004768371582,
+                "samples": 360
+              },
+              "playerCombatAndMods": {
+                "averageMs": 0.033333333995607166,
+                "maximumMs": 0.20000004768371582,
+                "samples": 360
+              },
+              "projectiles": {
+                "averageMs": 0.026666665408346387,
+                "maximumMs": 0.20000004768371582,
+                "samples": 360
+              },
+              "enemies": {
+                "averageMs": 0.0783333334657881,
+                "maximumMs": 0.30000007152557373,
+                "samples": 360
+              },
+              "deployables": {
+                "averageMs": 0.005277777711550395,
+                "maximumMs": 0.10000002384185791,
+                "samples": 360
+              },
+              "pickupsHazardsMission": {
+                "averageMs": 0.019444447093539766,
+                "maximumMs": 0.20000004768371582,
+                "samples": 360
+              },
+              "hudMaintenance": {
+                "averageMs": 0.2722222169240316,
+                "maximumMs": 0.5,
+                "samples": 360
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "fixture": "sky-polish-retirement",
+      "checks": 7,
+      "assertions": [
+        "Arena resumes after maximum-density fixture",
+        "all new attack ownership retires",
+        "aircraft, hardpoints and projectiles retire",
+        "all captured scene-owned visual roots are destroyed",
+        "pooled destruction references retire",
+        "retired boss cannot emit delayed attacks",
+        "no captured page errors or unhandled rejections"
+      ],
+      "texturePixels": 2898544
+    }
+  ],
+  "limits": [
+    "Assisted, isolated DEV profiles; not unassisted clears.",
+    "Performance samples are 3–6 seconds on this machine; no low-end GPU or full-run soak claim.",
+    "Hardpoints/core are accelerated through real damage handlers for lifecycle checks."
+  ]
+}

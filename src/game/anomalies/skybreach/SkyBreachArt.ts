@@ -21,12 +21,12 @@ function vent(c: Context, x: number, y: number, w: number, rows: number) {
   c.fillStyle = '#040a12'; c.fillRect(x - 2,y - 2,w + 4,rows * 4 + 3);
   for(let i=0;i<rows;i++) { c.fillStyle = '#607080'; c.fillRect(x,y + i*4,w,1); }
 }
-function aircraft(c: Context, type: 'player'|'interceptor'|'strike'|'escort') {
+function aircraft(c: Context, type: 'player'|'interceptor'|'strike'|'escort', bank = 0) {
   const wide = type === 'strike', friendly = type === 'player' || type === 'escort';
   const color = friendly ? '#43eeff' : wide ? '#ffaa43' : '#ff4d94';
   c.translate(80,80);
   for(const side of [-1,1]) {
-    c.save(); c.scale(side,1);
+    c.save(); c.transform(side*(1-Math.abs(bank)*.35+bank*side*.27),bank*side*.16,bank*.08,1,0,0);
     polygon(c,[13,-32,29,-29,66,24,66,37,26,19,12,33],metal(c,12,54));
     polygon(c,[29,-20,55,22,33,11,23,-6], '#203345');
     polygon(c,[15,24,44,53,44,62,12,45],metal(c,12,32));
@@ -37,6 +37,7 @@ function aircraft(c: Context, type: 'player'|'interceptor'|'strike'|'escort') {
     c.strokeStyle = '#8d9aa0'; c.beginPath();c.moveTo(34,0);c.lineTo(54,29);c.stroke();
     for(let i=0;i<3;i++){ c.fillStyle=palette.light;c.fillRect(29+i*6,18+i*3,2,2); }
     if(wide){polygon(c,[31,-20,42,-8,53,35,34,27],metal(c,31,22));vent(c,36,3,7,5);}
+    if(bank*side<0)polygon(c,[13,-32,29,-29,66,24,66,37,26,19,12,33],'#03101b66','#637184');
     c.restore();
   }
   polygon(c,[0,-69,12,-43,16,17,8,45,-8,45,-16,17,-12,-43],metal(c,-16,32,friendly?'#64858d':'#765164'));
@@ -114,6 +115,45 @@ export function ensureSkyArt(scene: Phaser.Scene): void {
     draw(texture.context);texture.refresh();
   };
   for(const type of ['player','interceptor','strike','escort'] as const) bake(`sky-${type}`,160,160,c=>aircraft(c,type));
+  for(const type of ['interceptor','strike'] as const)for(const bank of [-2,-1,0,1,2])
+    bake(`sky-${type}-bank-${bank}`,160,160,c=>aircraft(c,type,bank/2));
+  for(const kind of ['shell','kinetic','plasma','flak'] as const)bake(`sky-shot-${kind}`,64,32,c=>{
+    c.translate(32,16);
+    if(kind==='plasma') {
+      const g=c.createRadialGradient(0,0,1,0,0,16);g.addColorStop(0,'#ffffff');g.addColorStop(.3,'#9fffff');g.addColorStop(.65,'#30acdfcc');g.addColorStop(1,'#158bd000');
+      c.scale(1.8,1);c.fillStyle=g;c.fillRect(-16,-16,32,32);
+    }else {
+      polygon(c,[-23,-6,13,-6,27,0,13,6,-23,6],kind==='shell'?'#c1ac85':kind==='flak'?'#db7891':'#d2dbe3','#53687b');
+      c.fillStyle='#f3eee2';c.fillRect(-8,-4,21,2);c.fillStyle='#454553';c.fillRect(-23,-6,6,12);
+      lamp(c,-20,-3,5,6,kind==='kinetic'?'#ffd690':'#fa9558');
+    }
+  });
+  bake('sky-lock',64,64,c=>{
+    c.strokeStyle='#ffb969';c.lineWidth=2;c.setLineDash([7,8]);c.beginPath();c.arc(32,32,22,0,Math.PI*2);c.stroke();
+    c.setLineDash([]);for(const s of [-1,1]){c.beginPath();c.moveTo(32+s*12,32);c.lineTo(32+s*28,32);c.stroke();}
+  });
+  bake('sky-wreck',160,160,c=>{
+    c.translate(80,80);
+    const rng=new SeededRandom(0xb10a);
+    c.fillStyle='#04080ed9';c.beginPath();c.ellipse(0,2,67,53,.2,0,Math.PI*2);c.fill();
+    polygon(c,[-59,-23,-35,-29,-44,-49,-13,-40,3,-61,22,-37,55,-47,46,-15,68,1,41,18,51,47,19,38,1,58,-20,33,-57,41,-42,12],metal(c,-65,130,'#494749'),'#93816d');
+    polygon(c,[-37,-12,-21,-31,1,-27,18,-35,37,-13,29,14,13,30,-9,24,-32,33,-25,9], '#020914','#687a85');
+    for(let i=0;i<7;i++) {
+      const x=-24+rng.next()*48,y=-20+rng.next()*42;
+      vent(c,x,y,12,3);c.strokeStyle='#3a6a82';c.lineWidth=3;c.beginPath();c.arc(x,y,8,0,Math.PI*1.6);c.stroke();
+      c.strokeStyle='#172b39';c.beginPath();c.moveTo(x,y);c.lineTo(x+15,y+18);c.stroke();
+    }
+    for(let i=0;i<9;i++) {
+      const a=i*Math.PI*2/9;c.strokeStyle=i%2?'#080b10':'#899598';c.lineWidth=i%2?3:1;
+      c.beginPath();c.moveTo(Math.cos(a)*30,Math.sin(a)*24);c.lineTo(Math.cos(a+.1)*49,Math.sin(a+.1)*39);c.lineTo(Math.cos(a)*62,Math.sin(a)*45);c.stroke();
+    }
+    lamp(c,-12,7,7,4,'#338bd6');lamp(c,14,-13,6,3,'#de9333');
+  });
+  bake('sky-wreck-power',160,160,c=>{
+    c.translate(80,80);c.strokeStyle='#55baff';c.shadowColor='#2395ff';c.shadowBlur=9;c.lineWidth=2;
+    for(const s of [-1,1]){c.beginPath();c.moveTo(s*30,-16);c.lineTo(s*13,-7);c.lineTo(s*22,0);c.lineTo(s*5,13);c.stroke();}
+    c.shadowBlur=0;c.strokeStyle='#ffd16a';for(let i=0;i<8;i++){const a=i*2.4;c.beginPath();c.moveTo(12,3);c.lineTo(12+Math.cos(a)*22,3+Math.sin(a)*22);c.stroke();}
+  });
   bake('sky-zeppelin',360,250,zeppelin);
   bake('sky-dreadnought',900,420,dreadnought);
   for(const type of ['cannon','missile','core'])bake(`sky-${type}`,128,128,c=>hardpoint(c,type));
@@ -177,13 +217,32 @@ export function ensureSkyArt(scene: Phaser.Scene): void {
   bake('sky-industrial',512,1024,c=>{
     c.fillStyle='#081320';c.fillRect(0,0,512,1024);
     const rng=new SeededRandom(5129);
-    for(let i=0;i<40;i++){
-      const x=24+rng.next()*410,y=rng.next()*1024,w=22+rng.next()*54,h=40+rng.next()*140;
-      c.fillStyle='#030c17';c.fillRect(x+8,y+10,w,h);c.fillStyle='#142839';c.fillRect(x,y,w,h);
-      c.strokeStyle='#263b49';c.strokeRect(x,y,w,h);vent(c,x+5,y+8,w-10,Math.min(9,Math.floor(h/7)));
-      if(i%3===0)lamp(c,x+4,y+h-9,w-8,2,i%2?'#bc7941':'#387887');
+    // A continuous 156px street matches groundLaneX and the three-vehicle patrol width.
+    c.fillStyle='#101d2b';c.fillRect(178,0,156,1024);
+    for(const x of [182,330])lamp(c,x,0,2,1024,'#347a8c');
+    for(let row=0;row<4;row++) {
+      const y=row*256;
+      c.fillStyle='#152738';c.fillRect(0,y+207,512,49);
+      for(const x of [187,305])for(let j=0;j<4;j++){c.fillStyle='#52717a';c.fillRect(x,y+213+j*9,19,4);}
+      for(const side of [0,1]) {
+        const x=side?350:10,w=150,h=178;
+        c.fillStyle='#020914';c.fillRect(x+8,y+17,w,h);
+        c.fillStyle=row%2?'#213448':'#192c3d';c.fillRect(x,y+8,w,h);
+        c.strokeStyle='#436073';c.lineWidth=3;c.strokeRect(x,y+8,w,h);
+        const color=(row+side)%2?'#3bacae':'#a25791';
+        lamp(c,x+4,y+12,w-8,2,color);lamp(c,x+4,y+h+1,w-8,2,color);
+        for(let j=0;j<8;j++)lamp(c,x+6+j*18,y+177,8,3,'#88adbc');
+        vent(c,x+12,y+22,42,11);vent(c,x+92,y+25,35,8);
+        c.strokeStyle='#668192';c.lineWidth=2;c.beginPath();c.arc(x+81,y+114,34,0,Math.PI*2);c.stroke();
+        c.fillStyle='#819d9e';c.font='bold 23px monospace';c.textAlign='center';c.fillText('H',x+81,y+122);
+        c.strokeStyle='#346777';c.strokeRect(x+5,y+17,140,143);
+        for(let k=0;k<4;k++){const px=x+12+rng.next()*120;lamp(c,px,y+151,5,6,'#de9b54');}
+        c.strokeStyle='#8c9ba6';c.beginPath();c.moveTo(x+25,y+108);c.lineTo(x+25,y+64);c.lineTo(x+18,y+79);c.stroke();
+        lamp(c,x+22,y+64,6,4,'#f59581');
+        c.fillStyle='#96aeba';c.font='8px monospace';c.fillText(`N3 // ${row}${side}`,x+76,y+198);
+      }
     }
-    c.strokeStyle='#284957';c.setLineDash([12,25]);c.beginPath();c.moveTo(256,0);c.lineTo(256,1024);c.stroke();
+    c.strokeStyle='#66878e';c.setLineDash([16,23]);c.beginPath();c.moveTo(256,0);c.lineTo(256,1024);c.stroke();
   });
   bake('sky-platform',280,380,c=>{
     polygon(c,[30,12,247,12,268,38,268,334,240,369,37,369,12,340,12,39],metal(c,10,260));
@@ -203,7 +262,7 @@ export class SkyBreachWorld {
   constructor(scene:Phaser.Scene, width:number,height:number) {
     ensureSkyArt(scene);
     this.layers=[
-      scene.add.tileSprite(width/2,height/2,width,height,'sky-industrial').setDepth(-20).setAlpha(.48),
+      scene.add.tileSprite(width/2,height/2,width,height,'sky-industrial').setDepth(-20).setAlpha(.8),
       scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-18).setAlpha(.8),
       scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-12).setAlpha(.4).setTileScale(1.7)
     ];
