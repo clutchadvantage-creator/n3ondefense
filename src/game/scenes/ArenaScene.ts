@@ -29,6 +29,8 @@ import { getMineRackEnergyCost, getMineRackPatternOffsets } from '../abilities/M
 import { resolveAbilityRuntimeConfig, resolveShieldRuntime, type AbilityRuntimeConfig } from '../gameplay/AbilityRuntimeRules.ts';
 import { Turret } from '../abilities/Turret';
 import { Fence } from '../abilities/Fence';
+import { FenceObstruction, fenceDistance, liveFence, type FenceBarrier } from '../abilities/FenceObstruction.ts';
+import { SystemInfusionTargetReticle } from '../mods/SystemInfusionTargetReticle.ts';
 import { MAX_DISTINCT_FENCE_SPLITS, resolveFenceSplitStage } from '../abilities/FenceSplitRules.ts';
 import { Player } from '../entities/Player';
 import { baseEnemyStats, Enemy } from '../enemies/Enemy';
@@ -635,8 +637,13 @@ export class ArenaScene extends Phaser.Scene {
   private infusionGraphics: Phaser.GameObjects.Graphics | null = null;
   private infusionHint: Phaser.GameObjects.Text | null = null;
   private infusionInteracting = false;
-  private ascensionAlly: Enemy | null = null;
-  private ascensionGun: Turret | null = null;
+  private possession: BossEncounter | null = null;
+  private possessionRemainingMs = 0;
+  private infusionReticle: SystemInfusionTargetReticle | null = null;
+  private readonly fenceObstruction = new FenceObstruction(32);
+  private fenceContacts = new WeakMap<Enemy, {fence:FenceBarrier;since:number}>();
+  private fencePositions = new WeakMap<object, {x:number;y:number}>();
+  private railTrailAt = 0;
   private ascensionUntil = 0;
   private ascensionWallCollider: Phaser.Physics.Arcade.Collider | null = null;
   private poweredFencePulse = new WeakMap<object, number>();
@@ -1765,9 +1772,12 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.recordEnergyRegeneration(requestedRegeneration, this.player.energy - energyBeforeRegeneration);
     this.refreshAimWorldPoint();
     this.updatePrismCosmetics(now);
-    this.updatePlayerMovement(now);
     this.updateSystemInfusions(now, dt);
-    this.echo?.update(delta, this.playerInput, now);
+    this.updatePlayerMovement(now);
+    this.updatePossession(now,delta);
+    if(this.roundRuntime.phase!=='active')return; // A controlled boss attack can finish the encounter.
+    this.updateFenceObstruction(now);
+    if(!this.systemInfusions?.railActive&&!this.possession)this.echo?.update(delta, this.playerInput, now);
     this.updatePlayerShooting(now);
     this.muzzleFlashVfx.update(now);
     this.projectileImpactVfx.update(now);
@@ -1810,7 +1820,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.updateRelentlessSpawns(now, activeSites.length > 0);
 
-    const playerLaserImmune = now < this.player.dashUntil || now < this.shieldActiveUntil;
+    const playerLaserImmune = !this.possession && (now < this.player.dashUntil || now < this.shieldActiveUntil);
     const arcadeBoss = this.arcadeController?.getBossTarget();
     if (this.gasHazard?.visualGasActive && arcadeBoss) {
       this.gasHazard.carveVisualTunnel(
@@ -1824,7 +1834,7 @@ export class ArenaScene extends Phaser.Scene {
     this.gasHazard?.update(
       now,
       this.player,
-      this.modRuntime.multiplier('gasDamageTaken') * this.currentModeBalance().hazardDamageMultiplier
+      this.possession ? 0 : this.modRuntime.multiplier('gasDamageTaken') * this.currentModeBalance().hazardDamageMultiplier
     );
     const gasSuppressesLasers = this.gasHazard?.isLaserSuppressed(now) ?? false;
     this.fluxCores?.update(now, this.player, gasSuppressesLasers);
@@ -2243,6 +2253,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePlayerMovement(now: number): void {
+    if(this.systemInfusions?.railActive||this.possession){this.player.setVelocity(0,0);return;}
     const aim = this.getAimWorldPoint();
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
     if (this.tutorialDirector?.awaits('combat.aimChanged')) {
@@ -2344,6 +2355,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePlayerShooting(now: number): void {
+    if(this.systemInfusions?.railActive||this.possession)return;
     if (!this.playerInput.held('fire')) return;
     if (this.player.heat >= this.player.weapon.maxHeat) return;
 
@@ -2506,6 +2518,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private updatePlanting(delta: number): void {
     if (this.infusionInteracting) {
+      if(!this.possession)this.siteActionText.setText('');
       this.audio.stopPlantingLoop();
       if (this.activePlantingSite) this.bombSites.cancelPlanting(this.activePlantingSite);
       this.activePlantingSite = null; this.plantingProgressMs = 0;
@@ -2710,7 +2723,7 @@ export class ArenaScene extends Phaser.Scene {
       if (hit) {
         GameplayTelemetryRecorder.recordPlayerDamage('enemy-contact', enemy.stats.damage);
       }
-    });
+    },()=>!this.systemInfusions?.railActive&&!this.possession);
     this.enemyColliders.set(enemy, [wallCollider, playerCollider]);
 
     this.enemies.push(enemy);
@@ -3040,13 +3053,6 @@ export class ArenaScene extends Phaser.Scene {
 
     this.navigateEnemy(enemy, tx, ty, now, enemy.stats.speed, focusBombSite);
 
-    if (enemy.stats.type === 'tank' || enemy.stats.type === 'star') {
-      const isStar = enemy.stats.type === 'star';
-      const fenceDamage = isStar ? 1.35 : 0.95;
-      for (const f of this.fences) {
-        if (Phaser.Math.Distance.Between(enemy.x, enemy.y, f.sprite.x, f.sprite.y) < 56) f.hp -= fenceDamage;
-      }
-    }
   }
 
   private activateShield(now: number): void {
@@ -3180,7 +3186,7 @@ export class ArenaScene extends Phaser.Scene {
 
       const playerDx = this.player.x - missile.sprite.x;
       const playerDy = this.player.y - missile.sprite.y;
-      if (playerDx * playerDx + playerDy * playerDy <= 19 * 19) {
+      if (playerDx * playerDx + playerDy * playerDy <= (this.player.combatRadius+7) ** 2) {
         this.detonateHomingMissile(missile, 'impact');
         continue;
       }
@@ -3227,7 +3233,7 @@ export class ArenaScene extends Phaser.Scene {
     const playerDx = this.player.x - x;
     const playerDy = this.player.y - y;
     const playerInBlast = playerDx * playerDx + playerDy * playerDy
-      <= TANK_HOMING_MISSILE_BALANCE.blastRadius * TANK_HOMING_MISSILE_BALANCE.blastRadius;
+      <= (TANK_HOMING_MISSILE_BALANCE.blastRadius + this.player.combatRadius - 12) ** 2;
     if (playerInBlast) {
       const hit = this.player.takeDamage(missile.damage);
       GameplayTelemetryRecorder.recordProjectileHit('enemy', hit ? missile.damage : 0, 0, false, !hit);
@@ -3363,7 +3369,8 @@ export class ArenaScene extends Phaser.Scene {
           if (recovery && clearOfBombsites(recovery, this.layout.bombSites)) {
             const recoveryDx = recovery.x - enemy.x;
             const recoveryDy = recovery.y - enemy.y;
-            if (recoveryDx * recoveryDx + recoveryDy * recoveryDy > 24 * 24) {
+            if (recoveryDx * recoveryDx + recoveryDy * recoveryDy > 24 * 24
+              && !this.fenceObstruction.firstHit(enemy.x,enemy.y,recovery.x,recovery.y,enemy.hazardRadius,now)) {
               enemy.setPosition(recovery.x, recovery.y);
               body?.reset(recovery.x, recovery.y);
               nav.lastSampleX = recovery.x;
@@ -3383,6 +3390,7 @@ export class ArenaScene extends Phaser.Scene {
       this.navigationQueriesRemaining -= 1;
       nav.path = this.pathfinder.findPath(enemy.x, enemy.y, targetX, targetY, {
         cellPenalty: this.navigationCellPenalty,
+        cellBlocked: this.fenceObstruction.cellBlocked,
         smooth: nav.stuckTicks === 0,
         maxIterations: 4800,
         output: nav.path
@@ -3421,13 +3429,21 @@ export class ArenaScene extends Phaser.Scene {
     const directDistanceSquared = directX * directX + directY * directY;
     if (directDistanceSquared <= 1) {
       enemy.setVelocity(0, 0);
-    } else if (this.pathfinder.hasLineOfSightWorld(enemy.x, enemy.y, targetX, targetY)) {
+    } else if (this.pathfinder.hasLineOfSightWorld(enemy.x, enemy.y, targetX, targetY,this.fenceObstruction.cellBlocked)) {
       const inverseDistance = 1 / Math.sqrt(directDistanceSquared);
       this.setEnemyNavigationVelocity(enemy, directX * inverseDistance, directY * inverseDistance, speed, nav, now);
     } else {
       // Never fall back to driving directly into geometry when a path query
       // temporarily fails. The next staggered repath will try again.
-      enemy.setVelocity(0, 0);
+      const fence=this.fenceObstruction.firstHit(enemy.x,enemy.y,targetX,targetY,enemy.hazardRadius,now);
+      if(fence&&this.pathfinder.hasLineOfSightWorld(enemy.x,enemy.y,fence.x,fence.y)){
+        const d=Math.hypot(fence.x-enemy.x,fence.y-enemy.y);
+        if(d>1)enemy.setVelocity((fence.x-enemy.x)/d*speed,(fence.y-enemy.y)/d*speed);
+        else {
+          enemy.setVelocity(0,0);
+          if(!this.fenceContacts.has(enemy))this.fenceContacts.set(enemy,{fence:fence.fence,since:now});
+        }
+      }else enemy.setVelocity(0, 0);
       nav.nextRepathAt = Math.min(nav.nextRepathAt, now + 90);
     }
   }
@@ -3465,6 +3481,44 @@ export class ArenaScene extends Phaser.Scene {
       );
     }
     this.separationSubject = null;
+  }
+
+  private updateFenceObstruction(now:number):void {
+    const fences=this.systemInfusions?.fences??this.fences;
+    if(this.fenceObstruction.refresh(fences,now))for(const enemy of this.enemies){
+      const nav=this.navState.get(enemy);if(nav){nav.path.length=0;nav.waypointIndex=0;nav.nextRepathAt=0;}
+    }
+    for(const enemy of this.enemies){
+      if(!enemy.active||enemy.isDead()||enemy.airborne)continue;
+      const body=enemy.body as Phaser.Physics.Arcade.Body|null;
+      const previous=this.fencePositions.get(enemy)??enemy;
+      const hit=this.fenceObstruction.firstHit(previous.x,previous.y,enemy.x,enemy.y,enemy.hazardRadius,now);
+      if(hit&&body){
+        const vx=body.velocity.x,vy=body.velocity.y,normal=Math.min(0,vx*hit.nx+vy*hit.ny);
+        body.reset(hit.x,hit.y);enemy.setVelocity(vx-normal*hit.nx,vy-normal*hit.ny);
+        const contact=this.fenceContacts.get(enemy);
+        if(!contact||contact.fence!==hit.fence)this.fenceContacts.set(enemy,{fence:hit.fence,since:now});
+      }
+      const contact=this.fenceContacts.get(enemy);
+      if(contact){
+        if(!liveFence(contact.fence,now)||fenceDistance(enemy.x,enemy.y,contact.fence)>enemy.hazardRadius+12)this.fenceContacts.delete(enemy);
+        else if(now-contact.since>=INFUSION_TUNING.fence.attackDelayMs
+          && now-enemy.lastAttackMs>=ENEMY_BALANCE[enemy.stats.type].attackCooldownMs){
+          enemy.lastAttackMs=now;contact.fence.hp=Math.max(0,contact.fence.hp-enemy.stats.damage);
+          this.spawnImpact(enemy.x,enemy.y,enemy.stats.color);
+        }
+      }
+      const stored=this.fencePositions.get(enemy)??{x:0,y:0};stored.x=enemy.x;stored.y=enemy.y;this.fencePositions.set(enemy,stored);
+      if(this.possession&&Math.hypot(enemy.x-this.possession.boss.x,enemy.y-this.possession.boss.y)<enemy.hazardRadius+this.possession.boss.hazardRadius
+        && now-enemy.lastAttackMs>=ENEMY_BALANCE[enemy.stats.type].attackCooldownMs){
+        enemy.lastAttackMs=now;this.player.takeDamage(enemy.stats.damage);
+      }
+    }
+    for(const boss of this.activeMajorBosses()){
+      const previous=this.fencePositions.get(boss)??boss,hit=this.fenceObstruction.firstHit(previous.x,previous.y,boss.x,boss.y,boss.hazardRadius,now);
+      if(hit)(boss.body as Phaser.Physics.Arcade.Body|null)?.reset(hit.x,hit.y);
+      const stored=this.fencePositions.get(boss)??{x:0,y:0};stored.x=boss.x;stored.y=boss.y;this.fencePositions.set(boss,stored);
+    }
   }
 
   private drawTraversalDebug(): void {
@@ -3834,12 +3888,18 @@ export class ArenaScene extends Phaser.Scene {
         const boss = p.ammoMode === 'grenade' ? null : this.nearestActiveBossTarget(p.sprite.x, p.sprite.y);
         if (boss?.active && !boss.isDefeated
           && (boss.x - p.sprite.x) ** 2 + (boss.y - p.sprite.y) ** 2 < (boss.hazardRadius + 8) ** 2) {
-          const applied = boss.takeDamage(p.damage, p.echo ? 'echo' : p.from === 'player' ? 'weapon' : 'turret', p.echo);
+          const rocket = p.bossAttack === 'artillery-rocket' && p.from === 'player';
+          const previousHp = boss.hp;
+          if (rocket) this.explodeBossRocket(p);
+          const applied = rocket ? previousHp - boss.hp
+            : boss.takeDamage(p.damage, p.echo ? 'echo' : p.from === 'player' ? 'weapon' : 'turret', p.echo);
           const overkill = Math.max(0, p.damage - applied);
           if (p.from === 'turret') GameplayTelemetryRecorder.recordTurretHit(p.turretId ?? '', applied, overkill);
           else GameplayTelemetryRecorder.recordProjectileHit(p.echo ? 'echo' : 'weapon', applied, overkill, p.critical);
-          this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.nativePalette ? (p.emissiveColor ?? p.trailColor) : p.sprite.tintTopLeft);
-          this.retireProjectile(p);
+          if (!rocket) {
+            this.spawnAmmoAwareImpact(p, p.sprite.x, p.sprite.y, p.nativePalette ? (p.emissiveColor ?? p.trailColor) : p.sprite.tintTopLeft);
+            this.retireProjectile(p);
+          }
           if (boss.isDefeated && (boss === this.bossEncounter?.boss || this.supremeFinale?.allDefeated)) {
             // Preserve all unprocessed pooled projectiles for the deferred boss
             // teardown. Nothing else should advance on the fatal-hit frame.
@@ -3855,6 +3915,10 @@ export class ArenaScene extends Phaser.Scene {
           ? this.findSpecialAmmoHitEnemy(p.sprite.x, p.sprite.y)
           : this.findProjectileHitEnemy(p.sprite.x, p.sprite.y);
         if (hitEnemy) {
+          if (p.bossAttack === 'artillery-rocket' && p.from === 'player') {
+            this.explodeBossRocket(p);
+            continue;
+          }
           const markedForTurret = this.defuseAssignees.has(hitEnemy) || now < (this.defuserMarkedUntil.get(hitEnemy) ?? 0);
           const conditionalBonus = p.from === 'turret' && this.modRuntime.rank('priority-targeting') === 3 && markedForTurret
             ? this.modRuntime.conditionalDamageBonus([MOD_BALANCE.priorityTargeting.rank3TurretDamageBonus])
@@ -3878,10 +3942,6 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       if (p.from === 'enemy') {
-        if (this.ascensionAlly?.active && !this.ascensionAlly.isDead()
-          && Math.hypot(this.ascensionAlly.x-p.sprite.x,this.ascensionAlly.y-p.sprite.y) < 32) {
-          this.ascensionAlly.takeDamage(p.damage);this.retireProjectile(p);continue;
-        }
         if (p.bossAttack === 'artillery-rocket') {
           const playerDx = this.player.x - p.sprite.x;
           const playerDy = this.player.y - p.sprite.y;
@@ -3898,7 +3958,7 @@ export class ArenaScene extends Phaser.Scene {
             continue;
           }
         }
-        if ((this.player.x - p.sprite.x) ** 2 + (this.player.y - p.sprite.y) ** 2 < 16 * 16) {
+        if ((this.player.x - p.sprite.x) ** 2 + (this.player.y - p.sprite.y) ** 2 < (this.player.combatRadius+4) ** 2) {
           const hit = this.player.takeDamage(p.damage);
           if (p.telemetryOwner) GameplayTelemetryRecorder.recordProjectileHit(p.telemetryOwner, hit ? p.damage : 0, 0, false, !hit);
           if (p.bossAttack) GameplayTelemetryRecorder.recordBossAttackIntersection(p.bossAttack, hit ? p.damage : 0, !hit);
@@ -3939,7 +3999,8 @@ export class ArenaScene extends Phaser.Scene {
     const x = projectile.sprite.x;
     const y = projectile.sprite.y;
     this.audio.playSfx('bomblet');
-    this.applyBossAreaDamage(x, y, 68, projectile.damage, 'artillery-rocket');
+    if(projectile.from==='player')this.applyPossessedBossAreaDamage(x,y,68,projectile.damage,'artillery-rocket');
+    else this.applyBossAreaDamage(x, y, 68, projectile.damage, 'artillery-rocket');
     this.retireProjectile(projectile);
   }
 
@@ -3993,8 +4054,9 @@ export class ArenaScene extends Phaser.Scene {
     const previousX = projectile.previousX ?? projectile.sprite.x;
     const previousY = projectile.previousY ?? projectile.sprite.y;
     let crossedFence: Fence | null = null;
-    for (const fence of this.fences) {
-      if (projectile.crossedFences?.has(fence)) continue;
+    for (const candidate of this.systemInfusions?.fences??this.fences) {
+      const fence=candidate as Fence;
+      if (!liveFence(fence,this.time.now)||projectile.crossedFences?.has(fence)) continue;
       if (this.segmentsIntersect(
         previousX, previousY, projectile.sprite.x, projectile.sprite.y,
         fence.x1, fence.y1, fence.x2, fence.y2
@@ -4051,6 +4113,7 @@ export class ArenaScene extends Phaser.Scene {
         turretId: projectile.turretId,
         ricochetsRemaining: projectile.ricochetsRemaining,
         ammoMode: projectile.ammoMode,
+        bossAttack: projectile.bossAttack,
         nativePalette: projectile.nativePalette,
         emissiveColor: projectile.emissiveColor,
         grenadeBouncesRemaining: projectile.grenadeBouncesRemaining,
@@ -4589,11 +4652,11 @@ export class ArenaScene extends Phaser.Scene {
           fence.x2,
           fence.y2
         );
-        if (d < 11) {
+        if (d < enemy.hazardRadius + INFUSION_TUNING.fence.thickness + 2) {
           enemy.takeDamage(effectiveDps * dt, 'fence');
           const body = enemy.body as Phaser.Physics.Arcade.Body | null;
           if (body) enemy.setVelocity(body.velocity.x * fence.slowFactor, body.velocity.y * fence.slowFactor);
-          if (enemy.stats.type === 'tank') fence.hp -= 16 * dt;
+
         }
       }
       for (const bossTarget of this.activeMajorBosses()) {
@@ -4924,11 +4987,13 @@ export class ArenaScene extends Phaser.Scene {
   private updateSystemInfusions(now: number, dt: number): void {
     if (!this.systemInfusions && this.modRuntime.getActiveInfusions().length === 0) return;
     if (!this.systemInfusions) {
+      const arena=this;
       this.infusionGraphics = this.add.graphics().setDepth(19);
+      this.infusionReticle = new SystemInfusionTargetReticle(this);
       this.infusionHint = this.add.text(0,0,'',{fontFamily:'Rajdhani, sans-serif',fontSize:'18px',color:'#a9ffdf',
         backgroundColor:'#071822',padding:{x:8,y:5},align:'center'}).setOrigin(.5,1).setDepth(20);
       this.systemInfusions = new SystemInfusionRuntime({
-        has: id => this.modRuntime.hasActiveInfusion(id), player: this.player,
+        has: id => this.modRuntime.hasActiveInfusion(id), get player() { return arena.player; },
         turrets: () => this.turrets, mines: () => this.mines, fences: () => this.fences,
         targetAt: (point,radius) => {
           let target: InfusionTarget|null = null, closest = radius;
@@ -4948,25 +5013,23 @@ export class ArenaScene extends Phaser.Scene {
           (this.player.body as Phaser.Physics.Arcade.Body).reset(point.x,point.y);
           this.player.setVelocity(0,0);this.spawnImpact(point.x,point.y,0x70ffdf);
         },
+        railMove: point => {
+          (this.player.body as Phaser.Physics.Arcade.Body).reset(point.x,point.y);this.player.setVelocity(0,0);
+          if(this.time.now>=this.railTrailAt){this.spawnImpact(point.x,point.y,0x70ffdf);this.railTrailAt=this.time.now+40;}
+        },
+        railState: active => {
+          this.player.railInvulnerable=active;this.player.dashUntil=this.time.now;
+          if(active){this.mineSalvoInput.cancel();this.pendingMineSalvo=false;}
+          this.player.setVelocity(0,0);this.boostVisual.reset();this.clearEcho();
+          this.spawnImpact(this.player.x,this.player.y,0x70ffdf);
+        },
         moveMine: (mine,point) => {this.tweens.killTweensOf((mine as Mine).sprite);(mine as Mine).sprite.setPosition(point.x,point.y);this.spawnImpact(point.x,point.y,COLORS.cyan);},
         armMine: mine => (mine as Mine).update(this.time.now,true),
         createLink: (a,b,first,second) => new Fence(this,(a.x+b.x)/2,(a.y+b.y)/2,Math.atan2(b.y-a.y,b.x-a.x),
           SaveSystem.getCosmeticColor('fenceStyle',this.time.now),Math.hypot(b.x-a.x,b.y-a.y),
           Math.max(1,Math.min(first.expiresAt,second.expiresAt)-this.time.now),Math.min(first.hp,second.hp),
           Math.min((first as Fence).dps,(second as Fence).dps),Math.max((first as Fence).slowFactor,(second as Fence).slowFactor)),
-        ascend: (turrets,point,until) => {
-          if(this.ascensionAlly?.active)return false;
-          const damage=turrets.reduce((sum,t)=>sum+(t as Turret).damage,0)*INFUSION_TUNING.ascension.damageScale;
-          this.ascensionAlly=new Enemy(this,point.x,point.y,ENEMY_ROBOT_FRAMES.tank.textureKey,
-            {...baseEnemyStats.tank,hp:turrets.reduce((sum,t)=>sum+t.hp,0),speed:INFUSION_TUNING.ascension.speed,
-              damage,color:0x70ffdf,size:44,valueCredits:0,valueCoreTokens:0});
-          this.ascensionAlly.faction='player';this.ascensionAlly.setCollideWorldBounds(true);
-          this.ascensionWallCollider=this.physics.add.collider(this.ascensionAlly,this.walls);
-          this.ascensionGun=new Turret(this,point.x,point.y,0x70ffdf,1,damage,INFUSION_TUNING.ascension.fireRate,INFUSION_TUNING.ascension.range);
-          this.ascensionGun.takeDamage=amount=>this.ascensionAlly?.takeDamage(amount)??0;
-          this.ascensionGun.sprite.setVisible(false);this.ascensionGun.telemetryId='ascension-ally';this.ascensionUntil=until;
-          this.audio.playSfx('miniBossSpawn');this.spawnImpact(point.x,point.y,0x70ffdf);return true;
-        },
+        ascend: (_turrets,point,until) => this.beginPossession(point,until),
         boostActive: time => time<this.player.dashUntil,
         drainBoost: amount => {
           if(!this.player.canSpendEnergy(amount)){this.player.dashUntil=this.time.now;this.boostVisual.reset();return false;}
@@ -4984,48 +5047,106 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.infusionInteracting=this.systemInfusions.update(now,dt,this.aimWorldPoint,{
       pressed:this.playerInput.pressed('interact'),held:this.playerInput.held('interact'),released:this.playerInput.released('interact'),
-      prompt:this.playerInput.prompt('interact','E')
-    }, Boolean(this.tutorialDirector?.isActive()));
-    const graphics=this.infusionGraphics!, point=this.systemInfusions.contextPoint;
-    graphics.clear();graphics.lineStyle(2,this.systemInfusions.placementValid?0x70ffdf:0xff5677,.85);
-    if(point)graphics.strokeCircle(point.x,point.y,29);
+      prompt:this.playerInput.prompt('interact','E'),
+      aimDirection:this.playerInput.activeDevice==='gamepad'?(this.playerInput.controllerAim.magnitude>0?this.playerInput.controllerAim:null):undefined
+    }, Boolean(this.tutorialDirector?.isActive()||this.possession)) || Boolean(this.possession);
+    const graphics=this.infusionGraphics!;
+    graphics.clear();this.infusionReticle?.update(now,this.systemInfusions);
     const target=this.systemInfusions.designatedTarget;if(target)graphics.lineStyle(3,0xff65cb,.95).strokeCircle(target.x,target.y,36);
-    for(const node of this.systemInfusions.reachableNodes)graphics.lineStyle(2,0x70ffdf,.8).strokeCircle(node.x,node.y,18);
     for(const device of this.systemInfusions.poweredDevices){graphics.lineStyle(2,0x70ffdf,.6).lineBetween(this.player.x,this.player.y,device.sprite.x,device.sprite.y);graphics.strokeCircle(device.sprite.x,device.sprite.y,25);}
     this.infusionHint!.setText(this.systemInfusions.contextHint).setVisible(Boolean(this.systemInfusions.contextHint))
       .setPosition(this.player.x,this.player.y-52);
-    this.updateAscensionAlly(now);
   }
 
-  private updateAscensionAlly(now:number):void {
-    const ally=this.ascensionAlly, gun=this.ascensionGun;if(!ally||!gun)return;
-    if(now>=this.ascensionUntil||!ally.active||ally.isDead()){this.clearAscensionAlly();return;}
-    ally.updateDamageFlash(now);ally.updateMechanicalPresentation(now);
-    gun.sprite.setPosition(ally.x,ally.y);
-    gun.hp=ally.hp;
-    const boss=this.nearestActiveBossTarget(ally.x,ally.y);
-    const target=this.systemInfusions?.priorityTarget(gun,now)
-      ?? (boss?.active&&!boss.isDefeated?boss:this.getNearestEnemy(ally.x,ally.y,INFUSION_TUNING.ascension.range));
-    if(!target){ally.setVelocity(0,0);return;}
-    const angle=Math.atan2(target.y-ally.y,target.x-ally.x),d=Math.hypot(target.x-ally.x,target.y-ally.y);
-    ally.setRotation(angle+Math.PI/2);
-    if(d>180)ally.setVelocity(Math.cos(angle)*INFUSION_TUNING.ascension.speed,Math.sin(angle)*INFUSION_TUNING.ascension.speed);else ally.setVelocity(0,0);
-    if(d<=gun.range&&gun.canFire(now)&&this.infusionSegmentClear(ally,target)){
-      gun.lastShotMs=now;this.spawnTurretAmmoVolley(gun,'normal',angle,gun.damage,now);
+  private possessionPosition(point:InfusionPoint,radius:number):InfusionPoint|null {
+    const valid=(p:InfusionPoint)=>{
+      const b=this.layout.generation.bounds;
+      return p.x>=b.x+radius&&p.y>=b.y+radius&&p.x<=b.x+b.w-radius&&p.y<=b.y+b.h-radius
+        &&!this.intersectsWallGeometry(p.x,p.y,radius*2,radius*2)&&this.infusionLandingValid(p)
+        &&!this.enemies.some(e=>e.active&&!e.isDead()&&Math.hypot(e.x-p.x,e.y-p.y)<radius+e.hazardRadius+8)
+        &&!this.activeMajorBosses().some(b=>b.active&&!b.isDefeated&&Math.hypot(b.x-p.x,b.y-p.y)<radius+b.hazardRadius+8);
+    };
+    if(valid(point))return {x:point.x,y:point.y};
+    for(let ring=1;ring<=16;ring++)for(let i=0;i<16;i++){
+      const a=i*Math.PI/8,p={x:point.x+Math.cos(a)*ring*28,y:point.y+Math.sin(a)*ring*28};if(valid(p))return p;
     }
+    return null;
   }
 
-  private clearAscensionAlly():void {
+  private beginPossession(point:InfusionPoint,until:number):boolean {
+    if(this.possession||this.systemInfusions?.railActive||this.player.isDead())return false;
+    const spawn=this.possessionPosition(point,36);if(!spawn)return false;
+    const choices=Object.keys(BOSS_ARCHETYPES) as BossArchetype[],archetype=choices[Math.floor(Math.random()*choices.length)];
+    const stage=arenaBossStageScaling(this.protocol,this.currentModeFamily());
+    this.clearEcho();this.player.dashUntil=this.time.now;this.boostVisual.reset();
+    this.mineSalvoInput.cancel();this.pendingMineSalvo=false;
+    this.possession=new BossEncounter(this,this.currentCombatPosition(),this.roundManager.seedBase,archetype,spawn,
+      this.layout.generation.bounds,(x,y)=>this.intersectsWallGeometry(x,y,72,72),{
+        fireProjectile:spec=>this.spawnBossProjectile(spec,'player'),
+        damageArea:(x,y,r,d,attack)=>this.applyPossessedBossAreaDamage(x,y,r,d,attack),
+        dropCredit:()=>{},onDamaged:()=>{},onAttackCast:attack=>this.playBossAttackCue(attack),
+        onDefeated:()=>{this.possessionRemainingMs=0;}
+      },this.currentModeFamily(),{faction:'player',ownerId:'operative',showHealthUi:false,
+        healthMultiplier:stage.healthMultiplier*INFUSION_TUNING.ascension.healthScale,
+        damageMultiplier:stage.damageMultiplier*INFUSION_TUNING.ascension.damageScale,particlesEnabled:this.particlesEnabled,legBlockers:this.getBlockers()});
+    this.ascensionUntil=until;this.possessionRemainingMs=Math.max(0,until-this.time.now);
+    this.ascensionWallCollider=this.physics.add.collider(this.possession.boss,this.walls);
+    this.player.combatBody=this.possession.boss;
+    (this.player.body as Phaser.Physics.Arcade.Body).reset(spawn.x,spawn.y);
+    (this.player.body as Phaser.Physics.Arcade.Body).enable=false;
+    this.player.setVelocity(0,0).setVisible(false);
+    this.possession.playEntrance();this.audio.playSfx('miniBossSpawn');shakeGameplayCamera(this,160,.003);
+    return true;
+  }
+
+  private updatePossession(now:number,delta:number):void {
+    const possession=this.possession;if(!possession)return;
+    this.possessionRemainingMs=Math.max(0,this.possessionRemainingMs-delta);this.ascensionUntil=now+this.possessionRemainingMs;
+    if(this.possessionRemainingMs<=0||!possession.boss.active||possession.boss.isDefeated||!this.modRuntime.hasActiveInfusion('ascension-protocol')){
+      this.endPossession(true);return;
+    }
+    possession.updateControlled(delta,{move:this.playerInput.move,aim:this.aimWorldPoint,
+      primary:this.playerInput.held('fire'),secondary:this.playerInput.pressed('dash')});
+    this.player.setPosition(possession.boss.x,possession.boss.y).setVisible(false).setVelocity(0,0);
+    this.siteActionText.setText(`Fire: primary / ${this.playerInput.prompt('dash','Boost')}: boss secondary`);
+    this.infusionHint?.setVisible(true).setPosition(possession.boss.x,possession.boss.y-92)
+      .setText(`${BOSS_ARCHETYPES[possession.archetype].label} // ${Math.ceil((this.ascensionUntil-now)/1000)}s\nFire: primary · ${this.playerInput.prompt('dash','Boost')}: secondary`);
+  }
+
+  private endPossession(protect:boolean):void {
+    const possession=this.possession;if(!possession)return;
+    const boss=possession.boss,point=this.possessionPosition(boss,12)??{x:boss.x,y:boss.y};
+    this.possession=null;this.possessionRemainingMs=0;this.player.combatBody=null;possession.cancelCombat();
     this.ascensionWallCollider?.destroy();this.ascensionWallCollider=null;
-    this.ascensionAlly?.destroy();this.ascensionAlly=null;
-    if(this.ascensionGun){this.ascensionGun.hp=0;this.ascensionGun.destroy();this.ascensionGun=null;}
+    if(boss.isDefeated){this.mechanicalDestructionVfx.emitBossStage(boss.archetype,boss.x,boss.y,BOSS_ARCHETYPES[boss.archetype].color,this.time.now,true);this.audio.playSfx('bomblet');}
+    else this.spawnImpact(boss.x,boss.y,0x70ffdf);
+    possession.destroy();
+    const body=this.player.body as Phaser.Physics.Arcade.Body;
+    body.enable=true;body.reset(point.x,point.y);this.player.setVelocity(0,0).setVisible(true);
+    if(protect)this.player.invulnUntil=Math.max(this.player.invulnUntil,this.time.now+INFUSION_TUNING.ascension.ejectProtectionMs);
+    this.infusionHint?.setVisible(false);this.siteActionText?.setText('');this.hudPayload.healthLabel=undefined;
+  }
+
+  private applyPossessedBossAreaDamage(x:number,y:number,radius:number,damage:number,attack:BossAttackKind):void {
+    this.mineExplosionVfx.emitColors(x,y,radius,0xffffff,0x70ffdf,0x9a72ff,0x45dfff,this.time.now,false);
+    this.fluxCores?.damageArea(x,y,radius,damage,'weapon');this.arenaSmashables?.damageArea(x,y,radius,damage);
+    for(const enemy of this.enemies){
+      if(!enemy.active||enemy.isDead()||Math.hypot(enemy.x-x,enemy.y-y)>radius+enemy.hazardRadius)continue;
+      const applied=enemy.takeDamage(damage,'weapon');
+      if(enemy.isDead())this.triggerSplitCurrent(enemy,applied);
+      else if(attack.startsWith('brawler')){const d=Math.hypot(enemy.x-x,enemy.y-y)||1;enemy.setVelocity((enemy.x-x)/d*180,(enemy.y-y)/d*180);}
+    }
+    for(const boss of this.activeMajorBosses())if(boss.active&&!boss.isDefeated&&Math.hypot(boss.x-x,boss.y-y)<=radius+boss.hazardRadius)boss.takeDamage(damage,'weapon');
   }
 
   private clearRoundInfusionEffects(): void {
     this.poweredFencePulse = new WeakMap();
     this.systemInfusions?.reset();this.systemInfusions=null;this.infusionInteracting=false;
     this.infusionGraphics?.destroy();this.infusionGraphics=null;
-    this.infusionHint?.destroy();this.infusionHint=null;this.clearAscensionAlly();
+    this.infusionHint?.destroy();this.infusionHint=null;this.endPossession(false);
+    this.infusionReticle?.destroy();this.infusionReticle=null;
+    this.fenceObstruction.clear();this.fenceContacts=new WeakMap();this.fencePositions=new WeakMap();
+    if(this.player){this.player.railInvulnerable=false;this.player.combatBody=null;}
     for (const timer of this.roundInfusionTimers) timer.remove(false);
     this.roundInfusionTimers.clear();
     for (const effect of this.roundInfusionEffects) {
@@ -5079,7 +5200,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getSecondaryTurretTarget(enemy: Enemy, now: number): Turret | null {
-    if (!['grunt', 'shooter', 'tank', 'star'].includes(enemy.stats.type) || (this.turrets.length === 0 && !this.ascensionGun)) return null;
+    if (!['grunt', 'shooter', 'tank', 'star'].includes(enemy.stats.type) || this.turrets.length === 0) return null;
 
     const previous = this.enemyTurretTargets.get(enemy);
     if (previous && now < previous.reconsiderAt && previous.turret && previous.turret.hp > 0) return previous.turret;
@@ -5091,7 +5212,7 @@ export class ArenaScene extends Phaser.Scene {
           : 0.14;
     let nearestTurret: Turret | null = null;
     let nearestDistanceSquared = 380 * 380;
-    for (const turret of this.ascensionGun ? [...this.turrets,this.ascensionGun] : this.turrets) {
+    for (const turret of this.turrets) {
       if (turret.hp <= 0) continue;
       const dx = turret.sprite.x - enemy.x;
       const dy = turret.sprite.y - enemy.y;
@@ -5564,6 +5685,8 @@ export class ArenaScene extends Phaser.Scene {
     // otherwise left entirely to the existing authoritative handoff.
     this.mechanicalDestructionVfx.reset();
     this.lastAnomalyResourceAudit = null;
+    this.systemInfusions?.cancelRail();
+    this.endPossession(false);
     this.anomalySuspensionState = this.captureAnomalySuspensionState();
     this.pendingAnomalyReturn = null;
     this.traceAnomalyReturn('arena-suspension-captured');
@@ -6431,7 +6554,7 @@ export class ArenaScene extends Phaser.Scene {
         wallPredictionSeconds: 0.06 + roundPressure * 0.17 + familyPressure * 0.035,
         wallMaximumLead: 46 + roundPressure * 18 + familyPressure * 4,
         onDamagePlayer: (amount) => {
-          if (this.time.now < this.player.dashUntil || this.time.now < this.shieldActiveUntil) return;
+          if (!this.possession && (this.time.now < this.player.dashUntil || this.time.now < this.shieldActiveUntil)) return;
           if (this.player.takeDamage(amount)) GameplayTelemetryRecorder.recordPlayerDamage('fire-trap', amount);
         },
         antiCamp: {
@@ -6453,7 +6576,8 @@ export class ArenaScene extends Phaser.Scene {
       x: this.player.x,
       y: this.player.y,
       velocityX: body?.velocity.x ?? 0,
-      velocityY: body?.velocity.y ?? 0
+      velocityY: body?.velocity.y ?? 0,
+      radius: this.player.combatRadius
     });
   }
 
@@ -6879,8 +7003,9 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private spawnBossProjectile(spec: BossProjectileSpec): void {
-    GameplayTelemetryRecorder.recordBossProjectileFired(spec.attack);
+  private spawnBossProjectile(spec: BossProjectileSpec,owner:'enemy'|'player'='enemy'): void {
+    if(owner==='enemy')GameplayTelemetryRecorder.recordBossProjectileFired(spec.attack);
+    else GameplayTelemetryRecorder.recordProjectileFired('weapon');
     const texture = spec.attack === 'artillery-rocket'
       ? 'projectile-missile'
       : spec.attack === 'storm-basic' || spec.attack === 'storm-super'
@@ -6901,12 +7026,13 @@ export class ArenaScene extends Phaser.Scene {
       tint: spec.color, rotation: spec.angle,
       velocityX: Math.cos(spec.angle) * spec.speed, velocityY: Math.sin(spec.angle) * spec.speed, depth: 8,
       damage: spec.damage,
-      from: 'enemy',
+      from: owner,
       lifeMs: 2600,
       trailColor: spec.color,
       previousX: spec.x,
       previousY: spec.y,
-      telemetryOwner: 'boss',
+      telemetryOwner: owner==='enemy'?'boss':'weapon',
+      splitCurrentEligible: owner==='player',
       bossAttack: spec.attack
     }));
   }
@@ -6928,7 +7054,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.fluxCores?.damageArea(x, y, radius, damage, 'boss');
     this.arenaSmashables?.damageArea(x, y, radius, damage);
-    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) <= radius + 12) {
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) <= radius + this.player.combatRadius) {
       const hit = this.player.takeDamage(damage);
       GameplayTelemetryRecorder.recordBossAttackIntersection(attack, hit ? damage : 0, !hit);
       if (hit) {
@@ -7281,6 +7407,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private beginBossDestruction(snapshot: BossDeathSnapshot): void {
     if (this.bossFlowPhase !== 'destruction' || this.bossEncounter !== snapshot.encounter) return;
+    this.clearRoundInfusionEffects();
     this.clearBossSupportEnemies();
     this.laserSecurity?.silence();
     this.laserSecurity?.destroy();
@@ -7329,7 +7456,7 @@ export class ArenaScene extends Phaser.Scene {
   private retireActiveBossProjectiles(): void {
     let writeIndex = 0;
     for (const projectile of this.projectiles) {
-      if (projectile.telemetryOwner === 'boss') {
+      if (projectile.telemetryOwner === 'boss' || (projectile.from === 'player' && projectile.bossAttack)) {
         this.retireProjectile(projectile);
         continue;
       }
@@ -7772,8 +7899,9 @@ export class ArenaScene extends Phaser.Scene {
     const turretCdMs = Math.max(0, this.abilityCooldownUntil.turret - now);
     const shieldCdMs = Math.max(0, this.shieldCooldownUntil - now);
 
-    this.hudPayload.hp = this.player.hp;
-    this.hudPayload.maxHp = this.player.stats.maxHealth;
+    this.hudPayload.hp = this.possession?.boss.hp??this.player.hp;
+    this.hudPayload.maxHp = this.possession?.boss.maxHp??this.player.stats.maxHealth;
+    this.hudPayload.healthLabel = this.possession?`CHASSIS INTEGRITY // ${Math.ceil(Math.max(0,this.ascensionUntil-now)/1000)}s`:undefined;
     this.hudPayload.energy = this.player.energy;
     this.hudPayload.maxEnergy = this.player.energyStats.max;
     this.hudPayload.level = this.roundManager.round;
@@ -7833,8 +7961,9 @@ export class ArenaScene extends Phaser.Scene {
     const fenceCfg = this.getAbilityConfig('fence');
     const turretCfg = this.getAbilityConfig('turret');
     const mineCfg = this.getAbilityConfig('mine');
-    this.hudPayload.hp = this.player.hp;
-    this.hudPayload.maxHp = this.player.stats.maxHealth;
+    this.hudPayload.hp = this.possession?.boss.hp??this.player.hp;
+    this.hudPayload.maxHp = this.possession?.boss.maxHp??this.player.stats.maxHealth;
+    this.hudPayload.healthLabel = this.possession?`CHASSIS INTEGRITY // ${Math.ceil(Math.max(0,this.ascensionUntil-now)/1000)}s`:undefined;
     this.hudPayload.energy = this.player.energy;
     this.hudPayload.maxEnergy = this.player.energyStats.max;
     this.hudPayload.level = this.bossRound;
@@ -9236,6 +9365,14 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private clearRoundCollections(): void {
+    // Also used after Phaser-owned shutdown: drop references without touching
+    // already-destroyed display objects, colliders or scene plugins.
+    this.systemInfusions=null;this.infusionInteracting=false;
+    this.infusionReticle=null;this.infusionGraphics=null;this.infusionHint=null;
+    this.possession=null;this.possessionRemainingMs=0;this.ascensionWallCollider=null;
+    this.fenceObstruction.clear();this.fenceContacts=new WeakMap();this.fencePositions=new WeakMap();
+    this.poweredFencePulse=new WeakMap();
+    if(this.player){this.player.railInvulnerable=false;this.player.combatBody=null;}
     this.pendingRoundActivation = null;
     this.bossSequenceTimers.length = 0;
     this.bossNextFightButton?.destroy();

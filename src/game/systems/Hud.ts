@@ -35,6 +35,7 @@ export interface HudRadarContact {
 }
 
 export interface HudPayload {
+  healthLabel?: string;
   hp: number;
   maxHp: number;
   energy: number;
@@ -834,7 +835,7 @@ export class Hud {
     }
     this.overhealthActive = overhealthRatio > 0.0001;
     this.overchargeActive = overchargeRatio > 0.0001;
-    this.setTextIfChanged(this.healthLabel, this.overhealthActive ? 'HP // OVERHEALTH' : 'HP');
+    this.setTextIfChanged(this.healthLabel, payload.healthLabel ?? (this.overhealthActive ? 'HP // OVERHEALTH' : 'HP'));
     this.healthLabel.setColor(this.overhealthActive ? '#65ffac' : '#ff93a8');
     this.setTextIfChanged(this.energyLabel, this.overchargeActive ? 'EN // OVERCHARGE' : 'EN');
     this.energyLabel.setColor(this.overchargeActive ? '#bd8bff' : '#75eaff');

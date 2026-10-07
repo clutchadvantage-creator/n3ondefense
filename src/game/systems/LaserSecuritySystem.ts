@@ -41,6 +41,7 @@ export class LaserSecuritySystem {
   private presentationVisible = false;
   private liveSegmentCount = 0;
   private hijackedUntil = 0;
+  private readonly hijackPoints: {x:number;y:number}[] = [];
   setHijackedUntil(until: number): void { this.hijackedUntil = until; }
   isDangerousAt(x: number, y: number, now: number): boolean {
     return now >= this.hijackedUntil && this.touchesAnySegment(x, y, 26, this.liveSegmentCount);
@@ -48,7 +49,8 @@ export class LaserSecuritySystem {
   /** Existing beam center acts as its clearly marked control relay. No new hazard is spawned. */
   hijackTarget(x: number, y: number): { x: number; y: number } | null {
     for (let i = 0; i < this.liveSegmentCount; i++) {
-      const s = this.segments[i], point = { x: (s.x1+s.x2)/2, y: (s.y1+s.y2)/2 };
+      const s = this.segments[i], point = this.hijackPoints[i]??(this.hijackPoints[i]={x:0,y:0});
+      point.x=(s.x1+s.x2)/2;point.y=(s.y1+s.y2)/2;
       if (Math.hypot(point.x-x, point.y-y) <= 54) return point;
     }
     return null;
@@ -133,7 +135,7 @@ export class LaserSecuritySystem {
     const activeWarning = `${now < this.hijackedUntil ? 'LASERS HIJACKED' : 'SECURITY LASERS ACTIVE'}: ${LASER_PATTERN_NAMES[this.patternIndex]}`;
     if (this.warningText.text !== activeWarning) this.warningText.setText(activeWarning);
     this.warningText.setAlpha(0.72);
-    if (now >= this.hijackedUntil && !playerLaserImmune && this.touchesAnySegment(player.x, player.y, config.collisionRadius + 11, segmentCount)) {
+    if (now >= this.hijackedUntil && !playerLaserImmune && this.touchesAnySegment(player.x, player.y, config.collisionRadius + (player.combatBody?.hazardRadius??11), segmentCount)) {
       const damage = getScaledHazardDamage(config.playerDamagePerHit, this.round, config.maximumPlayerDamagePerHit)
         * this.playerDamageMultiplier;
       if (player.takeDamage(damage)) this.onPlayerDamaged?.(damage);

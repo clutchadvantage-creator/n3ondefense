@@ -362,7 +362,7 @@ export class BombletHazardSystem {
 
     const playerDx = player.x - target.x;
     const playerDy = player.y - target.y;
-    const playerRadius = config.blastRadius + 10;
+    const playerRadius = config.blastRadius + (player.combatBody?.hazardRadius??10);
     if (playerDx * playerDx + playerDy * playerDy <= playerRadius * playerRadius) {
       const damage = getScaledHazardDamage(config.playerDamageBase, this.round, config.maximumPlayerDamage)
         * this.playerDamageMultiplier;

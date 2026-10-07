@@ -62,7 +62,7 @@ test('enemy navigation retains tactical focus and never uses random wall-bounce 
   );
 
   assert.match(navigation, /nextFocusDecisionAt = now \+ Phaser\.Math\.Between\(900, 1400\)/);
-  assert.match(navigation, /hasLineOfSightWorld\(enemy\.x, enemy\.y, targetX, targetY\)/);
+  assert.match(navigation, /hasLineOfSightWorld\(enemy\.x, enemy\.y, targetX, targetY,this\.fenceObstruction\.cellBlocked\)/);
   assert.doesNotMatch(navigation, /FloatBetween/);
   assert.doesNotMatch(navigation, /Math\.random\(\) < 0\.42 \? site\.x/);
 });

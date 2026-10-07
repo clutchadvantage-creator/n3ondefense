@@ -8,12 +8,16 @@ import { BossLegRig } from './BossLegRig.ts';
 export type BossDamageSource = 'weapon' | 'echo' | 'turret' | 'mine' | 'fence' | 'hazard';
 
 export interface BossInstanceOptions {
+  faction?: 'enemy' | 'player';
+  ownerId?: string;
   /** Applies only to this boss instance; normal milestone bosses remain unchanged. */
   healthMultiplier?: number;
   legBlockers?: readonly RectSpec[];
 }
 
 export class Boss extends Phaser.Physics.Arcade.Sprite {
+  readonly faction: 'enemy' | 'player';
+  readonly ownerId: string | null;
   readonly archetype: BossArchetype;
   readonly maxHp: number;
   readonly hazardRadius = 34;
@@ -43,6 +47,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   ) {
     const definition = BOSS_ARCHETYPES[archetype];
     super(scene, x, y, definition.texture);
+    this.faction=options.faction??'enemy';this.ownerId=options.ownerId??null;
     this.archetype = archetype;
     this.maxHp = Math.max(1, Math.round(
       getBossHealth(completedRound, modeFamily) * Math.max(0.01, options.healthMultiplier ?? 1)
@@ -117,7 +122,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   takeDamage(amount: number, source: BossDamageSource = 'weapon', echo?: EchoDamageStamp): number {
     if (source === 'echo') amount = authoritativeEchoDamage(amount, echo);
     if (this.defeated || !Number.isFinite(amount) || amount <= 0) return 0;
-    const applied = Math.min(this.hp, amount * (source === 'hazard' ? BOSS_BALANCE.hazardDamageMultiplier : 1));
+    const applied = Math.min(this.hp, amount * (source === 'hazard' && this.faction==='enemy' ? BOSS_BALANCE.hazardDamageMultiplier : 1));
     if (applied <= 0) return 0;
     this.hp = Math.max(0, this.hp - applied);
     this.onDamaged(applied, source);

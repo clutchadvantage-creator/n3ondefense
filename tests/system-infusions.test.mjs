@@ -82,10 +82,10 @@ test('System Infusions are protected from bulk recycling even on rank-zero dupli
  const mods=collection();addModDrop(mods,mods.cards[0].modId);mods.cards.at(-1).infusionId='cascade';
  assert.equal(getRecyclableUnupgradedDuplicates(mods).some(c=>c.infusionId==='cascade'),false);
 });
-test('Relay Jump rejects dead, foreign, distant and blocked turrets and uses safe landing',()=>{
+test('Relay Jump rejects dead, foreign and blocked turrets but reaches across the arena',()=>{
  const f=fixture(),t=f.turret();t.hp=0;assert.equal(f.runtime.relay(t,100),false);t.hp=100;
  f.state.landing=false;assert.equal(f.runtime.relay(t,100),false);assert.equal(f.state.teleports.length,0);
- f.state.landing=true;t.sprite.x=900;assert.equal(f.runtime.relay(t,100),false);t.sprite.x=100;
+ f.state.landing=true;t.sprite.x=9000;
  assert.equal(f.runtime.relay({...t},100),false);assert.equal(f.runtime.relay(t,100),true);
  assert.equal(f.runtime.relay(t,101),false);assert.equal(f.state.teleports.length,1);
 });
@@ -93,9 +93,19 @@ test('Gridlink builds bounded unique links, propagates connectivity and removes 
  const f=fixture();f.state.fences=[f.fence(0,100),f.fence(500,100),f.fence(1000,100)];
  f.runtime.refreshNetwork(1);assert.equal(f.runtime.generatedLinks.length,2);
  const links=[...f.runtime.generatedLinks];f.runtime.refreshNetwork(2);assert.deepEqual(f.runtime.generatedLinks,links);
- f.runtime.rail(f.runtime.nodes[0],3);assert.equal(f.runtime.reachableNodes.length,6);
+ assert.equal(f.runtime.reachable(f.runtime.nodes[0]).size,6);
+ f.runtime.rail(f.runtime.nodes[0],3);assert.equal(f.runtime.railActive,true);assert.equal(f.runtime.railRoute.length,5);
  f.state.fences[1].hp=0;f.runtime.refreshNetwork(4);assert.equal(f.runtime.generatedLinks.length,0);assert.ok(links.every(l=>!l.fence.sprite.active));
 });
+test('destroyed connections stay broken when another connection is destroyed',()=>{
+ const f=fixture(['gridlink']);f.state.fences=[f.fence(0,0),f.fence(300,0),f.fence(600,0)];
+ f.runtime.refreshNetwork(1);assert.ok(f.runtime.generatedLinks.length>=2);
+ const broken=f.runtime.generatedLinks[0];broken.fence.hp=0;f.runtime.refreshNetwork(2);
+ f.runtime.generatedLinks[0].fence.hp=0;f.runtime.refreshNetwork(3);
+ assert.ok(!f.runtime.generatedLinks.some(l=>l.a===broken.a&&l.b===broken.b));
+ f.runtime.reset();assert.equal(f.runtime.brokenLinks.size,0);
+});
+
 test('Gridlink rejects blocked edges and caps dense grids',()=>{
  const f=fixture();f.state.fences=Array.from({length:30},(_,i)=>f.fence(i*4,100));
  f.state.clear=false;f.runtime.refreshNetwork(1);assert.equal(f.runtime.generatedLinks.length,0);
@@ -109,7 +119,7 @@ test('Target Designator respects target life, duration, turret range and obstacl
  enemy.isDefeated=true;assert.equal(f.runtime.priorityTarget(t,104),null);
  enemy.isDefeated=false;assert.equal(f.runtime.designate(enemy,9000),true);assert.equal(f.runtime.priorityTarget(t,13000),null);
 });
-test('Ascension consumes exactly three valid turrets and creates an independent timed ally',()=>{
+test('Ascension consumes exactly three valid turrets and activates the timed chassis port once',()=>{
  const f=fixture(),t=f.turret();f.turret(200);assert.equal(f.runtime.ascend(t,10),false);
  f.turret(300);f.turret(400);assert.equal(f.runtime.ascend(t,100),true);
  assert.equal(f.state.turrets.filter(t=>t.hp===0).length,3);assert.equal(f.state.ally.turrets.length,3);
@@ -151,12 +161,69 @@ test('Hazard Hijack requires a supported source, applies a finite lease and clea
  f.input(300,{x:0,y:0},true,true);assert.equal(f.state.hijackedUntil,5200);
  f.runtime.reset();assert.equal(f.state.hijackedUntil,0);
 });
-test('Fence Rail works without Gridlink, rejects unsafe geometry and stops when path becomes unsafe',()=>{
+test('Fence Rail starts in one press, rejects unsafe geometry and cancels a destroyed route',()=>{
  const f=fixture(['fence-rail']);f.state.fences=[f.fence(0,100)];f.runtime.refreshNetwork(1);
- const [a,b]=f.runtime.nodes;assert.equal(f.runtime.rail(a,10),true);f.state.landing=false;
- assert.equal(f.runtime.rail(b,20),false);assert.equal(f.state.teleports.length,0);
- f.state.landing=true;assert.equal(f.runtime.rail(b,30),true);f.input(31);assert.equal(f.state.teleports.length,1);
- f.state.landing=false;f.input(60);assert.equal(f.state.teleports.length,1);assert.equal(f.runtime.railPath.length,0);
+ const [a]=f.runtime.nodes;f.state.clear=false;assert.equal(f.runtime.rail(a,10),false);
+ f.state.clear=true;f.state.landing=false;assert.equal(f.runtime.rail(a,20),false);assert.equal(f.state.teleports.length,0);
+ f.state.landing=true;assert.equal(f.runtime.rail(a,30),true);assert.equal(f.state.teleports.length,1);
+ f.state.fences[0].hp=0;f.input(60);assert.equal(f.state.teleports.length,1);assert.equal(f.runtime.railActive,false);
+});
+
+test('persistent selection survives aim drift, switches once, consumes and clears invalid ownership',()=>{
+ const ids=['relay-jump'],f=fixture(ids),a=f.turret(100),b=f.turret(2500);
+ f.input(100,a.sprite);assert.equal(f.runtime.selection.target,a);
+ f.input(220,{x:-999,y:400});assert.equal(f.runtime.selection.target,a);
+ f.input(340,b.sprite);assert.equal(f.runtime.selection.target,b);
+ f.input(460,{x:-999,y:400},true,true);assert.equal(f.runtime.selection,null);assert.ok(f.player.x>2400);
+ f.input(560,b.sprite);assert.equal(f.runtime.selection,null);
+ f.input(6000,a.sprite);assert.equal(f.runtime.selection.target,a);
+ ids.length=0;f.input(6001);assert.equal(f.runtime.selection,null);
+});
+
+test('all interaction Infusions retain and validate their object, including hold with aim drift',()=>{
+ for(const id of ['detonator-link','magnetic-redeploy','target-designator','hazard-hijack','ascension-protocol','fence-rail']){
+  const f=fixture([id]);let point={x:100,y:0};
+  if(id.includes('redeploy')||id==='detonator-link')f.mine();
+  if(id==='target-designator'){f.state.enemy={...point,active:true};f.ports.targetAt=p=>Math.hypot(p.x-100,p.y)<54?f.state.enemy:null;}
+  if(id==='hazard-hijack'){f.state.hazard=true;f.ports.hazardAt=p=>Math.hypot(p.x-100,p.y)<54?point:null;}
+  if(id==='ascension-protocol'){f.turret();f.turret(200);f.turret(300);}
+  if(id==='fence-rail'){f.state.fences=[f.fence(100,0)];}
+  f.input(100,point);const target=f.runtime.selection?.target;assert.ok(target,id);
+  f.input(220,{x:9000,y:9000});assert.equal(f.runtime.selection?.target,target,id);
+  f.input(300,{x:9000,y:9000},true,true);if(id==='ascension-protocol')f.input(1200,{x:9000,y:9000},false,true);
+  assert.ok(f.runtime.activation,id);f.runtime.reset();assert.equal(f.runtime.selection,null);
+ }
+});
+
+test('controller direction selects distant turrets and neutral stick retains the lock',()=>{
+ const f=fixture(['relay-jump']),a=f.turret(2800,0),b=f.turret(0,2400);
+ const step=(now,direction)=>f.runtime.update(now,.016,{x:410,y:0},{pressed:false,held:false,released:false,prompt:'A',aimDirection:direction});
+ step(100,{x:1,y:0});assert.equal(f.runtime.selection.target,a);
+ step(250,null);assert.equal(f.runtime.selection.target,a);
+ step(400,{x:0,y:1});assert.equal(f.runtime.selection.target,b);
+ b.sprite.active=false;step(401,null);step(550,null);assert.equal(f.runtime.selection.target,a);
+ a.hp=0;step(700,null);assert.equal(f.runtime.selection,null);
+});
+
+test('rail traverses every turn at configured speed in both directions with exact immunity lifetime',()=>{
+ for(const reverse of [false,true]){
+  const f=fixture(['fence-rail']),a=f.fence(0,100,100),b=f.fence(100,100,0),c=f.fence(100,300,100);
+  b.y2=300;f.state.fences=[a,b,c];f.runtime.refreshNetwork(1);
+  const changes=[];f.ports.railState=active=>changes.push(active);
+  const node=reverse?f.runtime.nodes.at(-1):f.runtime.nodes[0];Object.assign(f.player,node);
+  assert.equal(f.runtime.rail(node,100),true);assert.deepEqual(changes,[true]);
+  const positions=[];for(let t=110;t<=500&&f.runtime.railActive;t+=10){f.runtime.update(t,.01,{x:999,y:999},{pressed:true,held:true,released:false,prompt:'E'});positions.push({...f.player});}
+  assert.ok(positions.some(p=>p.x===100&&p.y>110&&p.y<290));
+  assert.equal(f.runtime.railActive,false);assert.deepEqual(changes,[true,false]);
+ }
+});
+
+test('destroying an upcoming link stops at its preceding node without crossing the gap',()=>{
+ const f=fixture(['fence-rail','gridlink']);f.state.fences=[f.fence(0,0,100),f.fence(500,0,100)];f.runtime.refreshNetwork(1);
+ const link=f.runtime.generatedLinks[0].fence;assert.equal(f.runtime.rail(f.runtime.nodes[0],10),true);link.hp=0;
+ f.runtime.update(20,1,{x:0,y:0},{pressed:false,held:false,released:false,prompt:'E'});
+ assert.equal(f.player.x,100);assert.equal(f.runtime.railActive,false);assert.equal(f.runtime.generatedLinks.length,0);
+ f.runtime.reset();assert.equal(f.runtime.railActive,false);
 });
 test('shared interaction hold consumes Ascension without also jumping; shooting never activates a system',()=>{
  const f=fixture(['relay-jump','ascension-protocol']);const t=f.turret();f.turret(200);f.turret(300);

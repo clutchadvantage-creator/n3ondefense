@@ -11,6 +11,7 @@ export interface PathPoint {
 }
 
 export interface PathQueryOptions {
+  cellBlocked?: (cx:number,cy:number)=>boolean;
   cellPenalty?: (cx: number, cy: number) => number;
   smooth?: boolean;
   maxIterations?: number;
@@ -46,6 +47,7 @@ export class GridPathfinder {
   private readonly rows: number;
   private readonly cellCount: number;
   private readonly blocked: Uint8Array;
+  private queryBlocked: ((cx:number,cy:number)=>boolean) | undefined;
   private readonly gScore: Float64Array;
   private readonly fScore: Float64Array;
   private readonly cameFrom: Int32Array;
@@ -129,7 +131,7 @@ export class GridPathfinder {
 
   private isWalkable(cx: number, cy: number): boolean {
     return cx >= 0 && cy >= 0 && cx < this.cols && cy < this.rows
-      && this.blocked[this.index(cx, cy)] === 0;
+      && this.blocked[this.index(cx, cy)] === 0 && !this.queryBlocked?.(cx,cy);
   }
 
   private findNearestWalkableCell(
@@ -170,6 +172,12 @@ export class GridPathfinder {
   }
 
   findPath(fromX: number, fromY: number, toX: number, toY: number, options?: PathQueryOptions): PathPoint[] {
+    this.queryBlocked=options?.cellBlocked;
+    try { return this.findPathWithObstacles(fromX,fromY,toX,toY,options); }
+    finally { this.queryBlocked=undefined; }
+  }
+
+  private findPathWithObstacles(fromX:number,fromY:number,toX:number,toY:number,options?:PathQueryOptions):PathPoint[] {
     const output = options?.output ?? [];
     const requestedStartX = clamp(Math.floor(fromX / this.cellSize), 0, this.cols - 1);
     const requestedStartY = clamp(Math.floor(fromY / this.cellSize), 0, this.rows - 1);
@@ -263,7 +271,12 @@ export class GridPathfinder {
     return result;
   }
 
-  hasLineOfSightWorld(fromX: number, fromY: number, toX: number, toY: number): boolean {
+  hasLineOfSightWorld(fromX: number, fromY: number, toX: number, toY: number,cellBlocked?: (cx:number,cy:number)=>boolean): boolean {
+    this.queryBlocked=cellBlocked;
+    try { return this.lineOfSightWithObstacles(fromX,fromY,toX,toY); }
+    finally { this.queryBlocked=undefined; }
+  }
+  private lineOfSightWithObstacles(fromX:number,fromY:number,toX:number,toY:number):boolean {
     const startX = clamp(Math.floor(fromX / this.cellSize), 0, this.cols - 1);
     const startY = clamp(Math.floor(fromY / this.cellSize), 0, this.rows - 1);
     const goalX = clamp(Math.floor(toX / this.cellSize), 0, this.cols - 1);

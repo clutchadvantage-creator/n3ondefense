@@ -20,6 +20,7 @@ export interface SharedFireTrapPlacement {
 }
 
 export interface SharedFireTrapTarget {
+  radius?: number;
   x: number;
   y: number;
   velocityX: number;
@@ -261,8 +262,12 @@ export class SharedFireTrapSystem {
       }
       if (nozzle.state === 'active') {
         const hit = nozzle.placement.kind === 'floor'
-          ? distanceSquared <= FLOOR_DAMAGE_RADIUS * FLOOR_DAMAGE_RADIUS
-          : this.wallFlameContains(nozzle, target.x, target.y);
+          ? distanceSquared <= (FLOOR_DAMAGE_RADIUS+Math.max(0,(target.radius??12)-12)) ** 2
+          : this.wallFlameContains(nozzle, target.x, target.y)
+            || (target.radius!==undefined&&target.radius>12&&[
+              [target.x+target.radius-12,target.y],[target.x-target.radius+12,target.y],
+              [target.x,target.y+target.radius-12],[target.x,target.y-target.radius+12]
+            ].some(([x,y])=>this.wallFlameContains(nozzle,x,y)));
         if (hit) {
           touchingFire = true;
           if (nozzle.damagePulsesDelivered === 0) nozzle.damageContactStartedAt = now;

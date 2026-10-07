@@ -9,6 +9,8 @@ import { BossCombatVfx } from '../vfx/BossCombatVfx.ts';
 import { Boss, type BossDamageSource } from './Boss';
 
 export interface BossEncounterOptions {
+  faction?: 'enemy' | 'player';
+  ownerId?: string;
   /** Instance-only health scaling used by variants such as N3ON Arcade Mini-Bosses. */
   healthMultiplier?: number;
   /** Instance-only final attack multiplier (Supreme stage delta, finale tuning). */
@@ -30,6 +32,7 @@ export interface BossProjectileSpec {
   size?: number;
   attack: BossAttackKind;
 }
+export interface BossControlInput { move:{x:number;y:number}; aim:{x:number;y:number}; primary:boolean; secondary:boolean }
 
 export type BossAttackKind =
   | 'artillery-basic'
@@ -103,6 +106,7 @@ export class BossEncounter {
   private creditDamage = 0;
   private calloutUntil = 0;
   private combatActive = true;
+  private control: BossControlInput | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -129,7 +133,7 @@ export class BossEncounter {
       (damage, source) => this.handleBossDamage(damage, source),
       () => callbacks.onDefeated(),
       modeFamily,
-      { healthMultiplier: options.healthMultiplier, legBlockers: options.legBlockers }
+      { healthMultiplier: options.healthMultiplier, legBlockers: options.legBlockers, faction:options.faction, ownerId:options.ownerId }
     );
 
     const width = Math.min(900, scene.scale.width - 80);
@@ -156,7 +160,14 @@ export class BossEncounter {
     this.refreshHealthBar();
   }
 
-  update(deltaMs: number, player: Player): void {
+  updateControlled(deltaMs:number,input:BossControlInput):void {
+    if(this.boss.faction!=='player')return;
+    this.control=input;
+    try { this.update(deltaMs,input.aim); } finally { this.control=null; }
+  }
+
+  update(deltaMs: number, player: Pick<Player,'x'|'y'> & { combatRadius?: number }): void {
+    if(this.boss.faction==='player'&&!this.control)return;
     if (!this.combatActive || this.boss.isDefeated) return;
     this.elapsedMs += Math.max(0, deltaMs);
     this.vfx.update(this.elapsedMs);
@@ -165,7 +176,7 @@ export class BossEncounter {
     if (this.archetype === 'artillery') this.updateArtillery(player);
     else if (this.archetype === 'storm-mage') this.updateStormMage(player);
     else this.updateVoidBrawler(player);
-    this.updatePendingStrikes(player);
+    this.updatePendingStrikes();
     const aim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
     const mageCharge = this.archetype === 'storm-mage' && this.mageChargeEndsAt > this.elapsedMs
       ? Phaser.Math.Clamp((this.elapsedMs - this.mageChargeStartsAt) / Math.max(1, this.mageChargeEndsAt - this.mageChargeStartsAt), 0, 1)
@@ -253,9 +264,16 @@ export class BossEncounter {
     this.vfx.emitArrival(this.archetype, x, y, BOSS_ARCHETYPES[this.archetype].color, this.elapsedMs, true);
   }
 
-  private updateArtillery(player: Player): void {
+  private controlledMovement(speed:number):void {
+    const move=this.control!.move,scale=speed/Math.max(1,Math.hypot(move.x,move.y));
+    this.boss.setVelocity(move.x*scale,move.y*scale);
+  }
+
+  private updateArtillery(player: Pick<Player,'x'|'y'>): void {
     const config = BOSS_BALANCE.artillery;
     const aim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
+    if(this.control)this.controlledMovement(config.movementSpeed);
+    else {
     const desiredX = player.x + Math.cos(this.elapsedMs * 0.00032) * 360;
     const desiredY = player.y + Math.sin(this.elapsedMs * 0.00027) * 260;
     let moveX = desiredX - this.boss.x;
@@ -272,7 +290,8 @@ export class BossEncounter {
       }
     }
     this.boss.setVelocity(moveX, moveY).setRotation(aim);
-    if (this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
+    }
+    if ((!this.control||this.control.primary) && this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
       this.lastBasicAt = this.elapsedMs;
       this.callbacks.onAttackCast('artillery-basic');
       const center = (config.rapidBurstCount - 1) * 0.5;
@@ -281,7 +300,7 @@ export class BossEncounter {
       }
       this.spawnMuzzleEffect(aim, BOSS_ARCHETYPES.artillery.color);
     }
-    if (this.elapsedMs - this.lastRocketAt >= config.rocketCooldownMs) {
+    if ((!this.control||this.control.secondary) && this.elapsedMs - this.lastRocketAt >= config.rocketCooldownMs) {
       this.lastRocketAt = this.elapsedMs;
       this.callbacks.onAttackCast('artillery-rocket');
       this.showCallout('ROCKET LOCK // EVADE', 720);
@@ -300,7 +319,7 @@ export class BossEncounter {
         aim
       );
     }
-    if (this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
+    if ((!this.control||this.control.secondary) && this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
       this.lastSuperAt = this.elapsedMs;
       this.callbacks.onAttackCast('artillery-super');
       this.showCallout('SUPER: ORBITAL SIEGE', config.superTelegraphMs);
@@ -320,8 +339,10 @@ export class BossEncounter {
     }
   }
 
-  private updateStormMage(player: Player): void {
+  private updateStormMage(player: Pick<Player,'x'|'y'>): void {
     const config = BOSS_BALANCE.stormMage;
+    if(this.control)this.controlledMovement(config.movementSpeed);
+    else {
     let directionX = player.x + Math.cos(this.elapsedMs * 0.00055) * 260 - this.boss.x;
     let directionY = player.y + Math.sin(this.elapsedMs * 0.0007) * 210 - this.boss.y;
     const distanceSquared = directionX * directionX + directionY * directionY;
@@ -331,13 +352,14 @@ export class BossEncounter {
       directionY *= scale;
     }
     this.boss.setVelocity(directionX, directionY).setRotation(-this.elapsedMs * 0.0006);
+    }
 
     if (this.mageChargeEndsAt > 0 && this.elapsedMs >= this.mageChargeEndsAt) {
       this.callbacks.onAttackCast('storm-basic');
       this.fire(this.mageChargeAim, config.projectileSpeed, config.projectileDamage, BOSS_ARCHETYPES['storm-mage'].color, 12, 'storm-basic');
       this.spawnMuzzleEffect(this.mageChargeAim, BOSS_ARCHETYPES['storm-mage'].color);
       this.mageChargeEndsAt = 0;
-    } else if (this.mageChargeEndsAt <= 0 && this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
+    } else if ((!this.control||this.control.primary) && this.mageChargeEndsAt <= 0 && this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
       this.lastBasicAt = this.elapsedMs;
       this.mageChargeStartsAt = this.elapsedMs;
       this.mageChargeEndsAt = this.elapsedMs + config.chargeMs;
@@ -357,7 +379,7 @@ export class BossEncounter {
       }
       this.vfx.emit('mage-volley', this.boss.x, this.boss.y, 128, 0xb980ff, this.elapsedMs, 620, aim);
       this.mageSuperVolleyAt = 0;
-    } else if (this.mageSuperVolleyAt <= 0 && this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
+    } else if ((!this.control||this.control.secondary) && this.mageSuperVolleyAt <= 0 && this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
       this.lastSuperAt = this.elapsedMs;
       this.showCallout('SUPER: PRISMATIC TEMPEST', config.superTelegraphMs);
       this.mageSuperVolleyAt = this.elapsedMs + config.superTelegraphMs;
@@ -368,9 +390,9 @@ export class BossEncounter {
     }
   }
 
-  private updateVoidBrawler(player: Player): void {
+  private updateVoidBrawler(player: Pick<Player,'x'|'y'> & { combatRadius?: number }): void {
     const config = BOSS_BALANCE.voidBrawler;
-    if (this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
+    if (!this.control && this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
       this.lastSuperAt = this.elapsedMs;
       this.callbacks.onAttackCast('brawler-super');
       this.showCallout('SUPER: VOID AMBUSH', config.superTelegraphMs);
@@ -395,7 +417,7 @@ export class BossEncounter {
       }
     }
 
-    if (this.elapsedMs - this.lastTeleportAt >= config.teleportCooldownMs) {
+    if (!this.control && this.elapsedMs - this.lastTeleportAt >= config.teleportCooldownMs) {
       this.lastTeleportAt = this.elapsedMs;
       this.vfx.emit('brawler-depart', this.boss.x, this.boss.y, 76, 0xff4e82, this.elapsedMs, 300);
       const target = this.findClearNear(player.x, player.y, 150, 270);
@@ -423,7 +445,7 @@ export class BossEncounter {
       this.vfx.emit('brawler-impact', this.boss.x, this.boss.y, 92, 0xff4e82, this.elapsedMs, 620, this.pounceAngle);
       this.pounceStartsAt = 0;
       this.pounceEndsAt = 0;
-    } else if (this.elapsedMs - this.lastPounceAt >= config.pounceCooldownMs) {
+    } else if ((!this.control||this.control.secondary) && this.elapsedMs - this.lastPounceAt >= config.pounceCooldownMs) {
       this.lastPounceAt = this.elapsedMs;
       this.callbacks.onAttackCast('brawler-pounce');
       this.pounceStartsAt = this.elapsedMs + config.pounceTelegraphMs;
@@ -438,6 +460,8 @@ export class BossEncounter {
       );
       this.boss.setVelocity(0, 0);
     } else {
+      if(this.control)this.controlledMovement(config.movementSpeed);
+      else {
       let directionX = player.x - this.boss.x;
       let directionY = player.y - this.boss.y;
       const distanceSquared = directionX * directionX + directionY * directionY;
@@ -447,14 +471,18 @@ export class BossEncounter {
         directionY *= scale;
       }
       this.boss.setVelocity(directionX, directionY).setRotation(Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y));
+      }
     }
 
-    if (Phaser.Math.Distance.Between(this.boss.x, this.boss.y, player.x, player.y) <= this.boss.hazardRadius + 14
+    const pouncing = this.pounceStartsAt > 0 && this.elapsedMs >= this.pounceStartsAt && this.elapsedMs < this.pounceEndsAt;
+    if ((this.control ? this.control.primary||pouncing : Phaser.Math.Distance.Between(this.boss.x, this.boss.y, player.x, player.y) <= this.boss.hazardRadius + (player.combatRadius ?? 12) + 2)
       && this.elapsedMs - this.lastContactAt >= config.contactCooldownMs) {
       this.lastContactAt = this.elapsedMs;
-      const pouncing = this.pounceStartsAt > 0 && this.elapsedMs >= this.pounceStartsAt && this.elapsedMs < this.pounceEndsAt;
       if (!pouncing) this.callbacks.onAttackCast('brawler-contact');
-      this.callbacks.damageArea(this.boss.x, this.boss.y, this.boss.hazardRadius + 18, config.contactDamage * this.damageMultiplier, pouncing ? 'brawler-pounce' : 'brawler-contact');
+      const aim=Math.atan2(player.y-this.boss.y,player.x-this.boss.x);
+      const impact=this.control&&!pouncing?{x:this.boss.x+Math.cos(aim)*43,y:this.boss.y+Math.sin(aim)*43}:this.boss;
+      if(this.control)this.boss.playAction('slam',this.elapsedMs,380);
+      this.callbacks.damageArea(impact.x, impact.y, this.boss.hazardRadius + 18, config.contactDamage * this.damageMultiplier, pouncing ? 'brawler-pounce' : 'brawler-contact');
       this.vfx.emit(
         'brawler-impact', this.boss.x, this.boss.y, pouncing ? 84 : 58, 0xff4e82,
         this.elapsedMs, pouncing ? 560 : 380, this.pounceAngle
@@ -497,7 +525,7 @@ export class BossEncounter {
     });
   }
 
-  private updatePendingStrikes(_player: Player): void {
+  private updatePendingStrikes(): void {
     for (let index = this.pendingStrikes.length - 1; index >= 0; index -= 1) {
       const strike = this.pendingStrikes[index];
       const remaining = Math.max(0, strike.triggerAt - this.elapsedMs);
@@ -574,6 +602,7 @@ export class BossEncounter {
 
   private handleBossDamage(damage: number, source: BossDamageSource): void {
     this.callbacks.onDamaged(damage, source);
+    if(this.boss.faction==='player')return;
     this.creditDamage += damage;
     const threshold = this.boss.maxHp / BOSS_BALANCE.creditDropChunks;
     while (this.creditDamage >= threshold) {

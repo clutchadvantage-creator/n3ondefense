@@ -30,6 +30,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   lastDashMs = -9_999;
   damageRevision = 0;
   dashUntil = 0;
+  /** Encounter-owned movement immunity; never extends ordinary hit/Shield timers. */
+  railInvulnerable = false;
+  /** Temporary player combat body. The operative identity and HP stay intact. */
+  combatBody: { x:number; y:number; hazardRadius:number; takeDamage(amount:number):number } | null = null;
+  get combatRadius():number { return this.combatBody?.hazardRadius??12; }
   private readonly appearanceController: OperativeAppearanceController;
   permanentModSpeedMultiplier = 1;
   modSpeedBoostUntil = 0;
@@ -147,6 +152,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   takeDamage(amount: number): boolean {
+    if(this.railInvulnerable)return false;
+    if(this.combatBody)return this.combatBody.takeDamage(amount)>0;
     const now = this.scene.time.now;
     if (now < this.invulnUntil) return false;
     const previousHp = this.hp;

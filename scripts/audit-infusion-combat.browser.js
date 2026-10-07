@@ -1,0 +1,81 @@
+(() => {
+  const report=globalThis.__n3onLayoutAudit={running:true,cases:[],checks:[],samples:[],errors:[]};
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  const check=(ok,label)=>{report.checks.push({ok:!!ok,label});if(!ok)throw Error(label);};
+  const errors=[];const onError=e=>errors.push(e.message??String(e.reason));
+  report.promise=(async()=>{try{
+    const {a,Fence,Turret,anchor,pad}=globalThis.__infusionFixture,player=a.player;
+    window.addEventListener('error',onError);window.addEventListener('unhandledrejection',onError);
+    a.enemies.slice().forEach(e=>{a.destroyEnemyColliders(e);e.destroy();});a.enemies=[];
+    a.projectiles.forEach(p=>a.retireProjectile(p));a.projectiles=[];
+    a.updateSystemInfusions(a.time.now,.016);const runtime=a.systemInfusions;
+    const f=new Fence(a,anchor.x+100,anchor.y+50,Math.PI/2,0x70ffdf,160,60000,500,25,.6);a.fences.push(f);
+    runtime.refreshNetwork(a.time.now);player.body.reset(anchor.x+200,anchor.y+50);
+    const enemy=a.spawnEnemy('grunt',false,anchor);check(enemy,'ground enemy spawned');
+    enemy.hp=10000;enemy.body.reset(anchor.x+60,anchor.y+50);a.updateFenceObstruction(a.time.now);
+    enemy.body.reset(anchor.x+160,anchor.y+50);a.updateFenceObstruction(a.time.now+16);
+    check(enemy.x<f.x1,'fast enemy cannot cross fence');
+    const hp=enemy.hp;a.updateAbilities(a.time.now,.1);check(enemy.hp<hp,'blocked enemy still receives fence shock');
+    const fenceHp=f.hp;enemy.lastAttackMs=0;a.updateFenceObstruction(a.time.now+1500);check(f.hp<fenceHp,'persistently blocked enemy attacks durability');
+    enemy.body.reset(anchor.x,anchor.y+300);
+    player.body.reset(f.x1-40,anchor.y+50);a.playerInput.clear();a.playerInput.adoptDevice('gamepad');pad.axes[0]=1;
+    a.scene.resume();a.physics.resume();await wait(450);a.scene.pause();a.physics.pause();pad.axes[0]=0;player.setVelocity(0,0);
+    check(player.x>f.x1,'operative crosses friendly fence without collision');
+    // Use the actual navigation fallback in a wall-to-wall obstruction.
+    const route=a.pathfinder.findPath(anchor.x+40,anchor.y+50,anchor.x+200,anchor.y+50,{cellBlocked:a.fenceObstruction.cellBlocked,smooth:true});
+    check(route.length>0&&route.some(p=>Math.abs(p.y-(anchor.y+50))>80),'enemy path routes around segment');
+    f.hp=0;a.updateFenceObstruction(a.time.now+1501);enemy.body.reset(f.x1-40,anchor.y+50);a.updateFenceObstruction(a.time.now+1502);
+    enemy.body.reset(f.x1+40,anchor.y+50);a.updateFenceObstruction(a.time.now+1518);check(enemy.x>f.x1,'destroyed fence releases obstruction');
+    runtime.reset();f.destroy();a.fences=[];a.destroyEnemyColliders(enemy);enemy.destroy();a.enemies=[];
+    // Live controller movement/primary/secondary while the operative is hidden.
+    const turrets=[0,1,2].map(i=>{const t=new Turret(a,anchor.x+40+i*24,anchor.y,0x70ffdf,500,30,3,500);a.turrets.push(t);return t;});
+    player.body.reset(anchor.x,anchor.y);check(runtime.ascend(turrets[0],a.time.now),'live possession starts');
+    const boss=a.possession.boss,start={x:boss.x,y:boss.y};player.invulnUntil=0;
+    a.playerInput.clear();a.playerInput.adoptDevice('gamepad');pad.axes[0]=.7;pad.axes[2]=1;pad.buttons[7]={pressed:true,value:1,touched:true};
+    a.scene.resume();a.physics.resume();await wait(350);a.scene.pause();a.physics.pause();pad.axes[0]=0;pad.buttons[7]={pressed:false,value:0,touched:false};
+    check(Math.hypot(boss.x-start.x,boss.y-start.y)>3,'live controller moves chassis');
+    check(Math.hypot(player.x-boss.x,player.y-boss.y)<5&&!player.visible,'hidden identity follows active body');
+    check(a.projectiles.some(p=>p.from==='player')||a.possession.lastContactAt>=0||a.possession.mageChargeEndsAt>0,'live primary uses boss weapon');
+    const enemyHpBefore=player.hp,chassisBefore=boss.hp;
+    a.projectiles.push(a.obtainProjectile({x:boss.x+25,y:boss.y,texture:'circle',width:7,height:7,tint:0xff7744,rotation:0,velocityX:0,velocityY:0,depth:8,damage:13,from:'enemy',lifeMs:1000,trailColor:0xff7744}));
+    a.updateProjectiles(16);check(boss.hp===chassisBefore-13&&player.hp===enemyHpBefore,'enemy projectile hits enlarged chassis, not operative HP');
+    const target=a.spawnEnemy('grunt',false,anchor);target.body.reset(boss.x+55,boss.y);target.hp=1;
+    a.applyPossessedBossAreaDamage(target.x,target.y,40,999,'brawler-contact');
+    check(target.isDead()&&target.lastDamageSource==='weapon','chassis kill has player weapon attribution');
+    const killsBefore=a.pendingProgressEnemyKills;a.updateEnemies(a.time.now,.016);check(a.pendingProgressEnemyKills>killsBefore,'chassis kill enters existing progression');
+    a.projectiles.forEach(p=>a.retireProjectile(p));a.projectiles=[];
+    const direct=a.spawnEnemy('grunt',false,anchor),splash=a.spawnEnemy('grunt',false,anchor);
+    direct.body.reset(anchor.x+70,anchor.y);splash.body.reset(anchor.x+120,anchor.y);direct.hp=splash.hp=1000;
+    a.spawnBossProjectile({x:direct.x,y:direct.y,angle:0,speed:300,damage:20,color:0xffb54f,attack:'artillery-rocket'},'player');
+    a.updateProjectiles(16);check(direct.hp===980&&splash.hp===980,'direct chassis rocket hit preserves splash without double damage');
+    for(const e of [direct,splash]){a.destroyEnemyColliders(e);e.destroy();}a.enemies=a.enemies.filter(e=>e!==direct&&e!==splash);
+    // Exercise each real hazard's damage boundary against the possessed body.
+    const source=await fetch('/src/game/scenes/ArenaScene.ts').then(r=>r.text());
+    const dep=name=>source.match(new RegExp('import\\s*\\{[^}]*\\b'+name+'\\b[^}]*\\}\\s*from\\s*["\x27]([^"\x27]+)'))[1];
+    const {LaserSecuritySystem}=await import(dep('LaserSecuritySystem'));
+    const {BombletHazardSystem}=await import(dep('BombletHazardSystem'));
+    const {LASER_HAZARD_BALANCE:L}=await import('/src/game/config/laserHazards.ts');
+    const {BOMBLET_HAZARD_BALANCE:B}=await import('/src/game/config/bombletHazards.ts');
+    const laser=new LaserSecuritySystem(a,14,{primary:0x55ffff,secondary:0xff55dd,accent:0xffffff});
+    laser.buildSegments=()=>{laser.segments[0]={x1:boss.x+27,y1:boss.y-100,x2:boss.x+27,y2:boss.y+100};return 1;};
+    const beforeLaser=boss.hp;laser.update(laser.createdAt+L.initialDelayMs+L.telegraphMs+100,.016,player,[],false,false);
+    check(boss.hp<beforeLaser&&player.hp===enemyHpBefore,'real laser catches chassis edge');laser.destroy();
+    const bomblets=new BombletHazardSystem(a,14,{primary:0x55ffff,secondary:0xff55dd,accent:0xffffff});
+    const marker=a.add.circle(0,0,1),bomb=a.add.circle(0,0,1),beforeBomb=boss.hp;
+    bomblets.detonate({x:boss.x+B.blastRadius+25,y:boss.y,marker,bomb},player,[]);
+    check(boss.hp<beforeBomb&&player.hp===enemyHpBefore,'real bomblet catches chassis edge');bomblets.destroy();marker.destroy();bomb.destroy();
+    if(a.arenaFireTraps){const beforeFire=boss.hp;a.arenaFireTraps.options.onDamagePlayer(8);check(boss.hp===beforeFire-8,'fire damage reaches chassis');}
+    const remaining=a.possessionRemainingMs;await wait(150);check(a.possessionRemainingMs===remaining,'pause preserves possession duration');
+    a.endPossession(true);a.updateHud(a.time.now);check(player.visible&&player.body.enable&&!player.combatBody&&!a.hudPayload.healthLabel,'live exit restores controls, collision and HUD');
+    a.clearRoundInfusionEffects();a.turrets.forEach(t=>t.destroy());a.turrets=[];
+    // Leave a selected turret on screen for visual inspection of the shared reticle.
+    a.updateSystemInfusions(a.time.now,.016);const t=new Turret(a,player.x+60,player.y,0x70ffdf,500,30,3,500);a.turrets.push(t);
+    a.systemInfusions.update(a.time.now+120,.016,t.sprite,{pressed:false,held:false,released:false,prompt:'E'});
+    a.infusionReticle.update(a.time.now,a.systemInfusions);a.cameras.main.centerOn(t.sprite.x,t.sprite.y);
+    check(a.infusionReticle.graphic.visible,'single reticle ready for visual inspection');
+    check(errors.length===0,'no browser errors during live combat');
+    window.removeEventListener('error',onError);window.removeEventListener('unhandledrejection',onError);
+    report.cases.push({name:'live controls, obstruction, hazards and attribution'});
+  }catch(error){report.errors.push(String(error.stack??error));}finally{window.removeEventListener('error',onError);window.removeEventListener('unhandledrejection',onError);report.running=false;}})();
+  return {started:true};
+})();
