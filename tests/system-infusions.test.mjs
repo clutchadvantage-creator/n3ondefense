@@ -123,7 +123,7 @@ test('Ascension consumes exactly three valid turrets and activates the timed cha
  const f=fixture(),t=f.turret();f.turret(200);assert.equal(f.runtime.ascend(t,10),false);
  f.turret(300);f.turret(400);assert.equal(f.runtime.ascend(t,100),true);
  assert.equal(f.state.turrets.filter(t=>t.hp===0).length,3);assert.equal(f.state.ally.turrets.length,3);
- assert.equal(f.state.ally.until,20100);assert.equal(f.runtime.ascend(t,200),false);
+ assert.equal(f.state.ally.until,60100);assert.equal(f.runtime.ascend(t,200),false);
 });
 test('Detonator Link uses a single scheduled detonation and does not touch airborne/foreign mines',()=>{
  const f=fixture(),m=f.mine();m.landedAt=1000;assert.equal(f.runtime.detonate(m,100),false);m.landedAt=0;

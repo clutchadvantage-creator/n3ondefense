@@ -554,7 +554,7 @@ export class OptionsScene extends Phaser.Scene {
     const labelWidth = Math.max(150, trackX - trackWidth * 0.5 - controlLeft - 14);
     container.add(this.add.rectangle(centerX, topY + panelHeight * 0.5, panelWidth, panelHeight, 0x091522, 0.9)
       .setStrokeStyle(1, 0x3a9db2, 0.58));
-    container.add(this.add.text(centerX, topY + 12, 'Xbox / XInput, PlayStation, and standard browser-mapped controllers', {
+    container.add(this.add.text(centerX, topY + 12, 'Xbox / PlayStation / standard controllers · Infusion: right-stick click (RS / R3)', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '18px', color: '#a9cbd6', align: 'center', wordWrap: { width: panelWidth - 40 }
     }).setOrigin(0.5, 0));
 
@@ -661,7 +661,7 @@ export class OptionsScene extends Phaser.Scene {
     const heading = this.add.text(centerX, topY + 14, 'CORE CONTROLS', {
       fontFamily: 'Orbitron, sans-serif', fontSize: '19px', color: '#69f4ff'
     }).setOrigin(0.5, 0);
-    const controls = this.add.text(centerX, heading.y + heading.height + 14, 'WASD  MOVE    ·    MOUSE  AIM    ·    LMB  FIRE    ·    E  PLANT / INTERACT    ·    1 / 2 / 3  SELECT ABILITY    ·    ESC  PAUSE', {
+    const controls = this.add.text(centerX, heading.y + heading.height + 14, 'WASD  MOVE    ·    MOUSE  AIM    ·    LMB  FIRE    ·    E  PLANT / INTERACT    ·    C  INFUSION    ·    1 / 2 / 3  SELECT ABILITY    ·    ESC  PAUSE', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', color: '#dff8ff', align: 'center', fontStyle: 'bold',
       wordWrap: { width: panelWidth - 34, useAdvancedWrap: true }
     }).setOrigin(0.5, 0);

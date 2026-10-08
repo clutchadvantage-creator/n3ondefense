@@ -6,7 +6,7 @@ export type InputContext = 'gameplay' | 'paused' | 'menu' | 'modal' | 'tutorial'
 export type GamepadFamily = 'xbox' | 'playstation' | 'generic';
 
 export const INPUT_ACTIONS = [
-  'fire', 'interact', 'fence', 'turret', 'mine', 'dash', 'shield', 'echo',
+  'fire', 'interact', 'infusion', 'fence', 'turret', 'mine', 'dash', 'shield', 'echo',
   'selectFence', 'selectTurret', 'selectMine', 'pause',
   'confirm', 'cancel', 'navigateUp', 'navigateDown', 'navigateLeft', 'navigateRight',
   'pageLeft', 'pageRight', 'tabLeft', 'tabRight'
@@ -15,7 +15,7 @@ export type InputAction = typeof INPUT_ACTIONS[number];
 
 const ACTION_INDEX = Object.fromEntries(INPUT_ACTIONS.map((action, index) => [action, index])) as Record<InputAction, number>;
 const GAMEPLAY_ACTIONS = new Set<InputAction>([
-  'fire', 'interact', 'fence', 'turret', 'mine', 'dash', 'shield', 'echo',
+  'fire', 'interact', 'infusion', 'fence', 'turret', 'mine', 'dash', 'shield', 'echo',
   'selectFence', 'selectTurret', 'selectMine', 'pause'
 ]);
 const UI_ACTIONS = new Set<InputAction>([
@@ -235,6 +235,7 @@ export class StandardGamepadReader {
     }
     const set = (action: InputAction, down: boolean): void => { if (down) this.heldActions[ACTION_INDEX[action]] = 1; };
     set('interact', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.south));
+    set('infusion', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.rightStick));
     set('mine', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.east));
     set('fence', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.west));
     set('turret', buttonDown(pad, STANDARD_GAMEPAD_BUTTON.north));
@@ -348,9 +349,9 @@ export class StandardGamepadReader {
 }
 
 const GAMEPAD_GLYPHS: Record<GamepadFamily, Partial<Record<InputAction, string>>> = {
-  xbox: { interact: 'A', confirm: 'A', cancel: 'B', mine: 'B', fence: 'X', turret: 'Y', dash: 'LB', shield: 'RB', fire: 'RT', pause: 'MENU' },
-  playstation: { interact: 'CROSS', confirm: 'CROSS', cancel: 'CIRCLE', mine: 'CIRCLE', fence: 'SQUARE', turret: 'TRIANGLE', dash: 'L1', shield: 'R1', fire: 'R2', pause: 'OPTIONS' },
-  generic: { interact: 'SOUTH', confirm: 'SOUTH', cancel: 'EAST', mine: 'EAST', fence: 'WEST', turret: 'NORTH', dash: 'L1', shield: 'R1', fire: 'R2', pause: 'START' }
+  xbox: { interact: 'A', infusion: 'RS', confirm: 'A', cancel: 'B', mine: 'B', fence: 'X', turret: 'Y', dash: 'LB', shield: 'RB', fire: 'RT', pause: 'MENU' },
+  playstation: { interact: 'CROSS', infusion: 'R3', confirm: 'CROSS', cancel: 'CIRCLE', mine: 'CIRCLE', fence: 'SQUARE', turret: 'TRIANGLE', dash: 'L1', shield: 'R1', fire: 'R2', pause: 'OPTIONS' },
+  generic: { interact: 'SOUTH', infusion: 'R3', confirm: 'SOUTH', cancel: 'EAST', mine: 'EAST', fence: 'WEST', turret: 'NORTH', dash: 'L1', shield: 'R1', fire: 'R2', pause: 'START' }
 };
 
 export function resolveActionPrompt(

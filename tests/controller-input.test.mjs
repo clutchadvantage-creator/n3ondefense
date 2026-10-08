@@ -109,6 +109,21 @@ test('non-standard controllers are reported without unsafe gameplay mapping', ()
   assert.equal(result.held('interact'), false);
 });
 
+test('plant and Infusion controller actions are independent and suppressed in menus', () => {
+  const reader = new StandardGamepadReader(), state = new ActionStateBuffer();
+  for (const [button, action, other] of [[0, 'interact', 'infusion'], [11, 'infusion', 'interact']]) {
+    const input = reader.poll([pad({ down: [button] })], DEFAULT_CONTROLLER_SETTINGS);
+    assert.equal(input.held(action), true);
+    assert.equal(input.held(other), false);
+    state.beginFrame(); state.setHeld(action, input.held(action)); state.finishFrame('gameplay');
+    assert.equal(state.held(action), true);
+    state.finishFrame('paused'); assert.equal(state.held(action), false);
+  }
+  assert.equal(resolveActionPrompt('infusion', 'keyboardMouse', 'xbox', 'C'), 'C');
+  assert.equal(resolveActionPrompt('infusion', 'gamepad', 'xbox', 'C'), 'RS');
+  assert.equal(resolveActionPrompt('infusion', 'gamepad', 'playstation', 'C'), 'R3');
+});
+
 test('controller settings clamp malformed data and safely migrate older profiles', () => {
   assert.deepEqual(normalizeControllerSettings({ leftStickDeadZone: -1, rightStickDeadZone: 8, aimSensitivity: 99 }), {
     leftStickDeadZone: 0.05,

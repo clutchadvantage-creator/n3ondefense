@@ -5045,11 +5045,16 @@ export class ArenaScene extends Phaser.Scene {
         }
       });
     }
-    this.infusionInteracting=this.systemInfusions.update(now,dt,this.aimWorldPoint,{
-      pressed:this.playerInput.pressed('interact'),held:this.playerInput.held('interact'),released:this.playerInput.released('interact'),
-      prompt:this.playerInput.prompt('interact','E'),
+    const infusionInput={
+      pressed:this.playerInput.pressed('infusion'),held:this.playerInput.held('infusion'),released:this.playerInput.released('infusion'),
+      prompt:this.playerInput.prompt('infusion','C'),
       aimDirection:this.playerInput.activeDevice==='gamepad'?(this.playerInput.controllerAim.magnitude>0?this.playerInput.controllerAim:null):undefined
-    }, Boolean(this.tutorialDirector?.isActive()||this.possession)) || Boolean(this.possession);
+    };
+    const ownsInfusion=this.systemInfusions.update(now,dt,this.aimWorldPoint,infusionInput,
+      Boolean(this.tutorialDirector?.isActive()||this.possession));
+    // A persistent target must not reserve E / Plant while the Infusion control is idle.
+    this.infusionInteracting=Boolean(this.possession)||this.systemInfusions.railActive
+      || (ownsInfusion&&(infusionInput.pressed||infusionInput.held||infusionInput.released));
     const graphics=this.infusionGraphics!;
     graphics.clear();this.infusionReticle?.update(now,this.systemInfusions);
     const target=this.systemInfusions.designatedTarget;if(target)graphics.lineStyle(3,0xff65cb,.95).strokeCircle(target.x,target.y,36);

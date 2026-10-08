@@ -21,7 +21,7 @@ export class PlayerInput {
   private readonly gamepadReader = new StandardGamepadReader();
   private readonly pointerButtons = new Uint8Array(5);
   private readonly gamepadBuffer: (BrowserGamepadLike | null)[] = [];
-  private readonly fixedKeys: Record<'up' | 'left' | 'down' | 'right' | 'interact' | 'pause' | 'one' | 'two' | 'three', Phaser.Input.Keyboard.Key>;
+  private readonly fixedKeys: Record<'up' | 'left' | 'down' | 'right' | 'interact' | 'infusion' | 'pause' | 'one' | 'two' | 'three', Phaser.Input.Keyboard.Key>;
   private readonly heldCodes = new Set<string>();
   private readonly pendingPulses = new Set<InputAction>();
   private bindings: AbilityBindings;
@@ -47,7 +47,7 @@ export class PlayerInput {
     this.settings = { ...settings };
     this.fixedKeys = {
       up: keyboard.addKey('W'), left: keyboard.addKey('A'), down: keyboard.addKey('S'), right: keyboard.addKey('D'),
-      interact: keyboard.addKey('E'), pause: keyboard.addKey('ESC'), one: keyboard.addKey('ONE'),
+      interact: keyboard.addKey('E'), infusion: keyboard.addKey('C'), pause: keyboard.addKey('ESC'), one: keyboard.addKey('ONE'),
       two: keyboard.addKey('TWO'), three: keyboard.addKey('THREE')
     };
     scene.input.on('pointerdown', this.onPointerDown);
@@ -91,6 +91,7 @@ export class PlayerInput {
 
     this.states.setHeld('fire', this.pointerButtons[0] === 1 || gamepad.held('fire') || this.pendingPulses.has('fire'));
     this.states.setHeld('interact', this.fixedKeys.interact.isDown || gamepad.held('interact') || this.pendingPulses.has('interact'));
+    this.states.setHeld('infusion', this.fixedKeys.infusion.isDown || gamepad.held('infusion') || this.pendingPulses.has('infusion'));
     this.states.setHeld('pause', this.fixedKeys.pause.isDown || gamepad.held('pause') || this.pendingPulses.has('pause'));
     this.states.setHeld('selectFence', this.fixedKeys.one.isDown || this.pendingPulses.has('selectFence'));
     this.states.setHeld('selectTurret', this.fixedKeys.two.isDown || this.pendingPulses.has('selectTurret'));
@@ -205,6 +206,7 @@ export class PlayerInput {
     if (event.repeat) return;
     this.keyboardActivityAt = performance.now();
     if (event.code === 'KeyE') this.pendingPulses.add('interact');
+    if (event.code === 'KeyC') this.pendingPulses.add('infusion');
     if (event.code === 'Escape') this.pendingPulses.add('pause');
     if (event.code === 'Digit1') this.pendingPulses.add('selectFence');
     if (event.code === 'Digit2') this.pendingPulses.add('selectTurret');

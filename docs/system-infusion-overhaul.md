@@ -2,6 +2,10 @@
 
 Implemented in the existing Arena/Mod architecture. Infusion IDs, inventory/save format, five-slot ownership rules, turret balance, and hostile boss balance remain intact. This update does not modify SkyBreach.
 
+Infusions use **C** on keyboard or **right-stick click (RS / R3)** on controller. Planting remains **E / A / Cross**. Selecting an Infusion target alone does not block planting. Boss possession lasts **60 seconds**, or until chassis destruction.
+
+October 8 follow-up validation: **871 automated tests passed**, production build passed, and browser checks verified E/A planting with nearby and distant selected turrets, release without teleport, explicit C teleport, controller rail activation, and possession surviving past 20 seconds until its full minute expires. `scripts/audit-infusion-planting.browser.js` reproduces the planting regression using real Arena input and bombsites after the main Infusion browser fixture. C and right-stick click are reserved core controls so an old custom ability binding cannot trigger an ability at the same time.
+
 ## Behavior and reuse
 
 - **Shared targeting:** `SystemInfusionRuntime` owns persistent selection; one retained `SystemInfusionTargetReticle` renders floor rings, crosshair brackets, rotating ticks, acquisition contraction, and immediate consumption feedback. Mouse aim and controller direction acquire targets; neutral aim retains selection. Destroyed, expired, unequipped, consumed, and encounter-invalidated targets clear safely. Relay Jump, Ascension Protocol, Target Designator, Detonator Link, Magnetic Redeploy, Hazard Hijack, and Fence Rail use it. Magnetic Redeploy retains its selected-mine reticle and separate destination marker.
@@ -42,6 +46,6 @@ Browser fixtures create isolated DEV profiles. Run the overhaul fixture before c
 
 ## Gameplay tuning and limits
 
-Central tuning remains in `SystemInfusions.ts`: rail **1800 units/s**, entry range **160**, cooldown **4 s**; fence contact delay **850 ms**, navigation clearance **30**; chassis duration **20 s**, cooldown **45 s**, health scale **1.0**, damage scale **1.4**, ejection protection **250 ms**; targeting acquisition **180 ms**, consumption **150 ms**.
+Central tuning remains in `SystemInfusions.ts`: rail **1800 units/s**, entry range **160**, cooldown **4 s**; fence contact delay **850 ms**, navigation clearance **30**; chassis duration **60 s**, cooldown **45 s**, health scale **1.0**, damage scale **1.4**, ejection protection **250 ms**; targeting acquisition **180 ms**, consumption **150 ms**.
 
 Evaluate late-game chassis strength, each form's existing movement speed, controller selection in crowded/collinear networks, fence durability under concentrated attacks, and rail readability during extended play. Links destroyed by combat stay broken until source topology changes. Dense networks retain the existing 16-link cap. Ejection searches nearby clear positions and falls back to the chassis's current position if the neighborhood is saturated, with the short transition protection window. Physical-controller feel and long-session/low-end GPU performance still need human playtesting; the bounded automated samples do not establish those results.

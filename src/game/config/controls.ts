@@ -6,6 +6,7 @@ export type AbilityBindings = Record<AbilityAction, InputBinding>;
 export const MOVEMENT_BINDINGS = ['Keyboard:KeyW', 'Keyboard:KeyA', 'Keyboard:KeyS', 'Keyboard:KeyD'] as const;
 export const PRIMARY_FIRE_BINDING: InputBinding = 'Mouse:0';
 export const INTERACT_BINDING: InputBinding = 'Keyboard:KeyE';
+export const INFUSION_BINDING: InputBinding = 'Keyboard:KeyC';
 
 export const ABILITY_ACTIONS: ReadonlyArray<{ action: AbilityAction; label: string }> = [
   { action: 'fence', label: 'Fence' },
@@ -27,8 +28,8 @@ export const DEFAULT_ABILITY_BINDINGS: AbilityBindings = {
 
 export const RESERVED_ABILITY_BINDINGS = new Set<InputBinding>([
   'Keyboard:Escape', 'Keyboard:KeyW', 'Keyboard:KeyA', 'Keyboard:KeyS', 'Keyboard:KeyD',
-  'Keyboard:KeyE', 'Keyboard:F8', 'Mouse:0',
-  'Gamepad:0', 'Gamepad:1', 'Gamepad:2', 'Gamepad:3', 'Gamepad:4', 'Gamepad:5', 'Gamepad:7', 'Gamepad:9'
+  'Keyboard:KeyE', INFUSION_BINDING, 'Keyboard:F8', 'Mouse:0',
+  'Gamepad:0', 'Gamepad:1', 'Gamepad:2', 'Gamepad:3', 'Gamepad:4', 'Gamepad:5', 'Gamepad:7', 'Gamepad:9', 'Gamepad:11'
 ]);
 
 export const normalizeAbilityBindings = (value: unknown): AbilityBindings => {

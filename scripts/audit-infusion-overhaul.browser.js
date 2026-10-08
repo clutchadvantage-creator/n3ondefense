@@ -48,7 +48,7 @@
       const turret=p=>{const t=new Turret(a,p.x,p.y,0x70ffdf,500,30,3,500);a.turrets.push(t);return t;};
       const near=turret({x:anchor.x+65,y:anchor.y}),distant=turret(far);
       let now=a.time.now+100;
-      const input=(aim,pressed=false,held=false,released=false,direction=undefined)=>runtime.update(now+=120,.016,aim,{pressed,held,released,prompt:'E',aimDirection:direction});
+      const input=(aim,pressed=false,held=false,released=false,direction=undefined)=>runtime.update(now+=120,.016,aim,{pressed,held,released,prompt:'C',aimDirection:direction});
       input(distant.sprite);check(runtime.selection?.target===distant,'distant turret selected');
       input({x:-100,y:-100});check(runtime.selection?.target===distant,'target persists off aim');
       a.infusionReticle.update(now,runtime);check(a.infusionReticle.graphic.visible&&a.infusionReticle.graphic.depth<distant.sprite.depth,'reticle on floor below turret');
@@ -62,22 +62,22 @@
       const first=fence(anchor.x,anchor.y,anchor.x+100,anchor.y),second=fence(anchor.x+100,anchor.y+100,anchor.x+200,anchor.y+100);
       runtime.refreshNetwork(a.time.now);check(runtime.generatedLinks.length===1,'real connected link created');
       // Real keyboard action buffer, no extra rail interaction or destination.
-      a.playerInput.adoptDevice('keyboardMouse');a.playerInput.fixedKeys.interact.isDown=true;a.playerInput.update('gameplay');
+      a.playerInput.adoptDevice('keyboardMouse');a.playerInput.fixedKeys.infusion.isDown=true;a.playerInput.update('gameplay');
       a.aimWorldPoint.set(first.x1,first.y1);a.updateSystemInfusions(a.time.now,.016);
-      a.playerInput.fixedKeys.interact.isDown=false;a.playerInput.update('gameplay');
-      check(runtime.railActive&&player.railInvulnerable,'single keyboard E enters protected rail');
+      a.playerInput.fixedKeys.infusion.isDown=false;a.playerInput.update('gameplay');
+      check(runtime.railActive&&player.railInvulnerable,'single keyboard C enters protected rail');
       for(const source of ['contact','projectile','laser','bomblet','fire','explosion']){player.invulnUntil=0;check(!player.takeDamage(10)&&player.hp===originalHp,'rail ignores '+source);}
       a.playerInput.move.x=1;a.updatePlayerMovement(now);check(player.body.velocity.lengthSq()===0,'movement input cannot break rail');
-      const path=[];for(let i=0;i<60&&runtime.railActive;i++){runtime.update(a.time.now,.01,{x:-10,y:-10},{pressed:true,held:true,released:false,prompt:'E'});path.push({x:player.x,y:player.y});}
+      const path=[];for(let i=0;i<60&&runtime.railActive;i++){runtime.update(a.time.now,.01,{x:-10,y:-10},{pressed:true,held:true,released:false,prompt:'C'});path.push({x:player.x,y:player.y});}
       check(path.some(p=>p.x>anchor.x+95&&p.y>anchor.y+20&&p.y<anchor.y+90),'rail follows generated connector');
       check(!runtime.railActive&&!player.railInvulnerable&&player.visible,'automatic exit restores state');
       player.invulnUntil=0;check(player.takeDamage(1)&&player.hp===originalHp-1,'damage restored immediately after rail');player.hp=originalHp;
       runtime.reset();runtime.refreshNetwork(a.time.now);player.body.reset(first.x1+40,first.y1+40);
-      a.playerInput.clear();a.playerInput.adoptDevice('gamepad');pad.axes[2]=-.71;pad.axes[3]=-.71;pad.buttons[0]={pressed:true,value:1,touched:true};a.playerInput.update('gameplay');
+      a.playerInput.clear();a.playerInput.adoptDevice('gamepad');pad.axes[2]=-.71;pad.axes[3]=-.71;pad.buttons[11]={pressed:true,value:1,touched:true};a.playerInput.update('gameplay');
       a.updateSystemInfusions(a.time.now,.016);check(runtime.railActive&&player.railInvulnerable,'single controller interaction enters rail');
-      pad.buttons[0]={pressed:false,value:0,touched:false};pad.axes[2]=pad.axes[3]=0;a.playerInput.update('gameplay');
+      pad.buttons[11]={pressed:false,value:0,touched:false};pad.axes[2]=pad.axes[3]=0;a.playerInput.update('gameplay');
       const pausedRail={x:player.x,y:player.y};await wait(60);check(player.x===pausedRail.x&&player.y===pausedRail.y,'paused rail remains attached without advancing');
-      runtime.generatedLinks[0].fence.hp=0;runtime.update(a.time.now,.1,{x:-10,y:-10},{pressed:false,held:false,released:false,prompt:'A'});
+      runtime.generatedLinks[0].fence.hp=0;runtime.update(a.time.now,.1,{x:-10,y:-10},{pressed:false,held:false,released:false,prompt:'RS'});
       check(!runtime.railActive&&!player.railInvulnerable&&player.x===first.x2&&player.y===first.y2,'broken upcoming connector stops at last node and clears immunity');
       runtime.reset();runtime.refreshNetwork(a.time.now);
       // Every fan descendant traverses/splits at generated geometry with its history intact.
@@ -104,6 +104,7 @@
         let forceChoice=true;Math.random=()=>{if(forceChoice){forceChoice=false;return (index+.1)/3;}return oldRandom();};
         try { check(runtime.ascend(turrets[0],a.time.now),archetype+': sacrifice activation'); } finally { Math.random=oldRandom; }
         const encounter=a.possession,boss=encounter?.boss;
+        check(a.possessionRemainingMs===60000,archetype+': full minute duration');
         check(boss?.archetype===archetype&&boss.faction==='player'&&boss.ownerId==='operative',archetype+': real player-owned boss');
         check(turrets.every(t=>t.hp===0)&&!player.visible&&!player.body.enable&&player.combatBody===boss,archetype+': transfer and sacrifice');
         const hp=boss.hp;player.takeDamage(27);check(boss.hp===hp-27&&player.hp===originalHp,archetype+': incoming damage uses integrity');
@@ -117,7 +118,10 @@
         check(archetype==='artillery'?encounter.lastRocketAt>0:archetype==='storm-mage'?encounter.mageSuperVolleyAt>0:encounter.pounceStartsAt>0,archetype+': secondary');
         a.updateHud(a.time.now);check(a.hudPayload.healthLabel?.includes('CHASSIS INTEGRITY')&&a.hudPayload.maxHp===boss.maxHp,archetype+': chassis HUD');
         const timer=a.possessionRemainingMs;await wait(80);check(a.possessionRemainingMs===timer,archetype+': paused timer remains frozen');
-        if(index===1)boss.takeDamage(boss.hp);else a.possessionRemainingMs=0;
+        if(index===1)boss.takeDamage(boss.hp);else {
+          a.updatePossession(a.time.now,30000);check(a.possession===encounter&&a.possessionRemainingMs===30000,archetype+': still controlled after old 20-second limit');
+          a.updatePossession(a.time.now,29999);check(a.possession===encounter&&a.possessionRemainingMs===1,archetype+': controlled until full minute');
+        }
         a.updatePossession(a.time.now,16);
         check(!a.possession&&!player.combatBody&&player.visible&&player.body.enable&&player.hp===originalHp,archetype+': safe restoration');
         check(!a.intersectsWallGeometry(player.x,player.y,24,24)&&!boss.active,archetype+': no orphan or invalid landing');

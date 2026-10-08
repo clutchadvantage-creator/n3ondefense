@@ -293,7 +293,7 @@ export class SystemInfusionRuntime {
     this.ports.feedback(ok?SYSTEM_INFUSION_BY_ID.get(action.id)!.name:'Unavailable — check range, cooldown and destination',action.point,ok);
     this.scanAt=0;
   }
-  /** Returns true while this arbiter owns interact; planting must not also consume it. */
+  /** Returns true for an available or active Infusion interaction; selection alone must not block planting. */
   update(now:number,dt:number,aim:InfusionPoint,input:InfusionInput,blocked=false):boolean {
     this.refreshNetwork(now);
     if(!liveInfusionTarget(this.designated)||now>=this.designationUntil)this.designated=null;

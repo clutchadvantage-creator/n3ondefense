@@ -8,20 +8,20 @@ The existing save normalizer recognizes the new registry IDs. Card identity, ran
 
 ## Controls and starting tuning
 
-Aim with the normal cursor/reticle and use the current **Interact** binding. A contextual prompt identifies the action. Shooting remains independent. When two actions share a turret or mine, tap activates the first and an 800 ms hold activates the second; releasing after a successful hold does not also trigger the tap action.
+Aim with the normal cursor/reticle and use the dedicated **Infusion** control: **C** on keyboard or **right-stick click (RS / R3)** on controller. **E / A / Cross** remains Plant / Interact, even with an Infusion target selected. A contextual prompt identifies the action. Shooting remains independent. When two actions share a turret or mine, tap activates the first and an 800 ms hold activates the second; releasing after a successful hold does not also trigger the tap action.
 
 | System | Interaction and behavior |
 | --- | --- |
-| Relay Jump | Tap Interact on a living player turret. Safe landing beside it, 800 range, 5 s cooldown. |
+| Relay Jump | Tap Infusion on a living player turret. Safe landing beside it, arena-wide range, 5 s cooldown. |
 | Gridlink | Automatically joins nearby living fence endpoints within 540 units. Generated links use normal fence damage and slowing; maximum 16 links. |
-| Target Designator | Tap Interact on an enemy or boss. Turrets prioritize it for 4 s while respecting range and clear geometry; 8 s cooldown. |
-| Ascension Protocol | Hold Interact on a turret to consume three living turrets. A temporary allied tank attacks enemies for 20 s; 45 s cooldown. It is never in the enemy completion roster. |
-| Detonator Link | Tap Interact on a landed player mine. Uses the original mine explosion, damage, audio and cleanup. |
+| Target Designator | Tap Infusion on an enemy or boss. Turrets prioritize it for 4 s while respecting range and clear geometry; 8 s cooldown. |
+| Ascension Protocol | Hold Infusion on a turret to consume three living turrets. Pilot a random existing boss chassis for 60 s (or until its integrity runs out); 45 s cooldown. It is never in the enemy completion roster. |
+| Detonator Link | Tap Infusion on a landed player mine. Uses the original mine explosion, damage, audio and cleanup. |
 | Cascade | Explosions queue neighboring mines within 350 units, one every 140 ms. Chains propagate outward with visited tracking and a 24-mine propagation cap. |
-| Magnetic Redeploy | Select a landed mine, then Interact at a valid destination within 500 units of it. Hold to select when Detonator Link is also equipped. Preserves the mine instance; 4 s per-mine cooldown, 8 s selection timeout. |
+| Magnetic Redeploy | Select a landed mine, then press Infusion at a valid destination within 500 units of it. Hold to select when Detonator Link is also equipped. Preserves the mine instance; 4 s per-mine cooldown, 8 s selection timeout. |
 | Power Bus | While Boost is active, energizes up to four nearby devices within 450 units. Each draws an additional 6 Energy/s. Turrets fire faster, fences gain extra pulses, and landed mines arm immediately. Stops when Boost stops or Energy is insufficient. |
-| Hazard Hijack | Interact with the marked relay in an existing security laser beam. The laser network becomes safe for the player for 5 s while retaining enemy damage; 15 s cooldown. |
-| Fence Rail | Select a nearby fence endpoint, then a connected destination. Rapid transport follows a validated path; 4 s cooldown, 8 s selection timeout. A normal fence works by itself, and Gridlink expands the reachable network. |
+| Hazard Hijack | Press Infusion on the marked relay in an existing security laser beam. The laser network becomes safe for the player for 5 s while retaining enemy damage; 15 s cooldown. |
+| Fence Rail | Select a nearby fence endpoint and press Infusion once. Automatic, invulnerable travel follows the connected segments; 4 s cooldown. A normal fence works by itself, and Gridlink expands the reachable network. |
 
 Hazard Hijack currently supports **arena security lasers**. Gas and fire retain their existing rules. Suppressed lasers and boss encounters cannot be activated through this interaction. Expiry and round cleanup restore normal laser ownership without altering the hazard schedule.
 
@@ -33,7 +33,7 @@ Definitions, descriptions, requirements, hooks and tuning live in `src/game/mods
 
 Fence topology rebuilds when the deployable registry changes. Context and Power Bus scans run at 100 ms intervals; targeting uses the existing enemy spatial grid. Links, powered devices and mine chains are bounded. Round completion, defeat, encounter transitions and shutdown use the existing cleanup owner.
 
-Validation for this pass:
+Initial release validation (see [the overhaul report](system-infusion-overhaul.md) for current behavior and follow-up checks):
 
 - 840 automated tests passed, including 22 focused System Infusion tests; production TypeScript/Vite build passed.
 - Live browser checks exercised both five-system builds using real turrets, fences, enemies and mines. Checks included Gridlink damage, safe Relay/Fence Rail travel, targeting invalidation, Power Bus drain, same-instance mine relocation and sequential mine explosions.

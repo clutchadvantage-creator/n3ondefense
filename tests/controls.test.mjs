@@ -17,3 +17,10 @@ test('mouse binding labels are player readable', () => {
   assert.equal(bindingLabel('Mouse:1'), 'MIDDLE MOUSE');
   assert.equal(bindingLabel('Keyboard:Space'), 'SPACE');
 });
+
+test('Infusion controls stay separate from remapped abilities in existing saves', () => {
+  const normalized = normalizeAbilityBindings({ fence: 'Keyboard:KeyC', echo: 'Gamepad:11' });
+  assert.notEqual(normalized.fence, 'Keyboard:KeyC');
+  assert.notEqual(normalized.echo, 'Gamepad:11');
+  assert.equal(new Set(Object.values(normalized)).size, Object.values(normalized).length);
+});
