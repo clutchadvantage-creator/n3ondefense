@@ -41,6 +41,56 @@
       let root = menu.children.getByName('weekly-operations-panel');
       check(root?.active, 'existing mission panel mounted');
       const layer = UiNavigationController.get().phaserLayer(menu);
+      const body = root.getByName('weekly-operations-content');
+      check(!root.getData('weeklyTrayExpanded') && !body.visible, 'tray starts collapsed with the welcome bar visible');
+      check(!layer.manager.focus('weekly-next'), 'collapsed deck controls cannot receive focus');
+      report.screenshots.push({ label: `collapsed-${game.scale.width}x${game.scale.height}`, png: await new Promise(resolve => game.renderer.snapshot(image => resolve(image.src))) });
+      const moveMouse = (x, y) => {
+        const bounds = game.canvas.getBoundingClientRect();
+        game.canvas.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, view: window,
+          clientX: bounds.left + x * bounds.width / game.scale.width,
+          clientY: bounds.top + y * bounds.height / game.scale.height }));
+      };
+      const clickMouse = async (x, y) => {
+        moveMouse(x, y); await wait(40);
+        const bounds = game.canvas.getBoundingClientRect();
+        const options = { bubbles: true, view: window, button: 0,
+          clientX: bounds.left + x * bounds.width / game.scale.width,
+          clientY: bounds.top + y * bounds.height / game.scale.height };
+        game.canvas.dispatchEvent(new MouseEvent('mousedown', { ...options, buttons: 1 })); await wait(40);
+        game.canvas.dispatchEvent(new MouseEvent('mouseup', options)); await wait(280);
+      };
+      moveMouse(root.x, root.y + 30); await wait(300);
+      check(root.getData('weeklyTrayExpanded') && body.visible && body.y === 0, 'hover unfolds the tray below the welcome bar');
+      const arrow = body.list.find(item => item.type === 'Container' && item.getByName('button-label')?.text === '>');
+      const arrowBounds = arrow.getBounds();
+      const arrowX = arrowBounds.centerX, arrowY = arrowBounds.centerY;
+      await clickMouse(arrowX, arrowY);
+      check(menu.operationDeck === 'overdrive' && root.getData('weeklyTrayExpanded'), 'mouse click navigates the open tray without collapsing it');
+      await clickMouse(arrowX, arrowY);
+      check(menu.operationDeck === 'regular', 'mouse can return to the regular deck');
+      moveMouse(root.x, root.y + 310); await wait(80);
+      check(root.getData('weeklyTrayExpanded'), 'moving down into mission cards keeps the tray open');
+      moveMouse(root.x, root.y + 145); await wait(80);
+      check(root.getData('weeklyTrayExpanded'), 'gaps between controls do not collapse the tray');
+      moveMouse(root.x - 450, root.y + 30); await wait(220);
+      check(!root.getData('weeklyTrayExpanded') && !body.visible, 'leaving the panel collapses the tray');
+      await clickMouse(arrowX, arrowY);
+      check(menu.operationDeck === 'regular' && !root.getData('weeklyTrayExpanded'), 'clicking the hidden arrow cannot change decks or reopen the tray');
+      moveMouse(root.x, root.y + 310); await wait(100);
+      check(!root.getData('weeklyTrayExpanded'), 'hidden body area cannot reopen a collapsed tray');
+      moveMouse(root.x, root.y + 30); await wait(70);
+      moveMouse(root.x - 450, root.y + 30); await wait(40);
+      moveMouse(root.x, root.y + 30); await wait(300);
+      check(root.getData('weeklyTrayExpanded') && body.y === 0, 'rapid hover reversals finish expanded');
+      menu.input.emit('gameout'); await wait(220);
+      check(!body.visible, 'leaving the game canvas closes a mouse-opened tray');
+      check(layer.manager.focus('weekly-tray-toggle'), 'welcome bar remains keyboard/controller focusable');
+      layer.manager.activate(); await wait(280);
+      check(root.getData('weeklyTrayExpanded'), 'keyboard/controller activation expands the tray');
+      layer.manager.focusDefault(); await wait(240);
+      check(!root.getData('weeklyTrayExpanded'), 'moving keyboard/controller focus out of the tray collapses it');
+      layer.manager.focus('weekly-tray-toggle'); layer.manager.activate(); await wait(280);
       check(layer.manager.focus('weekly-next'), 'stable arrow focus ID registered');
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await wait(280);
       check(menu.operationDeck === 'overdrive', 'focused arrow switches to Overdrive');
@@ -55,7 +105,7 @@
       check(menu.children.length === children && root.length === rootChildren, 'cached page switches do not accumulate objects');
       check(menu.tweens.getTweens().length <= tweenCount, 'rapid switching cancels obsolete page tweens');
       check(before === JSON.stringify(Store.getActiveSave().progress.weeklyOperations), 'switching never mutates mission progress');
-      check(root.list.filter(item => item.name.startsWith('weekly-page-') && item.visible).length === 1, 'exactly one selected page visible');
+      check(root.getByName('weekly-operations-content').list.filter(item => item.name.startsWith('weekly-page-') && item.visible).length === 1, 'exactly one selected page visible');
       originalGetGamepads = navigator.getGamepads;
       originalHasFocus = document.hasFocus;
       document.hasFocus = () => true;
@@ -70,7 +120,7 @@
       layer.manager.focus('weekly-next'); layer.manager.activate(); await wait(280);
       navigator.getGamepads = originalGetGamepads; originalGetGamepads = undefined;
       document.hasFocus = originalHasFocus; originalHasFocus = undefined;
-      const page = root.getByName('weekly-page-regular');
+      const page = root.getByName('weekly-operations-content').getByName('weekly-page-regular');
       check(page.list.some(item => item.text?.includes(first.regular.objectives[0].title)), 'creative title displayed');
       check(page.list.some(item => item.text === first.regular.objectives[0].description), 'separate objective displayed');
       check(page.list.some(item => item.name === 'weekly-reward-credits'), 'individual currency entry rendered with shared pickup art');
@@ -119,9 +169,9 @@
       let snapshots = S.getWeeklyOperations();
       check(snapshots.regular.featuredRewards.length === 1 && snapshots.overdrive.featuredRewards.length === 2, 'Regular shared / Overdrive shared plus exclusive bonus');
       menu.scene.restart(); await wait(700); menu = game.scene.keys.menu; root = menu.children.getByName('weekly-operations-panel');
-      const nav = UiNavigationController.get().phaserLayer(menu); nav.manager.focus('weekly-next');
+      const nav = UiNavigationController.get().phaserLayer(menu); nav.manager.focus('weekly-tray-toggle'); nav.manager.activate(); await wait(280); nav.manager.focus('weekly-next');
       if (menu.operationDeck !== 'overdrive') nav.manager.activate(); await wait(300);
-      const bonusPage = root.getByName('weekly-page-overdrive');
+      const bonusPage = root.getByName('weekly-operations-content').getByName('weekly-page-overdrive');
       check(bonusPage.list.filter(item => item.name.startsWith('weekly-featured-')).length === 2, 'two configured reward cards display');
       check(bonusPage.getByName('weekly-campaign-countdown')?.text.includes('FEATURED REWARDS END IN'), 'campaign countdown distinct from weekly clock');
       const detailId = 'weekly-page-overdrive:dev-weekly-test:bonus-test';
@@ -171,10 +221,12 @@
       originalMatchMedia = window.matchMedia;
       window.matchMedia = query => query.includes('prefers-reduced-motion') ? { matches: true } : originalMatchMedia.call(window, query);
       menu.scene.restart(); await wait(400); menu = game.scene.keys.menu; root = menu.children.getByName('weekly-operations-panel');
-      const reducedNav = UiNavigationController.get().phaserLayer(menu); reducedNav.manager.focus('weekly-next');
+      const reducedNav = UiNavigationController.get().phaserLayer(menu); reducedNav.manager.focus('weekly-tray-toggle'); reducedNav.manager.activate();
+      check(root.getByName('weekly-operations-content').visible && root.getByName('weekly-operations-content').y === 0, 'reduced-motion tray opens instantly');
+      reducedNav.manager.focus('weekly-next');
       reducedNav.manager.activate();
-      check(root.list.find(item => item.name === `weekly-page-${menu.operationDeck}`).alpha === 1, 'reduced-motion deck switches instantly');
-      check(root.alpha === 1 && !menu.tweens.getTweensOf(root.list.find(item => item.name === `weekly-page-${menu.operationDeck}`)).length, 'reduced-motion page has no transition tween');
+      check(root.getByName('weekly-operations-content').list.find(item => item.name === `weekly-page-${menu.operationDeck}`).alpha === 1, 'reduced-motion deck switches instantly');
+      check(root.alpha === 1 && !menu.tweens.getTweensOf(root.getByName('weekly-operations-content').list.find(item => item.name === `weekly-page-${menu.operationDeck}`)).length, 'reduced-motion page has no transition tween');
       window.matchMedia = originalMatchMedia; originalMatchMedia = undefined;
       report.cases.push({ name: 'mission deck navigation, layouts, authoritative metrics, campaign eligibility, atomic grants and profile reload' });
     } catch (error) { report.errors.push(String(error.stack ?? error)); }

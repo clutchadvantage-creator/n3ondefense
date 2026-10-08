@@ -15,6 +15,9 @@ export const getWeeklyRewardEntries = (reward: WeeklyOperationReward): WeeklyRew
   { id: 'randomMod', name: 'RANDOM MOD', amount: reward.randomMod ? 1 : 0, iconRef: 'mod:random' }
 ].filter(item => item.amount > 0);
 
+export const getWeeklyRewardColumns = (reward: WeeklyOperationReward): number => getWeeklyRewardEntries(reward).length > 2 ? 3 : 2;
+export const WEEKLY_CURRENCY_ROW_HEIGHT = 44;
+
 /** Uses the same authored currency/Mod artwork as actual arena loot. Static
  * menu instances need no animation loop, asset load, or repeated decoding. */
 const rewardIcon = (scene: Phaser.Scene, parent: Phaser.GameObjects.Container, iconRef: string, x: number, y: number): void => {
@@ -36,17 +39,18 @@ const rewardIcon = (scene: Phaser.Scene, parent: Phaser.GameObjects.Container, i
 export const renderWeeklyCurrencyRewards = (scene: Phaser.Scene, parent: Phaser.GameObjects.Container,
   reward: WeeklyOperationReward, width: number, top: number): void => {
   const entries = getWeeklyRewardEntries(reward);
-  const cellWidth = width / 2;
+  const columns = getWeeklyRewardColumns(reward);
+  const cellWidth = width / columns;
   entries.forEach((entry, index) => {
-    const x = -width / 2 + index % 2 * cellWidth;
-    const y = top + Math.floor(index / 2) * 32;
-    rewardIcon(scene, parent, entry.iconRef, x + 15, y + 14);
-    parent.add(scene.add.text(x + 32, y, entry.amount.toLocaleString(), {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#ffe1a4', fontStyle: 'bold'
+    const x = -width / 2 + index % columns * cellWidth;
+    const y = top + Math.floor(index / columns) * WEEKLY_CURRENCY_ROW_HEIGHT;
+    rewardIcon(scene, parent, entry.iconRef, x + 13, y + 14);
+    parent.add(scene.add.text(x + 29, y, entry.amount.toLocaleString(), {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: columns === 3 ? '20px' : '23px', color: '#ffe1a4', fontStyle: 'bold'
     }).setName(`weekly-reward-${entry.id}`));
-    parent.add(scene.add.text(x + 32, y + 17, entry.name, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#b9dae4', fontStyle: 'bold'
-    }));
+    parent.add(scene.add.text(x + cellWidth / 2, y + 27, entry.name, {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: columns === 3 ? '13px' : '15px', color: '#d0e7ee', fontStyle: 'bold'
+    }).setOrigin(0.5, 0));
   });
 };
 

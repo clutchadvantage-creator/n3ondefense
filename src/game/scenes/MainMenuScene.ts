@@ -1,4 +1,5 @@
-import { getWeeklyRewardEntries, renderWeeklyCurrencyRewards, renderWeeklyFeaturedRewards } from '../ui/WeeklyRewardView.ts';
+import { attachWeeklyOperationsTray } from '../ui/WeeklyOperationsTray.ts';
+import { getWeeklyRewardColumns, WEEKLY_CURRENCY_ROW_HEIGHT, getWeeklyRewardEntries, renderWeeklyCurrencyRewards, renderWeeklyFeaturedRewards } from '../ui/WeeklyRewardView.ts';
 import Phaser from 'phaser';
 import mainMenuBackgroundUrl from '../../assets/mainmenubackground.png';
 import { GAME_TAGLINE, GAME_TITLE, OBJECTIVE_CONFIG } from '../config/gameplay';
@@ -163,7 +164,7 @@ export class MainMenuScene extends Phaser.Scene {
     const briefingWidth = Phaser.Math.Clamp(width * (narrow ? 0.34 : 0.2), narrow ? (width < 750 ? 240 : 280) : 330, narrow ? 390 : 400);
     const briefingX = width - Math.max(12, width * 0.018) - briefingWidth / 2;
     const briefingTop = tiny ? 58 : short ? 78 : 96;
-    const briefingHeight = Math.max(300, Math.min(short ? 600 : 680, height - briefingTop - 18));
+    const briefingHeight = Math.max(300, Math.min(680, height - briefingTop - 18));
     this.createOperativeBriefing(briefingX, briefingTop, briefingWidth, briefingHeight, profile?.name ?? null);
 
     const protocolY = tiny ? 128 : short ? 177 : 235;
@@ -519,6 +520,8 @@ export class MainMenuScene extends Phaser.Scene {
   private createOperativeBriefing(x: number, top: number, panelWidth: number, panelHeight: number, profileName: string | null): void {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const root = this.add.container(x + (reducedMotion ? 0 : 24), top).setDepth(30).setAlpha(reducedMotion ? 1 : 0).setName('weekly-operations-panel');
+    const body = this.add.container(0, 0).setName('weekly-operations-content');
+    root.add(body);
     const dense = panelWidth < 350 || panelHeight < 600;
     const spacious = panelWidth >= 390 && panelHeight >= 580;
     const cut = dense ? 10 : 17;
@@ -535,32 +538,35 @@ export class MainMenuScene extends Phaser.Scene {
     const rightMount = this.add.rectangle(halfW + 5, halfH, 10, panelHeight * 0.52, 0x101e2b, 0.95).setStrokeStyle(1, 0x55efff, 0.36);
     const topRail = this.add.rectangle(0, 5, panelWidth - cut * 2, 4, 0x65f4ff, 0.48);
     const magentaRail = this.add.rectangle(-halfW + 8, halfH, 3, panelHeight - cut * 3, 0xff5bcf, 0.42);
-    const headerHeight = dense ? 98 : 122;
+    const welcome = this.add.text(0, 28, profileName ? `WELCOME, OPERATIVE ${profileName.toUpperCase()}` : 'OPERATIVE BRIEFING', {
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${panelWidth >= 370 ? 18 : 16}px`, color: '#86f8ff', fontStyle: 'bold', align: 'center'
+    }).setOrigin(0.5, 0).setWordWrapWidth(panelWidth - 44, true).setMaxLines(2);
+    const operationsHeading = this.add.text(0, welcome.y + welcome.height + 6, 'WEEKLY OPERATIONS // MISSION DECK', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${panelWidth >= 370 ? 16 : 14}px`, color: '#ff9ddd', fontStyle: 'bold', align: 'center'
+    }).setOrigin(0.5, 0);
+    const selectorY = operationsHeading.y + operationsHeading.height + 22;
+    const arrowHeight = dense ? 24 : 28;
+    const sync = this.add.text(0, selectorY + arrowHeight / 2 + 5, 'DATA SYNC', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', color: '#92dfe9', align: 'center'
+    }).setOrigin(0.5, 0);
+    const headerHeight = sync.y + sync.height - 4;
     const header = this.add.rectangle(0, 14, panelWidth - 30, headerHeight, 0x0b2130, 0.96)
       .setOrigin(0.5, 0).setStrokeStyle(1, 0x59eaff, 0.5);
     const headerInset = this.add.rectangle(0, 18, panelWidth - 40, 3, 0xff5bcf, 0.42).setOrigin(0.5, 0);
-    const welcome = this.add.text(-halfW + (dense ? 22 : 28), dense ? 28 : 30, profileName ? `WELCOME, OPERATIVE ${profileName.toUpperCase()}` : 'OPERATIVE BRIEFING', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${dense ? 11 : spacious ? 17 : 15}px`, color: '#86f8ff', fontStyle: 'bold'
-    }).setOrigin(0, 0).setWordWrapWidth(panelWidth - (dense ? 44 : 56), true).setMaxLines(1);
-    const operationsHeading = this.add.text(-halfW + (dense ? 22 : 28), dense ? 49 : 57, 'WEEKLY OPERATIONS // MISSION DECK', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 10 : spacious ? 16 : 14}px`, color: '#ff9ddd', fontStyle: 'bold', letterSpacing: 1
-    }).setOrigin(0, 0);
-    const sync = this.add.text(0, headerHeight - 2, 'DATA SYNC', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: '#70dbe8', letterSpacing: 1
-    }).setOrigin(0.5, 0);
-    root.add([shadow, chassis, leftMount, rightMount, innerGlass, scanlines, topRail, magentaRail, header, headerInset, welcome, operationsHeading, sync]);
+    body.add([shadow, chassis, leftMount, rightMount, innerGlass, scanlines, topRail, magentaRail, header, headerInset, welcome, operationsHeading, sync]);
     for (const side of [-1, 1]) {
       for (const screwY of [13, panelHeight - 13]) {
-        root.add(this.add.circle(side * (halfW - 12), screwY, dense ? 2 : 3, side < 0 ? 0xff5bcf : 0x55efff, 0.75));
+        body.add(this.add.circle(side * (halfW - 12), screwY, dense ? 2 : 3, side < 0 ? 0xff5bcf : 0x55efff, 0.75));
       }
     }
 
     if (!profileName) {
-      root.add(this.add.rectangle(0, panelHeight * 0.48, panelWidth - 54, dense ? 94 : 128, 0x07131f, 0.92).setStrokeStyle(1, 0x6adfee, 0.35));
-      root.add(this.add.text(0, panelHeight * 0.48, 'PROFILE LINK REQUIRED\nSELECT AN OPERATIVE TO RECEIVE WEEKLY OPERATIONS', {
+      body.add(this.add.rectangle(0, panelHeight * 0.48, panelWidth - 54, dense ? 94 : 128, 0x07131f, 0.92).setStrokeStyle(1, 0x6adfee, 0.35));
+      body.add(this.add.text(0, panelHeight * 0.48, 'PROFILE LINK REQUIRED\nSELECT AN OPERATIVE TO RECEIVE WEEKLY OPERATIONS', {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 13 : 18}px`, color: '#9fcbd8', align: 'center', lineSpacing: 8,
         wordWrap: { width: panelWidth - 70, useAdvancedWrap: true }
       }).setOrigin(0.5));
+      attachWeeklyOperationsTray(this, root, body, welcome, panelWidth, panelHeight, reducedMotion);
       this.tweens.add({ targets: root, x, alpha: 1, duration: reducedMotion ? 0 : 420, ease: 'Sine.easeOut' });
       return;
     }
@@ -569,18 +575,17 @@ export class MainMenuScene extends Phaser.Scene {
     try {
       snapshots = SaveSystem.getWeeklyOperations();
     } catch {
-      root.add(this.add.rectangle(0, panelHeight * 0.48, panelWidth - 54, dense ? 94 : 128, 0x21101a, 0.82).setStrokeStyle(1, 0xff6e9d, 0.55));
-      root.add(this.add.text(0, panelHeight * 0.48, 'WEEKLY OPERATIONS\nDATA LINK UNAVAILABLE', {
+      body.add(this.add.rectangle(0, panelHeight * 0.48, panelWidth - 54, dense ? 94 : 128, 0x21101a, 0.82).setStrokeStyle(1, 0xff6e9d, 0.55));
+      body.add(this.add.text(0, panelHeight * 0.48, 'WEEKLY OPERATIONS\nDATA LINK UNAVAILABLE', {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 14 : 20}px`, color: '#ffaeaf', align: 'center', lineSpacing: 9, fontStyle: 'bold'
       }).setOrigin(0.5));
+      attachWeeklyOperationsTray(this, root, body, welcome, panelWidth, panelHeight, reducedMotion);
       this.tweens.add({ targets: root, x, alpha: 1, duration: reducedMotion ? 0 : 420, ease: 'Sine.easeOut' });
       return;
     }
 
-    const selectorY = dense ? 83 : 101;
     const arrowWidth = dense ? 30 : 38;
-    const arrowHeight = dense ? 21 : 27;
-    const arrowOffset = dense ? 82 : 112;
+    const arrowOffset = halfW - (dense ? 38 : 44);
     const pages = new Map<WeeklyOperationDeck, Phaser.GameObjects.Container>();
     const switchDeck = (direction: -1 | 1): boolean => {
       this.operationDeck = this.operationDeck === 'regular' ? 'overdrive' : 'regular';
@@ -590,22 +595,23 @@ export class MainMenuScene extends Phaser.Scene {
     const previousDeck = createButton(this, -arrowOffset, selectorY, '<', () => switchDeck(-1), arrowWidth, 'menu', { height: arrowHeight, fontSize: dense ? 12 : 16, horizontalPadding: 4, focusId: 'weekly-previous', focusLabel: 'Previous challenge deck' });
     const nextDeck = createButton(this, arrowOffset, selectorY, '>', () => switchDeck(1), arrowWidth, 'menu', { height: arrowHeight, fontSize: dense ? 12 : 16, horizontalPadding: 4, focusId: 'weekly-next', focusLabel: 'Next challenge deck' });
     const deckLabel = this.add.text(0, selectorY, this.operationDeck === 'regular' ? 'REGULAR CHALLENGES' : 'OVERDRIVE CHALLENGES', {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${dense ? 8 : spacious ? 12 : 10}px`,
-      color: this.operationDeck === 'regular' ? '#8cebf7' : '#ffb15c', fontStyle: 'bold', letterSpacing: dense ? 0 : 1
+      fontFamily: 'Orbitron, sans-serif', fontSize: `${panelWidth >= 370 ? 13 : 12}px`,
+      color: this.operationDeck === 'regular' ? '#8cebf7' : '#ffb15c', fontStyle: 'bold', align: 'center'
     }).setOrigin(0.5);
-    root.add([previousDeck, nextDeck, deckLabel]);
-    let currencyRows = Math.max(...Object.values(snapshots).map(deck => Math.ceil(getWeeklyRewardEntries(deck.reward).length / 2)));
-    let featuredRows = Math.max(...Object.values(snapshots).map(deck => Math.ceil((deck.featuredRewards?.length ?? 0) / 2)));
-    let rewardHeight = 32 + currencyRows * 32 + (featuredRows ? featuredRows * 56 + 18 : 0);
-    const footerHeight = dense ? 25 : 34;
-    const objectiveTop = headerHeight + (dense ? 24 : 34);
-    let objectiveBottom = panelHeight - rewardHeight - footerHeight - (dense ? 12 : 18);
+    body.add([previousDeck, nextDeck, deckLabel]);
+    const footerHeight = 32;
+    const objectiveTop = headerHeight + 24;
     const rowGap = dense ? 7 : 11;
     const cardWidth = panelWidth - (dense ? 30 : 42);
     const createPage = (snapshot: WeeklyOperationsSnapshot): Phaser.GameObjects.Container => {
       const page = this.add.container(0, 0).setName(`weekly-page-${snapshot.deck}`);
+      const currencyRows = Math.ceil(getWeeklyRewardEntries(snapshot.reward).length / getWeeklyRewardColumns(snapshot.reward));
+      const featuredRows = Math.ceil((snapshot.featuredRewards?.length ?? 0) / 2);
+      const currencyHeight = Math.max(92, 36 + currencyRows * WEEKLY_CURRENCY_ROW_HEIGHT);
+      const rewardHeight = currencyHeight + (featuredRows ? featuredRows * 56 + 20 : 0);
+      const objectiveBottom = panelHeight - rewardHeight - footerHeight - 12;
       const rowHeight = (objectiveBottom - objectiveTop - rowGap * 2) / Math.max(1, snapshot.objectives.length);
-      const compactRow = rowHeight < 95;
+      const compactRow = rowHeight < 90;
       snapshot.objectives.forEach((objective, index) => {
         const cardTop = objectiveTop + index * (rowHeight + rowGap);
         const cardCenterY = cardTop + rowHeight * 0.5;
@@ -623,33 +629,41 @@ export class MainMenuScene extends Phaser.Scene {
           .setStrokeStyle(2, accent, objective.complete ? 0.95 : 0.62);
         const iconText = this.add.text(iconX, cardCenterY, objective.complete ? '\u2713' : objective.icon ?? String(index + 1).padStart(2, '0'), {
           fontFamily: objective.complete ? 'Rajdhani, sans-serif' : 'Orbitron, sans-serif',
-          fontSize: `${dense ? 10 : objective.complete ? 20 : 11}px`, color: objective.complete ? '#c8ffdb' : '#8cebf7', fontStyle: 'bold'
+          fontSize: `${objective.complete ? 23 : 16}px`, color: objective.complete ? '#c8ffdb' : '#8cebf7', fontStyle: 'bold'
         }).setOrigin(0.5);
         page.add([iconHalo, icon, iconText]);
         if (objective.complete && !reducedMotion) {
           this.tweens.add({ targets: [iconHalo, icon], alpha: { from: 0.5, to: 1 }, scale: { from: 0.94, to: 1.06 }, duration: 320, yoyo: true, repeat: 0, ease: 'Sine.easeInOut' });
         }
 
-        const contentLeft = -cardWidth / 2 + (dense ? 47 : 66);
+        const contentLeft = -cardWidth / 2 + (dense ? 47 : 58);
         const contentRight = cardWidth / 2 - (dense ? 10 : 16);
-        const missionTitle = this.add.text(contentLeft, cardTop + (dense ? 6 : 11), objective.title.toUpperCase(), {
-          fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense || compactRow ? 12 : spacious ? 16 : 14}px`, color: objective.complete ? '#b6ffd1' : '#e0faff', fontStyle: 'bold', letterSpacing: dense ? 0 : 1
+        const missionTitle = this.add.text(contentLeft, cardTop + (compactRow ? 5 : 8), objective.title.toUpperCase(), {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${compactRow ? 18 : rowHeight >= 112 ? 22 : 20}px`, color: objective.complete ? '#b6ffd1' : '#e0faff', fontStyle: 'bold', letterSpacing: 0
         }).setOrigin(0, 0);
         missionTitle.setScale(Math.min(1, (contentRight - contentLeft) / missionTitle.width));
         page.add(missionTitle);
-        page.add(this.add.text(contentLeft, cardTop + (dense || compactRow ? 22 : 33), objective.description, {
-          fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense || compactRow ? 11 : 12}px`, color: '#a9d3df',
+        const progressY = cardTop + rowHeight - 32;
+        const descriptionY = missionTitle.y + missionTitle.displayHeight + 2;
+        let descriptionFontSize = compactRow ? 15 : 18;
+        const description = this.add.text(contentLeft, descriptionY, objective.description, {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${descriptionFontSize}px`, color: '#c2e0e9',
           wordWrap: { width: contentRight - contentLeft, useAdvancedWrap: true }
-        }).setMaxLines(2));
-        page.add(this.add.text(contentLeft, cardTop + rowHeight - (dense ? 27 : 34), `${objective.current.toLocaleString()} / ${objective.target.toLocaleString()}`, {
-          fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', color: '#b4d9e3', fontStyle: 'bold'
+        });
+        // Wrap objectives at a readable size; only densely packed reward pages need the smaller tier.
+        while (description.height > progressY - descriptionY - 3 && descriptionFontSize > 14) {
+          description.setFontSize(--descriptionFontSize);
+        }
+        page.add(description);
+        page.add(this.add.text(contentLeft, progressY, `${objective.current.toLocaleString()} / ${objective.target.toLocaleString()}`, {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: compactRow ? '14px' : '16px', color: '#d1e9ef', fontStyle: 'bold'
         }));
-        page.add(this.add.text(contentRight, cardTop + rowHeight - (dense ? 27 : 34), objective.complete ? 'COMPLETE' : 'IN PROGRESS', {
-          fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: objective.complete ? '#75ffad' : '#86b2c0', fontStyle: 'bold'
+        page.add(this.add.text(contentRight, progressY, objective.complete ? 'COMPLETE' : 'IN PROGRESS', {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: compactRow ? '12px' : '14px', color: objective.complete ? '#75ffad' : '#acd7e2', fontStyle: 'bold'
         }).setOrigin(1, 0));
 
         const ratio = Math.min(1, objective.current / objective.target);
-        const barY = cardTop + rowHeight - (dense ? 10 : 16);
+        const barY = cardTop + rowHeight - 10;
         const barWidth = contentRight - contentLeft;
         const trackOuter = this.add.rectangle(contentLeft, barY, barWidth, dense ? 7 : 11, 0x02070b, 0.94).setOrigin(0, 0.5).setStrokeStyle(1, 0x315a69, 0.65);
         const trackInner = this.add.rectangle(contentLeft + 2, barY, Math.max(2, barWidth - 4), dense ? 3 : 5, 0x102a36, 1).setOrigin(0, 0.5);
@@ -664,29 +678,29 @@ export class MainMenuScene extends Phaser.Scene {
       });
 
       const rewardTop = panelHeight - rewardHeight - footerHeight;
-      const rewardPlate = this.add.rectangle(0, rewardTop, panelWidth - (dense ? 30 : 42), rewardHeight - (dense ? 6 : 10), snapshot.complete ? 0x0d291f : 0x1b1524, 0.94)
+      const rewardPlate = this.add.rectangle(0, rewardTop, panelWidth - (dense ? 30 : 42), rewardHeight - 2, snapshot.complete ? 0x0d291f : 0x1b1524, 0.94)
         .setOrigin(0.5, 0).setStrokeStyle(1, snapshot.complete ? 0x72ffac : 0xff65cf, 0.58);
       const rewardRail = this.add.rectangle(0, rewardTop + 3, panelWidth - (dense ? 48 : 64), 3, snapshot.complete ? 0x72ffac : 0xff65cf, 0.62).setOrigin(0.5, 0);
       page.add([rewardPlate, rewardRail]);
-      page.add(this.add.text(0, rewardTop + (dense ? 9 : 14), snapshot.complete && snapshot.rewardClaimed
+      page.add(this.add.text(0, rewardTop + 9, snapshot.complete && snapshot.rewardClaimed
         ? `${snapshot.deck.toUpperCase()} REWARD // ACQUIRED`
         : `${snapshot.deck.toUpperCase()} COMPLETION REWARD`, {
-        fontFamily: 'Orbitron, sans-serif', fontSize: `${dense ? 9 : 11}px`, color: snapshot.complete ? '#78ffae' : '#ff9bda', fontStyle: 'bold'
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${panelWidth >= 370 ? 14 : 12}px`, color: snapshot.complete ? '#78ffae' : '#ff9bda', fontStyle: 'bold'
       }).setOrigin(0.5, 0));
-      renderWeeklyCurrencyRewards(this, page, snapshot.reward, cardWidth - 14, rewardTop + 31);
+      renderWeeklyCurrencyRewards(this, page, snapshot.reward, cardWidth - 14, rewardTop + 36 + (currencyHeight - 36 - currencyRows * WEEKLY_CURRENCY_ROW_HEIGHT) / 2);
       const featured = snapshot.featuredRewards ?? [];
       if (featured.length) {
-        const featuredTop = rewardTop + 32 + currencyRows * 32;
+        const featuredTop = rewardTop + currencyHeight;
         renderWeeklyFeaturedRewards(this, page, featured, cardWidth - 12, featuredTop);
         const end = Math.min(...featured.map(entry => entry.endsAt));
         const campaignClock = this.add.text(0, featuredTop + featuredRows * 56, '', {
-          fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#dab5ee'
+          fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', color: '#dab5ee'
         }).setOrigin(0.5, 0).setName('weekly-campaign-countdown');
         campaignClock.setData('endsAt', end);
         page.add(campaignClock);
       }
       if (snapshot.complete && !reducedMotion) this.tweens.add({ targets: rewardRail, alpha: 0.2, duration: 300, yoyo: true, repeat: 0 });
-      root.add(page);
+      body.add(page);
       return page;
     };
     const refreshCampaignClocks = (): void => {
@@ -718,9 +732,9 @@ export class MainMenuScene extends Phaser.Scene {
     };
     showDeck();
     const countdown = this.add.text(0, panelHeight - footerHeight / 2 - 2, formatWeeklyCountdown(snapshots.regular.endsAt), {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 10 : spacious ? 15 : 13}px`, color: '#9cd5df', fontStyle: 'bold', letterSpacing: 1
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${panelWidth >= 370 ? 16 : 14}px`, color: '#b9e8f0', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5);
-    root.add(countdown);
+    body.add(countdown);
     this.time.addEvent({
       delay: 60_000,
       loop: true,
@@ -729,10 +743,6 @@ export class MainMenuScene extends Phaser.Scene {
         const refreshed = SaveSystem.getWeeklyOperations();
         if (JSON.stringify(refreshed) !== JSON.stringify(snapshots)) {
           snapshots = refreshed;
-          currencyRows = Math.max(...Object.values(snapshots).map(deck => Math.ceil(getWeeklyRewardEntries(deck.reward).length / 2)));
-          featuredRows = Math.max(...Object.values(snapshots).map(deck => Math.ceil((deck.featuredRewards?.length ?? 0) / 2)));
-          rewardHeight = 32 + currencyRows * 32 + (featuredRows ? featuredRows * 56 + 18 : 0);
-          objectiveBottom = panelHeight - rewardHeight - footerHeight - (dense ? 12 : 18);
           for (const page of pages.values()) { this.tweens.killTweensOf(page); page.destroy(); }
           pages.clear();
           showDeck();
@@ -742,10 +752,10 @@ export class MainMenuScene extends Phaser.Scene {
       }
     });
     const dataSweep = this.add.rectangle(-halfW + 20, 12, 2, panelHeight - 24, 0x8cf7ff, 0.08).setOrigin(0.5, 0);
-    root.add(dataSweep);
+    body.add(dataSweep);
     if (!reducedMotion) this.tweens.add({ targets: dataSweep, x: halfW - 20, alpha: { from: 0.02, to: 0.14 }, duration: 3400, repeat: -1, repeatDelay: 2400, ease: 'Sine.easeInOut' });
-    if (!reducedMotion) this.tweens.add({ targets: sync, alpha: { from: 0.24, to: 1 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     if (!reducedMotion) this.tweens.add({ targets: topRail, alpha: { from: 0.28, to: 0.7 }, duration: 1900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    attachWeeklyOperationsTray(this, root, body, welcome, panelWidth, panelHeight, reducedMotion);
     this.tweens.add({ targets: root, x, alpha: 1, duration: reducedMotion ? 0 : 420, ease: 'Sine.easeOut' });
   }
 
