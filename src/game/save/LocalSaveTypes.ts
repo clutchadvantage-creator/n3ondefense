@@ -62,6 +62,12 @@ export interface LocalPlayerProgress {
   initialDeploymentBriefingSeen: boolean;
   overdriveWeeklyProgress: WeeklyOperationProgressSource;
   weeklyOperations: WeeklyOperationsState;
+  weeklyRewardCampaigns: import('../progression/WeeklyRewardCampaigns.ts').WeeklyRewardCampaignState;
+  bossesDefeated: number;
+  heistsCompleted: number;
+  skyBreachesCompleted: number;
+  modUpgrades: number;
+  currencyExchanges: number;
 }
 
 export interface LocalPlayerSettings {
@@ -142,7 +148,7 @@ export interface LocalPlayerSaveV1 {
   wallet: Omit<LocalPlayerWallet, 'fluxCores'> & { fluxCores?: number };
   upgrades: Record<string, number>;
   cosmetics: LocalPlayerCosmetics;
-  progress: Omit<LocalPlayerProgress, 'campaign' | 'normalHighestRound' | 'supremeHighestRound' | 'supremeOverdriveCompleted' | 'regularOverdriveCompleted' | 'regularOverdriveSupremeBridgeAwarded' | 'firstSupremeTutorialSeen' | 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'arcadeEventsCompleted' | 'goldenEnemiesKilled' | 'arcadeMiniBossesKilled' | 'neonCircuitsCompleted' | 'overdriveWeeklyProgress' | 'weeklyOperations'>;
+  progress: Omit<LocalPlayerProgress, 'campaign' | 'normalHighestRound' | 'supremeHighestRound' | 'supremeOverdriveCompleted' | 'regularOverdriveCompleted' | 'regularOverdriveSupremeBridgeAwarded' | 'firstSupremeTutorialSeen' | 'totalPlaytimeSeconds' | 'totalCreditsSpent' | 'creditSpendByCategory' | 'initialDeploymentBriefingSeen' | 'totalFluxCoresEarned' | 'arcadeEventsCompleted' | 'goldenEnemiesKilled' | 'arcadeMiniBossesKilled' | 'neonCircuitsCompleted' | 'overdriveWeeklyProgress' | 'weeklyOperations' | 'weeklyRewardCampaigns' | 'bossesDefeated' | 'heistsCompleted' | 'skyBreachesCompleted' | 'modUpgrades' | 'currencyExchanges'>;
   settings: Omit<LocalPlayerSettings, 'lyra' | 'screenShake' | 'particles' | 'soundVolumes' | 'abilityBindings' | 'hud' | 'aim' | 'controller' | 'contextualTutorials' | 'buttonJiggle'>;
   metadata: Omit<LocalPlayerMetadata, 'saveRevision'>;
 }

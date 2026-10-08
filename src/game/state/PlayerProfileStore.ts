@@ -1,3 +1,6 @@
+import { earnWeeklyCampaignRewards, getWeeklyFeaturedRewards, getWeeklyRewardHistory } from '../progression/WeeklyRewardCampaigns.ts';
+import { deliverWeeklyFeaturedRewards } from '../progression/WeeklyRewardDelivery.ts';
+import type { WeeklyMissionEligibility } from '../progression/WeeklyMissionLibrary.ts';
 import { COSMETICS, getCosmeticPurchaseCosts } from '../../data/cosmetics';
 import { UPGRADE_DEFINITIONS, getUpgradeCost } from '../../data/upgrades';
 import type { CosmeticOption } from '../types';
@@ -309,7 +312,12 @@ export class PlayerProfileStore {
 
   static recordRoundCompletion(round: number, protocol: RunProtocolId = 'normal', encounter: CampaignEncounterKind = 'arena'): void {
     const save = PlayerProfileStore.getActiveSave();
+    PlayerProfileStore.observeWeeklyProgress(save);
     recordCampaignVictory(save.progress.campaign, RUN_PROTOCOLS[protocol].family, round, encounter);
+    if (encounter === 'boss' || encounter === 'trinity') {
+      save.progress.bossesDefeated++;
+      if (isOverdriveProtocol(protocol)) save.progress.overdriveWeeklyProgress.bossesDefeated = (save.progress.overdriveWeeklyProgress.bossesDefeated ?? 0) + 1;
+    }
     save.progress.roundsCompleted += 1;
     save.progress.highestRound = Math.max(save.progress.highestRound, round);
     if (!protocol || protocol === 'normal') {
@@ -323,7 +331,7 @@ export class PlayerProfileStore {
       save.progress.overdriveWeeklyProgress.highestRound = Math.max(save.progress.overdriveWeeklyProgress.highestRound, round);
     }
     save.profile.lastPlayedAt = new Date().toISOString();
-    PlayerProfileStore.save();
+    PlayerProfileStore.saveWeeklyProgress(save);
   }
 
   static recordEnemyDestroyed(count = 1, protocol?: RunProtocolId): void {
@@ -332,12 +340,15 @@ export class PlayerProfileStore {
 
   static recordSupremeCompletion(): void {
     const save = PlayerProfileStore.getActiveSave();
+    PlayerProfileStore.observeWeeklyProgress(save);
     recordCampaignVictory(save.progress.campaign, 'supreme', 30, 'trinity');
+    save.progress.bossesDefeated++;
+    save.progress.overdriveWeeklyProgress.bossesDefeated = (save.progress.overdriveWeeklyProgress.bossesDefeated ?? 0) + 1;
     save.progress.supremeOverdriveCompleted = true;
     save.progress.supremeHighestRound = Math.max(save.progress.supremeHighestRound, 30);
     save.progress.highestRound = Math.max(save.progress.highestRound, 30);
     save.profile.lastPlayedAt = new Date().toISOString();
-    PlayerProfileStore.save();
+    PlayerProfileStore.saveWeeklyProgress(save);
   }
 
   static hasRegularOverdriveSupremeBridgeAwarded(): boolean {
@@ -411,6 +422,7 @@ export class PlayerProfileStore {
    */
   static recordCombatProgress(enemiesDestroyed = 0, bombSitesDestroyed = 0, protocol?: RunProtocolId): void {
     const save = PlayerProfileStore.getActiveSave();
+    PlayerProfileStore.observeWeeklyProgress(save);
     const enemyCount = Math.max(0, Math.floor(enemiesDestroyed));
     const siteCount = Math.max(0, Math.floor(bombSitesDestroyed));
     save.progress.enemiesDestroyed = Math.max(
@@ -426,11 +438,12 @@ export class PlayerProfileStore {
       save.progress.overdriveWeeklyProgress.bombSitesDestroyed += siteCount;
     }
     save.profile.lastPlayedAt = new Date().toISOString();
-    PlayerProfileStore.save();
+    PlayerProfileStore.saveWeeklyProgress(save);
   }
 
   static recordArcadeMetric(event: ArcadeMetricEvent): void {
     const save = PlayerProfileStore.getActiveSave();
+    PlayerProfileStore.observeWeeklyProgress(save);
     const targets: WeeklyOperationProgressSource[] = [save.progress];
     if (isOverdriveProtocol(event.protocol)) targets.push(save.progress.overdriveWeeklyProgress);
     for (const progress of targets) {
@@ -444,13 +457,53 @@ export class PlayerProfileStore {
       || event.name === 'arcade_miniboss_killed'
       || event.name === 'neon_circuit_completed') {
       save.profile.lastPlayedAt = new Date().toISOString();
-      PlayerProfileStore.save();
+      PlayerProfileStore.saveWeeklyProgress(save);
     }
   }
 
-  static getWeeklyOperations(nowMs = Date.now()): WeeklyOperationDecksSnapshot {
+  static getWeeklyMissionEligibility(save = PlayerProfileStore.getActiveSave()): WeeklyMissionEligibility {
+    const systems: WeeklyMissionEligibility['systems'][number][] = ['combat'];
+    if (save.progress.campaign.packages.training.eligible || save.progress.highestRound > 0) systems.push('arcade', 'anomalies', 'exchange');
+    if (save.mods.cards.some(card => {
+      const definition = MOD_DEFINITIONS.find(item => item.id === card.modId);
+      return definition && card.upgradeLevel < definition.maxRank;
+    })) systems.push('mod-upgrade');
+    return { systems };
+  }
+
+  /** Observes before and after authoritative counter mutations, including UTC rollover. */
+  private static observeWeeklyProgress(save: LocalPlayerSave, nowMs = Date.now()): boolean {
+    // Reserve any previous week's earned reward before replacing its track.
+    let changed = earnWeeklyCampaignRewards(save.progress.weeklyRewardCampaigns, save.progress.weeklyOperations);
+    const resolution = resolveWeeklyOperationDecks(save.progress, save.progress.overdriveWeeklyProgress,
+      save.progress.weeklyOperations, nowMs, { eligibility: () => PlayerProfileStore.getWeeklyMissionEligibility(save), claimRewards: false });
+    save.progress.weeklyOperations = resolution.state;
+    changed = earnWeeklyCampaignRewards(save.progress.weeklyRewardCampaigns, resolution.state) || changed;
+    return resolution.stateChanged || changed;
+  }
+
+  private static saveWeeklyProgress(save: LocalPlayerSave): void {
+    PlayerProfileStore.observeWeeklyProgress(save);
+    PlayerProfileStore.save();
+  }
+
+  static recordAnomalyCompletion(id: AnomalyId, protocol: RunProtocolId): void {
     const save = PlayerProfileStore.getActiveSave();
-    const resolution = resolveWeeklyOperationDecks(save.progress, save.progress.overdriveWeeklyProgress, save.progress.weeklyOperations, nowMs);
+    PlayerProfileStore.observeWeeklyProgress(save);
+    const key = id === 'heist' ? 'heistsCompleted' : 'skyBreachesCompleted';
+    save.progress[key]++;
+    if (isOverdriveProtocol(protocol)) save.progress.overdriveWeeklyProgress[key] = (save.progress.overdriveWeeklyProgress[key] ?? 0) + 1;
+    PlayerProfileStore.saveWeeklyProgress(save);
+  }
+
+  static getWeeklyOperations(nowMs = Date.now()): WeeklyOperationDecksSnapshot {
+    const previous = PlayerProfileStore.getActiveSave();
+    // Persist earned reservations before attempting delivery. An unavailable
+    // inventory adapter or interrupted grant leaves a recoverable EARNED receipt.
+    if (PlayerProfileStore.observeWeeklyProgress(previous, nowMs)) PlayerProfileStore.save(true);
+    const save = structuredClone(previous);
+    const resolution = resolveWeeklyOperationDecks(save.progress, save.progress.overdriveWeeklyProgress, save.progress.weeklyOperations, nowMs,
+      { eligibility: () => PlayerProfileStore.getWeeklyMissionEligibility(save) });
     save.progress.weeklyOperations = resolution.state;
     for (const grant of resolution.rewardsToGrant) {
       const reward = grant.reward;
@@ -475,8 +528,29 @@ export class PlayerProfileStore {
       }
       save.profile.lastPlayedAt = new Date(nowMs).toISOString();
     }
-    if (resolution.stateChanged) PlayerProfileStore.save();
+    const delivered = deliverWeeklyFeaturedRewards(save, nowMs);
+    if (resolution.stateChanged || delivered) {
+      PlayerProfileStore.activeSave = save;
+      if (!PlayerProfileStore.save(true)) {
+        PlayerProfileStore.activeSave = previous;
+        walletState.publish(PlayerProfileStore.walletSnapshot(previous));
+      }
+    }
+    const committed = PlayerProfileStore.getActiveSave();
+    for (const deck of ['regular', 'overdrive'] as const) {
+      resolution.snapshot[deck].rewardClaimed = (deck === 'regular' ? committed.progress.weeklyOperations : committed.progress.weeklyOperations.overdrive).rewardClaimed;
+      resolution.snapshot[deck].featuredRewards = getWeeklyFeaturedRewards(committed.progress.weeklyRewardCampaigns, deck, nowMs);
+    }
     return resolution.snapshot;
+  }
+
+  static getWeeklyRewardHistory(nowMs = Date.now()) {
+    return getWeeklyRewardHistory(PlayerProfileStore.getActiveSave().progress.weeklyRewardCampaigns, nowMs);
+  }
+
+  static getWeeklyEntitlementAmount(inventoryRef: string): number {
+    return PlayerProfileStore.getActiveSave().progress.weeklyRewardCampaigns.entitlements
+      .filter(item => item.inventoryRef === inventoryRef).reduce((sum, item) => sum + item.amount, 0);
   }
 
   static getInitialDeploymentBriefingState(): { seen: boolean; highestRound: number } {
@@ -498,11 +572,12 @@ export class PlayerProfileStore {
   static addCredits(amount: number): void {
     if (!Number.isFinite(amount) || amount <= 0) return;
     const save = PlayerProfileStore.getActiveSave();
+    PlayerProfileStore.observeWeeklyProgress(save);
     const earned = Math.floor(amount);
     save.wallet.credits += earned;
     save.progress.totalCreditsEarned += earned;
     save.profile.lastPlayedAt = new Date().toISOString();
-    PlayerProfileStore.save();
+    PlayerProfileStore.saveWeeklyProgress(save);
   }
 
   static addCoreTokens(amount: number): void {
@@ -571,12 +646,14 @@ export class PlayerProfileStore {
 
   static rankUpMod(modId: string, instanceId?: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
+    PlayerProfileStore.observeWeeklyProgress(save);
     const result = rankUpMod(save.mods, modId, save.wallet.credits, save.wallet.coreTokens, instanceId);
     if (!result.ok || result.cost === undefined || result.coreTokenCost === undefined) return result;
     if (!spendCreditsAtomic(save.wallet, save.progress, result.cost, 'modRank')) return { ok: false, message: 'Not enough credits.' };
     save.wallet.coreTokens -= result.coreTokenCost;
     save.profile.lastPlayedAt = new Date().toISOString();
-    PlayerProfileStore.save();
+    save.progress.modUpgrades++;
+    PlayerProfileStore.saveWeeklyProgress(save);
     return result;
   }
 
@@ -706,6 +783,7 @@ export class PlayerProfileStore {
 
   static exchangeCurrency(source: ExchangeCurrency, target: ExchangeCurrency, amount: number) {
     const save = PlayerProfileStore.getActiveSave();
+    PlayerProfileStore.observeWeeklyProgress(save);
     const balances = {
       credits: save.wallet.credits,
       coreTokens: save.wallet.coreTokens,
@@ -723,7 +801,8 @@ export class PlayerProfileStore {
     save.wallet.fluxCores = balances.fluxCores;
     save.mods.plasmaChips = balances.plasmaChips;
     save.profile.lastPlayedAt = new Date().toISOString();
-    PlayerProfileStore.save();
+    save.progress.currencyExchanges++;
+    PlayerProfileStore.saveWeeklyProgress(save);
     return result;
   }
 
@@ -953,7 +1032,8 @@ export class PlayerProfileStore {
     } else {
       PlayerProfileStore.markNotice('LOCAL SAVE UPDATED');
     }
-    walletState.publish(PlayerProfileStore.walletSnapshot(save));
+    // Persistent transactions must not advertise a wallet that failed to commit.
+    if (result.ok || !requirePersistent) walletState.publish(PlayerProfileStore.walletSnapshot(save));
     return result.ok;
   }
 

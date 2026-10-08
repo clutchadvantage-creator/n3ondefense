@@ -1,3 +1,4 @@
+import { getWeeklyRewardEntries, renderWeeklyCurrencyRewards, renderWeeklyFeaturedRewards } from '../ui/WeeklyRewardView.ts';
 import Phaser from 'phaser';
 import mainMenuBackgroundUrl from '../../assets/mainmenubackground.png';
 import { GAME_TAGLINE, GAME_TITLE, OBJECTIVE_CONFIG } from '../config/gameplay';
@@ -516,8 +517,9 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private createOperativeBriefing(x: number, top: number, panelWidth: number, panelHeight: number, profileName: string | null): void {
-    const root = this.add.container(x + 24, top).setDepth(30).setAlpha(0);
-    const dense = panelWidth < 330 || panelHeight < 500;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const root = this.add.container(x + (reducedMotion ? 0 : 24), top).setDepth(30).setAlpha(reducedMotion ? 1 : 0).setName('weekly-operations-panel');
+    const dense = panelWidth < 350 || panelHeight < 600;
     const spacious = panelWidth >= 390 && panelHeight >= 580;
     const cut = dense ? 10 : 17;
     const halfW = panelWidth / 2;
@@ -543,9 +545,9 @@ export class MainMenuScene extends Phaser.Scene {
     const operationsHeading = this.add.text(-halfW + (dense ? 22 : 28), dense ? 49 : 57, 'WEEKLY OPERATIONS // MISSION DECK', {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 10 : spacious ? 16 : 14}px`, color: '#ff9ddd', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0, 0);
-    const sync = this.add.text(halfW - (dense ? 18 : 24), dense ? 50 : 61, 'DATA SYNC', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 8 : 11}px`, color: '#70dbe8', letterSpacing: 1
-    }).setOrigin(1, 0);
+    const sync = this.add.text(0, headerHeight - 2, 'DATA SYNC', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: '9px', color: '#70dbe8', letterSpacing: 1
+    }).setOrigin(0.5, 0);
     root.add([shadow, chassis, leftMount, rightMount, innerGlass, scanlines, topRail, magentaRail, header, headerInset, welcome, operationsHeading, sync]);
     for (const side of [-1, 1]) {
       for (const screwY of [13, panelHeight - 13]) {
@@ -559,7 +561,7 @@ export class MainMenuScene extends Phaser.Scene {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 13 : 18}px`, color: '#9fcbd8', align: 'center', lineSpacing: 8,
         wordWrap: { width: panelWidth - 70, useAdvancedWrap: true }
       }).setOrigin(0.5));
-      this.tweens.add({ targets: root, x, alpha: 1, duration: 420, ease: 'Sine.easeOut' });
+      this.tweens.add({ targets: root, x, alpha: 1, duration: reducedMotion ? 0 : 420, ease: 'Sine.easeOut' });
       return;
     }
 
@@ -571,109 +573,151 @@ export class MainMenuScene extends Phaser.Scene {
       root.add(this.add.text(0, panelHeight * 0.48, 'WEEKLY OPERATIONS\nDATA LINK UNAVAILABLE', {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 14 : 20}px`, color: '#ffaeaf', align: 'center', lineSpacing: 9, fontStyle: 'bold'
       }).setOrigin(0.5));
-      this.tweens.add({ targets: root, x, alpha: 1, duration: 420, ease: 'Sine.easeOut' });
+      this.tweens.add({ targets: root, x, alpha: 1, duration: reducedMotion ? 0 : 420, ease: 'Sine.easeOut' });
       return;
     }
 
-    const snapshot: WeeklyOperationsSnapshot = snapshots[this.operationDeck];
-    if (snapshot.complete) operationsHeading.setText('WEEKLY OPERATIONS // COMPLETE').setColor('#77ffad');
     const selectorY = dense ? 83 : 101;
     const arrowWidth = dense ? 30 : 38;
     const arrowHeight = dense ? 21 : 27;
     const arrowOffset = dense ? 82 : 112;
+    const pages = new Map<WeeklyOperationDeck, Phaser.GameObjects.Container>();
     const switchDeck = (direction: -1 | 1): boolean => {
-      this.operationDeck = direction < 0
-        ? (this.operationDeck === 'regular' ? 'overdrive' : 'regular')
-        : (this.operationDeck === 'overdrive' ? 'regular' : 'overdrive');
-      this.scene.restart();
+      this.operationDeck = this.operationDeck === 'regular' ? 'overdrive' : 'regular';
+      showDeck(direction);
       return true;
     };
-    const previousDeck = createButton(this, -arrowOffset, selectorY, '<', () => switchDeck(-1), arrowWidth, 'menu', { height: arrowHeight, fontSize: dense ? 12 : 16, horizontalPadding: 4 });
-    const nextDeck = createButton(this, arrowOffset, selectorY, '>', () => switchDeck(1), arrowWidth, 'menu', { height: arrowHeight, fontSize: dense ? 12 : 16, horizontalPadding: 4 });
+    const previousDeck = createButton(this, -arrowOffset, selectorY, '<', () => switchDeck(-1), arrowWidth, 'menu', { height: arrowHeight, fontSize: dense ? 12 : 16, horizontalPadding: 4, focusId: 'weekly-previous', focusLabel: 'Previous challenge deck' });
+    const nextDeck = createButton(this, arrowOffset, selectorY, '>', () => switchDeck(1), arrowWidth, 'menu', { height: arrowHeight, fontSize: dense ? 12 : 16, horizontalPadding: 4, focusId: 'weekly-next', focusLabel: 'Next challenge deck' });
     const deckLabel = this.add.text(0, selectorY, this.operationDeck === 'regular' ? 'REGULAR CHALLENGES' : 'OVERDRIVE CHALLENGES', {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${dense ? 8 : spacious ? 12 : 10}px`,
       color: this.operationDeck === 'regular' ? '#8cebf7' : '#ffb15c', fontStyle: 'bold', letterSpacing: dense ? 0 : 1
     }).setOrigin(0.5);
     root.add([previousDeck, nextDeck, deckLabel]);
-    const rewardHeight = dense ? 76 : 104;
+    let currencyRows = Math.max(...Object.values(snapshots).map(deck => Math.ceil(getWeeklyRewardEntries(deck.reward).length / 2)));
+    let featuredRows = Math.max(...Object.values(snapshots).map(deck => Math.ceil((deck.featuredRewards?.length ?? 0) / 2)));
+    let rewardHeight = 32 + currencyRows * 32 + (featuredRows ? featuredRows * 56 + 18 : 0);
     const footerHeight = dense ? 25 : 34;
     const objectiveTop = headerHeight + (dense ? 24 : 34);
-    const objectiveBottom = panelHeight - rewardHeight - footerHeight - (dense ? 12 : 18);
+    let objectiveBottom = panelHeight - rewardHeight - footerHeight - (dense ? 12 : 18);
     const rowGap = dense ? 7 : 11;
-    const rowHeight = (objectiveBottom - objectiveTop - rowGap * 2) / Math.max(1, snapshot.objectives.length);
     const cardWidth = panelWidth - (dense ? 30 : 42);
-    snapshot.objectives.forEach((objective, index) => {
-      const cardTop = objectiveTop + index * (rowHeight + rowGap);
-      const cardCenterY = cardTop + rowHeight * 0.5;
-      const accent = objective.complete ? 0x72ffac : 0x52eaff;
-      const card = this.add.rectangle(0, cardTop, cardWidth, rowHeight, objective.complete ? 0x0b291f : 0x091824, objective.complete ? 0.78 : 0.88)
-        .setOrigin(0.5, 0).setStrokeStyle(1, accent, objective.complete ? 0.68 : 0.34);
-      const leftEdge = this.add.rectangle(-cardWidth / 2 + 3, cardCenterY, 4, Math.max(8, rowHeight - 12), accent, objective.complete ? 0.78 : 0.42);
-      root.add([card, leftEdge]);
+    const createPage = (snapshot: WeeklyOperationsSnapshot): Phaser.GameObjects.Container => {
+      const page = this.add.container(0, 0).setName(`weekly-page-${snapshot.deck}`);
+      const rowHeight = (objectiveBottom - objectiveTop - rowGap * 2) / Math.max(1, snapshot.objectives.length);
+      const compactRow = rowHeight < 95;
+      snapshot.objectives.forEach((objective, index) => {
+        const cardTop = objectiveTop + index * (rowHeight + rowGap);
+        const cardCenterY = cardTop + rowHeight * 0.5;
+        const accent = objective.complete ? 0x72ffac : 0x52eaff;
+        const card = this.add.rectangle(0, cardTop, cardWidth, rowHeight, objective.complete ? 0x0b291f : 0x091824, objective.complete ? 0.78 : 0.88)
+          .setOrigin(0.5, 0).setStrokeStyle(1, accent, objective.complete ? 0.68 : 0.34);
+        const leftEdge = this.add.rectangle(-cardWidth / 2 + 3, cardCenterY, 4, Math.max(8, rowHeight - 12), accent, objective.complete ? 0.78 : 0.42);
+        page.add([card, leftEdge]);
 
-      const iconRadius = Math.max(10, Math.min(spacious ? 21 : 17, rowHeight * 0.25));
-      const iconX = -cardWidth / 2 + (dense ? 25 : 34);
-      const hexPoints = createCenteredHexagonPoints(iconRadius);
-      const iconHalo = this.add.circle(iconX, cardCenterY, iconRadius + (dense ? 4 : 7), accent, objective.complete ? 0.12 : 0.045);
-      const icon = this.add.polygon(iconX, cardCenterY, hexPoints, objective.complete ? 0x163c2b : 0x102838, 0.98)
-        .setStrokeStyle(2, accent, objective.complete ? 0.95 : 0.62);
-      const iconText = this.add.text(iconX, cardCenterY, objective.complete ? '\u2713' : String(index + 1).padStart(2, '0'), {
-        fontFamily: objective.complete ? 'Rajdhani, sans-serif' : 'Orbitron, sans-serif',
-        fontSize: `${dense ? 10 : objective.complete ? 20 : 11}px`, color: objective.complete ? '#c8ffdb' : '#8cebf7', fontStyle: 'bold'
-      }).setOrigin(0.5);
-      root.add([iconHalo, icon, iconText]);
-      if (objective.complete) {
-        this.tweens.add({ targets: [iconHalo, icon], alpha: { from: 0.5, to: 1 }, scale: { from: 0.94, to: 1.06 }, duration: 1200 + index * 110, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        const iconRadius = Math.max(10, Math.min(spacious ? 21 : 17, rowHeight * 0.25));
+        const iconX = -cardWidth / 2 + (dense ? 25 : 34);
+        const hexPoints = createCenteredHexagonPoints(iconRadius);
+        const iconHalo = this.add.circle(iconX, cardCenterY, iconRadius + (dense ? 4 : 7), accent, objective.complete ? 0.12 : 0.045);
+        const icon = this.add.polygon(iconX, cardCenterY, hexPoints, objective.complete ? 0x163c2b : 0x102838, 0.98)
+          .setStrokeStyle(2, accent, objective.complete ? 0.95 : 0.62);
+        const iconText = this.add.text(iconX, cardCenterY, objective.complete ? '\u2713' : objective.icon ?? String(index + 1).padStart(2, '0'), {
+          fontFamily: objective.complete ? 'Rajdhani, sans-serif' : 'Orbitron, sans-serif',
+          fontSize: `${dense ? 10 : objective.complete ? 20 : 11}px`, color: objective.complete ? '#c8ffdb' : '#8cebf7', fontStyle: 'bold'
+        }).setOrigin(0.5);
+        page.add([iconHalo, icon, iconText]);
+        if (objective.complete && !reducedMotion) {
+          this.tweens.add({ targets: [iconHalo, icon], alpha: { from: 0.5, to: 1 }, scale: { from: 0.94, to: 1.06 }, duration: 320, yoyo: true, repeat: 0, ease: 'Sine.easeInOut' });
+        }
+
+        const contentLeft = -cardWidth / 2 + (dense ? 47 : 66);
+        const contentRight = cardWidth / 2 - (dense ? 10 : 16);
+        const missionTitle = this.add.text(contentLeft, cardTop + (dense ? 6 : 11), objective.title.toUpperCase(), {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense || compactRow ? 12 : spacious ? 16 : 14}px`, color: objective.complete ? '#b6ffd1' : '#e0faff', fontStyle: 'bold', letterSpacing: dense ? 0 : 1
+        }).setOrigin(0, 0);
+        missionTitle.setScale(Math.min(1, (contentRight - contentLeft) / missionTitle.width));
+        page.add(missionTitle);
+        page.add(this.add.text(contentLeft, cardTop + (dense || compactRow ? 22 : 33), objective.description, {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense || compactRow ? 11 : 12}px`, color: '#a9d3df',
+          wordWrap: { width: contentRight - contentLeft, useAdvancedWrap: true }
+        }).setMaxLines(2));
+        page.add(this.add.text(contentLeft, cardTop + rowHeight - (dense ? 27 : 34), `${objective.current.toLocaleString()} / ${objective.target.toLocaleString()}`, {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: '11px', color: '#b4d9e3', fontStyle: 'bold'
+        }));
+        page.add(this.add.text(contentRight, cardTop + rowHeight - (dense ? 27 : 34), objective.complete ? 'COMPLETE' : 'IN PROGRESS', {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: objective.complete ? '#75ffad' : '#86b2c0', fontStyle: 'bold'
+        }).setOrigin(1, 0));
+
+        const ratio = Math.min(1, objective.current / objective.target);
+        const barY = cardTop + rowHeight - (dense ? 10 : 16);
+        const barWidth = contentRight - contentLeft;
+        const trackOuter = this.add.rectangle(contentLeft, barY, barWidth, dense ? 7 : 11, 0x02070b, 0.94).setOrigin(0, 0.5).setStrokeStyle(1, 0x315a69, 0.65);
+        const trackInner = this.add.rectangle(contentLeft + 2, barY, Math.max(2, barWidth - 4), dense ? 3 : 5, 0x102a36, 1).setOrigin(0, 0.5);
+        const fillGlow = this.add.rectangle(contentLeft + 2, barY, Math.max(2, (barWidth - 4) * ratio), dense ? 7 : 10, accent, 0.16).setOrigin(0, 0.5);
+        const fill = this.add.rectangle(contentLeft + 2, barY, Math.max(2, (barWidth - 4) * ratio), dense ? 3 : 5, accent, 0.96).setOrigin(0, 0.5);
+
+        page.add([trackOuter, trackInner, fillGlow, fill]);
+        for (let segment = 1; segment < 8; segment += 1) {
+          page.add(this.add.rectangle(contentLeft + barWidth * segment / 8, barY, 1, dense ? 5 : 9, 0x061018, 0.72));
+        }
+
+      });
+
+      const rewardTop = panelHeight - rewardHeight - footerHeight;
+      const rewardPlate = this.add.rectangle(0, rewardTop, panelWidth - (dense ? 30 : 42), rewardHeight - (dense ? 6 : 10), snapshot.complete ? 0x0d291f : 0x1b1524, 0.94)
+        .setOrigin(0.5, 0).setStrokeStyle(1, snapshot.complete ? 0x72ffac : 0xff65cf, 0.58);
+      const rewardRail = this.add.rectangle(0, rewardTop + 3, panelWidth - (dense ? 48 : 64), 3, snapshot.complete ? 0x72ffac : 0xff65cf, 0.62).setOrigin(0.5, 0);
+      page.add([rewardPlate, rewardRail]);
+      page.add(this.add.text(0, rewardTop + (dense ? 9 : 14), snapshot.complete && snapshot.rewardClaimed
+        ? `${snapshot.deck.toUpperCase()} REWARD // ACQUIRED`
+        : `${snapshot.deck.toUpperCase()} COMPLETION REWARD`, {
+        fontFamily: 'Orbitron, sans-serif', fontSize: `${dense ? 9 : 11}px`, color: snapshot.complete ? '#78ffae' : '#ff9bda', fontStyle: 'bold'
+      }).setOrigin(0.5, 0));
+      renderWeeklyCurrencyRewards(this, page, snapshot.reward, cardWidth - 14, rewardTop + 31);
+      const featured = snapshot.featuredRewards ?? [];
+      if (featured.length) {
+        const featuredTop = rewardTop + 32 + currencyRows * 32;
+        renderWeeklyFeaturedRewards(this, page, featured, cardWidth - 12, featuredTop);
+        const end = Math.min(...featured.map(entry => entry.endsAt));
+        const campaignClock = this.add.text(0, featuredTop + featuredRows * 56, '', {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#dab5ee'
+        }).setOrigin(0.5, 0).setName('weekly-campaign-countdown');
+        campaignClock.setData('endsAt', end);
+        page.add(campaignClock);
       }
-
-      const contentLeft = -cardWidth / 2 + (dense ? 47 : 66);
-      const contentRight = cardWidth / 2 - (dense ? 10 : 16);
-      root.add(this.add.text(contentLeft, cardTop + (dense ? 6 : 11), objective.title.toUpperCase(), {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 10 : spacious ? 17 : 14}px`, color: objective.complete ? '#b6ffd1' : '#e0faff', fontStyle: 'bold', letterSpacing: dense ? 0 : 1
-      }).setOrigin(0, 0).setWordWrapWidth(contentRight - contentLeft, true).setMaxLines(1));
-      root.add(this.add.text(contentRight, cardTop + (dense ? 22 : 34), objective.complete ? 'COMPLETE' : `${objective.current.toLocaleString()} / ${objective.target.toLocaleString()}`, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 9 : spacious ? 15 : 12}px`, color: objective.complete ? '#75ffad' : '#a9d3df', fontStyle: 'bold'
-      }).setOrigin(1, 0));
-
-      const ratio = Math.min(1, objective.current / objective.target);
-      const barY = cardTop + rowHeight - (dense ? 10 : 16);
-      const barWidth = contentRight - contentLeft;
-      const trackOuter = this.add.rectangle(contentLeft, barY, barWidth, dense ? 7 : 11, 0x02070b, 0.94).setOrigin(0, 0.5).setStrokeStyle(1, 0x315a69, 0.65);
-      const trackInner = this.add.rectangle(contentLeft + 2, barY, Math.max(2, barWidth - 4), dense ? 3 : 5, 0x102a36, 1).setOrigin(0, 0.5);
-      const fillGlow = this.add.rectangle(contentLeft + 2, barY, Math.max(2, (barWidth - 4) * ratio), dense ? 7 : 10, accent, 0.16).setOrigin(0, 0.5);
-      const fill = this.add.rectangle(contentLeft + 2, barY, Math.max(2, (barWidth - 4) * ratio), dense ? 3 : 5, accent, 0.96).setOrigin(0, 0.5);
-      fill.setScale(0, 1);
-      fillGlow.setScale(0, 1);
-      root.add([trackOuter, trackInner, fillGlow, fill]);
-      for (let segment = 1; segment < 8; segment += 1) {
-        root.add(this.add.rectangle(contentLeft + barWidth * segment / 8, barY, 1, dense ? 5 : 9, 0x061018, 0.72));
+      if (snapshot.complete && !reducedMotion) this.tweens.add({ targets: rewardRail, alpha: 0.2, duration: 300, yoyo: true, repeat: 0 });
+      root.add(page);
+      return page;
+    };
+    const refreshCampaignClocks = (): void => {
+      for (const page of pages.values()) {
+        const text = page.getByName('weekly-campaign-countdown') as Phaser.GameObjects.Text | null;
+        if (text) text.setText(Date.now() >= text.getData('endsAt') ? 'CAMPAIGN CLOSED // EARNED REWARDS RETAINED'
+          : formatWeeklyCountdown(text.getData('endsAt')).replace('NEW OPERATIONS IN', 'FEATURED REWARDS END IN'));
       }
-      this.tweens.add({ targets: [fill, fillGlow], scaleX: 1, duration: 520 + index * 120, delay: 160 + index * 90, ease: 'Sine.easeOut' });
-    });
-
-    const rewardTop = panelHeight - rewardHeight - footerHeight;
-    const rewardPlate = this.add.rectangle(0, rewardTop, panelWidth - (dense ? 30 : 42), rewardHeight - (dense ? 6 : 10), snapshot.complete ? 0x0d291f : 0x1b1524, 0.94)
-      .setOrigin(0.5, 0).setStrokeStyle(1, snapshot.complete ? 0x72ffac : 0xff65cf, 0.58);
-    const rewardRail = this.add.rectangle(0, rewardTop + 3, panelWidth - (dense ? 48 : 64), 3, snapshot.complete ? 0x72ffac : 0xff65cf, 0.62).setOrigin(0.5, 0);
-    root.add([rewardPlate, rewardRail]);
-    root.add(this.add.text(0, rewardTop + (dense ? 9 : 14), snapshot.complete && snapshot.rewardClaimed
-      ? `${this.operationDeck.toUpperCase()} REWARD // ACQUIRED`
-      : `${this.operationDeck.toUpperCase()} COMPLETION REWARD`, {
-      fontFamily: 'Orbitron, sans-serif', fontSize: `${dense ? 9 : spacious ? 14 : 12}px`, color: snapshot.complete ? '#78ffae' : '#ff9bda', fontStyle: 'bold'
-    }).setOrigin(0.5, 0));
-    const primaryReward = `${snapshot.reward.credits.toLocaleString()} CREDITS  +  ${snapshot.reward.coreTokens} CORE TOKEN${snapshot.reward.coreTokens === 1 ? '' : 'S'}`;
-    const bonusRewardParts = [
-      snapshot.reward.plasmaChips ? `${snapshot.reward.plasmaChips} PLASMA` : '',
-      snapshot.reward.fluxCores ? `${snapshot.reward.fluxCores} FLUX CORES` : '',
-      snapshot.reward.randomMod ? 'RANDOM MOD' : ''
-    ].filter(Boolean);
-    const rewardText = [primaryReward, bonusRewardParts.join('  +  ')].filter(Boolean).join('\n');
-    root.add(this.add.text(0, rewardTop + (dense ? 28 : 40), rewardText, {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 10 : spacious ? 16 : 14}px`, color: '#ffd287',
-      fontStyle: 'bold', letterSpacing: dense ? 0 : 1, align: 'center', lineSpacing: dense ? 0 : 2,
-      wordWrap: { width: panelWidth - (dense ? 42 : 58), useAdvancedWrap: true }
-    }).setOrigin(0.5, 0).setMaxLines(2));
-    const countdown = this.add.text(0, panelHeight - footerHeight / 2 - 2, formatWeeklyCountdown(snapshot.endsAt), {
+    };
+    const showDeck = (direction: -1 | 1 = 1): void => {
+      for (const page of pages.values()) {
+        this.tweens.killTweensOf(page); page.setVisible(false).setAlpha(1).setX(0);
+        for (const child of page.list) if (child.name === 'weekly-reward-details') (child as Phaser.GameObjects.Container).setVisible(false);
+      }
+      const snapshot = snapshots[this.operationDeck];
+      let page = pages.get(this.operationDeck);
+      if (!page) { page = createPage(snapshot); pages.set(this.operationDeck, page); }
+      page.setVisible(true);
+      sync.setText(this.operationDeck === 'regular' ? 'DATA SYNC // ALL DEPLOYMENTS' : 'OVERDRIVE + SUPREME DEPLOYMENTS');
+      deckLabel.setText(this.operationDeck === 'regular' ? 'REGULAR CHALLENGES' : 'OVERDRIVE CHALLENGES')
+        .setColor(this.operationDeck === 'regular' ? '#8cebf7' : '#ffb15c');
+      operationsHeading.setText(snapshot.complete ? 'WEEKLY OPERATIONS // COMPLETE' : 'WEEKLY OPERATIONS // MISSION DECK')
+        .setColor(snapshot.complete ? '#77ffad' : '#ff9ddd');
+      if (!reducedMotion) {
+        page.setX(direction * 10).setAlpha(0);
+        this.tweens.add({ targets: page, x: 0, alpha: 1, duration: 240, ease: 'Sine.easeOut' });
+      }
+      refreshCampaignClocks();
+    };
+    showDeck();
+    const countdown = this.add.text(0, panelHeight - footerHeight / 2 - 2, formatWeeklyCountdown(snapshots.regular.endsAt), {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${dense ? 10 : spacious ? 15 : 13}px`, color: '#9cd5df', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5);
     root.add(countdown);
@@ -681,15 +725,28 @@ export class MainMenuScene extends Phaser.Scene {
       delay: 60_000,
       loop: true,
       callback: () => {
-        if (countdown.active) countdown.setText(formatWeeklyCountdown(snapshot.endsAt));
+        if (!countdown.active) return;
+        const refreshed = SaveSystem.getWeeklyOperations();
+        if (JSON.stringify(refreshed) !== JSON.stringify(snapshots)) {
+          snapshots = refreshed;
+          currencyRows = Math.max(...Object.values(snapshots).map(deck => Math.ceil(getWeeklyRewardEntries(deck.reward).length / 2)));
+          featuredRows = Math.max(...Object.values(snapshots).map(deck => Math.ceil((deck.featuredRewards?.length ?? 0) / 2)));
+          rewardHeight = 32 + currencyRows * 32 + (featuredRows ? featuredRows * 56 + 18 : 0);
+          objectiveBottom = panelHeight - rewardHeight - footerHeight - (dense ? 12 : 18);
+          for (const page of pages.values()) { this.tweens.killTweensOf(page); page.destroy(); }
+          pages.clear();
+          showDeck();
+        }
+        countdown.setText(formatWeeklyCountdown(snapshots.regular.endsAt));
+        refreshCampaignClocks();
       }
     });
     const dataSweep = this.add.rectangle(-halfW + 20, 12, 2, panelHeight - 24, 0x8cf7ff, 0.08).setOrigin(0.5, 0);
     root.add(dataSweep);
-    this.tweens.add({ targets: dataSweep, x: halfW - 20, alpha: { from: 0.02, to: 0.14 }, duration: 3400, repeat: -1, repeatDelay: 2400, ease: 'Sine.easeInOut' });
-    this.tweens.add({ targets: sync, alpha: { from: 0.24, to: 1 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.tweens.add({ targets: topRail, alpha: { from: 0.28, to: 0.7 }, duration: 1900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.tweens.add({ targets: root, x, alpha: 1, duration: 420, ease: 'Sine.easeOut' });
+    if (!reducedMotion) this.tweens.add({ targets: dataSweep, x: halfW - 20, alpha: { from: 0.02, to: 0.14 }, duration: 3400, repeat: -1, repeatDelay: 2400, ease: 'Sine.easeInOut' });
+    if (!reducedMotion) this.tweens.add({ targets: sync, alpha: { from: 0.24, to: 1 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    if (!reducedMotion) this.tweens.add({ targets: topRail, alpha: { from: 0.28, to: 0.7 }, duration: 1900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: root, x, alpha: 1, duration: reducedMotion ? 0 : 420, ease: 'Sine.easeOut' });
   }
 
   private createTipRotator(centerX: number, panelWidth: number, availableTop: number, availableBottom: number): void {

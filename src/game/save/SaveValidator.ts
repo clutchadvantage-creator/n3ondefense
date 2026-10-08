@@ -1,3 +1,4 @@
+import { normalizeWeeklyRewardCampaignState } from '../progression/WeeklyRewardCampaigns.ts';
 import { COSMETICS } from '../../data/cosmetics.ts';
 import { UPGRADE_DEFINITIONS } from '../../data/upgrades.ts';
 import type { CosmeticOption } from '../types.ts';
@@ -190,7 +191,13 @@ const normalizeProgress = (progress: unknown): LocalPlayerProgress => {
     totalPlaytimeSeconds: toInteger(candidate.totalPlaytimeSeconds),
     initialDeploymentBriefingSeen: toBoolean(candidate.initialDeploymentBriefingSeen, false),
     overdriveWeeklyProgress: createWeeklyBaselines(isObject(candidate.overdriveWeeklyProgress) ? candidate.overdriveWeeklyProgress : undefined),
-    weeklyOperations: normalizeWeeklyOperationsState(candidate.weeklyOperations)
+    weeklyOperations: normalizeWeeklyOperationsState(candidate.weeklyOperations),
+    weeklyRewardCampaigns: normalizeWeeklyRewardCampaignState(candidate.weeklyRewardCampaigns),
+    bossesDefeated: toInteger(candidate.bossesDefeated),
+    heistsCompleted: toInteger(candidate.heistsCompleted),
+    skyBreachesCompleted: toInteger(candidate.skyBreachesCompleted),
+    modUpgrades: toInteger(candidate.modUpgrades),
+    currencyExchanges: toInteger(candidate.currencyExchanges)
   };
 };
 
@@ -350,7 +357,9 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       totalPlaytimeSeconds: 0,
       initialDeploymentBriefingSeen: false,
       overdriveWeeklyProgress: createWeeklyBaselines(),
-      weeklyOperations: createDefaultWeeklyOperationsState()
+      weeklyOperations: createDefaultWeeklyOperationsState(),
+      weeklyRewardCampaigns: normalizeWeeklyRewardCampaignState(undefined),
+      bossesDefeated: 0, heistsCompleted: 0, skyBreachesCompleted: 0, modUpgrades: 0, currencyExchanges: 0
     };
     current.garage = createDefaultGarageState();
     current.settings = {

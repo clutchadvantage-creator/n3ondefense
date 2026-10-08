@@ -22,7 +22,7 @@ export class SaveSystem {
       bombSitesDestroyed: save.progress.bombSitesDestroyed + sites };
     const overdrive = { ...save.progress.overdriveWeeklyProgress };
     if (protocol !== 'normal') { overdrive.enemiesDestroyed += enemies; overdrive.bombSitesDestroyed += sites; }
-    return resolveWeeklyOperationDecks(progress, overdrive, state ?? save.progress.weeklyOperations);
+    return resolveWeeklyOperationDecks(progress, overdrive, state ?? save.progress.weeklyOperations, Date.now(), { eligibility: () => PlayerProfileStore.getWeeklyMissionEligibility(save), claimRewards: false });
   }
 
   static getWalletSnapshot(): WalletSnapshot {
@@ -234,6 +234,9 @@ export class SaveSystem {
   static useAccessCard(id: import('../anomalies/types.ts').AnomalyId, lastStarted?: string) { return PlayerProfileStore.useAccessCard(id, lastStarted); }
   static getSupremeHighestRound(): number { return PlayerProfileStore.getActiveSave().progress.supremeHighestRound; }
   static hasCompletedSupremeOverdrive(): boolean { return PlayerProfileStore.getActiveSave().progress.supremeOverdriveCompleted; }
+  static recordAnomalyCompletion(id: import('../anomalies/types.ts').AnomalyId, protocol: RunProtocolId): void { PlayerProfileStore.recordAnomalyCompletion(id, protocol); }
+  static getWeeklyRewardHistory(nowMs = Date.now()) { return PlayerProfileStore.getWeeklyRewardHistory(nowMs); }
+  static getWeeklyEntitlementAmount(inventoryRef: string) { return PlayerProfileStore.getWeeklyEntitlementAmount(inventoryRef); }
   static getWeeklyOperations(nowMs = Date.now()) { return PlayerProfileStore.getWeeklyOperations(nowMs); }
   static getInitialDeploymentBriefingState() { return PlayerProfileStore.getInitialDeploymentBriefingState(); }
   static markInitialDeploymentBriefingSeen(): void { PlayerProfileStore.markInitialDeploymentBriefingSeen(); }

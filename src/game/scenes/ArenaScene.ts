@@ -6136,6 +6136,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private commitAnomalyLoot(result: AnomalyReturnResult): void {
+    SaveSystem.recordAnomalyCompletion(result.anomalyId, this.protocol);
     const loot = result.loot;
     SaveSystem.addCredits(loot.credits);
     SaveSystem.addCoreTokens(loot.coreTokens);
@@ -8817,7 +8818,12 @@ export class ArenaScene extends Phaser.Scene {
     const result = SaveSystem.previewWeeklyOperations(this.pendingProgressEnemyKills, this.pendingProgressBombSites,
       this.protocol, this.weeklyObservationState);
     this.weeklyObservationState = result.state;
-    this.weeklyCompletionTracker.update(result.snapshot, notice => this.hudInformation.notify(notice));
+    this.weeklyCompletionTracker.update(result.snapshot, notice => {
+      // Persist completion when announced so campaign eligibility does not
+      // wait for a later batched kill flush or a return to Main Menu.
+      if (notice.heading === 'WEEKLY DECK COMPLETE') this.flushPendingCombatProgress();
+      this.hudInformation.notify(notice);
+    });
   }
 
   private handleResize(size: Phaser.Structs.Size): void {

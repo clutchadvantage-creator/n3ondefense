@@ -1,3 +1,6 @@
+import { presentWeeklyMission, resolveWeeklyMission, selectWeeklyMissions, type MissionCategory, type WeeklyMissionEligibility } from './WeeklyMissionLibrary.ts';
+import type { WeeklyFeaturedRewardView } from './WeeklyRewardCampaigns.ts';
+
 export type WeeklyOperationStat =
   | 'enemiesDestroyed'
   | 'roundsCompleted'
@@ -7,7 +10,8 @@ export type WeeklyOperationStat =
   | 'arcadeEventsCompleted'
   | 'goldenEnemiesKilled'
   | 'arcadeMiniBossesKilled'
-  | 'neonCircuitsCompleted';
+  | 'neonCircuitsCompleted'
+  | 'bossesDefeated' | 'heistsCompleted' | 'skyBreachesCompleted' | 'modUpgrades' | 'currencyExchanges';
 
 export type WeeklyOperationDeck = 'regular' | 'overdrive';
 
@@ -18,6 +22,8 @@ export interface WeeklyOperationDefinition {
   statKey: WeeklyOperationStat;
   target: number;
   progressMode: 'rotation' | 'absolute';
+  category?: MissionCategory;
+  icon?: string;
 }
 
 export interface WeeklyOperationReward {
@@ -46,6 +52,11 @@ export interface WeeklyOperationProgressSource {
   goldenEnemiesKilled: number;
   arcadeMiniBossesKilled: number;
   neonCircuitsCompleted: number;
+  bossesDefeated?: number;
+  heistsCompleted?: number;
+  skyBreachesCompleted?: number;
+  modUpgrades?: number;
+  currencyExchanges?: number;
 }
 
 export interface WeeklyOperationTrackState {
@@ -53,6 +64,10 @@ export interface WeeklyOperationTrackState {
   startedAt: string;
   baselines: Record<WeeklyOperationStat, number>;
   rewardClaimed: boolean;
+  /** Frozen on first assignment. Missing means an existing legacy rotation. */
+  missionIds?: string[];
+  /** First observed full completion, independent of collection and weekly reset. */
+  completedAt?: number;
 }
 
 /**
@@ -76,6 +91,7 @@ export interface WeeklyOperationsSnapshot {
   reward: WeeklyOperationReward;
   complete: boolean;
   rewardClaimed: boolean;
+  featuredRewards?: WeeklyFeaturedRewardView[];
 }
 
 export interface WeeklyOperationsResolution {
@@ -117,7 +133,8 @@ const STAT_KEYS: readonly WeeklyOperationStat[] = [
   'arcadeEventsCompleted',
   'goldenEnemiesKilled',
   'arcadeMiniBossesKilled',
-  'neonCircuitsCompleted'
+  'neonCircuitsCompleted',
+  'bossesDefeated', 'heistsCompleted', 'skyBreachesCompleted', 'modUpgrades', 'currencyExchanges'
 ] as const;
 
 export const WEEKLY_OPERATION_ROTATIONS: readonly WeeklyOperationRotationDefinition[] = [
@@ -210,7 +227,12 @@ export const createWeeklyBaselines = (progress?: Partial<WeeklyOperationProgress
   arcadeEventsCompleted: finiteCounter(progress?.arcadeEventsCompleted),
   goldenEnemiesKilled: finiteCounter(progress?.goldenEnemiesKilled),
   arcadeMiniBossesKilled: finiteCounter(progress?.arcadeMiniBossesKilled),
-  neonCircuitsCompleted: finiteCounter(progress?.neonCircuitsCompleted)
+  neonCircuitsCompleted: finiteCounter(progress?.neonCircuitsCompleted),
+  bossesDefeated: finiteCounter(progress?.bossesDefeated),
+  heistsCompleted: finiteCounter(progress?.heistsCompleted),
+  skyBreachesCompleted: finiteCounter(progress?.skyBreachesCompleted),
+  modUpgrades: finiteCounter(progress?.modUpgrades),
+  currencyExchanges: finiteCounter(progress?.currencyExchanges)
 });
 
 export const createDefaultWeeklyOperationTrackState = (): WeeklyOperationTrackState => ({
@@ -236,7 +258,11 @@ const normalizeTrackState = (value: unknown): WeeklyOperationTrackState => {
     rotationId: typeof candidate.rotationId === 'string' ? candidate.rotationId : '',
     startedAt: typeof candidate.startedAt === 'string' && !Number.isNaN(Date.parse(candidate.startedAt)) ? candidate.startedAt : '',
     baselines,
-    rewardClaimed: candidate.rewardClaimed === true
+    rewardClaimed: candidate.rewardClaimed === true,
+    ...(Array.isArray(candidate.missionIds) && candidate.missionIds.length === 3 && candidate.missionIds.every(id => typeof id === 'string')
+      ? { missionIds: [...candidate.missionIds] as string[] } : {}),
+    ...(typeof candidate.completedAt === 'number' && Number.isFinite(candidate.completedAt) && candidate.completedAt > 0
+      ? { completedAt: candidate.completedAt } : {})
   };
 };
 
@@ -259,12 +285,19 @@ interface TrackResolution {
   stateChanged: boolean;
 }
 
+export interface WeeklyResolutionOptions {
+  eligibility?: WeeklyMissionEligibility | (() => WeeklyMissionEligibility);
+  /** Live observation reserves completion but leaves standard collection to Main Menu. */
+  claimRewards?: boolean;
+}
+
 const resolveTrack = (
   deck: WeeklyOperationDeck,
   rotations: readonly WeeklyOperationRotationDefinition[],
   progress: WeeklyOperationProgressSource,
   storedState: WeeklyOperationTrackState,
-  nowMs: number
+  nowMs: number,
+  options: WeeklyResolutionOptions = {}
 ): TrackResolution => {
   const slot = getWeeklyRotationSlot(nowMs);
   const rotation = rotations[((slot.index % rotations.length) + rotations.length) % rotations.length];
@@ -274,20 +307,31 @@ const resolveTrack = (
   const state: WeeklyOperationTrackState = rotated
     ? { rotationId, startedAt: new Date(slot.startsAt).toISOString(), baselines: createWeeklyBaselines(progress), rewardClaimed: false }
     : normalized;
-  const objectives = rotation.objectives.map((definition): WeeklyOperationObjectiveView => {
+  if (rotated && options.eligibility) {
+    const eligibility = typeof options.eligibility === 'function' ? options.eligibility() : options.eligibility;
+    const selected = selectWeeklyMissions(deck, slot.index, eligibility);
+    if (selected.length === 3) state.missionIds = selected;
+  }
+  const selected = state.missionIds?.map(id => resolveWeeklyMission(id, deck, slot.index));
+  const definitions = selected?.length === 3 && selected.every(item => item !== undefined)
+    ? selected as WeeklyOperationDefinition[] : rotation.objectives.map(presentWeeklyMission);
+  const objectives = definitions.map((definition): WeeklyOperationObjectiveView => {
     const rawCurrent = finiteCounter(progress[definition.statKey]);
     const baseline = finiteCounter(state.baselines[definition.statKey]);
     const current = definition.progressMode === 'absolute' ? rawCurrent : Math.max(0, rawCurrent - baseline);
     return { ...definition, current: Math.min(current, definition.target), complete: current >= definition.target };
   });
   const complete = objectives.every((objective) => objective.complete);
-  const shouldGrant = complete && !state.rewardClaimed;
+  const newlyCompleted = complete && !state.completedAt && !state.rewardClaimed;
+  // Previously claimed legacy decks cannot retroactively earn a new campaign.
+  if (newlyCompleted) state.completedAt = nowMs;
+  const shouldGrant = complete && !state.rewardClaimed && options.claimRewards !== false;
   if (shouldGrant) state.rewardClaimed = true;
   return {
     state,
     snapshot: { deck, rotationId, endsAt: slot.endsAt, objectives, reward: { ...rotation.reward }, complete, rewardClaimed: state.rewardClaimed },
     rewardToGrant: shouldGrant ? { ...rotation.reward } : null,
-    stateChanged: rotated || shouldGrant
+    stateChanged: rotated || shouldGrant || Boolean(newlyCompleted)
   };
 };
 
@@ -311,11 +355,12 @@ export const resolveWeeklyOperationDecks = (
   progress: WeeklyOperationProgressSource,
   overdriveProgress: WeeklyOperationProgressSource,
   storedState: WeeklyOperationsState,
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  options: WeeklyResolutionOptions = {}
 ): WeeklyOperationDecksResolution => {
   const normalized = normalizeWeeklyOperationsState(storedState);
-  const regular = resolveTrack('regular', WEEKLY_OPERATION_ROTATIONS, progress, normalized, nowMs);
-  const overdrive = resolveTrack('overdrive', OVERDRIVE_WEEKLY_OPERATION_ROTATIONS, overdriveProgress, normalized.overdrive, nowMs);
+  const regular = resolveTrack('regular', WEEKLY_OPERATION_ROTATIONS, progress, normalized, nowMs, options);
+  const overdrive = resolveTrack('overdrive', OVERDRIVE_WEEKLY_OPERATION_ROTATIONS, overdriveProgress, normalized.overdrive, nowMs, options);
   const rewardsToGrant: WeeklyOperationRewardGrant[] = [];
   if (regular.rewardToGrant) rewardsToGrant.push({ deck: 'regular', rotationId: regular.snapshot.rotationId, reward: regular.rewardToGrant });
   if (overdrive.rewardToGrant) rewardsToGrant.push({ deck: 'overdrive', rotationId: overdrive.snapshot.rotationId, reward: overdrive.rewardToGrant });
