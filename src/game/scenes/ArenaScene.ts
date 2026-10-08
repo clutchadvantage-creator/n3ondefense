@@ -1820,7 +1820,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.updateRelentlessSpawns(now, activeSites.length > 0);
 
-    const playerLaserImmune = !this.possession && (now < this.player.dashUntil || now < this.shieldActiveUntil);
+    const playerLaserImmune = now < this.shieldActiveUntil || (!this.possession && now < this.player.dashUntil);
     const arcadeBoss = this.arcadeController?.getBossTarget();
     if (this.gasHazard?.visualGasActive && arcadeBoss) {
       this.gasHazard.carveVisualTunnel(
@@ -2253,7 +2253,14 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePlayerMovement(now: number): void {
-    if(this.systemInfusions?.railActive||this.possession){this.player.setVelocity(0,0);return;}
+    if(this.systemInfusions?.railActive){this.player.setVelocity(0,0);return;}
+    if(this.possession){
+      this.player.setPosition(this.possession.boss.x,this.possession.boss.y).setVelocity(0,0);
+      const aim=this.getAimWorldPoint();
+      this.player.setRotation(Math.atan2(aim.y-this.player.y,aim.x-this.player.x)+Math.PI/2);
+      this.updatePlayerAbilityInput(now);
+      return;
+    }
     const aim = this.getAimWorldPoint();
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
     if (this.tutorialDirector?.awaits('combat.aimChanged')) {
@@ -2314,6 +2321,11 @@ export class ArenaScene extends Phaser.Scene {
 
     this.boostVisual.update(this.player, now);
 
+    this.updatePlayerAbilityInput(now);
+    this.updateHoloAfterimage(now);
+  }
+
+  private updatePlayerAbilityInput(now: number): void {
     if (this.playerInput.pressed('selectFence')) this.selectedAbility = 'fence';
     if (this.playerInput.pressed('selectTurret')) this.selectedAbility = 'turret';
     if (this.playerInput.pressed('selectMine')) this.selectedAbility = 'mine';
@@ -2328,7 +2340,6 @@ export class ArenaScene extends Phaser.Scene {
       this.placeFullRackSalvo(now, this.getAbilityConfig('mine'), x, y);
     }
     if (this.playerInput.pressed('shield')) this.activateShield(now);
-    this.updateHoloAfterimage(now);
   }
 
   private updateHoloAfterimage(now: number): void {
@@ -2383,11 +2394,7 @@ export class ArenaScene extends Phaser.Scene {
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
     const speed = this.player.weapon.projectileSpeed;
 
-    const crit = Math.random() < this.player.weapon.critChance;
-    const criticalMultiplier = WEAPON_BALANCE.critMultiplier * this.modRuntime.multiplier('weaponCritDamage');
-    const damage = this.player.weapon.damage * this.player.damageMultiplier
-      * this.modRuntime.supremePickupSurgeDamageMultiplier(now)
-      * (crit ? criticalMultiplier : 1);
+    const { damage, critical: crit } = this.rollPlayerWeaponDamage(now);
     const potentialDamage = ammoMode === 'scattershot'
       ? damage * TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier * TEMPORARY_AMMO_BALANCE.scattershot.pelletCount
       : damage;
@@ -2428,6 +2435,14 @@ export class ArenaScene extends Phaser.Scene {
       ammoMode === 'scattershot' ? 1.18 : ammoMode === 'grenade' ? 1.1 : 1
     );
     this.audio.playSfx('shot');
+  }
+
+  private rollPlayerWeaponDamage(now: number): { damage: number; critical: boolean } {
+    const critical = Math.random() < this.player.weapon.critChance;
+    const criticalMultiplier = WEAPON_BALANCE.critMultiplier * this.modRuntime.multiplier('weaponCritDamage');
+    const damage = this.player.weapon.damage * this.player.damageMultiplier
+      * this.modRuntime.supremePickupSurgeDamageMultiplier(now) * (critical ? criticalMultiplier : 1);
+    return { damage, critical };
   }
 
   private spawnPlayerAmmoProjectile(
@@ -3080,6 +3095,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.tutorialDirector?.awaits('combat.ability.shield')) TutorialEventBus.emit('combat.ability.shield');
 
     this.shieldActiveUntil = now + durationMs;
+    this.player.shieldUntil = this.shieldActiveUntil;
     this.shieldCooldownUntil = now + cooldownMs;
     this.player.invulnUntil = Math.max(this.player.invulnUntil, this.shieldActiveUntil);
 
@@ -3097,14 +3113,17 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     shield.update(this.player, now);
+    this.player.shieldUntil = this.shieldActiveUntil;
     this.player.invulnUntil = Math.max(this.player.invulnUntil, this.shieldActiveUntil);
   }
 
   private createShieldVisual(): void {
+    this.player.shieldUntil = this.shieldActiveUntil;
     this.shieldVisual = new OperativeShieldEffect(this, this.player);
   }
 
   private destroyShieldOrb(): void {
+    if (this.player) this.player.shieldUntil = 0;
     this.shieldVisual?.destroy();
     this.shieldVisual = null;
   }
@@ -5093,7 +5112,11 @@ export class ArenaScene extends Phaser.Scene {
         onDefeated:()=>{this.possessionRemainingMs=0;}
       },this.currentModeFamily(),{faction:'player',ownerId:'operative',showHealthUi:false,
         healthMultiplier:stage.healthMultiplier*INFUSION_TUNING.ascension.healthScale,
-        damageMultiplier:stage.damageMultiplier*INFUSION_TUNING.ascension.damageScale,particlesEnabled:this.particlesEnabled,legBlockers:this.getBlockers()});
+        controlledWeapon:{
+          fireRate:()=>this.player.fireRate * (this.bombsiteMods?.playerFireRateMultiplier(this.player.x,this.player.y)??1)
+            * INFUSION_TUNING.ascension.fireRateScale,
+          rollDamage:()=>this.rollPlayerWeaponDamage(this.time.now)
+        },particlesEnabled:this.particlesEnabled,legBlockers:this.getBlockers()});
     this.ascensionUntil=until;this.possessionRemainingMs=Math.max(0,until-this.time.now);
     this.ascensionWallCollider=this.physics.add.collider(this.possession.boss,this.walls);
     this.player.combatBody=this.possession.boss;
@@ -6559,7 +6582,7 @@ export class ArenaScene extends Phaser.Scene {
         wallPredictionSeconds: 0.06 + roundPressure * 0.17 + familyPressure * 0.035,
         wallMaximumLead: 46 + roundPressure * 18 + familyPressure * 4,
         onDamagePlayer: (amount) => {
-          if (!this.possession && (this.time.now < this.player.dashUntil || this.time.now < this.shieldActiveUntil)) return;
+          if (this.time.now < this.shieldActiveUntil || (!this.possession && this.time.now < this.player.dashUntil)) return;
           if (this.player.takeDamage(amount)) GameplayTelemetryRecorder.recordPlayerDamage('fire-trap', amount);
         },
         antiCamp: {
@@ -6951,7 +6974,7 @@ export class ArenaScene extends Phaser.Scene {
         (x, y) => this.hitWall(x, y),
         { ...callbacks, onDefeated: () => this.completeBossFight() },
         this.currentModeFamily(),
-        { particlesEnabled: this.particlesEnabled, healthMultiplier: bossHealthStageDelta, damageMultiplier: bossDamageStageDelta, legBlockers: this.wallRects }
+        { enemyShield: true, particlesEnabled: this.particlesEnabled, healthMultiplier: bossHealthStageDelta, damageMultiplier: bossDamageStageDelta, legBlockers: this.wallRects }
       );
       GameplayTelemetryRecorder.startBoss(archetype, this.bossEncounter.boss.maxHp);
       this.bossWallCollider = this.physics.add.collider(this.bossEncounter.boss, this.walls);
@@ -7010,7 +7033,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private spawnBossProjectile(spec: BossProjectileSpec,owner:'enemy'|'player'='enemy'): void {
     if(owner==='enemy')GameplayTelemetryRecorder.recordBossProjectileFired(spec.attack);
-    else GameplayTelemetryRecorder.recordProjectileFired('weapon');
+    else GameplayTelemetryRecorder.recordProjectileFired('weapon',spec.critical);
     const texture = spec.attack === 'artillery-rocket'
       ? 'projectile-missile'
       : spec.attack === 'storm-basic' || spec.attack === 'storm-super'
@@ -7031,6 +7054,7 @@ export class ArenaScene extends Phaser.Scene {
       tint: spec.color, rotation: spec.angle,
       velocityX: Math.cos(spec.angle) * spec.speed, velocityY: Math.sin(spec.angle) * spec.speed, depth: 8,
       damage: spec.damage,
+      critical: spec.critical,
       from: owner,
       lifeMs: 2600,
       trailColor: spec.color,

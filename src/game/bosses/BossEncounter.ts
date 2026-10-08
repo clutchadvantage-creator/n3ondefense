@@ -7,8 +7,12 @@ import type { Player } from '../entities/Player';
 import { SeededRandom } from '../systems/SeededRandom';
 import { BossCombatVfx } from '../vfx/BossCombatVfx.ts';
 import { Boss, type BossDamageSource } from './Boss';
+import { OperativeShieldEffect } from '../vfx/OperativeShieldEffect.ts';
 
 export interface BossEncounterOptions {
+  /** Live operative stats, evaluated only for player-controlled attacks. */
+  controlledWeapon?: { fireRate(): number; rollDamage(): { damage: number; critical: boolean } };
+  enemyShield?: boolean;
   faction?: 'enemy' | 'player';
   ownerId?: string;
   /** Instance-only health scaling used by variants such as N3ON Arcade Mini-Bosses. */
@@ -28,6 +32,7 @@ export interface BossProjectileSpec {
   angle: number;
   speed: number;
   damage: number;
+  critical?: boolean;
   color: number;
   size?: number;
   attack: BossAttackKind;
@@ -107,6 +112,9 @@ export class BossEncounter {
   private calloutUntil = 0;
   private combatActive = true;
   private control: BossControlInput | null = null;
+  private shield: OperativeShieldEffect | null = null;
+  private shieldUntil = 0;
+  private nextShieldAt = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -118,7 +126,7 @@ export class BossEncounter {
     private readonly isBlocked: (x: number, y: number) => boolean,
     private readonly callbacks: BossEncounterCallbacks,
     modeFamily: RunModeFamily,
-    options: BossEncounterOptions = {}
+    private readonly options: BossEncounterOptions = {}
   ) {
     this.archetype = archetype;
     this.random = new SeededRandom((seed ^ Math.imul(completedRound, 0x9e3779b1) ^ 0xb055cafe) >>> 0);
@@ -170,6 +178,7 @@ export class BossEncounter {
     if(this.boss.faction==='player'&&!this.control)return;
     if (!this.combatActive || this.boss.isDefeated) return;
     this.elapsedMs += Math.max(0, deltaMs);
+    this.updateEnemyShield();
     this.vfx.update(this.elapsedMs);
     this.callout.setAlpha(this.elapsedMs < this.calloutUntil ? 0.75 + Math.sin(this.elapsedMs * 0.018) * 0.2 : 0);
 
@@ -199,6 +208,7 @@ export class BossEncounter {
   }
 
   destroy(): void {
+    this.clearShield();
     this.boss.destroy();
     this.healthTrack.destroy();
     this.healthFill.destroy();
@@ -218,6 +228,7 @@ export class BossEncounter {
   cancelCombat(): void {
     if (!this.combatActive) return;
     this.combatActive = false;
+    this.clearShield();
     this.boss.setVelocity(0, 0);
     for (const strike of this.pendingStrikes) strike.marker.destroy(true);
     this.pendingStrikes.length = 0;
@@ -250,6 +261,7 @@ export class BossEncounter {
 
   /** Plays an encounter arrival without affecting the boss's active state. */
   playEntrance(): void {
+    this.updateEnemyShield();
     this.vfx.emitArrival(
       this.archetype,
       this.boss.x,
@@ -267,6 +279,36 @@ export class BossEncounter {
   private controlledMovement(speed:number):void {
     const move=this.control!.move,scale=speed/Math.max(1,Math.hypot(move.x,move.y));
     this.boss.setVelocity(move.x*scale,move.y*scale);
+  }
+
+  private primaryInterval(nativeMs: number): number {
+    return this.control && this.options.controlledWeapon
+      ? 1000 / Math.max(0.01, this.options.controlledWeapon.fireRate()) : nativeMs;
+  }
+
+  private attackDamage(nativeDamage: number): { damage: number; critical: boolean } {
+    return this.control && this.options.controlledWeapon
+      ? this.options.controlledWeapon.rollDamage()
+      : { damage: nativeDamage * this.damageMultiplier, critical: false };
+  }
+
+  private updateEnemyShield(): void {
+    if (!this.options.enemyShield || this.boss.faction !== 'enemy') return;
+    if (this.shield && this.elapsedMs >= this.shieldUntil) this.clearShield();
+    if (this.elapsedMs >= this.nextShieldAt) {
+      this.shieldUntil = this.elapsedMs + BOSS_BALANCE.shieldDurationMs;
+      this.nextShieldAt = this.shieldUntil + BOSS_BALANCE.shieldCooldownMs;
+      this.boss.shielded = true;
+      this.shield = new OperativeShieldEffect(this.scene, this.boss);
+      this.showCallout('SHIELD ACTIVE', BOSS_BALANCE.shieldDurationMs);
+    }
+    this.shield?.update(this.boss, this.elapsedMs);
+  }
+
+  private clearShield(): void {
+    this.boss.shielded = false;
+    this.shield?.destroy();
+    this.shield = null;
   }
 
   private updateArtillery(player: Pick<Player,'x'|'y'>): void {
@@ -291,7 +333,7 @@ export class BossEncounter {
     }
     this.boss.setVelocity(moveX, moveY).setRotation(aim);
     }
-    if ((!this.control||this.control.primary) && this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
+    if ((!this.control||this.control.primary) && this.elapsedMs - this.lastBasicAt >= this.primaryInterval(config.basicCooldownMs)) {
       this.lastBasicAt = this.elapsedMs;
       this.callbacks.onAttackCast('artillery-basic');
       const center = (config.rapidBurstCount - 1) * 0.5;
@@ -330,7 +372,7 @@ export class BossEncounter {
           player.x + Math.cos(angle) * distance,
           player.y + Math.sin(angle) * distance,
           config.superRadius,
-          config.superDamage * this.damageMultiplier,
+          this.attackDamage(config.superDamage).damage,
           config.superTelegraphMs + index * 110,
           0xffc96a,
           'artillery-strike'
@@ -359,15 +401,16 @@ export class BossEncounter {
       this.fire(this.mageChargeAim, config.projectileSpeed, config.projectileDamage, BOSS_ARCHETYPES['storm-mage'].color, 12, 'storm-basic');
       this.spawnMuzzleEffect(this.mageChargeAim, BOSS_ARCHETYPES['storm-mage'].color);
       this.mageChargeEndsAt = 0;
-    } else if ((!this.control||this.control.primary) && this.mageChargeEndsAt <= 0 && this.elapsedMs - this.lastBasicAt >= config.basicCooldownMs) {
+    } else if ((!this.control||this.control.primary) && this.mageChargeEndsAt <= 0 && this.elapsedMs - this.lastBasicAt >= this.primaryInterval(config.basicCooldownMs)) {
+      const chargeMs = this.control ? Math.min(config.chargeMs, this.primaryInterval(config.basicCooldownMs) * 0.35) : config.chargeMs;
       this.lastBasicAt = this.elapsedMs;
       this.mageChargeStartsAt = this.elapsedMs;
-      this.mageChargeEndsAt = this.elapsedMs + config.chargeMs;
+      this.mageChargeEndsAt = this.elapsedMs + chargeMs;
       this.mageChargeAim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
-      this.showCallout('ARC CHARGE', config.chargeMs);
+      this.showCallout('ARC CHARGE', chargeMs);
       this.vfx.emit(
         'mage-cast', this.boss.x, this.boss.y, 92, BOSS_ARCHETYPES['storm-mage'].color,
-        this.elapsedMs, config.chargeMs, this.mageChargeAim
+        this.elapsedMs, chargeMs, this.mageChargeAim
       );
     }
     if (this.mageSuperVolleyAt > 0 && this.elapsedMs >= this.mageSuperVolleyAt) {
@@ -476,13 +519,13 @@ export class BossEncounter {
 
     const pouncing = this.pounceStartsAt > 0 && this.elapsedMs >= this.pounceStartsAt && this.elapsedMs < this.pounceEndsAt;
     if ((this.control ? this.control.primary||pouncing : Phaser.Math.Distance.Between(this.boss.x, this.boss.y, player.x, player.y) <= this.boss.hazardRadius + (player.combatRadius ?? 12) + 2)
-      && this.elapsedMs - this.lastContactAt >= config.contactCooldownMs) {
+      && this.elapsedMs - this.lastContactAt >= this.primaryInterval(config.contactCooldownMs)) {
       this.lastContactAt = this.elapsedMs;
       if (!pouncing) this.callbacks.onAttackCast('brawler-contact');
       const aim=Math.atan2(player.y-this.boss.y,player.x-this.boss.x);
       const impact=this.control&&!pouncing?{x:this.boss.x+Math.cos(aim)*43,y:this.boss.y+Math.sin(aim)*43}:this.boss;
-      if(this.control)this.boss.playAction('slam',this.elapsedMs,380);
-      this.callbacks.damageArea(impact.x, impact.y, this.boss.hazardRadius + 18, config.contactDamage * this.damageMultiplier, pouncing ? 'brawler-pounce' : 'brawler-contact');
+      if(this.control)this.boss.playAction('slam',this.elapsedMs,Math.min(380,this.primaryInterval(config.contactCooldownMs)));
+      this.callbacks.damageArea(impact.x, impact.y, this.boss.hazardRadius + 18, this.attackDamage(config.contactDamage).damage, pouncing ? 'brawler-pounce' : 'brawler-contact');
       this.vfx.emit(
         'brawler-impact', this.boss.x, this.boss.y, pouncing ? 84 : 58, 0xff4e82,
         this.elapsedMs, pouncing ? 560 : 380, this.pounceAngle
@@ -497,7 +540,7 @@ export class BossEncounter {
       y: this.boss.y + Math.sin(angle) * 42,
       angle,
       speed,
-      damage: damage * this.damageMultiplier,
+      ...this.attackDamage(damage),
       color,
       size,
       attack

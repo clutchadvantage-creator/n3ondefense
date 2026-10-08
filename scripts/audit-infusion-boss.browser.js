@@ -12,6 +12,10 @@
       const {a,Turret,anchor}=globalThis.__infusionFixture,player=a.player;
       const hostile=a.bossEncounter,hostileHp=hostile?.boss.hp,playerHp=player.hp;
       check(hostile?.boss.faction==='enemy'&&a.bossFlowPhase==='combat','actual enemy boss objective active');
+      check(hostile.boss.shielded&&hostile.shield,'enemy boss shields at combat entrance');
+      check(hostile.boss.takeDamage(100)===0&&hostile.boss.hp===hostileHp,'enemy shield blocks player damage');
+      hostile.update(2500,player);
+      check(!hostile.boss.shielded&&!hostile.shield,'enemy shield expires during actual encounter update');
       const activate=()=>{
         a.clearRoundInfusionEffects();a.turrets.forEach(t=>t.destroy());a.turrets=[];
         a.projectiles.forEach(p=>a.retireProjectile(p));a.projectiles=[];

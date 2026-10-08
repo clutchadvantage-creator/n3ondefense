@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/constants.ts';
 
-interface ShieldSource { x: number; y: number }
+interface ShieldSource { x: number; y: number; combatRadius?: number; hazardRadius?: number }
 
 /** Shared gameplay shield presentation used in every combat location. */
 export class OperativeShieldEffect {
   readonly root: Phaser.GameObjects.Container;
+  private readonly field: Phaser.GameObjects.Container;
   private readonly shell: Phaser.GameObjects.Arc;
   private readonly innerField: Phaser.GameObjects.Arc;
   private readonly orbitArcs: Phaser.GameObjects.Graphics;
@@ -15,6 +16,8 @@ export class OperativeShieldEffect {
 
   constructor(scene: Phaser.Scene, source: ShieldSource) {
     this.root = scene.add.container(source.x, source.y).setDepth(12).setAlpha(0).setScale(0.18);
+    this.field = scene.add.container(0, 0);
+    this.root.add(this.field);
     const rearGlow = scene.add.ellipse(0, 5, 84, 69, COLORS.purple, 0.035)
       .setStrokeStyle(1, COLORS.purple, 0.24).setBlendMode(Phaser.BlendModes.ADD);
     this.innerField = scene.add.circle(0, 0, 36, COLORS.cyan, 0.065)
@@ -56,7 +59,8 @@ export class OperativeShieldEffect {
     this.crackleB = scene.add.graphics();
     drawCrackle(this.crackleA, 0.12, 0xffffff);
     drawCrackle(this.crackleB, 0.48, COLORS.cyan);
-    this.root.add([rearGlow, this.innerField, this.shell, lensGlow, this.orbitArcs, this.crackleA, this.crackleB]);
+    this.field.add([rearGlow, this.innerField, this.shell, lensGlow, this.orbitArcs, this.crackleA, this.crackleB]);
+    this.field.setScale(((source.combatRadius ?? source.hazardRadius ?? 12) + 28) / 40);
 
     this.tweens.push(
       scene.tweens.add({ targets: this.root, alpha: 1, scaleX: 1, scaleY: 1, duration: 260, ease: 'Back.Out' }),
@@ -69,6 +73,7 @@ export class OperativeShieldEffect {
 
   update(source: ShieldSource, now: number): void {
     this.root.setPosition(source.x, source.y);
+    this.field.setScale(((source.combatRadius ?? source.hazardRadius ?? 12) + 28) / 40);
     this.orbitArcs.setRotation(now * 0.0011);
     this.crackleA.setRotation(-now * 0.0018).setAlpha(0.42 + Math.sin(now * 0.031) * 0.24);
     this.crackleB.setRotation(now * 0.0023).setAlpha(0.36 + Math.sin(now * 0.043 + 1.7) * 0.2);

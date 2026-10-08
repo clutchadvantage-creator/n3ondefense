@@ -603,9 +603,54 @@ export class SkyBreachScene extends AnomalyCombatScene {
     this.announce('ARENA RETURN LINK OPEN','ENTER THE PORTAL AND INTERACT TO BANK YOUR HAUL');
   }
   private recoveryPickups():void {
-    for(const [i,kind] of (['health','energy'] as PickupType[]).entries())this.pickups.push({kind,
-      root:this.createGameplayPickup(kind,this.pickupBounds.w*(.42+i*.16),this.pickupBounds.h*.56),
-      expiresAt:this.time.now+22000,source:'enemy'});
+    this.replenishResourcePickups();
+  }
+
+  protected override createSupportPickups(): void {
+    this.replenishResourcePickups();
+  }
+
+  protected override createGameplayPickup(type: PickupType, x: number, y: number): Phaser.GameObjects.Container {
+    const root = super.createGameplayPickup(type, x, y);
+    // Flight supplies scroll with the world instead of bouncing off Arena bounds.
+    if (type === 'health' || type === 'energy') this.pickupMotion.delete(root);
+    return root;
+  }
+
+  protected override updatePickups(now: number, dt: number): void {
+    if (this.returning) return;
+    for (let i = this.pickups.length - 1; i >= 0; i--) {
+      const pickup = this.pickups[i];
+      if (pickup.kind !== 'health' && pickup.kind !== 'energy') continue;
+      pickup.root.y += Math.max(0, dt) * 49;
+      if (pickup.root.y <= this.pickupBounds.y + this.pickupBounds.h + 32) continue;
+      pickup.root.destroy(true);
+      this.pickups.splice(i, 1);
+    }
+    super.updatePickups(now, dt);
+    this.replenishResourcePickups();
+  }
+
+  private replenishResourcePickups(): void {
+    if (this.returning) return;
+    for (const [typeIndex, kind] of (['health', 'energy'] as const).entries()) {
+      let count = 0;
+      // Enemy drops count toward supply too; keep the total bounded during long runs.
+      for (let i = 0; i < this.pickups.length;) {
+        const pickup = this.pickups[i];
+        if (pickup.kind !== kind) { i++; continue; }
+        if (pickup.root.active && count < 2) { count++; i++; continue; }
+        pickup.root.destroy(true);
+        this.pickups.splice(i, 1);
+      }
+      while (count < 2) {
+        const x = this.pickupBounds.x + this.pickupBounds.w * (0.16 + typeIndex * 0.4 + Math.random() * 0.28);
+        const y = this.pickupBounds.y + 190 + count * 100;
+        this.pickups.push({ kind, root: this.createGameplayPickup(kind, x, y),
+          expiresAt: Number.POSITIVE_INFINITY, source: 'enemy' });
+        count++;
+      }
+    }
   }
   private retireFlights():void {
     for(const [enemy,f]of this.flights){f.warning.destroy();for(const d of f.decorations)d.destroy();enemy.destroy();const i=this.enemies.indexOf(enemy);if(i>=0)this.enemies.splice(i,1);}

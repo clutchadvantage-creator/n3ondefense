@@ -54,10 +54,10 @@ const makeDifficulty = (index: number): ModeBalanceDefinition => ({
   enemySpeedMultiplier: 1.04 + index * 0.01,
   hazardDamageMultiplier: 1.25 + index * 0.05,
   enemyDefuseTimeMultiplier: 0.90 - index * 0.018,
-  spawnCadenceMultiplier: 0.90 - index * 0.018,
+  spawnCadenceMultiplier: (0.90 - index * 0.018) * 0.9,
   // Deliberately modest: cadence and elite weighting create most of the
   // pressure while this bounded cap increase preserves late-game performance.
-  activePressureMultiplier: 1.06 + index * 0.02,
+  activePressureMultiplier: (1.06 + index * 0.02) * 1.12,
   elitePressureMultiplier: 1.15 + index * 0.06,
   bossHealthMultiplier: 1.40 + index * 0.095,
   bossDamageMultiplier: 1.22 + index * 0.05,

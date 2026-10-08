@@ -20,6 +20,7 @@ import {
 import { RUN_PROTOCOLS } from '../src/game/mods/modBalance.ts';
 import { protocolStart } from '../src/game/mods/ModRules.ts';
 import { nextPickupBuffStack, resourcePickupCap } from '../src/game/player/OverdriveRules.ts';
+import { SUPREME_STAGE_DEFINITIONS } from '../src/game/progression/SupremeProgression.ts';
 
 const arenaSource = readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
 
@@ -36,11 +37,14 @@ test('mode tuning is centralized and preserves Overdrive as the combat baseline'
     },
     { health: 0.76, damage: 0.72, hazard: 0.7, defuse: 1.32, cadence: 0.92, bossHealth: 0.76, bossDamage: 0.78 }
   );
-  for (const key of ['enemyHealthMultiplier', 'enemyDamageMultiplier', 'hazardDamageMultiplier', 'enemyDefuseTimeMultiplier', 'spawnCadenceMultiplier', 'bossHealthMultiplier', 'bossDamageMultiplier']) {
+  for (const key of ['enemyHealthMultiplier', 'enemyDamageMultiplier', 'hazardDamageMultiplier', 'enemyDefuseTimeMultiplier', 'bossHealthMultiplier', 'bossDamageMultiplier']) {
     assert.equal(MODE_BALANCE.overdrive[key], 1, `${key} should use the established Overdrive baseline`);
   }
   assert.equal(MODE_BALANCE.normal.enemySpeedMultiplier, 1);
   assert.equal(MODE_BALANCE.overdrive.enemySpeedMultiplier, 1);
+  assert.equal(MODE_BALANCE.normal.activePressureMultiplier, 1);
+  assert.equal(MODE_BALANCE.overdrive.spawnCadenceMultiplier, 0.9);
+  assert.equal(MODE_BALANCE.overdrive.activePressureMultiplier, 1.12);
 });
 
 test('same-round enemy stats, hazard damage, defuse duration, and cadence differ directly by mode', () => {
@@ -63,9 +67,20 @@ test('same-round enemy stats, hazard damage, defuse duration, and cadence differ
 
   const profile = getSpawnProfile(round, 2);
   assert.equal(getModeSpawnCadence(profile.defenseCadenceMs, 'normal'), profile.defenseCadenceMs * 0.92);
-  assert.equal(getModeSpawnCadence(profile.defenseCadenceMs, 'overdrive'), profile.defenseCadenceMs);
+  assert.equal(getModeSpawnCadence(profile.defenseCadenceMs, 'overdrive'), profile.defenseCadenceMs * 0.9);
   assert.equal(profile.activeCountCap, getSpawnProfile(round, 2).activeCountCap);
   assert.equal(profile.activeWeightCap, getSpawnProfile(round, 2).activeWeightCap);
+});
+
+test('every Supreme stage receives the same modest pressure increase while Normal stays fixed', () => {
+  for (const [index, stage] of SUPREME_STAGE_DEFINITIONS.entries()) {
+    assert.ok(Math.abs(stage.difficulty.spawnCadenceMultiplier / (0.90-index*0.018) - 0.9) < 1e-12);
+    assert.ok(Math.abs(stage.difficulty.activePressureMultiplier / (1.06+index*0.02) - 1.12) < 1e-12);
+  }
+  assert.equal(MODE_BALANCE.normal.spawnCadenceMultiplier, 0.92);
+  assert.equal(MODE_BALANCE.normal.activePressureMultiplier, 1);
+  assert.equal(MODE_BALANCE.supreme.spawnCadenceMultiplier, SUPREME_STAGE_DEFINITIONS[0].difficulty.spawnCadenceMultiplier);
+  assert.equal(MODE_BALANCE.supreme.activePressureMultiplier, SUPREME_STAGE_DEFINITIONS[0].difficulty.activePressureMultiplier);
 });
 
 test('same boss keeps its schedule and attack scaling while Normal is more forgiving', () => {

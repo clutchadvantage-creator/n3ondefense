@@ -76,6 +76,7 @@ export class SupremeFinaleController {
       modeFamily,
       {
         showHealthUi: false,
+        enemyShield: true,
         particlesEnabled: options.particlesEnabled,
         legBlockers: options.legBlockers,
         healthMultiplier: options.healthMultiplier,

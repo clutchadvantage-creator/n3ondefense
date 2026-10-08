@@ -15,6 +15,8 @@ export const BOSS_BALANCE = {
   healthPerTier: 1900,
   maximumHealth: 22_400,
   hazardDamageMultiplier: 0.35,
+  shieldDurationMs: 2500,
+  shieldCooldownMs: 35000,
   damageMultiplierPerTier: 0.08,
   maximumDamageMultiplier: 1.48,
   creditDropChunks: 18,

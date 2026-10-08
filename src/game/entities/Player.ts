@@ -32,6 +32,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   dashUntil = 0;
   /** Encounter-owned movement immunity; never extends ordinary hit/Shield timers. */
   railInvulnerable = false;
+  /** Ability shield protects the active combat body; ordinary hit iframes do not. */
+  shieldUntil = 0;
   /** Temporary player combat body. The operative identity and HP stay intact. */
   combatBody: { x:number; y:number; hazardRadius:number; takeDamage(amount:number):number } | null = null;
   get combatRadius():number { return this.combatBody?.hazardRadius??12; }
@@ -152,7 +154,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   takeDamage(amount: number): boolean {
-    if(this.railInvulnerable)return false;
+    if(this.railInvulnerable || this.scene.time.now < this.shieldUntil)return false;
     if(this.combatBody)return this.combatBody.takeDamage(amount)>0;
     const now = this.scene.time.now;
     if (now < this.invulnUntil) return false;

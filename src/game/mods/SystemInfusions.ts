@@ -6,7 +6,7 @@ export const SYSTEM_INFUSION_TUNING = {
   relay: { cooldownMs: 5000, landingRadius: 44 },
   grid: { range: 540, maxLinks: 16 },
   designator: { durationMs: 4000, cooldownMs: 8000 },
-  ascension: { turrets: 3, durationMs: 60000, cooldownMs: 45000, healthScale: 1, damageScale: 1.4, ejectProtectionMs: 250 },
+  ascension: { turrets: 3, durationMs: 60000, cooldownMs: 45000, healthScale: 1, fireRateScale: 0.75, ejectProtectionMs: 250 },
   cascade: { range: 350, delayMs: 140, maxMines: 24 },
   redeploy: { range: 500, cooldownMs: 4000, selectionMs: 8000 },
   power: { range: 450, maxDevices: 4, energyPerDevicePerSecond: 6, turretRate: 1.5, fenceRate: 1.35, pulseMs: 100 },

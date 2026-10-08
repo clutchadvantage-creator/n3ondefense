@@ -22,6 +22,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   readonly maxHp: number;
   readonly hazardRadius = 34;
   hp: number;
+  shielded = false;
   private defeated = false;
   private readonly visualRoot: Phaser.GameObjects.Container;
   private readonly legRig: BossLegRig;
@@ -121,7 +122,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
 
   takeDamage(amount: number, source: BossDamageSource = 'weapon', echo?: EchoDamageStamp): number {
     if (source === 'echo') amount = authoritativeEchoDamage(amount, echo);
-    if (this.defeated || !Number.isFinite(amount) || amount <= 0) return 0;
+    if (this.defeated || this.shielded || !Number.isFinite(amount) || amount <= 0) return 0;
     const applied = Math.min(this.hp, amount * (source === 'hazard' && this.faction==='enemy' ? BOSS_BALANCE.hazardDamageMultiplier : 1));
     if (applied <= 0) return 0;
     this.hp = Math.max(0, this.hp - applied);

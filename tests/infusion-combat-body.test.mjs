@@ -36,3 +36,18 @@ test('controlled bosses receive full physical hazard damage without changing hos
  let defeats=0;controlled.onDefeated=()=>defeats++;
  controlled.takeDamage(1000);controlled.takeDamage(1000);assert.equal(defeats,1);assert.equal(controlled.hp,0);
 });
+
+test('operative ability shield protects the possessed chassis and expires without changing its HP or hit iframes',()=>{
+ const p=player(),b=boss('player');p.combatBody=b;p.shieldUntil=1500;
+ assert.equal(p.takeDamage(40),false);assert.equal(b.hp,200);assert.equal(p.hp,100);
+ p.scene.time.now=1500;
+ assert.equal(p.takeDamage(40),true);assert.equal(b.hp,160);assert.equal(p.invulnUntil,0);
+ p.combatBody=null;p.shieldUntil=2000;
+ assert.equal(p.takeDamage(40),false,'shield survives ejection');assert.equal(p.hp,100);
+});
+
+test('enemy boss shield rejects every damage owner, then normal damage resumes',()=>{
+ const b=boss('enemy');b.shielded=true;
+ for(const source of ['weapon','turret','mine','fence','hazard'])assert.equal(b.takeDamage(40,source),0);
+ assert.equal(b.hp,200);b.shielded=false;assert.equal(b.takeDamage(40),40);assert.equal(b.hp,160);
+});

@@ -25,6 +25,8 @@ Aim with the normal cursor/reticle and use the dedicated **Infusion** control: *
 
 Hazard Hijack currently supports **arena security lasers**. Gas and fire retain their existing rules. Suppressed lasers and boss encounters cannot be activated through this interaction. Expiry and round cleanup restore normal laser ownership without altering the hazard schedule.
 
+Ascension weapons use the operative's current damage, critical stats and active damage bonuses. Primary attacks run at 75% of the current operative fire rate, including Rapid Fire and field bonuses. Mines, fences, turrets and shield keep their normal controls, energy costs and cooldowns; Boost triggers the chassis secondary attack. Shield protects the active chassis and scales to its size. See [combat polish](combat-balance-polish.md) for balance changes and validation.
+
 New installations cost 180 Plasma Chips. Existing reconfiguration/removal costs remain 90/60. The terminal confirms the exact transaction cost before charging.
 
 ## Runtime and validation
