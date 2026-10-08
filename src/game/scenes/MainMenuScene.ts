@@ -1,7 +1,7 @@
 import { attachWeeklyOperationsTray } from '../ui/WeeklyOperationsTray.ts';
 import { getWeeklyRewardColumns, WEEKLY_CURRENCY_ROW_HEIGHT, getWeeklyRewardEntries, renderWeeklyCurrencyRewards, renderWeeklyFeaturedRewards } from '../ui/WeeklyRewardView.ts';
 import Phaser from 'phaser';
-import mainMenuBackgroundUrl from '../../assets/mainmenubackground.png';
+import mainMenuBackgroundUrl from '../../assets/newmainmenubackgrd.png';
 import { GAME_TAGLINE, GAME_TITLE, OBJECTIVE_CONFIG } from '../config/gameplay';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
