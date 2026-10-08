@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { SeededRandom } from '../../systems/SeededRandom.ts';
+import { CITY_BUILDINGS, CITY_AA_BUILDING, CITY_ROOF_ANCHOR, CITY_TEXTURE_WIDTH, cityTextureHeight,
+  drawCityBuilding, drawCityShadow } from './SkyBreachCityArt.ts';
 
 type Context = CanvasRenderingContext2D;
 const palette = { edge: '#627e91', recess: '#050d18', light: '#c5e4eb' };
@@ -164,31 +166,14 @@ export function ensureSkyArt(scene: Phaser.Scene): void {
     polygon(c,[-27,-15,-19,-29,19,-29,27,-15,24,18,-24,18],metal(c,-27,54));
     vent(c,-17,-16,34,6);lamp(c,-22,10,9,4,'#ffbe67');lamp(c,13,10,9,4,'#ffbe67');
   });
-  bake('sky-aa-platform',180,220,c=>{
-    polygon(c,[24,12,156,12,174,34,174,191,149,212,29,212,6,186,6,36],metal(c,6,168));
-    polygon(c,[29,29,150,29,155,181,139,196,36,196,22,179], '#102335');
-    c.strokeStyle='#637e8d';c.lineWidth=3;c.beginPath();c.arc(90,110,50,0,Math.PI*2);c.stroke();
-    for(const x of [13,159])for(let y=45;y<184;y+=22)lamp(c,x,y,7,8,'#dc973f');
-    vent(c,56,37,68,5);vent(c,56,166,68,5);
-    c.strokeStyle='#7eacb7';c.setLineDash([9,7]);c.strokeRect(37,67,106,86);
-  });
-  bake('sky-superstructure',320,640,c=>{
-    polygon(c,[20,40,256,40,300,90,300,580,251,623,16,623,3,570,3,90],metal(c,0,300,'#334b5d'));
-    for(let row=0;row<4;row++){
-      const y=74+row*127;
-      polygon(c,[30,y,240,y,271,y+24,271,y+102,31,y+102], '#102234');
-      vent(c,49,y+18,91,14);vent(c,159,y+18,73,14);
-      for(let j=0;j<5;j++)lamp(c,47+j*39,y+88,15,3,row%2?'#578997':'#a97743');
-    }
-    // Elevated service bridges, cabling and antenna masts.
-    c.strokeStyle='#63808c';c.lineWidth=3;
-    for(const x of [39,232]){c.beginPath();c.moveTo(x,92);c.lineTo(x,0);c.stroke();lamp(c,x-3,9,6,6,'#eb8863');}
-    for(const y of [182,434]){
-      c.fillStyle='#334c5d';c.fillRect(12,y,290,17);
-      c.strokeStyle='#7b929a';for(let x=18;x<293;x+=17)c.strokeRect(x,y-4,12,25);
-    }
-    c.strokeStyle='#08111f';c.lineWidth=5;c.strokeRect(15,56,271,553);
-  });
+  for(const [index,building] of [...CITY_BUILDINGS,CITY_AA_BUILDING].entries()) {
+    const key=index===CITY_BUILDINGS.length?'aa':String(index);
+    for(const side of ['left','right'])bake(`sky-city-${key}-${side}`,CITY_TEXTURE_WIDTH,cityTextureHeight(building),c=>{
+      if(side==='right'){c.translate(CITY_TEXTURE_WIDTH,0);c.scale(-1,1);}
+      drawCityBuilding(c,building,index,side==='right');
+    });
+    bake(`sky-city-shadow-${key}`,520,340,c=>drawCityShadow(c,building));
+  }
   bake('sky-rotor',64,64,c=>{
     c.translate(32,32);c.strokeStyle='#91a6b3';c.lineWidth=2;c.beginPath();c.arc(0,0,29,0,Math.PI*2);c.stroke();
     for(let i=0;i<4;i++){c.rotate(Math.PI/2);polygon(c,[-3,-3,2,-26,8,-23,6,3],metal(c,-3,12));}
@@ -215,63 +200,67 @@ export function ensureSkyArt(scene: Phaser.Scene): void {
     }
   });
   bake('sky-industrial',512,1024,c=>{
-    c.fillStyle='#081320';c.fillRect(0,0,512,1024);
-    const rng=new SeededRandom(5129);
+    c.fillStyle='#091725';c.fillRect(0,0,512,1024);
     // A continuous 156px street matches groundLaneX and the three-vehicle patrol width.
-    c.fillStyle='#101d2b';c.fillRect(178,0,156,1024);
-    for(const x of [182,330])lamp(c,x,0,2,1024,'#347a8c');
+    c.fillStyle='#142333';c.fillRect(178,0,156,1024);
+    for(const x of [169,341]){c.fillStyle='#263e4c';c.fillRect(x,0,2,1024);}
+    for(const x of [182,330]){c.fillStyle='#416475';c.fillRect(x,0,1,1024);}
     for(let row=0;row<4;row++) {
       const y=row*256;
-      c.fillStyle='#152738';c.fillRect(0,y+207,512,49);
-      for(const x of [187,305])for(let j=0;j<4;j++){c.fillStyle='#52717a';c.fillRect(x,y+213+j*9,19,4);}
-      for(const side of [0,1]) {
-        const x=side?350:10,w=150,h=178;
-        c.fillStyle='#020914';c.fillRect(x+8,y+17,w,h);
-        c.fillStyle=row%2?'#213448':'#192c3d';c.fillRect(x,y+8,w,h);
-        c.strokeStyle='#436073';c.lineWidth=3;c.strokeRect(x,y+8,w,h);
-        const color=(row+side)%2?'#3bacae':'#a25791';
-        lamp(c,x+4,y+12,w-8,2,color);lamp(c,x+4,y+h+1,w-8,2,color);
-        for(let j=0;j<8;j++)lamp(c,x+6+j*18,y+177,8,3,'#88adbc');
-        vent(c,x+12,y+22,42,11);vent(c,x+92,y+25,35,8);
-        c.strokeStyle='#668192';c.lineWidth=2;c.beginPath();c.arc(x+81,y+114,34,0,Math.PI*2);c.stroke();
-        c.fillStyle='#819d9e';c.font='bold 23px monospace';c.textAlign='center';c.fillText('H',x+81,y+122);
-        c.strokeStyle='#346777';c.strokeRect(x+5,y+17,140,143);
-        for(let k=0;k<4;k++){const px=x+12+rng.next()*120;lamp(c,px,y+151,5,6,'#de9b54');}
-        c.strokeStyle='#8c9ba6';c.beginPath();c.moveTo(x+25,y+108);c.lineTo(x+25,y+64);c.lineTo(x+18,y+79);c.stroke();
-        lamp(c,x+22,y+64,6,4,'#f59581');
-        c.fillStyle='#96aeba';c.font='8px monospace';c.fillText(`N3 // ${row}${side}`,x+76,y+198);
+      c.fillStyle='#132738';c.fillRect(0,y+207,512,49);
+      for(const x of [187,305])for(let j=0;j<4;j++){c.fillStyle='#395665';c.fillRect(x,y+213+j*9,19,4);}
+      // Street-level service yards and ducts; all elevated architecture is separate geometry.
+      for(const x of [30,365]) {
+        c.strokeStyle='#1c3343';c.lineWidth=1;c.strokeRect(x,y+32,113,143);
+        for(let slot=0;slot<5;slot++){c.beginPath();c.moveTo(x+12,y+47+slot*23);c.lineTo(x+37,y+47+slot*23);c.stroke();}
+        c.fillStyle='#101f2d';c.fillRect(x+61,y+66,34,77);
+        for(let i=0;i<6;i++){c.fillStyle='#30434c';c.fillRect(x+65,y+71+i*11,26,2);}
       }
+      for(const x of [174,336]) {lamp(c,x,y+70,2,5,'#5797a6');lamp(c,x,y+183,2,5,'#ad8155');}
+      // Tiny traffic/service lights establish that the roads lie far below the aircraft.
+      for(const x of [215,287]){c.fillStyle='#263b4a';c.fillRect(x,y+92,8,15);lamp(c,x,y+91,2,2,'#a5bdc2');lamp(c,x+6,y+107,2,2,'#b47364');}
     }
-    c.strokeStyle='#66878e';c.setLineDash([16,23]);c.beginPath();c.moveTo(256,0);c.lineTo(256,1024);c.stroke();
-  });
-  bake('sky-platform',280,380,c=>{
-    polygon(c,[30,12,247,12,268,38,268,334,240,369,37,369,12,340,12,39],metal(c,10,260));
-    polygon(c,[41,34,235,34,244,326,224,345,50,345,32,325], '#101d2d');
-    for(const x of [47,212])for(let y=60;y<330;y+=50)lamp(c,x,y,5,16,'#b2824f');
-    c.strokeStyle='#486272';c.lineWidth=2;c.strokeRect(77,68,121,229);
-    vent(c,90,90,95,16);vent(c,90,225,95,12);
+    c.strokeStyle='#45606a';c.setLineDash([16,23]);c.beginPath();c.moveTo(256,0);c.lineTo(256,1024);c.stroke();
   });
 }
 
+interface CityStructure {
+  image: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image;
+  baseY: number; x: number; elevation: number; speed: number; period: number; band: number;
+}
 export class SkyBreachWorld {
   private readonly layers: Phaser.GameObjects.TileSprite[];
-  private readonly platforms: Phaser.GameObjects.Image[];
-  private readonly structures: Phaser.GameObjects.Image[];
+  private readonly structures: CityStructure[] = [];
   private readonly edgeClouds: Phaser.GameObjects.TileSprite;
   private scroll = 0;
   constructor(scene:Phaser.Scene, width:number,height:number) {
     ensureSkyArt(scene);
     this.layers=[
       scene.add.tileSprite(width/2,height/2,width,height,'sky-industrial').setDepth(-20).setAlpha(.8),
-      scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-18).setAlpha(.8),
-      scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-12).setAlpha(.4).setTileScale(1.7)
+      scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-17).setAlpha(.28),
+      scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-12).setAlpha(.2).setTileScale(1.7)
     ];
-    this.structures=[-1,1].flatMap(side=>Array.from({length:4},(_,i)=>scene.add.image(
-      side<0?-42:width+42,i*height/3-180,'sky-superstructure')
-      .setDisplaySize(240,480).setFlipX(side>0).setAlpha(.76).setDepth(-17)));
-    this.edgeClouds=scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-11).setAlpha(.18).setTileScale(2.3);
-    this.platforms=[.13,.86,.32].map((x,i)=>scene.add.image(width*x,-i*height*.48,'sky-platform')
-      .setDisplaySize(100,136).setAlpha(.45).setDepth(-16));
+    const random=new SeededRandom(0xc17ab0);
+    const bands=[{inset:.205,scale:.53,spacing:225},{inset:.12,scale:.77,spacing:270},{inset:.025,scale:1.02,spacing:340}];
+    for(const [band,layer] of bands.entries())for(const side of [-1,1]) {
+      const count=Math.ceil((height+1400)/layer.spacing),period=count*layer.spacing;
+      for(let i=0;i<count;i++) {
+        const variant=(i*5+band*2+(side>0?3:0))%CITY_BUILDINGS.length,building=CITY_BUILDINGS[variant];
+        const scale=layer.scale*(.91+random.next()*.18),elevation=building.height*scale;
+        const x=(side<0?width*layer.inset:width*(1-layer.inset))+(random.next()-.5)*38;
+        const image=scene.add.image(x,0,`sky-city-${variant}-${side<0?'left':'right'}`)
+          .setOrigin(CITY_ROOF_ANCHOR.x/CITY_TEXTURE_WIDTH,CITY_ROOF_ANCHOR.y/cityTextureHeight(building))
+          .setScale(scale).setTint(band===0?0x718b9f:band===1?0xb3c8d6:0xffffff);
+        const shadow=scene.add.image(x,0,`sky-city-shadow-${variant}`).setOrigin((side>0?320:200)/520,70/340)
+          .setScale(scale).setFlipX(side>0).setDepth(-18.8).setAlpha(.6);
+        // Buildings in one elevation band share a scroll rate so city blocks cannot
+        // bunch up over time. Taller, nearer bands have progressively stronger parallax.
+        this.structures.push({image,shadow,x,baseY:i*layer.spacing-650+(side>0?135:0)+random.next()*55,
+          elevation,speed:14+layer.scale*42+band*3,period,band});
+      }
+    }
+    this.edgeClouds=scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-11).setAlpha(.12).setTileScale(2.3);
+    this.update(0,height);
   }
   resize(width:number,height:number):void {
     for(const layer of this.layers)layer.setSize(width,height);
@@ -286,8 +275,15 @@ export class SkyBreachWorld {
   update(dt:number,height:number):void {
     this.scroll+=dt;
     this.layers.forEach((layer,i)=>{layer.tilePositionY-=dt*(14+i*20);layer.tilePositionX=Math.sin(this.scroll/30+i)*30;});
-    this.platforms.forEach(p=>{p.y+=dt*49;if(p.y>height+160)p.y=-200;});
-    this.structures.forEach(p=>{p.y+=dt*36;if(p.y>height+300)p.y-=height+640;});
+    for(const structure of this.structures) {
+      structure.baseY+=Math.max(0,dt)*structure.speed;
+      // Recycle only after the entire roof, mast and wall have left the viewport.
+      const maximum=height+structure.elevation+210;
+      while(structure.baseY>maximum)structure.baseY-=structure.period;
+      structure.image.setPosition(structure.x,structure.baseY-structure.elevation)
+        .setDepth(-18+structure.band*2+structure.baseY/100000);
+      structure.shadow.setPosition(structure.x,structure.baseY);
+    }
     this.edgeClouds.tilePositionY-=dt*64;
   }
 }

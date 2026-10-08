@@ -17,7 +17,7 @@
   for(const e of [...actors,...drones])e.hp=e.stats.hp=1e9;
   const tank=actors[3],aa=actors[4];
   check(tank.depth<sky.world.layers[1].depth&&aa.depth>sky.world.layers[2].depth,'tank below cloud decks; AA above on existing platform');
-  check(sky.flights.get(aa).decorations[0].texture.key==='sky-aa-platform'&&sky.flights.get(tank).decorations.length===0,'AA retains elevated platform; tanks have no floating platform');
+  check(sky.flights.get(aa).decorations[0].texture.key.startsWith('sky-city-aa-')&&sky.flights.get(tank).decorations.length===0,'AA sits on an extruded tower; tanks remain on the street');
   const started=sky.missionTime;
   await wait(4500);
   let minDistance=Infinity;

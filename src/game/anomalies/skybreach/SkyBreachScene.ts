@@ -4,6 +4,7 @@ import { SceneKeys } from '../../flow/SceneKeys.ts';
 import { Enemy, baseEnemyStats } from '../../enemies/Enemy.ts';
 import { ENEMY_ROBOT_FRAMES } from '../../enemies/EnemyRobotFrames.ts';
 import { SkyBreachWorld } from './SkyBreachArt.ts';
+import { CITY_AA_BUILDING, CITY_ROOF_ANCHOR, CITY_TEXTURE_WIDTH, cityTextureHeight } from './SkyBreachCityArt.ts';
 import { skyBreachDifficulty, scaleArenaEnemyStats } from './SkyBreachDifficulty.ts';
 import { SkyBreachDirector, DreadnoughtCrossfire, DREADNOUGHT_WEAPONS, attackWeapons, coreExposed,
   formationSlots, tankGroupSlots, skyReinforcementPlan, type DreadnoughtAttack, type FlightModule, type SkyRole, type HardpointId } from './SkyBreachDirector.ts';
@@ -240,7 +241,11 @@ export class SkyBreachScene extends AnomalyCombatScene {
       weapon:new DroneBurstWeapon(),volleys:0,
       nextDronesAt:this.missionTime+6500,warning:this.add.image(x,y,'sky-lock').setDisplaySize(42,42).setDepth(8).setVisible(false),
       decorations:role==='zeppelin'?[-1,1].map(()=>this.add.image(x,y,'sky-rotor').setDisplaySize(32,32).setDepth(8))
-        :role==='aa'?[this.add.image(x,y,'sky-aa-platform').setDisplaySize(136,172).setDepth(3)]:[]});
+        :role==='aa'?[this.add.image(x,y,`sky-city-aa-${lane<0?'left':'right'}`)
+          .setOrigin(CITY_ROOF_ANCHOR.x/CITY_TEXTURE_WIDTH,CITY_ROOF_ANCHOR.y/cityTextureHeight(CITY_AA_BUILDING))
+          .setScale(.78).setDepth(3),
+          this.add.image(x,y+CITY_AA_BUILDING.height*.78,'sky-city-shadow-aa')
+            .setOrigin((lane>0?320:200)/520,70/340).setScale(.78).setFlipX(lane>0).setDepth(-18.75).setAlpha(.6)]:[]});
     if(role==='zeppelin')this.airshipAt=this.missionTime+28000;
     return enemy;
   }
@@ -285,7 +290,8 @@ export class SkyBreachScene extends AnomalyCombatScene {
         enemy.setTexture(`sky-${f.role}-bank-${frame}`);
         const size=f.role==='strike'?78:64;enemy.setDisplaySize(size,size*(1-Math.abs(bank)*.08));
       }
-      f.decorations.forEach((d,i)=>f.role==='aa'?d.setPosition(enemy.x,enemy.y):d.setPosition(enemy.x+(i?1:-1)*46,enemy.y+20).setRotation(this.missionTime*.022));
+      f.decorations.forEach((d,i)=>f.role==='aa'?d.setPosition(enemy.x,enemy.y+(i?CITY_AA_BUILDING.height*.78:0))
+        :d.setPosition(enemy.x+(i?1:-1)*46,enemy.y+20).setRotation(this.missionTime*.022));
       if(Math.hypot(dx,dy)<enemy.stats.size*.5+12&&now-enemy.lastAttackMs>850){enemy.lastAttackMs=now;this.damagePlayer(enemy.stats.damage);}
       if(f.role==='drone') {
         f.weapon.update(f.age*1000,aim,Math.hypot(dx,dy)<=ENEMY_BALANCE.drone.attackRange&&f.steering.stage==='attack',
