@@ -21,6 +21,14 @@
       const aim={x:b.x+55,y:b.y};
       const target=a.spawnEnemy('grunt',false,anchor);target.body.reset(aim.x,aim.y);target.hp=10000;
       const input={move:{x:0,y:0},aim,primary:true,secondary:false};
+      const placeAtMaceHead=delta=>{
+        if(archetype!=='void-brawler')return;
+        const pose=Object.assign(Object.create(Object.getPrototypeOf(b.maceMotion)),b.maceMotion);
+        pose.update(delta,true,800);
+        const head=pose.head(b.x,b.y,Math.atan2(aim.y-b.y,aim.x-b.x));
+        target.body.reset(head.x,head.y);
+      };
+      placeAtMaceHead(1);
       e.updateControlled(1,input);if(archetype==='storm-mage')e.updateControlled(45,input);
       if(archetype==='void-brawler')check(target.hp===9827,'brawler primary uses operative damage');
       else {
@@ -30,6 +38,7 @@
       }
       clearShots();p.buffs.damageBoostUntil=a.time.now+5000;p.buffs.rapidFireUntil=a.time.now+5000;
       const expected=a.rollPlayerWeaponDamage(a.time.now).damage;
+      placeAtMaceHead(200);
       e.updateControlled(200,input);if(archetype==='storm-mage')e.updateControlled(45,input);
       check(archetype==='void-brawler'?target.hp===9827-expected:a.projectiles.filter(s=>s.from==='player').every(s=>s.damage===expected),archetype+': active damage pickup carries into chassis');
       const rate=p.fireRate*(a.bombsiteMods?.playerFireRateMultiplier(p.x,p.y)??1)*.75;

@@ -60,6 +60,7 @@ import { getFireHazardDamageProfile } from '../config/fireHazards.ts';
 import type { HazardDamageTarget } from '../config/hazardScaling';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossRewards, getBossTier, selectBossArchetype, type BossArchetype } from '../config/bossBalance';
 import { BossEncounter, type BossAttackKind, type BossProjectileSpec } from '../bosses/BossEncounter';
+import { macePathIntersects, type MacePoint } from '../bosses/BrawlerMaceMotion.ts';
 import { BossIntroOverlay } from '../bosses/BossIntroOverlay.ts';
 import { canAdvanceFromBossLootCollection } from '../bosses/BossLootCollectionGate.ts';
 import { SeededRandom } from '../systems/SeededRandom';
@@ -5107,7 +5108,7 @@ export class ArenaScene extends Phaser.Scene {
     this.possession=new BossEncounter(this,this.currentCombatPosition(),this.roundManager.seedBase,archetype,spawn,
       this.layout.generation.bounds,(x,y)=>this.intersectsWallGeometry(x,y,72,72),{
         fireProjectile:spec=>this.spawnBossProjectile(spec,'player'),
-        damageArea:(x,y,r,d,attack)=>this.applyPossessedBossAreaDamage(x,y,r,d,attack),
+        damageArea:(x,y,r,d,attack,path)=>this.applyPossessedBossAreaDamage(x,y,r,d,attack,path),
         dropCredit:()=>{},onDamaged:()=>{},onAttackCast:attack=>this.playBossAttackCue(attack),
         onDefeated:()=>{this.possessionRemainingMs=0;}
       },this.currentModeFamily(),{faction:'player',ownerId:'operative',showHealthUi:false,
@@ -5155,16 +5156,19 @@ export class ArenaScene extends Phaser.Scene {
     this.infusionHint?.setVisible(false);this.siteActionText?.setText('');this.hudPayload.healthLabel=undefined;
   }
 
-  private applyPossessedBossAreaDamage(x:number,y:number,radius:number,damage:number,attack:BossAttackKind):void {
-    this.mineExplosionVfx.emitColors(x,y,radius,0xffffff,0x70ffdf,0x9a72ff,0x45dfff,this.time.now,false);
+  private applyPossessedBossAreaDamage(x:number,y:number,radius:number,damage:number,attack:BossAttackKind,macePath?:readonly MacePoint[]):void {
+    if(attack!=='brawler-contact')this.mineExplosionVfx.emitColors(x,y,radius,0xffffff,0x70ffdf,0x9a72ff,0x45dfff,this.time.now,false);
     this.fluxCores?.damageArea(x,y,radius,damage,'weapon');this.arenaSmashables?.damageArea(x,y,radius,damage);
+    const intersects=(target:{x:number;y:number;hazardRadius:number})=>macePath?.length
+      ? macePathIntersects(macePath,target.x,target.y,radius+target.hazardRadius)
+      : Math.hypot(target.x-x,target.y-y)<=radius+target.hazardRadius;
     for(const enemy of this.enemies){
-      if(!enemy.active||enemy.isDead()||Math.hypot(enemy.x-x,enemy.y-y)>radius+enemy.hazardRadius)continue;
+      if(!enemy.active||enemy.isDead()||!intersects(enemy))continue;
       const applied=enemy.takeDamage(damage,'weapon');
       if(enemy.isDead())this.triggerSplitCurrent(enemy,applied);
       else if(attack.startsWith('brawler')){const d=Math.hypot(enemy.x-x,enemy.y-y)||1;enemy.setVelocity((enemy.x-x)/d*180,(enemy.y-y)/d*180);}
     }
-    for(const boss of this.activeMajorBosses())if(boss.active&&!boss.isDefeated&&Math.hypot(boss.x-x,boss.y-y)<=radius+boss.hazardRadius)boss.takeDamage(damage,'weapon');
+    for(const boss of this.activeMajorBosses())if(boss.active&&!boss.isDefeated&&intersects(boss))boss.takeDamage(damage,'weapon');
   }
 
   private clearRoundInfusionEffects(): void {

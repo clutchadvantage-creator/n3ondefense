@@ -8,6 +8,7 @@ import { SeededRandom } from '../systems/SeededRandom';
 import { BossCombatVfx } from '../vfx/BossCombatVfx.ts';
 import { Boss, type BossDamageSource } from './Boss';
 import { OperativeShieldEffect } from '../vfx/OperativeShieldEffect.ts';
+import { BRAWLER_MACE, type MacePoint } from './BrawlerMaceMotion.ts';
 
 export interface BossEncounterOptions {
   /** Live operative stats, evaluated only for player-controlled attacks. */
@@ -52,7 +53,7 @@ export type BossAttackKind =
 
 export interface BossEncounterCallbacks {
   fireProjectile(spec: BossProjectileSpec): void;
-  damageArea(x: number, y: number, radius: number, damage: number, attack: BossAttackKind): void;
+  damageArea(x: number, y: number, radius: number, damage: number, attack: BossAttackKind, macePath?: readonly MacePoint[]): void;
   dropCredit(x: number, y: number): void;
   onDamaged(damage: number, source: BossDamageSource): void;
   onAttackCast(attack: BossAttackKind): void;
@@ -96,6 +97,7 @@ export class BossEncounter {
   private lastBasicAt = -99_999;
   private lastSuperAt = 0;
   private lastContactAt = -99_999;
+  private readonly macePath: MacePoint[] = [];
   private lastPounceAt = -99_999;
   private lastTeleportAt = 0;
   private lastRocketAt = -99_999;
@@ -184,7 +186,7 @@ export class BossEncounter {
 
     if (this.archetype === 'artillery') this.updateArtillery(player);
     else if (this.archetype === 'storm-mage') this.updateStormMage(player);
-    else this.updateVoidBrawler(player);
+    else this.updateVoidBrawler(player, deltaMs);
     this.updatePendingStrikes();
     const aim = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, player.x, player.y);
     const mageCharge = this.archetype === 'storm-mage' && this.mageChargeEndsAt > this.elapsedMs
@@ -236,6 +238,8 @@ export class BossEncounter {
     this.mageSuperVolleyAt = 0;
     this.pounceStartsAt = 0;
     this.pounceEndsAt = 0;
+    this.macePath.length = 0;
+    this.boss.maceMotion.reset();
     for (const effect of this.effects) {
       this.scene.tweens.killTweensOf(effect);
       effect.destroy();
@@ -433,7 +437,7 @@ export class BossEncounter {
     }
   }
 
-  private updateVoidBrawler(player: Pick<Player,'x'|'y'> & { combatRadius?: number }): void {
+  private updateVoidBrawler(player: Pick<Player,'x'|'y'> & { combatRadius?: number }, deltaMs: number): void {
     const config = BOSS_BALANCE.voidBrawler;
     if (!this.control && this.elapsedMs - this.lastSuperAt >= config.superCooldownMs) {
       this.lastSuperAt = this.elapsedMs;
@@ -456,6 +460,8 @@ export class BossEncounter {
         this.boss.setPosition(ambush.x, ambush.y).setAlpha(1);
         this.vfx.emit('brawler-arrive', this.boss.x, this.boss.y, 96, 0xffffff, this.elapsedMs, 470);
       } else {
+        this.macePath.length = 0;
+        this.boss.maceMotion.update(deltaMs, false);
         return;
       }
     }
@@ -518,17 +524,35 @@ export class BossEncounter {
     }
 
     const pouncing = this.pounceStartsAt > 0 && this.elapsedMs >= this.pounceStartsAt && this.elapsedMs < this.pounceEndsAt;
-    if ((this.control ? this.control.primary||pouncing : Phaser.Math.Distance.Between(this.boss.x, this.boss.y, player.x, player.y) <= this.boss.hazardRadius + (player.combatRadius ?? 12) + 2)
+    const swinging = this.control ? this.control.primary : true;
+    this.boss.maceMotion.update(deltaMs, swinging,
+      this.control ? BRAWLER_MACE.controlledRotationMs : BRAWLER_MACE.enemyRotationMs);
+    const aim = Math.atan2(player.y - this.boss.y, player.x - this.boss.x);
+    const head = this.boss.maceMotion.head(this.boss.x, this.boss.y, aim);
+    if (this.control && swinging && !pouncing) {
+      // Bounded samples since the last damage pulse. Each enemy is tested once against
+      // this path, so a fast sweep cannot skip it or hit it twice in a single pulse.
+      if (this.macePath.length >= 64) this.macePath.shift();
+      this.macePath.push(head);
+    } else this.macePath.length = 0;
+    const bodyContact = Phaser.Math.Distance.Between(this.boss.x, this.boss.y, player.x, player.y)
+      <= this.boss.hazardRadius + (player.combatRadius ?? 12) + 2;
+    const maceContact = Phaser.Math.Distance.Between(head.x, head.y, player.x, player.y)
+      <= BRAWLER_MACE.headRadius + (player.combatRadius ?? 12);
+    if ((this.control ? swinging || pouncing : bodyContact || (!pouncing && maceContact))
       && this.elapsedMs - this.lastContactAt >= this.primaryInterval(config.contactCooldownMs)) {
       this.lastContactAt = this.elapsedMs;
       if (!pouncing) this.callbacks.onAttackCast('brawler-contact');
-      const aim=Math.atan2(player.y-this.boss.y,player.x-this.boss.x);
-      const impact=this.control&&!pouncing?{x:this.boss.x+Math.cos(aim)*43,y:this.boss.y+Math.sin(aim)*43}:this.boss;
-      if(this.control)this.boss.playAction('slam',this.elapsedMs,Math.min(380,this.primaryInterval(config.contactCooldownMs)));
-      this.callbacks.damageArea(impact.x, impact.y, this.boss.hazardRadius + 18, this.attackDamage(config.contactDamage).damage, pouncing ? 'brawler-pounce' : 'brawler-contact');
+      const maceHit = !pouncing && (this.control || maceContact);
+      const impact = maceHit ? head : this.boss;
+      const radius = maceHit ? BRAWLER_MACE.headRadius : this.boss.hazardRadius + 18;
+      this.callbacks.damageArea(impact.x, impact.y, radius, this.attackDamage(config.contactDamage).damage,
+        pouncing ? 'brawler-pounce' : 'brawler-contact', this.control && maceHit ? this.macePath : undefined);
+      this.macePath.length = 0;
+      if (this.control && maceHit) this.macePath.push(head);
       this.vfx.emit(
-        'brawler-impact', this.boss.x, this.boss.y, pouncing ? 84 : 58, 0xff4e82,
-        this.elapsedMs, pouncing ? 560 : 380, this.pounceAngle
+        'brawler-impact', impact.x, impact.y, pouncing ? 84 : 26, 0xff4e82,
+        this.elapsedMs, pouncing ? 560 : 140, pouncing ? this.pounceAngle : aim + this.boss.maceMotion.angle
       );
     }
   }

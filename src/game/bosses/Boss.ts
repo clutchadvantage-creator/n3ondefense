@@ -4,6 +4,8 @@ import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossHealth, type BossArchetype } from
 import type { RunModeFamily } from '../config/modeBalance.ts';
 import type { RectSpec } from '../types.ts';
 import { BossLegRig } from './BossLegRig.ts';
+import { BrawlerMaceMotion } from './BrawlerMaceMotion.ts';
+import { BrawlerMaceRig } from './BrawlerMaceRig.ts';
 
 export type BossDamageSource = 'weapon' | 'echo' | 'turret' | 'mine' | 'fence' | 'hazard';
 
@@ -26,14 +28,14 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   private defeated = false;
   private readonly visualRoot: Phaser.GameObjects.Container;
   private readonly legRig: BossLegRig;
-  private weaponFacing = 0;
+  readonly maceMotion = new BrawlerMaceMotion();
+  private readonly maceRig?: BrawlerMaceRig;
   private readonly weapons: Phaser.GameObjects.Image[] = [];
   private presentationNow = 0;
   private hitUntil = 0;
   private actionAt = -10000;
   private actionDuration = 400;
   private action: 'fire' | 'slam' | 'spin' | 'arrival' = 'fire';
-  private weaponAngle = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -68,13 +70,18 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.body?.setCircle(radius, this.width / 2 - radius, this.height / 2 - radius);
     this.legRig = new BossLegRig(scene, archetype, options.legBlockers ?? []);
     this.visualRoot = scene.add.container(x, y).setDepth(9.1);
+    if (archetype === 'void-brawler') {
+      this.maceRig = new BrawlerMaceRig(scene, this.visualRoot);
+      this.maceRig.draw(this.maceMotion, 0, false);
+    }
     const parts = archetype === 'artillery' ? ['artillery-gun']
-      : archetype === 'storm-mage' ? ['storm-mage-rotor'] : ['void-brawler-hammer', 'void-brawler-shield'];
+      : archetype === 'storm-mage' ? ['storm-mage-rotor'] : ['void-brawler-shield'];
     for (const part of parts) {
       const weapon = scene.add.image(0, 0, 'rwg-' + part).setDisplaySize(160, 160);
       this.weapons.push(weapon);
       this.visualRoot.add(weapon);
     }
+    if (archetype === 'void-brawler') this.weapons[0].setDisplaySize(200, 200).setPosition(5, 38);
   }
 
   playAction(action: 'fire' | 'slam' | 'spin' | 'arrival', now: number, duration = 400): void {
@@ -83,17 +90,9 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     this.actionDuration = duration;
   }
 
-  /** Hammer tip in world space; used by damage and impact presentation alike. */
-  hammerTip(angle = this.weaponAngle): { x: number; y: number } {
-    const facing = this.weaponFacing;
-    return { x: this.x + Math.cos(facing) * 4 - Math.sin(facing) * -22 + Math.cos(angle) * 43,
-      y: this.y + Math.sin(facing) * 4 + Math.cos(facing) * -22 + Math.sin(angle) * 43 };
-  }
-
-  updatePresentation(elapsedMs: number, aimAngle: number, charge = 0, spinAngle?: number): void {
+  updatePresentation(elapsedMs: number, aimAngle: number, charge = 0): void {
     if (!this.visualRoot.active) return;
     this.presentationNow = elapsedMs;
-    this.weaponFacing = aimAngle;
     const chassisAngle = this.legRig.update(this.x, this.y, aimAngle, elapsedMs, charge, this.alpha);
     this.visualRoot.setPosition(this.x, this.y).setAlpha(this.alpha);
     this.setRotation(chassisAngle);
@@ -107,13 +106,8 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
       this.weapons[0].setRotation(elapsedMs * (.001 + charge * .003)).setScale(160 / 384 * (1 + charge * .12));
     } else {
       this.visualRoot.setRotation(aimAngle);
-      const swing = this.action === 'slam' && progress < 1
-        ? progress < .48 ? -1.25 * progress / .48 : progress < .68 ? -1.25 + 1.9 * (progress - .48) / .2 : .65 * (1 - progress) / .32
-        : -charge * 1.1;
-      const localAngle = spinAngle === undefined ? swing : spinAngle - aimAngle;
-      this.weapons[0].setPosition(4, -22).setRotation(localAngle);
-      this.weapons[1].setPosition(1 + charge * 8, 22).setRotation(.25 - charge * .35);
-      this.weaponAngle = aimAngle + localAngle;
+      this.maceRig?.draw(this.maceMotion, charge, elapsedMs < this.hitUntil);
+      this.weapons[0].setPosition(5 + charge * 8, 38).setRotation(.12 - charge * .2);
     }
     const flash = elapsedMs < this.hitUntil;
     if (flash) this.setTintFill(0xd9edff); else this.clearTint();
@@ -133,6 +127,7 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
       this.setVelocity(0, 0);
       this.setTint(0x8c8c9a);
       for (const part of this.weapons) part.setTint(0x8c8c9a);
+      this.maceRig?.draw(this.maceMotion, 0, false, true);
       this.legRig.defeat();
       this.visualRoot.setAlpha(0.95);
       this.onDefeated();
