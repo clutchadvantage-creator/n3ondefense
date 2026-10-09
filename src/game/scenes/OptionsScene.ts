@@ -1,3 +1,4 @@
+import { addTerminalDetail } from '../ui/TerminalChrome.ts';
 import Phaser from 'phaser';
 import { SFX_DEFINITIONS, SFX_CATEGORIES, type AudioSfxName } from '../config/audio';
 import { ABILITY_ACTIONS, DEFAULT_ABILITY_BINDINGS, RESERVED_ABILITY_BINDINGS, bindingForKeyboardEvent, bindingForMouseButton, bindingLabel, type AbilityAction, type InputBinding } from '../config/controls';
@@ -244,6 +245,8 @@ export class OptionsScene extends Phaser.Scene {
     grid.lineStyle(1, 0x123247, 0.18);
     for (let x = 0; x <= width; x += 64) grid.lineBetween(x, 0, x, height);
     for (let y = 0; y <= height; y += 64) grid.lineBetween(0, y, width, y);
+    const shell = this.add.container(0, 0).setDepth(-80);
+    addTerminalDetail(this, shell, { x: 12, y: 12, width: width - 24, height: height - 24 });
     this.add.text(centerX, height < 650 ? 30 : 36, 'OPTIONS', {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${height < 650 ? 31 : 38}px`, color: '#58efff'
     }).setOrigin(0.5).setDepth(110);

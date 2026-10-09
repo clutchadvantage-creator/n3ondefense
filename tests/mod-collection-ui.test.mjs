@@ -17,7 +17,7 @@ test('Mod Collection uses the shared cyber-console visual language without repla
   assert.match(scene, /getModCollectionChromeLayout\(width, height\)/);
   assert.match(scene, /createModCardView\(this/);
   assert.match(presentation, /chamferedPoints/);
-  assert.match(presentation, /MOD CARD COLLECTION/);
+  assert.match(presentation, /MOD COLLECTION/);
   assert.match(presentation, /OPERATIVE ARCHIVE \/\/ MODULAR INVENTORY CONTROL/);
   assert.match(presentation, /leftRail/);
   assert.match(presentation, /rightRail/);

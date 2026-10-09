@@ -1,3 +1,4 @@
+import { addTerminalDetail } from '../ui/TerminalChrome.ts';
 import Phaser from 'phaser';
 import type { CosmeticOption } from '../types.ts';
 import type { GearLockerRect } from './gearLockerLayout.ts';
@@ -62,6 +63,7 @@ export const createGearLockerPanel = (
   const anchorA = scene.add.circle(13, 13, 2, accent, 0.55);
   const anchorB = scene.add.circle(rect.width - 13, rect.height - 13, 2, titleAccent, 0.55);
   root.add([shadow, chassis, inset, header, topRail, headerRail, sideRail, title, led, anchorA, anchorB]);
+  addTerminalDetail(scene, root, { x: 0, y: 0, width: rect.width, height: rect.height }, accent);
   scene.tweens.add({ targets: led, alpha: { from: 0.22, to: 1 }, duration: 940, yoyo: true, repeat: -1 });
   root.setData('animatedTargets', [led]);
   return root;

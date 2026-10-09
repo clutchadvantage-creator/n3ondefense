@@ -116,8 +116,8 @@ test('Garage presets restore at most two universal Supreme Mods only with a Supr
   invalid.protocol = 'normal';
   invalid.cardSlots = { ...save.garage.presets.find((entry) => entry.id === 'config-a').cardSlots };
   const rejected = loadGaragePreset(save, 'config-b');
-  assert.equal(rejected.ok, true);
-  assert.equal(rejected.missingCards, 2);
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.message, /Supreme/);
   assert.equal(new ModRuntime(save.mods, undefined, 'normal').snapshot().some((entry) => entry.id.startsWith('supreme-')), false);
 });
 
@@ -164,36 +164,38 @@ test('Garage presets save and immediately restore five Mod and deployment refere
   for (const slot of GARAGE_MOD_SLOTS) assert.equal(loadout.cardSlots[slot], cards[slot].instanceId);
 });
 
-test('a preset safely skips a missing card reference', () => {
+test('a preset rejects a missing card without changing the active loadout', () => {
   const save = createDefaultLocalSave('garage-missing', 'Garage Missing');
   const cards = addCategoryLoadout(save);
   saveCurrentGaragePreset(save, 'config-a');
   save.garage.presets[0].cardSlots.weapon = 'missing-card-instance';
   const result = loadGaragePreset(save, 'config-a');
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, false);
   assert.equal(result.missingCards, 1);
-  assert.equal(save.mods.loadouts[0].cardSlots.weapon, null);
+  assert.equal(save.mods.loadouts[0].cardSlots.weapon, cards.weapon.instanceId);
   assert.equal(save.mods.loadouts[0].cardSlots.player, cards.player.instanceId);
 });
 
-test('a recycled or deleted preset card becomes an empty slot without crashing', () => {
+test('a recycled or deleted preset card prevents loading without altering the preset', () => {
   const save = createDefaultLocalSave('garage-deleted', 'Garage Deleted');
   const cards = addCategoryLoadout(save);
   saveCurrentGaragePreset(save, 'config-b');
   assert.equal(deleteModCard(save.mods, cards.defense.instanceId).ok, true);
   const result = loadGaragePreset(save, 'config-b');
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, false);
   assert.equal(result.missingCards, 1);
   assert.equal(save.mods.loadouts[0].cardSlots.defense, null);
+  assert.equal(save.garage.presets[1].cardSlots.defense, cards.defense.instanceId);
 });
 
-test('invalid Contract and Signal references are ignored when a preset loads', () => {
+test('invalid Contract and Signal references block preset loads', () => {
   const save = createDefaultLocalSave('garage-invalid-setup', 'Garage Invalid Setup');
   save.garage.presets[0] = {
     ...save.garage.presets[0], saved: true, contract: 'removed-contract', modFocus: 'removed-signal'
   };
   const result = loadGaragePreset(save, 'config-a');
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, false);
+  assert.match(result.message, /Contract.*Signal/);
   assert.deepEqual(save.garage.nextRun, { contract: null, modFocus: null });
   assert.deepEqual(normalizeGarageState({ nextRun: { contract: 'bad', modFocus: 'bad' } }).nextRun, { contract: null, modFocus: null });
 });
@@ -203,8 +205,9 @@ test('a preset never restores a locked Overdrive protocol', () => {
   save.garage.presets[0] = { ...save.garage.presets[0], saved: true, protocol: 'overdrive-draco' };
   assert.ok(save.progress.highestRound < RUN_PROTOCOLS['overdrive-draco'].unlockHighestRound);
   const result = loadGaragePreset(save, 'config-a');
-  assert.equal(result.ok, true);
-  assert.equal(result.ignoredProtocol, true);
+  assert.equal(result.ok, false);
+  assert.match(result.message, /UNLOCKED/);
+  assert.equal(result.ignoredProtocol, false);
   assert.equal(save.protocol.preferred, 'normal');
 });
 

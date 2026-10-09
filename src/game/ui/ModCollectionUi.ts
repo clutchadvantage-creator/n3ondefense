@@ -1,3 +1,4 @@
+import { addTerminalDetail } from './TerminalChrome.ts';
 import Phaser from 'phaser';
 import { createButton, type ButtonPresentationOptions } from '../utils/ui.ts';
 import type { ModArchiveAnalytics } from '../mods/ModArchiveAnalytics.ts';
@@ -189,10 +190,10 @@ export const createModCollectionShell = (
 
   const titleSize = layout.titleSize;
   const titleY = layout.titleY;
-  const ghost = scene.add.text(width / 2 + 2, titleY + 2, 'MOD CARD COLLECTION', {
+  const ghost = scene.add.text(width / 2 + 2, titleY + 2, 'MOD COLLECTION', {
     fontFamily: 'Orbitron, sans-serif', fontSize: `${titleSize}px`, color: '#ff48ca', fontStyle: 'bold'
   }).setOrigin(0.5, 0).setAlpha(0.18).setBlendMode(Phaser.BlendModes.ADD);
-  const title = scene.add.text(width / 2, titleY, 'MOD CARD COLLECTION', {
+  const title = scene.add.text(width / 2, titleY, 'MOD COLLECTION', {
     fontFamily: 'Orbitron, sans-serif', fontSize: `${titleSize}px`, color: '#75f4ff', fontStyle: 'bold',
     shadow: { color: '#39eeff', blur: 9, fill: true }, letterSpacing: 1
   }).setOrigin(0.5, 0);
@@ -277,6 +278,7 @@ export const createModCollectionFrame = (
   }).setOrigin(0, 0).setMaxLines(1);
   const led = scene.add.circle(rect.width - 18, 21, 3, accent, 0.92);
   root.add([shadow, frame, header, rail, headerDivider, leftEdge, label, led]);
+  addTerminalDetail(scene, root, { x: 0, y: 0, width: rect.width, height: rect.height }, accent);
   scene.tweens.add({ targets: led, alpha: { from: 0.24, to: 1 }, duration: 780, yoyo: true, repeat: -1 });
   return root;
 };
@@ -343,7 +345,7 @@ export const createModCollectionButton = (
 ): Phaser.GameObjects.Container => {
   const height = presentation.height ?? 40;
   const accent = toneColor(tone);
-  const button = createButton(scene, x, y, text.toUpperCase(), onClick, width, 'menu', presentation);
+  const button = createButton(scene, x, y, text.toUpperCase(), onClick, width, 'menu', { ...presentation, technicalDetails: false });
   const background = button.list[0] as Phaser.GameObjects.Rectangle;
   background.setDisplaySize(Math.max(20, width - 8), Math.max(18, height - 8));
   background.setFillStyle(toneFill(tone), 0.92).setStrokeStyle(1, accent, 0.62);

@@ -1,3 +1,4 @@
+import { addTerminalDetail } from '../ui/TerminalChrome.ts';
 import Phaser from 'phaser';
 import { COLORS } from '../config/constants';
 import { AudioManager } from '../systems/AudioManager';
@@ -82,6 +83,8 @@ export interface ButtonPresentationOptions {
   focusId?: string;
   focusGroup?: string;
   holdRepeat?: boolean;
+  technicalDetails?: boolean;
+  accent?: number;
 }
 
 export const createButton = (
@@ -117,6 +120,10 @@ export const createButton = (
     .setInteractive({ useHandCursor: true });
   hit.setName('button-hit');
   const button = scene.add.container(x, y, [bg, label, hit]).setScrollFactor(0);
+  if (presentation.technicalDetails !== false && width >= 60) {
+    const detail = addTerminalDetail(scene, button, { x: -width / 2, y: -height / 2, width, height }, presentation.accent, true);
+    button.moveTo(detail, 1);
+  }
   const state: ButtonAudioState = { enabled: true, jiggleTargets: [button] };
   buttonAudioStates.set(button, state);
   hit.on('pointerover', () => {

@@ -5,7 +5,7 @@ import type { CosmeticOption, GameSaveData } from '../types';
 import type { OnlineProgressSnapshot } from '../../online/onlineTypes';
 import type { ModInfusionId, ModSlot, RunProtocolId } from '../mods/types.ts';
 import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
-import type { GaragePresetId } from '../garage/types.ts';
+import type { GaragePresetId, SaveGaragePresetOptions } from '../garage/types.ts';
 import type { ArcadeMetricEvent } from '../arcade/types.ts';
 import type { ExchangeCurrency } from '../economy/CurrencyExchange.ts';
 import { buildEconomyAnalytics, type EconomyAnalyticsSnapshot } from '../economy/EconomyAnalytics.ts';
@@ -249,7 +249,9 @@ export class SaveSystem {
   static setSavedDeploymentEnabled(enabled: boolean, nowMs = Date.now()) { return PlayerProfileStore.setSavedDeploymentEnabled(enabled, nowMs); }
   static isSavedDeploymentReminderDue(nowMs = Date.now()): boolean { return PlayerProfileStore.isSavedDeploymentReminderDue(nowMs); }
   static commitDeploymentLaunch(options: { acknowledgeReminder?: boolean; nowMs?: number } = {}) { return PlayerProfileStore.commitDeploymentLaunch(options); }
-  static saveGaragePreset(presetId: GaragePresetId) { return PlayerProfileStore.saveGaragePreset(presetId); }
+  static saveGaragePreset(presetId: GaragePresetId, options: SaveGaragePresetOptions = {}) { return PlayerProfileStore.saveGaragePreset(presetId, options); }
+  static renameGaragePreset(presetId: GaragePresetId, name: string) { return PlayerProfileStore.renameGaragePreset(presetId, name); }
+  static getGaragePresetState(presetId: GaragePresetId) { return PlayerProfileStore.getGaragePresetState(presetId); }
   static loadGaragePreset(presetId: GaragePresetId) { return PlayerProfileStore.loadGaragePreset(presetId); }
   static purchaseAdditionalModLoadoutSlot() { return PlayerProfileStore.purchaseAdditionalModLoadoutSlot(); }
 

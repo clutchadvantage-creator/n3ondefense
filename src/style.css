@@ -1,3 +1,5 @@
+@import './ui/terminal.css';
+
 :root {
   --bg0: #03050a;
   --bg1: #080d17;

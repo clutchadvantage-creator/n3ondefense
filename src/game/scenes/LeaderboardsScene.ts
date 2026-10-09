@@ -1,3 +1,4 @@
+import { addTerminalDetail } from '../ui/TerminalChrome.ts';
 import Phaser from 'phaser';
 import type { LocalLeaderboardEntry } from '../save/LocalSaveTypes';
 import { SceneKeys } from '../flow/SceneKeys';
@@ -73,6 +74,7 @@ export class LeaderboardsScene extends Phaser.Scene {
   ): void {
     this.add.rectangle(x, y, width, height, 0x0a1423, 0.9).setStrokeStyle(2, board.color, 0.72);
     this.add.rectangle(x, y - height / 2 + 25, width - 4, 46, board.color, 0.08);
+    addTerminalDetail(this, this.add.container(0, 0), { x: x - width / 2, y: y - height / 2, width, height }, board.color);
     this.add.text(x, y - height / 2 + 25, board.title, {
       fontFamily: 'Orbitron, sans-serif', fontSize: '17px', color: Phaser.Display.Color.IntegerToColor(board.color).rgba
     }).setOrigin(0.5);

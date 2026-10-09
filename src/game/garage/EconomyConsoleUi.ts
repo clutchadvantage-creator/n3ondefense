@@ -1,3 +1,4 @@
+import { addTerminalDetail } from '../ui/TerminalChrome.ts';
 import Phaser from 'phaser';
 import type { EconomyValuePoint } from '../economy/EconomyAnalytics.ts';
 
@@ -44,6 +45,7 @@ export const createEconomyPanel = (
   });
   const led = scene.add.circle(rect.width - 22, 22, 3, accent, 0.92);
   panel.add([shadow, rear, face, recess, headerGlass, rail, sideRail, titleText, led]);
+  addTerminalDetail(scene, panel, { x: 0, y: 0, width: rect.width, height: rect.height }, accent);
   if (subtitle) panel.add(scene.add.text(rect.width - 35, 16, subtitle, {
     fontFamily: ECONOMY_FONT, fontSize: `${rect.width < 360 ? 11 : 13}px`, color: '#9ac0cc', fontStyle: 'bold'
   }).setOrigin(1, 0));
@@ -65,11 +67,11 @@ export const addMetric = (
   const originX = align === 'left' ? 0 : align === 'right' ? 1 : 0.5;
   panel.add(scene.add.text(x, y, label, {
     fontFamily: ECONOMY_FONT, fontSize: '14px', color: '#9abec9', fontStyle: 'bold', letterSpacing: 0.5,
-    align, fixedWidth: align === 'center' ? width : undefined
+    align, fixedWidth: align === 'center' ? width : 0
   }).setOrigin(originX, 0));
   panel.add(scene.add.text(x, y + 19, value, {
     fontFamily: ECONOMY_DISPLAY_FONT, fontSize: '21px', color: Phaser.Display.Color.IntegerToColor(color).rgba,
-    fontStyle: 'bold', align, fixedWidth: align === 'center' ? width : undefined
+    fontStyle: 'bold', align, fixedWidth: align === 'center' ? width : 0
   }).setOrigin(originX, 0));
 };
 

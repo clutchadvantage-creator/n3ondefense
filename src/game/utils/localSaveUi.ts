@@ -1,3 +1,4 @@
+import { addTerminalDetail } from '../ui/TerminalChrome.ts';
 import Phaser from 'phaser';
 import { createButton } from './ui';
 
@@ -91,7 +92,9 @@ const createModalRoot = (
       cursorX += item.width + buttonGap;
     });
   });
-  root.add([backdrop, panel, titleText, bodyText]);
+  root.add([backdrop, panel]);
+  addTerminalDetail(scene, root, { x: (sw - width) / 2, y: panelTop, width, height });
+  root.add([titleText, bodyText]);
   return { root, buttonPositions };
 };
 

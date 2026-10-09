@@ -453,6 +453,9 @@ export class Hud {
     frame.fillStyle(accent, 0.24 + glow * 0.44).fillRect(cut + 4, 4, Math.max(8, width - cut * 2 - 8), 2);
     frame.fillStyle(MAGENTA, 0.2 + glow * 0.3).fillRect(3, cut + 5, 2, Math.max(5, height - cut * 2 - 10));
     frame.lineStyle(1, accent, 0.22).lineBetween(9, 17, width - 9, 17);
+    // Static inset and terminal fasteners share the menu frame language.
+    frame.lineStyle(1, accent, 0.16).strokeRect(7, 18, Math.max(1, width - 14), Math.max(1, height - 25));
+    frame.fillStyle(accent, 0.45).fillRect(width - 21, height - 5, 3, 2).fillRect(width - 15, height - 5, 3, 2);
     panel.title.setPosition(rect.x + 11, rect.y + 5)
       .setFontSize(Math.max(8, Math.round(10 * this.scaleFactor)))
       .setColor(Phaser.Display.Color.IntegerToColor(accent).rgba);

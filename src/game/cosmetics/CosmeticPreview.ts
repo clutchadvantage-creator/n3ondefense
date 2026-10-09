@@ -6,6 +6,8 @@ import type { CosmeticOption } from '../types.ts';
 import { createPremiumTurretVisual } from './PremiumTurretVisual.ts';
 
 export interface CosmeticPreviewOptions {
+  /** Small configuration thumbnails are static. */
+  animate?: boolean;
   maxWidth: number;
   maxHeight: number;
   operatorTextureKey?: string;
@@ -34,6 +36,9 @@ export const createCosmeticPreview = (
   options: CosmeticPreviewOptions
 ): CosmeticPreviewHandle => {
   const container = scene.add.container(x, y);
+  const animatePreview = (config: Phaser.Types.Tweens.TweenBuilderConfig): void => {
+    if (options.animate !== false && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) scene.tweens.add(config);
+  };
   const colorSetters: Array<(color: number) => void> = [];
   let previewUpdater: ((timeMs: number) => void) | undefined;
   const operativeAppearance = item.category === 'playerShape'
@@ -146,8 +151,8 @@ export const createCosmeticPreview = (
       drawSkull(initialColor);
       colorSetters.push(drawSkull);
       heroLayer.add(skull);
-      scene.tweens.add({ targets: heroLayer, alpha: { from: 0, to: 1 }, scaleX: { from: 0.34, to: 1.06 }, scaleY: { from: 0.34, to: 1.06 }, y: { from: size * 0.12, to: -size * 0.08 }, duration: 620, hold: 1_240, yoyo: true, repeat: -1, repeatDelay: 120, ease: 'Back.easeOut' });
-      scene.tweens.add({ targets: rotatingLayer, angle: 360, duration: 4_600, repeat: -1 });
+      animatePreview({ targets: heroLayer, alpha: { from: 0, to: 1 }, scaleX: { from: 0.34, to: 1.06 }, scaleY: { from: 0.34, to: 1.06 }, y: { from: size * 0.12, to: -size * 0.08 }, duration: 620, hold: 1_240, yoyo: true, repeat: -1, repeatDelay: 120, ease: 'Back.easeOut' });
+      animatePreview({ targets: rotatingLayer, angle: 360, duration: 4_600, repeat: -1 });
     } else if (item.bombExplosionEffect === 'neon-bats') {
       const bats = scene.add.graphics();
       for (let index = 0; index < 9; index += 1) {
@@ -163,7 +168,7 @@ export const createCosmeticPreview = (
         bats.fillStyle(0x090311, 0.9).fillEllipse(x, y, unit * 0.48, unit * 1.5);
       }
       heroLayer.add(bats);
-      scene.tweens.add({ targets: heroLayer, alpha: { from: 0.25, to: 1 }, scaleX: { from: 0.45, to: 1.15 }, scaleY: { from: 0.7, to: 1.08 }, angle: { from: -18, to: 22 }, duration: 1_150, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      animatePreview({ targets: heroLayer, alpha: { from: 0.25, to: 1 }, scaleX: { from: 0.45, to: 1.15 }, scaleY: { from: 0.7, to: 1.08 }, angle: { from: -18, to: 22 }, duration: 1_150, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     } else if (item.bombExplosionEffect === 'witch-signal') {
       const witch = scene.add.graphics();
       const faceWidth = size * 0.45;
@@ -177,7 +182,7 @@ export const createCosmeticPreview = (
       witch.lineStyle(Math.max(1.4, size * 0.012), 0xfff47a, 0.9);
       witch.beginPath(); witch.arc(0, size * 0.08, faceWidth * 0.2, 0.12, Math.PI - 0.12, false); witch.strokePath();
       heroLayer.add(witch);
-      scene.tweens.add({ targets: heroLayer, y: { from: size * 0.08, to: -size * 0.08 }, angle: { from: -3, to: 3 }, alpha: { from: 0.42, to: 1 }, duration: 1_250, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      animatePreview({ targets: heroLayer, y: { from: size * 0.08, to: -size * 0.08 }, angle: { from: -3, to: 3 }, alpha: { from: 0.42, to: 1 }, duration: 1_250, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     } else {
       const blooms = scene.add.graphics();
       const flowerColors = [0xff63d7, 0x64efff, 0xffe76a, 0x9f76ff, 0x76ff8f, 0xffa54f];
@@ -206,8 +211,8 @@ export const createCosmeticPreview = (
         petals.fillRect(Math.cos(angle) * distance, Math.sin(angle) * distance, Math.max(2, size * 0.025), Math.max(1, size * 0.012));
       }
       rotatingLayer.add(petals);
-      scene.tweens.add({ targets: heroLayer, alpha: { from: 0, to: 1 }, scaleX: { from: 0.05, to: 1.08 }, scaleY: { from: 0.05, to: 1.08 }, angle: { from: -24, to: 18 }, duration: 680, hold: 1_180, yoyo: true, repeat: -1, repeatDelay: 110, ease: 'Back.easeOut' });
-      scene.tweens.add({ targets: rotatingLayer, angle: 220, scaleX: { from: 0.42, to: 1.18 }, scaleY: { from: 0.42, to: 1.18 }, alpha: { from: 0.18, to: 0.82 }, duration: 1_700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      animatePreview({ targets: heroLayer, alpha: { from: 0, to: 1 }, scaleX: { from: 0.05, to: 1.08 }, scaleY: { from: 0.05, to: 1.08 }, angle: { from: -24, to: 18 }, duration: 680, hold: 1_180, yoyo: true, repeat: -1, repeatDelay: 110, ease: 'Back.easeOut' });
+      animatePreview({ targets: rotatingLayer, angle: 220, scaleX: { from: 0.42, to: 1.18 }, scaleY: { from: 0.42, to: 1.18 }, alpha: { from: 0.18, to: 0.82 }, duration: 1_700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
 
     container.once('destroy', () => animatedTargets.forEach((target) => scene.tweens.killTweensOf(target)));
@@ -296,7 +301,7 @@ export const createCosmeticPreview = (
       const core = addCircle(maxWidth * 0.3, 0, Math.min(maxHeight * 0.24, maxWidth * 0.11), 0.95, 1);
       core.setFillStyle(0x07131d, 0.92);
       colorSetters[colorSetters.length - 1] = (color) => core.setFillStyle(0x07131d, 0.92).setStrokeStyle(1, color, 1);
-      scene.tweens.add({ targets: wake, alpha: { from: 0.58, to: 1 }, scaleX: { from: 0.88, to: 1.04 }, duration: 780, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      animatePreview({ targets: wake, alpha: { from: 0.58, to: 1 }, scaleX: { from: 0.88, to: 1.04 }, duration: 780, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       container.once('destroy', () => scene.tweens.killTweensOf(wake));
       break;
     }
@@ -349,7 +354,7 @@ export const createCosmeticPreview = (
       const ringRadius = Math.min(maxWidth, maxHeight) * 0.16;
       const armedRing = addCircle(0, 0, ringRadius, 0.06, Math.max(1, ringRadius * 0.1));
       const armedCore = addCircle(0, 0, Math.max(2, ringRadius * 0.28), 0.9, 1);
-      scene.tweens.add({
+      animatePreview({
         targets: [armedRing, armedCore],
         alpha: { from: 0.42, to: 1 },
         scaleX: { from: 0.86, to: 1.12 },
@@ -359,7 +364,7 @@ export const createCosmeticPreview = (
         repeat: -1,
         ease: 'Sine.easeInOut'
       });
-      scene.tweens.add({ targets: art, angle: { from: -1.2, to: 1.2 }, duration: 1_800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      animatePreview({ targets: art, angle: { from: -1.2, to: 1.2 }, duration: 1_800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       container.once('destroy', () => {
         scene.tweens.killTweensOf(art);
         scene.tweens.killTweensOf([armedRing, armedCore]);

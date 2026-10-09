@@ -1,3 +1,5 @@
+import { createConfigurationPresetsView } from '../ui/ConfigurationPresetsView.ts';
+import { addTerminalDetail } from '../ui/TerminalChrome.ts';
 import Phaser from 'phaser';
 import { COSMETICS, getCosmeticById, getCosmeticDisplayColor, getCosmeticTextureKey } from '../../data/cosmetics.ts';
 import { createCosmeticPreview } from '../cosmetics/CosmeticPreview.ts';
@@ -357,6 +359,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const led = this.add.circle(rect.width - 14 * contentScale, headerHeight / 2, roomy ? 4 * contentScale : 3, 0x68ffac, 0.9);
     const footerRail = this.add.rectangle(9, rect.height - 7, rect.width - 18, 2, color, 0.13).setOrigin(0);
     root.add([panel, glass, scanlines, header, label, led, footerRail]);
+    addTerminalDetail(this, root, { x: 0, y: 0, width: rect.width, height: rect.height }, color);
     addTerminalMount(this, root, rect, color);
     this.tweens.add({ targets: led, alpha: { from: 0.35, to: 1 }, duration: 1100, yoyo: true, repeat: -1 });
     return root;
@@ -385,12 +388,13 @@ export class OperatorGarageScene extends Phaser.Scene {
     rows.forEach((row, index) => {
       const y = startY + index * rowGap;
       const hit = this.add.rectangle(7, y - 1, rect.width - 14, rowGap - 4, 0x102331, 0.5).setOrigin(0).setInteractive({ useHandCursor: true });
-      const label = this.add.text(15 * contentScale, y + (roomy ? 7 * contentScale : 1), row.label, {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomy ? Math.round(14 * contentScale) : 9}px`, color: '#8fc6d5'
+      const label = this.add.text(15 * contentScale, y + 1, row.label, {
+        fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomy ? Math.round(10 * contentScale) : 9}px`, color: '#8fc6d5'
       }).setOrigin(0);
-      const value = this.add.text(roomy ? rect.width - 15 * contentScale : 15, y + (roomy ? 4 * contentScale : 10), row.value, {
+      const value = this.add.text(15 * contentScale, y + (roomy ? 16 * contentScale : 10), row.value, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomy ? Math.round(17 * contentScale) : 10}px`, fontStyle: 'bold', color: '#e4fcff'
-      }).setOrigin(roomy ? 1 : 0, 0).setMaxLines(1);
+      }).setOrigin(0).setMaxLines(1).setData('availableWidth', rect.width - 30 * contentScale);
+      value.setScale(Math.min(1, value.getData('availableWidth') / value.width));
       if (row.label === 'OPERATIONS' || row.label === 'CONTRACT' || row.label === 'SIGNAL') {
         this.configurationValueTexts.set(row.label.toLowerCase() as 'operations' | 'contract' | 'signal', value);
       }
@@ -432,6 +436,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       ?.setText(`${formatOperationsMode(operations.mode)} // START ${operations.startingRound}  [CHANGE]`);
     this.configurationValueTexts.get('contract')?.setText(`${setup.contract ? RUN_CONTRACTS[setup.contract].label : 'NO CONTRACT ACTIVE'}  [CHANGE]`);
     this.configurationValueTexts.get('signal')?.setText(`${setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus] : 'NO SIGNAL ACTIVE'}  [CHANGE]`);
+    for (const value of this.configurationValueTexts.values()) value.setScale(Math.min(1, value.getData('availableWidth') / value.width));
     const cost = getRunSetupCost(setup);
     const saved = SaveSystem.getGarageState().savedDeploymentEnabled;
     this.configurationPersistenceText
@@ -457,6 +462,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     ] as const;
     values.forEach(([currency, label, value, color], index) => {
       const y = (roomy ? 42 * contentScale : 31) + index * (roomy ? 36 * contentScale : 23);
+      root.add(this.add.rectangle(9, y - 4, rect.width - 18, (roomy ? 32 : 21) * contentScale, 0x102331, 0.6).setOrigin(0).setStrokeStyle(1, 0x597585, 0.28));
       root.add(this.add.text(15 * contentScale, y, label, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: `${roomy ? Math.round(15 * contentScale) : 11}px`, color: '#93b8c7'
       }).setOrigin(0));
@@ -698,14 +704,31 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private createOverlay(title: string): Phaser.GameObjects.Container {
+    const { width, height } = this.scale;
+    const narrow = width < 760;
+    const fitHeading = (heading: Phaser.GameObjects.Text): void => {
+      heading.setText(title).setScale(Math.min(1, (width - (narrow ? 164 : 320)) / heading.width));
+    };
+    const stationKey = /CONSTELLATION|OVERDRIVE PROGRESSION/.test(title) ? 'constellations' : title;
+    if (this.overlay?.getData('stationKey') === stationKey) {
+      this.clearOverlayContent();
+      const content = this.overlay.getByName('workstation-content') as Phaser.GameObjects.Container;
+      const retire = (object: Phaser.GameObjects.GameObject): void => {
+        this.tweens.killTweensOf(object);
+        if (object instanceof Phaser.GameObjects.Container) for (const child of object.list) retire(child);
+      };
+      retire(content); content.destroy(true);
+      fitHeading(this.overlay.getByName('workstation-heading') as Phaser.GameObjects.Text);
+      const replacement = this.add.container(0, 0).setName('workstation-content');
+      this.overlay.add(replacement);
+      return replacement;
+    }
     this.closeOverlay(false);
     setSceneUiModalDepth(this, 30);
-    const { width, height } = this.scale;
     const root = this.add.container(0, 0).setDepth(2000);
     const blocker = this.add.rectangle(width / 2, height / 2, width, height, 0x01040a, 0.94).setInteractive();
     const panel = this.add.rectangle(width / 2, height / 2, width - 16, height - 16, 0x06111b, 0.985).setStrokeStyle(2, 0x54efff, 0.8);
     const scanlines = this.add.grid(width / 2, height / 2, width - 20, height - 20, width, 6, 0x000000, 0, 0x57eafa, 0.035);
-    const narrow = width < 760;
     const headingX = narrow ? (width - 118) / 2 : width / 2;
     const heading = this.add.text(headingX, 20, title, {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${narrow ? 18 : Phaser.Math.Clamp(width * 0.027, 21, 30)}px`, color: '#65f5ff', fontStyle: 'bold'
@@ -717,9 +740,15 @@ export class OperatorGarageScene extends Phaser.Scene {
       this.clearRecalibrationSession();
       this.closeOverlay(true);
     }, closeWidth);
-    root.add([blocker, panel, scanlines, heading, close]);
+    heading.setName('workstation-heading');
+    fitHeading(heading);
+    root.add([blocker, panel, scanlines]);
+    addTerminalDetail(this, root, { x: 9, y: 9, width: width - 18, height: height - 18 });
+    root.add([heading, close]);
+    const content = this.add.container(0, 0).setName('workstation-content'); root.add(content);
+    root.setData('stationKey', stationKey);
     this.overlay = root;
-    return root;
+    return content;
   }
 
   private runConfigurationFocusTarget: string | null = null;
@@ -745,7 +774,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       selectedNormalStartRound: current.mode === 'normal' ? current.startingRound : 1,
       selectedStartingRounds: { [current.mode]: current.startingRound }
     }, progress);
-    const pageSize = compact ? 12 : 15;
+    const pageSize = height < 560 ? (narrow ? 8 : 10) : compact ? 12 : 15;
     const pageCount = Math.max(1, Math.ceil(checkpoints.length / pageSize));
     const page = Phaser.Math.Clamp(Math.floor(requestedPage), 0, pageCount - 1);
     const visibleCheckpoints = checkpoints.slice(page * pageSize, (page + 1) * pageSize);
@@ -761,9 +790,9 @@ export class OperatorGarageScene extends Phaser.Scene {
       onPageRight: () => this.showOperations(viewedMode, Math.min(pageCount - 1, page + 1))
     });
 
-    root.add(this.add.text(width / 2, compact ? 68 : 73, 'SELECT MODE // SELECT AN UNLOCKED STARTING CHECKPOINT', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 14 : 18}px`, color: '#9bcad7',
-      fontStyle: 'bold', letterSpacing: 2, align: 'center'
+    root.add(this.add.text(width / 2, narrow ? 74 : compact ? 68 : 73, 'SELECT MODE // SELECT AN UNLOCKED STARTING CHECKPOINT', {
+      fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 11 : compact ? 14 : 18}px`, color: '#9bcad7',
+      fontStyle: 'bold', letterSpacing: narrow ? 1 : 2, align: 'center'
     }).setOrigin(0.5));
 
     modes.forEach((status, index) => {
@@ -809,7 +838,8 @@ export class OperatorGarageScene extends Phaser.Scene {
     const gridHeader = this.add.rectangle(gridX + 8, contentTop + 8, gridWidth - 16, compact ? 32 : 40, 0x55efff, 0.075)
       .setOrigin(0).setStrokeStyle(1, 0x55efff, 0.24);
     root.add([gridFrame, gridHeader]);
-    root.add(this.add.text(gridX + 22, contentTop + (compact ? 24 : 28), `${formatOperationsMode(viewedMode)} // STARTING CHECKPOINTS`, {
+    const stackedGridHeader = gridWidth < 1100;
+    root.add(this.add.text(gridX + 22, contentTop + (stackedGridHeader ? compact ? 17 : 21 : compact ? 24 : 28), `${formatOperationsMode(viewedMode)} // STARTING CHECKPOINTS`, {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 13 : 17}px`, color: '#70f5ff', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0, 0.5));
 
@@ -819,23 +849,25 @@ export class OperatorGarageScene extends Phaser.Scene {
       : viewedStatus.unlocked
         ? `${formatOperationsMode(viewedMode)} CLEARANCE // ONLINE`
         : `LOCKED // ${viewedStatus.unlockRequirement}`;
-    root.add(this.add.text(gridX + gridWidth - 22, contentTop + (compact ? 24 : 28), clearanceText, {
+    root.add(this.add.text(stackedGridHeader ? gridX + 22 : gridX + gridWidth - 22, contentTop + (stackedGridHeader ? compact ? 33 : 40 : compact ? 24 : 28), clearanceText, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: `${narrow ? 9 : compact ? 11 : 13}px`, color: viewedStatus.unlocked ? '#78ffb2' : '#ff8eaa', fontStyle: 'bold'
-    }).setOrigin(1, 0.5).setMaxLines(1));
+    }).setOrigin(stackedGridHeader ? 0 : 1, 0.5).setMaxLines(1));
 
     const columns = narrow ? 4 : compact ? 5 : 5;
     const rows = Math.max(1, Math.ceil(visibleCheckpoints.length / columns));
-    const buttonGap = compact ? 8 : 12;
+    const buttonGap = height < 560 ? 8 : compact ? 12 : 28;
     const horizontalPadding = compact ? 20 : 30;
     const checkpointWidth = (gridWidth - horizontalPadding * 2 - buttonGap * (columns - 1)) / columns;
-    const availableGridHeight = gridHeight - (compact ? 50 : 62);
+    const gridStart = compact ? 46 : 55;
+    const pagerSpace = pageCount > 1 ? compact ? 40 : 48 : 0;
+    const availableGridHeight = gridHeight - gridStart - pagerSpace - 8;
     const checkpointHeight = Phaser.Math.Clamp(
       (availableGridHeight - buttonGap * Math.max(0, rows - 1)) / rows,
       compact ? 34 : 44,
-      compact ? 58 : 72
+      compact ? 74 : 150
     );
     const usedHeight = checkpointHeight * rows + buttonGap * Math.max(0, rows - 1);
-    const firstY = contentTop + (compact ? 46 : 55) + Math.max(0, (availableGridHeight - usedHeight) / 2) + checkpointHeight / 2;
+    const firstY = contentTop + gridStart + Math.max(0, (availableGridHeight - usedHeight) / 2) + checkpointHeight / 2;
     visibleCheckpoints.forEach((option, index) => {
       const column = index % columns;
       const row = Math.floor(index / columns);
@@ -860,7 +892,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         return result.ok;
       }, checkpointWidth, 'menu', {
         height: checkpointHeight,
-        fontSize: narrow ? 9 : compact ? 11 : 14,
+        fontSize: narrow ? 10 : compact ? 14 : 21,
         horizontalPadding: 10,
         focusModalDepth: 30,
         focusDefaultPriority: option.selected ? 100 : option.unlocked ? 10 : 0,
@@ -870,6 +902,14 @@ export class OperatorGarageScene extends Phaser.Scene {
       const backing = button.list[0] as Phaser.GameObjects.Rectangle;
       backing.setFillStyle(option.selected ? 0x15382d : option.unlocked ? 0x0b1d29 : 0x16131d, 0.98);
       backing.setStrokeStyle(option.selected ? 3 : 2, option.selected ? 0x71ffad : option.unlocked ? 0x55efff : 0x74425f, option.selected ? 1 : option.unlocked ? 0.65 : 0.45);
+      if (option.startingRound % 5 === 0) {
+        addTerminalDetail(this, button, { x: -checkpointWidth / 2, y: -checkpointHeight / 2, width: checkpointWidth, height: checkpointHeight }, option.unlocked ? 0xffb45f : 0x74425f, true);
+      }
+      if (checkpointHeight >= 100) {
+        button.add(this.add.text(0, checkpointHeight / 2 - 20, option.selected ? 'SELECTED CHECKPOINT' : option.unlocked ? 'CLEARANCE CONFIRMED' : 'CLEARANCE REQUIRED', {
+          fontFamily: 'Rajdhani, sans-serif', fontSize: '12px', fontStyle: 'bold', color: option.unlocked ? '#98dcc9' : '#bc91a4'
+        }).setOrigin(0.5));
+      }
       button.setAlpha(option.unlocked ? 1 : 0.68);
       root.add(button);
     });
@@ -895,6 +935,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const summaryRail = this.add.rectangle(summaryX + 8, summaryY + 8, summaryWidth - 16, compact ? 30 : 38, 0xff5bcf, 0.08)
       .setOrigin(0).setStrokeStyle(1, 0xff5bcf, 0.26);
     root.add([summaryFrame, summaryRail]);
+    addTerminalDetail(this, root, { x: summaryX, y: summaryY, width: summaryWidth, height: summaryHeight }, 0xff65c8);
     root.add(this.add.text(summaryX + summaryWidth / 2, summaryY + (compact ? 23 : 28), 'CURRENT DEPLOYMENT', {
       fontFamily: 'Orbitron, sans-serif', fontSize: `${compact ? 13 : 17}px`, color: '#ff8edb', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5));
@@ -904,11 +945,18 @@ export class OperatorGarageScene extends Phaser.Scene {
         fontStyle: 'bold', align: 'center', lineSpacing: compact ? 2 : 7
       }).setOrigin(0.5));
     if (wide) {
+      const motifX = summaryX + summaryWidth / 2, motifY = summaryY + summaryHeight * 0.23;
+      const motifColor = current.mode === 'supreme' ? 0xff8edb : current.mode === 'overdrive' ? 0xffb45f : 0x55eaff;
+      root.add(this.add.polygon(motifX, motifY, createConsoleChamferPoints(92, 92, 24), motifColor, 0.05).setStrokeStyle(2, motifColor, 0.55));
+      root.add(this.add.circle(motifX, motifY, 36, motifColor, 0.04).setStrokeStyle(1, motifColor, 0.3));
+      root.add(this.add.text(motifX, motifY, current.mode === 'normal' ? 'N' : current.mode === 'overdrive' ? 'OD' : 'SOD', {
+        fontFamily: 'Orbitron, sans-serif', fontSize: '21px', color: Phaser.Display.Color.IntegerToColor(motifColor).rgba, fontStyle: 'bold'
+      }).setOrigin(0.5));
       const setup = SaveSystem.getNextRunSetupSelection();
       const contract = setup.contract ? RUN_CONTRACTS[setup.contract].label.toUpperCase() : 'NONE';
       const signal = setup.modFocus ? MOD_FOCUS_LABELS[setup.modFocus].toUpperCase() : 'NONE';
       root.add(this.add.text(summaryX + summaryWidth / 2, summaryY + summaryHeight * 0.72,
-        `CONTRACT // ${contract}\nSIGNAL // ${signal}\n\nSELECTIONS SAVE IMMEDIATELY`, {
+        `CONTRACT // ${contract}\nSIGNAL // ${signal}\nRUN COST // ${getRunSetupCost(setup).toLocaleString()} CR\n${SaveSystem.get().credits >= getRunSetupCost(setup) ? 'DEPLOYMENT READY' : 'CREDITS REQUIRED TO DEPLOY'}`, {
           fontFamily: 'Rajdhani, sans-serif', fontSize: `${compact ? 13 : 16}px`, color: '#a8d4df',
           fontStyle: 'bold', align: 'center', lineSpacing: 5,
           wordWrap: { width: summaryWidth - 28, useAdvancedWrap: true }
@@ -2020,7 +2068,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     const cardsTop = terminalLayout.cardsTop;
     const cardsBottom = terminalLayout.cardsBottom;
     const availableHeight = cardsBottom - cardsTop;
-    const cardHeight = Phaser.Math.Clamp((availableHeight - rowGap * (rows - 1)) / rows, narrow ? 48 : 58, 118);
+    const cardHeight = Phaser.Math.Clamp((availableHeight - rowGap * (rows - 1)) / rows, 36, 118);
     const usedHeight = cardHeight * rows + rowGap * (rows - 1);
     const firstCenterY = cardsTop + Math.max(0, (availableHeight - usedHeight) / 2) + cardHeight / 2;
     protocols.forEach((id, index) => {
@@ -2110,47 +2158,97 @@ export class OperatorGarageScene extends Phaser.Scene {
         locked: () => !unlocked,
         defaultPriority: selected ? 60 : unlocked ? 10 : 0
       });
-      root.add([shadow, chassis, inner, topRail, sideEdge, tierBadge, tierText, tierName, stateText, detail, progressTrack, progressFill, led, hitZone]);
+      root.add([shadow, chassis, inner]);
+      addTerminalDetail(this, root, { x: x - cardWidth / 2, y: y - cardHeight / 2, width: cardWidth, height: cardHeight }, accent, true);
+      root.add([topRail, sideEdge, tierBadge, tierText, tierName, stateText, detail, progressTrack, progressFill, led, hitZone]);
       this.overlayAnimatedTargets.push(led);
       this.tweens.add({ targets: led, alpha: { from: selected ? 0.35 : 0.2, to: 1 }, duration: 720 + index * 45, yoyo: true, repeat: -1 });
     });
   }
 
+  private compactEconomyPage = 0;
+
   private showCurrencyExchange(): void {
     const root = this.createOverlay('ECONOMY CONSOLE // MARKET NODE');
     const { width, height } = this.scale;
     const compact = width < 1180 || height < 760;
+    const pagedMarket = width < 1000 || height < 640;
     const analytics = SaveSystem.getEconomyAnalytics();
     if (this.exchangeSource === this.exchangeTarget) {
       this.exchangeTarget = EXCHANGE_CURRENCIES.find((currency) => currency !== this.exchangeSource) ?? 'coreTokens';
     }
-    this.createEconomyConsoleHeader(root, analytics, compact);
-    const bodyTop = compact ? 250 : 286;
-    const bodyBottom = height - (compact ? 42 : 50);
+    this.createEconomyConsoleHeader(root, analytics, compact, pagedMarket);
+    const bodyTop = pagedMarket ? 134 : compact ? 250 : 286;
+    const bodyBottom = height - (pagedMarket ? 12 : compact ? 42 : 50);
     const body: EconomyConsoleRect = { x: compact ? 14 : 24, y: bodyTop, width: width - (compact ? 28 : 48), height: Math.max(300, bodyBottom - bodyTop) };
     const tab = ECONOMY_TABS[this.economyConsoleTabIndex];
-    if (tab === 'MARKET') this.renderEconomyMarket(root, analytics, body, compact);
+    let scroll: ((amount: number) => void) | undefined;
+    if (pagedMarket) {
+      const pages = tab === 'MARKET' ? ['EXCHANGE', 'PORTFOLIO', 'RATES']
+        : tab === 'PROGRESSION' ? ['UPGRADES', 'FUTURE COST', 'REMAINING VALUE']
+          : tab === 'COMMERCE' ? ['CATALOG', 'VALUATION', 'PRICE CURVE'] : ['MODS', 'INFUSIONS', 'INTEL'];
+      const pageWidth = Math.min(210, (width - 40) / 3);
+      pages.forEach((label, index) => root.add(createButton(this, width / 2 + (index - 1) * pageWidth, 115, label, () => {
+        this.compactEconomyPage = index; this.showCurrencyExchange();
+      }, pageWidth - 6, 'menu', { height: 24, fontSize: 12, focusModalDepth: 30,
+        focusId: `economy-page-${index}`, accent: index === this.compactEconomyPage ? 0x74ffb2 : 0x577383 })));
+      if (tab === 'MARKET' && this.compactEconomyPage === 0) this.renderExchangeTransaction(root, analytics, body, true);
+      else scroll = this.createCompactEconomyViewport(root, body, (content, virtualBody) => {
+        if (tab === 'MARKET') {
+          if (this.compactEconomyPage === 1) this.renderPortfolioAnalytics(content, analytics, virtualBody, true);
+          else this.renderExchangeMatrix(content, analytics, virtualBody, true);
+        } else {
+          content.x = -this.compactEconomyPage * (body.width + 8);
+          if (tab === 'PROGRESSION') this.renderEconomyProgression(content, analytics, virtualBody, true);
+          else if (tab === 'COMMERCE') this.renderEconomyCommerce(content, analytics, virtualBody, true);
+          else this.renderEconomyMods(content, analytics, virtualBody, true);
+        }
+      });
+    }
+    else if (tab === 'MARKET') this.renderEconomyMarket(root, analytics, body, compact);
     else if (tab === 'PROGRESSION') this.renderEconomyProgression(root, analytics, body, compact);
     else if (tab === 'COMMERCE') this.renderEconomyCommerce(root, analytics, body, compact);
     else this.renderEconomyMods(root, analytics, body, compact);
-    this.createEconomyTicker(root, analytics, height);
+    if (!pagedMarket) this.createEconomyTicker(root, analytics, height);
     configureSceneUiNavigation(this, {
       onBack: this.handleEscape,
       onTabLeft: () => this.switchEconomyConsoleTab(-1),
-      onTabRight: () => this.switchEconomyConsoleTab(1)
+      onTabRight: () => this.switchEconomyConsoleTab(1),
+      onScroll: scroll
     });
+  }
+
+  private createCompactEconomyViewport(root: Phaser.GameObjects.Container, body: EconomyConsoleRect,
+    render: (content: Phaser.GameObjects.Container, virtualBody: EconomyConsoleRect) => void): (amount: number) => void {
+    const content = this.add.container(0, 0); root.add(content);
+    const visibleHeight = body.height - 36;
+    const virtualHeight = Math.max(640, visibleHeight);
+    const source = this.add.graphics().fillStyle(0xffffff).fillRect(body.x, body.y, body.width, visibleHeight).setVisible(false);
+    root.add(source);
+    const mask = source.createGeometryMask(); content.setMask(mask);
+    render(content, { ...body, height: virtualHeight });
+    const scroll = (amount: number): void => { content.y = Phaser.Math.Clamp(content.y - amount, visibleHeight - virtualHeight, 0); };
+    const wheel = (_pointer: Phaser.Input.Pointer, _objects: Phaser.GameObjects.GameObject[], _dx: number, dy: number): void => scroll(dy);
+    this.input.on('wheel', wheel);
+    root.once('destroy', () => { this.input.off('wheel', wheel); mask.destroy(); });
+    const footerY = body.y + body.height - 16;
+    root.add(createButton(this, this.scale.width / 2 - 100, footerY, 'UP', () => scroll(-150), 80, 'menu', { height: 26, fontSize: 12, focusModalDepth: 30 }));
+    root.add(createButton(this, this.scale.width / 2 + 100, footerY, 'DOWN', () => scroll(150), 80, 'menu', { height: 26, fontSize: 12, focusModalDepth: 30 }));
+    root.add(this.add.text(this.scale.width / 2, footerY, 'SCROLL DATA', { fontFamily: ECONOMY_FONT, fontSize: '12px', color: '#a5cad5' }).setOrigin(0.5));
+    return scroll;
   }
 
   private switchEconomyConsoleTab(direction: number): void {
     this.economyConsoleTabIndex = (this.economyConsoleTabIndex + direction + ECONOMY_TABS.length) % ECONOMY_TABS.length;
+    this.compactEconomyPage = 0;
     this.exchangeConfirmationArmed = true;
     this.status = '';
     this.showCurrencyExchange();
   }
 
-  private createEconomyConsoleHeader(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, compact: boolean): void {
+  private createEconomyConsoleHeader(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, compact: boolean, condensed = false): void {
     const { width } = this.scale;
-    root.add(this.add.text(width / 2, compact ? 52 : 59, `OPERATIVE PORTFOLIO   //   ${CURRENCY_EXCHANGE_RATES.length} EXCHANGE PAIRS ACTIVE   //   WALLET VERIFIED`, {
+    root.add(this.add.text(condensed ? (width - 118) / 2 : width / 2, compact ? 52 : 59, condensed ? 'OPERATIVE PORTFOLIO // WALLET VERIFIED' : `OPERATIVE PORTFOLIO   //   ${CURRENCY_EXCHANGE_RATES.length} EXCHANGE PAIRS ACTIVE   //   WALLET VERIFIED`, {
       fontFamily: ECONOMY_FONT, fontSize: `${compact ? 12 : 15}px`, color: '#a5cad5', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5, 0));
     const tabY = compact ? 82 : 91;
@@ -2163,12 +2261,14 @@ export class OperatorGarageScene extends Phaser.Scene {
         .setStrokeStyle(selected ? 2 : 1, selected ? 0x62efff : 0x385e6d, selected ? 0.95 : 0.5));
       root.add(createButton(this, x, tabY, label, () => {
         this.economyConsoleTabIndex = index;
+        this.compactEconomyPage = 0;
         this.exchangeConfirmationArmed = true;
         this.status = '';
         this.showCurrencyExchange();
       }, tabWidth, 'menu', { height: compact ? 32 : 40, fontSize: compact ? 13 : 16, focusModalDepth: 30, focusDefaultPriority: selected ? 35 : 0, focusGroup: 'economy-console-tabs' }));
     });
 
+    if (condensed) return;
     const walletTop = compact ? 106 : 119;
     const walletHeight = compact ? 132 : 150;
     const margin = compact ? 14 : 24;
@@ -2203,6 +2303,7 @@ export class OperatorGarageScene extends Phaser.Scene {
   private renderExchangeTransaction(root: Phaser.GameObjects.Container, analytics: EconomyAnalyticsSnapshot, rect: EconomyConsoleRect, compact: boolean): void {
     const panel = createEconomyPanel(this, root, rect, 'SECURE EXCHANGE EXECUTION', 0x62efff, 'ATOMIC LEDGER');
     const short = rect.height < 440;
+    const dense = rect.height < 360;
     const rate = getCurrencyExchangeRate(this.exchangeSource, this.exchangeTarget)!;
     if (this.exchangeAmount <= 0 || this.exchangeAmount % rate.sourceUnits !== 0) this.exchangeAmount = rate.sourceUnits;
     this.exchangeAmount = Math.max(rate.sourceUnits, Math.min(this.exchangeAmount, getMaximumExchangeSpend(analytics.wallet, this.exchangeSource, this.exchangeTarget)));
@@ -2220,11 +2321,11 @@ export class OperatorGarageScene extends Phaser.Scene {
     };
     const innerWidth = rect.width - 34;
     const halfWidth = (innerWidth - 74) / 2;
-    const accountY = rect.y + 88;
+    const accountY = rect.y + (dense ? 74 : 88);
     (['source', 'target'] as const).forEach((role, index) => {
       const currency = role === 'source' ? this.exchangeSource : this.exchangeTarget;
       const x = rect.x + 17 + halfWidth / 2 + index * (halfWidth + 74);
-      root.add(this.add.text(x, rect.y + 54, role === 'source' ? 'SOURCE ACCOUNT' : 'TARGET ACCOUNT', {
+      root.add(this.add.text(x, rect.y + (dense ? 48 : 54), role === 'source' ? 'SOURCE ACCOUNT' : 'TARGET ACCOUNT', {
         fontFamily: ECONOMY_FONT, fontSize: `${compact ? 11 : 14}px`, color: '#a2c3ce', fontStyle: 'bold'
       }).setOrigin(0.5));
       root.add(createButton(this, x, accountY, EXCHANGE_CURRENCY_LABELS[currency], () => cycleCurrency(role), halfWidth, 'menu', {
@@ -2245,7 +2346,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.overlayAnimatedTargets.push(routePulse);
     this.tweens.add({ targets: routePulse, x: rect.x + rect.width - 17 - halfWidth, alpha: { from: 0.25, to: 1 }, duration: 1250, repeat: -1, ease: 'Sine.easeInOut' });
 
-    const amountY = rect.y + (compact ? 142 : 159);
+    const amountY = rect.y + (dense ? 120 : compact ? 142 : 159);
     root.add(this.add.text(rect.x + rect.width / 2, amountY, 'SOURCE AMOUNT', { fontFamily: ECONOMY_FONT, fontSize: `${compact ? 12 : 15}px`, color: '#9dbdc8', fontStyle: 'bold' }).setOrigin(0.5));
     const amountText = this.add.text(rect.x + rect.width / 2, amountY + 17, this.exchangeAmount.toLocaleString(), {
       fontFamily: ECONOMY_DISPLAY_FONT, fontSize: `${compact ? 23 : 32}px`, color: Phaser.Display.Color.IntegerToColor(EXCHANGE_CURRENCY_COLORS[this.exchangeSource]).rgba, fontStyle: 'bold'
@@ -2269,8 +2370,8 @@ export class OperatorGarageScene extends Phaser.Scene {
       root.add(button); return button;
     });
 
-    const previewTop = amountY + (compact ? 91 : 113);
-    const previewBacking = this.add.rectangle(17, previewTop - rect.y, rect.width - 34, short ? 52 : compact ? 98 : 121, quote.ok ? 0x113039 : 0x37131e, 0.88).setOrigin(0).setStrokeStyle(1, quote.ok ? 0x62efff : 0xff6f89, 0.52);
+    const previewTop = amountY + (dense ? 86 : compact ? 91 : 113);
+    const previewBacking = this.add.rectangle(17, previewTop - rect.y, rect.width - 34, dense ? 36 : short ? 52 : compact ? 98 : 121, quote.ok ? 0x113039 : 0x37131e, 0.88).setOrigin(0).setStrokeStyle(1, quote.ok ? 0x62efff : 0xff6f89, 0.52);
     panel.add(previewBacking);
     const spent = quote.ok ? quote.spent : 0; const received = quote.ok ? quote.received : 0;
     const sourceAfter = analytics.wallet[this.exchangeSource] - spent;
@@ -2290,7 +2391,7 @@ export class OperatorGarageScene extends Phaser.Scene {
       }).setOrigin(1, 0);
       root.add(targetPost);
     }
-    const confirmY = Math.min(rect.y + rect.height - (compact ? 42 : 49), previewTop + (short ? 75 : compact ? 129 : 158));
+    const confirmY = Math.min(rect.y + rect.height - (compact ? 42 : 49), previewTop + (dense ? 60 : short ? 75 : compact ? 129 : 158));
     const confirm = createButton(this, rect.x + rect.width / 2, confirmY, quote.ok
       ? this.exchangeConfirmationArmed ? 'CONFIRM SECURE EXCHANGE' : 'ADJUST TO EXCHANGE AGAIN' : 'EXCHANGE UNAVAILABLE', () => {
       if (!this.exchangeConfirmationArmed || this.time.now < this.exchangeConfirmLockedUntil) return false;
@@ -2400,7 +2501,7 @@ export class OperatorGarageScene extends Phaser.Scene {
 
   private getEconomyColumns(body: EconomyConsoleRect, compact: boolean): EconomyConsoleRect[] {
     const gap = compact ? 8 : 12;
-    const width = (body.width - gap * 2) / 3;
+    const width = this.scale.width < 1000 || this.scale.height < 640 ? body.width : (body.width - gap * 2) / 3;
     return [0, 1, 2].map((index) => ({ x: body.x + index * (width + gap), y: body.y, width, height: body.height }));
   }
 
@@ -2563,45 +2664,10 @@ export class OperatorGarageScene extends Phaser.Scene {
 
   private showPresets(): void {
     const root = this.createOverlay('CONFIGURATION WORKBENCH // PRESETS');
-    const { width, height } = this.scale;
-    const state = SaveSystem.getGarageState();
-    const mods = SaveSystem.getModCollection();
-    const columns = 3;
-    const gap = Math.max(8, Math.min(18, width * 0.015));
-    const panelWidth = Math.min(360, (width - 36 - gap * 2) / columns);
-    const panelHeight = height - 128;
-    state.presets.forEach((preset, index) => {
-      const x = width / 2 + (index - 1) * (panelWidth + gap);
-      const y = 92 + panelHeight / 2;
-      const missing = Object.values(preset.cardSlots).filter((id) => id && !mods.cards.some((card) => card.instanceId === id)).length;
-      root.add(this.add.rectangle(x, y, panelWidth, panelHeight, 0x081622, 0.97).setStrokeStyle(2, preset.saved ? 0x63efff : 0x3d6170, preset.saved ? 0.68 : 0.42));
-      root.add(this.add.text(x, 108, preset.name, { fontFamily: 'Orbitron, sans-serif', fontSize: `${Phaser.Math.Clamp(panelWidth * 0.08, 14, 20)}px`, color: preset.saved ? '#69f5ff' : '#7798a5' }).setOrigin(0.5));
-      const installed = Object.values(preset.cardSlots).filter(Boolean).length;
-      const protocol = preset.protocol
-        ? `${RUN_PROTOCOLS[preset.protocol].label}${preset.protocol === 'normal' && preset.normalStartRound ? ` // START ${preset.normalStartRound}` : ''}`
-        : 'NO PROTOCOL SAVED';
-      const contract = preset.contract ? RUN_CONTRACTS[preset.contract].label : 'NO CONTRACT';
-      const signal = preset.modFocus ? MOD_FOCUS_LABELS[preset.modFocus] : 'NO SIGNAL';
-      root.add(this.add.text(x, 145, preset.saved
-        ? `${installed} / 5 MODS\n${protocol}\n${contract}\n${signal}${missing ? `\n${missing} MISSING MOD${missing === 1 ? '' : 'S'}` : ''}`
-        : 'EMPTY CONFIGURATION SLOT\n\nSAVE THE CURRENT WORKBENCH\nSTATE TO BEGIN.', {
-        fontFamily: 'Rajdhani, sans-serif', fontSize: panelWidth < 210 ? '12px' : '15px', color: missing ? '#ff9baa' : '#c4dce7', align: 'center', lineSpacing: 5
-      }).setOrigin(0.5, 0).setWordWrapWidth(panelWidth - 24, true).setMaxLines(7));
-      if (preset.savedAt) root.add(this.add.text(x, y + panelHeight / 2 - 112, `SAVED ${new Date(preset.savedAt).toLocaleDateString()}`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '10px', color: '#6f919f' }).setOrigin(0.5));
-      root.add(createButton(this, x, y + panelHeight / 2 - 74, 'SAVE CURRENT CONFIG', () => {
-        const result = SaveSystem.saveGaragePreset(preset.id);
-        this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? ''}`;
-        this.showPresets();
-        return result.ok;
-      }, panelWidth - 22));
-      const load = createButton(this, x, y + panelHeight / 2 - 28, 'LOAD CONFIG', () => {
-        const result = SaveSystem.loadGaragePreset(preset.id);
-        this.status = `${result.ok ? 'SUCCESS' : 'BLOCKED'} // ${result.message ?? ''}`;
-        this.scene.restart({ returnScene: this.returnScene });
-        return result.ok;
-      }, panelWidth - 22);
-      if (!preset.saved) disableButton(load);
-      root.add(load);
+    createConfigurationPresetsView(this, root, () => {
+      this.modStatsDirty = true;
+      this.refreshConfigurationTerminalState();
+      this.refreshOperatorPreview();
     });
   }
 
@@ -2609,7 +2675,7 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.scene.start(SceneKeys.Mods, { returnScene: SceneKeys.Garage, selectedCardId, initialCategory, targetSlot });
   }
 
-  private closeOverlay(refreshGarage = false): void {
+  private clearOverlayContent(): void {
     this.resetNativeConfirmModal?.destroy();
     this.resetNativeConfirmModal = null;
     this.input.off('wheel', this.handleLibraryWheel);
@@ -2623,6 +2689,10 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.runConfigurationWalletUpdater = null;
     this.tweens.killTweensOf(this.overlayAnimatedTargets);
     this.overlayAnimatedTargets.length = 0;
+  }
+
+  private closeOverlay(refreshGarage = false): void {
+    this.clearOverlayContent();
     this.overlay?.destroy(true);
     this.overlay = null;
     setSceneUiModalDepth(this, 0);
@@ -2630,7 +2700,8 @@ export class OperatorGarageScene extends Phaser.Scene {
       onTabLeft: undefined,
       onTabRight: undefined,
       onPageLeft: undefined,
-      onPageRight: undefined
+      onPageRight: undefined,
+      onScroll: (amount) => this.libraryViewer?.scrollBy(amount)
     });
     if (refreshGarage && this.modStatsDirty && this.scene.isActive()) {
       this.modStatsDirty = false;

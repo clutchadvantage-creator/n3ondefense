@@ -1,5 +1,5 @@
 import { normalizeWeeklyRewardCampaignState } from '../progression/WeeklyRewardCampaigns.ts';
-import { COSMETICS } from '../../data/cosmetics.ts';
+import { DEFAULT_EQUIPPED_COSMETICS, COSMETICS } from '../../data/cosmetics.ts';
 import { UPGRADE_DEFINITIONS } from '../../data/upgrades.ts';
 import type { CosmeticOption } from '../types.ts';
 import { DEFAULT_AUDIO_VOLUME, SFX_DEFINITIONS, createDefaultSoundVolumes } from '../config/audio.ts';
@@ -90,18 +90,7 @@ const normalizeTutorialProgress = (value: unknown): TutorialProgressState => {
   };
 };
 
-const defaultEquipped: Partial<Record<CosmeticOption['category'], string>> = {
-  playerColor: 'player-cyan',
-  playerShape: 'player-circle',
-  projectileColor: 'projectile-cyan',
-  projectileShape: 'projectile-shape-pulse',
-  trailColor: 'trail-cyan',
-  bombColor: 'bomb-purple',
-  turretSkin: 'turret-default',
-  mineFrame: 'mine-default',
-  fenceStyle: 'fence-default',
-  dashTrail: 'dash-cyan'
-};
+const defaultEquipped = DEFAULT_EQUIPPED_COSMETICS;
 
 const defaultOwned = ['player-cyan', 'player-native', 'player-circle', 'projectile-cyan', 'projectile-native', 'projectile-shape-pulse', 'turret-default', 'mine-default', 'fence-default', 'dash-cyan'];
 

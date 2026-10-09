@@ -1,6 +1,19 @@
 import type { CosmeticOption } from '../game/types.ts';
 import type { CosmeticPriceTier } from '../game/economy/types.ts';
 
+export const DEFAULT_EQUIPPED_COSMETICS: Partial<Record<CosmeticOption['category'], string>> = {
+  playerColor: 'player-cyan',
+  playerShape: 'player-circle',
+  projectileColor: 'projectile-cyan',
+  projectileShape: 'projectile-shape-pulse',
+  trailColor: 'trail-cyan',
+  bombColor: 'bomb-purple',
+  turretSkin: 'turret-default',
+  mineFrame: 'mine-default',
+  fenceStyle: 'fence-default',
+  dashTrail: 'dash-cyan'
+};
+
 export const getCosmeticPriceTier = (item: CosmeticOption): CosmeticPriceTier => item.priceTier
   ?? (item.currency === 'plasmaChips' ? 'prestige' : item.currency === 'coreTokens' ? 'rare' : 'standard');
 

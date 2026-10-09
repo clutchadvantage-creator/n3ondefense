@@ -1,3 +1,4 @@
+import { addTerminalDetail } from './TerminalChrome.ts';
 import Phaser from 'phaser';
 import { createButton } from '../utils/ui.ts';
 import type { DebriefLayout, DebriefRect } from './DebriefLayout.ts';
@@ -122,6 +123,7 @@ const createSectionFrame = (scene: Phaser.Scene, rect: DebriefRect, title: strin
   }).setOrigin(0, 0);
   const led = scene.add.circle(rect.width - 16, 17, 3, accent, 0.9);
   root.add([shadow, frame, header, rail, label, led]);
+  addTerminalDetail(scene, root, { x: 0, y: 0, width: rect.width, height: rect.height }, accent);
   scene.tweens.add({ targets: led, alpha: { from: 0.25, to: 1 }, duration: 800, yoyo: true, repeat: -1 });
   return root;
 };

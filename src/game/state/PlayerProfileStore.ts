@@ -25,8 +25,8 @@ import { RUN_PROTOCOLS, isRunProtocolUnlocked } from '../mods/modBalance.ts';
 import { isSupremeProtocol } from '../progression/SupremeProgression.ts';
 import { buildRunEconomySnapshot, getNextLoadoutSlotCost, getRunSetupCost, purchaseRunSetup, spendCreditsAtomic } from '../economy/EconomyService.ts';
 import type { CreditSpendCategory, RunSetupSelection } from '../economy/types.ts';
-import { loadGaragePreset, normalizeRunSetupSelection, saveCurrentGaragePreset } from '../garage/GarageState.ts';
-import type { GaragePresetId, PlayerGarageState } from '../garage/types.ts';
+import { getGaragePresetStatus, validateGaragePreset, renameGaragePreset, loadGaragePreset, normalizeRunSetupSelection, saveCurrentGaragePreset } from '../garage/GarageState.ts';
+import type { GaragePresetId, PlayerGarageState, SaveGaragePresetOptions } from '../garage/types.ts';
 import {
   commitDeploymentLaunch,
   isSavedDeploymentReminderDue,
@@ -735,25 +735,43 @@ export class PlayerProfileStore {
     return result;
   }
 
-  static saveGaragePreset(presetId: GaragePresetId): PurchaseResult {
+  static getGaragePresetState(presetId: GaragePresetId) {
     const save = PlayerProfileStore.getActiveSave();
-    const result = saveCurrentGaragePreset(save, presetId);
-    if (result.ok) {
-      save.profile.lastPlayedAt = new Date().toISOString();
-      PlayerProfileStore.save();
+    const preset = save.garage.presets.find(entry => entry.id === presetId);
+    return preset ? { status: getGaragePresetStatus(save, preset), issues: preset.saved ? validateGaragePreset(save, preset).issues : [] }
+      : { status: 'saved' as const, issues: ['Configuration unavailable.'] };
+  }
+
+  private static commitGarageConfiguration(change: (save: LocalPlayerSave) => PurchaseResult): PurchaseResult {
+    const save = PlayerProfileStore.getActiveSave();
+    const previous = { garage: structuredClone(save.garage), protocol: structuredClone(save.protocol),
+      loadouts: structuredClone(save.mods.loadouts), equipped: { ...save.cosmetics.equipped },
+      metadata: { ...save.metadata }, lastPlayedAt: save.profile.lastPlayedAt };
+    const result = change(save);
+    if (!result.ok) return result;
+    save.profile.lastPlayedAt = new Date().toISOString();
+    let persisted = false;
+    try { persisted = PlayerProfileStore.save(true); } catch { /* Roll back the complete configuration below. */ }
+    if (!persisted) {
+      save.garage = previous.garage; save.protocol = previous.protocol;
+      save.mods.loadouts = previous.loadouts; save.cosmetics.equipped = previous.equipped;
+      save.metadata = previous.metadata; save.profile.lastPlayedAt = previous.lastPlayedAt;
+      return { ok: false, message: 'Configuration could not be saved. Current setup unchanged; retry when local storage is available.' };
     }
+    publishDeploymentConfigurationChanged(save.garage);
     return result;
   }
 
+  static saveGaragePreset(presetId: GaragePresetId, options: SaveGaragePresetOptions = {}): PurchaseResult {
+    return PlayerProfileStore.commitGarageConfiguration(save => saveCurrentGaragePreset(save, presetId, new Date().toISOString(), options));
+  }
+
+  static renameGaragePreset(presetId: GaragePresetId, name: string): PurchaseResult {
+    return PlayerProfileStore.commitGarageConfiguration(save => renameGaragePreset(save, presetId, name));
+  }
+
   static loadGaragePreset(presetId: GaragePresetId): PurchaseResult {
-    const save = PlayerProfileStore.getActiveSave();
-    const result = loadGaragePreset(save, presetId);
-    if (result.ok) {
-      save.profile.lastPlayedAt = new Date().toISOString();
-      PlayerProfileStore.save();
-      publishDeploymentConfigurationChanged(save.garage);
-    }
-    return result;
+    return PlayerProfileStore.commitGarageConfiguration(save => loadGaragePreset(save, presetId));
   }
 
   static purchaseAdditionalModLoadoutSlot(): PurchaseResult & { cost?: number } {
