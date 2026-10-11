@@ -2,16 +2,10 @@ import { HudInformationSystem } from '../ui/HudInformationSystem.ts';
 import Phaser from 'phaser';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 import { LASER_HAZARD_BALANCE } from '../config/laserHazards';
-import type { ArenaTheme } from '../types';
+import type { ArenaTheme, RectSpec } from '../types';
+import { clipLaserSegment, type LaserSegment } from './LaserGeometry.ts';
 import type { Player } from '../entities/Player';
 import { getScaledHazardDamage, type HazardDamageTarget } from '../config/hazardScaling';
-
-interface LaserSegment {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-}
 
 export const LASER_PATTERN_NAMES = [
   'SWEEP',
@@ -34,6 +28,7 @@ export class LaserSecuritySystem {
   private readonly warningText: Phaser.GameObjects.Text;
   private readonly segments: LaserSegment[] = Array.from({ length: MAX_LASER_SEGMENTS }, () => ({ x1: 0, y1: 0, x2: 0, y2: 0 }));
   private readonly createdAt: number;
+  private readonly beamBounds: RectSpec;
   private patternIndex = 0;
   private lastCycle = -1;
   private audioActive = false;
@@ -62,8 +57,11 @@ export class LaserSecuritySystem {
     private readonly theme: ArenaTheme,
     private readonly onPlayerDamaged?: (damage: number) => void,
     private readonly onActiveChanged?: (active: boolean) => void,
-    private readonly playerDamageMultiplier = 1
+    private readonly playerDamageMultiplier = 1,
+    private readonly playfield: RectSpec = { x: 0, y: 0, w: WORLD_WIDTH, h: WORLD_HEIGHT }
   ) {
+    // Include the largest visible element: the 12px relay ring plus its stroke.
+    this.beamBounds = { x: playfield.x + 13, y: playfield.y + 13, w: playfield.w - 26, h: playfield.h - 26 };
     this.createdAt = scene.time.now;
     this.graphics = scene.add.graphics().setDepth(6).setBlendMode(Phaser.BlendModes.ADD);
     this.warningText = HudInformationSystem.forScene(scene).createTacticalText('laser', '#ff9fe6');
@@ -187,8 +185,22 @@ export class LaserSecuritySystem {
   }
 
   private buildSegments(pattern: number, t: number): number {
-    const w = WORLD_WIDTH;
-    const h = WORLD_HEIGHT;
+    const count = this.buildPatternSegments(pattern, t);
+    let visible = 0;
+    for (let i = 0; i < count; i++) {
+      const segment = this.segments[i];
+      segment.x1 += this.playfield.x; segment.x2 += this.playfield.x;
+      segment.y1 += this.playfield.y; segment.y2 += this.playfield.y;
+      if (!clipLaserSegment(segment, this.beamBounds)) continue;
+      if (visible !== i) Object.assign(this.segments[visible], segment);
+      visible++;
+    }
+    return visible;
+  }
+
+  private buildPatternSegments(pattern: number, t: number): number {
+    const w = this.playfield.w;
+    const h = this.playfield.h;
     if (pattern === 0) {
       const x = Phaser.Math.Linear(-80, w + 80, t);
       this.setSegment(0, x, 0, x, h);
@@ -391,6 +403,8 @@ export class LaserSecuritySystem {
   }
 
   private touchesAnySegment(x: number, y: number, radius: number, segmentCount: number): boolean {
+    if (x < this.playfield.x || x > this.playfield.x + this.playfield.w
+      || y < this.playfield.y || y > this.playfield.y + this.playfield.h) return false;
     const radiusSquared = radius * radius;
     for (let index = 0; index < segmentCount; index += 1) {
       if (this.distanceSquaredToSegment(x, y, this.segments[index]) <= radiusSquared) return true;

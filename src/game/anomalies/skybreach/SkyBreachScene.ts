@@ -6,6 +6,7 @@ import { ENEMY_ROBOT_FRAMES } from '../../enemies/EnemyRobotFrames.ts';
 import { SkyBreachWorld } from './SkyBreachArt.ts';
 import { CITY_AA_BUILDING, CITY_ROOF_ANCHOR, CITY_TEXTURE_WIDTH, cityTextureHeight } from './SkyBreachCityArt.ts';
 import { skyBreachDifficulty, scaleArenaEnemyStats } from './SkyBreachDifficulty.ts';
+import { SkyBreachSupplies, type FlightSupplyState } from './SkyBreachSupplies.ts';
 import { SkyBreachDirector, DreadnoughtCrossfire, DREADNOUGHT_WEAPONS, attackWeapons, coreExposed,
   formationSlots, tankGroupSlots, skyReinforcementPlan, type DreadnoughtAttack, type FlightModule, type SkyRole, type HardpointId } from './SkyBreachDirector.ts';
 import { createArtilleryMarker } from '../../bosses/ArtilleryMarker.ts';
@@ -45,6 +46,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
   private world!: SkyBreachWorld;
   private difficulty!: ReturnType<typeof skyBreachDifficulty>;
   private director = new SkyBreachDirector();
+  private supplies = new SkyBreachSupplies(0);
   private scheduler = new DreadnoughtCrossfire();
   private bossStartedAt = 0;
   private bossCues: { family:DreadnoughtAttack; at:number }[] = [];
@@ -95,7 +97,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
   protected override prepareWorldNavigation(): void {}
 
   protected override createEnvironment(): void {
-    this.director=new SkyBreachDirector(this.session.seed);this.scheduler=new DreadnoughtCrossfire();
+    this.scheduler=new DreadnoughtCrossfire();
     this.missionTime=0;this.nextArtillery=0;this.bossStarted=false;this.bossOpen=false;
     this.nextCoreVolley=0;this.airshipAt=0;this.bossStartedAt=0;this.bossCues=[];
     this.reinforcementPlan=skyReinforcementPlan(this.session.seed);this.reinforcementIndex=0;
@@ -104,6 +106,8 @@ export class SkyBreachScene extends AnomalyCombatScene {
     this.destructionAt=0;this.destructionStep=0;this.rewardDropped=false;this.bossBursts.length=0;
     this.core=null;this.hull=null;this.coreDoors=[];this.moduleLabel='ENTERING HOSTILE AIRSPACE';
     this.difficulty=skyBreachDifficulty(this.session);
+    this.supplies=new SkyBreachSupplies(this.session.seed);
+    this.director=new SkyBreachDirector(this.session.seed,this.difficulty.spawnCadence);
     this.pickupBounds.w=1440;this.pickupBounds.h=Math.max(900,Math.min(1260,1440*this.scale.height/this.scale.width));
     this.physics.world.setBounds(30,110,this.pickupBounds.w-60,this.pickupBounds.h-145);
     this.cameras.main.setBackgroundColor(0x081423);
@@ -243,7 +247,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
       decorations:role==='zeppelin'?[-1,1].map(()=>this.add.image(x,y,'sky-rotor').setDisplaySize(32,32).setDepth(8))
         :role==='aa'?[this.add.image(x,y,`sky-city-aa-${lane<0?'left':'right'}`)
           .setOrigin(CITY_ROOF_ANCHOR.x/CITY_TEXTURE_WIDTH,CITY_ROOF_ANCHOR.y/cityTextureHeight(CITY_AA_BUILDING))
-          .setScale(.78).setDepth(3),
+          .setScale(.78).setDepth(-18+(y+CITY_AA_BUILDING.height*.78)/10000),
           this.add.image(x,y+CITY_AA_BUILDING.height*.78,'sky-city-shadow-aa')
             .setOrigin((lane>0?320:200)/520,70/340).setScale(.78).setFlipX(lane>0).setDepth(-18.75).setAlpha(.6)]:[]});
     if(role==='zeppelin')this.airshipAt=this.missionTime+28000;
@@ -292,6 +296,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
       }
       f.decorations.forEach((d,i)=>f.role==='aa'?d.setPosition(enemy.x,enemy.y+(i?CITY_AA_BUILDING.height*.78:0))
         :d.setPosition(enemy.x+(i?1:-1)*46,enemy.y+20).setRotation(this.missionTime*.022));
+      if(f.role==='aa')f.decorations[0].setDepth(-18+(enemy.y+CITY_AA_BUILDING.height*.78)/10000);
       if(Math.hypot(dx,dy)<enemy.stats.size*.5+12&&now-enemy.lastAttackMs>850){enemy.lastAttackMs=now;this.damagePlayer(enemy.stats.damage);}
       if(f.role==='drone') {
         f.weapon.update(f.age*1000,aim,Math.hypot(dx,dy)<=ENEMY_BALANCE.drone.attackRange&&f.steering.stage==='attack',
@@ -442,7 +447,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
     DREADNOUGHT_WEAPONS.forEach((id,i)=>{
       const [dx,dy]=offsets[i];const kind=id.startsWith('missile')?'missile':'cannon';
       const e=new Enemy(this,this.hull!.x+dx,this.hull!.y+dy,`sky-${kind}`,{
-        ...baseEnemyStats.tank,hp:this.difficulty.bossHealth,size:44,speed:0,valueCredits:0,valueCoreTokens:0
+        ...baseEnemyStats.tank,hp:this.difficulty.hardpointHealth,size:44,speed:0,valueCredits:0,valueCoreTokens:0
       }).setDisplaySize(65,65).setVisualTintOverride(null).setDepth(8);
       const wreck=this.add.image(e.x,e.y,'sky-wreck').setDisplaySize(110,110).setDepth(6).setVisible(false);
       const power=this.add.image(e.x,e.y,'sky-wreck-power').setDisplaySize(110,110).setDepth(8).setVisible(false);
@@ -450,7 +455,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
       e.setName(id);this.enemies.push(e);this.hardpoints.push({id,enemy:e,dx,dy,wreck,smoke,power,fired:0});this.aliveWeapons.add(id);
     });
     this.core=new Enemy(this,this.hull.x,this.hull.y,'sky-core',{
-      ...baseEnemyStats.tank,hp:this.difficulty.bossHealth*2,size:66,speed:0,valueCredits:0,valueCoreTokens:0
+      ...baseEnemyStats.tank,hp:this.difficulty.coreHealth,size:66,speed:0,valueCredits:0,valueCoreTokens:0
     }).setDisplaySize(92,92).setVisualTintOverride(null).setDepth(7).setName('dreadnought-core');
     this.enemies.push(this.core);
     this.coreDoors=[-1,1].map(s=>this.add.rectangle(this.hull!.x+s*22,this.hull!.y,43,76,0x1b3043)
@@ -489,7 +494,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
       this.clearThreats();this.retireFlights();this.announce('REACTOR FAILURE','DREADNOUGHT BREAKING APART');return;
     }
     if(this.bossOpen&&this.missionTime>=this.nextCoreVolley){
-      this.nextCoreVolley=this.missionTime+2200/Math.min(1.3,this.difficulty.pressure);
+      this.nextCoreVolley=this.missionTime+1650/Math.min(1.3,this.difficulty.pressure);
       const aim=Math.atan2(this.player.y-this.core.y,this.player.x-this.core.x);
       for(let j=-2;j<=2;j++)this.fireSkyShot('plasma',this.core,aim+j*.22,230,
         BOSS_BALANCE.artillery.projectileDamage*this.difficulty.bossDamage);
@@ -504,7 +509,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
       if(!burst.owner.active||burst.owner.hp<=0){this.bossBursts.splice(i,1);continue;}
       if(this.missionTime<burst.at)continue;
       this.fireSkyShot(burst.kind??'kinetic',burst.owner,burst.angle,burst.kind==='shell'?195:385,burst.damage);
-      burst.angle+=burst.step;burst.at=this.missionTime+(burst.kind==='shell'?420:170);if(--burst.remaining<=0)this.bossBursts.splice(i,1);
+      burst.angle+=burst.step;burst.at=this.missionTime+(burst.kind==='shell'?320:135);if(--burst.remaining<=0)this.bossBursts.splice(i,1);
     }
   }
   private castBossFamily(attack:DreadnoughtAttack):void {
@@ -541,7 +546,8 @@ export class SkyBreachScene extends AnomalyCombatScene {
     return {mode:this.difficulty.mode,entryRound:this.session.round,protocol:this.session.protocol,
       difficultyPosition:this.difficulty.difficultyPosition,entryCurve:this.difficulty.entryCurve,
       enemyScaling:{health:this.difficulty.health,damage:this.difficulty.damage,speed:this.difficulty.speed},
-      bossBenchmark:this.difficulty.bossBenchmark,hardpointHealth:this.difficulty.bossHealth,coreHealth:2*this.difficulty.bossHealth,
+      bossBenchmark:this.difficulty.bossBenchmark,hardpointHealth:this.difficulty.hardpointHealth,coreHealth:this.difficulty.coreHealth,
+      bossTotalHealth:this.difficulty.bossTotalHealth,loadout:this.difficulty.loadout,
       bossDamageMultiplier:this.difficulty.bossDamage,reinforcements:this.reinforcementPlan,
       weapons:this.hardpoints.map(h=>({id:h.id,hp:h.enemy.hp,maxHp:h.enemy.stats.hp,fired:h.fired})),
       activeShots:this.skyShots.size,seekers:this.seekers.size,destruction:this.mechanicalDestruction.stats()};
@@ -553,7 +559,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
     this.devPerformanceOverlay.setText(`SKYBREACH (F6) // ${d.mode.toUpperCase()} ${this.session.round}\n`
       + `Enemy HP x${d.health.toFixed(3)} DMG x${d.damage.toFixed(3)} SPEED x${d.speed.toFixed(3)}\n`
       + `Arena Boss ${d.bossBenchmark.round} / ${d.bossBenchmark.protocol}: ${d.bossHealth} HP\n`
-      + `Hardpoint ${d.bossHealth} each / Core ${d.bossHealth*2}\n`
+      + `Hardpoint ${d.hardpointHealth} each / Core ${d.coreHealth} / Total ${d.bossTotalHealth}\n`
       + `Enemy ${this.flights.size}/${d.activeCap} Shot ${this.skyShots.size}/160 Seeker ${this.seekers.size}/12\n`
       + `Frame ${p?.frameTime.averageMs.toFixed(2)??'-'}ms / update ${p?.updateWork.averageMs.toFixed(2)??'-'}ms\n`
       + `Render ${p?.renderWork.averageMs.toFixed(2)??'-'}ms / damage stays at entry round`);
@@ -609,11 +615,11 @@ export class SkyBreachScene extends AnomalyCombatScene {
     this.announce('ARENA RETURN LINK OPEN','ENTER THE PORTAL AND INTERACT TO BANK YOUR HAUL');
   }
   private recoveryPickups():void {
-    this.replenishResourcePickups();
+    this.updateResourceSupplies(true);
   }
 
   protected override createSupportPickups(): void {
-    this.replenishResourcePickups();
+    // The first supply arrives after 8–13 active seconds, or through a paced kill drop.
   }
 
   protected override createGameplayPickup(type: PickupType, x: number, y: number): Phaser.GameObjects.Container {
@@ -634,29 +640,28 @@ export class SkyBreachScene extends AnomalyCombatScene {
       this.pickups.splice(i, 1);
     }
     super.updatePickups(now, dt);
-    this.replenishResourcePickups();
+    this.updateResourceSupplies();
   }
 
-  private replenishResourcePickups(): void {
-    if (this.returning) return;
-    for (const [typeIndex, kind] of (['health', 'energy'] as const).entries()) {
-      let count = 0;
-      // Enemy drops count toward supply too; keep the total bounded during long runs.
-      for (let i = 0; i < this.pickups.length;) {
-        const pickup = this.pickups[i];
-        if (pickup.kind !== kind) { i++; continue; }
-        if (pickup.root.active && count < 2) { count++; i++; continue; }
-        pickup.root.destroy(true);
-        this.pickups.splice(i, 1);
-      }
-      while (count < 2) {
-        const x = this.pickupBounds.x + this.pickupBounds.w * (0.16 + typeIndex * 0.4 + Math.random() * 0.28);
-        const y = this.pickupBounds.y + 190 + count * 100;
-        this.pickups.push({ kind, root: this.createGameplayPickup(kind, x, y),
-          expiresAt: Number.POSITIVE_INFINITY, source: 'enemy' });
-        count++;
-      }
-    }
+  private supplyState(): FlightSupplyState {
+    const state = { health: 0, energy: 0,
+      missingHealth: Math.max(0, 1 - this.player.hp / this.player.stats.maxHealth),
+      missingEnergy: Math.max(0, 1 - this.player.energy / this.player.energyStats.max) };
+    for (const pickup of this.pickups) if (pickup.root.active && (pickup.kind === 'health' || pickup.kind === 'energy')) state[pickup.kind]++;
+    return state;
+  }
+  protected override allowEnemyGameplayPickup(kind: PickupType): boolean {
+    if (kind !== 'health' && kind !== 'energy') return true;
+    return !this.returning && !this.destructionAt && !this.extractionPortal
+      && this.supplies.acceptEnemyDrop(kind, this.missionTime, this.supplyState());
+  }
+  private updateResourceSupplies(recovery = false): void {
+    if (this.returning || this.destructionAt || this.extractionPortal) return;
+    const kind = this.supplies.next(this.missionTime, this.supplyState(), recovery);
+    if (!kind) return;
+    const x = this.pickupBounds.x + this.pickupBounds.w * (.22 + this.random.next() * .56);
+    this.pickups.push({ kind, root: this.createGameplayPickup(kind, x, this.pickupBounds.y + 190),
+      expiresAt: this.time.now + 22_000, source: 'enemy' });
   }
   private retireFlights():void {
     for(const [enemy,f]of this.flights){f.warning.destroy();for(const d of f.decorations)d.destroy();enemy.destroy();const i=this.enemies.indexOf(enemy);if(i>=0)this.enemies.splice(i,1);}

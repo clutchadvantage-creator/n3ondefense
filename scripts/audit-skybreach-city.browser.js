@@ -34,7 +34,9 @@
       check(sky.children.length===objectCount&&game.textures.getTextureKeys().length===textureCount,'scrolling recycles existing images without new objects or textures');
       check(JSON.stringify(sky.physics.world.bounds)===bounds&&sky.player.body===body&&radius===12,'player collision radius and world collision bounds preserved');
       check(sky.cameras.main.zoom===camera.zoom&&sky.cameras.main.scrollX===camera.x&&sky.cameras.main.scrollY===camera.y,'city scrolling never changes the gameplay camera');
-      check(Math.max(...structures.map(s=>s.speed))-Math.min(...structures.map(s=>s.speed))>20,'taller foreground structures have stronger parallax');
+      check(structures.every(s=>s.speed===49),'all foundations scroll at the street velocity');
+      check(Math.max(...structures.map(s=>s.elevation))>750,'foreground skyscrapers have substantially taller walls');
+      check(structures.every(s=>Math.abs(s.image.y+s.elevation-s.baseY)<.001&&s.shadow.y===s.baseY),'complete facades terminate at their ground shadows');
       const aa=sky.spawnAircraft('aa',185,430),state=sky.flights.get(aa),aaBody=aa.body;
       check(state.decorations.length===2&&state.decorations[0].texture.key==='sky-city-aa-left','live AA has an extruded tower and a ground shadow');
       aa.body.reset(195,445);sky.updateEnemies(sky.time.now,.016);
@@ -57,6 +59,8 @@
       const {width,height}=game.scale;
       check(sky.cameras.main.zoom===Math.min(width/sky.pickupBounds.w,height/sky.pickupBounds.h),`${width}x${height}: existing camera zoom rule`);
       await capture(`city-${width}x${height}`);
+      const viewWidth=width/sky.cameras.main.zoom,left=(sky.pickupBounds.w-viewWidth)/2;
+      check(Math.min(...structures.map(s=>s.x))<left+80&&Math.max(...structures.map(s=>s.x))>left+viewWidth-80,`${width}x${height}: architecture reaches both viewport edges`);
       sky.returnToArena(false,'player-dead');await wait(700);
       check(game.scene.isActive('arena')&&roots.every(root=>!root.active),'return to Arena destroys all city render objects');
       report.cases.push({name:'city canyon geometry, parallax, AA roof anchoring, viewports and teardown'});

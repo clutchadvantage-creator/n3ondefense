@@ -226,45 +226,53 @@ export function ensureSkyArt(scene: Phaser.Scene): void {
 
 interface CityStructure {
   image: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image;
-  baseY: number; x: number; elevation: number; speed: number; period: number; band: number;
+  baseY: number; x: number; elevation: number; speed: number; period: number; band: number; side: number; jitter: number;
 }
 export class SkyBreachWorld {
   private readonly layers: Phaser.GameObjects.TileSprite[];
   private readonly structures: CityStructure[] = [];
   private readonly edgeClouds: Phaser.GameObjects.TileSprite;
   private scroll = 0;
-  constructor(scene:Phaser.Scene, width:number,height:number) {
+  constructor(scene:Phaser.Scene, private readonly width:number,height:number) {
     ensureSkyArt(scene);
     this.layers=[
       scene.add.tileSprite(width/2,height/2,width,height,'sky-industrial').setDepth(-20).setAlpha(.8),
-      scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-17).setAlpha(.28),
-      scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-12).setAlpha(.2).setTileScale(1.7)
+      scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-19).setAlpha(.16),
+      scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-12).setAlpha(.1).setTileScale(1.7)
     ];
     const random=new SeededRandom(0xc17ab0);
-    const bands=[{inset:.205,scale:.53,spacing:225},{inset:.12,scale:.77,spacing:270},{inset:.025,scale:1.02,spacing:340}];
+    const bands=[{inset:.105,scale:.67,spacing:270},{inset:.047,scale:.93,spacing:330},{inset:-.016,scale:1.14,spacing:380}];
     for(const [band,layer] of bands.entries())for(const side of [-1,1]) {
-      const count=Math.ceil((height+1400)/layer.spacing),period=count*layer.spacing;
+      const count=Math.ceil((height+1800)/layer.spacing),period=count*layer.spacing;
       for(let i=0;i<count;i++) {
         const variant=(i*5+band*2+(side>0?3:0))%CITY_BUILDINGS.length,building=CITY_BUILDINGS[variant];
         const scale=layer.scale*(.91+random.next()*.18),elevation=building.height*scale;
-        const x=(side<0?width*layer.inset:width*(1-layer.inset))+(random.next()-.5)*38;
+        const jitter=(random.next()-.5)*38;
+        const x=(side<0?width*layer.inset:width*(1-layer.inset))+jitter;
         const image=scene.add.image(x,0,`sky-city-${variant}-${side<0?'left':'right'}`)
           .setOrigin(CITY_ROOF_ANCHOR.x/CITY_TEXTURE_WIDTH,CITY_ROOF_ANCHOR.y/cityTextureHeight(building))
           .setScale(scale).setTint(band===0?0x718b9f:band===1?0xb3c8d6:0xffffff);
         const shadow=scene.add.image(x,0,`sky-city-shadow-${variant}`).setOrigin((side>0?320:200)/520,70/340)
           .setScale(scale).setFlipX(side>0).setDepth(-18.8).setAlpha(.6);
-        // Buildings in one elevation band share a scroll rate so city blocks cannot
-        // bunch up over time. Taller, nearer bands have progressively stronger parallax.
+        // Foundations and roads share motion. Height comes from complete extruded
+        // walls; differing ground velocities made the old buildings appear to float.
         this.structures.push({image,shadow,x,baseY:i*layer.spacing-650+(side>0?135:0)+random.next()*55,
-          elevation,speed:14+layer.scale*42+band*3,period,band});
+          elevation,speed:49,period,band,side,jitter});
       }
     }
-    this.edgeClouds=scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-11).setAlpha(.12).setTileScale(2.3);
+    this.edgeClouds=scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-11).setAlpha(.06).setTileScale(2.3);
     this.update(0,height);
   }
   resize(width:number,height:number):void {
     for(const layer of this.layers)layer.setSize(width,height);
     this.edgeClouds.setSize(width,height);
+    const left=(this.width-width)/2,inner=this.width*.105;
+    for(const structure of this.structures) {
+      const distance=[0,.55,1.15][structure.band];
+      const x=inner-(inner-left)*distance;
+      structure.x=(structure.side<0?x:this.width-x)+structure.jitter;
+    }
+    this.update(0,height);
   }
   /** Existing industrial texture repeats a road every 512px beneath the cloud decks. */
   groundLaneX(lane:number):number {
@@ -274,14 +282,14 @@ export class SkyBreachWorld {
   }
   update(dt:number,height:number):void {
     this.scroll+=dt;
-    this.layers.forEach((layer,i)=>{layer.tilePositionY-=dt*(14+i*20);layer.tilePositionX=Math.sin(this.scroll/30+i)*30;});
+    this.layers.forEach((layer,i)=>{layer.tilePositionY-=dt*(49+i*20);if(i)layer.tilePositionX=Math.sin(this.scroll/30+i)*30;});
     for(const structure of this.structures) {
       structure.baseY+=Math.max(0,dt)*structure.speed;
       // Recycle only after the entire roof, mast and wall have left the viewport.
       const maximum=height+structure.elevation+210;
       while(structure.baseY>maximum)structure.baseY-=structure.period;
       structure.image.setPosition(structure.x,structure.baseY-structure.elevation)
-        .setDepth(-18+structure.band*2+structure.baseY/100000);
+        .setDepth(-18+structure.baseY/10000+structure.band/100000);
       structure.shadow.setPosition(structure.x,structure.baseY);
     }
     this.edgeClouds.tilePositionY-=dt*64;

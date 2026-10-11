@@ -8,15 +8,15 @@ export interface CityBuilding {
   accent: string; sign: string; style: 'tower' | 'spire' | 'factory' | 'terraced' | 'aa';
 }
 export const CITY_BUILDINGS: readonly CityBuilding[] = [
-  { width: 188, length: 124, height: 340, accent: '#49c9de', sign: 'N3ON', style: 'tower' },
-  { width: 122, length: 106, height: 490, accent: '#9c8bed', sign: 'AXIOM', style: 'spire' },
-  { width: 232, length: 148, height: 225, accent: '#de9b57', sign: 'REACTOR 09', style: 'factory' },
-  { width: 212, length: 132, height: 385, accent: '#69cdbd', sign: 'NEXUS', style: 'terraced' },
-  { width: 150, length: 112, height: 425, accent: '#cf6da9', sign: 'KAI', style: 'tower' },
-  { width: 196, length: 102, height: 295, accent: '#68a6de', sign: 'ORBITAL', style: 'tower' }
+  { width: 188, length: 124, height: 500, accent: '#49c9de', sign: 'N3ON', style: 'tower' },
+  { width: 122, length: 106, height: 710, accent: '#9c8bed', sign: 'AXIOM', style: 'spire' },
+  { width: 232, length: 148, height: 335, accent: '#de9b57', sign: 'REACTOR 09', style: 'factory' },
+  { width: 212, length: 132, height: 560, accent: '#69cdbd', sign: 'NEXUS', style: 'terraced' },
+  { width: 150, length: 112, height: 620, accent: '#cf6da9', sign: 'KAI', style: 'tower' },
+  { width: 196, length: 102, height: 440, accent: '#68a6de', sign: 'ORBITAL', style: 'tower' }
 ];
 export const CITY_AA_BUILDING: CityBuilding = {
-  width: 154, length: 118, height: 235, accent: '#d6a267', sign: 'AA // 07', style: 'aa'
+  width: 154, length: 118, height: 350, accent: '#d6a267', sign: 'AA // 07', style: 'aa'
 };
 export const CITY_TEXTURE_WIDTH = 400;
 export const CITY_ROOF_ANCHOR = { x: 200, y: 140 };
@@ -59,7 +59,7 @@ function facade(c: Context, a: Point, b: Point, height: number, accent: string, 
   const gradient = c.createLinearGradient(0,a.y,0,a.y+height);
   gradient.addColorStop(0,dark?'#1b3147':'#294354');
   gradient.addColorStop(.55,dark?'#122237':'#1a3041');
-  gradient.addColorStop(1,'#07131f');
+  gradient.addColorStop(1,dark?'#152536':'#213847');
   const wall=[a,b,lower(b,height),lower(a,height)];fill(c,wall,gradient,'#415a6b');
   c.save(); path(c,wall);c.clip();
   const columns=Math.max(3,Math.floor(Math.hypot(b.x-a.x,b.y-a.y)/15));
@@ -116,9 +116,14 @@ function machinery(c: Context, building: CityBuilding): void {
 export function drawCityBuilding(c: Context, building: CityBuilding, variant: number, mirrored = false): void {
   const random=new SeededRandom(0xc17a+variant*8191),roof=roofRect(building,0,0,1,1);
   // A street-level plinth and narrow buttresses anchor the walls to the lower city.
-  box(c,roof.map(p=>lower(p,building.height-12)),12,'#263b49');
   facade(c,roof[3],roof[2],building.height,building.accent,random,false);
   facade(c,roof[1],roof[2],building.height,building.accent,random,true);
+  // Foundation strips continue each vertical face to the pavement. A full top
+  // polygon here would read as a floating platform projecting from the wall.
+  for(const [a,b] of [[roof[3],roof[2]],[roof[1],roof[2]]]) {
+    fill(c,[lower(a,building.height-12),lower(b,building.height-12),lower(b,building.height),lower(a,building.height)],'#263c48');
+  }
+  line(c,[lower(roof[3],building.height),lower(roof[2],building.height),lower(roof[1],building.height)],'#65818b',2);
   for(const t of [.06,.94]) {
     const p=lerp(roof[3],roof[2],t);
     line(c,[lower(p,24),lower(p,building.height-12)],'#4b6574',3);
@@ -165,4 +170,5 @@ export function drawCityShadow(c: Context, building: CityBuilding): void {
   gradient.addColorStop(0,'#010710c9');gradient.addColorStop(1,'#01071000');
   fill(c,[roof[0],roof[1],{x:roof[1].x+dx,y:roof[1].y+dy},
     {x:roof[2].x+dx,y:roof[2].y+dy},{x:roof[3].x+dx,y:roof[3].y+dy},roof[3]],gradient);
+  fill(c,roof,'#020912cc');
 }

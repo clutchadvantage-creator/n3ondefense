@@ -4,13 +4,15 @@ import { getBossHealth, getBossDamageMultiplier } from './bossBalance.ts';
 import { CAMPAIGN_ROUNDS, getCampaignProtocol } from '../progression/CampaignProgression.ts';
 import { getCampaignCombatPosition } from '../progression/CampaignDifficulty.ts';
 import type { RunProtocolId } from '../mods/types.ts';
+import type { loadoutDifficulty } from './CombatPower.ts';
 
 /** Shared by Arena spawns and excursions: round, phase, Contract, then mode, once. */
-export function arenaEnemyScaling(curve: DifficultyCurve, protocol: RunProtocolId, defensePhase: boolean, contractHealth = 1) {
+export function arenaEnemyScaling(curve: DifficultyCurve, protocol: RunProtocolId, defensePhase: boolean, contractHealth = 1,
+  loadout?: Pick<ReturnType<typeof loadoutDifficulty>, 'health' | 'damage'>) {
   const mode = getProtocolModeBalance(protocol), phase = defensePhase ? 1 : .9;
   return {
-    health: (1 + (curve.healthMultiplier - 1) * phase) * contractHealth * mode.enemyHealthMultiplier,
-    damage: (1 + (curve.damageMultiplier - 1) * phase) * mode.enemyDamageMultiplier,
+    health: (1 + (curve.healthMultiplier - 1) * phase) * contractHealth * mode.enemyHealthMultiplier * (loadout?.health ?? 1),
+    damage: (1 + (curve.damageMultiplier - 1) * phase) * mode.enemyDamageMultiplier * (loadout?.damage ?? 1),
     speed: curve.speedMultiplier * mode.enemySpeedMultiplier
   };
 }

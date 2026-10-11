@@ -36,6 +36,7 @@ import { Player } from '../entities/Player';
 import { baseEnemyStats, Enemy } from '../enemies/Enemy';
 import { SystemInfusionRuntime, type InfusionPoint, type InfusionTarget } from '../mods/SystemInfusionRuntime.ts';
 import { arenaEnemyScaling, scaleArenaEnemyStats, arenaBossStageScaling, arenaBossBenchmark } from '../config/ArenaCombatScaling.ts';
+import { loadoutDifficulty } from '../config/CombatPower.ts';
 import { SYSTEM_INFUSION_TUNING as INFUSION_TUNING } from '../mods/SystemInfusions.ts';
 import { getTankHomingMissileSpeed, steerTankHomingMissile } from '../enemies/HomingMissile.ts';
 import { ENEMY_ROBOT_FRAMES } from '../enemies/EnemyRobotFrames.ts';
@@ -532,6 +533,7 @@ export class ArenaScene extends Phaser.Scene {
   private readonly defuseTargetByEnemy = new Map<Enemy, BombSiteRuntime>();
   private defuserMarkedUntil = new WeakMap<Enemy, number>();
   private modRuntime!: ModRuntime;
+  private loadoutScaling = loadoutDifficulty('normal');
   private protocol: RunProtocolId = 'normal';
   private modFocus: ModFocusSignalId | null = null;
   private contract: RunContractId | null = null;
@@ -1293,6 +1295,7 @@ export class ArenaScene extends Phaser.Scene {
     this.createOrMovePlayer();
     this.modRuntime.beginRound(1);
     this.mineChargeRack.reset(this.getAbilityConfig('mine').maxActive);
+    this.captureLoadoutDifficulty();
     this.defuserMarkedUntil = new WeakMap<Enemy, number>();
     this.defuseTargetByEnemy.clear();
     this.createHudLayer();
@@ -1325,7 +1328,13 @@ export class ArenaScene extends Phaser.Scene {
         GameplayTelemetryRecorder.recordPlayerDamage('laser', damage);
       },
       (active) => active ? this.audio.startSecurityLaserLoop() : this.audio.stopSecurityLaserLoop(),
-      this.currentModeBalance().hazardDamageMultiplier
+      this.currentModeBalance().hazardDamageMultiplier,
+      {
+        x: this.layout.generation.bounds.x + ARENA_GENERATION_CONFIG.boundaryThickness,
+        y: this.layout.generation.bounds.y + ARENA_GENERATION_CONFIG.boundaryThickness,
+        w: this.layout.generation.bounds.w - 2 * ARENA_GENERATION_CONFIG.boundaryThickness,
+        h: this.layout.generation.bounds.h - 2 * ARENA_GENERATION_CONFIG.boundaryThickness
+      }
     );
     if (hazards.bomblets) this.bombletHazard = new BombletHazardSystem(
       this,
@@ -1913,7 +1922,7 @@ export class ArenaScene extends Phaser.Scene {
       const profile = getSpawnProfile(this.currentCombatPosition(), this.bombSites.destroyedCount(), this.currentModeFamily());
       activeBombs = this.bombSites.activeBombCount();
       const pressure = getConcurrentSpawnPressure(profile, activeBombs);
-      const modePressure = this.currentModeBalance().activePressureMultiplier;
+      const modePressure = this.currentModeBalance().activePressureMultiplier * this.loadoutScaling.pressure;
       activeCountCap = Math.max(1, Math.round(pressure.activeCountCap * modePressure));
       activeWeightCap = Math.max(1, pressure.activeWeightCap * modePressure);
     }
@@ -2623,10 +2632,10 @@ export class ArenaScene extends Phaser.Scene {
         * phaseMultiplier
         * concurrentPressure.cadenceMultiplier
         * contractCadence
-        * bombsiteCadence,
+        * bombsiteCadence / this.loadoutScaling.pressure,
       this.protocol
     ));
-    const pressureMultiplier = this.currentModeBalance().activePressureMultiplier;
+    const pressureMultiplier = this.currentModeBalance().activePressureMultiplier * this.loadoutScaling.pressure;
     const activeCountCap = Math.max(1, Math.round(concurrentPressure.activeCountCap * pressureMultiplier));
     const activeWeightCap = Math.max(1, concurrentPressure.activeWeightCap * pressureMultiplier);
 
@@ -2722,7 +2731,7 @@ export class ArenaScene extends Phaser.Scene {
     if (!spawn) return null;
     const curve = getDifficultyCurve(this.currentCombatPosition(), this.bombSites.destroyedCount());
     const stats = scaleArenaEnemyStats(base, arenaEnemyScaling(curve, this.protocol, defensePhase,
-      getContract(this.contract)?.enemyHealthMultiplier ?? 1));
+      getContract(this.contract)?.enemyHealthMultiplier ?? 1, this.loadoutScaling));
 
     const enemyTexture = ENEMY_ROBOT_FRAMES[type].textureKey;
     const enemy = type === 'drone'
@@ -5570,7 +5579,7 @@ export class ArenaScene extends Phaser.Scene {
       spawnEnemy: ({ type, x, y, droneVariant }) => {
         if (type === 'drone') {
           const pressure = getConcurrentSpawnPressure(getSpawnProfile(this.currentCombatPosition(), this.bombSites.destroyedCount(), this.currentModeFamily()), this.bombSites.activeBombCount());
-          const multiplier = this.currentModeBalance().activePressureMultiplier;
+          const multiplier = this.currentModeBalance().activePressureMultiplier * this.loadoutScaling.pressure;
           if (this.enemies.length >= Math.round(pressure.activeCountCap * multiplier)
             || this.enemies.reduce((sum, e) => sum + ENEMY_BALANCE[e.stats.type].weight, 0) + ENEMY_BALANCE.drone.weight > pressure.activeWeightCap * multiplier) return null;
         }
@@ -5800,6 +5809,7 @@ export class ArenaScene extends Phaser.Scene {
       difficulty: {
         ...getDifficultyCurve(this.currentCombatPosition(), this.bombSites.destroyedCount()),
         defensePhase: this.bombSites.activeBombCount() > 0,
+        loadout: { ...this.loadoutScaling },
         bossBenchmark: arenaBossBenchmark(this.currentModeFamily(), this.currentCombatRound()),
         activeCount: getConcurrentSpawnPressure(
           getSpawnProfile(this.currentCombatPosition(), this.bombSites.destroyedCount(), this.currentModeFamily()),
@@ -6033,9 +6043,13 @@ export class ArenaScene extends Phaser.Scene {
     if (this.scene.isPaused(SceneKeys.Arena)) failures.push('arena-scene-paused');
     if (this.scene.isSleeping(SceneKeys.Arena)) failures.push('arena-scene-sleeping');
     if (this.scene.isActive(SceneKeys.Heist)) failures.push('heist-still-active');
-    if (this.scene.isVisible(SceneKeys.Heist)) failures.push('heist-still-visible');
+    // Registered, never-started scenes default visible=true but cannot render.
+    // Only initialized anomaly displays can obscure the restored Arena.
+    if (this.scene.get(SceneKeys.Heist).sys.settings.status > Phaser.Scenes.INIT
+      && this.scene.isVisible(SceneKeys.Heist)) failures.push('heist-still-visible');
     if (this.scene.isActive(SceneKeys.SkyBreach)) failures.push('skybreach-still-active');
-    if (this.scene.isVisible(SceneKeys.SkyBreach)) failures.push('skybreach-still-visible');
+    if (this.scene.get(SceneKeys.SkyBreach).sys.settings.status > Phaser.Scenes.INIT
+      && this.scene.isVisible(SceneKeys.SkyBreach)) failures.push('skybreach-still-visible');
     if (!camera || !camera.visible || camera.alpha <= 0) failures.push('arena-camera-hidden');
     if (camera.width <= 0 || camera.height <= 0) failures.push('arena-camera-viewport-invalid');
     if (!Number.isFinite(camera.zoom) || camera.zoom <= 0) failures.push('arena-camera-zoom-invalid');
@@ -6919,6 +6933,7 @@ export class ArenaScene extends Phaser.Scene {
     this.createOrMovePlayer();
     this.modRuntime.beginRound(1);
     this.createHudLayer();
+    this.captureLoadoutDifficulty();
 
     this.bombSites = new BombSiteManager('open', 1);
     this.bombSites.initialize(this, [], this.layout.theme);
@@ -6975,7 +6990,7 @@ export class ArenaScene extends Phaser.Scene {
           onComplete: () => this.completeSupremeTerminalEncounter()
         },
         this.currentModeFamily(),
-        { particlesEnabled: this.particlesEnabled, healthMultiplier: bossHealthStageDelta, damageMultiplier: bossDamageStageDelta, legBlockers: this.wallRects }
+        { particlesEnabled: this.particlesEnabled, healthMultiplier: bossHealthStageDelta * this.loadoutScaling.health, damageMultiplier: bossDamageStageDelta * this.loadoutScaling.damage, legBlockers: this.wallRects }
       );
       GameplayTelemetryRecorder.startBoss('artillery', this.supremeFinale.totalMaximumHealth);
       for (const boss of this.supremeFinale.bosses) this.supremeBossWallColliders.push(this.physics.add.collider(boss, this.walls));
@@ -6985,7 +7000,7 @@ export class ArenaScene extends Phaser.Scene {
         (x, y) => this.hitWall(x, y),
         { ...callbacks, onDefeated: () => this.completeBossFight() },
         this.currentModeFamily(),
-        { enemyShield: true, particlesEnabled: this.particlesEnabled, healthMultiplier: bossHealthStageDelta, damageMultiplier: bossDamageStageDelta, legBlockers: this.wallRects }
+        { enemyShield: true, particlesEnabled: this.particlesEnabled, healthMultiplier: bossHealthStageDelta * this.loadoutScaling.health, damageMultiplier: bossDamageStageDelta * this.loadoutScaling.damage, legBlockers: this.wallRects }
       );
       GameplayTelemetryRecorder.startBoss(archetype, this.bossEncounter.boss.maxHp);
       this.bossWallCollider = this.physics.add.collider(this.bossEncounter.boss, this.walls);
@@ -8343,6 +8358,7 @@ export class ArenaScene extends Phaser.Scene {
       `BALANCE DEV (F8)  R${round}  Sites ${destroyed}/${this.bombSites.sites.length}\n`
       + `Enemies ${this.enemies.length}/${spawn.activeCountCap}  Weight ${activeWeight.toFixed(1)}/${spawn.activeWeightCap.toFixed(1)}  HP ${Math.round(totalHp)}\n`
       + `HPx ${curve.healthMultiplier.toFixed(2)}  DMGx ${curve.damageMultiplier.toFixed(2)}  Cadence ${spawn.defenseCadenceMs}ms\n`
+      + `Build HPx ${this.loadoutScaling.health.toFixed(2)} DMGx ${this.loadoutScaling.damage.toFixed(2)} Pressure x${this.loadoutScaling.pressure.toFixed(2)}\n`
       + `ARENA (F7 regenerate) ${this.layout.template} ${this.layout.generation.bounds.w}x${this.layout.generation.bounds.h} attempt ${this.layout.generation.attempt} similarity ${this.layout.generation.similarityScore.toFixed(3)} open ${this.layout.generation.openSpacePercentage}%`
     );
   }
@@ -8372,6 +8388,14 @@ export class ArenaScene extends Phaser.Scene {
 
   private getAbilityConfig(type: AbilityType): AbilityRuntimeConfig {
     return resolveAbilityRuntimeConfig(type, this.runUpgrades, this.modRuntime);
+  }
+
+  private captureLoadoutDifficulty(): void {
+    this.loadoutScaling = loadoutDifficulty(this.currentModeFamily(), {
+      stats: this.player.stats, energyStats: this.player.energyStats, weapon: this.player.weapon,
+      criticalMultiplier: WEAPON_BALANCE.critMultiplier * this.modRuntime.multiplier('weaponCritDamage'),
+      abilities: { turret: this.getAbilityConfig('turret'), fence: this.getAbilityConfig('fence'), mine: this.getAbilityConfig('mine') }
+    });
   }
 
   private getShieldDurationMs(): number {

@@ -18,8 +18,8 @@
     for(const role of ['drone','tank','interceptor','strike','aa','zeppelin']) {
       const enemy=sky.spawnAircraft(role,sky.player.x+100,sky.player.y-220);
       const base=ENEMY_BALANCE[role==='drone'?'drone':['tank','aa','zeppelin'].includes(role)?'tank':'shooter'];
-      check(enemy.stats.hp===Math.round(base.hp*(1+(curve.healthMultiplier-1)*phase)*curve.contractHealthMultiplier*mode.enemyHealthMultiplier*(role==='zeppelin'?7:1)),role+' actual HP matches captured Arena');
-      check(enemy.stats.damage===Math.round(base.damage*(1+(curve.damageMultiplier-1)*phase)*mode.enemyDamageMultiplier),role+' actual damage matches captured Arena');
+      check(enemy.stats.hp===Math.round(base.hp*(1+(curve.healthMultiplier-1)*phase)*curve.contractHealthMultiplier*mode.enemyHealthMultiplier*(curve.loadout?.health??1)*(role==='zeppelin'?7:1)),role+' actual HP matches captured Arena');
+      check(enemy.stats.damage===Math.round(base.damage*(1+(curve.damageMultiplier-1)*phase)*mode.enemyDamageMultiplier*(curve.loadout?.damage??1)),role+' actual damage matches captured Arena');
     }
     sky.retireFlights();
     const drone=sky.spawnAircraft('drone',sky.player.x,sky.player.y-240),df=sky.flights.get(drone);

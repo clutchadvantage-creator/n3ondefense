@@ -1784,8 +1784,10 @@ export class AnomalyCombatScene extends Phaser.Scene {
     const mode = getProtocolModeBalance(this.session.protocol);
     const stats: EnemyStats = {
       ...base,
-      hp: applyEnemyHealthMode(base.hp * curve.healthMultiplier * (elite ? 2.8 : 1), this.session.protocol),
-      damage: applyEnemyDamageMode(base.damage * curve.damageMultiplier * (elite ? 1.35 : 1), this.session.protocol),
+      hp: applyEnemyHealthMode(base.hp * curve.healthMultiplier * (elite ? 2.8 : 1)
+        * (this.session.difficulty?.loadout?.health ?? 1), this.session.protocol),
+      damage: applyEnemyDamageMode(base.damage * curve.damageMultiplier * (elite ? 1.35 : 1)
+        * (this.session.difficulty?.loadout?.damage ?? 1), this.session.protocol),
       speed: base.speed * curve.speedMultiplier * mode.enemySpeedMultiplier * (elite ? 0.92 : 1),
       size: base.size * (elite ? 1.55 : 1),
       color: elite ? 0xffd85c : base.color
@@ -2436,6 +2438,8 @@ export class AnomalyCombatScene extends Phaser.Scene {
     this.enemies.splice(index, 1);
   }
 
+  protected allowEnemyGameplayPickup(_kind: PickupType): boolean { return true; }
+
   protected spawnEnemyDrops(enemy: Enemy): void {
     const standardChance = Math.min(1,
       PICKUP_BALANCE.enemyDropChance * this.modRuntime.multiplier('enemyPickupChance'));
@@ -2446,7 +2450,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
         : kind === 'coreToken'
           ? { kind: 'coreTokens', amount: Math.max(1, enemy.stats.valueCoreTokens || 1) }
           : undefined;
-      this.pickups.push({
+      if (this.allowEnemyGameplayPickup(kind)) this.pickups.push({
         kind,
         root: this.createGameplayPickup(kind, enemy.x, enemy.y),
         expiresAt: this.time.now + PICKUP_BALANCE.lifetimeMs,

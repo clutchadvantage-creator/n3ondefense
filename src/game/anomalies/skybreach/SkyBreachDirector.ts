@@ -54,7 +54,8 @@ export function skyReinforcementPlan(seed: number): readonly SkyRole[] {
 
 export class SkyBreachDirector {
   readonly modules: readonly FlightModule[];
-  constructor(seed = 0) { this.modules = skyFlightPlan(seed); }
+  private readonly cadence: number;
+  constructor(seed = 0, cadence = 1) { this.modules = skyFlightPlan(seed); this.cadence = cadence; }
   elapsed = 0;
   index = -1;
   private nextWave = 0;
@@ -74,7 +75,7 @@ export class SkyBreachDirector {
     }
     if (!this.complete && this.elapsed >= this.nextWave) {
       const module = this.modules[this.index];
-      this.nextWave = this.elapsed + (this.index < 3 ? 5.5 : 4.5);
+      this.nextWave = this.elapsed + (this.index < 3 ? 5.5 : 4.5) * this.cadence;
       if (!module.recovery) wave(module, this.sequence++);
     }
   }
@@ -136,7 +137,7 @@ export class DreadnoughtCrossfire {
   private nextAt = 0;
   next(now:number, alive:ReadonlySet<HardpointId>, pressure:number): readonly DreadnoughtCue[] {
     if(now<this.nextAt)return [];
-    this.nextAt=now+5200/Math.max(1,Math.min(1.3,pressure));
+    this.nextAt=now+3800/Math.max(1,Math.min(1.3,pressure));
     if(!alive.size)return [{family:'escorts',delayMs:0}];
     for(let i=0;i<CROSSFIRES.length;i++) {
       const cues=CROSSFIRES[this.cursor++%CROSSFIRES.length].filter(c=>c.family==='escorts'||attackWeapons(c.family,alive).length>0);

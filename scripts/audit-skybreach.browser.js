@@ -2,6 +2,8 @@
 (() => {
   if(globalThis.__n3onLayoutAudit?.running||globalThis.__n3onMixedSession?.running)throw Error('Another fixture is running');
   const report=globalThis.__n3onLayoutAudit={running:true,cases:[],checks:[],samples:[],errors:[],startedAt:new Date().toISOString()};
+  const originalError=console.error;
+  console.error=(...args)=>{report.errors.push(args.map(String).join(' '));originalError.apply(console,args);};
   const wait=ms=>new Promise(r=>setTimeout(r,ms));
   const check=(ok,label)=>{report.checks.push({ok:!!ok,label});if(!ok)throw Error(label);};
   const until=async(fn,label)=>{const end=performance.now()+18000;while(!fn()){if(performance.now()>end)throw Error('Timeout: '+label);await wait(40);}};
@@ -169,8 +171,8 @@
           sky.scheduler.next=next;
         }
         const scaling=sky.getScalingDiagnostics();report.samples.at(-1).scaling=scaling;
-        check(sky.hardpoints.every(h=>h.enemy.stats.hp===scaling.bossBenchmark.health),mode+': each hardpoint equals actual Arena boss benchmark');
-        check(sky.core.stats.hp===2*scaling.bossBenchmark.health,mode+': core alone gets twice Arena benchmark');
+        check(sky.hardpoints.every(h=>h.enemy.stats.hp===scaling.hardpointHealth),mode+': each hardpoint receives its share of the ship budget');
+        check(sky.core.stats.hp===scaling.coreHealth&&sky.hardpoints.reduce((n,h)=>n+h.enemy.stats.hp,0)+sky.core.stats.hp===scaling.bossTotalHealth,mode+': weapons and core sum to the scaled ship budget');
         sky.damageEnemy(sky.core,1e12);check(sky.core.hp===coreHp,mode+': core rejects early damage');
         sky.damageEnemy(sky.core,1e12,{equivalentDamage:1e12,multiplier:.5});check(sky.core.hp===coreHp,mode+': core rejects Echo before opening');
         const cannon=sky.hardpoints[0].enemy;
@@ -254,7 +256,7 @@
       }
       report.finishedAt=new Date().toISOString();
     }catch(error){report.errors.push(String(error.stack??error));}
-    finally{report.running=false;}
+    finally{console.error=originalError;report.running=false;}
   })();
   return {started:true};
 })();

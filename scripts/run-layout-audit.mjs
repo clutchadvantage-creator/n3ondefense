@@ -3,6 +3,8 @@ import {dirname} from 'node:path';
 const output=process.argv[2]??'artifacts/layout-audit.json';
 const port=Number(process.env.N3ON_CDP_PORT??9225);
 const cpuRate=Number(process.env.N3ON_CPU_RATE??1);
+const viewport=process.argv[4]?.match(/^(\d{3,5})x(\d{3,5})$/);
+if(process.argv[4]&&!viewport)throw new Error('Viewport must be WIDTHxHEIGHT');
 if(!Number.isFinite(cpuRate)||cpuRate<1||cpuRate>20)throw new Error('N3ON_CPU_RATE must be between 1 and 20');
 const targets=await fetch(`http://127.0.0.1:${port}/json/list`).then(r=>r.json());
 const target=targets.find(t=>t.type==='page'&&/^http:\/\/(localhost|127\.0\.0\.1):/.test(t.url));
@@ -29,6 +31,7 @@ let cpuApplied=false;
 try{
   if(await evaluate(`Boolean(globalThis.__n3onLayoutAudit?.running||globalThis.__n3onMixedSoak?.running)`))
     throw new Error('Another browser fixture is still running');
+  if(viewport)await call('Emulation.setDeviceMetricsOverride',{width:Number(viewport[1]),height:Number(viewport[2]),deviceScaleFactor:1,mobile:false});
   if(cpuRate!==1){await call('Emulation.setCPUThrottlingRate',{rate:cpuRate});cpuApplied=true;}
   await call('Runtime.addBinding',{name:'__n3onSaveLayoutCheckpoint'});
   await evaluate(`globalThis.__n3onLayoutAuditOptions=${JSON.stringify(JSON.parse(process.env.N3ON_LAYOUT_OPTIONS??'{}'))}`);
@@ -40,10 +43,14 @@ try{
   }while(state.running);
   const report=await evaluate(`(({promise,...report})=>report)(__n3onLayoutAudit)`);
   report.cpuThrottleRate=cpuRate;
+  if(viewport)report.viewport={width:Number(viewport[1]),height:Number(viewport[2])};
   await writes;if(writeError)throw writeError;
   await writeFile(output,JSON.stringify(report,null,2)+'\n');
   if(report.errors.length)process.exitCode=1;
 }finally{
-  try{if(cpuApplied)await call('Emulation.setCPUThrottlingRate',{rate:1});}
+  try{
+    if(cpuApplied)await call('Emulation.setCPUThrottlingRate',{rate:1});
+    if(viewport)await call('Emulation.clearDeviceMetricsOverride');
+  }
   finally{socket.close();}
 }

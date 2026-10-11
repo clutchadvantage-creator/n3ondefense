@@ -1,0 +1,1505 @@
+{
+  "date": "2026-10-11",
+  "validation": {
+    "unitTests": 966,
+    "unitFailures": 0,
+    "productionBuild": "passed",
+    "browserChecks": 632,
+    "limitations": [
+      "Assisted integration and permanent-build projections; no unassisted human playthrough.",
+      "Existing immediate-return timer/tween diagnostic warnings persist; anomaly object/reference cleanup and Arena restoration pass."
+    ]
+  },
+  "browser": [
+    {
+      "name": "skybreach-all-modes-verified",
+      "checks": 251,
+      "errors": [],
+      "cases": [],
+      "samples": [
+        {
+          "mode": "normal",
+          "round": 4,
+          "difficulty": {
+            "localRound": 4,
+            "rewardPosition": 4,
+            "difficultyPosition": 4,
+            "mode": "normal",
+            "protocol": "normal",
+            "health": 0.9002788016486529,
+            "damage": 0.78804,
+            "speed": 1.036,
+            "entryCurve": {
+              "healthMultiplier": 1.195,
+              "damageMultiplier": 1.105,
+              "speedMultiplier": 1.036,
+              "defensePhase": false,
+              "loadout": {
+                "weaponDps": 83.71200000000002,
+                "supportDps": 101.60824285714286,
+                "offense": 185.3202428571429,
+                "resilience": 1,
+                "offenseRatio": 1.5684218353282553,
+                "health": 1.007722135763788,
+                "damage": 1,
+                "pressure": 1.0016087782841225
+              },
+              "bossBenchmark": {
+                "mode": "normal",
+                "round": 5,
+                "protocol": "normal",
+                "difficultyPosition": 5,
+                "health": 5472
+              },
+              "activeCount": 11,
+              "rewardMultiplier": 1,
+              "contractHealthMultiplier": 1
+            },
+            "loadout": {
+              "weaponDps": 83.71200000000002,
+              "supportDps": 101.60824285714286,
+              "offense": 185.3202428571429,
+              "resilience": 1,
+              "offenseRatio": 1.5684218353282553,
+              "health": 1.007722135763788,
+              "damage": 1,
+              "pressure": 1.0016087782841225
+            },
+            "pressure": 1.0016087782841225,
+            "spawnCadence": 0.998393805726345,
+            "activeCap": 14,
+            "formationCount": 3,
+            "bossBenchmark": {
+              "mode": "normal",
+              "round": 5,
+              "protocol": "normal",
+              "difficultyPosition": 5,
+              "health": 5472
+            },
+            "bossHealth": 5472,
+            "bossTotalHealth": 7569,
+            "hardpointHealth": 756,
+            "coreHealth": 2277,
+            "bossDamage": 0.78,
+            "rewardMultiplier": 1
+          },
+          "frames": 99,
+          "mean": 30.305050505532158,
+          "p95": 37.19999980926514,
+          "highRatePlayerProjectiles": 15,
+          "scaling": {
+            "mode": "normal",
+            "entryRound": 4,
+            "protocol": "normal",
+            "difficultyPosition": 4,
+            "entryCurve": {
+              "healthMultiplier": 1.195,
+              "damageMultiplier": 1.105,
+              "speedMultiplier": 1.036,
+              "defensePhase": false,
+              "loadout": {
+                "weaponDps": 83.71200000000002,
+                "supportDps": 101.60824285714286,
+                "offense": 185.3202428571429,
+                "resilience": 1,
+                "offenseRatio": 1.5684218353282553,
+                "health": 1.007722135763788,
+                "damage": 1,
+                "pressure": 1.0016087782841225
+              },
+              "bossBenchmark": {
+                "mode": "normal",
+                "round": 5,
+                "protocol": "normal",
+                "difficultyPosition": 5,
+                "health": 5472
+              },
+              "activeCount": 11,
+              "rewardMultiplier": 1,
+              "contractHealthMultiplier": 1
+            },
+            "enemyScaling": {
+              "health": 0.9002788016486529,
+              "damage": 0.78804,
+              "speed": 1.036
+            },
+            "bossBenchmark": {
+              "mode": "normal",
+              "round": 5,
+              "protocol": "normal",
+              "difficultyPosition": 5,
+              "health": 5472
+            },
+            "hardpointHealth": 756,
+            "coreHealth": 2277,
+            "bossTotalHealth": 7569,
+            "loadout": {
+              "weaponDps": 83.71200000000002,
+              "supportDps": 101.60824285714286,
+              "offense": 185.3202428571429,
+              "resilience": 1,
+              "offenseRatio": 1.5684218353282553,
+              "health": 1.007722135763788,
+              "damage": 1,
+              "pressure": 1.0016087782841225
+            },
+            "bossDamageMultiplier": 0.78,
+            "reinforcements": [
+              "drone",
+              "interceptor",
+              "tank"
+            ],
+            "weapons": [
+              {
+                "id": "cannon-left",
+                "hp": 756,
+                "maxHp": 756,
+                "fired": 12
+              },
+              {
+                "id": "cannon-right",
+                "hp": 756,
+                "maxHp": 756,
+                "fired": 28
+              },
+              {
+                "id": "broadside-left",
+                "hp": 756,
+                "maxHp": 756,
+                "fired": 15
+              },
+              {
+                "id": "broadside-right",
+                "hp": 756,
+                "maxHp": 756,
+                "fired": 15
+              },
+              {
+                "id": "missile-left",
+                "hp": 756,
+                "maxHp": 756,
+                "fired": 2
+              },
+              {
+                "id": "missile-right",
+                "hp": 756,
+                "maxHp": 756,
+                "fired": 2
+              },
+              {
+                "id": "artillery",
+                "hp": 756,
+                "maxHp": 756,
+                "fired": 1
+              }
+            ],
+            "activeShots": 20,
+            "seekers": 0,
+            "destruction": {
+              "activeFragments": 0,
+              "peakFragments": 10,
+              "fragmentCapacity": 168,
+              "fragmentPool": {
+                "created": 48,
+                "reused": 20,
+                "active": 0,
+                "available": 48
+              },
+              "activeBursts": 0,
+              "peakBursts": 3,
+              "allocationMisses": 0,
+              "degradedEffects": 0,
+              "droppedOptionalFragments": 0
+            }
+          },
+          "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":1576,\"height\":908,\"scrollX\":736.4444444444446,\"scrollY\":79,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+        },
+        {
+          "mode": "overdrive",
+          "round": 16,
+          "difficulty": {
+            "localRound": 16,
+            "rewardPosition": 46,
+            "difficultyPosition": 46,
+            "mode": "overdrive",
+            "protocol": "overdrive",
+            "health": 1.9900000000000002,
+            "damage": 1.585,
+            "speed": 1.28,
+            "entryCurve": {
+              "healthMultiplier": 2.1,
+              "damageMultiplier": 1.65,
+              "speedMultiplier": 1.28,
+              "defensePhase": false,
+              "loadout": {
+                "weaponDps": 83.71200000000002,
+                "supportDps": 101.60824285714286,
+                "offense": 185.3202428571429,
+                "resilience": 1,
+                "offenseRatio": 1.5684218353282553,
+                "health": 1,
+                "damage": 1,
+                "pressure": 1
+              },
+              "bossBenchmark": {
+                "mode": "overdrive",
+                "round": 15,
+                "protocol": "overdrive",
+                "difficultyPosition": 45,
+                "health": 22400
+              },
+              "activeCount": 26,
+              "rewardMultiplier": 1,
+              "contractHealthMultiplier": 1
+            },
+            "loadout": {
+              "weaponDps": 83.71200000000002,
+              "supportDps": 101.60824285714286,
+              "offense": 185.3202428571429,
+              "resilience": 1,
+              "offenseRatio": 1.5684218353282553,
+              "health": 1,
+              "damage": 1,
+              "pressure": 1
+            },
+            "pressure": 1.12,
+            "spawnCadence": 0.9,
+            "activeCap": 24,
+            "formationCount": 4,
+            "bossBenchmark": {
+              "mode": "overdrive",
+              "round": 15,
+              "protocol": "overdrive",
+              "difficultyPosition": 45,
+              "health": 22400
+            },
+            "bossHealth": 22400,
+            "bossTotalHealth": 21280,
+            "hardpointHealth": 2127,
+            "coreHealth": 6391,
+            "bossDamage": 1.48,
+            "rewardMultiplier": 1
+          },
+          "frames": 103,
+          "mean": 29.399029125287694,
+          "p95": 35,
+          "highRatePlayerProjectiles": 16,
+          "scaling": {
+            "mode": "overdrive",
+            "entryRound": 16,
+            "protocol": "overdrive",
+            "difficultyPosition": 46,
+            "entryCurve": {
+              "healthMultiplier": 2.1,
+              "damageMultiplier": 1.65,
+              "speedMultiplier": 1.28,
+              "defensePhase": false,
+              "loadout": {
+                "weaponDps": 83.71200000000002,
+                "supportDps": 101.60824285714286,
+                "offense": 185.3202428571429,
+                "resilience": 1,
+                "offenseRatio": 1.5684218353282553,
+                "health": 1,
+                "damage": 1,
+                "pressure": 1
+              },
+              "bossBenchmark": {
+                "mode": "overdrive",
+                "round": 15,
+                "protocol": "overdrive",
+                "difficultyPosition": 45,
+                "health": 22400
+              },
+              "activeCount": 26,
+              "rewardMultiplier": 1,
+              "contractHealthMultiplier": 1
+            },
+            "enemyScaling": {
+              "health": 1.9900000000000002,
+              "damage": 1.585,
+              "speed": 1.28
+            },
+            "bossBenchmark": {
+              "mode": "overdrive",
+              "round": 15,
+              "protocol": "overdrive",
+              "difficultyPosition": 45,
+              "health": 22400
+            },
+            "hardpointHealth": 2127,
+            "coreHealth": 6391,
+            "bossTotalHealth": 21280,
+            "loadout": {
+              "weaponDps": 83.71200000000002,
+              "supportDps": 101.60824285714286,
+              "offense": 185.3202428571429,
+              "resilience": 1,
+              "offenseRatio": 1.5684218353282553,
+              "health": 1,
+              "damage": 1,
+              "pressure": 1
+            },
+            "bossDamageMultiplier": 1.48,
+            "reinforcements": [
+              "drone",
+              "interceptor",
+              "tank"
+            ],
+            "weapons": [
+              {
+                "id": "cannon-left",
+                "hp": 2127,
+                "maxHp": 2127,
+                "fired": 0
+              },
+              {
+                "id": "cannon-right",
+                "hp": 2127,
+                "maxHp": 2127,
+                "fired": 0
+              },
+              {
+                "id": "broadside-left",
+                "hp": 2127,
+                "maxHp": 2127,
+                "fired": 0
+              },
+              {
+                "id": "broadside-right",
+                "hp": 2127,
+                "maxHp": 2127,
+                "fired": 0
+              },
+              {
+                "id": "missile-left",
+                "hp": 2127,
+                "maxHp": 2127,
+                "fired": 0
+              },
+              {
+                "id": "missile-right",
+                "hp": 2127,
+                "maxHp": 2127,
+                "fired": 0
+              },
+              {
+                "id": "artillery",
+                "hp": 2127,
+                "maxHp": 2127,
+                "fired": 0
+              }
+            ],
+            "activeShots": 0,
+            "seekers": 0,
+            "destruction": {
+              "activeFragments": 0,
+              "peakFragments": 0,
+              "fragmentCapacity": 168,
+              "fragmentPool": {
+                "created": 48,
+                "reused": 0,
+                "active": 0,
+                "available": 48
+              },
+              "activeBursts": 0,
+              "peakBursts": 0,
+              "allocationMisses": 0,
+              "degradedEffects": 0,
+              "droppedOptionalFragments": 0
+            }
+          },
+          "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":1576,\"height\":908,\"scrollX\":412,\"scrollY\":50.44444444444446,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+        },
+        {
+          "mode": "supreme",
+          "round": 26,
+          "difficulty": {
+            "localRound": 26,
+            "rewardPosition": 86,
+            "difficultyPosition": 136,
+            "mode": "supreme",
+            "protocol": "supreme-capricornus",
+            "health": 4.2769080000000015,
+            "damage": 2.51698,
+            "speed": 1.4336000000000002,
+            "entryCurve": {
+              "healthMultiplier": 2.1,
+              "damageMultiplier": 1.65,
+              "speedMultiplier": 1.28,
+              "defensePhase": false,
+              "loadout": {
+                "weaponDps": 109.52320000000002,
+                "supportDps": 101.60824285714286,
+                "offense": 211.13144285714287,
+                "resilience": 1,
+                "offenseRatio": 1.7868699069036391,
+                "health": 1,
+                "damage": 1,
+                "pressure": 1
+              },
+              "bossBenchmark": {
+                "mode": "supreme",
+                "round": 25,
+                "protocol": "supreme-capricornus",
+                "difficultyPosition": 133,
+                "health": 48384
+              },
+              "activeCount": 26,
+              "rewardMultiplier": 1.9500000000000002,
+              "contractHealthMultiplier": 1
+            },
+            "loadout": {
+              "weaponDps": 109.52320000000002,
+              "supportDps": 101.60824285714286,
+              "offense": 211.13144285714287,
+              "resilience": 1,
+              "offenseRatio": 1.7868699069036391,
+              "health": 1,
+              "damage": 1,
+              "pressure": 1
+            },
+            "pressure": 1.3664,
+            "spawnCadence": 0.6804,
+            "activeCap": 24,
+            "formationCount": 7,
+            "bossBenchmark": {
+              "mode": "supreme",
+              "round": 25,
+              "protocol": "supreme-capricornus",
+              "difficultyPosition": 133,
+              "health": 48384
+            },
+            "bossHealth": 48384,
+            "bossTotalHealth": 45965,
+            "hardpointHealth": 4596,
+            "coreHealth": 13793,
+            "bossDamage": 2.3976,
+            "rewardMultiplier": 1.9500000000000002
+          },
+          "frames": 97,
+          "mean": 30.97422680412371,
+          "p95": 40.90000009536743,
+          "highRatePlayerProjectiles": 15,
+          "scaling": {
+            "mode": "supreme",
+            "entryRound": 26,
+            "protocol": "supreme-capricornus",
+            "difficultyPosition": 136,
+            "entryCurve": {
+              "healthMultiplier": 2.1,
+              "damageMultiplier": 1.65,
+              "speedMultiplier": 1.28,
+              "defensePhase": false,
+              "loadout": {
+                "weaponDps": 109.52320000000002,
+                "supportDps": 101.60824285714286,
+                "offense": 211.13144285714287,
+                "resilience": 1,
+                "offenseRatio": 1.7868699069036391,
+                "health": 1,
+                "damage": 1,
+                "pressure": 1
+              },
+              "bossBenchmark": {
+                "mode": "supreme",
+                "round": 25,
+                "protocol": "supreme-capricornus",
+                "difficultyPosition": 133,
+                "health": 48384
+              },
+              "activeCount": 26,
+              "rewardMultiplier": 1.9500000000000002,
+              "contractHealthMultiplier": 1
+            },
+            "enemyScaling": {
+              "health": 4.2769080000000015,
+              "damage": 2.51698,
+              "speed": 1.4336000000000002
+            },
+            "bossBenchmark": {
+              "mode": "supreme",
+              "round": 25,
+              "protocol": "supreme-capricornus",
+              "difficultyPosition": 133,
+              "health": 48384
+            },
+            "hardpointHealth": 4596,
+            "coreHealth": 13793,
+            "bossTotalHealth": 45965,
+            "loadout": {
+              "weaponDps": 109.52320000000002,
+              "supportDps": 101.60824285714286,
+              "offense": 211.13144285714287,
+              "resilience": 1,
+              "offenseRatio": 1.7868699069036391,
+              "health": 1,
+              "damage": 1,
+              "pressure": 1
+            },
+            "bossDamageMultiplier": 2.3976,
+            "reinforcements": [
+              "drone",
+              "interceptor",
+              "aa"
+            ],
+            "weapons": [
+              {
+                "id": "cannon-left",
+                "hp": 4596,
+                "maxHp": 4596,
+                "fired": 0
+              },
+              {
+                "id": "cannon-right",
+                "hp": 4596,
+                "maxHp": 4596,
+                "fired": 0
+              },
+              {
+                "id": "broadside-left",
+                "hp": 4596,
+                "maxHp": 4596,
+                "fired": 0
+              },
+              {
+                "id": "broadside-right",
+                "hp": 4596,
+                "maxHp": 4596,
+                "fired": 0
+              },
+              {
+                "id": "missile-left",
+                "hp": 4596,
+                "maxHp": 4596,
+                "fired": 0
+              },
+              {
+                "id": "missile-right",
+                "hp": 4596,
+                "maxHp": 4596,
+                "fired": 0
+              },
+              {
+                "id": "artillery",
+                "hp": 4596,
+                "maxHp": 4596,
+                "fired": 0
+              }
+            ],
+            "activeShots": 0,
+            "seekers": 0,
+            "destruction": {
+              "activeFragments": 0,
+              "peakFragments": 0,
+              "fragmentCapacity": 168,
+              "fragmentPool": {
+                "created": 48,
+                "reused": 0,
+                "active": 0,
+                "available": 48
+              },
+              "activeBursts": 0,
+              "peakBursts": 0,
+              "allocationMisses": 0,
+              "degradedEffects": 0,
+              "droppedOptionalFragments": 0
+            }
+          },
+          "cameraBefore": "{\"count\":1,\"x\":0,\"y\":0,\"width\":1576,\"height\":908,\"scrollX\":87.55555555555554,\"scrollY\":346,\"zoom\":0.9,\"rotation\":0,\"alpha\":1,\"visible\":true}"
+        }
+      ]
+    },
+    {
+      "name": "skybreach-supplies-new",
+      "checks": 30,
+      "errors": [],
+      "cases": [
+        {
+          "name": "randomized resource collection, kill-drop pacing, scroll retirement, recovery and pause"
+        }
+      ],
+      "samples": [
+        {
+          "preview": true
+        }
+      ]
+    },
+    {
+      "name": "skybreach-city-wide-final",
+      "checks": 38,
+      "errors": [],
+      "viewport": {
+        "width": 2560,
+        "height": 1080
+      },
+      "cases": [
+        {
+          "name": "city canyon geometry, parallax, AA roof anchoring, viewports and teardown"
+        }
+      ],
+      "samples": [
+        {
+          "preview": true
+        },
+        {
+          "cityUpdateMs": 0.0009027777777777777,
+          "minimumPerSide": 10
+        }
+      ]
+    },
+    {
+      "name": "skybreach-city-small-final",
+      "checks": 38,
+      "errors": [],
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "cases": [
+        {
+          "name": "city canyon geometry, parallax, AA roof anchoring, viewports and teardown"
+        }
+      ],
+      "samples": [
+        {
+          "preview": true
+        },
+        {
+          "cityUpdateMs": 0.0006527777512868245,
+          "minimumPerSide": 10
+        }
+      ]
+    },
+    {
+      "name": "loadout-difficulty-final",
+      "checks": 275,
+      "errors": [],
+      "cases": [
+        {
+          "name": "actual permanent build stats in three modes, bounded scaling, and all nine arena laser patterns"
+        }
+      ]
+    }
+  ],
+  "builds": [
+    {
+      "mode": "normal",
+      "profile": "starter",
+      "mods": [],
+      "health": 130,
+      "energy": 110,
+      "weaponDps": 77,
+      "weightedSupportDps": 41,
+      "offenseRatio": 1,
+      "enemyHealthMultiplier": 1,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1,
+      "oldShipHealth": 75240,
+      "shipHealth": 7942,
+      "hardpointHealth": 794,
+      "coreHealth": 2384,
+      "weaponOnlySeconds": 103.4
+    },
+    {
+      "mode": "normal",
+      "profile": "developing",
+      "mods": [
+        {
+          "id": "calibrated-barrel",
+          "slot": "weapon",
+          "rank": 1
+        },
+        {
+          "id": "aegis-battery",
+          "slot": "player",
+          "rank": 1
+        },
+        {
+          "id": "siege-firmware",
+          "slot": "defense",
+          "rank": 1
+        },
+        {
+          "id": "bomb-chronometer",
+          "slot": "bombSite",
+          "rank": 1
+        },
+        {
+          "id": "coolant-jacket",
+          "slot": "wildcard",
+          "rank": 1
+        }
+      ],
+      "health": 180,
+      "energy": 135,
+      "weaponDps": 195,
+      "weightedSupportDps": 142,
+      "offenseRatio": 2.85,
+      "enemyHealthMultiplier": 1.111,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1.023,
+      "oldShipHealth": 75240,
+      "shipHealth": 12952,
+      "hardpointHealth": 1295,
+      "coreHealth": 3887,
+      "weaponOnlySeconds": 66.6
+    },
+    {
+      "mode": "normal",
+      "profile": "full upgrades",
+      "mods": [],
+      "health": 230,
+      "energy": 160,
+      "weaponDps": 357,
+      "weightedSupportDps": 325,
+      "offenseRatio": 5.78,
+      "enemyHealthMultiplier": 1.233,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1.049,
+      "oldShipHealth": 75240,
+      "shipHealth": 20486,
+      "hardpointHealth": 2048,
+      "coreHealth": 6150,
+      "weaponOnlySeconds": 57.4
+    },
+    {
+      "mode": "normal",
+      "profile": "rank 3 strong",
+      "mods": [
+        {
+          "id": "black-star-engine",
+          "slot": "weapon",
+          "rank": 3
+        },
+        {
+          "id": "phase-armor",
+          "slot": "player",
+          "rank": 3
+        },
+        {
+          "id": "siege-firmware",
+          "slot": "defense",
+          "rank": 3
+        },
+        {
+          "id": "bomb-chronometer",
+          "slot": "bombSite",
+          "rank": 3
+        },
+        {
+          "id": "coolant-jacket",
+          "slot": "wildcard",
+          "rank": 3
+        }
+      ],
+      "health": 199,
+      "energy": 160,
+      "weaponDps": 775,
+      "weightedSupportDps": 477,
+      "offenseRatio": 10.6,
+      "enemyHealthMultiplier": 1.339,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1.071,
+      "oldShipHealth": 75240,
+      "shipHealth": 30399,
+      "hardpointHealth": 3039,
+      "coreHealth": 9126,
+      "weaponOnlySeconds": 39.2
+    },
+    {
+      "mode": "normal",
+      "profile": "recalibrated strong",
+      "mods": [
+        {
+          "id": "black-star-engine",
+          "slot": "weapon",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 1,
+              "stat": "weaponCritChance",
+              "mode": "add",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 2,
+              "stat": "weaponCooling",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "phase-armor",
+          "slot": "player",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 1,
+              "stat": "weaponCritChance",
+              "mode": "add",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "siege-firmware",
+          "slot": "defense",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 1,
+              "stat": "weaponCritChance",
+              "mode": "add",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 2,
+              "stat": "weaponCooling",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "bomb-chronometer",
+          "slot": "bombSite",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "coolant-jacket",
+          "slot": "wildcard",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "health": 154,
+      "energy": 160,
+      "weaponDps": 3432,
+      "weightedSupportDps": 325,
+      "offenseRatio": 31.8,
+      "enemyHealthMultiplier": 1.45,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1.08,
+      "oldShipHealth": 75240,
+      "shipHealth": 50160,
+      "hardpointHealth": 5016,
+      "coreHealth": 15048,
+      "weaponOnlySeconds": 14.6
+    },
+    {
+      "mode": "overdrive",
+      "profile": "starter",
+      "mods": [],
+      "health": 130,
+      "energy": 110,
+      "weaponDps": 77,
+      "weightedSupportDps": 41,
+      "offenseRatio": 1,
+      "enemyHealthMultiplier": 1,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1,
+      "oldShipHealth": 201600,
+      "shipHealth": 21280,
+      "hardpointHealth": 2127,
+      "coreHealth": 6391,
+      "weaponOnlySeconds": 277.1
+    },
+    {
+      "mode": "overdrive",
+      "profile": "developing",
+      "mods": [
+        {
+          "id": "calibrated-barrel",
+          "slot": "weapon",
+          "rank": 1
+        },
+        {
+          "id": "aegis-battery",
+          "slot": "player",
+          "rank": 1
+        },
+        {
+          "id": "siege-firmware",
+          "slot": "defense",
+          "rank": 1
+        },
+        {
+          "id": "bomb-chronometer",
+          "slot": "bombSite",
+          "rank": 1
+        },
+        {
+          "id": "coolant-jacket",
+          "slot": "wildcard",
+          "rank": 1
+        }
+      ],
+      "health": 180,
+      "energy": 135,
+      "weaponDps": 195,
+      "weightedSupportDps": 142,
+      "offenseRatio": 2.85,
+      "enemyHealthMultiplier": 1,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1,
+      "oldShipHealth": 201600,
+      "shipHealth": 21280,
+      "hardpointHealth": 2127,
+      "coreHealth": 6391,
+      "weaponOnlySeconds": 109.4
+    },
+    {
+      "mode": "overdrive",
+      "profile": "full upgrades",
+      "mods": [],
+      "health": 230,
+      "energy": 160,
+      "weaponDps": 357,
+      "weightedSupportDps": 325,
+      "offenseRatio": 5.78,
+      "enemyHealthMultiplier": 1,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1,
+      "oldShipHealth": 201600,
+      "shipHealth": 28925,
+      "hardpointHealth": 2892,
+      "coreHealth": 8681,
+      "weaponOnlySeconds": 81
+    },
+    {
+      "mode": "overdrive",
+      "profile": "rank 3 strong",
+      "mods": [
+        {
+          "id": "black-star-engine",
+          "slot": "weapon",
+          "rank": 3
+        },
+        {
+          "id": "phase-armor",
+          "slot": "player",
+          "rank": 3
+        },
+        {
+          "id": "siege-firmware",
+          "slot": "defense",
+          "rank": 3
+        },
+        {
+          "id": "bomb-chronometer",
+          "slot": "bombSite",
+          "rank": 3
+        },
+        {
+          "id": "coolant-jacket",
+          "slot": "wildcard",
+          "rank": 3
+        }
+      ],
+      "health": 199,
+      "energy": 160,
+      "weaponDps": 775,
+      "weightedSupportDps": 477,
+      "offenseRatio": 10.6,
+      "enemyHealthMultiplier": 1.099,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1.021,
+      "oldShipHealth": 201600,
+      "shipHealth": 42921,
+      "hardpointHealth": 4292,
+      "coreHealth": 12877,
+      "weaponOnlySeconds": 55.4
+    },
+    {
+      "mode": "overdrive",
+      "profile": "recalibrated strong",
+      "mods": [
+        {
+          "id": "black-star-engine",
+          "slot": "weapon",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 1,
+              "stat": "weaponCritChance",
+              "mode": "add",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 2,
+              "stat": "weaponCooling",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "phase-armor",
+          "slot": "player",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 1,
+              "stat": "weaponCritChance",
+              "mode": "add",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "siege-firmware",
+          "slot": "defense",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 1,
+              "stat": "weaponCritChance",
+              "mode": "add",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 2,
+              "stat": "weaponCooling",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "bomb-chronometer",
+          "slot": "bombSite",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "coolant-jacket",
+          "slot": "wildcard",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "health": 154,
+      "energy": 160,
+      "weaponDps": 3432,
+      "weightedSupportDps": 325,
+      "offenseRatio": 31.8,
+      "enemyHealthMultiplier": 1.289,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1.06,
+      "oldShipHealth": 201600,
+      "shipHealth": 87652,
+      "hardpointHealth": 8765,
+      "coreHealth": 26297,
+      "weaponOnlySeconds": 25.5
+    },
+    {
+      "mode": "supreme",
+      "profile": "starter",
+      "mods": [],
+      "health": 130,
+      "energy": 110,
+      "weaponDps": 77,
+      "weightedSupportDps": 41,
+      "offenseRatio": 1,
+      "enemyHealthMultiplier": 1,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1,
+      "oldShipHealth": 358848,
+      "shipHealth": 37878,
+      "hardpointHealth": 3787,
+      "coreHealth": 11369,
+      "weaponOnlySeconds": 493.2
+    },
+    {
+      "mode": "supreme",
+      "profile": "developing",
+      "mods": [
+        {
+          "id": "calibrated-barrel",
+          "slot": "weapon",
+          "rank": 1
+        },
+        {
+          "id": "aegis-battery",
+          "slot": "player",
+          "rank": 1
+        },
+        {
+          "id": "siege-firmware",
+          "slot": "defense",
+          "rank": 1
+        },
+        {
+          "id": "bomb-chronometer",
+          "slot": "bombSite",
+          "rank": 1
+        },
+        {
+          "id": "coolant-jacket",
+          "slot": "wildcard",
+          "rank": 1
+        }
+      ],
+      "health": 180,
+      "energy": 135,
+      "weaponDps": 195,
+      "weightedSupportDps": 142,
+      "offenseRatio": 2.85,
+      "enemyHealthMultiplier": 1,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1,
+      "oldShipHealth": 358848,
+      "shipHealth": 37878,
+      "hardpointHealth": 3787,
+      "coreHealth": 11369,
+      "weaponOnlySeconds": 194.7
+    },
+    {
+      "mode": "supreme",
+      "profile": "full upgrades",
+      "mods": [],
+      "health": 230,
+      "energy": 160,
+      "weaponDps": 357,
+      "weightedSupportDps": 325,
+      "offenseRatio": 5.78,
+      "enemyHealthMultiplier": 1,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1,
+      "oldShipHealth": 358848,
+      "shipHealth": 37878,
+      "hardpointHealth": 3787,
+      "coreHealth": 11369,
+      "weaponOnlySeconds": 106.1
+    },
+    {
+      "mode": "supreme",
+      "profile": "rank 3 strong",
+      "mods": [
+        {
+          "id": "black-star-engine",
+          "slot": "weapon",
+          "rank": 3
+        },
+        {
+          "id": "phase-armor",
+          "slot": "player",
+          "rank": 3
+        },
+        {
+          "id": "siege-firmware",
+          "slot": "defense",
+          "rank": 3
+        },
+        {
+          "id": "bomb-chronometer",
+          "slot": "bombSite",
+          "rank": 3
+        },
+        {
+          "id": "coolant-jacket",
+          "slot": "wildcard",
+          "rank": 3
+        }
+      ],
+      "health": 199,
+      "energy": 160,
+      "weaponDps": 775,
+      "weightedSupportDps": 477,
+      "offenseRatio": 10.6,
+      "enemyHealthMultiplier": 1,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1,
+      "oldShipHealth": 358848,
+      "shipHealth": 52519,
+      "hardpointHealth": 5251,
+      "coreHealth": 15762,
+      "weaponOnlySeconds": 67.7
+    },
+    {
+      "mode": "supreme",
+      "profile": "recalibrated strong",
+      "mods": [
+        {
+          "id": "black-star-engine",
+          "slot": "weapon",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 1,
+              "stat": "weaponCritChance",
+              "mode": "add",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 2,
+              "stat": "weaponCooling",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "phase-armor",
+          "slot": "player",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 1,
+              "stat": "weaponCritChance",
+              "mode": "add",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "siege-firmware",
+          "slot": "defense",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 1,
+              "stat": "weaponCritChance",
+              "mode": "add",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            },
+            {
+              "slotIndex": 2,
+              "stat": "weaponCooling",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "bomb-chronometer",
+          "slot": "bombSite",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "coolant-jacket",
+          "slot": "wildcard",
+          "rank": 3,
+          "calibrations": [
+            {
+              "slotIndex": 0,
+              "stat": "weaponDamage",
+              "mode": "multiply",
+              "normalizedPower": 1,
+              "quality": "optimal",
+              "calibratedAt": "2026-10-11T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "health": 154,
+      "energy": 160,
+      "weaponDps": 3432,
+      "weightedSupportDps": 325,
+      "offenseRatio": 31.8,
+      "enemyHealthMultiplier": 1.099,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1.021,
+      "oldShipHealth": 358848,
+      "shipHealth": 107253,
+      "hardpointHealth": 10725,
+      "coreHealth": 32178,
+      "weaponOnlySeconds": 31.3
+    },
+    {
+      "mode": "supreme",
+      "profile": "Supreme rank 3",
+      "mods": [
+        {
+          "id": "black-star-engine",
+          "slot": "weapon",
+          "rank": 3
+        },
+        {
+          "id": "phase-armor",
+          "slot": "player",
+          "rank": 3
+        },
+        {
+          "id": "supreme-eventide-arsenal",
+          "slot": "defense",
+          "rank": 3
+        },
+        {
+          "id": "supreme-singularity-chamber",
+          "slot": "bombSite",
+          "rank": 3
+        },
+        {
+          "id": "coolant-jacket",
+          "slot": "wildcard",
+          "rank": 3
+        }
+      ],
+      "health": 199,
+      "energy": 160,
+      "weaponDps": 3989,
+      "weightedSupportDps": 325,
+      "offenseRatio": 36.51,
+      "enemyHealthMultiplier": 1.122,
+      "enemyDamageMultiplier": 1,
+      "pressureMultiplier": 1.026,
+      "oldShipHealth": 358848,
+      "shipHealth": 117345,
+      "hardpointHealth": 11734,
+      "coreHealth": 35207,
+      "weaponOnlySeconds": 29.4
+    }
+  ]
+}
