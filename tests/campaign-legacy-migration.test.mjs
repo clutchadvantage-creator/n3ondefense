@@ -71,10 +71,11 @@ test('old Centaurus completion survives even when its recorded round is 100 rath
 });
 
 test('completed training qualifies retroactively; skipped or unfinished training does not', () => {
-  for (const evidence of [{ trainingRoundsCompleted: 3 }, { completedTutorialSequences: ['onboarding.certification'] }]) {
+  for (const evidence of [{ trainingRoundsCompleted: 3 }]) {
     const { progress } = migrateLegacyCampaignProgress(legacy(evidence));
     assert.deepEqual(getPendingCampaignPackages(progress), ['training']);
     assert.equal(progress.packages.training.claimed, false);
   }
   assert.deepEqual(getPendingCampaignPackages(migrateLegacyCampaignProgress(legacy({ trainingRoundsCompleted: 2 })).progress), []);
+  assert.deepEqual(getPendingCampaignPackages(migrateLegacyCampaignProgress(legacy({ completedTutorialSequences: ['onboarding.certification'] })).progress), []);
 });

@@ -38,7 +38,8 @@ function fixture() {
     '../mods/modBalance.ts': { normalizeRunProtocolId: x => x },
     './SaveSystem': { SaveSystem: { get: () => ({ settings }) } },
     '../utils/assetUrl': { publicAssetUrl: x => x },
-    './DroneAudioPool': { DroneAudioPool: class {} }
+    './DroneAudioPool': { DroneAudioPool: class {} },
+    './BossWalkingAudio': { BossWalkingAudio: class { stop() {} stats() { return { active: 0 }; } } }
   };
   const globals = { performance: { now: () => now }, document, Audio, AudioContext: class { state = 'running'; }, console };
   const require = key => { if (!dependencies[key]) throw Error('Unexpected dependency ' + key); return dependencies[key]; };

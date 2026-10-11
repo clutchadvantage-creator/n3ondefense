@@ -1,0 +1,127 @@
+// Isolated DEV browser: real scene transitions, gameplay action paths, profile saves and reward transactions.
+(() => {
+  const game=n3onGame,wait=ms=>new Promise(r=>setTimeout(r,ms));
+  const report=globalThis.__n3onLayoutAudit={running:true,cases:[],errors:[],screenshots:[]};
+  const check=(ok,label)=>{report.cases.push({ok:!!ok,label});if(!ok)throw Error(label);};
+  const until=async(fn,label)=>{const end=performance.now()+20000;while(!fn()){if(performance.now()>end)throw Error('Timeout: '+label);await wait(30);}};
+  const all=scene=>{const out=[];const visit=o=>{out.push(o);o.list?.forEach(visit);};scene.children.list.forEach(visit);return out;};
+  const button=(scene,label)=>all(scene).find(o=>o.text===label)?.parentContainer?.getByName('button-hit');
+  const click=(scene,label)=>{const hit=button(scene,label);check(hit,`${label} navigation exists`);hit.emit('pointerdown');};
+  const stop=async()=>{for(const s of game.scene.getScenes(false))game.scene.stop(s.scene.key);await wait(80);};
+  const acknowledge=async()=>{
+    const b=document.querySelector('.tutorial-overlay:not([hidden]) .tutorial-continue');
+    check(b&&!b.hidden,'visible tutorial acknowledgement');b.click();await wait(230);
+  };
+  let arena,originalUpdate;
+  report.promise=(async()=>{try{
+    await until(()=>game.scene.keys.arena&&!game.scene.isActive('boot'),'boot');
+    const source=await fetch('/src/game/scenes/ArenaScene.ts').then(r=>r.text());
+    const dep=name=>source.match(new RegExp('import\\s*\\{[^}]*\\b'+name+'\\b[^}]*\\}\\s*from\\s*["\x27]([^"\x27]+)'))[1];
+    const {SaveSystem:S}=await import(dep('SaveSystem'));
+    const {PlayerProfileStore:P}=await import('/src/game/state/PlayerProfileStore.ts');
+    const {MOD_BY_ID}=await import('/src/game/mods/definitions.ts');
+    const {UPGRADE_DEFINITIONS}=await import('/src/data/upgrades.ts');
+    const {TutorialEventBus:Bus}=await import(dep('TutorialEventBus'));
+    await stop();check(S.createProfile('Adaptive '+Date.now().toString().slice(-7)).ok,'new isolated profile');
+    S.setSettings({masterVolume:0,lyra:{...S.get().settings.lyra,voice:false}});
+    const profile=S.getActiveProfileSummary().id;
+    report.profileId=profile;
+    const state=()=>S.getTutorialProgress();
+    game.scene.start('menu');await until(()=>game.scene.keys.menu.tutorialDirector?.active,'welcome');
+    check(document.querySelector('.tutorial-body').textContent.includes('I am LYRA'),'existing LYRA identity and introduction retained');
+    await acknowledge();await acknowledge();
+    check(game.scene.keys.menu.tutorialDirector.active.steps[game.scene.keys.menu.tutorialDirector.stepIndex].id==='start-local','initial explanation retains Start Game guidance');
+
+    const startRound=async round=>{
+      if(arena&&originalUpdate)arena.sys.sceneUpdate=originalUpdate;
+      await stop();game.scene.start('arena',{baseSeed:550055,round,protocol:'normal',objectiveMode:'open',modsEarned:[],runStartedAt:Date.now()});
+      arena=game.scene.keys.arena;
+      await until(()=>arena.roundRuntime?.phase==='active'&&arena.player,'round '+round);
+      arena.player.invulnUntil=Infinity;arena.playerInput.adoptDevice('gamepad');arena.pointerLockInitialGate=false;
+      if(arena.state.state==='Paused')arena.restoreGameplayAfterPause();
+      originalUpdate=arena.sys.sceneUpdate;arena.sys.sceneUpdate=()=>{};arena.physics.pause();await wait(250);
+    };
+    const die=async()=>{
+      arena.player.hp=0;arena.triggerDefeat('playerDead');
+      await until(()=>game.scene.isActive('results'),'death results');
+      check(!document.querySelector('.tutorial-overlay:not([hidden])'),'death clears tutorial presentation');
+    };
+    const deathMenu=async()=>{click(game.scene.keys.results,'MAIN MENU');await until(()=>game.scene.isActive('menu'),'death to menu');await wait(300);};
+    await startRound(1);await acknowledge();
+    arena.updatePlayerMovement(arena.time.now);arena.player.body.reset(arena.player.x+16,arena.player.y);
+    arena.updatePlayerMovement(arena.time.now+16);
+    arena.playerInput.states.beginFrame();arena.playerInput.states.setHeld('fire',true);arena.playerInput.states.finishFrame('gameplay');
+    arena.updatePlayerShooting(arena.time.now+1000);arena.playerInput.clear();
+    check(state().learning.objectives['onboarding.basic-controls.move']==='COMPLETED','real movement persisted');
+    check(state().learning.objectives['onboarding.basic-controls.fire']==='COMPLETED','real fire persisted outside its visible prompt');
+    await die();await deathMenu();
+    check(state().trainingRoundsCompleted===0,'Round 1 death leaves training incomplete');
+    check(document.querySelector('.tutorial-title')?.textContent==='PROGRESS ARCHIVED','one-time RWG acknowledgement replaces forced restart');
+    const overlay=document.querySelector('.tutorial-overlay:not([hidden])');
+    check([...overlay.querySelectorAll('.tutorial-shade')].every(e=>getComputedStyle(e).display==='none'),'archive notice leaves menu controls unblocked');
+    report.screenshots.push({name:'training-archived',html:overlay.outerHTML});
+    click(game.scene.keys.menu,'STORE');await until(()=>game.scene.isActive('upgrades'),'early Store');await wait(220);
+    check(game.scene.keys.upgrades.tutorialDirector.active?.id==='onboarding.store','early Store receives its existing teaching');
+    while(game.scene.keys.upgrades.tutorialDirector.isActive())await acknowledge();
+    check(state().learning.objectives['onboarding.store.purchase']!=='COMPLETED','unaffordable purchase explanation does not fake a purchase');
+    S.addCredits(10000);
+    const upgrade=UPGRADE_DEFINITIONS[0],result=game.scene.keys.upgrades.purchaseUpgrade(upgrade,0);
+    check(result.ok&&state().learning.objectives['onboarding.store.purchase']==='COMPLETED','real Store purchase completes pending objective');
+    game.scene.keys.upgrades.returnToMainMenu({returnScene:'menu',resumePausedScene:false});
+    await until(()=>game.scene.isActive('menu'),'Store exit');await wait(300);
+    check(!game.scene.keys.menu.tutorialDirector.isActive(),'menu return has no repeated opening or archive notice');
+    const saved=JSON.stringify(state());P.bootstrap();check(JSON.stringify(state())===saved,'profile reload restores explanations and actions from browser storage');
+
+    await startRound(1);
+    check(!['welcome','move','fire'].includes(arena.tutorialDirector.active?.steps[arena.tutorialDirector.stepIndex]?.id),'retry skips previously taught actions and introduction');
+    arena.tutorialDirector.suspend();arena.completeRound();
+    await until(()=>game.scene.isActive('round-finished'),'first successful debrief');
+    check(state().trainingRoundsCompleted===1,'actual round-one victory recorded');
+    await startRound(2);await die();await deathMenu();
+    check(state().trainingRoundsCompleted===1&&state().firstRunStage==='arena-teaching','Round 2 death preserves first win without workstation clearance');
+    check(!game.scene.keys.menu.tutorialDirector.isActive(),'Round 2 death does not replay the archived-progress notice');
+    await startRound(2);arena.tutorialDirector.suspend();arena.completeRound();
+    await until(()=>game.scene.isActive('round-finished'),'second successful debrief');
+    await startRound(3);await die();await deathMenu();
+    check(state().trainingRoundsCompleted===2&&!S.getCampaignProgress().packages.training.eligible,'Round 3 entry and death grant no clearance or reward');
+    await startRound(3);arena.tutorialDirector.suspend();
+    const before=S.getModCollection().cards.map(c=>c.instanceId);
+    arena.completeRound();
+    await until(()=>S.getCampaignProgress().packages.training.claimed,'third victory package');
+    const after=S.getModCollection().cards.filter(c=>!before.includes(c.instanceId));
+    check(after.filter(c=>MOD_BY_ID.get(c.modId).rarity==='common').length>=3,'third actual victory grants Common Mods');
+    check(state().trainingRoundsCompleted===3,'third successful training round persisted');
+    const ids=S.getModCollection().cards.map(c=>c.instanceId).sort().join();
+    P.bootstrap();check(S.claimCampaignPackages().length===0&&S.getModCollection().cards.map(c=>c.instanceId).sort().join()===ids,'reward reload cannot duplicate package');
+    // Preserve normal reward ownership; skip only its cosmetic presentation wait for this fixture.
+    await stop();game.scene.start('menu');await wait(300);
+    check(state().firstRunStage==='waiting-for-garage','formal phase opens only after third victory');
+    click(game.scene.keys.menu,'OPERATOR GARAGE');await until(()=>game.scene.isActive('garage'),'Garage');await wait(250);
+    check(game.scene.keys.garage.tutorialDirector.active?.id==='onboarding.garage','normal Garage instruction begins');
+    await acknowledge();click(game.scene.keys.garage,'MOD COLLECTION');await until(()=>game.scene.isActive('mods'),'Collection');await wait(230);
+    await acknowledge();await acknowledge();
+    check(game.scene.keys.mods.tutorialDirector.active.steps[game.scene.keys.mods.tutorialDirector.stepIndex].id==='equip','equip objective is pending until actual installation');
+    game.scene.keys.mods.returnToPreviousScene();await wait(250);
+    check(state().learning.objectives['onboarding.mod-collection.equip']!=='COMPLETED','leaving the equip instruction preserves pending action');
+    await stop();game.scene.start('mods',{returnScene:'menu'});await wait(300);
+    check(game.scene.keys.mods.tutorialDirector.active?.steps[game.scene.keys.mods.tutorialDirector.stepIndex]?.id!=='equip','return does not repeat equip explanation');
+    const card=S.getModCollection().cards.find(c=>MOD_BY_ID.get(c.modId).rarity==='common');
+    check(S.equipMod('wildcard',card.modId,card.instanceId).ok,'actual saved Mod installation');Bus.emit('mods.equipped');
+    while(game.scene.keys.mods.tutorialDirector.isActive())await acknowledge();
+    check(state().firstRunStage==='complete','early Store teaching skips correctly after equipment completion');
+    const chosen=S.getModCollection().loadouts.find(l=>l.id===S.getModCollection().activeLoadoutId).cardSlots.wildcard;
+    P.bootstrap();check(S.getModCollection().loadouts.find(l=>l.id===S.getModCollection().activeLoadoutId).cardSlots.wildcard===chosen,'equipment choice survives reload');
+    // A new profile is independent; stale scene handlers must not write into it.
+    const oldDirector=game.scene.keys.mods.tutorialDirector;
+    const second=S.createProfile('Other '+Date.now().toString().slice(-6));
+    check(second.ok,'second isolated profile: '+(second.message??'created'));
+    Bus.emit('combat.ability.turret');oldDirector.advance();await wait(250);
+    check(!state().learning.objectives['onboarding.tactics.turret'],'old profile callbacks cannot mutate the new profile');
+    await stop();S.selectProfile(profile);game.scene.start('menu');await wait(300);
+    check(state().firstRunStage==='complete'&&!game.scene.keys.menu.tutorialDirector.isActive(),'completed profile does not restart onboarding');
+    report.reloadExpected={profile,chosen,cardIds:S.getModCollection().cards.map(c=>c.instanceId).sort()};
+    sessionStorage.setItem('adaptive-tutorial-reload',JSON.stringify(report.reloadExpected));
+  }catch(error){report.errors.push(String(error.stack??error));}
+  finally{if(arena&&originalUpdate)arena.sys.sceneUpdate=originalUpdate;report.running=false;}})();
+  return {started:true};
+})();

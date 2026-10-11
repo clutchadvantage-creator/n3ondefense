@@ -16,6 +16,7 @@ import { DEFAULT_LYRA_SETTINGS, normalizeLyraSettings } from '../lyra/LyraTypes.
 import { normalizeCampaignProgress } from '../progression/CampaignSaveNormalizer.ts';
 import { migrateLegacyCampaignProgress } from '../progression/CampaignLegacyMigration.ts';
 import { normalizeAccessCards } from '../anomalies/AnomalyAccessCards.ts';
+import { createTutorialProgress, tutorialLearning, reconcileTutorialEvidence } from '../tutorial/TutorialProgress.ts';
 
 const defaultSettings: LocalPlayerSettings = {
   lyra: { ...DEFAULT_LYRA_SETTINGS },
@@ -33,18 +34,7 @@ const defaultSettings: LocalPlayerSettings = {
   buttonJiggle: 1
 };
 
-const createDefaultTutorialProgress = (): TutorialProgressState => ({
-  version: 3,
-  lyraCurriculum: 4,
-  trainingRoundsCompleted: 0,
-  lyraSeen: [],
-  firstRunWelcomePending: true,
-  firstRunStage: 'welcome-main-menu',
-  completedSequences: [],
-  skippedSequences: [],
-  completedSteps: {},
-  replaySequenceId: null
-});
+const createDefaultTutorialProgress = createTutorialProgress;
 
 const normalizeTutorialProgress = (value: unknown): TutorialProgressState => {
   const candidate = isObject(value) ? value : {};
@@ -72,7 +62,7 @@ const normalizeTutorialProgress = (value: unknown): TutorialProgressState => {
     const welcomeSteps = completedSteps['onboarding.menu-welcome'] ?? [];
     firstRunStage = welcomeSteps.includes('welcome') ? 'waiting-for-start-local' : 'welcome-main-menu';
   }
-  return {
+  const progress: TutorialProgressState = {
     version: 3,
     lyraCurriculum: candidate.lyraCurriculum === 4 ? 4 : 0,
     trainingRoundsCompleted: clamp(toInteger(candidate.trainingRoundsCompleted), 0, 3),
@@ -88,6 +78,25 @@ const normalizeTutorialProgress = (value: unknown): TutorialProgressState => {
       ? candidate.replaySequenceId
       : null
   };
+  if (isObject(candidate.learning) && candidate.learning.version === 1) {
+    const saved = candidate.learning;
+    const objectives: NonNullable<TutorialProgressState['learning']>['objectives'] = {};
+    const messages: NonNullable<TutorialProgressState['learning']>['messages'] = {};
+    if (isObject(saved.objectives)) for (const [id, status] of Object.entries(saved.objectives)) {
+      if (id !== '__proto__' && id !== 'constructor' && ['NOT_STARTED', 'INTRODUCED', 'IN_PROGRESS', 'COMPLETED'].includes(String(status)))
+        objectives[id] = status as typeof objectives[string];
+    }
+    if (isObject(saved.messages)) for (const [id, status] of Object.entries(saved.messages)) {
+      if (id !== '__proto__' && id !== 'constructor' && (status === 'delivered' || status === 'acknowledged')) messages[id] = status;
+    }
+    progress.learning = { version: 1, objectives, messages,
+      trainingRounds: Array.isArray(saved.trainingRounds) ? [...new Set(saved.trainingRounds.filter((round): round is number => [1, 2, 3].includes(round as number)))] : [],
+      started: saved.started === true, dismissed: saved.dismissed === true, legacyGraduated: saved.legacyGraduated === true,
+      replays: uniqueStrings(saved.replays).slice(0, 16), legacyTrainingCleared: saved.legacyTrainingCleared === true };
+    if (firstRunStage === 'complete' && progress.learning.trainingRounds.length < 3 && !progress.learning.dismissed) progress.learning.legacyGraduated = true;
+  }
+  tutorialLearning(progress);
+  return progress;
 };
 
 const defaultEquipped = DEFAULT_EQUIPPED_COSMETICS;
@@ -439,6 +448,15 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
         [mode]: mode === 'normal' ? current.protocol!.selectedNormalStartRound : campaign.modes[mode].legacyStartRound }
     }, current.progress!.normalHighestRound, campaign);
   }
+  const learning = tutorialLearning(current.tutorials!);
+  // Campaign completed-round records are authoritative; attempted/highest entered rounds are not.
+  const rawTutorial = isObject(input.tutorials) ? input.tutorials : {};
+  if ((!isObject(rawTutorial.learning) && version >= 19 && current.progress!.campaign.modes.normal.highestCompletedRound >= 3)
+    || current.progress!.campaign.packages.training.claimed) learning.trainingRounds = [1, 2, 3];
+  const activeLoadout = current.mods.loadouts.find(loadout => loadout.id === current.mods!.activeLoadoutId);
+  reconcileTutorialEvidence(current.tutorials!, !!activeLoadout && Object.values(activeLoadout.slots).some(Boolean),
+    Object.values(current.upgrades!).some(level => level > 0));
+  if (current.tutorials!.trainingRoundsCompleted === 3) current.progress!.campaign.packages.training.eligible = true;
   return current as LocalPlayerSave;
 };
 

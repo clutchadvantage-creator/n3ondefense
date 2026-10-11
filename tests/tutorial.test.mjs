@@ -3,332 +3,247 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createDefaultLocalSave, normalizeLocalSave } from '../src/game/save/SaveValidator.ts';
 import {
-  completeTutorialSequence,
-  completeTutorialStep,
-  completeFirstRunTeachingRound,
-  createTutorialProgress,
-  isTutorialSequenceComplete,
-  isTutorialSequenceEligible,
-  requestTutorialReplay,
-  setFirstRunTeachingStage,
-  skipTutorialSequence
+  acknowledgeTutorialMessage, completeFirstRunTeachingRound, completeTutorialSequence, createTutorialProgress,
+  hasTutorialMessage, hasTutorialObjective, introduceTutorialStep, isTutorialSequenceComplete,
+  isTutorialSequenceEligible, needsTutorialStep, recordTutorialEvent, reconcileTutorialEvidence,
+  requestTutorialReplay, resetTutorialSequence, setFirstRunTeachingStage, skipTutorialSequence
 } from '../src/game/tutorial/TutorialProgress.ts';
-import { TUTORIAL_SEQUENCES } from '../src/game/tutorial/TutorialRegistry.ts';
-
-test('third training round retires all Arena teaching and stale deployment callbacks', () => {
-  const state = createTutorialProgress();
-  setFirstRunTeachingStage(state, 'arena-teaching');
-  completeFirstRunTeachingRound(state, 1);
-  completeFirstRunTeachingRound(state, 2);
-  state.replaySequenceId = 'onboarding.menu-resume-training';
-  assert.equal(completeFirstRunTeachingRound(state, 3), true);
-  assert.equal(state.replaySequenceId, null);
-  for (const id of ['onboarding.menu-welcome', 'onboarding.menu-resume-training', 'onboarding.basic-controls',
-    'onboarding.defense', 'onboarding.hud', 'onboarding.tactics', 'onboarding.certification']) {
-    assert.equal(isTutorialSequenceComplete(state, id), true, id);
-    const sequence = TUTORIAL_SEQUENCES.find(s => s.id === id);
-    assert.equal(isTutorialSequenceEligible(state, sequence, sequence.scene), false);
-  }
-  completeTutorialStep(state, 'onboarding.menu-welcome', 'welcome');
-  completeTutorialStep(state, 'onboarding.menu-welcome', 'start-local');
-  assert.equal(state.firstRunStage, 'waiting-for-garage');
-  assert.equal(isTutorialSequenceEligible(state, TUTORIAL_SEQUENCES.find(s => s.id === 'onboarding.menu-garage'), 'menu'), true);
-  const save = createDefaultLocalSave('training-test', 'Training'); save.tutorials = state;
-  assert.equal(normalizeLocalSave(JSON.parse(JSON.stringify(save))).tutorials.firstRunStage, 'waiting-for-garage');
-});
-
-test('persisted three-round progress graduates even when the latest run restarts at one', () => {
-  const state = createTutorialProgress(); setFirstRunTeachingStage(state, 'arena-teaching'); state.trainingRoundsCompleted = 3;
-  assert.equal(completeFirstRunTeachingRound(state, 1), true);
-  assert.equal(state.firstRunStage, 'waiting-for-garage');
-});
+import { TUTORIAL_SEQUENCES, TUTORIAL_SEQUENCE_BY_ID as registry } from '../src/game/tutorial/TutorialRegistry.ts';
+import { prepareCampaignRewardPackages } from '../src/game/progression/CampaignRewardPackages.ts';
 import { resolveTutorialAdvancePolicy } from '../src/game/tutorial/TutorialStepRules.ts';
-import {
-  projectTutorialBoundsToViewport,
-  projectViewportBoundsToTutorialMount,
-  resolveTutorialCalloutPlacement,
-  unionTutorialBounds
-} from '../src/game/tutorial/TutorialTargeting.ts';
+import { projectTutorialBoundsToViewport, projectViewportBoundsToTutorialMount, resolveTutorialCalloutPlacement, unionTutorialBounds } from '../src/game/tutorial/TutorialTargeting.ts';
 
-test('tutorial progress uses stable ids and supports completion, skipping, and replay', () => {
-  const progress = createTutorialProgress();
-  assert.equal(progress.version, 3);
-  assert.equal(progress.firstRunWelcomePending, true);
-  assert.equal(progress.firstRunStage, 'welcome-main-menu');
-  completeTutorialStep(progress, 'onboarding.basic-controls', 'move');
-  completeTutorialStep(progress, 'onboarding.basic-controls', 'move');
-  assert.deepEqual(progress.completedSteps['onboarding.basic-controls'], ['move']);
-  completeTutorialSequence(progress, 'onboarding.basic-controls');
-  assert.equal(isTutorialSequenceComplete(progress, 'onboarding.basic-controls'), true);
-  requestTutorialReplay(progress, 'onboarding.basic-controls');
-  assert.equal(isTutorialSequenceComplete(progress, 'onboarding.basic-controls'), false);
-  assert.equal(progress.replaySequenceId, 'onboarding.basic-controls');
-  skipTutorialSequence(progress, 'onboarding.basic-controls');
-  assert.equal(isTutorialSequenceComplete(progress, 'onboarding.basic-controls'), true);
-  assert.equal(progress.replaySequenceId, null);
+const reload=state=>{
+  const save=createDefaultLocalSave('tutorial-profile','Training');save.tutorials=state;
+  return normalizeLocalSave(JSON.parse(JSON.stringify(save))).tutorials;
+};
+const explain=(state,id)=>{
+  for(const step of registry.get(id).steps){introduceTutorialStep(state,id,step.id);acknowledgeTutorialMessage(state,id,step);}
+  completeTutorialSequence(state,id);
+};
+const graduate=state=>[1,2,3].forEach(round=>completeFirstRunTeachingRound(state,round));
+
+test('new profile starts the existing introduction and acknowledges it only once',()=>{
+  const s=createTutorialProgress(),welcome=registry.get('onboarding.menu-welcome');
+  assert.equal(isTutorialSequenceEligible(s,welcome,'menu'),true);
+  introduceTutorialStep(s,welcome.id,'welcome');
+  assert.equal(s.learning.messages[`${welcome.id}.welcome`],'delivered');
+  const restored=reload(s);
+  assert.equal(needsTutorialStep(restored,welcome.id,welcome.steps[0]),false);
+  assert.equal(needsTutorialStep(restored,welcome.id,welcome.steps[1]),true);
+  assert.equal(restored.firstRunStage,'waiting-for-start-local');
 });
 
-test('older profiles safely migrate into optional tutorial and contextual-tip defaults', () => {
-  const source = createDefaultLocalSave('tutorial-profile', 'Tutorial Profile');
-  const legacy = structuredClone(source);
-  legacy.version = 10;
-  delete legacy.tutorials;
-  delete legacy.settings.contextualTutorials;
-  const migrated = normalizeLocalSave(legacy);
-  assert.ok(migrated);
-  assert.equal(migrated.version, 20);
-  assert.equal(migrated.settings.contextualTutorials, true);
-  assert.deepEqual(migrated.tutorials.completedSequences, []);
-  assert.equal(migrated.tutorials.replaySequenceId, null);
-  assert.equal(migrated.tutorials.firstRunWelcomePending, false);
-  assert.equal(migrated.tutorials.firstRunStage, 'complete');
+for(const boundary of ['death','run-failed','try-again','main-menu','pause','quit','screen-exit','browser-refresh']){
+  test(`interrupted action persists across ${boundary} before the next explanation`,()=>{
+    let s=createTutorialProgress();recordTutorialEvent(s,'screen.entered','arena');
+    introduceTutorialStep(s,'onboarding.basic-controls','move');
+    assert.equal(recordTutorialEvent(s,'combat.playerMoved'),true);
+    recordTutorialEvent(s,boundary);
+    s=reload(s);
+    assert.equal(hasTutorialObjective(s,'onboarding.basic-controls.move'),true);
+    assert.equal(hasTutorialMessage(s,'onboarding.basic-controls','move'),true);
+    assert.equal(needsTutorialStep(s,'onboarding.basic-controls',registry.get('onboarding.basic-controls').steps[2]),true);
+    assert.equal(s.trainingRoundsCompleted,0);
+    assert.equal(s.firstRunStage,'arena-teaching');
+    assert.equal(isTutorialSequenceEligible(s,registry.get('onboarding.menu-welcome'),'menu'),false);
+  });
+}
+
+for(const wins of [[],[1],[1,2]])test(`death after ${wins.length} training wins never unlocks Garage clearance`,()=>{
+  let s=createTutorialProgress();recordTutorialEvent(s,'screen.entered','arena');
+  wins.forEach(r=>completeFirstRunTeachingRound(s,r));
+  recordTutorialEvent(s,'round.entered',{round:wins.length+1});
+  recordTutorialEvent(s,'player.died');s=reload(s);
+  assert.equal(s.trainingRoundsCompleted,wins.length);
+  assert.equal(hasTutorialObjective(s,'training.rounds'),false);
+  assert.equal(isTutorialSequenceEligible(s,registry.get('onboarding.menu-garage'),'menu'),false);
+  const notice=registry.get('onboarding.menu-resume-training');
+  assert.equal(isTutorialSequenceEligible(s,notice,'menu'),true);
+  assert.equal(notice.steps[0].completion.type,'manual');assert.equal(notice.steps[0].target,undefined);
+  explain(s,notice.id);s=reload(s);
+  assert.equal(isTutorialSequenceEligible(s,notice,'menu'),false);
 });
 
-test('version-2 fresh-profile progress resumes before Start Local instead of opening another scene', () => {
-  const source = createDefaultLocalSave('repair-welcome', 'Repair Welcome');
-  const legacy = structuredClone(source);
-  legacy.tutorials = {
-    version: 2,
-    firstRunWelcomePending: true,
-    completedSequences: [],
-    skippedSequences: [],
-    completedSteps: { 'onboarding.menu-welcome': ['welcome'] },
-    replaySequenceId: null
-  };
-  const migrated = normalizeLocalSave(legacy);
-  assert.ok(migrated);
-  assert.equal(migrated.tutorials.firstRunStage, 'waiting-for-start-local');
-  assert.equal(migrated.tutorials.firstRunWelcomePending, true);
+test('completed round identities, not attempts or counts, determine the three-round milestone',()=>{
+  const s=createTutorialProgress();
+  for(let i=0;i<12;i++)assert.equal(completeFirstRunTeachingRound(s,1),false);
+  assert.equal(s.trainingRoundsCompleted,1);
+  completeFirstRunTeachingRound(s,3);assert.equal(hasTutorialObjective(s,'training.rounds'),false);
+  assert.equal(completeFirstRunTeachingRound(s,2),true);
+  assert.deepEqual(s.learning.trainingRounds,[1,2,3]);
+  assert.equal(s.firstRunStage,'waiting-for-garage');
+  assert.equal(completeFirstRunTeachingRound(s,3),false);
+  assert.equal(completeFirstRunTeachingRound(s,undefined),false);
+  assert.equal(hasTutorialObjective(s,'onboarding.tactics.turret'),false,'graduation cannot invent an ability use');
 });
 
-test('fresh-profile Main Menu welcome is one-time and does not spill into established profiles', () => {
-  const freshSave = createDefaultLocalSave('fresh-welcome', 'Fresh Welcome');
-  const persistedFreshSave = normalizeLocalSave(structuredClone(freshSave));
-  assert.ok(persistedFreshSave);
-  assert.equal(persistedFreshSave.tutorials.firstRunWelcomePending, true);
-
-  const fresh = createTutorialProgress();
-  const welcome = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.menu-welcome');
-  assert.ok(welcome);
-  assert.equal(welcome.scene, 'menu');
-  assert.equal(welcome.freshProfileOnly, true);
-  assert.equal(isTutorialSequenceEligible(fresh, welcome, 'menu'), true);
-  assert.equal(welcome.steps.at(-1).target, 'menu.start-local');
-  assert.equal(welcome.steps.at(-1).completion.event, 'ui.startLocalSelected');
-  assert.match(welcome.steps.at(-1).body, /START GAME launches your campaign deployment/i);
-  completeTutorialStep(fresh, welcome.id, 'welcome');
-  assert.equal(fresh.firstRunStage, 'waiting-for-start-local');
-  assert.equal(fresh.firstRunWelcomePending, true);
-  completeTutorialStep(fresh, welcome.id, 'start-local');
-  completeTutorialSequence(fresh, welcome.id);
-  assert.equal(fresh.firstRunStage, 'arena-teaching');
-  assert.equal(fresh.firstRunWelcomePending, false);
-  assert.equal(isTutorialSequenceEligible(fresh, welcome, 'menu'), false);
-
-  const established = createTutorialProgress();
-  setFirstRunTeachingStage(established, 'complete');
-  assert.equal(isTutorialSequenceEligible(established, welcome, 'menu'), false);
-});
-
-test('first-run teaching completes Garage and Mods before Store, with independent persistent groups', () => {
-  const progress = createTutorialProgress();
-  completeTutorialStep(progress, 'onboarding.menu-welcome', 'welcome');
-  assert.equal(progress.firstRunStage, 'waiting-for-start-local');
-  completeTutorialStep(progress, 'onboarding.menu-welcome', 'start-local');
-  completeTutorialSequence(progress, 'onboarding.menu-welcome');
-  assert.equal(progress.firstRunStage, 'arena-teaching');
-
-  assert.equal(completeFirstRunTeachingRound(progress), true);
-  assert.equal(progress.firstRunStage, 'waiting-for-garage');
-  completeTutorialStep(progress, 'onboarding.menu-garage', 'garage');
-  assert.equal(progress.firstRunStage, 'garage-teaching');
-  completeTutorialStep(progress, 'onboarding.garage', 'mod-collection');
-  assert.equal(progress.firstRunStage, 'mod-collection-teaching');
-  completeTutorialSequence(progress, 'onboarding.mod-collection');
-  assert.equal(progress.firstRunStage, 'waiting-for-store');
-  assert.equal(isTutorialSequenceComplete(progress, 'progression.store'), false);
-  completeTutorialStep(progress, 'onboarding.menu-store', 'store');
-  assert.equal(progress.firstRunStage, 'store-teaching');
-  completeTutorialSequence(progress, 'onboarding.store');
-  assert.equal(progress.firstRunStage, 'complete');
-  assert.equal(isTutorialSequenceComplete(progress, 'progression.store'), true);
-  assert.equal(isTutorialSequenceComplete(progress, 'progression.mod-collection'), true);
-});
-
-test('legacy Store-first progress finishes its remaining group without replaying completed lessons', () => {
-  const progress = createTutorialProgress();
-  setFirstRunTeachingStage(progress, 'store-teaching');
-  completeTutorialSequence(progress, 'onboarding.store');
-  assert.equal(progress.firstRunStage, 'waiting-for-garage');
-  completeTutorialSequence(progress, 'onboarding.mod-collection');
-  assert.equal(progress.firstRunStage, 'complete');
-  requestTutorialReplay(progress, 'onboarding.store');
-  completeTutorialSequence(progress, 'onboarding.store');
-  assert.equal(progress.firstRunStage, 'complete');
-  requestTutorialReplay(progress, 'onboarding.garage');
-  completeTutorialStep(progress, 'onboarding.garage', 'mod-collection');
-  completeTutorialSequence(progress, 'onboarding.garage');
-  assert.equal(progress.firstRunStage, 'complete');
-});
-
-test('successful Teaching-round completion advances to Garage even when a presentation flag is still settling', () => {
-  const progress = createTutorialProgress();
-  setFirstRunTeachingStage(progress, 'arena-teaching');
-  completeTutorialSequence(progress, 'onboarding.basic-controls');
-
-  assert.equal(isTutorialSequenceComplete(progress, 'onboarding.defense'), false);
-  assert.equal(isTutorialSequenceComplete(progress, 'onboarding.hud'), false);
-  assert.equal(completeFirstRunTeachingRound(progress), true);
-  assert.equal(progress.firstRunStage, 'waiting-for-garage');
-  assert.equal(isTutorialSequenceComplete(progress, 'onboarding.defense'), true);
-  assert.equal(isTutorialSequenceComplete(progress, 'onboarding.hud'), true);
-
-  const resume = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.menu-resume-training');
-  const store = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.menu-garage');
-  assert.equal(isTutorialSequenceEligible(progress, resume, 'menu'), false);
-  assert.equal(isTutorialSequenceEligible(progress, store, 'menu'), true);
-  assert.equal(completeFirstRunTeachingRound(progress), false);
-});
-
-test('tutorial eligibility respects scene, prerequisites, completion, and skip state', () => {
-  const progress = createTutorialProgress();
-  setFirstRunTeachingStage(progress, 'arena-teaching');
-  const defense = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.defense');
-  assert.equal(isTutorialSequenceEligible(progress, defense, 'arena'), false);
-  completeTutorialSequence(progress, 'onboarding.basic-controls');
-  assert.equal(isTutorialSequenceEligible(progress, defense, 'arena'), false);
-  completeTutorialSequence(progress, 'onboarding.hud');
-  assert.equal(isTutorialSequenceEligible(progress, defense, 'menu'), false);
-  assert.equal(isTutorialSequenceEligible(progress, defense, 'arena'), true);
-  skipTutorialSequence(progress, defense.id);
-  assert.equal(isTutorialSequenceEligible(progress, defense, 'arena'), false);
-});
-
-test('tutorial registry has unique sequence and step ids with event-driven action gates', () => {
-  const sequenceIds = TUTORIAL_SEQUENCES.map(({ id }) => id);
-  assert.equal(new Set(sequenceIds).size, sequenceIds.length);
-  for (const sequence of TUTORIAL_SEQUENCES) {
-    const stepIds = sequence.steps.map(({ id }) => id);
-    assert.equal(new Set(stepIds).size, stepIds.length, `${sequence.id} repeats a step id`);
+test('third-round eligibility and exactly three Common rewards survive repeated saves and claims',()=>{
+  let save=createDefaultLocalSave('reward-once','Rewards');graduate(save.tutorials);
+  save=normalizeLocalSave(save);
+  assert.equal(save.progress.campaign.packages.training.eligible,true);
+  const prepared=prepareCampaignRewardPackages(save.progress.campaign,save.mods,123,'2026-10-09T12:00:00Z');
+  assert.equal(prepared.mods.cards.length-save.mods.cards.length,3);
+  assert.equal(prepared.grants.length,1);assert.equal(prepared.grants[0].packageId,'training');
+  save.mods=prepared.mods;save.progress.campaign=prepared.progress;
+  for(let i=0;i<3;i++){
+    save=normalizeLocalSave(JSON.parse(JSON.stringify(save)));
+    completeFirstRunTeachingRound(save.tutorials,3);
+    assert.deepEqual(prepareCampaignRewardPackages(save.progress.campaign,save.mods,999,'2026-10-10T12:00:00Z').grants,[]);
+    assert.equal(save.mods.cards.length,3);
   }
-  const basic = TUTORIAL_SEQUENCES.find(({ id }) => id === 'onboarding.basic-controls');
-  assert.equal(basic.steps.find(({ id }) => id === 'move').completion.event, 'combat.playerMoved');
-  assert.equal(basic.steps.find(({ id }) => id === 'fire').completion.event, 'combat.weaponFired');
-  assert.equal(TUTORIAL_SEQUENCES.flatMap(({ steps }) => steps).some(({ completion }) => completion.type === 'auto'), false);
-  assert.equal(basic.steps.find(({ id }) => id === 'welcome').completion.type, 'manual');
 });
 
-test('tutorial advance policies separate acknowledgement, action, fallback, and intentional timer behavior', () => {
-  assert.deepEqual(resolveTutorialAdvancePolicy({ type: 'manual' }), {
-    type: 'manual', label: 'GOT IT', reason: 'acknowledgement'
-  });
-  assert.deepEqual(resolveTutorialAdvancePolicy({ type: 'event', event: 'combat.weaponFired' }), {
-    type: 'event', event: 'combat.weaponFired'
-  });
-  assert.deepEqual(resolveTutorialAdvancePolicy({ type: 'event', event: 'mods.equipped' }, false), {
-    type: 'manual', label: 'CONTINUE', reason: 'action-unavailable'
-  });
-  assert.deepEqual(resolveTutorialAdvancePolicy({ type: 'auto', delayMs: 1200 }), {
-    type: 'auto', delayMs: 1200
-  });
+test('early Store introduction remains known while a dismissed purchase stays incomplete',()=>{
+  let s=createTutorialProgress();recordTutorialEvent(s,'screen.entered','arena');completeFirstRunTeachingRound(s,1);
+  recordTutorialEvent(s,'screen.entered','upgrades');
+  assert.equal(isTutorialSequenceEligible(s,registry.get('onboarding.store'),'upgrades'),true);
+  explain(s,'onboarding.store');recordTutorialEvent(s,'economy.upgradePurchaseAttempted',{ok:false});s=reload(s);
+  assert.equal(s.firstRunStage,'arena-teaching');
+  assert.equal(s.learning.objectives['onboarding.store.purchase'],'IN_PROGRESS');
+  assert.equal(hasTutorialMessage(s,'onboarding.store','purchase'),true);
+  assert.equal(isTutorialSequenceEligible(s,registry.get('onboarding.store'),'upgrades'),false,'no repeated explanation');
+  recordTutorialEvent(s,'economy.upgradePurchased',{id:'damage'});
+  assert.equal(isTutorialSequenceComplete(s,'onboarding.store'),true);
+  assert.equal(isTutorialSequenceComplete(s,'progression.upgrades'),true);
+  graduate(s);explain(s,'onboarding.mod-collection');recordTutorialEvent(s,'mods.equipped');
+  assert.equal(s.firstRunStage,'complete','early Store teaching is skipped in the formal path');
 });
 
-test('tutorial target projection accounts for canvas and game mount offsets and scaling', () => {
-  const viewport = projectTutorialBoundsToViewport(
-    { x: 200, y: 100, width: 400, height: 200 },
-    { x: 100, y: 50, width: 800, height: 450 },
-    1600,
-    900
-  );
-  assert.deepEqual(viewport, { x: 200, y: 100, width: 200, height: 100 });
-  assert.deepEqual(
-    projectViewportBoundsToTutorialMount(
-      viewport,
-      { x: 80, y: 30, width: 1000, height: 500 },
-      2000,
-      1000
-    ),
-    { x: 240, y: 140, width: 400, height: 200 }
-  );
+test('early Garage and Collection visits cannot grant training or fake equipment',()=>{
+  const s=createTutorialProgress();
+  recordTutorialEvent(s,'screen.entered','garage');explain(s,'onboarding.garage');
+  recordTutorialEvent(s,'screen.entered','mods');explain(s,'onboarding.mod-collection');
+  assert.equal(hasTutorialObjective(s,'training.rounds'),false);
+  assert.equal(hasTutorialObjective(s,'onboarding.mod-collection.equip'),false);
+  assert.equal(isTutorialSequenceComplete(s,'onboarding.mod-collection'),false);
+  recordTutorialEvent(s,'mods.equipped');
+  assert.equal(isTutorialSequenceComplete(s,'onboarding.mod-collection'),true);
+  assert.notEqual(s.firstRunStage,'complete');
 });
 
-test('tutorial targeting unions live controls and keeps full-height callouts inside the viewport', () => {
-  assert.deepEqual(unionTutorialBounds([
-    { x: 200, y: 300, width: 180, height: 44 },
-    { x: 200, y: 360, width: 180, height: 44 }
-  ]), { x: 200, y: 300, width: 180, height: 104 });
-  assert.deepEqual(resolveTutorialCalloutPlacement(
-    1280, 720,
-    { x: 20, y: 130, width: 900, height: 570 },
-    440, 230
-  ), { x: 640, y: 360, position: 'center' });
+test('normal graduation retains Garage/equipment then Store order without making navigation mandatory',()=>{
+  const s=createTutorialProgress();graduate(s);
+  assert.equal(s.firstRunStage,'waiting-for-garage');
+  explain(s,'onboarding.garage');explain(s,'onboarding.mod-collection');
+  assert.equal(s.firstRunStage,'waiting-for-garage');
+  recordTutorialEvent(s,'mods.equipped');assert.equal(s.firstRunStage,'waiting-for-store');
+  explain(s,'onboarding.store');assert.equal(s.firstRunStage,'waiting-for-store');
+  recordTutorialEvent(s,'economy.upgradePurchased');assert.equal(s.firstRunStage,'complete');
 });
 
-test('Mod Collection teaching always exposes acknowledgement instead of an install dead end', () => {
-  const collection = TUTORIAL_SEQUENCES.find(({ id }) => id === 'progression.mod-collection');
-  assert.ok(collection);
-  assert.equal(collection.steps.find(({ id }) => id === 'equip').completion.type, 'manual');
-  assert.equal(collection.steps.every(({ completion }) => completion.type === 'manual'), true);
+test('real existing equipment and upgrades satisfy objectives without an unequip/re-equip cycle',()=>{
+  const s=createTutorialProgress();reconcileTutorialEvidence(s,true,true);
+  const equip=registry.get('onboarding.mod-collection').steps.find(s=>s.id==='equip');
+  assert.equal(needsTutorialStep(s,'onboarding.mod-collection',equip),false);
+  assert.equal(hasTutorialObjective(s,'onboarding.store.purchase'),true);
+  assert.equal(hasTutorialMessage(s,'onboarding.store','credits'),false,'equipment proves no unrelated explanations');
 });
 
-test('first defuse teaching names the danger and requires acknowledgement', () => {
-  const sequence = TUTORIAL_SEQUENCES.find(({ id }) => id === 'context.first-defuse');
-  assert.equal(sequence.triggerEvent, 'objective.defuseStarted');
-  assert.equal(sequence.steps[0].target, 'world.defusingBombsite');
-  assert.equal(sequence.steps[0].completion.type, 'manual');
-  assert.match(sequence.steps[0].body, /Eliminate or interrupt every defuser/);
+test('unusual order and duplicate events are monotonic and idempotent',()=>{
+  const s=createTutorialProgress();
+  for(const event of ['combat.ability.turret','objective.bombArmed','combat.weaponFired','combat.aimChanged','combat.playerMoved'])assert.equal(recordTutorialEvent(s,event),true);
+  const before=structuredClone(s);
+  for(const event of ['combat.ability.turret','objective.bombArmed','combat.weaponFired','combat.aimChanged','combat.playerMoved'])assert.equal(recordTutorialEvent(s,event),false);
+  assert.deepEqual(s,before);
 });
 
-test('Arena tutorial cleanup and success events are wired to authoritative gameplay paths', async () => {
-  const arena = await readFile(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
-  assert.match(arena, /TutorialEventBus\.emit\('combat\.playerMoved'\)/);
-  assert.match(arena, /TutorialEventBus\.emit\('combat\.weaponFired'\)/);
-  assert.match(arena, /TutorialEventBus\.emit\(`combat\.ability\.\$\{type\}`/);
-  assert.match(arena, /this\.tutorialDirector\?\.destroy\(\)/);
-  assert.match(arena, /this\.tutorialHardPaused \|\| this\.state\.state === RoundState\.Paused/);
-  assert.match(arena, /TutorialEventBus\.emit\('objective\.defuseStarted'/);
-  assert.match(arena, /this\.pointerLock\?\.release\(\)/);
-  assert.match(arena, /this\.pointerLock\.requestLock\(\)/);
-  assert.match(arena, /const displayDiameter = diameter \* camera\.zoom/);
-  assert.match(arena, /firstRunStage === 'arena-teaching'/);
-  assert.match(arena, /completeFirstRunTeachingRound\(progress, completedRound\)/);
-  assert.match(arena, /this\.scene\.start\(SceneKeys\.MainMenu\)/);
+test('skip and explicit replay never erase actions or grant milestone credit',()=>{
+  const s=createTutorialProgress();recordTutorialEvent(s,'combat.playerMoved');
+  skipTutorialSequence(s,'onboarding.basic-controls');assert.equal(s.firstRunStage,'complete');
+  requestTutorialReplay(s,'onboarding.basic-controls');resetTutorialSequence(s,'onboarding.hud');
+  assert.equal(hasTutorialObjective(s,'onboarding.basic-controls.move'),true);
+  assert.equal(hasTutorialObjective(s,'training.rounds'),false);
+  assert.equal(s.replaySequenceId,'onboarding.basic-controls');
+  completeTutorialSequence(s,'onboarding.basic-controls');assert.equal(s.replaySequenceId,'onboarding.hud');
 });
 
-test('first-run scene handoff, live Main Menu targets, and undimmed Arena teaching are wired', async () => {
-  const [profiles, profileUi, menu, store, storefront, garage, mods, overlay, styles] = await Promise.all([
-    readFile(new URL('../src/game/scenes/LocalProfileScene.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/ui/local-profiles/LocalProfilesUi.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/game/scenes/MainMenuScene.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/game/scenes/UpgradeStoreScene.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/ui/stores/StorefrontUi.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/game/scenes/ModCollectionScene.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/game/tutorial/TutorialOverlay.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/style.css', import.meta.url), 'utf8')
-  ]);
-  assert.match(profiles, /SaveSystem\.createProfile\(value\)[\s\S]*?this\.scene\.start\(SceneKeys\.MainMenu, \{ showFirstRunWelcome: true \}\)/);
-  assert.doesNotMatch(profileUi, /this\.root\.replaceChildren\(\)/);
-  assert.match(profileUi, /this\.screen\?\.remove\(\)/);
-  assert.match(menu, /data\.showFirstRunWelcome[\s\S]*?replay\('onboarding\.menu-welcome'\)/);
-  assert.match(menu, /'menu\.start-local', localStartButton/);
-  assert.match(menu, /allowTeachingMenuAction\('local'/);
-  assert.match(menu, /TutorialEventBus\.emit\('ui\.startLocalSelected'\)/);
-  assert.match(menu, /TutorialEventBus\.emit\('ui\.storeSelected'\)/);
-  assert.match(menu, /TutorialEventBus\.emit\('ui\.garageSelected'\)/);
-  assert.match(menu, /teaching\.firstRunStage === 'arena-teaching'/);
-  assert.match(menu, /completeFirstRunTeachingRound\(progress\)/);
-  assert.match(store, /onboarding\.store[\s\S]*?SceneKeys\.MainMenu/);
-  assert.doesNotMatch(storefront, /root\.replaceChildren/);
-  assert.match(storefront, /this\.screen\?\.remove\(\)/);
-  assert.match(garage, /'garage\.mod-collection'/);
-  assert.match(garage, /TutorialEventBus\.emit\('ui\.modCollectionSelected'\)/);
-  assert.match(mods, /onboarding\.mod-collection[\s\S]*?SceneKeys\.MainMenu/);
-  assert.match(mods, /this\.tutorialDirector\.startEligible\(\)/);
-  assert.match(overlay, /resolveTutorialCalloutPlacement/);
-  assert.match(overlay, /event\.stopPropagation\(\)/);
-  assert.match(overlay, /event\.preventDefault\(\)/);
-  assert.match(styles, /\.tutorial-overlay--arena \.tutorial-shade \{ display: none !important; \}/);
-  assert.match(styles, /max-height: calc\(100% - 32px\); overflow-y: auto/);
-  assert.match(styles, /\.tutorial-continue \{[\s\S]*?position: sticky/);
+test('old completed profiles, skipped profiles and saves without tutorials never become new players',()=>{
+  for(const variant of ['completed','skipped','absent']){
+    const save=createDefaultLocalSave('legacy-'+variant,'Legacy');delete save.tutorials.learning;
+    if(variant==='absent')delete save.tutorials;
+    else if(variant==='completed')save.tutorials.firstRunStage='complete';
+    else save.tutorials.skippedSequences=['onboarding.basic-controls'];
+    const migrated=normalizeLocalSave(save);
+    assert.equal(migrated.tutorials.firstRunStage,'complete');
+    assert.equal(isTutorialSequenceEligible(migrated.tutorials,registry.get('onboarding.menu-welcome'),'menu'),false);
+    assert.deepEqual(migrated.wallet,save.wallet);assert.deepEqual(migrated.mods,save.mods);
+    assert.deepEqual(normalizeLocalSave(migrated),migrated);
+  }
+});
+
+test('legacy highest entered round and certification dialogue do not prove the third win',()=>{
+  const save=createDefaultLocalSave('entered-three','Entered Three');delete save.tutorials.learning;
+  save.tutorials.firstRunStage='arena-teaching';save.tutorials.trainingRoundsCompleted=2;
+  save.tutorials.completedSequences=['onboarding.certification'];
+  save.progress.highestRound=3;save.progress.normalHighestRound=3;save.progress.roundsCompleted=99;
+  let migrated=normalizeLocalSave(save);
+  assert.equal(migrated.tutorials.trainingRoundsCompleted,2);
+  assert.equal(migrated.progress.campaign.packages.training.eligible,false);
+  save.progress.campaign.modes.normal.highestCompletedRound=3;migrated=normalizeLocalSave(save);
+  assert.equal(migrated.tutorials.trainingRoundsCompleted,3);
+  assert.equal(migrated.tutorials.firstRunStage,'waiting-for-garage');
+});
+
+test('legacy one-round workstation clearance is preserved without inventing three completed rounds',()=>{
+  const save=createDefaultLocalSave('old-workstation','Old Workstation');delete save.tutorials.learning;
+  delete save.tutorials.lyraCurriculum;save.tutorials.firstRunStage='garage-teaching';
+  const s=normalizeLocalSave(save).tutorials;
+  assert.equal(s.firstRunStage,'waiting-for-garage');
+  assert.equal(hasTutorialObjective(s,'training.rounds'),false);
+});
+
+test('legacy partial action steps migrate separately from messages and v2 welcome resumes safely',()=>{
+  const save=createDefaultLocalSave('partial','Partial');
+  save.tutorials={version:2,firstRunWelcomePending:true,completedSequences:[],skippedSequences:[],
+    completedSteps:{'onboarding.menu-welcome':['welcome'],'onboarding.mod-collection':['equip'],'onboarding.basic-controls':['move']},replaySequenceId:null};
+  const s=normalizeLocalSave(save).tutorials;
+  assert.equal(s.firstRunStage,'waiting-for-start-local');
+  assert.equal(hasTutorialMessage(s,'onboarding.mod-collection','equip'),true);
+  assert.equal(hasTutorialObjective(s,'onboarding.mod-collection.equip'),false);
+  assert.equal(hasTutorialObjective(s,'onboarding.basic-controls.move'),true);
+});
+
+test('profile records are independent and malformed fields normalize deterministically',()=>{
+  const a=createDefaultLocalSave('profile-a','A'),b=createDefaultLocalSave('profile-b','B');
+  recordTutorialEvent(a.tutorials,'combat.playerMoved');
+  a.tutorials.learning.trainingRounds=[1,1,99,'2'];a.tutorials.learning.messages.bad=37;
+  const restored=normalizeLocalSave(a);assert.deepEqual(restored.tutorials.learning.trainingRounds,[1]);
+  assert.equal(restored.tutorials.learning.messages.bad,undefined);
+  assert.equal(hasTutorialObjective(normalizeLocalSave(b).tutorials,'onboarding.basic-controls.move'),false);
+});
+
+test('registry uses unique stable IDs, successful action gates and existing contextual content',()=>{
+  assert.equal(new Set(TUTORIAL_SEQUENCES.map(s=>s.id)).size,TUTORIAL_SEQUENCES.length);
+  for(const sequence of TUTORIAL_SEQUENCES)assert.equal(new Set(sequence.steps.map(s=>s.id)).size,sequence.steps.length);
+  assert.equal(registry.get('onboarding.store').steps.find(s=>s.id==='purchase').completion.event,'economy.upgradePurchased');
+  assert.equal(registry.get('progression.mod-collection').steps.find(s=>s.id==='equip').completion.event,'mods.equipped');
+  assert.match(registry.get('context.first-defuse').steps[0].body,/Eliminate or interrupt every defuser/);
+});
+
+test('advance policies distinguish acknowledgement, unavailable actions, and timers',()=>{
+  assert.deepEqual(resolveTutorialAdvancePolicy({type:'manual'}),{type:'manual',label:'GOT IT',reason:'acknowledgement'});
+  assert.deepEqual(resolveTutorialAdvancePolicy({type:'event',event:'mods.equipped'},false),{type:'manual',label:'CONTINUE',reason:'action-unavailable'});
+  assert.deepEqual(resolveTutorialAdvancePolicy({type:'auto',delayMs:1200}),{type:'auto',delayMs:1200});
+});
+
+test('tutorial target projection and full-height placement preserve existing viewport behavior',()=>{
+  const viewport=projectTutorialBoundsToViewport({x:200,y:100,width:400,height:200},{x:100,y:50,width:800,height:450},1600,900);
+  assert.deepEqual(viewport,{x:200,y:100,width:200,height:100});
+  assert.deepEqual(projectViewportBoundsToTutorialMount(viewport,{x:80,y:30,width:1000,height:500},2000,1000),{x:240,y:140,width:400,height:200});
+  assert.deepEqual(unionTutorialBounds([{x:200,y:300,width:180,height:44},{x:200,y:360,width:180,height:44}]),{x:200,y:300,width:180,height:104});
+  assert.deepEqual(resolveTutorialCalloutPlacement(1280,720,{x:20,y:130,width:900,height:570},440,230),{x:640,y:360,position:'center'});
+});
+
+test('real scenes record accomplishments independently of visible prompts and retain exits',async()=>{
+  const read=path=>readFile(new URL('../src/game/'+path,import.meta.url),'utf8');
+  const arena=await read('scenes/ArenaScene.ts'),menu=await read('scenes/MainMenuScene.ts'),store=await read('state/PlayerProfileStore.ts');
+  assert.doesNotMatch(arena,/awaits\('combat\./);
+  assert.match(store,/completeFirstRunTeachingRound\(save.tutorials, round\)/);
+  assert.doesNotMatch(menu,/profile.highestRound >= 3|TEACHING LINK ACTIVE/);
+  for(const file of ['UpgradeStoreScene.ts','OperatorGarageScene.ts','ModCollectionScene.ts']){
+    const source=await read('scenes/'+file);
+    assert.doesNotMatch(source,/isActiveSequence\('onboarding\.[^']+'\)\) return/);
+    assert.match(source,/this.time.delayedCall/);
+  }
 });

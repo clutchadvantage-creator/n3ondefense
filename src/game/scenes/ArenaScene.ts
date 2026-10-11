@@ -124,7 +124,7 @@ import { createArenaFireTrapPlacements, resolveArenaFloorFirePlacement } from '.
 import { SharedFireTrapSystem } from '../hazards/SharedFireTrapSystem.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
-import { completeFirstRunTeachingRound } from '../tutorial/TutorialProgress.ts';
+import { hasTutorialObjective } from '../tutorial/TutorialProgress.ts';
 import type { TutorialMode, TutorialTargetBounds } from '../tutorial/TutorialTypes.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { nextPickupBuffStack, resourcePickupCap } from '../player/OverdriveRules.ts';
@@ -450,7 +450,10 @@ const BOMBSITE_EXPLOSION_VISUAL_RADIUS = 520;
 export class ArenaScene extends Phaser.Scene {
   private readonly state = new GameStateMachine(RoundState.PrePlant);
   private readonly audio = AudioManager.get();
-  private readonly stopDroneAudio = (): void => this.audio.stopDroneAudio();
+  private readonly stopMovementAudio = (): void => {
+    this.audio.stopDroneAudio();
+    this.audio.stopBossWalkingAudio();
+  };
 
   private player!: Player;
   private hud!: Hud;
@@ -1089,6 +1092,9 @@ export class ArenaScene extends Phaser.Scene {
       scene: 'arena',
       resolveTarget: (target) => this.resolveTutorialTarget(target),
       setMode: (mode) => this.setTutorialMode(mode),
+      canPresent: () => this.scene.isActive() && this.roundRuntime.phase === 'active'
+        && !this.legendaryRevealInProgress && !this.anomalyEntryChoiceOpen
+        && this.state.state !== RoundState.Paused && this.state.state !== RoundState.Defeat && this.state.state !== RoundState.Victory,
       trainingRound: () => Math.max(this.currentCombatRound(), (SaveSystem.getTutorialProgress().trainingRoundsCompleted ?? 0) + 1)
     });
 
@@ -1100,9 +1106,10 @@ export class ArenaScene extends Phaser.Scene {
     this.events.on('quit-from-options', this.onQuitFromStore);
     this.events.on('anomaly-return', this.onAnomalyReturn);
     this.events.on(Phaser.Scenes.Events.WAKE, this.onArenaWoken);
-    this.events.on(Phaser.Scenes.Events.PAUSE, this.stopDroneAudio);
-    this.events.on(Phaser.Scenes.Events.SLEEP, this.stopDroneAudio);
-    this.game.events.on(Phaser.Core.Events.BLUR, this.stopDroneAudio);
+    this.events.on(Phaser.Scenes.Events.PAUSE, this.stopMovementAudio);
+    this.events.on(Phaser.Scenes.Events.SLEEP, this.stopMovementAudio);
+    this.game.events.on(Phaser.Core.Events.BLUR, this.stopMovementAudio);
+    this.game.events.on(Phaser.Core.Events.HIDDEN, this.stopMovementAudio);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
     this.pointerLock = new GameplayPointerLock(this.game, {
       onLocked: () => { if (!this.anomalyReturnLifecycle.blocksExternalPause) this.resumeFromPointerLock(); },
@@ -1698,9 +1705,15 @@ export class ArenaScene extends Phaser.Scene {
     this.audio.setLowHealthWarning(gameplayCanSoundLowHealth
       && this.player.hp > 0
       && this.player.hp <= this.player.stats.maxHealth * 0.25);
-    if (gameplayCanSoundLowHealth && this.roundRuntime.phase === 'active' && !this.anomalyController?.blocksArenaGameplay)
+    if (gameplayCanSoundLowHealth && this.roundRuntime.phase === 'active' && !this.anomalyController?.blocksArenaGameplay
+      && document.hasFocus() && !document.hidden) {
       this.audio.updateDroneAudio(now, this.enemies, this.player.x, this.player.y);
-    else this.audio.stopDroneAudio();
+      const bosses = this.activeMajorBosses();
+      const miniBoss = this.arcadeController?.getBossTarget();
+      if (miniBoss) bosses.push(miniBoss);
+      if (this.possession?.boss.active) bosses.push(this.possession.boss);
+      this.audio.updateBossWalkingAudio(bosses, this.player.x, this.player.y);
+    } else this.stopMovementAudio();
 
     const cosmeticEffectsCanAdvance = !this.tutorialHardPaused
       && this.state.state !== RoundState.Paused
@@ -2264,7 +2277,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     const aim = this.getAimWorldPoint();
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, aim.x, aim.y);
-    if (this.tutorialDirector?.awaits('combat.aimChanged')) {
+    if (!hasTutorialObjective(SaveSystem.getTutorialProgress(), 'onboarding.basic-controls.aim')) {
       if (this.tutorialAimAngle === null) this.tutorialAimAngle = angle;
       else if (Math.abs(Phaser.Math.Angle.Wrap(angle - this.tutorialAimAngle)) > 0.08) {
         this.tutorialAimAngle = angle;
@@ -2278,7 +2291,7 @@ export class ArenaScene extends Phaser.Scene {
 
     const movementX = this.playerInput.move.x;
     const movementY = this.playerInput.move.y;
-    if (this.tutorialDirector?.awaits('combat.playerMoved')) {
+    if (!hasTutorialObjective(SaveSystem.getTutorialProgress(), 'onboarding.basic-controls.move')) {
       if (!this.tutorialMoveOrigin) this.tutorialMoveOrigin = { x: this.player.x, y: this.player.y };
       else if (Math.hypot(this.player.x - this.tutorialMoveOrigin.x, this.player.y - this.tutorialMoveOrigin.y) >= 8) {
         TutorialEventBus.emit('combat.playerMoved');
@@ -2310,7 +2323,7 @@ export class ArenaScene extends Phaser.Scene {
         this.player.spendEnergy(PLAYER_BALANCE.dashEnergyCost);
         GameplayTelemetryRecorder.recordAbilityUse('dash', PLAYER_BALANCE.dashEnergyCost);
         this.player.dashTowardPoint(aim.x, aim.y, now);
-        if (this.tutorialDirector?.awaits('combat.ability.dash')) TutorialEventBus.emit('combat.ability.dash');
+        TutorialEventBus.emit('combat.ability.dash');
         if (this.sound.get('sfx-boost')) {
           this.sound.play('sfx-boost', { volume: this.audio.getSfxVolume() });
         } else {
@@ -2400,7 +2413,7 @@ export class ArenaScene extends Phaser.Scene {
       ? damage * TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier * TEMPORARY_AMMO_BALANCE.scattershot.pelletCount
       : damage;
     GameplayTelemetryRecorder.recordShot(potentialDamage, shotEnergyCost, crit);
-    if (this.tutorialDirector?.awaits('combat.weaponFired')) TutorialEventBus.emit('combat.weaponFired');
+    TutorialEventBus.emit('combat.weaponFired');
 
     const spawnX = this.player.x + Math.cos(angle) * 14;
     const spawnY = this.player.y + Math.sin(angle) * 14;
@@ -3093,7 +3106,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.player.spendEnergy(energyCost);
     GameplayTelemetryRecorder.recordAbilityUse('shield', energyCost);
-    if (this.tutorialDirector?.awaits('combat.ability.shield')) TutorialEventBus.emit('combat.ability.shield');
+    TutorialEventBus.emit('combat.ability.shield');
 
     this.shieldActiveUntil = now + durationMs;
     this.player.shieldUntil = this.shieldActiveUntil;
@@ -3946,7 +3959,7 @@ export class ArenaScene extends Phaser.Scene {
           const finalDamage = p.damage * (1 + conditionalBonus);
           const wasAlive = !hitEnemy.isDead();
           const applied = hitEnemy.takeDamage(finalDamage, p.echo ? 'echo' : p.from === 'player' ? 'weapon' : 'turret', p.echo);
-          if (p.from === 'player' && !p.echo && applied > 0 && this.tutorialDirector?.awaits('combat.enemyDamaged')) TutorialEventBus.emit('combat.enemyDamaged', { type: hitEnemy.stats.type, damage: applied });
+          if (p.from === 'player' && !p.echo && applied > 0) TutorialEventBus.emit('combat.enemyDamaged', { type: hitEnemy.stats.type, damage: applied });
           const overkill = Math.max(0, finalDamage - applied);
           if (p.from === 'turret') GameplayTelemetryRecorder.recordTurretHit(p.turretId ?? '', applied, overkill);
           else GameplayTelemetryRecorder.recordProjectileHit(p.echo ? 'echo' : 'weapon', applied, overkill, p.critical);
@@ -4261,7 +4274,7 @@ export class ArenaScene extends Phaser.Scene {
       const finalDamage = projectile.damage * (1 + conditionalBonus);
       const wasAlive = !primaryEnemy.isDead();
       const applied = primaryEnemy.takeDamage(finalDamage, source, projectile.echo);
-      if (source === 'weapon' && applied > 0 && this.tutorialDirector?.awaits('combat.enemyDamaged')) {
+      if (source === 'weapon' && applied > 0) {
         TutorialEventBus.emit('combat.enemyDamaged', { type: primaryEnemy.stats.type, damage: applied });
       }
       const overkill = Math.max(0, finalDamage - applied);
@@ -4380,7 +4393,7 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.recordAbilityUse(type, cfg.energyCost);
     if (type !== 'mine') this.abilityCooldownUntil[type] = now + cfg.cooldownMs;
     this.audio.playSfx(type === 'turret' ? 'placeTurret' : type === 'fence' ? 'electricFence' : 'placeMine');
-    if (this.tutorialDirector?.awaits(`combat.ability.${type}`)) TutorialEventBus.emit(`combat.ability.${type}`, { type });
+    TutorialEventBus.emit(`combat.ability.${type}`, { type });
   }
 
   private placeFullRackSalvo(now: number, cfg: AbilityRuntimeConfig, aimX: number, aimY: number): void {
@@ -4438,7 +4451,7 @@ export class ArenaScene extends Phaser.Scene {
     // A rack salvo is one placement action. Use one cue when the first mine
     // lands instead of stacking a sound for every mine in the pattern.
     this.scheduleRoundDelayedCall(salvo.flightMs, () => this.audio.playSfx('placeMine'));
-    if (this.tutorialDirector?.awaits('combat.ability.mine')) TutorialEventBus.emit('combat.ability.mine', { type: 'mine', count: points.length, salvo: true });
+    TutorialEventBus.emit('combat.ability.mine', { type: 'mine', count: points.length, salvo: true });
   }
 
   private resolveMineRackPattern(
@@ -5348,7 +5361,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private killEnemy(enemy: Enemy): void {
     this.audio.releaseDroneAudio(enemy);
-    if (this.tutorialDirector?.awaits('combat.enemyKilled')) TutorialEventBus.emit('combat.enemyKilled', { type: enemy.stats.type });
+    TutorialEventBus.emit('combat.enemyKilled', { type: enemy.stats.type });
     this.arcadeController?.handleGameplayEvent({ type: 'enemy-killed', enemy });
     this.anomalyController?.handleEnemyKilled(enemy.x, enemy.y);
     this.audio.playSfx('enemyDeath');
@@ -6780,18 +6793,11 @@ export class ArenaScene extends Phaser.Scene {
     SaveSystem.addCoreTokens(rewardTokens);
     SaveSystem.addPlasmaChips(rewardPlasmaChips);
     SaveSystem.addFluxCores(rewardFluxCores);
+    const trainingWasComplete = hasTutorialObjective(SaveSystem.getTutorialProgress(), 'training.rounds');
     SaveSystem.recordRoundCompletion(completedRound, this.protocol);
-    const completedTeachingRound = SaveSystem.getTutorialProgress().firstRunStage === 'arena-teaching';
-    let graduatedTraining = false;
-    if (completedTeachingRound) {
-      // Persist graduation with the round outcome, before rewards/transition delays.
-      SaveSystem.updateTutorialProgress((progress) => { graduatedTraining = completeFirstRunTeachingRound(progress, completedRound); });
-      if (graduatedTraining) {
-        SaveSystem.completeCampaignTraining();
-        this.tutorialDirector?.destroy();
-        this.tutorialDirector = null;
-      }
-    }
+    const graduatedTraining = !trainingWasComplete && hasTutorialObjective(SaveSystem.getTutorialProgress(), 'training.rounds')
+      && SaveSystem.getTutorialProgress().firstRunStage !== 'complete';
+    this.tutorialDirector?.suspend();
     this.presentCampaignPackages();
     OnlineRunManager.recordMilestone(completedRound);
     this.captureTelemetryEndState();
@@ -7749,6 +7755,7 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.boostVisual.reset();
     this.state.set(RoundState.Defeat);
+    this.tutorialDirector?.suspend();
     this.audio.stopLowHealthWarning();
     this.audio.stopDisarmLoop();
     this.laserSecurity?.silence();
@@ -8545,7 +8552,8 @@ export class ArenaScene extends Phaser.Scene {
         return;
       }
     }
-    if (!this.playerInput.pressed('pause') || this.tutorialHardPaused) return;
+    if (!this.playerInput.pressed('pause')) return;
+    if (this.tutorialHardPaused) this.tutorialDirector?.suspend();
     if (this.bossFlowPhase === 'intro' || this.bossFlowPhase === 'destruction' || this.bossFlowPhase === 'transitioning') return;
     if (this.state.state !== RoundState.Paused) {
       this.togglePause();
@@ -8716,6 +8724,7 @@ export class ArenaScene extends Phaser.Scene {
     if (shouldPause === this.tutorialHardPaused) return;
     this.tutorialHardPaused = shouldPause;
     if (shouldPause) {
+      this.stopMovementAudio();
       this.tutorialClockWasPaused = this.time.paused;
       this.clearGameplayInput();
       this.setMenuCursorMode();
@@ -8729,6 +8738,7 @@ export class ArenaScene extends Phaser.Scene {
       this.time.paused = this.tutorialClockWasPaused;
       this.tutorialClockWasPaused = false;
       const canResumeGameplay = this.state.state !== RoundState.Paused
+        && this.roundRuntime.phase === 'active'
         && this.state.state !== RoundState.Victory
         && this.state.state !== RoundState.Defeat;
       if (canResumeGameplay) {
@@ -8853,6 +8863,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private showPauseMenu(): void {
+    this.stopMovementAudio();
+    this.tutorialDirector?.suspend();
     this.hidePauseMenu();
     this.setMenuCursorMode();
     this.pauseMenuOpenedAt = Date.now();
@@ -9675,9 +9687,10 @@ export class ArenaScene extends Phaser.Scene {
     this.events.off('quit-from-options', this.onQuitFromStore);
     this.events.off('anomaly-return', this.onAnomalyReturn);
     this.events.off(Phaser.Scenes.Events.WAKE, this.onArenaWoken);
-    this.events.off(Phaser.Scenes.Events.PAUSE, this.stopDroneAudio);
-    this.events.off(Phaser.Scenes.Events.SLEEP, this.stopDroneAudio);
-    this.game.events.off(Phaser.Core.Events.BLUR, this.stopDroneAudio);
+    this.events.off(Phaser.Scenes.Events.PAUSE, this.stopMovementAudio);
+    this.events.off(Phaser.Scenes.Events.SLEEP, this.stopMovementAudio);
+    this.game.events.off(Phaser.Core.Events.BLUR, this.stopMovementAudio);
+    this.game.events.off(Phaser.Core.Events.HIDDEN, this.stopMovementAudio);
     this.events.off(Phaser.Scenes.Events.RENDER, this.onFirstArenaRenderAfterAnomaly, this);
     if (this.roundHudLive) {
       this.hud?.destroy();

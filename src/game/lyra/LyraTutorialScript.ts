@@ -12,10 +12,6 @@ export const LYRA_TUTORIAL_SCRIPT: Record<string, { file: string; text: string; 
     file: 'lyrastartlocal.mp3',
     text: 'Begin your first training run here.\n\nSTART LOCAL launches standard play without publishing your score to the online leaderboards.\n\nSelect START LOCAL when you’re ready, Operative.'
   },
-  'onboarding.menu-resume-training.start-local': {
-    file: 'lyrareturntotraining.mp3',
-    text: 'Arena training is still in progress.\n\nSelect START LOCAL to resume your training deployment. I kept everything exactly where you left it. Mostly.'
-  },
   'onboarding.basic-controls.welcome': {
     file: 'lyraenteringarena.mp3',
     text: 'LYRA online.\n\nThis is a live deployment exercise. We’ll begin with movement and weapons calibration.\n\nContinue when you’re ready, Operative.'

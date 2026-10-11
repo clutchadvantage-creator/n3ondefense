@@ -137,13 +137,13 @@ test('action gates are separated across rounds and all tutorial lines have stabl
   }
 });
 test('authored recordings retain transcripts; renamed Start Game prompts reject old audio', () => {
-  assert.equal(Object.keys(LYRA_TUTORIAL_SCRIPT).length, 17);
+  assert.equal(Object.keys(LYRA_TUTORIAL_SCRIPT).length, 16);
   for (const [id, line] of Object.entries(LYRA_TUTORIAL_SCRIPT)) {
     const sequence = TUTORIAL_SEQUENCES.find(s => id.startsWith(s.id + '.'));
     const step = sequence.steps.find(s => id === `${sequence.id}.${s.id}`);
     assert.ok(step, id);
     const body = resolveTutorialCopy(step, 'keyboardMouse', 'generic', DEFAULT_ABILITY_BINDINGS).body;
-    if (id === 'onboarding.menu-welcome.start-local' || id === 'onboarding.menu-resume-training.start-local') {
+    if (id === 'onboarding.menu-welcome.start-local') {
       assert.notEqual(body, line.text, id);
       assert.match(body, /START GAME/);
       assert.doesNotMatch(body, /START LOCAL|without publishing/);
@@ -167,7 +167,7 @@ test('controller and remapped instructions cannot play a recording naming the wr
 test('registered custom recordings resolve to real unique messages and files, with tutorial transcript guards', () => {
   const files = Object.values(LYRA_RECORDINGS['en-US']);
   assert.equal(new Set(files).size, files.length);
-  assert.equal(files.length, 33);
+  assert.equal(files.length, 32);
   for (const [id, file] of Object.entries(LYRA_RECORDINGS['en-US'])) {
     const definition = LYRA_MESSAGE_BY_ID.get(id);
     assert.ok(definition, id);

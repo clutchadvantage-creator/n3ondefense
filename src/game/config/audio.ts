@@ -12,6 +12,7 @@ export const SFX_DEFINITIONS = [
   { key: 'lowHealth', label: 'Low Health Warning' },
   { key: 'enemyDeath', label: 'Enemy Death' },
   { key: 'droneFlight', label: 'Drone Flight / Rotors' },
+  { key: 'bossWalking', label: 'Boss Walking' },
   { key: 'playerDeath', label: 'Player Death' },
   { key: 'place', label: 'Ability Place' },
   { key: 'placeTurret', label: 'Turret Placement' },
@@ -86,7 +87,7 @@ export type AudioSfxName = typeof SFX_DEFINITIONS[number]['key'];
 export const SFX_CATEGORIES = [
   { id: 'combat', label: 'Weapons & Combat', keys: ['shot', 'hit', 'mine', 'bomblet', 'bomb', 'grenadeShotExplosion', 'smashableBreak'] },
   { id: 'operative', label: 'Operative & Abilities', keys: ['boost', 'echoRecord', 'echoSnap', 'echoComplete', 'shieldOn', 'shieldOff', 'planting', 'playerDamage', 'lowHealth', 'playerDeath', 'place', 'placeTurret', 'electricFence', 'placeMine', 'unavailable'] },
-  { id: 'enemies', label: 'Enemies & Bosses', keys: ['enemyDeath', 'droneFlight', 'totemEntrance', 'totemPulse', 'miniBossSpawn', 'bossArtilleryExplosion', 'sentryBossAttack', 'mageBossLargeAttack', 'mageBossMagicAttack', 'brawlerBossChargeAttack'] },
+  { id: 'enemies', label: 'Enemies & Bosses', keys: ['enemyDeath', 'droneFlight', 'bossWalking', 'totemEntrance', 'totemPulse', 'miniBossSpawn', 'bossArtilleryExplosion', 'sentryBossAttack', 'mageBossLargeAttack', 'mageBossMagicAttack', 'brawlerBossChargeAttack'] },
   { id: 'hazards', label: 'Arena Hazards', keys: ['securityLaser', 'beep', 'defuseAlarm', 'disarm', 'gas', 'gasCanImpact', 'gasFizz', 'lasersOff', 'fireTrap'] },
   { id: 'rewards', label: 'Pickups & Rewards', keys: ['pickup', 'healthPickup', 'energyPickup', 'damageBoostPickup', 'speedPickup', 'fireRatePickup', 'creditPickup', 'coreTokenPickup', 'fluxCorePickup', 'ricochetPickup', 'grenadeRoundsPickup', 'scattershotPickup', 'modPickup', 'fluxCore', 'modCollection', 'legendaryMod'] },
   { id: 'arcade', label: 'Arcade Events', keys: ['circuitGate', 'overloadEvent', 'supplyDropEvent', 'dataThiefEntrance', 'dataThiefFail', 'goldenEnemyEvent', 'goldenEnemyEventFail'] },

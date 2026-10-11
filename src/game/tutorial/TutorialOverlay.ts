@@ -32,6 +32,7 @@ export class TutorialOverlay {
   private frame = 0;
   private manualHandler: (() => void) | null = null;
   private targetPadding = 12;
+  private notice = false;
   private readonly consumePointerEvent = (event: Event): void => {
     event.preventDefault();
     event.stopPropagation();
@@ -90,6 +91,8 @@ export class TutorialOverlay {
     this.manualHandler = onManual;
     this.eyebrow.textContent = step.eyebrow ?? 'LYRA // TACTICAL GUIDANCE';
     this.root.classList.toggle('tutorial-live', step.mode === 'live');
+    this.root.classList.toggle('tutorial-passive', step.mode === 'menu');
+    this.notice = step.notice ?? false;
     this.retireVideo();
     this.monitor.hidden = !step.advancedPreview;
     if (step.advancedPreview) {
@@ -164,6 +167,12 @@ export class TutorialOverlay {
       ? projectViewportBoundsToTutorialMount(target, mountBounds, viewportWidth, viewportHeight)
       : null;
     this.root.classList.toggle('tutorial-no-target', !localTarget);
+    if (this.notice) {
+      this.callout.style.left = `${viewportWidth - this.callout.offsetWidth / 2 - 16}px`;
+      this.callout.style.top = `${Math.max(16, viewportHeight - this.callout.offsetHeight - 16)}px`;
+      this.callout.dataset.position = 'below';
+      return;
+    }
     if (!localTarget) {
       this.callout.style.left = `${viewportWidth / 2}px`;
       this.callout.style.top = `${viewportHeight / 2}px`;

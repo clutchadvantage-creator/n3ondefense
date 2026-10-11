@@ -297,15 +297,16 @@ export class OperatorGarageScene extends Phaser.Scene {
         const canvas = this.game.canvas.getBoundingClientRect();
         return projectTutorialBoundsToViewport(rect, canvas, this.scale.width, this.scale.height);
       },
-      setMode: () => undefined
+      setMode: () => undefined,
+      canPresent: () => this.scene.isActive()
     });
-    this.tutorialDirector.startEligible();
-    window.setTimeout(() => {
+    this.time.delayedCall(0, () => this.tutorialDirector?.startEligible());
+    this.time.delayedCall(180, () => {
       if (!this.scene.isActive()) return;
       TutorialEventBus.emit('ui.garageSceneOpened');
       if (SaveSystem.hasCompletedRegularOverdrive()) TutorialEventBus.emit('progression.supremeAvailable');
       if (isCampaignModeUnlocked(SaveSystem.getCampaignProgress(), 'overdrive')) TutorialEventBus.emit('progression.overdriveUnlocked');
-    }, 180);
+    });
 
     if (this.status) {
       this.add.text(width / 2, layout.stationCenters[0].y - layout.stationHeight / 2 - 32, this.status, {
@@ -2710,8 +2711,6 @@ export class OperatorGarageScene extends Phaser.Scene {
   }
 
   private returnToPrevious(): void {
-    if (SaveSystem.getTutorialProgress().firstRunStage === 'garage-teaching'
-      && this.tutorialDirector?.isActiveSequence('onboarding.garage')) return;
     this.scene.start(this.returnScene);
   }
 }

@@ -23,6 +23,7 @@ export interface TutorialStepDefinition {
   body: string;
   illustration?: string;
   advancedPreview?: boolean;
+  notice?: boolean;
   inputDemo?: string[];
   mode: TutorialMode;
   spotlight?: TutorialSpotlightShape;
@@ -46,6 +47,8 @@ export interface TutorialSequenceDefinition {
   /** Explicit first-run stages in which this sequence may run. */
   firstRunStages?: readonly FirstRunTeachingStage[];
   minimumTrainingRound?: number;
+  /** Accessible workstations may teach before the formal training milestone. */
+  earlyDiscovery?: boolean;
 }
 
 export interface TutorialHost {
@@ -53,6 +56,7 @@ export interface TutorialHost {
   resolveTarget(target: string): TutorialTargetBounds | null;
   setMode(mode: TutorialMode): void;
   trainingRound?: () => number;
+  canPresent?: () => boolean;
   /** Return false when a real action is currently impossible (for example, no affordable upgrade). */
   isEventActionAvailable?: (event: string) => boolean;
   onComplete?: (sequenceId: string) => void;

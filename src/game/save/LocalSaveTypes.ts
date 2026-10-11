@@ -111,6 +111,18 @@ export interface TutorialProgressState {
   skippedSequences: string[];
   completedSteps: Record<string, string[]>;
   replaySequenceId: string | null;
+  /** Independent durable records; legacy sequence fields remain compatible projections. */
+  learning?: {
+    version: 1;
+    objectives: Record<string, 'NOT_STARTED' | 'INTRODUCED' | 'IN_PROGRESS' | 'COMPLETED'>;
+    messages: Record<string, 'delivered' | 'acknowledged'>;
+    trainingRounds: number[];
+    started: boolean;
+    dismissed: boolean;
+    legacyGraduated: boolean;
+    legacyTrainingCleared?: boolean;
+    replays?: string[];
+  };
 }
 
 export interface LocalPlayerCosmetics {

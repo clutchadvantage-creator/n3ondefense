@@ -1,6 +1,6 @@
 import { SaveSystem } from '../systems/SaveSystem.ts';
 import { TUTORIAL_SEQUENCES } from './TutorialRegistry.ts';
-import { completeTutorialSequence, completeTutorialStep, isTutorialSequenceEligible, skipTutorialSequence } from './TutorialProgress.ts';
+import { acknowledgeTutorialMessage, completeTutorialSequence, introduceTutorialStep, isTutorialSequenceEligible, needsTutorialStep, skipTutorialSequence } from './TutorialProgress.ts';
 import { TutorialEventBus } from './TutorialEventBus.ts';
 import { TutorialOverlay } from './TutorialOverlay.ts';
 import type { TutorialEvent, TutorialHost, TutorialSequenceDefinition } from './TutorialTypes.ts';
@@ -26,13 +26,13 @@ export class TutorialDirector {
   private acceptingCompletion = false;
   private advancePolicy: TutorialAdvancePolicy | null = null;
   private destroyed = false;
+  private readonly profileId: string | null;
+  private replaying = false;
   private readonly keyHandler = (event: KeyboardEvent): void => {
     if (!this.active) return;
     if (event.code === 'Escape') {
-      // An active Teaching step owns navigation. Prevent scene-level Escape
-      // handlers from abandoning Store/Garage/Collection midway through it.
-      event.preventDefault();
-      event.stopImmediatePropagation();
+      // Archive the explanation, then let the scene's normal Back/Pause action run.
+      this.suspend();
       return;
     }
     if (event.code === 'KeyK' && this.active.skippable !== false) {
@@ -47,10 +47,12 @@ export class TutorialDirector {
   };
 
   constructor(private readonly host: TutorialHost) {
+    this.profileId = SaveSystem.getActiveProfileSummary()?.id ?? null;
+    SaveSystem.recordTutorialEvent('screen.entered', host.scene);
     this.overlay = new TutorialOverlay(() => this.skip(), host.scene === 'arena');
     this.unsubscribe = TutorialEventBus.subscribe((event) => this.onEvent(event));
     this.presentationUnsubscribe = subscribeUiInputPresentation(() => {
-      if (!this.active) return;
+      if (!this.active || !this.canPresent()) { this.suspend(); return; }
       const copy = this.resolvePresentedCopy(this.active.steps[this.stepIndex]);
       this.overlay.updatePromptText(copy.body, copy.inputDemo);
       LyraComms.get().training(this.host.scene, `tutorial.${this.active.id}.${this.active.steps[this.stepIndex].id}`, copy.body);
@@ -59,13 +61,15 @@ export class TutorialDirector {
   }
 
   startEligible(): void {
-    if (this.active || this.destroyed) return;
+    if (this.active || !this.canPresent()) return;
     const progress = SaveSystem.getTutorialProgress();
     const replay = progress.replaySequenceId
       ? TUTORIAL_SEQUENCES.find((sequence) => sequence.id === progress.replaySequenceId && sequence.scene === this.host.scene)
       : null;
     const sequence = replay ?? TUTORIAL_SEQUENCES.find((candidate) =>
       candidate.autoStart
+      && (!candidate.earlyDiscovery || SaveSystem.get().settings.contextualTutorials
+        || (progress.trainingRoundsCompleted ?? 0) === 3 || progress.learning?.legacyTrainingCleared)
       && (this.host.trainingRound?.() ?? 1) >= (candidate.minimumTrainingRound ?? 1)
       && isTutorialSequenceEligible(progress, candidate, this.host.scene)
     );
@@ -76,7 +80,7 @@ export class TutorialDirector {
     const sequence = TUTORIAL_SEQUENCES.find((candidate) => candidate.id === sequenceId && candidate.scene === this.host.scene);
     if (!sequence) return false;
     this.finish(false);
-    this.begin(sequence);
+    this.begin(sequence, true);
     return true;
   }
 
@@ -124,8 +128,25 @@ export class TutorialDirector {
     this.overlay.destroy();
   }
 
+  /** Navigation, death and pause retire only transient presentation. */
+  suspend(): void {
+    this.clearTransitionTimer();
+    this.pending.length = 0;
+    this.finish(false);
+  }
+
+  private ownsProfile(): boolean {
+    return !this.destroyed && !!this.profileId && this.profileId === SaveSystem.getActiveProfileSummary()?.id;
+  }
+
+  private canPresent(): boolean {
+    return this.ownsProfile() && this.host.canPresent?.() !== false;
+  }
+
   private onEvent(event: TutorialEvent): void {
-    if (this.destroyed) return;
+    if (!this.ownsProfile()) { this.suspend(); return; }
+    SaveSystem.recordTutorialEvent(event.type, event.payload);
+    if (!this.canPresent()) { this.suspend(); return; }
     if (this.active) {
       if (this.acceptingCompletion && this.advancePolicy?.type === 'event' && this.advancePolicy.event === event.type) {
         this.advance();
@@ -134,9 +155,9 @@ export class TutorialDirector {
       this.queueTriggeredSequence(event);
       return;
     }
-    if (!SaveSystem.get().settings.contextualTutorials) return;
-    const sequence = this.findTriggeredSequence(event);
+    const sequence = SaveSystem.get().settings.contextualTutorials ? this.findTriggeredSequence(event) : undefined;
     if (sequence) this.begin(sequence);
+    else this.startEligible();
   }
 
   private findTriggeredSequence(event: TutorialEvent): TutorialSequenceDefinition | undefined {
@@ -153,18 +174,23 @@ export class TutorialDirector {
     if (sequence && sequence !== this.active && !this.pending.some((item) => item.id === sequence.id)) this.pending.push(sequence);
   }
 
-  private begin(sequence: TutorialSequenceDefinition): void {
-    if (this.destroyed) return;
+  private begin(sequence: TutorialSequenceDefinition, replay = false): void {
+    if (!this.canPresent()) return;
     this.active = sequence;
-    const completed = SaveSystem.getTutorialProgress().completedSteps[sequence.id] ?? [];
-    this.stepIndex = Math.max(0, sequence.steps.findIndex((step) => !completed.includes(step.id)));
-    if (this.stepIndex < 0) this.stepIndex = 0;
+    const progress = SaveSystem.getTutorialProgress();
+    this.replaying = replay || progress.replaySequenceId === sequence.id;
+    this.stepIndex = this.replaying ? 0 : sequence.steps.findIndex(step => needsTutorialStep(progress, sequence.id, step));
+    if (this.stepIndex < 0) { this.finish(false); return; }
     this.showStep();
     TutorialEventBus.emit('tutorial.sequenceStarted', { sequenceId: sequence.id });
   }
 
   private showStep(): void {
     if (!this.active) return;
+    if (!this.canPresent()) { this.suspend(); return; }
+    while (!this.replaying && this.stepIndex < this.active.steps.length
+      && !needsTutorialStep(SaveSystem.getTutorialProgress(), this.active.id, this.active.steps[this.stepIndex])) this.stepIndex++;
+    if (this.stepIndex >= this.active.steps.length) { this.finish(true); this.startNext(); return; }
     this.clearTimer();
     this.acceptingCompletion = true;
     const sourceStep = this.active.steps[this.stepIndex];
@@ -194,8 +220,9 @@ export class TutorialDirector {
       this.active.skippable !== false,
       this.advancePolicy.type === 'manual'
         ? (this.advancePolicy.reason === 'acknowledgement' ? step.advanceLabel ?? this.advancePolicy.label : this.advancePolicy.label)
-        : null
+        : step.mode === 'menu' ? 'CONTINUE LATER' : null
     );
+    SaveSystem.updateTutorialProgress(state => introduceTutorialStep(state, this.active!.id, step.id));
     LyraComms.get().training(this.host.scene, `tutorial.${this.active.id}.${step.id}`, step.body);
     TutorialEventBus.emit('tutorial.stepShown', { sequenceId: this.active.id, stepId: step.id });
     if (this.advancePolicy.type === 'auto') {
@@ -209,17 +236,19 @@ export class TutorialDirector {
   }
 
   private advance(): void {
-    if (!this.active || !this.acceptingCompletion) return;
+    if (!this.active || !this.acceptingCompletion || !this.ownsProfile()) return;
     this.acceptingCompletion = false;
     this.advancePolicy = null;
     this.clearTimer();
     const sequence = this.active;
     const step = sequence.steps[this.stepIndex];
-    SaveSystem.updateTutorialProgress((state) => completeTutorialStep(state, sequence.id, step.id));
+    SaveSystem.updateTutorialProgress((state) => acknowledgeTutorialMessage(state, sequence.id, step));
     this.overlay.confirm();
     LyraComms.get().endTraining(this.host.scene);
     TutorialEventBus.emit('tutorial.stepCompleted', { sequenceId: sequence.id, stepId: step.id });
     this.stepIndex += 1;
+    while (!this.replaying && this.stepIndex < sequence.steps.length
+      && !needsTutorialStep(SaveSystem.getTutorialProgress(), sequence.id, sequence.steps[this.stepIndex])) this.stepIndex++;
     if (this.stepIndex >= sequence.steps.length) {
       SaveSystem.updateTutorialProgress((state) => completeTutorialSequence(state, sequence.id));
       TutorialEventBus.emit('tutorial.sequenceCompleted', { sequenceId: sequence.id });
@@ -235,7 +264,7 @@ export class TutorialDirector {
   }
 
   private skip(): void {
-    if (!this.active || this.active.skippable === false) return;
+    if (!this.active || this.active.skippable === false || !this.ownsProfile()) return;
     const sequenceId = this.active.id;
     const skippedIds = sequenceId.startsWith('onboarding.')
       ? TUTORIAL_SEQUENCES.filter(({ id }) => id.startsWith('onboarding.')).map(({ id }) => id)
@@ -255,12 +284,13 @@ export class TutorialDirector {
     const sequenceId = this.active?.id;
     LyraComms.get().endTraining(this.host.scene);
     this.clearTimer();
+    this.clearTransitionTimer();
     this.acceptingCompletion = false;
     this.advancePolicy = null;
     this.active = null;
     this.overlay.hide();
     this.host.setMode('live');
-    if (notify && sequenceId) this.host.onComplete?.(sequenceId);
+    if (notify && sequenceId && this.ownsProfile()) this.host.onComplete?.(sequenceId);
   }
 
   private clearTimer(): void {
@@ -272,7 +302,8 @@ export class TutorialDirector {
     this.clearTransitionTimer();
     this.transitionTimer = window.setTimeout(() => {
       this.transitionTimer = null;
-      if (!this.destroyed) callback();
+      if (this.canPresent()) callback();
+      else if (!this.destroyed) this.suspend();
     }, delayMs);
   }
 
@@ -282,7 +313,7 @@ export class TutorialDirector {
   }
 
   private startNext(): void {
-    if (this.destroyed) return;
+    if (!this.canPresent()) return;
     const progress = SaveSystem.getTutorialProgress();
     while (this.pending.length) {
       const queued = this.pending.shift()!;

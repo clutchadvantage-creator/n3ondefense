@@ -13,6 +13,7 @@ import type { PlasmaRecalibrationCandidate } from '../mods/PlasmaRecalibration.t
 import type { WalletChangeListener, WalletSnapshot } from '../economy/WalletState.ts';
 import type { ModStatChangeListener } from '../mods/ModStatEvents.ts';
 import type { CampaignEncounterKind } from '../progression/CampaignProgression.ts';
+import { recordTutorialEvent, tutorialLearning } from '../tutorial/TutorialProgress.ts';
 
 export class SaveSystem {
   /** Read-only live progress projection. Reward collection remains with getWeeklyOperations. */
@@ -335,7 +336,17 @@ export class SaveSystem {
 
   static updateTutorialProgress(mutator: (progress: import('../save/LocalSaveTypes.ts').TutorialProgressState) => void): void {
     const progress = PlayerProfileStore.getActiveSave().tutorials;
+    const previousStage = progress.firstRunStage;
     mutator(progress);
+    // Preserve the explicit existing developer/reset API without making presentation own graduation.
+    if (previousStage !== 'complete' && progress.firstRunStage === 'complete'
+      && progress.trainingRoundsCompleted !== 3) tutorialLearning(progress).dismissed = true;
     PlayerProfileStore.save();
+  }
+
+  /** Synchronous, idempotent event commit, independent of the visible instruction. */
+  static recordTutorialEvent(type: string, payload?: unknown): void {
+    if (!PlayerProfileStore.hasActiveProfile()) return;
+    if (recordTutorialEvent(PlayerProfileStore.getActiveSave().tutorials, type, payload)) PlayerProfileStore.save();
   }
 }

@@ -2,6 +2,7 @@ import { SaveSystem } from './SaveSystem';
 import { DEFAULT_AUDIO_VOLUME, SFX_DEFINITIONS, type AudioSfxName } from '../config/audio';
 import { publicAssetUrl } from '../utils/assetUrl';
 import { DroneAudioPool, type DroneAudioOwner } from './DroneAudioPool';
+import { BossWalkingAudio, type WalkingBoss } from './BossWalkingAudio';
 import type Phaser from 'phaser';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
 import { SceneKeys } from '../flow/SceneKeys';
@@ -147,6 +148,7 @@ export class AudioManager {
   private static instance: AudioManager | null = null;
   private readonly context: AudioContext;
   private readonly droneAudio: DroneAudioPool;
+  private readonly bossWalkingAudio: BossWalkingAudio;
   private readonly playlist = [
     'music/Arc Grid SiegeV1.mp3',
     'music/Arc Grid SiegeV3.mp3',
@@ -311,6 +313,7 @@ export class AudioManager {
   private constructor() {
     this.context = new AudioContext();
     this.droneAudio = new DroneAudioPool(this.context, audioAssetUrl('soundeffects/dronesound.mp3'));
+    this.bossWalkingAudio = new BossWalkingAudio(this.context, audioAssetUrl('soundeffects/bosswalkingsound.mp3'));
     this.shufflePlaylist();
     this.refreshVolumeCache();
     this.initShotSfxPool();
@@ -1441,6 +1444,7 @@ export class AudioManager {
     anomalyPortal: boolean;
     arcadeEvent: boolean;
     heistAlarm: boolean;
+    bossWalking: boolean;
   }> {
     const result = {
       planting: this.plantingLoopRequested,
@@ -1450,7 +1454,8 @@ export class AudioManager {
       lowHealth: this.lowHealthLoopRequested,
       anomalyPortal: this.anomalyPortalIdleRequested,
       arcadeEvent: this.activeArcadeLoop !== null,
-      heistAlarm: this.heistAlarmRequested
+      heistAlarm: this.heistAlarmRequested,
+      bossWalking: this.bossWalkingAudio.stats().active > 0
     };
     return { activeCount: Object.values(result).filter(Boolean).length, ...result };
   }
@@ -1486,6 +1491,7 @@ export class AudioManager {
 
   refreshMix(): void {
     this.refreshVolumeCache();
+    if (this.getSfxVolume('bossWalking') <= 0) this.stopBossWalkingAudio();
     if (this.musicAudio) {
       this.musicAudio.volume = this.clampVolume(this.getVolume('music'));
     }
@@ -1604,6 +1610,7 @@ export class AudioManager {
   stopRoundScopedAudio(options: { preserveAnomalyTransit?: boolean } = {}): void {
     for (const owner of this.fireVoices.keys()) this.stopFireTrap(owner);
     this.stopDroneAudio();
+    this.stopBossWalkingAudio();
     this.stopPlantingLoop();
     this.stopDisarmLoop();
     this.stopSecurityLaserLoop();
@@ -1715,6 +1722,7 @@ export class AudioManager {
     }
     for (const audio of dedicated) if (audio && !audio.paused && !audio.ended) activeVoices += 1;
     activeVoices += this.droneAudio.stats().active;
+    activeVoices += this.bossWalkingAudio.stats().active;
     const activeTones = this.activeSfxTones.size;
     const requestedLoops = this.roundLoopDiagnostics().activeCount;
     return {
@@ -1723,7 +1731,7 @@ export class AudioManager {
       activeTones,
       requestedLoops,
       pooledVoices: pools.reduce((sum, pool) => sum + pool.length, 0) + this.droneAudio.stats().capacity,
-      dedicatedVoices: dedicated.reduce((sum, audio) => sum + Number(Boolean(audio)), 0)
+      dedicatedVoices: dedicated.reduce((sum, audio) => sum + Number(Boolean(audio)), 0) + this.bossWalkingAudio.stats().owners
     };
   }
 
@@ -1733,6 +1741,12 @@ export class AudioManager {
   releaseDroneAudio(owner: DroneAudioOwner): void { this.droneAudio.release(owner); }
   stopDroneAudio(): void { this.droneAudio.stop(); }
   droneAudioDiagnostics() { return this.droneAudio.stats(); }
+
+  updateBossWalkingAudio(bosses: readonly WalkingBoss[], x: number, y: number): void {
+    this.bossWalkingAudio.update(bosses, x, y, this.getSfxVolume('bossWalking'));
+  }
+  stopBossWalkingAudio(): void { this.bossWalkingAudio.stop(); }
+  bossWalkingAudioDiagnostics() { return this.bossWalkingAudio.stats(); }
 
   /** Keeps one electrical loop alive only while the operative is near a Flux Core. */
   setFluxCoreProximity(strength: number): void {
@@ -1830,7 +1844,7 @@ export class AudioManager {
   }
 
   playSfx(name: Exclude<AudioSfxName,
-    'droneFlight' | 'planting' | 'disarm' | 'securityLaser' | 'fluxCore' | 'lowHealth' | 'anomalyPortalIdle' | 'heistAlarm'>): void {
+    'bossWalking' | 'droneFlight' | 'planting' | 'disarm' | 'securityLaser' | 'fluxCore' | 'lowHealth' | 'anomalyPortalIdle' | 'heistAlarm'>): void {
     switch (name) {
       case 'echoRecord':
         this.beep('sfx', 620, 80, .035, name);

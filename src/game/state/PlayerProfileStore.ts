@@ -42,6 +42,7 @@ import { getPendingCampaignPackages, recordCampaignTrainingCompletion, recordCam
 import { prepareCampaignRewardPackages, type PreparedCampaignPackages } from '../progression/CampaignRewardPackages.ts';
 import { ACCESS_CARD_PRICE, ACCESS_CARD_DAILY_LIMIT, ACCESS_CARD_TYPES, normalizeAccessCards, accessCardUseError } from '../anomalies/AnomalyAccessCards.ts';
 import type { AnomalyId } from '../anomalies/types.ts';
+import { completeFirstRunTeachingRound, hasTutorialObjective, recordTutorialEvent, reconcileTutorialEvidence } from '../tutorial/TutorialProgress.ts';
 
 export interface PurchaseResult {
   ok: boolean;
@@ -314,6 +315,10 @@ export class PlayerProfileStore {
     const save = PlayerProfileStore.getActiveSave();
     PlayerProfileStore.observeWeeklyProgress(save);
     recordCampaignVictory(save.progress.campaign, RUN_PROTOCOLS[protocol].family, round, encounter);
+    if (protocol === 'normal' && encounter === 'arena') {
+      completeFirstRunTeachingRound(save.tutorials, round);
+      if (hasTutorialObjective(save.tutorials, 'training.rounds')) recordCampaignTrainingCompletion(save.progress.campaign);
+    }
     if (encounter === 'boss' || encounter === 'trinity') {
       save.progress.bossesDefeated++;
       if (isOverdriveProtocol(protocol)) save.progress.overdriveWeeklyProgress.bossesDefeated = (save.progress.overdriveWeeklyProgress.bossesDefeated ?? 0) + 1;
@@ -789,7 +794,10 @@ export class PlayerProfileStore {
   static equipMod(slot: ModSlot, modId: string, instanceId?: string): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
     const result = equipMod(save.mods, slot, modId, instanceId, resolveOperationsConfiguration(save.protocol, save.progress).protocol);
-    if (result.ok) PlayerProfileStore.save();
+    if (result.ok) {
+      recordTutorialEvent(save.tutorials, 'mods.equipped');
+      PlayerProfileStore.save();
+    }
     return result;
   }
 
@@ -1036,6 +1044,9 @@ export class PlayerProfileStore {
 
   static save(requirePersistent = false): boolean {
     const save = PlayerProfileStore.getActiveSave();
+    const loadout = save.mods.loadouts.find(item => item.id === save.mods.activeLoadoutId);
+    reconcileTutorialEvidence(save.tutorials, !!loadout && Object.values(loadout.slots).some(Boolean),
+      Object.values(save.upgrades).some(level => level > 0));
     const now = Date.now();
     const deltaSeconds = Math.max(0, Math.floor((now - PlayerProfileStore.lastPlaytimeCommitAt) / 1000));
     if (deltaSeconds > 0) {

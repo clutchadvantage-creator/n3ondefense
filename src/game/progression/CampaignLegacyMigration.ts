@@ -60,8 +60,8 @@ export const migrateLegacyCampaignProgress = (record: LegacyCampaignRecord): Cam
     ? 30 : supremeAccess.findLast(([threshold]) => supreme >= threshold)?.[1] ?? 1;
   progress.modes.supreme.completed = record.supremeOverdriveCompleted;
   progress.modes.supreme.highestCompletedRound = record.supremeOverdriveCompleted ? 30 : 0;
-  progress.packages.training.eligible = record.trainingRoundsCompleted >= 3
-    || record.completedTutorialSequences.includes('onboarding.certification');
+  // Hearing the Round 3 briefing proves entry, not a successful third round.
+  progress.packages.training.eligible = record.trainingRoundsCompleted >= 3;
   // All claims deliberately remain false. Ownership of any rarity proves
   // neither delivery of a package nor completion of a campaign.
   return { progress, legacy: structuredClone(record) };

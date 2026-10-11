@@ -161,6 +161,7 @@ body {
 .tutorial-no-target .tutorial-shade-top { inset: 0 !important; width: auto !important; height: auto !important; }
 .tutorial-no-target .tutorial-shade-right,.tutorial-no-target .tutorial-shade-bottom,.tutorial-no-target .tutorial-shade-left,.tutorial-no-target .tutorial-focus,.tutorial-no-target .tutorial-arrow { display: none; }
 .tutorial-overlay--arena .tutorial-shade { display: none !important; }
+.tutorial-passive .tutorial-shade { display: none; pointer-events: none; }
 .tutorial-confirm .tutorial-focus { border-color: #7dffae; box-shadow: 0 0 30px rgba(125,255,174,.9); }
 @keyframes tutorial-focus-pulse { 50% { box-shadow: 0 0 0 2px rgba(255, 85, 205, 0.38), 0 0 36px rgba(78,235,255,.9), inset 0 0 24px rgba(78,235,255,.25); } }
 @keyframes tutorial-key-demo { 50% { transform: translateY(2px) scale(.96); background: rgba(255,91,207,.28); } }

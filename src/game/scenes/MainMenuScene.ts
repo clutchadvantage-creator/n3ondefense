@@ -20,7 +20,6 @@ import {
 import { formatWeeklyCountdown, type WeeklyOperationDeck, type WeeklyOperationDecksSnapshot, type WeeklyOperationsSnapshot } from '../progression/WeeklyOperations.ts';
 import { TutorialDirector } from '../tutorial/TutorialDirector.ts';
 import { TutorialEventBus } from '../tutorial/TutorialEventBus.ts';
-import { completeFirstRunTeachingRound } from '../tutorial/TutorialProgress.ts';
 import { projectTutorialBoundsToViewport } from '../tutorial/TutorialTargeting.ts';
 import { createDeploymentConfigurationModal, type DeploymentConfigurationModalOptions } from '../ui/DeploymentConfigurationModal.ts';
 import { setSceneUiModalDepth } from '../input/UiNavigationController.ts';
@@ -103,7 +102,7 @@ export class MainMenuScene extends Phaser.Scene {
     }
   }
 
-  create(data: MainMenuLaunchData = {}): void {
+  create(_data: MainMenuLaunchData = {}): void {
     this.deploymentLaunchGate.reset();
     this.closeDeploymentModal();
     this.unsubscribeDeploymentConfiguration?.();
@@ -120,21 +119,6 @@ export class MainMenuScene extends Phaser.Scene {
     this.createBranding(width, height);
 
     const profile = SaveSystem.getActiveProfileSummary();
-    if (profile) {
-      // Repair profiles already stranded by the previous completion guard.
-      // A persisted completed round proves that this first-run deployment
-      // succeeded, so Main Menu must continue with workstation training.
-      const teaching = SaveSystem.getTutorialProgress();
-      if (teaching.firstRunStage === 'arena-teaching' && (
-        (teaching.trainingRoundsCompleted ?? 0) >= 3
-        || (teaching.lyraCurriculum !== 4 && profile.roundsCompleted > 0)
-        || ((teaching.trainingRoundsCompleted ?? 0) >= 2 && profile.highestRound >= 3)
-      )) {
-        SaveSystem.updateTutorialProgress((progress) => { completeFirstRunTeachingRound(progress); });
-        SaveSystem.completeCampaignTraining();
-        SaveSystem.claimCampaignPackages();
-      }
-    }
     const deploymentStart = profile
       ? SaveSystem.getOperationsConfiguration()
       : { mode: 'normal' as const, protocol: 'normal' as const, startingRound: 1 };
@@ -373,20 +357,19 @@ export class MainMenuScene extends Phaser.Scene {
         const canvas = this.game.canvas.getBoundingClientRect();
         return projectTutorialBoundsToViewport(bounds, canvas, this.scale.width, this.scale.height);
       },
-      setMode: () => undefined
+      setMode: () => undefined,
+      canPresent: () => this.scene.isActive() && !this.deploymentModal
     });
-    // Fresh profile creation is an authoritative onboarding entry point. The
-    // persisted pending flag still handles reloads/restarts, while this launch
-    // signal guarantees that the greeting is presented on the handoff itself.
-    if (data.showFirstRunWelcome) this.tutorialDirector.replay('onboarding.menu-welcome');
-    else this.tutorialDirector.startEligible();
-    window.setTimeout(() => {
+    // Phaser marks the scene active after create returns. Presentation uses that
+    // lifecycle boundary so shutdown/covered scenes cannot show stale lessons.
+    this.time.delayedCall(0, () => this.tutorialDirector?.startEligible());
+    this.time.delayedCall(250, () => {
       if (!this.scene.isActive()) return;
       const briefing = SaveSystem.getInitialDeploymentBriefingState();
       if (briefing.seen && SaveSystem.get().settings.contextualTutorials) TutorialEventBus.emit('progression.firstFailure');
       const collection = SaveSystem.getModCollection();
       if (Object.values(collection.inventory).some((entry) => entry.discovered)) TutorialEventBus.emit('progression.firstModOwned');
-    }, 250);
+    });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.handleResize, this);
       this.events.off(Phaser.Scenes.Events.WAKE, this.handleDeploymentConfigurationChanged, this);
@@ -399,38 +382,15 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private allowTeachingMenuAction(
-    action: 'local' | 'online' | 'store' | 'garage' | 'mods' | 'other',
-    status: Phaser.GameObjects.Text
+    _action: 'local' | 'online' | 'store' | 'garage' | 'mods' | 'other',
+    _status: Phaser.GameObjects.Text
   ): boolean {
-    const stage = SaveSystem.getTutorialProgress().firstRunStage;
-    if (stage === 'complete') return true;
-    const allowed = stage === 'waiting-for-start-local' || stage === 'arena-teaching'
-      ? action === 'local'
-      : stage === 'waiting-for-store' || stage === 'store-teaching'
-        ? action === 'store'
-        : stage === 'waiting-for-garage' || stage === 'garage-teaching'
-          ? action === 'garage'
-          : stage === 'mod-collection-teaching'
-            ? action === 'garage' || action === 'mods'
-            : false;
-    if (allowed) return true;
-    const instruction = stage === 'welcome-main-menu'
-      ? 'READ THE WELCOME BRIEFING, THEN SELECT NEXT.'
-      : stage === 'waiting-for-start-local' || stage === 'arena-teaching'
-        ? 'TRAINING LINK ACTIVE // SELECT START GAME.'
-        : stage === 'waiting-for-store' || stage === 'store-teaching'
-          ? 'TEACHING LINK ACTIVE // SELECT STORE.'
-          : 'TEACHING LINK ACTIVE // SELECT OPERATOR GARAGE.';
-    status.setText(instruction).setColor('#ffbd85');
-    return false;
+    this.tutorialDirector?.suspend();
+    return true;
   }
 
   private confirmLocalTeachingSelection(): void {
-    const stage = SaveSystem.getTutorialProgress().firstRunStage;
-    if ((stage === 'waiting-for-start-local' || stage === 'arena-teaching')
-      && this.tutorialDirector?.awaits('ui.startLocalSelected')) {
-      TutorialEventBus.emit('ui.startLocalSelected');
-    }
+    TutorialEventBus.emit('ui.startLocalSelected');
   }
 
   private createCommandButton(

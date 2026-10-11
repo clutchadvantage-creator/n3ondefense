@@ -274,24 +274,20 @@ export class ModCollectionScene extends Phaser.Scene {
         return projectTutorialBoundsToViewport(rect, canvas, this.scale.width, this.scale.height);
       },
       setMode: () => undefined,
+      canPresent: () => this.scene.isActive(),
       isEventActionAvailable: (event) => event !== 'mods.equipped' || cards.some((card) => {
         const definition = MOD_BY_ID.get(card.modId);
         return !!definition && !!activeLoadout && (['weapon', 'player', 'defense', 'bombSite', 'wildcard'] as ModSlot[])
           .some((slot) => validateModEquip(activeLoadout.slots, definition, slot, SaveSystem.getPreferredProtocol()).ok);
-      }),
-      onComplete: (sequenceId) => {
-        if (sequenceId === 'onboarding.mod-collection' && this.scene.isActive()) {
-          this.scene.start(SceneKeys.MainMenu);
-        }
-      }
+      })
     });
     // First-run Mod Collection teaching is state-driven and must work even if
     // the training reward inventory is empty. Contextual teaching still uses
     // the delayed collection-open event below.
-    this.tutorialDirector.startEligible();
-    window.setTimeout(() => {
+    this.time.delayedCall(0, () => this.tutorialDirector?.startEligible());
+    this.time.delayedCall(160, () => {
       if (this.scene.isActive() && SaveSystem.getModCollection().cards.length > 0) TutorialEventBus.emit('ui.modCollectionOpened');
-    }, 160);
+    });
     this.input.keyboard?.off('keydown-ESC', this.handleEscape);
     this.input.keyboard?.on('keydown-ESC', this.handleEscape);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -650,8 +646,6 @@ export class ModCollectionScene extends Phaser.Scene {
   }
 
   private returnToPreviousScene(): void {
-    if (SaveSystem.getTutorialProgress().firstRunStage === 'mod-collection-teaching'
-      && this.tutorialDirector?.isActiveSequence('onboarding.mod-collection')) return;
     if (this.returnScene === SceneKeys.Arena && this.resumePausedScene) {
       const arenaCanResume = this.scene.isPaused(SceneKeys.Arena) && this.registry.has('arena-session');
       if (!arenaCanResume) {

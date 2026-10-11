@@ -12,9 +12,9 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     ]
   },
   {
-    id: 'onboarding.menu-resume-training', scene: 'menu', title: 'RESUME TRAINING', autoStart: true,
-    firstRunStages: ['arena-teaching'], skippable: true,
-    steps: [{ id: 'start-local', target: 'menu.start-local', eyebrow: 'LYRA // TRAINING INCOMPLETE', title: 'RESUME TRAINING', body: 'Arena training is still in progress.\n\nSelect START GAME to resume your training deployment. I kept everything exactly where you left it. Mostly.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.startLocalSelected' } }]
+    id: 'onboarding.menu-resume-training', scene: 'menu', title: 'TRAINING RECORD', autoStart: true,
+    firstRunStages: ['arena-teaching'], skippable: false,
+    steps: [{ id: 'archived', notice: true, eyebrow: 'RWG TRAINING RECORD', title: 'PROGRESS ARCHIVED', body: 'Operative, your current training progress has been archived.\n\nSuccessful completion of the first three rounds is required to advance your training clearance.\n\nAdditional system instruction will become available upon reaching this milestone.\n\nRWG appreciates your continued cooperation.', mode: 'menu', advanceLabel: 'GOT IT', completion: { type: 'manual' } }]
   },
   {
     id: 'onboarding.basic-controls', scene: 'arena', title: 'INITIAL DEPLOYMENT', autoStart: true, firstRunStages: ['arena-teaching'], skippable: true,
@@ -61,13 +61,13 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     steps: [{ id: 'store', target: 'menu.store', eyebrow: 'LYRA // POST-DEPLOYMENT', title: 'STORE / UPGRADES', body: 'Credits earned in the Arena persist between runs. Spend them on permanent upgrades that help your operative push farther. Click STORE to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.storeSelected' } }]
   },
   {
-    id: 'onboarding.store', scene: 'upgrades', title: 'PERMANENT UPGRADES', autoStart: true,
+    id: 'onboarding.store', scene: 'upgrades', title: 'PERMANENT UPGRADES', autoStart: true, earlyDiscovery: true,
     firstRunStages: ['store-teaching'], skippable: true,
     steps: [
       { id: 'credits', target: 'store.wallet.credits', title: 'CREDITS PERSIST', body: 'Credits earned during deployments remain in your wallet and fund permanent improvements.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
       { id: 'currencies', target: 'store.wallet', title: 'YOUR CURRENCIES', body: 'Credits fund permanent upgrades. Core Tokens and Plasma Chips support Mod improvements and other purchases. Flux Cores pay anomaly entry fees. Always check the displayed currency and cost before spending.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
       { id: 'card', target: 'store.upgrade-card', title: 'CHOOSE A SYSTEM', body: 'Each upgrade module shows its current level, next improvement, and cost. Upgrades apply to future deployments.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
-      { id: 'purchase', target: 'store.upgrade-action', title: 'IMPROVE YOUR OPERATIVE', body: 'Choose an affordable upgrade and use its purchase control. If none are affordable, continue and return after earning more Credits.', mode: 'menu', completion: { type: 'event', event: 'economy.upgradePurchaseAttempted' } },
+      { id: 'purchase', target: 'store.upgrade-action', title: 'IMPROVE YOUR OPERATIVE', body: 'Choose an affordable upgrade and use its purchase control. If none are affordable, continue and return after earning more Credits.', mode: 'menu', completion: { type: 'event', event: 'economy.upgradePurchased' } },
       { id: 'exchange', title: 'CURRENCY EXCHANGE', body: 'The Operator Garage has a Currency Exchange station. Choose the source and target currencies, set an amount, and review the quote before confirming. Converting Flux Cores spends resources you could use to enter an anomaly. No exchange is required for training.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
       { id: 'action', target: 'store.upgrade-action', title: 'RETURN STRONGER', body: 'Select and purchase upgrades when you are ready. Every permanent improvement helps your next run push farther.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } }
     ]
@@ -78,7 +78,7 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     steps: [{ id: 'garage', target: 'menu.garage', eyebrow: 'LYRA // LOADOUT SYSTEMS', title: 'OPERATOR GARAGE / MOD COLLECTION', body: 'Mods recovered during runs can alter your build. Inspect and equip them through the Operator Garage and its Mod Collection station. Click OPERATOR GARAGE to continue.', mode: 'menu', targetPadding: 12, completion: { type: 'event', event: 'ui.garageSelected' } }]
   },
   {
-    id: 'onboarding.garage', scene: 'garage', title: 'OPERATOR LOADOUT', autoStart: true,
+    id: 'onboarding.garage', scene: 'garage', title: 'OPERATOR LOADOUT', autoStart: true, earlyDiscovery: true,
     firstRunStages: ['garage-teaching'], skippable: true,
     steps: [
       { id: 'loadout', target: 'garage.loadout', title: 'YOUR INSTALLED MODS', body: 'These five docks show the Mods installed for your next deployment. Each slot accepts its matching category, while Utility can support flexible builds.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
@@ -86,7 +86,7 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     ]
   },
   {
-    id: 'onboarding.mod-collection', scene: 'mods', title: 'MOD COLLECTION', autoStart: true,
+    id: 'onboarding.mod-collection', scene: 'mods', title: 'MOD COLLECTION', autoStart: true, earlyDiscovery: true,
     firstRunStages: ['mod-collection-teaching'], skippable: true,
     steps: [
       { id: 'archive', target: 'mods.archive', title: 'RECOVERED MOD ARCHIVE', body: 'Every Mod card recovered during a run appears in this archive. Rarity, rank, infusion, and duplicate status remain attached to the exact card.', mode: 'menu', advanceLabel: 'CONTINUE', completion: { type: 'manual' } },
@@ -116,7 +116,7 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
     steps: [
       { id: 'archive', target: 'mods.archive', title: 'OWNED CARD ARCHIVE', body: 'Every acquired copy appears here. Border color identifies rarity; the duplicate marker counts extra copies regardless of upgrade level.', mode: 'menu', completion: { type: 'manual' } },
       { id: 'details', target: 'mods.details', title: 'INSPECT & CONFIGURE', body: "The viewer shows the selected card's rank, infusion, category, and complete effect. Equip it to a compatible slot or the Utility/Wildcard dock.", mode: 'menu', completion: { type: 'manual' } },
-      { id: 'equip', target: 'mods.details', title: 'INSTALL A MOD', body: 'Use a valid category slot or the Utility/Wildcard dock whenever you want to install the selected card into the real next-deployment loadout.', mode: 'menu', completion: { type: 'manual' } },
+      { id: 'equip', target: 'mods.details', title: 'INSTALL A MOD', body: 'Use a valid category slot or the Utility/Wildcard dock whenever you want to install the selected card into the real next-deployment loadout.', mode: 'menu', completion: { type: 'event', event: 'mods.equipped' } },
       { id: 'upgrade', target: 'mods.details', title: 'UPGRADE OR RECYCLE', body: 'Upgrade favorite cards with the displayed currencies. Unupgraded duplicate copies can be recycled into Plasma Chips.', mode: 'menu', completion: { type: 'manual' } }
     ]
   },
@@ -134,7 +134,7 @@ export const TUTORIAL_SEQUENCES: readonly TutorialSequenceDefinition[] = [
       { id: 'credits', target: 'store.wallet.credits', title: 'CREDITS', body: 'This wallet value shows your Credits. Credits persist after every deployment and purchase permanent combat upgrades, cosmetics, and Mod improvements.', mode: 'menu', completion: { type: 'manual' } },
       { id: 'core-tokens', target: 'store.wallet.core-tokens', title: 'CORE TOKENS', body: 'This wallet value shows Core Tokens, a persistent rare resource used by higher-rarity Mod upgrades and select unlocks.', mode: 'menu', completion: { type: 'manual' } },
       { id: 'card', target: 'store.upgrade-card', title: 'CHOOSE A SYSTEM', body: 'Each highlighted module shows its current level, next improvement, and exact cost. Select one to inspect it.', mode: 'menu', completion: { type: 'manual' } },
-      { id: 'purchase', target: 'store.upgrade-action', title: 'INSTALL AN UPGRADE', body: 'Try an available upgrade. A successful install persists across every future run; if funds are short, the Store shows the exact amount still needed.', mode: 'menu', completion: { type: 'event', event: 'economy.upgradePurchaseAttempted' } }
+      { id: 'purchase', target: 'store.upgrade-action', title: 'INSTALL AN UPGRADE', body: 'Try an available upgrade. A successful install persists across every future run; if funds are short, the Store shows the exact amount still needed.', mode: 'menu', completion: { type: 'event', event: 'economy.upgradePurchased' } }
     ]
   },
   {
