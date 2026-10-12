@@ -1,3 +1,4 @@
+import { isCosmeticInSeason } from '../cosmetics/SeasonalStore.ts';
 import { earnWeeklyCampaignRewards, getWeeklyFeaturedRewards, getWeeklyRewardHistory } from '../progression/WeeklyRewardCampaigns.ts';
 import { deliverWeeklyFeaturedRewards } from '../progression/WeeklyRewardDelivery.ts';
 import type { WeeklyMissionEligibility } from '../progression/WeeklyMissionLibrary.ts';
@@ -153,6 +154,11 @@ export class PlayerProfileStore {
       throw new Error('No active local profile is selected.');
     }
     return PlayerProfileStore.activeSave;
+  }
+
+  /** Identity of the live session; gameplay must not reload every stored profile. */
+  static getLoadedProfileId(): string | null {
+    return PlayerProfileStore.activeSave?.profile.id ?? null;
   }
 
   static getActiveProfileSummary(): ProfileSummary | null {
@@ -1009,6 +1015,7 @@ export class PlayerProfileStore {
       return { ok: true, message: 'COSMETIC EQUIPPED' };
     }
 
+    if (!isCosmeticInSeason(cosmetic)) return { ok: false, message: 'THIS HOLIDAY COLLECTION IS OUT OF SEASON. OWNED ITEMS REMAIN AVAILABLE IN YOUR LOCKER.' };
     const costs = getCosmeticPurchaseCosts(cosmetic);
     const missing: string[] = [];
     if (save.wallet.credits < costs.credits) missing.push(`${(costs.credits - save.wallet.credits).toLocaleString()} CREDITS`);

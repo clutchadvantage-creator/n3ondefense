@@ -1,3 +1,6 @@
+import { getSeasonalStoreInventory, getStoreCalendarKey, HOLIDAY_WINDOWS, isCosmeticInSeason } from '../../game/cosmetics/SeasonalStore.ts';
+import { createHalloweenSvgElement, halloweenArtKind } from '../../game/cosmetics/HalloweenCosmeticArt.ts';
+import { HALLOWEEN_SETS } from '../../data/halloweenCosmetics.ts';
 import type { CosmeticOption, UpgradeDefinition } from '../../game/types';
 import { getUpgradeCost, getUpgradeLevel } from '../../data/upgrades';
 import { getUpgradeComparison, getUpgradeVisual } from './upgradePresentation';
@@ -36,6 +39,7 @@ interface StoreScrollState {
 }
 
 export interface StorefrontUiOptions {
+  getNow?(): Date;
   getAccessCards?(): AnomalyAccessCards;
   onPurchaseAccessCard?(id: AnomalyId): StoreActionResult;
   root: HTMLElement;
@@ -71,34 +75,40 @@ export class StorefrontUi {
   private walletFeedback: { credits: number; coreTokens: number; plasmaChips: number } | null = null;
   private screen: HTMLElement | null = null;
   private cardDayTimer: number | undefined;
+  private calendarKey = '';
+  private readonly calendarHandler = (): void => this.refreshCalendar();
   private acquiredAccessCard: AnomalyId | null = null;
   private accessCelebrationTimer: number | undefined;
   private readonly keyHandler = (event: KeyboardEvent): void => this.handleKey(event);
 
   constructor(options: StorefrontUiOptions) {
     this.options = options;
+    this.calendarKey = getStoreCalendarKey(this.now());
     const categories = this.getCategories();
     this.selectedCategory = categories[0] ?? '';
     this.selectedId = this.getVisibleItems()[0]?.id ?? null;
     this.options.root.querySelector<HTMLElement>('.storefront-screen')?.remove();
     window.addEventListener('keydown', this.keyHandler);
     this.render();
-    if (options.getAccessCards) {
-      let day = options.getAccessCards().day;
-      this.cardDayTimer = window.setInterval(() => {
-        const current = options.getAccessCards!().day;
+    window.addEventListener('focus', this.calendarHandler);
+    document.addEventListener('visibilitychange', this.calendarHandler);
+    let day = options.getAccessCards?.().day;
+    this.cardDayTimer = window.setInterval(() => {
+        this.refreshCalendar();
+        const current = options.getAccessCards?.().day;
         if (current !== day) {
           day = current;
           if (this.selectedCategory === 'access-cards') this.render();
         }
       }, 1000);
-    }
   }
 
   destroy(): void {
     window.clearInterval(this.cardDayTimer);
     window.clearTimeout(this.accessCelebrationTimer);
     window.removeEventListener('keydown', this.keyHandler);
+    window.removeEventListener('focus', this.calendarHandler);
+    document.removeEventListener('visibilitychange', this.calendarHandler);
     this.screen?.remove();
     this.screen = null;
     this.options.root.querySelectorAll<HTMLElement>('.store-dialog-backdrop').forEach((dialog) => dialog.remove());
@@ -119,16 +129,39 @@ export class StorefrontUi {
     if (chips) chips.innerHTML = `<b>◇</b> ${snapshot.plasmaChips.toLocaleString()} <small>PLASMA CHIPS</small>`;
   }
 
+  private now(): Date { return this.options.getNow?.() ?? new Date(); }
+
+  private availableCosmetics(): CosmeticOption[] { return getSeasonalStoreInventory(this.options.cosmetics ?? [], this.now()); }
+
+  private refreshCalendar(): void {
+    const key = getStoreCalendarKey(this.now());
+    if (key === this.calendarKey) return;
+    this.calendarKey = key;
+    if (this.options.mode !== 'cosmetics') return;
+    const focusId = (document.activeElement as HTMLElement | null)?.dataset.controllerFocusId;
+    const categories = this.getCategories();
+    if (!categories.includes(this.selectedCategory)) this.selectedCategory = categories[0] ?? '';
+    if (!this.getVisibleItems().some(item => item.id === this.selectedId)) this.selectedId = this.getVisibleItems()[0]?.id ?? null;
+    this.options.root.querySelectorAll('.store-dialog-backdrop').forEach(dialog => dialog.remove());
+    this.dialogOpen = false;
+    this.render();
+    if (focusId) {
+      const candidates = [...(this.screen?.querySelectorAll<HTMLElement>('[data-controller-focus-id]') ?? [])];
+      (candidates.find(node => node.dataset.controllerFocusId === focusId)
+        ?? candidates.find(node => node.dataset.controllerFocusId === `store-category-${this.selectedCategory}`))?.focus({ preventScroll: true });
+    }
+  }
+
   private getCategories(): string[] {
     const values = this.options.mode === 'cosmetics'
-      ? (this.options.cosmetics ?? []).map((item) => item.category)
+      ? [...(this.availableCosmetics().some(item => item.holiday) ? ['seasonal'] : []), ...this.availableCosmetics().map((item) => item.category)]
       : (this.options.upgrades ?? []).map((item) => item.category);
     return [...new Set(values), ...(this.options.mode === 'upgrades' && this.options.onPurchaseAccessCard ? ['access-cards'] : [])];
   }
 
   private getVisibleItems(): Array<CosmeticOption | UpgradeDefinition> {
     return this.options.mode === 'cosmetics'
-      ? (this.options.cosmetics ?? []).filter((item) => item.category === this.selectedCategory)
+      ? this.availableCosmetics().filter((item) => this.selectedCategory === 'seasonal' ? !!item.holiday : item.category === this.selectedCategory)
       : (this.options.upgrades ?? []).filter((item) => item.category === this.selectedCategory);
   }
 
@@ -344,7 +377,7 @@ export class StorefrontUi {
       let complete: number;
       let total: number;
       if (this.options.mode === 'cosmetics') {
-        const items = (this.options.cosmetics ?? []).filter((item) => item.category === category);
+        const items = this.availableCosmetics().filter((item) => category === 'seasonal' ? !!item.holiday : item.category === category);
         complete = items.filter((item) => snapshot.ownedCosmetics.includes(item.id) || item.cost === 0).length;
         total = items.length;
       } else {
@@ -360,7 +393,7 @@ export class StorefrontUi {
       button.dataset.controllerTabGroup = 'store-category';
       button.dataset.controllerFocusId = `store-category-${category}`;
       const label = this.options.mode === 'cosmetics'
-        ? COSMETIC_LABELS[category as CosmeticOption['category']]
+        ? category === 'seasonal' ? 'Holiday Collection' : COSMETIC_LABELS[category as CosmeticOption['category']]
         : UPGRADE_LABELS[category as UpgradeDefinition['category']];
       if (this.options.mode === 'upgrades') {
         button.classList.add('has-system-icon');
@@ -382,7 +415,7 @@ export class StorefrontUi {
         text.textContent = label;
         const count = document.createElement('small');
         count.textContent = `${complete} / ${total}`;
-        button.append(indicator, this.createCosmeticCategoryIcon(category as CosmeticOption['category']), text, count);
+        button.append(indicator, this.createCosmeticCategoryIcon(category === 'seasonal' ? 'bombColor' : category as CosmeticOption['category']), text, count);
       }
       button.addEventListener('click', () => {
         this.selectedCategory = category;
@@ -440,7 +473,16 @@ export class StorefrontUi {
         ? this.renderCosmeticCard(item as CosmeticOption, snapshot)
         : this.renderUpgradeCard(item as UpgradeDefinition, snapshot));
     }
-    section.append(heading, grid);
+    section.append(heading);
+    const holidays = HOLIDAY_WINDOWS.filter(holiday => this.availableCosmetics().some(item => item.holiday === holiday.id));
+    if (this.options.mode === 'cosmetics' && holidays.length) {
+      section.classList.add('has-season-banner');
+      const banner = document.createElement('div');
+      banner.className = 'store-season-banner';
+      banner.textContent = `${holidays.map(holiday => `${holiday.label} // ${holiday.dates}`).join(' + ')} • Keep every unlock year-round`;
+      section.append(banner);
+    }
+    section.append(grid);
     return section;
   }
 
@@ -455,6 +497,7 @@ export class StorefrontUi {
       !owned && !affordable
     );
     card.dataset.cosmeticClass = premium ? 'premium' : 'regular';
+    if (item.halloweenSet) card.dataset.halloweenSet = item.halloweenSet;
     const visual = this.renderCosmeticVisual(item, false);
     const topLine = document.createElement('div');
     topLine.className = 'card-topline';
@@ -463,7 +506,7 @@ export class StorefrontUi {
     badge.textContent = equipped ? 'EQUIPPED' : owned ? 'OWNED' : affordable ? 'AVAILABLE' : 'LOCKED';
     const tier = document.createElement('span');
     tier.className = `cosmetic-tier-marker ${premium ? 'premium' : 'regular'}`;
-    tier.textContent = premium ? 'PREMIUM' : 'REGULAR';
+    tier.textContent = item.holiday ? 'HOLIDAY PREMIUM' : premium ? 'PREMIUM' : 'REGULAR';
     topLine.append(badge, tier);
     const name = document.createElement('h3');
     name.textContent = item.label;
@@ -565,6 +608,7 @@ export class StorefrontUi {
     action.addEventListener('click', () => {
       AudioManager.get().playSfx(unavailable ? 'itemLocked' : 'menu');
       if (unavailable) return;
+      if (!isCosmeticInSeason(item, this.now())) { this.refreshCalendar(); return; }
       if (owned) this.perform(() => this.options.onEquip?.(item));
       else if (getCosmeticPriceTier(item) === 'prestige' || item.currency !== 'credits' || item.cost >= 650) this.confirm(`UNLOCK ${item.label.toUpperCase()}?`, `Cost: ${this.formatCosmeticCost(item)}`, 'UNLOCK', () => this.perform(() => this.options.onUnlock?.(item)));
       else this.perform(() => this.options.onUnlock?.(item));
@@ -572,6 +616,29 @@ export class StorefrontUi {
     aside.append(label, preview, title, description);
     if (!owned) aside.append(purchaseCost);
     aside.append(status, action, this.renderMessage());
+    if (item.halloweenSet) {
+      const collection = document.createElement('div');
+      collection.className = 'store-set-collection';
+      const heading = document.createElement('h3');
+      const members = this.availableCosmetics().filter(member => member.halloweenSet === item.halloweenSet);
+      const ownedCount = members.filter(member => snapshot.ownedCosmetics.includes(member.id)).length;
+      heading.textContent = `${HALLOWEEN_SETS[item.halloweenSet].label} // ${ownedCount}/${members.length} OWNED`;
+      collection.append(heading);
+      for (const member of members) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.controllerFocusId = `store-set-${member.id}`;
+        button.textContent = `${snapshot.ownedCosmetics.includes(member.id) ? '✓ ' : ''}${COSMETIC_LABELS[member.category]}`;
+        button.setAttribute('aria-label', member.label);
+        button.setAttribute('aria-current', String(member.id === item.id));
+        button.addEventListener('click', () => {
+          this.selectedCategory = 'seasonal'; this.selectedId = member.id; this.message = ''; this.render();
+          this.screen?.querySelector<HTMLElement>(`[data-controller-focus-id="store-set-${member.id}"]`)?.focus({ preventScroll: true });
+        });
+        collection.append(button);
+      }
+      aside.append(collection);
+    }
   }
 
   private fillUpgradeDetails(aside: HTMLElement, item: UpgradeDefinition, snapshot: StoreSnapshot): void {
@@ -743,6 +810,11 @@ export class StorefrontUi {
     if (item.turretSkinEffect) visual.dataset.turretSkin = item.turretSkinEffect;
     if (item.mineFrameEffect) visual.dataset.mineFrame = item.mineFrameEffect;
     visual.innerHTML = '<i class="trail-a"></i><i class="trail-b"></i><b></b><span></span>';
+    if (item.halloweenSet) {
+      visual.classList.add('halloween-cosmetic-art');
+      visual.replaceChildren(createHalloweenSvgElement(item.halloweenSet, halloweenArtKind(item.category), this.options.particlesEnabled));
+      return visual;
+    }
     if (item.bombExplosionEffect === 'tug-life') {
       visual.innerHTML = createTugLifeWhistleSvg();
       return visual;

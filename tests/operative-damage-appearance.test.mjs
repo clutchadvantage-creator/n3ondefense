@@ -43,7 +43,7 @@ test('normal and custom-colored Operatives restore through the current authorita
 
 test('Native Palette restores cached authored textures without applying a white tint', () => {
   const premiumFrames = COSMETICS.filter((item) => item.category === 'playerShape' && item.nativeTextureKey);
-  assert.equal(premiumFrames.length, 9);
+  assert.equal(premiumFrames.length, 12);
   for (const frame of premiumFrames) {
     const { state, target } = createTarget(frame.textureKey);
     const expected = resolveOperativeFrameAppearance(frame.id, 'player-native', 1_000);

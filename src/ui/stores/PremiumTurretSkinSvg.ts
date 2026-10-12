@@ -1,8 +1,9 @@
+import { createHalloweenSvgElement, halloweenSetFromEffect } from '../../game/cosmetics/HalloweenCosmeticArt.ts';
 import type { TurretSkinCosmeticEffectId } from '../../game/types.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-const TURRET_MARKUP: Record<TurretSkinCosmeticEffectId, string> = {
+const TURRET_MARKUP: Partial<Record<TurretSkinCosmeticEffectId, string>> = {
   'void-reactor': `
     <ellipse class="pt-shadow" cx="100" cy="137" rx="66" ry="18"/><path class="pt-base" d="m40 126 20-20h80l20 20-19 21H59z"/>
     <path class="pt-shell" d="m47 94 12-49 28-21 45 10 24 39-20 41-59 9z"/><path class="pt-dark" d="m48 92 24-17 7-36-20 8zM137 36l-17 29 17 46 19-38z"/>
@@ -66,12 +67,14 @@ const TURRET_MARKUP: Record<TurretSkinCosmeticEffectId, string> = {
 };
 
 export const createPremiumTurretSkinSvg = (effect: TurretSkinCosmeticEffectId | undefined): SVGSVGElement | null => {
+  const halloween = halloweenSetFromEffect(effect);
+  if (halloween) return createHalloweenSvgElement(halloween, 'turret');
   if (!effect) return null;
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 200 160');
   svg.setAttribute('aria-hidden', 'true');
   svg.classList.add('premium-turret-svg');
   svg.dataset.turretSkin = effect;
-  svg.innerHTML = TURRET_MARKUP[effect];
+  svg.innerHTML = TURRET_MARKUP[effect] ?? '';
   return svg;
 };

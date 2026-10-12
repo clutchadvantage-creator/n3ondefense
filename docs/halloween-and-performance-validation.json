@@ -1,0 +1,1094 @@
+{
+  "environment": {
+    "width": 1576,
+    "height": 908,
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 (0x00002F04) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  "normal": {
+    "description": "Live Normal rounds 9 and 14, same seed, half-max upgrades, no mods, ordinary count/weight caps, simulated gamepad movement and firing, invulnerable test operative, 5-second samples. Measurements include instrumentation overhead; combat outcomes vary between runs.",
+    "before": [
+      {
+        "label": "normal-9/natural",
+        "frame": {
+          "n": 267,
+          "mean": 18.664419475119658,
+          "p95": 33.39999985694885,
+          "p99": 59.5,
+          "max": 77.5,
+          "over33": 14
+        },
+        "update": {
+          "n": 268,
+          "mean": 7.049999995018119,
+          "p95": 27.600000143051147,
+          "p99": 54.39999985694885,
+          "max": 70.30000019073486,
+          "over33": 6
+        },
+        "render": {
+          "n": 268,
+          "mean": 3.6656716341402995,
+          "p95": 4.200000047683716,
+          "p99": 4.6000001430511475,
+          "max": 5.5,
+          "over33": 0
+        },
+        "enemies": 13,
+        "projectiles": 6
+      },
+      {
+        "label": "normal-9/bounded-pinwheel",
+        "frame": {
+          "n": 249,
+          "mean": 20.008433734556757,
+          "p95": 34.299999952316284,
+          "p99": 36.200000047683716,
+          "max": 62.200000047683716,
+          "over33": 29
+        },
+        "update": {
+          "n": 250,
+          "mean": 7.226400004386901,
+          "p95": 27.90000009536743,
+          "p99": 30.299999952316284,
+          "max": 56,
+          "over33": 2
+        },
+        "render": {
+          "n": 250,
+          "mean": 4.575200003623962,
+          "p95": 5.3999998569488525,
+          "p99": 5.700000047683716,
+          "max": 5.800000190734863,
+          "over33": 0
+        },
+        "enemies": 13,
+        "projectiles": 3
+      },
+      {
+        "label": "normal-9/before-clipping-pinwheel",
+        "frame": {
+          "n": 261,
+          "mean": 19.156321839811245,
+          "p95": 32.799999952316284,
+          "p99": 56.299999952316284,
+          "max": 62.09999990463257,
+          "over33": 12
+        },
+        "update": {
+          "n": 262,
+          "mean": 6.750381682665293,
+          "p95": 27,
+          "p99": 50.89999985694885,
+          "max": 55.5,
+          "over33": 4
+        },
+        "render": {
+          "n": 262,
+          "mean": 4.450381671199362,
+          "p95": 4.8999998569488525,
+          "p99": 5.400000095367432,
+          "max": 5.8999998569488525,
+          "over33": 0
+        },
+        "enemies": 14,
+        "projectiles": 4
+      },
+      {
+        "label": "normal-9/lasers-off",
+        "frame": {
+          "n": 262,
+          "mean": 19.02022900745159,
+          "p95": 34.10000014305115,
+          "p99": 36.10000014305115,
+          "max": 37.5,
+          "over33": 24
+        },
+        "update": {
+          "n": 263,
+          "mean": 5.703041822738068,
+          "p95": 27,
+          "p99": 28.299999952316284,
+          "max": 30.90000009536743,
+          "over33": 0
+        },
+        "render": {
+          "n": 263,
+          "mean": 5.192395426927864,
+          "p95": 8.099999904632568,
+          "p99": 9,
+          "max": 9.200000047683716,
+          "over33": 0
+        },
+        "enemies": 15,
+        "projectiles": 4
+      },
+      {
+        "label": "normal-14/natural",
+        "frame": {
+          "n": 250,
+          "mean": 19.867199999809266,
+          "p95": 37.5,
+          "p99": 57.39999985694885,
+          "max": 58.10000014305115,
+          "over33": 25
+        },
+        "update": {
+          "n": 251,
+          "mean": 9.105179288947724,
+          "p95": 31.799999952316284,
+          "p99": 52.799999952316284,
+          "max": 53,
+          "over33": 10
+        },
+        "render": {
+          "n": 251,
+          "mean": 3.4553784887154264,
+          "p95": 4.200000047683716,
+          "p99": 4.900000095367432,
+          "max": 5.599999904632568,
+          "over33": 0
+        },
+        "enemies": 18,
+        "projectiles": 9
+      },
+      {
+        "label": "normal-14/bounded-pinwheel",
+        "frame": {
+          "n": 234,
+          "mean": 21.360256410052635,
+          "p95": 33.89999985694885,
+          "p99": 57.299999952316284,
+          "max": 57.799999952316284,
+          "over33": 19
+        },
+        "update": {
+          "n": 235,
+          "mean": 10.985106379935083,
+          "p95": 28,
+          "p99": 51.69999980926514,
+          "max": 52.299999952316284,
+          "over33": 10
+        },
+        "render": {
+          "n": 235,
+          "mean": 4.141702125427571,
+          "p95": 4.6000001430511475,
+          "p99": 5,
+          "max": 5.1000001430511475,
+          "over33": 0
+        },
+        "enemies": 14,
+        "projectiles": 8
+      },
+      {
+        "label": "normal-14/before-clipping-pinwheel",
+        "frame": {
+          "n": 228,
+          "mean": 22.05043859649123,
+          "p95": 56.10000014305115,
+          "p99": 57.80000019073486,
+          "max": 83,
+          "over33": 17
+        },
+        "update": {
+          "n": 229,
+          "mean": 12.146724888330985,
+          "p95": 50.40000009536743,
+          "p99": 52.5,
+          "max": 77.70000004768372,
+          "over33": 12
+        },
+        "render": {
+          "n": 229,
+          "mean": 4.127510917238793,
+          "p95": 4.700000047683716,
+          "p99": 5.1000001430511475,
+          "max": 5.700000047683716,
+          "over33": 0
+        },
+        "enemies": 15,
+        "projectiles": 6
+      },
+      {
+        "label": "normal-14/lasers-off",
+        "frame": {
+          "n": 228,
+          "mean": 21.99561403508772,
+          "p95": 35.5,
+          "p99": 62.5,
+          "max": 85.10000014305115,
+          "over33": 28
+        },
+        "update": {
+          "n": 229,
+          "mean": 11.241048030978208,
+          "p95": 29.59999990463257,
+          "p99": 57,
+          "max": 78.70000004768372,
+          "over33": 11
+        },
+        "render": {
+          "n": 229,
+          "mean": 3.996069872743698,
+          "p95": 4.700000047683716,
+          "p99": 5.200000047683716,
+          "max": 6.199999809265137,
+          "over33": 0
+        },
+        "enemies": 14,
+        "projectiles": 10
+      }
+    ],
+    "after": [
+      {
+        "label": "normal-9/natural",
+        "frame": {
+          "n": 299,
+          "mean": 16.66588628810385,
+          "p95": 17.09999990463257,
+          "p99": 17.300000190734863,
+          "max": 31.799999952316284,
+          "over33": 0
+        },
+        "update": {
+          "n": 300,
+          "mean": 0.9826666720708211,
+          "p95": 1.2999999523162842,
+          "p99": 2.5,
+          "max": 21.700000047683716,
+          "over33": 0
+        },
+        "render": {
+          "n": 300,
+          "mean": 4.117999997138977,
+          "p95": 5.099999904632568,
+          "p99": 6.099999904632568,
+          "max": 7.799999952316284,
+          "over33": 0
+        },
+        "enemies": 14,
+        "projectiles": 3
+      },
+      {
+        "label": "normal-9/bounded-pinwheel",
+        "frame": {
+          "n": 299,
+          "mean": 16.6652173916233,
+          "p95": 17,
+          "p99": 17.200000047683716,
+          "max": 17.200000047683716,
+          "over33": 0
+        },
+        "update": {
+          "n": 300,
+          "mean": 0.9669999917348225,
+          "p95": 1.2999999523162842,
+          "p99": 1.6000001430511475,
+          "max": 9.100000143051147,
+          "over33": 0
+        },
+        "render": {
+          "n": 300,
+          "mean": 5.245999995072682,
+          "p95": 6.6000001430511475,
+          "p99": 7.5,
+          "max": 8.5,
+          "over33": 0
+        },
+        "enemies": 14,
+        "projectiles": 6
+      },
+      {
+        "label": "normal-9/before-clipping-pinwheel",
+        "frame": {
+          "n": 299,
+          "mean": 16.66655518378701,
+          "p95": 17,
+          "p99": 17,
+          "max": 17.09999990463257,
+          "over33": 0
+        },
+        "update": {
+          "n": 300,
+          "mean": 0.9656666572888692,
+          "p95": 1.4000000953674316,
+          "p99": 1.7000000476837158,
+          "max": 1.9000000953674316,
+          "over33": 0
+        },
+        "render": {
+          "n": 300,
+          "mean": 5.713666667143504,
+          "p95": 6.3999998569488525,
+          "p99": 7.1000001430511475,
+          "max": 8.099999904632568,
+          "over33": 0
+        },
+        "enemies": 8,
+        "projectiles": 5
+      },
+      {
+        "label": "normal-9/lasers-off",
+        "frame": {
+          "n": 299,
+          "mean": 16.665551839464882,
+          "p95": 17,
+          "p99": 17.100000143051147,
+          "max": 17.399999856948853,
+          "over33": 0
+        },
+        "update": {
+          "n": 300,
+          "mean": 0.898999993801117,
+          "p95": 1.2000000476837158,
+          "p99": 1.7000000476837158,
+          "max": 1.7999999523162842,
+          "over33": 0
+        },
+        "render": {
+          "n": 300,
+          "mean": 5.050333328247071,
+          "p95": 5.800000190734863,
+          "p99": 7.1000001430511475,
+          "max": 7.599999904632568,
+          "over33": 0
+        },
+        "enemies": 12,
+        "projectiles": 3
+      },
+      {
+        "label": "normal-14/natural",
+        "frame": {
+          "n": 299,
+          "mean": 16.66622073594543,
+          "p95": 17,
+          "p99": 17.100000143051147,
+          "max": 17.200000047683716,
+          "over33": 0
+        },
+        "update": {
+          "n": 300,
+          "mean": 0.9953333377838135,
+          "p95": 1.4000000953674316,
+          "p99": 2,
+          "max": 3.799999952316284,
+          "over33": 0
+        },
+        "render": {
+          "n": 300,
+          "mean": 3.881666669845581,
+          "p95": 5.599999904632568,
+          "p99": 6.099999904632568,
+          "max": 6.300000190734863,
+          "over33": 0
+        },
+        "enemies": 18,
+        "projectiles": 7
+      },
+      {
+        "label": "normal-14/bounded-pinwheel",
+        "frame": {
+          "n": 300,
+          "mean": 16.666666666666668,
+          "p95": 17,
+          "p99": 17.100000143051147,
+          "max": 17.200000047683716,
+          "over33": 0
+        },
+        "update": {
+          "n": 301,
+          "mean": 1.0093023333438607,
+          "p95": 1.4000000953674316,
+          "p99": 1.7000000476837158,
+          "max": 2,
+          "over33": 0
+        },
+        "render": {
+          "n": 301,
+          "mean": 4.8272425185802375,
+          "p95": 5.5,
+          "p99": 5.900000095367432,
+          "max": 6.800000190734863,
+          "over33": 0
+        },
+        "enemies": 19,
+        "projectiles": 8
+      },
+      {
+        "label": "normal-14/before-clipping-pinwheel",
+        "frame": {
+          "n": 299,
+          "mean": 16.66622073594543,
+          "p95": 17,
+          "p99": 17.100000143051147,
+          "max": 17.200000047683716,
+          "over33": 0
+        },
+        "update": {
+          "n": 300,
+          "mean": 0.9913333336512248,
+          "p95": 1.4000000953674316,
+          "p99": 1.7999999523162842,
+          "max": 2.4000000953674316,
+          "over33": 0
+        },
+        "render": {
+          "n": 300,
+          "mean": 4.887333328723908,
+          "p95": 5.700000047683716,
+          "p99": 7.299999952316284,
+          "max": 8.099999904632568,
+          "over33": 0
+        },
+        "enemies": 18,
+        "projectiles": 10
+      },
+      {
+        "label": "normal-14/lasers-off",
+        "frame": {
+          "n": 299,
+          "mean": 16.66622073594543,
+          "p95": 17,
+          "p99": 17.100000143051147,
+          "max": 17.200000047683716,
+          "over33": 0
+        },
+        "update": {
+          "n": 300,
+          "mean": 0.9916666682561238,
+          "p95": 1.4000000953674316,
+          "p99": 1.8999998569488525,
+          "max": 2,
+          "over33": 0
+        },
+        "render": {
+          "n": 300,
+          "mean": 4.704666671752929,
+          "p95": 5.5,
+          "p99": 5.900000095367432,
+          "max": 6.1000001430511475,
+          "over33": 0
+        },
+        "enemies": 18,
+        "projectiles": 12
+      }
+    ]
+  },
+  "halloween": {
+    "checks": [
+      {
+        "ok": true,
+        "label": "isolated profile created"
+      },
+      {
+        "ok": true,
+        "label": "seasonal collection featured on entry"
+      },
+      {
+        "ok": true,
+        "label": "all 15 cards render authored SVG art"
+      },
+      {
+        "ok": true,
+        "label": "bomb-neon-bats: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "bomb-witch-signal: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-witch: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "turret-halloween-witch: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-witch: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-witch: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-bats: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "turret-halloween-bats: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-bats: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-bats: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-pumpkin: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "turret-halloween-pumpkin: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-pumpkin: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-pumpkin: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "bomb-pumpkin-reactor: art stays above its readable name"
+      },
+      {
+        "ok": true,
+        "label": "inclusive seasonal dates displayed"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-witch: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-witch: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-witch: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-witch: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-bats: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-bats: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-bats: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-bats: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-pumpkin: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-pumpkin: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-pumpkin: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-pumpkin: combat texture loaded"
+      },
+      {
+        "ok": true,
+        "label": "premium confirmation shown"
+      },
+      {
+        "ok": true,
+        "label": "credits: exact multi-currency purchase charge"
+      },
+      {
+        "ok": true,
+        "label": "coreTokens: exact multi-currency purchase charge"
+      },
+      {
+        "ok": true,
+        "label": "plasmaChips: exact multi-currency purchase charge"
+      },
+      {
+        "ok": true,
+        "label": "purchase equips selected signature"
+      },
+      {
+        "ok": true,
+        "label": "successful purchase reflected in store"
+      },
+      {
+        "ok": true,
+        "label": "set ownership progress updated"
+      },
+      {
+        "ok": true,
+        "label": "repeat owned purchase equips"
+      },
+      {
+        "ok": true,
+        "label": "owned equip never charges again"
+      },
+      {
+        "ok": true,
+        "label": "calendar rollover dismisses stale purchase dialog"
+      },
+      {
+        "ok": true,
+        "label": "off-season goods hidden from store"
+      },
+      {
+        "ok": true,
+        "label": "purchase service rejects stale out-of-season item"
+      },
+      {
+        "ok": true,
+        "label": "out-of-season rejection spends nothing"
+      },
+      {
+        "ok": true,
+        "label": "owned holiday signature equip allowed off-season"
+      },
+      {
+        "ok": true,
+        "label": "collection returns next October automatically"
+      },
+      {
+        "ok": true,
+        "label": "bomb-neon-bats: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "bomb-witch-signal: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-witch: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "turret-halloween-witch: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-witch: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-witch: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-bats: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "turret-halloween-bats: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-bats: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-bats: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-pumpkin: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "turret-halloween-pumpkin: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-pumpkin: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-pumpkin: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "bomb-pumpkin-reactor: purchase all five-piece sets"
+      },
+      {
+        "ok": true,
+        "label": "saved profile reloaded"
+      },
+      {
+        "ok": true,
+        "label": "bomb-neon-bats: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "bomb-witch-signal: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-witch: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "turret-halloween-witch: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-witch: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-witch: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-bats: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "turret-halloween-bats: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-bats: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-bats: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "player-halloween-pumpkin: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "turret-halloween-pumpkin: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "mine-halloween-pumpkin: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "projectile-halloween-pumpkin: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "bomb-pumpkin-reactor: ownership persisted"
+      },
+      {
+        "ok": true,
+        "label": "equipped operative loaded in actual Arena"
+      },
+      {
+        "ok": true,
+        "label": "operative retains standard collision radius"
+      },
+      {
+        "ok": true,
+        "label": "equipped projectile loaded in actual Arena"
+      },
+      {
+        "ok": true,
+        "label": "valid ability placement found"
+      },
+      {
+        "ok": true,
+        "label": "equipped Halloween turret placed"
+      },
+      {
+        "ok": true,
+        "label": "placed turret uses premium art"
+      },
+      {
+        "ok": true,
+        "label": "placed mine uses premium art"
+      },
+      {
+        "ok": true,
+        "label": "bomb-neon-bats: effect resolved"
+      },
+      {
+        "ok": true,
+        "label": "bomb-neon-bats: active during celebration"
+      },
+      {
+        "ok": true,
+        "label": "bomb-neon-bats: scene-sized bounded centerpiece"
+      },
+      {
+        "ok": true,
+        "label": "bomb-neon-bats: seal rotates"
+      },
+      {
+        "ok": true,
+        "label": "bat wings flap independently"
+      },
+      {
+        "ok": true,
+        "label": "bomb-neon-bats: release dissolves"
+      },
+      {
+        "ok": true,
+        "label": "bomb-neon-bats: automatic expiry"
+      },
+      {
+        "ok": true,
+        "label": "bomb-witch-signal: effect resolved"
+      },
+      {
+        "ok": true,
+        "label": "bomb-witch-signal: active during celebration"
+      },
+      {
+        "ok": true,
+        "label": "bomb-witch-signal: scene-sized bounded centerpiece"
+      },
+      {
+        "ok": true,
+        "label": "bomb-witch-signal: seal rotates"
+      },
+      {
+        "ok": true,
+        "label": "bomb-witch-signal: jaw cackles"
+      },
+      {
+        "ok": true,
+        "label": "bomb-witch-signal: release dissolves"
+      },
+      {
+        "ok": true,
+        "label": "bomb-witch-signal: automatic expiry"
+      },
+      {
+        "ok": true,
+        "label": "bomb-pumpkin-reactor: effect resolved"
+      },
+      {
+        "ok": true,
+        "label": "bomb-pumpkin-reactor: active during celebration"
+      },
+      {
+        "ok": true,
+        "label": "bomb-pumpkin-reactor: scene-sized bounded centerpiece"
+      },
+      {
+        "ok": true,
+        "label": "bomb-pumpkin-reactor: seal rotates"
+      },
+      {
+        "ok": true,
+        "label": "bomb-pumpkin-reactor: jaw cackles"
+      },
+      {
+        "ok": true,
+        "label": "bomb-pumpkin-reactor: release dissolves"
+      },
+      {
+        "ok": true,
+        "label": "bomb-pumpkin-reactor: automatic expiry"
+      },
+      {
+        "ok": true,
+        "label": "simultaneous effects bounded by six reusable slots"
+      },
+      {
+        "ok": true,
+        "label": "repeated celebrations reuse objects without scene growth"
+      },
+      {
+        "ok": true,
+        "label": "reduced detail keeps smaller particle budget"
+      },
+      {
+        "ok": true,
+        "label": "reset hides every pooled celebration"
+      },
+      {
+        "ok": true,
+        "label": "real site detonation resolves purchased Pumpkin effect"
+      },
+      {
+        "ok": true,
+        "label": "round handoff holds until celebration finishes"
+      }
+    ],
+    "cases": [
+      "holiday storefront, purchase, rollover and saved ownership",
+      "purchased frames and projectile reach actual Arena",
+      "authoritative site detonation and round handoff",
+      "animation phases, performance cap, reduced effects, reset"
+    ],
+    "errors": [],
+    "performance": [
+      {
+        "label": "baseline",
+        "raw": {
+          "mean": 16.664341084716856,
+          "p95": 16.899999856948853,
+          "max": 17,
+          "n": 258
+        },
+        "render": {
+          "mean": 2.1621621575594867,
+          "p95": 2.5,
+          "max": 3.6000001430511475,
+          "n": 259
+        },
+        "update": {
+          "mean": 0.004247101117285062,
+          "p95": 0,
+          "max": 0.10000014305114746,
+          "n": 259
+        },
+        "objects": 1304
+      },
+      {
+        "label": "witch-signal",
+        "raw": {
+          "mean": 16.666536964795004,
+          "p95": 16.899999856948853,
+          "max": 17,
+          "n": 257
+        },
+        "render": {
+          "mean": 2.1837209352227145,
+          "p95": 2.5,
+          "max": 2.799999952316284,
+          "n": 258
+        },
+        "update": {
+          "mean": 0.029457363971444064,
+          "p95": 0.10000014305114746,
+          "max": 0.20000004768371582,
+          "n": 258
+        },
+        "objects": 1304
+      },
+      {
+        "label": "neon-bats",
+        "raw": {
+          "mean": 16.665758754492735,
+          "p95": 16.899999856948853,
+          "max": 17,
+          "n": 257
+        },
+        "render": {
+          "mean": 2.167441869890967,
+          "p95": 2.5,
+          "max": 2.700000047683716,
+          "n": 258
+        },
+        "update": {
+          "mean": 0.03759689571321473,
+          "p95": 0.10000014305114746,
+          "max": 0.20000004768371582,
+          "n": 258
+        },
+        "objects": 1304
+      },
+      {
+        "label": "pumpkin-reactor",
+        "raw": {
+          "mean": 16.666536964795004,
+          "p95": 16.899999856948853,
+          "max": 16.90000009536743,
+          "n": 257
+        },
+        "render": {
+          "mean": 2.1224806170130885,
+          "p95": 2.3999998569488525,
+          "max": 2.6000001430511475,
+          "n": 258
+        },
+        "update": {
+          "mean": 0.02131782853326132,
+          "p95": 0.10000014305114746,
+          "max": 0.20000004768371582,
+          "n": 258
+        },
+        "objects": 1304
+      },
+      {
+        "label": "six overlapping signatures",
+        "raw": {
+          "mean": 16.667315175097276,
+          "p95": 16.899999856948853,
+          "max": 17,
+          "n": 257
+        },
+        "render": {
+          "mean": 2.2515503824219225,
+          "p95": 2.5,
+          "max": 2.700000047683716,
+          "n": 258
+        },
+        "update": {
+          "mean": 0.04922481377919515,
+          "p95": 0.10000014305114746,
+          "max": 0.20000004768371582,
+          "n": 258
+        },
+        "objects": 1304
+      }
+    ],
+    "performanceChecks": [
+      {
+        "ok": true,
+        "label": "prepared paused Arena"
+      },
+      {
+        "ok": true,
+        "label": "baseline: expires"
+      },
+      {
+        "ok": true,
+        "label": "baseline: no display-object growth after warmup"
+      },
+      {
+        "ok": true,
+        "label": "witch-signal: expires"
+      },
+      {
+        "ok": true,
+        "label": "witch-signal: no display-object growth after warmup"
+      },
+      {
+        "ok": true,
+        "label": "neon-bats: expires"
+      },
+      {
+        "ok": true,
+        "label": "neon-bats: no display-object growth after warmup"
+      },
+      {
+        "ok": true,
+        "label": "pumpkin-reactor: expires"
+      },
+      {
+        "ok": true,
+        "label": "pumpkin-reactor: no display-object growth after warmup"
+      },
+      {
+        "ok": true,
+        "label": "six overlapping signatures: expires"
+      },
+      {
+        "ok": true,
+        "label": "six overlapping signatures: no display-object growth after warmup"
+      }
+    ],
+    "performanceErrors": []
+  },
+  "unitTests": 979,
+  "productionBuild": "passed"
+}

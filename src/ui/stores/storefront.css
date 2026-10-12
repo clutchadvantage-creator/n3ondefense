@@ -255,3 +255,18 @@
 @media(max-width:1300px){.store-body{grid-template-columns:226px minmax(340px,1fr) 310px}.store-card-grid{grid-template-columns:repeat(2,minmax(150px,1fr))}.store-header{gap:12px}.store-wallet{gap:7px}}
 @media(max-width:1000px){.storefront-screen{overflow:auto;padding:12px}.store-shell{height:auto;min-height:100%}.store-mode-tabs::before{display:none}.store-header{grid-template-columns:1fr auto}.store-wallet{grid-row:2;grid-column:1/-1;justify-content:center;flex-wrap:wrap}.store-body{grid-template-columns:1fr}.store-categories{position:sticky;top:0;z-index:4;display:flex;gap:9px;overflow-x:auto;border-right:0;border-bottom:1px solid rgba(95,207,239,.2);padding:18px 12px 12px}.store-categories h2{display:none}.store-categories button{min-width:150px;margin:0}.store-grid-panel{min-height:560px;border-right:0;border-bottom:1px solid rgba(95,207,239,.2)}.store-details{min-height:640px}.store-card-grid{grid-template-columns:repeat(2,minmax(180px,1fr))}}
 @media(max-width:620px){.store-console-decor span{display:none}.store-header{grid-template-columns:1fr;padding:22px 18px 18px}.store-header-actions{grid-row:2;display:grid;grid-template-columns:1fr 1fr}.store-wallet{grid-row:3;grid-column:1;flex-wrap:wrap}.store-branding h1{font-size:1.15rem;line-height:1.3}.store-card-grid{grid-template-columns:1fr}.store-grid-panel{padding:22px 16px 16px}.store-details{padding:24px 20px 20px;min-height:680px}.detail-status{grid-template-columns:1fr}.detail-status strong{text-align:left}.store-dialog>div{grid-template-columns:1fr}.upgrade-comparison{grid-template-columns:1fr}.upgrade-comparison>b{transform:rotate(90deg);justify-self:center}}
+.store-season-banner { padding:10px 14px; border:1px solid #b475ff80; background:linear-gradient(100deg,#241039,#142533); color:#e0c4ff; font-size:13px; line-height:1.5; letter-spacing:.7px; }
+.cosmetic-visual.halloween-cosmetic-art { background:none; overflow:hidden; min-height:156px; }
+.cosmetic-visual.halloween-cosmetic-art::before,.cosmetic-visual.halloween-cosmetic-art::after { display:none; }
+.cosmetic-visual.halloween-cosmetic-art .hw-svg { position:relative; width:130px; height:130px; max-width:100%; max-height:100%; filter:drop-shadow(0 0 5px color-mix(in srgb,var(--item-color) 30%,transparent)); }
+.cosmetic-visual.halloween-cosmetic-art.large .hw-svg { width:230px; height:230px; }
+.cosmetic-visual.halloween-cosmetic-art.large { height:260px; }
+.store-card.locked:not(.selected) .cosmetic-visual.halloween-cosmetic-art { filter:none; }
+.store-card[data-halloween-set] { min-height:300px; grid-template-rows:auto minmax(156px,1fr) auto auto; background:radial-gradient(ellipse at 50% 40%,#5223573d,transparent 70%),linear-gradient(145deg,#111827,#070e19); }
+.store-card[data-halloween-set=pumpkin] { background:radial-gradient(ellipse at 50% 40%,#9147193b,transparent 70%),linear-gradient(145deg,#171722,#070e19); }
+.store-set-collection { margin-top:18px; padding-top:12px; border-top:1px solid #b475ff60; display:flex; flex-wrap:wrap; gap:7px; }
+.store-set-collection h3 { width:100%; margin:0 0 5px; font-size:13px; color:#d3aaff; }
+.store-set-collection button { padding:7px 9px; border:1px solid #775595; background:#171126; color:#ddd0f1; cursor:pointer; font:inherit; font-size:12px; }
+.store-set-collection button[aria-current=true],.store-set-collection button:focus-visible { border-color:#a2ffbb; color:#a2ffbb; outline:1px solid #a2ffbb; }
+.reduced-effects .hw-svg * { animation:none!important; }
+.store-grid-panel.has-season-banner { grid-template-rows:auto auto minmax(0,1fr); }

@@ -17,6 +17,9 @@ const LEGACY_DISPLAY_SIZE_BY_TEXTURE: Readonly<Record<string, readonly [number, 
 };
 
 const PREMIUM_DISPLAY_SIZE_BY_TEXTURE: Readonly<Record<string, readonly [number, number]>> = {
+  'projectile-premium-halloween-witch': [24, 24],
+  'projectile-premium-halloween-bats': [24, 24],
+  'projectile-premium-halloween-pumpkin': [24, 24],
   'projectile-premium-medical-needle': [22, 12],
   'projectile-premium-hardware-bolt': [20, 12],
   'projectile-premium-alien-goo': [17, 14],

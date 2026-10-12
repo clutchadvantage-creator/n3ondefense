@@ -79,8 +79,9 @@ test('each equipped premium bomb signature owns its matching recorded audio cue'
 test('signature renderer is bounded, batched, data-driven, and has complete lifecycle cleanup', () => {
   assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS['death-signal'].lifetimeMs, 2_700);
   assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS['neon-bloom'].lifetimeMs, 2_750);
-  assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS['neon-bats'].lifetimeMs, 2_850);
-  assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS['witch-signal'].lifetimeMs, 2_900);
+  assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS['neon-bats'].lifetimeMs, 4_200);
+  assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS['witch-signal'].lifetimeMs, 4_200);
+  assert.equal(BOMB_EXPLOSION_COSMETIC_DEFINITIONS['pumpkin-reactor'].lifetimeMs, 4_200);
   assert.match(runtime, /const MAX_ACTIVE_EFFECTS = 6/);
   assert.match(runtime, /this\.renderers = \{[\s\S]*?'death-signal'[\s\S]*?'neon-bloom'[\s\S]*?'neon-bats'[\s\S]*?'witch-signal'/);
   assert.match(runtime, /crowded \|\| !this\.particlesEnabled/);

@@ -199,6 +199,10 @@ export class SaveSystem {
     return save.cosmetics.equipped[category] ?? null;
   }
 
+  static getLoadedProfileId(): string | null {
+    return PlayerProfileStore.getLoadedProfileId();
+  }
+
   static getActiveProfileSummary() {
     return PlayerProfileStore.getActiveProfileSummary();
   }

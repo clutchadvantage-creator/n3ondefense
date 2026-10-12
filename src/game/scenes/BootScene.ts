@@ -1,3 +1,4 @@
+import { createHalloweenSvg, halloweenSvgDataUri, halloweenTexture, HALLOWEEN_PARTS } from '../cosmetics/HalloweenCosmeticArt.ts';
 import Phaser from 'phaser';
 import splashImageUrl from '../../assets/splashimage.png';
 import { COLORS } from '../config/constants';
@@ -28,6 +29,14 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    for (const set of ['witch', 'bats', 'pumpkin'] as const) {
+      for (const part of HALLOWEEN_PARTS) {
+        const resolution = part === 'spark' ? 256 : 512;
+        this.load.svg(halloweenTexture(set, part), halloweenSvgDataUri(createHalloweenSvg(set, part, { part: true })), { width: resolution, height: resolution });
+      }
+      this.load.svg(`turret-halloween-${set}`, halloweenSvgDataUri(createHalloweenSvg(set, 'turret')), { width: 128, height: 128 });
+      this.load.svg(`player-premium-halloween-${set}`, halloweenSvgDataUri(createHalloweenSvg(set, 'operative', { neutral: true })), { width: 54, height: 54 });
+    }
     this.load.svg(TUG_WHISTLE_TEXTURE, `data:image/svg+xml;base64,${btoa(createTugLifeWhistleHeroSvg())}`, { width: 480, height: 640 });
     this.load.svg(TUG_STEAM_TEXTURE, `data:image/svg+xml;base64,${btoa(createTugLifeSteamSvg())}`, { width: 160, height: 130 });
     // Prepare the next screen while the intro plays so its handoff needs no fetch.
@@ -45,7 +54,7 @@ export class BootScene extends Phaser.Scene {
       if (frame.category !== 'playerShape') continue;
       if (frame.nativeTextureKey) {
         const source = createPremiumOperativeFrameSvgDataUri(frame.visualShape, frame.color, frame.accentColor ?? frame.color);
-        if (source) this.load.svg(frame.nativeTextureKey, source, { width: 62, height: 50 });
+        if (source) this.load.svg(frame.nativeTextureKey, source, frame.halloweenSet ? { width: 54, height: 54 } : { width: 62, height: 50 });
       }
       const baseSource = createBaseOperativeFrameSvgDataUri(frame.visualShape);
       if (baseSource && frame.textureKey) this.load.svg(frame.textureKey, baseSource, { width: 58, height: 56 });
@@ -55,7 +64,7 @@ export class BootScene extends Phaser.Scene {
       this.load.svg(
         frame.textureKey,
         createMineFrameSvgDataUri(frame.mineFrameEffect ?? 'default', frame.color, frame.accentColor ?? frame.color),
-        { width: 72, height: 62 }
+        frame.halloweenSet ? { width: 72, height: 72 } : { width: 72, height: 62 }
       );
     }
     for (const projectile of COSMETICS) {
@@ -70,7 +79,7 @@ export class BootScene extends Phaser.Scene {
           projectile.color,
           projectile.accentColor ?? projectile.color
         ),
-        { width: 120, height: 64 }
+        projectile.halloweenSet ? { width: 120, height: 120 } : { width: 120, height: 64 }
       );
     }
   }

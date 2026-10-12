@@ -1,4 +1,8 @@
 import Phaser from 'phaser';
+import { HalloweenBombsiteVisual } from './HalloweenBombsiteVisual.ts';
+import { halloweenSetFromEffect } from './HalloweenCosmeticArt.ts';
+import { HALLOWEEN_TIMING } from './HalloweenCelebrationTiming.ts';
+import { SaveSystem } from '../systems/SaveSystem';
 import { TugLifeWhistleVisual } from './TugLifeWhistleVisual.ts';
 import { TUG_WHISTLE_LIFETIME_MS } from './TugLifeWhistleArt.ts';
 import { getCosmeticById, getCosmeticDisplayColor, getProjectileDisplayColor, resolveOperativeFrameAppearance } from '../../data/cosmetics.ts';
@@ -89,6 +93,16 @@ export const createCosmeticPreview = (
   const addBombSignaturePreview = (): boolean => {
     if (!item.bombExplosionEffect) return false;
     const size = Math.min(maxWidth, maxHeight);
+    const halloween = halloweenSetFromEffect(item.bombExplosionEffect);
+    if (halloween) {
+      const visual = new HalloweenBombsiteVisual(scene);
+      container.add(visual.root);
+      const reduced = !SaveSystem.get().settings.particles || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      previewUpdater = time => visual.update(halloween, 0, size * .18, size * .38,
+        options.animate === false || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1_400 : time % HALLOWEEN_TIMING.end, reduced);
+      previewUpdater(scene.time.now);
+      return true;
+    }
     if (item.bombExplosionEffect === 'tug-life') {
       const visual = new TugLifeWhistleVisual(scene);
       container.add(visual.root);
@@ -153,36 +167,6 @@ export const createCosmeticPreview = (
       heroLayer.add(skull);
       animatePreview({ targets: heroLayer, alpha: { from: 0, to: 1 }, scaleX: { from: 0.34, to: 1.06 }, scaleY: { from: 0.34, to: 1.06 }, y: { from: size * 0.12, to: -size * 0.08 }, duration: 620, hold: 1_240, yoyo: true, repeat: -1, repeatDelay: 120, ease: 'Back.easeOut' });
       animatePreview({ targets: rotatingLayer, angle: 360, duration: 4_600, repeat: -1 });
-    } else if (item.bombExplosionEffect === 'neon-bats') {
-      const bats = scene.add.graphics();
-      for (let index = 0; index < 9; index += 1) {
-        const angle = index * 2.399963229728653;
-        const distance = size * (0.1 + index % 4 * 0.075);
-        const x = Math.cos(angle) * distance;
-        const y = Math.sin(angle) * distance;
-        const unit = size * (index === 0 ? 0.11 : 0.055);
-        const color = index % 3 === 0 ? 0x65efff : index % 2 ? 0xff55ce : 0xb35cff;
-        bats.fillStyle(color, 0.68);
-        bats.fillTriangle(x, y, x - unit * 1.8, y - unit, x - unit * 0.55, y + unit * 0.7);
-        bats.fillTriangle(x, y, x + unit * 1.8, y - unit, x + unit * 0.55, y + unit * 0.7);
-        bats.fillStyle(0x090311, 0.9).fillEllipse(x, y, unit * 0.48, unit * 1.5);
-      }
-      heroLayer.add(bats);
-      animatePreview({ targets: heroLayer, alpha: { from: 0.25, to: 1 }, scaleX: { from: 0.45, to: 1.15 }, scaleY: { from: 0.7, to: 1.08 }, angle: { from: -18, to: 22 }, duration: 1_150, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    } else if (item.bombExplosionEffect === 'witch-signal') {
-      const witch = scene.add.graphics();
-      const faceWidth = size * 0.45;
-      const faceHeight = size * 0.48;
-      witch.fillStyle(0x75ff73, 0.2).fillEllipse(0, size * 0.08, faceWidth, faceHeight);
-      witch.lineStyle(Math.max(2, size * 0.018), 0x75ff73, 0.96).strokeEllipse(0, size * 0.08, faceWidth, faceHeight);
-      witch.fillStyle(0xc65cff, 0.42).fillTriangle(-faceWidth * 0.5, -faceHeight * 0.22, faceWidth * 0.42, -faceHeight * 0.22, 0, -size * 0.47);
-      witch.lineStyle(Math.max(3, size * 0.024), 0xff5fcf, 0.94).lineBetween(-faceWidth * 0.72, -faceHeight * 0.19, faceWidth * 0.72, -faceHeight * 0.19);
-      witch.fillStyle(0x020806, 0.9).fillCircle(-faceWidth * 0.18, size * 0.03, size * 0.027).fillCircle(faceWidth * 0.18, size * 0.03, size * 0.027);
-      witch.fillStyle(0xfff47a, 0.9).fillCircle(-faceWidth * 0.18, size * 0.03, size * 0.009).fillCircle(faceWidth * 0.18, size * 0.03, size * 0.009);
-      witch.lineStyle(Math.max(1.4, size * 0.012), 0xfff47a, 0.9);
-      witch.beginPath(); witch.arc(0, size * 0.08, faceWidth * 0.2, 0.12, Math.PI - 0.12, false); witch.strokePath();
-      heroLayer.add(witch);
-      animatePreview({ targets: heroLayer, y: { from: size * 0.08, to: -size * 0.08 }, angle: { from: -3, to: 3 }, alpha: { from: 0.42, to: 1 }, duration: 1_250, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     } else {
       const blooms = scene.add.graphics();
       const flowerColors = [0xff63d7, 0x64efff, 0xffe76a, 0x9f76ff, 0x76ff8f, 0xffa54f];

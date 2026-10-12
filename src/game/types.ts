@@ -280,9 +280,11 @@ export type CosmeticVisualShape =
   | 'fly'
   | 'joint'
   | 'tacticalMissile'
-  | 'teardrop';
+  | 'teardrop'
+  | 'witchFrame' | 'batFrame' | 'pumpkinFrame'
+  | 'witchBolt' | 'batShard' | 'pumpkinSeed';
 
-export type BombExplosionCosmeticEffectId = 'death-signal' | 'neon-bloom' | 'neon-bats' | 'witch-signal' | 'tug-life';
+export type BombExplosionCosmeticEffectId = 'death-signal' | 'neon-bloom' | 'neon-bats' | 'witch-signal' | 'tug-life' | 'pumpkin-reactor';
 export type DashTrailCosmeticEffectId = 'ion' | 'fire-smoke' | 'grass-clippings' | 'bubbles' | 'plasma' | 'jet-plume' | 'stars';
 export type TurretSkinCosmeticEffectId =
   | 'void-reactor'
@@ -293,7 +295,8 @@ export type TurretSkinCosmeticEffectId =
   | 'arctic-zero'
   | 'mini-orbital'
   | 'bomb-buddy'
-  | 'harbor-beacon';
+  | 'harbor-beacon'
+  | 'halloween-witch' | 'halloween-bats' | 'halloween-pumpkin';
 export type MineFrameCosmeticEffectId =
   | 'road-hazard'
   | 'lifeline'
@@ -303,10 +306,14 @@ export type MineFrameCosmeticEffectId =
   | 'pond-trap'
   | 'breakfast-blast'
   | 'roll-station'
-  | 'watcher';
+  | 'watcher'
+  | 'halloween-witch' | 'halloween-bats' | 'halloween-pumpkin';
 
 export interface CosmeticOption {
   id: string;
+  /** Store availability only; never restricts an owned item's use. */
+  holiday?: import('./cosmetics/SeasonalStore.ts').HolidayId;
+  halloweenSet?: 'witch' | 'bats' | 'pumpkin';
   category: 'playerColor' | 'playerShape' | 'projectileColor' | 'projectileShape' | 'trailColor' | 'bombColor' | 'turretSkin' | 'mineFrame' | 'fenceStyle' | 'dashTrail';
   label: string;
   currency: 'credits' | 'coreTokens' | 'plasmaChips';

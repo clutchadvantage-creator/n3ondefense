@@ -40,7 +40,8 @@ test('projectile shape cosmetics are unique, renderable, and migrate into existi
   const shapes = COSMETICS.filter((cosmetic) => cosmetic.category === 'projectileShape');
   assert.deepEqual(shapes.map((cosmetic) => cosmetic.visualShape), [
     'pulse', 'missile', 'lightning', 'orb', 'sword', 'bubbles', 'balloons', 'carrot',
-    'medicalNeedle', 'hardwareBolt', 'alienGoo', 'cerealLoop', 'fly', 'joint', 'tacticalMissile', 'teardrop'
+    'medicalNeedle', 'hardwareBolt', 'alienGoo', 'cerealLoop', 'fly', 'joint', 'tacticalMissile', 'teardrop',
+    'witchBolt', 'batShard', 'pumpkinSeed'
   ]);
   for (const cosmetic of shapes) assert.ok(getCosmeticTextureKey(cosmetic.id, '').startsWith('projectile-'));
 

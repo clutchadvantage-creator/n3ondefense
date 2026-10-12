@@ -1,3 +1,4 @@
+import { halloweenSetFromEffect } from './HalloweenCosmeticArt.ts';
 import Phaser from 'phaser';
 import type { TurretSkinCosmeticEffectId } from '../types.ts';
 
@@ -21,6 +22,26 @@ export const createPremiumTurretVisual = (
   accentColor: number,
   scale = 1
 ): PremiumTurretVisualHandle => {
+  const halloween = halloweenSetFromEffect(effect);
+  if (halloween) {
+    const root = scene.add.container(0, 0).setScale(scale);
+    const head = scene.add.container(0, 0);
+    const image = scene.add.image(0, -2, `turret-halloween-${halloween}`).setDisplaySize(58, 58);
+    const core = scene.add.circle(0, -23, 2.4, accentColor, .65).setBlendMode(Phaser.BlendModes.ADD);
+    const flash = scene.add.circle(0, -26, 5, accentColor, 0).setBlendMode(Phaser.BlendModes.ADD);
+    head.add([image, core, flash]); root.add(head);
+    let firedAt = -10_000;
+    return { root, head,
+      setColor: color => { core.setFillStyle(color); },
+      markFired: time => { firedAt = time; },
+      update: time => {
+        const recoil = Math.max(0, 1 - (time - firedAt) / 180);
+        image.y = -2 + recoil * 2;
+        core.setAlpha(.45 + Math.sin(time * .005) * .2);
+        flash.setAlpha(recoil * .8).setScale(.6 + recoil * .9);
+      }
+    };
+  }
   const root = scene.add.container(0, 0).setScale(scale);
   const head = scene.add.container(0, 0);
   const shadow = scene.add.ellipse(3, 10, 35, 15, 0x000000, 0.5);

@@ -1,5 +1,6 @@
 import type { CosmeticOption } from '../game/types.ts';
 import type { CosmeticPriceTier } from '../game/economy/types.ts';
+import { HALLOWEEN_COSMETICS } from './halloweenCosmetics.ts';
 
 export const DEFAULT_EQUIPPED_COSMETICS: Partial<Record<CosmeticOption['category'], string>> = {
   playerColor: 'player-cyan',
@@ -187,6 +188,7 @@ export const COSMETICS: CosmeticOption[] = [
   },
   {
     id: 'bomb-neon-bats',
+    holiday: 'halloween', halloweenSet: 'bats',
     category: 'bombColor',
     label: 'Nightwing Swarm',
     currency: 'credits',
@@ -199,7 +201,7 @@ export const COSMETICS: CosmeticOption[] = [
     previewRenderer: 'bomb-neon-bats',
     bombExplosionEffect: 'neon-bats',
     priceTier: 'prestige',
-    description: 'The bombsite fractures into a neon night swarm. Cyber-bats spiral outward and flap through the blast haze before dissolving.'
+    description: 'NIGHTSWARM COLLECTION. A colossal cyber-bat tears through a rotating sonar seal, unleashes a wing-beating swarm, then scatters into neon starlight.'
   },
   {
     id: 'bomb-tug-life', category: 'bombColor', label: 'Tug Life // Full Steam',
@@ -210,6 +212,7 @@ export const COSMETICS: CosmeticOption[] = [
   },
   {
     id: 'bomb-witch-signal',
+    holiday: 'halloween', halloweenSet: 'witch',
     category: 'bombColor',
     label: 'Hexcaster Signal',
     currency: 'plasmaChips',
@@ -222,7 +225,7 @@ export const COSMETICS: CosmeticOption[] = [
     previewRenderer: 'bomb-witch-signal',
     bombExplosionEffect: 'witch-signal',
     priceTier: 'prestige',
-    description: 'A grinning neon witch in a towering hat erupts over the bombsite, cackling in violet static before burning out.'
+    description: 'HEXCRAFT COLLECTION. A towering cyber-witch rises from a spell seal, cackles and casts with both hands, then releases a vortex of spectral sparks.'
   },
 
   { id: 'turret-default', category: 'turretSkin', label: 'Sentinel Cyan', currency: 'credits', cost: 0, color: 0x4ffcff },
@@ -270,7 +273,8 @@ export const COSMETICS: CosmeticOption[] = [
   { id: 'dash-bubbles', category: 'dashTrail', label: 'Bubble Drive', currency: 'credits', cost: 7_500, additionalCosts: { coreTokens: 160 }, color: 0x5feaff, accentColor: 0xff81df, priceTier: 'prestige', dashTrailEffect: 'bubbles', description: 'Leaves buoyant, iridescent bubbles tumbling behind every dash.' },
   { id: 'dash-plasma', category: 'dashTrail', label: 'Plasma Rift', currency: 'coreTokens', cost: 240, additionalCosts: { credits: 11_000, plasmaChips: 55 }, color: 0xb75cff, accentColor: 0x64f5ff, priceTier: 'prestige', dashTrailEffect: 'plasma', description: 'Tears open a vivid plasma wake threaded with cyan electrical arcs.' },
   { id: 'dash-jet-plume', category: 'dashTrail', label: 'Afterburner Plume', currency: 'plasmaChips', cost: 95, additionalCosts: { credits: 15_000, coreTokens: 300 }, color: 0x55eaff, accentColor: 0xffb44f, priceTier: 'prestige', dashTrailEffect: 'jet-plume', description: 'A focused jet-engine afterburner with shock diamonds and a dense exhaust plume.' },
-  { id: 'dash-stars', category: 'dashTrail', label: 'Starfall Wake', currency: 'coreTokens', cost: 320, additionalCosts: { credits: 16_000 }, color: 0xffed68, accentColor: 0xff71d6, priceTier: 'prestige', dashTrailEffect: 'stars', description: 'Fires spinning neon stars outward in a bright arcade constellation.' }
+  { id: 'dash-stars', category: 'dashTrail', label: 'Starfall Wake', currency: 'coreTokens', cost: 320, additionalCosts: { credits: 16_000 }, color: 0xffed68, accentColor: 0xff71d6, priceTier: 'prestige', dashTrailEffect: 'stars', description: 'Fires spinning neon stars outward in a bright arcade constellation.' },
+  ...HALLOWEEN_COSMETICS
 ];
 
 const COSMETICS_BY_ID = new Map(COSMETICS.map((cosmetic) => [cosmetic.id, cosmetic]));

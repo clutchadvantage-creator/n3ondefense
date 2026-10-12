@@ -1,3 +1,4 @@
+import { createHalloweenSvgElement, createHalloweenSvg, halloweenSetFromShape, halloweenSvgDataUri } from '../../game/cosmetics/HalloweenCosmeticArt.ts';
 import type { CosmeticVisualShape } from '../../game/types.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -81,6 +82,8 @@ const PREMIUM_FRAME_MARKUP: Partial<Record<CosmeticVisualShape, string>> = {
 };
 
 export const createPremiumOperativeFrameSvg = (shape: CosmeticVisualShape | undefined): SVGSVGElement | null => {
+  const halloween = halloweenSetFromShape(shape);
+  if (halloween) return createHalloweenSvgElement(halloween, 'operative');
   if (!shape) return null;
   const markup = PREMIUM_FRAME_MARKUP[shape];
   if (!markup) return null;
@@ -110,6 +113,8 @@ export const createPremiumOperativeFrameSvgDataUri = (
   primaryColor: number,
   accentColor: number
 ): string | null => {
+  const halloween = halloweenSetFromShape(shape);
+  if (halloween) return halloweenSvgDataUri(createHalloweenSvg(halloween, 'operative'));
   if (!shape) return null;
   const markup = PREMIUM_FRAME_MARKUP[shape];
   if (!markup) return null;

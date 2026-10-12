@@ -47,7 +47,7 @@ export class TutorialDirector {
   };
 
   constructor(private readonly host: TutorialHost) {
-    this.profileId = SaveSystem.getActiveProfileSummary()?.id ?? null;
+    this.profileId = SaveSystem.getLoadedProfileId();
     SaveSystem.recordTutorialEvent('screen.entered', host.scene);
     this.overlay = new TutorialOverlay(() => this.skip(), host.scene === 'arena');
     this.unsubscribe = TutorialEventBus.subscribe((event) => this.onEvent(event));
@@ -136,7 +136,7 @@ export class TutorialDirector {
   }
 
   private ownsProfile(): boolean {
-    return !this.destroyed && !!this.profileId && this.profileId === SaveSystem.getActiveProfileSummary()?.id;
+    return !this.destroyed && !!this.profileId && this.profileId === SaveSystem.getLoadedProfileId();
   }
 
   private canPresent(): boolean {

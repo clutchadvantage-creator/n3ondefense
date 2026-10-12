@@ -1,10 +1,11 @@
+import { createHalloweenSvg, halloweenSetFromEffect } from './HalloweenCosmeticArt.ts';
 import type { MineFrameCosmeticEffectId } from '../types.ts';
 
 export type MineFrameArtId = 'default' | MineFrameCosmeticEffectId;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-const MINE_FRAME_MARKUP: Record<MineFrameArtId, string> = {
+const MINE_FRAME_MARKUP: Partial<Record<MineFrameArtId, string>> = {
   default: `
     <ellipse class="mf-shadow" cx="100" cy="142" rx="56" ry="16"/>
     <g class="mf-spikes"><path d="m100 18 9 30H91zM100 152l9-30H91zM24 85l30-9v18zm152 0-30-9v18zM46 31l28 15-13 13zm108 0-28 15 13 13zM46 139l28-15-13-13zm108 0-28-15 13-13z"/></g>
@@ -90,6 +91,8 @@ export const createMineFrameSvgMarkup = (
   primaryColor: number,
   accentColor: number
 ): string => {
+  const halloween = halloweenSetFromEffect(artId);
+  if (halloween) return createHalloweenSvg(halloween, 'mine', { animate: true });
   const primary = colorHex(primaryColor);
   const accent = colorHex(accentColor);
   return `<svg xmlns="${SVG_NS}" viewBox="0 0 200 170" role="img" aria-label="Mine frame preview" class="premium-mine-frame-svg" data-mine-frame="${artId}">

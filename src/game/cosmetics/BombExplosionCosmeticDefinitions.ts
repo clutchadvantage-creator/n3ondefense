@@ -1,10 +1,11 @@
 import type { BombExplosionCosmeticEffectId } from '../types.ts';
 import type { AudioSfxName } from '../config/audio.ts';
 import { TUG_WHISTLE_BURST_MS, TUG_WHISTLE_LIFETIME_MS } from './TugLifeWhistleArt.ts';
+import { HALLOWEEN_TIMING } from './HalloweenCelebrationTiming.ts';
 
 export type BombExplosionCosmeticSound = Extract<
   AudioSfxName,
-  'bombsiteSkull' | 'bombsiteFlower' | 'bombsiteBats' | 'bombsiteWitch' | 'bombsiteTugLife'
+  'bombsiteSkull' | 'bombsiteFlower' | 'bombsiteBats' | 'bombsiteWitch' | 'bombsiteTugLife' | 'bomb'
 >;
 
 export interface BombExplosionCosmeticDefinition {
@@ -18,6 +19,7 @@ export const BOMB_EXPLOSION_COSMETIC_DEFINITIONS: Readonly<Record<BombExplosionC
   'tug-life': { lifetimeMs: TUG_WHISTLE_LIFETIME_MS, heroScale: 1, sound: 'bombsiteTugLife', soundDelayMs: TUG_WHISTLE_BURST_MS },
   'death-signal': { lifetimeMs: 2_700, heroScale: 1, sound: 'bombsiteSkull' },
   'neon-bloom': { lifetimeMs: 2_750, heroScale: 1, sound: 'bombsiteFlower' },
-  'neon-bats': { lifetimeMs: 2_850, heroScale: 1.04, sound: 'bombsiteBats' },
-  'witch-signal': { lifetimeMs: 2_900, heroScale: 1.06, sound: 'bombsiteWitch' }
+  'neon-bats': { lifetimeMs: HALLOWEEN_TIMING.end, heroScale: 1.1, sound: 'bombsiteBats' },
+  'witch-signal': { lifetimeMs: HALLOWEEN_TIMING.end, heroScale: 1.1, sound: 'bombsiteWitch' },
+  'pumpkin-reactor': { lifetimeMs: HALLOWEEN_TIMING.end, heroScale: 1.1, sound: 'bomb', soundDelayMs: HALLOWEEN_TIMING.releaseAt }
 };

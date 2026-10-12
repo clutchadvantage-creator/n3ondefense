@@ -1,13 +1,14 @@
+import { createHalloweenSvg, halloweenSetFromShape } from './HalloweenCosmeticArt.ts';
 import type { CosmeticVisualShape } from '../types.ts';
 
 export type PremiumProjectileShape = Extract<
   CosmeticVisualShape,
-  'medicalNeedle' | 'hardwareBolt' | 'alienGoo' | 'cerealLoop' | 'fly' | 'joint' | 'tacticalMissile' | 'teardrop'
+  'medicalNeedle' | 'hardwareBolt' | 'alienGoo' | 'cerealLoop' | 'fly' | 'joint' | 'tacticalMissile' | 'teardrop' | 'witchBolt' | 'batShard' | 'pumpkinSeed'
 >;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-const PROJECTILE_MARKUP: Record<PremiumProjectileShape, string> = {
+const PROJECTILE_MARKUP: Partial<Record<PremiumProjectileShape, string>> = {
   medicalNeedle: `
     <path class="pp-shadow" d="M11 42h69l20 7H17z"/><path class="pp-metal-dark" d="M7 24h15v20H7l5-5V29z"/>
     <path class="pp-metal" d="M19 20h8v28h-8zM3 16h7v35H3z"/><path class="pp-shell" d="M26 19h55l13 13-13 14H26z"/>
@@ -59,13 +60,15 @@ const PROJECTILE_MARKUP: Record<PremiumProjectileShape, string> = {
 const colorHex = (color: number): string => `#${Math.max(0, color).toString(16).padStart(6, '0').slice(-6)}`;
 
 export const isPremiumProjectileShape = (shape: CosmeticVisualShape | undefined): shape is PremiumProjectileShape =>
-  !!shape && Object.prototype.hasOwnProperty.call(PROJECTILE_MARKUP, shape);
+  !!shape && (Object.prototype.hasOwnProperty.call(PROJECTILE_MARKUP, shape) || ['witchBolt', 'batShard', 'pumpkinSeed'].includes(shape));
 
 export const createPremiumProjectileShapeSvgMarkup = (
   shape: PremiumProjectileShape,
   primaryColor: number,
   accentColor: number
 ): string => {
+  const halloween = halloweenSetFromShape(shape);
+  if (halloween) return createHalloweenSvg(halloween, 'projectile', { animate: true });
   const primary = colorHex(primaryColor);
   const accent = colorHex(accentColor);
   return `<svg xmlns="${SVG_NS}" viewBox="0 0 120 64" role="img" aria-label="Premium projectile shape preview" class="premium-projectile-shape-svg" data-projectile-shape="${shape}">

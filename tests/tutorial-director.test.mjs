@@ -14,7 +14,9 @@ function fixture(scene='arena'){
   let save=createDefaultLocalSave('director-a','A'),writes=0,id=0,present=true;
   const timers=new Map(),keys=new Set(),modes=[];
   const SaveSystem={
-    getActiveProfileSummary:()=>({id:save.profile.id}),get:()=>save,getTutorialProgress:()=>save.tutorials,
+    getLoadedProfileId:()=>save?.profile.id ?? null,
+    getActiveProfileSummary:()=>{throw Error('Gameplay must not read the persisted profile index');},
+    get:()=>save,getTutorialProgress:()=>save.tutorials,
     recordTutorialEvent:(type,payload)=>{if(progress.recordTutorialEvent(save.tutorials,type,payload))writes++;},
     updateTutorialProgress:fn=>{fn(save.tutorials);writes++;}
   };
@@ -39,7 +41,7 @@ function fixture(scene='arena'){
   }});
   const make=()=>new exports.TutorialDirector({scene,resolveTarget:()=>null,setMode:m=>modes.push(m),canPresent:()=>present,isEventActionAvailable:()=>false});
   return {make,emit:TutorialEventBus.emit.bind(TutorialEventBus),get save(){return save;},get writes(){return writes;},
-    reload(){save=normalizeLocalSave(JSON.parse(JSON.stringify(save)));},switchProfile(){save=createDefaultLocalSave('director-b','B');},
+    reload(){save=normalizeLocalSave(JSON.parse(JSON.stringify(save)));},switchProfile(){save=createDefaultLocalSave('director-b','B');},clearProfile(){save=null;},
     tick(){const pending=[...timers.values()];timers.clear();for(const fn of pending)fn();},
     block(){present=false;},keys,modes,timers};
 }
@@ -98,6 +100,15 @@ test('repeated action events do not create duplicate writes or repeat completed 
   const f=fixture(),d=f.make();d.startEligible();f.emit('combat.weaponFired');const writes=f.writes;
   for(let i=0;i<30;i++)f.emit('combat.weaponFired');
   assert.equal(f.writes,writes);assert.deepEqual(d.overlay.shows,['welcome']);d.destroy();
+});
+
+test('combat event bursts use the loaded identity and stop safely when the profile is cleared',()=>{
+  const f=fixture(),d=f.make();d.startEligible();
+  f.emit('combat.weaponFired');f.emit('combat.enemyDamaged');const writes=f.writes;
+  for(let i=0;i<600;i++){f.emit('combat.weaponFired');f.emit('combat.enemyDamaged');}
+  assert.equal(f.writes,writes);
+  f.clearProfile();f.emit('combat.weaponFired');f.tick();
+  assert.equal(f.writes,writes);assert.equal(d.overlay.hidden,true);d.destroy();
 });
 
 test('a pending action completed after returning unlocks the next eligible lesson immediately',()=>{
