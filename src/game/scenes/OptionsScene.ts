@@ -160,6 +160,9 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   create(data?: OptionsSceneData): void {
+    // Anomaly return promotes the retained Arena. Launching a scene does not
+    // change its display order, so Options must reclaim the foreground.
+    this.scene.bringToTop();
     this.returnScene = data?.returnScene ?? SceneKeys.MainMenu;
     this.resumeGameplayOnEsc = data?.resumeGameplay === true;
     this.resumePausedSceneOnEsc = data?.resumePausedScene === true;
