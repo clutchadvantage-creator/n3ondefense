@@ -8,6 +8,9 @@ import { ENEMY_ROBOT_FRAMES } from '../enemies/EnemyRobotFrames.ts';
 import type { EnemyType } from '../types';
 import { createPremiumOperativeFrameTextures } from '../cosmetics/PremiumOperativeFrameTextures.ts';
 import { COSMETICS } from '../../data/cosmetics.ts';
+import { createDynamicFloorSvg, FLOOR_ART_PARTS } from '../arena/DynamicFloorArt.ts';
+import { createLegacyBombSvg, legacyBombTexture, LEGACY_BOMB_THEMES, LEGACY_BOMB_PARTS } from '../cosmetics/LegacyBombArt.ts';
+import { createFencePylonSvg, fenceTexture, resolveFenceAppearance } from '../cosmetics/FenceCosmetics.ts';
 import { createPremiumOperativeFrameSvgDataUri } from '../../ui/stores/PremiumOperativeFrameSvg.ts';
 import { createBaseOperativeFrameSvgDataUri } from '../../ui/stores/BaseOperativeFrameSvg.ts';
 import { createDetailedEnemyRobotTextures } from '../enemies/EnemyArtTextures.ts';
@@ -29,6 +32,13 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    for(const part of FLOOR_ART_PARTS)this.load.svg(`floor-${part}`,halloweenSvgDataUri(createDynamicFloorSvg(part)),{width:224,height:192});
+    for (const theme of LEGACY_BOMB_THEMES) for (const part of LEGACY_BOMB_PARTS) {
+      this.load.svg(legacyBombTexture(theme,part),halloweenSvgDataUri(createLegacyBombSvg(theme,part)),{width:part==='hero'?512:256,height:part==='hero'?512:256});
+    }
+    for (const item of COSMETICS) if (item.category === 'fenceStyle') {
+      this.load.svg(fenceTexture(item.id), halloweenSvgDataUri(createFencePylonSvg(resolveFenceAppearance(item))), { width: 96, height: 160 });
+    }
     for (const set of ['witch', 'bats', 'pumpkin'] as const) {
       for (const part of HALLOWEEN_PARTS) {
         const resolution = part === 'spark' ? 256 : 512;

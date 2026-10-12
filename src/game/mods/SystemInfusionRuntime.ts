@@ -25,12 +25,15 @@ export interface InfusionPorts {
   validLanding(point: InfusionPoint): boolean;
   validMine(point: InfusionPoint, mine: InfusionMine): boolean;
   clearSegment(a: InfusionPoint, b: InfusionPoint): boolean;
+  validFenceSegment?(a: InfusionPoint, b: InfusionPoint): boolean;
   teleport(point: InfusionPoint): void;
   railMove?(point: InfusionPoint): void;
   railState?(active: boolean): void;
   moveMine(mine: InfusionMine, point: InfusionPoint): void;
   armMine(mine: InfusionMine): void;
   createLink(a: InfusionPoint, b: InfusionPoint, first: InfusionFence, second: InfusionFence): InfusionFence;
+  /** Gameplay retirement only; reset/shutdown must not create new effects. */
+  linkRetired?(fence: InfusionFence): void;
   ascend(turrets: readonly InfusionTurret[], point: InfusionPoint, until: number): boolean;
   boostActive(now: number): boolean;
   drainBoost(amount: number): boolean;
@@ -186,7 +189,7 @@ export class SystemInfusionRuntime {
       if(this.links.length>=T.grid.maxLinks)break;
       let pair:[FenceNode,FenceNode]|null=null,best:number=T.grid.range;
       for(const a of this.nodes.slice(i*2,i*2+2))for(const b of this.nodes.slice(j*2,j*2+2)){
-        const d=distance(a,b);if(d>8&&d<best&&this.ports.clearSegment(a,b)){pair=[a,b];best=d;}
+        const d=distance(a,b);if(d>8&&d<best&&this.ports.clearSegment(a,b)&&(this.ports.validFenceSegment?.(a,b)??true)){pair=[a,b];best=d;}
       }
       if(!pair)continue;
       const [a,b]=pair, old=oldLinks.find(link=>link.a===a&&link.b===b);
@@ -203,7 +206,9 @@ export class SystemInfusionRuntime {
     for(let i=0;i<this.nodes.length;i++)for(let j=i+1;j<this.nodes.length;j++)if(distance(this.nodes[i],this.nodes[j])<=8){
       this.adjacency.get(this.nodes[i])!.push(this.nodes[j]);this.adjacency.get(this.nodes[j])!.push(this.nodes[i]);
     }
-    for(const link of oldLinks)if(!this.links.some(next=>next.fence===link.fence)&&this.live(link.fence))link.fence.destroy();
+    for(const link of oldLinks)if(!this.links.some(next=>next.fence===link.fence)&&this.live(link.fence)){
+      this.ports.linkRetired?.(link.fence);link.fence.destroy();
+    }
     this.combatFences=[...this.sources,...this.links.map(link=>link.fence)];
   }
   private reachable(start:FenceNode):Map<FenceNode,FenceNode|null> {
@@ -213,7 +218,7 @@ export class SystemInfusionRuntime {
   }
   private rail(node:FenceNode,now:number):boolean {
     if(!this.ports.has('fence-rail')||this.railActive||!this.ready('fence-rail',now)||!this.nodes.includes(node)
-      ||distance(this.ports.player,node)>T.rail.entryRange||!this.ports.clearSegment(this.ports.player,node))return false;
+      ||distance(this.ports.player,node)>T.rail.entryRange||!this.ports.clearSegment(this.ports.player,node)||!(this.ports.validFenceSegment?.(this.ports.player,node)??true))return false;
     const parent=this.reachable(node);
     // Stable breadth-first connection order: prefer the furthest terminal;
     // a closed loop ends at the last reachable node without repeating edges.
@@ -224,7 +229,7 @@ export class SystemInfusionRuntime {
     const landing=this.safeBeside(end);if(!landing||!this.ports.clearSegment(end,landing))return false;
     const steps:RailStep[]=[];
     for(let i=1;i<path.length;i++){
-      const a=path[i-1],b=path[i];if(!this.ports.clearSegment(a,b))return false;
+      const a=path[i-1],b=path[i];if(!this.ports.clearSegment(a,b)||!(this.ports.validFenceSegment?.(a,b)??true))return false;
       const fence=a.fence===b.fence?a.fence:this.links.find(l=>(l.a===a&&l.b===b)||(l.a===b&&l.b===a))?.fence??null;
       if(!fence&&distance(a,b)>8)return false;
       steps.push({point:{x:b.x,y:b.y},fence});
@@ -241,9 +246,11 @@ export class SystemInfusionRuntime {
   private updateRail(now:number,dt:number):void {
     if(!this.railActive)return;
     if(!this.ports.has('fence-rail')){this.cancelRail();return;}
+    if(this.railLanding&&!this.ports.validLanding(this.railLanding)){this.cancelRail();return;}
     let budget=T.rail.speed*Math.max(0,dt);
     while(this.railIndex<this.railPath.length){
       const step=this.railPath[this.railIndex];
+      if(!(this.ports.validFenceSegment?.(this.ports.player,step.point)??true)){this.cancelRail();return;}
       if(step.fence&&(!this.fenceLive(step.fence,now)||!this.combatFences.includes(step.fence))){this.cancelRail();return;}
       const p=this.ports.player,d=distance(p,step.point);
       if(d>budget){

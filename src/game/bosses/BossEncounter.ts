@@ -177,6 +177,7 @@ export class BossEncounter {
   }
 
   update(deltaMs: number, player: Pick<Player,'x'|'y'> & { combatRadius?: number }): void {
+    if(this.boss.getData('floorFalling')){this.boss.setVelocity(0,0);return;}
     if(this.boss.faction==='player'&&!this.control)return;
     if (!this.combatActive || this.boss.isDefeated) return;
     this.elapsedMs += Math.max(0, deltaMs);

@@ -18,7 +18,7 @@
       object[key]=function(...args){const start=performance.now();try{return original.apply(this,args);}finally{const ms=performance.now()-start;if(name==='render')renders.push(ms);else if(name==='update')updates.push(ms);else{const cost=costs.get(name)??{calls:0,totalMs:0};cost.calls++;cost.totalMs+=ms;costs.set(name,cost);}}};restores.push(()=>{if(owned)object[key]=original;else delete object[key];});};
     const visit=(object)=>{if(object.type==='Container'){object.list.forEach(visit);return;}wrap(object,'renderWebGL',`${object.type}@${object.parentContainer?.depth??object.depth}`);};
     arena.children.list.forEach(visit);wrap(game.renderer,'render','render');wrap(arena.sys,'sceneUpdate','update');
-    for(const key of ['updateEnemies','updateProjectiles','updateSystemInfusions','updateHud','updatePlayerShooting','getHazardDamageTargets'])wrap(arena,key,key);
+    for(const key of ['updateEnemies','updateProjectiles','updateSystemInfusions','updateHud','updatePlayerShooting','getHazardDamageTargets','updateDynamicFloor'])wrap(arena,key,key);
     for(const key of ['laserSecurity','gasHazard','bombletHazard'])wrap(arena[key],'update',key);
     wrap(arena.laserSecurity,'buildSegments','laserGeometry');
     const step=time=>{const now=performance.now();if(previous!==undefined)raw.push(now-previous);previous=now;arena.player.invulnUntil=Infinity;arena.player.energy=arena.player.energyStats.max;
@@ -62,6 +62,15 @@
         const types=['grunt','shooter','grunt','tank','shooter','defuser'];
         for(let i=a.enemies.length;i<cap;i++){const type=types[i%types.length];if(weight+ENEMY_BALANCE[type].weight>pressure.activeWeightCap*scale)break;a.spawnEnemy(type,!!site);weight+=ENEMY_BALANCE[type].weight;}
         await sample(a,`normal-${round}/natural`,{round,cap});
+        if(options.dynamicFloor){
+          a.destroyDynamicFloor();await sample(a,`normal-${round}/floor-disabled-control`,{round,cap});
+          a.createDynamicFloor(round);a.dynamicFloor.elapsed=250000;
+          const eventStarted=performance.now();
+          check(a.dynamicFloor.startEvent(),'late floor event validated');
+          const eventValidationMs=performance.now()-eventStarted;
+          await sample(a,`normal-${round}/floor-warning-slide`,{round,cap,eventValidationMs});
+          await sample(a,`normal-${round}/floor-open-reconstruct`,{round,cap});
+        }
         // Control only laser presentation/timing; all target damage and authored caps stay with Arena.
         const bounds=a.laserSecurity.playfield;
         for(const [label,Type] of [['bounded',CurrentLaser],...(LegacyLaser?[['before-clipping',LegacyLaser]]:[])]){

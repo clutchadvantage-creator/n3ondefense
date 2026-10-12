@@ -13,6 +13,9 @@ function display() { let p; p = new Proxy({ active: true, visible: true, width: 
   get: (o, k) => k in o ? o[k] : () => { if(k === 'destroy') o.active = false; return p; }
 }); return p; }
 class FakeBoss {
+  data = new Map();
+  getData(key){return this.data.get(key);}
+  setData(key,value){this.data.set(key,value);return this;}
   maceMotion = new mace.BrawlerMaceMotion();
   constructor(_s,x,y,_a,_r,_hit,_dead,_mode,options) {
     Object.assign(this,{x,y,faction:options.faction??'enemy',alpha:1,hazardRadius:34,hp:1000,maxHp:1000,healthRatio:1,isDefeated:false,shielded:false});
@@ -47,6 +50,15 @@ function fixture(archetype,controlled=true){
   const input={move:{x:0,y:0},aim:{x:550,y:500},primary:true,secondary:false};
   return {encounter,shots,areas,casts,stats,input};
 }
+test('environmental fall suspends boss AI and controlled attacks until recovery',()=>{
+  const {encounter,shots,areas,input}=fixture('artillery');
+  encounter.boss.setData('floorFalling',true);
+  for(let i=0;i<120;i++)encounter.updateControlled(16,input);
+  assert.equal(shots.length+areas.length,0);
+  encounter.boss.setData('floorFalling',false);
+  for(let i=0;i<120;i++)encounter.updateControlled(16,input);
+  assert.ok(shots.length>0);
+});
 for(const [archetype,primary] of [['artillery','artillery-basic'],['storm-mage','storm-basic'],['void-brawler','brawler-contact']]){
   test(`${archetype} uses live operative damage and three-quarter primary rate`,()=>{
     const f=fixture(archetype),e=f.encounter;

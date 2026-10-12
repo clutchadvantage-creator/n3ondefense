@@ -55,7 +55,7 @@ test('arena leaves the authoritative bomb explosion intact and invokes one gener
   assert.ok(detonation.indexOf('mineExplosionVfx.emitColors') < detonation.indexOf('bombExplosionCosmeticVfx.emitEquipped'));
   assert.match(detonation, /this\.audio\.playSfx\('bomb'\)/);
   assert.match(detonation, /const bombExplosionCosmeticEffect = this\.bombExplosionCosmeticVfx\.emitEquipped/);
-  assert.match(detonation, /this\.audio\.playSfx\(BOMB_EXPLOSION_COSMETIC_DEFINITIONS\[bombExplosionCosmeticEffect\]\.sound\)/);
+  assert.match(detonation, /else if \(sound\) this\.audio\.playSfx\(sound\)/);
   assert.match(detonation, /this\.fluxCores\?\.damageArea/);
   assert.doesNotMatch(detonation, /death-signal|neon-bloom/);
 });
@@ -99,9 +99,9 @@ test('store and redesigned Gear Locker expose distinct procedural previews for b
   assert.match(storefrontCss, /data-effect=neon-bloom/);
   assert.match(storefrontCss, /data-effect=neon-bats/);
   assert.match(storefrontCss, /data-effect=witch-signal/);
-  assert.match(preview, /item\.bombExplosionEffect === 'death-signal'/);
-  assert.match(preview, /drawFlower/);
-  assert.match(preview, /skull\.strokeEllipse/);
+  assert.match(preview, /isLegacyBomb\(item.bombExplosionEffect\)/);
+  assert.match(preview, /new LegacyBombVisual/);
+  assert.match(preview, /visual.update\(effect/);
   assert.match(preview, /container\.once\('destroy'/);
   assert.match(garage, /COSMETICS\.filter\(\(item\) => item\.category === category && save\.unlockedCosmetics\.includes\(item\.id\)\)/);
   assert.match(garage, /createCosmeticPreview\(this, item/);

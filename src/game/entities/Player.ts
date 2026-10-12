@@ -153,15 +153,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.appearanceController.update(now);
   }
 
-  takeDamage(amount: number): boolean {
-    if(this.railInvulnerable || this.scene.time.now < this.shieldUntil)return false;
+  takeDamage(amount: number, environmental = false): boolean {
+    if(!environmental && (this.railInvulnerable || this.scene.time.now < this.shieldUntil))return false;
     if(this.combatBody)return this.combatBody.takeDamage(amount)>0;
     const now = this.scene.time.now;
-    if (now < this.invulnUntil) return false;
+    if (!environmental && now < this.invulnUntil) return false;
     const previousHp = this.hp;
     this.hp = Math.max(0, this.hp - amount);
     if (this.hp < previousHp) { this.damageRevision++; AudioManager.get().playSfx('playerDamage'); }
-    this.invulnUntil = now + this.stats.invulnMs;
+    if (!environmental) this.invulnUntil = now + this.stats.invulnMs;
     this.appearanceController.beginDamageFlash(now, 90);
     return true;
   }

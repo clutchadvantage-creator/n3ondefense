@@ -166,9 +166,12 @@ export class GridPathfinder {
     return null;
   }
 
-  findNearestWalkableWorld(wx: number, wy: number, minimumRing = 0, maximumRing = 5): PathPoint | null {
-    const cell = this.findNearestWalkableCell(wx, wy, minimumRing, maximumRing);
-    return cell ? this.cellToWorld(cell.x, cell.y) : null;
+  findNearestWalkableWorld(wx: number, wy: number, minimumRing = 0, maximumRing = 5, cellBlocked?: (cx:number,cy:number)=>boolean): PathPoint | null {
+    this.queryBlocked=cellBlocked;
+    try {
+      const cell = this.findNearestWalkableCell(wx, wy, minimumRing, maximumRing);
+      return cell ? this.cellToWorld(cell.x, cell.y) : null;
+    } finally { this.queryBlocked=undefined; }
   }
 
   findPath(fromX: number, fromY: number, toX: number, toY: number, options?: PathQueryOptions): PathPoint[] {

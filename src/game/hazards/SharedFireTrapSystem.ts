@@ -48,6 +48,7 @@ export interface SharedFireTrapOptions {
   wallMaximumLead?: number;
   antiCamp?: SharedFireAntiCampConfig;
   isPlayerAlive?(): boolean;
+  surfaceConnected?(x:number,y:number,toX:number,toY:number):boolean;
   onDamagePlayer(amount: number): void;
 }
 
@@ -268,7 +269,7 @@ export class SharedFireTrapSystem {
               [target.x+target.radius-12,target.y],[target.x-target.radius+12,target.y],
               [target.x,target.y+target.radius-12],[target.x,target.y-target.radius+12]
             ].some(([x,y])=>this.wallFlameContains(nozzle,x,y)));
-        if (hit) {
+        if (hit && (nozzle.placement.kind !== 'floor' || (this.options.surfaceConnected?.(nozzle.placement.x,nozzle.placement.y,target.x,target.y) ?? true))) {
           touchingFire = true;
           if (nozzle.damagePulsesDelivered === 0) nozzle.damageContactStartedAt = now;
           const duePulses = 1 + Math.floor(

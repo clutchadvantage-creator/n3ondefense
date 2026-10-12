@@ -111,6 +111,22 @@ test('Gridlink rejects blocked edges and caps dense grids',()=>{
  f.state.clear=false;f.runtime.refreshNetwork(1);assert.equal(f.runtime.generatedLinks.length,0);
  f.state.clear=true;f.state.fences.push(f.fence(55,110));f.runtime.refreshNetwork(2);assert.ok(f.runtime.generatedLinks.length<=T.grid.maxLinks);
 });
+
+test('planned floor openings block new links without blocking airborne designated fire',()=>{
+ const f=fixture();f.ports.validFenceSegment=()=>false;f.state.fences=[f.fence(0,100),f.fence(500,100)];
+ f.runtime.refreshNetwork(1);assert.equal(f.runtime.generatedLinks.length,0);
+ const turret=f.turret(),enemy={x:200,y:0,active:true,isDefeated:false};
+ f.runtime.designate(enemy,100);assert.equal(f.runtime.priorityTarget(turret,101),enemy);
+});
+
+test('Fence Rail cancels if its landing or remaining floor route loses support',()=>{
+ for(const loss of ['landing','segment']){
+  const f=fixture();f.state.fences=[f.fence(0,100),f.fence(500,100)];f.runtime.refreshNetwork(1);
+  assert.equal(f.runtime.rail(f.runtime.nodes[0],2),true);
+  if(loss==='landing')f.state.landing=false;else f.ports.validFenceSegment=()=>false;
+  const before={...f.player};f.runtime.updateRail(3,.1);assert.equal(f.runtime.railActive,false);assert.deepEqual(f.player,before);
+ }
+});
 test('Target Designator respects target life, duration, turret range and obstacles, including bosses',()=>{
  const f=fixture(),t=f.turret(),enemy={x:200,y:0,active:true,isDefeated:false};
  assert.equal(f.runtime.designate(enemy,100),true);assert.equal(f.runtime.priorityTarget(t,101),enemy);
@@ -235,4 +251,25 @@ test('shared interaction hold consumes Ascension without also jumping; shooting 
 test('encounter reset removes generated links, selection, commands and powered state',()=>{
  const f=fixture();f.state.fences=[f.fence(0,100),f.fence(300,100)];f.input(100);const links=[...f.runtime.generatedLinks];
  f.runtime.reset();assert.equal(f.runtime.fences.length,0);assert.equal(f.runtime.designatedTarget,null);assert.ok(links.every(l=>!l.fence.sprite.active));
+});
+
+test('floor openings block generated links without blocking airborne target selection',()=>{
+ const f=fixture(['gridlink','target-designator']);f.state.fences=[f.fence(0,0),f.fence(300,0)];
+ f.ports.validFenceSegment=()=>false;f.runtime.refreshNetwork(1);assert.equal(f.runtime.generatedLinks.length,0);
+ f.state.enemy={x:500,y:0,active:true};f.input(100,f.state.enemy,true,true);
+ assert.equal(f.runtime.designatedTarget,f.state.enemy);
+});
+
+test('Rail cancels when landing support is lost without changing its final position',()=>{
+ const f=fixture(['fence-rail']);f.state.fences=[f.fence(0,100,400)];f.runtime.refreshNetwork(1);
+ assert.equal(f.runtime.rail(f.runtime.nodes[0],10),true);const position={...f.player};
+ f.ports.validFenceSegment=()=>false;f.runtime.update(20,.1,{x:0,y:0},{pressed:false,held:false,released:false,prompt:'C'});
+ assert.equal(f.runtime.railActive,false);assert.deepEqual(f.player,position);
+});
+
+test('link retirement feedback fires once during combat and never on scene reset',()=>{
+ const f=fixture(['gridlink']);let retired=0;f.ports.linkRetired=()=>retired++;
+ f.state.fences=[f.fence(0,0),f.fence(300,0)];f.runtime.refreshNetwork(1);
+ assert.ok(f.runtime.generatedLinks.length);f.runtime.generatedLinks[0].fence.hp=0;f.runtime.refreshNetwork(2);
+ assert.equal(retired,1);f.runtime.refreshNetwork(3);assert.equal(retired,1);f.runtime.reset();assert.equal(retired,1);
 });

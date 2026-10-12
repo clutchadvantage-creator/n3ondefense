@@ -27,6 +27,7 @@ export class EchoRuntime {
   private hudPhase = '';
   private destroyed = false;
   private readonly valid = (x: number, y: number): boolean => {
+    if(this.surface && !this.surface.valid(x,y))return false;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     const world = this.scene.physics.world, b = world.bounds, radius = 13;
     if (x < b.x + radius || y < b.y + radius || x > b.right - radius || y > b.bottom - radius) return false;
@@ -39,7 +40,7 @@ export class EchoRuntime {
     return true;
   };
   constructor(scene: Phaser.Scene, player: Player, fire: (shot: Readonly<EchoShot>, offsetX: number, offsetY: number, multiplier: number) => void,
-    config: Partial<EchoConfig> = {}) {
+    config: Partial<EchoConfig> = {}, private readonly surface?: {valid(x:number,y:number):boolean;relocated():void}) {
     this.scene = scene; this.player = player;
     this.ghosts = [0xff5bd8, 0x72faff, 0xffffff].map(color => scene.add.image(0, 0, player.texture.key).setTint(color));
     this.root = scene.add.container(0, 0, this.ghosts).setDepth(7.9).setVisible(false).setName('echo-hologram');
@@ -55,6 +56,7 @@ export class EchoRuntime {
         this.snapMs = 180;
         (player.body as Phaser.Physics.Arcade.Body).reset(out.x, out.y);
         player.setVelocity(0, 0); player.dashUntil = scene.time.now;
+        this.surface?.relocated();
         return true;
       },
       pose: (x, y, rotation, dash) => {

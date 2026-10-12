@@ -61,7 +61,7 @@ test('high-density deployables, pickups, and explosions retain bounded existing 
   assert.match(mineVfx, /drawSmokeNebula/);
   assert.match(pickups, /createShell/);
   assert.match(pickups, /iconRig/);
-  assert.match(fence, /FENCE_WIRE_LEVELS/);
-  assert.match(fence, /poleSegments/);
-  assert.match(fence, /currentPips/);
+  assert.match(fence, /this.beams/);
+  assert.match(fence, /this.pylons/);
+  assert.match(fence, /this.pips/);
 });

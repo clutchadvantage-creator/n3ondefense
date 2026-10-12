@@ -76,19 +76,19 @@ test('premium projectile SVGs are boot-cached and shared by Store, Locker previe
   assert.doesNotMatch(heist, /createPremiumProjectileShapeSvgDataUri/);
 });
 
-test('native projectile art keeps standard combat bodies, travel alignment, and dedicated temporary-ammo identities', () => {
+test('native projectile art keeps standard combat bodies, travel alignment, and equipped temporary-ammo identities', () => {
   assert.match(arena, /setRotation\(state\.rotation\)/);
   assert.match(heist, /setRotation\(state\.rotation\)/);
-  assert.match(arena, /8 \/ Math\.max\(0\.001, Math\.abs\(sprite\.scaleX\)\)/);
-  assert.match(heist, /8 \/ Math\.max\(0\.001, Math\.abs\(projectile\.sprite\.scaleX\)\)/);
+  assert.match(arena, /behavior.bodyWidth \/ Math\.max\(0\.001, Math\.abs\(sprite\.scaleX\)\)/);
+  assert.match(heist, /behavior.bodyWidth \/ Math\.max\(0\.001, Math\.abs\(projectile\.sprite\.scaleX\)\)/);
   assert.match(arena, /if \(!nativePalette\) sprite\.setTint\(state\.tint\)/);
   assert.match(heist, /if \(!nativePalette\) projectile\.sprite\.setTint\(state\.tint\)/);
   assert.match(arena, /emitAccent/);
   assert.match(heist, /emitAccent/);
-  assert.match(arena, /'ammo-grenade-round'/);
-  assert.match(arena, /'ammo-scatter-pellet'/);
-  assert.match(heist, /'ammo-grenade-round'/);
-  assert.match(heist, /'ammo-scatter-pellet'/);
+  assert.doesNotMatch(arena, /'ammo-grenade-round'/);
+  assert.doesNotMatch(arena, /'ammo-scatter-pellet'/);
+  assert.doesNotMatch(heist, /'ammo-grenade-round'/);
+  assert.doesNotMatch(heist, /'ammo-scatter-pellet'/);
 });
 
 test('premium projectile ownership/equip state persists and Economy Console derives the expanded catalog', () => {

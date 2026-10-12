@@ -25,10 +25,10 @@
       S.setSettings({masterVolume:0,contextualTutorials:false,particles:true});
       S.updateTutorialProgress(p=>{p.firstRunStage='complete';p.firstRunWelcomePending=false;});
       S.addCredits(1000000);S.addCoreTokens(10000);S.addPlasmaChips(10000);
-      game.scene.start('cosmetics'); await until(()=>document.querySelectorAll('.store-card').length===15,'seasonal showroom');
+      game.scene.start('cosmetics'); await until(()=>document.querySelectorAll('.store-card').length===18,'seasonal showroom');
       const store=game.scene.keys.cosmetics.storefront;
       check(store.selectedCategory==='seasonal','seasonal collection featured on entry');
-      check(document.querySelectorAll('.store-card .hw-svg').length===15,'all 15 cards render authored SVG art');
+      check(document.querySelectorAll('.store-card .hw-svg, .store-card .premium-fence-svg').length===18,'all 18 cards render authored SVG art');
       for(const card of document.querySelectorAll('.store-card[data-halloween-set]')){
         check(card.querySelector('.cosmetic-visual').getBoundingClientRect().bottom<=card.querySelector('h3').getBoundingClientRect().top,
           card.dataset.itemId+': art stays above its readable name');
@@ -48,7 +48,7 @@
       for(const currency of ['credits','coreTokens','plasmaChips'])check(before[currency]-after[currency]===cost[currency],currency+': exact multi-currency purchase charge');
       check(S.getEquippedCosmeticId('bombColor')===first.id,'purchase equips selected signature');
       check(document.querySelector('.store-action').textContent==='EQUIPPED','successful purchase reflected in store');
-      check(document.querySelector('.store-set-collection h3').textContent.includes('1/5'),'set ownership progress updated');
+      check(document.querySelector('.store-set-collection h3').textContent.includes('1/6'),'set ownership progress updated');
       const retryBefore=JSON.stringify(S.getWalletSnapshot());
       check(S.purchaseAndEquipCosmetic(first.id).ok,'repeat owned purchase equips');
       check(JSON.stringify(S.getWalletSnapshot())===retryBefore,'owned equip never charges again');

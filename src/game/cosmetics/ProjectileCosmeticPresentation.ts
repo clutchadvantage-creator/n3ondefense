@@ -1,11 +1,14 @@
 import type { CosmeticOption } from '../types.ts';
 
-export interface ProjectileCosmeticPresentation {
+export interface ProjectileVisualProfile {
   textureKey: string;
   displayWidth: number;
   displayHeight: number;
   preserveNativePalette: boolean;
 }
+
+/** Compatibility alias; temporary ammunition never modifies this profile. */
+export type ProjectileCosmeticPresentation = ProjectileVisualProfile;
 
 const LEGACY_DISPLAY_SIZE_BY_TEXTURE: Readonly<Record<string, readonly [number, number]>> = {
   'projectile-missile': [17, 8],

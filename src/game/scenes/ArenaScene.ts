@@ -1,4 +1,9 @@
 import { ANOMALY_SCENES } from '../anomalies/AnomalyScenes.ts';
+import { DynamicFloorModel, floorEnabled, circleTouches, type FloorPanel } from '../arena/DynamicFloorModel.ts';
+import { DynamicFloorActors, type FloorActorDriver } from '../arena/DynamicFloorActors.ts';
+import { DynamicFloorVisual } from '../arena/DynamicFloorVisual.ts';
+import { validateFloorConnectivity } from '../arena/DynamicFloorConnectivity.ts';
+import { DYNAMIC_FLOOR, DYNAMIC_FLOOR_AUDIO } from '../config/dynamicFloor.ts';
 import { GameplayPickupMotion, collectOrAttractPickup, energyPickupBlocked, findGameplayPickupLanding } from '../loot/GameplayPickupMotion.ts';
 import { HudInformationSystem } from '../ui/HudInformationSystem.ts';
 import { WeeklyCompletionTracker } from '../progression/WeeklyCompletionTracker.ts';
@@ -50,6 +55,8 @@ import { Hud, HUD_RADAR_RANGE } from '../systems/Hud';
 import type { HudAbilitySlot, HudPayload, HudRadarContact } from '../systems/Hud';
 import { RoundManager } from '../systems/RoundManager';
 import { SaveSystem } from '../systems/SaveSystem';
+import { PROJECTILE_BEHAVIOR_PROFILES } from '../player/ProjectileBehaviorProfile.ts';
+import { resolveFenceAppearance } from '../cosmetics/FenceCosmetics.ts';
 import { ArenaGenerator } from '../systems/ArenaGenerator';
 import { LaserSecuritySystem } from '../systems/LaserSecuritySystem';
 import { BombletHazardSystem } from '../systems/BombletHazardSystem';
@@ -147,7 +154,7 @@ import {
 import { TurretWeaponSyncController } from '../player/TemporaryOffensiveEffects.ts';
 import { N3ONArcadeController } from '../arcade/N3ONArcadeController.ts';
 import type { ArcadeEventId, ArcadeGrantedReward, ArcadeMetricEvent } from '../arcade/types.ts';
-import type { Boss } from '../bosses/Boss.ts';
+import { Boss } from '../bosses/Boss.ts';
 import { createPhysicalLootPlan, type PhysicalLootReward } from '../loot/PhysicalLootService.ts';
 import {
   GAMEPLAY_PICKUP_COLOR_BY_TYPE,
@@ -346,6 +353,9 @@ interface RoundRuntimeDiagnostics {
   premiumRevealScenes: number;
   staleEncounterOwners: number;
   cleanupFailures: number;
+  floorPanels: number;
+  floorActivePanels: number;
+  floorNavigationUpdates: number;
 }
 
 type EncounterCheckpoint = 'A_ACTIVE' | 'B_END_REQUESTED' | 'C_REWARDS_ACTIVE'
@@ -515,6 +525,13 @@ export class ArenaScene extends Phaser.Scene {
   private grenadeProjectileSequence = 0;
   private readonly hazardDamageTargets: HazardDamageTarget[] = [];
   private homingMissiles: HomingMissile[] = [];
+  private dynamicFloor: DynamicFloorModel | null = null;
+  private floorActors: DynamicFloorActors | null = null;
+  private floorVisual: DynamicFloorVisual | null = null;
+  private floorDrivers = new WeakMap<object, FloorActorDriver>();
+  private floorNavigationRevision = -1;
+  private readonly floorFloatingPickups: Pickup[] = [];
+  private readonly combatCellBlocked = (cx:number,cy:number):boolean => this.fenceObstruction.cellBlocked(cx,cy) || (this.dynamicFloor?.cellBlocked(cx,cy) ?? false);
   private pickups: Pickup[] = [];
   private modPickups: ModPickup[] = [];
   private pickupPresentation!: GameplayPickupPresentation;
@@ -930,11 +947,12 @@ export class ArenaScene extends Phaser.Scene {
         this.destroyShieldOrb();
       }
     }
-    const safe = this.pathfinder.findNearestWalkableWorld(result.sourcePortal.x + 118, result.sourcePortal.y, 0, 6)
+    const safe = this.pathfinder.findNearestWalkableWorld(result.sourcePortal.x + 118, result.sourcePortal.y, 0, 6, this.combatCellBlocked)
       ?? { x: result.sourcePortal.x, y: result.sourcePortal.y };
     this.player.setActive(true).setVisible(true).setAlpha(1).setScale(1).setPosition(safe.x, safe.y).setVelocity(0, 0);
     const playerBody = this.player.body as Phaser.Physics.Arcade.Body | null;
     if (playerBody) playerBody.enable = suspension?.playerBodyEnabled ?? true;
+    this.floorPlayerRelocated();
     this.player.invulnUntil = Math.max(
       result.playerState?.invulnUntil ?? 0,
       this.time.now + HEIST_BALANCE.safeReturnInvulnerabilityMs
@@ -1396,6 +1414,7 @@ export class ArenaScene extends Phaser.Scene {
     );
 
     this.registerBombSiteEvents();
+    this.createDynamicFloor(def.round);
 
     this.nextSpawnAt = this.time.now + 2500;
     this.nextArenaSupportPickupAt = this.time.now + 600;
@@ -1539,7 +1558,7 @@ export class ArenaScene extends Phaser.Scene {
 
     this.hud = new Hud(this, SaveSystem.get().settings.hud);
     this.echo?.destroy();
-    this.echo = new EchoRuntime(this, this.player, this.replayEchoShot);
+    this.echo = new EchoRuntime(this, this.player, this.replayEchoShot, {}, { valid: (x,y) => this.dynamicFloor?.isSupported(x,y,this.player.combatRadius,true)??true, relocated: () => this.floorPlayerRelocated() });
     this.hudPayload.abilities[4] = this.echo.hud;
 
     this.hudInformation = HudInformationSystem.forScene(this);
@@ -1795,6 +1814,7 @@ export class ArenaScene extends Phaser.Scene {
     GameplayTelemetryRecorder.recordEnergyRegeneration(requestedRegeneration, this.player.energy - energyBeforeRegeneration);
     this.refreshAimWorldPoint();
     this.updatePrismCosmetics(now);
+    this.updateDynamicFloor(delta);
     this.updateSystemInfusions(now, dt);
     this.updatePlayerMovement(now);
     this.updatePossession(now,delta);
@@ -1892,6 +1912,146 @@ export class ArenaScene extends Phaser.Scene {
     if (this.player.isDead()) {
       this.triggerDefeat('playerDead');
     }
+  }
+
+  private createDynamicFloor(round: number): void {
+    this.destroyDynamicFloor();
+    if(!floorEnabled(round,!!this.bossEncounter||!!this.supremeFinale))return;
+    const protectedPoints=[
+      ...this.layout.bombSites.map(p=>({x:p.x,y:p.y,radius:DYNAMIC_FLOOR.objectivePadding})),
+      ...[this.layout.playerSpawn,...this.layout.enemySpawns].map(p=>({x:p.x,y:p.y,radius:DYNAMIC_FLOOR.spawnPadding}))
+    ];
+    const walls=[...this.getBlockers(),...this.layout.smashables.map(s=>({x:s.x-s.width/2,y:s.y-s.height/2,w:s.width,h:s.height}))];
+    const required=[this.layout.playerSpawn,...this.layout.bombSites,...this.layout.enemySpawns];
+    const validate=(panels:readonly FloorPanel[])=>{
+      // A rider on a selected hatch has a safe receiver; an actor elsewhere must
+      // retain a walking route from their actual location, not just the spawn.
+      const player=this.possession?.boss??this.player;
+      const points=panels.some(p=>circleTouches(player.x,player.y,this.player.combatRadius,p))?required:[...required,player];
+      return validateFloorConnectivity(this.pathfinder,panels,points,
+        this.systemInfusions?.fences??this.fences,this.time.now,this.fenceObstruction.cellBlocked);
+    };
+    let lastCueAt=-1;
+    this.dynamicFloor=new DynamicFloorModel({seed:this.layout.seed,bounds:this.layout.generation.bounds,walls,protected:protectedPoints},this.currentModeFamily(),validate,phase=>{
+      const sound=DYNAMIC_FLOOR_AUDIO[phase];
+      if(sound&&this.time.now-lastCueAt>250){
+        this.audio.playSfx(sound);lastCueAt=this.time.now;
+        if(phase==='warning'&&this.dynamicFloor?.events===0)this.showBanner('FLOOR SHIFT // MOVE OFF AMBER PANELS');
+      }
+    });
+    this.floorActors=new DynamicFloorActors(this.dynamicFloor,{
+      validGround:(x,y,r)=>this.floorGroundValid(x,y,r),
+      clearMotion:(x,y,tx,ty,r)=>this.floorMotionClear(x,y,tx,ty,r),
+      impact:(x,y,kind)=>{
+        this.spawnImpact(x,y,COLORS.orange);
+        // Ordinary Player.takeDamage owns this cue; possessed bodies need the same feedback.
+        if(kind==='player'&&this.possession&&DYNAMIC_FLOOR_AUDIO.impact)this.audio.playSfx(DYNAMIC_FLOOR_AUDIO.impact);
+      },
+      eject:()=>{const sound=DYNAMIC_FLOOR_AUDIO.ejection;if(sound)this.audio.playSfx(sound);}
+    });
+    this.floorVisual=new DynamicFloorVisual(this,this.dynamicFloor,this.particlesEnabled);
+    // Register positions before the first physics step, including scene-created actors.
+    this.updateDynamicFloor(0);
+  }
+
+  private floorGroundValid(x:number,y:number,r:number):boolean {
+    const b=this.layout.generation.bounds;
+    return x-r>b.x+24&&x+r<b.x+b.w-24&&y-r>b.y+24&&y+r<b.y+b.h-24
+      && !this.intersectsWallGeometry(x,y,r,r)
+      && !this.fenceObstruction.firstHit(x,y,x,y,r,this.time.now)
+      && !this.intersectsBombSiteGeometry(x,y,r,r)
+      && !(this.arenaFireTraps?.isDangerousAt(x,y)??false);
+  }
+
+  private floorMotionClear(x:number,y:number,tx:number,ty:number,r:number):boolean {
+    if(this.fenceObstruction.firstHit(x,y,tx,ty,r,this.time.now))return false;
+    const steps=Math.max(1,Math.ceil(Math.hypot(tx-x,ty-y)/8));
+    for(let i=1;i<=steps;i++)if(this.intersectsWallGeometry(x+(tx-x)*i/steps,y+(ty-y)*i/steps,r,r))return false;
+    return true;
+  }
+
+  private floorFalling(target:object):boolean {
+    const driver=this.floorDrivers.get(target===this.player&&this.possession?this.possession.boss:target);
+    return !!driver && !!this.floorActors?.isFalling(driver);
+  }
+
+  private floorPlayerRelocated():void {
+    const driver=this.floorDrivers.get(this.player);if(driver)this.floorActors?.relocated(driver);
+  }
+
+  private trackFloorActor(target:Player|Enemy|Boss|Turret|Mine|Pickup|ModPickup):void {
+    if(!this.floorActors)return;
+    let driver=this.floorDrivers.get(target);
+    if(!driver){
+      const arena=this,actor=target instanceof Player||target instanceof Enemy||target instanceof Boss?target:target.sprite;
+      const player=target instanceof Player,enemy=target instanceof Enemy,boss=target instanceof Boss,controlled=boss&&target.faction==='player';
+      const scaleX=actor.scaleX,scaleY=actor.scaleY,alpha=actor.alpha;
+      const image=actor instanceof Phaser.GameObjects.Sprite?actor:null;
+      const originX=image?.originX??.5,originY=image?.originY??.5;
+      const body=actor.body instanceof Phaser.Physics.Arcade.Body?actor.body:null;
+      let suspended=false,bodyWasEnabled=true;
+      driver={
+        get x(){return actor.x;},get y(){return actor.y;},
+        get radius(){return player?arena.player.combatRadius:enemy||boss?target.hazardRadius:target instanceof Turret?18:12;},
+        get active(){return actor.active&&(boss?!target.isDefeated:player||enemy?!target.isDead():target instanceof Turret?target.hp>0:'expiresAt' in target?arena.time.now<=target.expiresAt:true);},
+        get maxHp(){return boss?target.maxHp:player?target.stats.maxHealth:enemy?target.stats.hp:0;},
+        kind:player||controlled?'player':enemy||boss?'enemy':'object',
+        get airborne(){return enemy?target.airborne:target instanceof Mine&&arena.time.now<target.landedAt;},
+        get crossing(){return player&&(arena.time.now<target.dashUntil||!!arena.systemInfusions?.railActive);},
+        get forcedMovement(){return enemy&&arena.time.now<(target.getData('floorForcedUntil')??0);},
+        move:(x,y)=>{actor.setPosition(x,y);if(controlled)arena.player.setPosition(x,y);if(body){const vx=body.velocity.x,vy=body.velocity.y;body.reset(x,y);body.setVelocity(vx,vy);}},
+        halt:falling=>{
+          if(!actor.active)return;
+          if(boss)target.setData('floorFalling',falling);
+          body?.setVelocity(0,0);
+          if(body&&falling&&!suspended){bodyWasEnabled=body.enable;body.enable=false;suspended=true;}
+          if(body&&!falling&&suspended){body.reset(actor.x,actor.y);body.enable=bodyWasEnabled;suspended=false;}
+        },
+        present:(scale,opacity,descent)=>{if(!actor.active)return;actor.setScale(scaleX*scale,scaleY*scale).setAlpha(alpha*opacity);image?.setOrigin(originX,originY-descent/Math.max(1,image.displayHeight));if(boss)target.presentFloorFall(scale,alpha*opacity,descent);},
+        impact:damage=>{
+          if(player){const hp=target.hp;if(damage>0)target.takeDamage(damage,true);GameplayTelemetryRecorder.recordPlayerDamage('dynamic-floor',Math.max(0,hp-target.hp));}
+          else if(boss){const applied=target.takeDamage(damage,'hazard',undefined,true);if(controlled)GameplayTelemetryRecorder.recordPlayerDamage('dynamic-floor',applied);}
+          else if(enemy)target.takeDamage(damage,'hazard');
+          else if(target instanceof Turret)target.hp=0;
+          else if(target instanceof Mine){target.armed=false;target.destroy();}
+          else target.expiresAt=arena.time.now-1;
+        }
+      };
+      this.floorDrivers.set(target,driver);
+    }
+    this.floorActors.update(driver);
+  }
+
+  private updateDynamicFloor(delta:number):void {
+    const floor=this.dynamicFloor,actors=this.floorActors;if(!floor||!actors)return;
+    const miniBoss=this.arcadeController?.getBossTarget();
+    if(miniBoss&&!DYNAMIC_FLOOR.bossesEnabled)floor.restore();
+    floor.update(delta,!miniBoss||DYNAMIC_FLOOR.bossesEnabled);
+    if(this.floorNavigationRevision!==floor.revision){
+      this.floorNavigationRevision=floor.revision;
+      for(const enemy of this.enemies){const nav=this.navState.get(enemy);if(nav&&floor.panels.some(p=>Math.hypot(enemy.x-p.x-p.w/2,enemy.y-p.y-p.h/2)<260||nav.path.some(point=>Math.abs(point.x-p.x-p.w/2)<p.w/2+60&&Math.abs(point.y-p.y-p.h/2)<p.h/2+60))){nav.path.length=0;nav.waypointIndex=0;nav.nextRepathAt=0;}}
+    }
+    actors.beginFrame();
+    this.trackFloorActor(this.possession?.boss??this.player);
+    if(miniBoss)this.trackFloorActor(miniBoss);
+    if(this.bossEncounter)this.trackFloorActor(this.bossEncounter.boss);
+    if(this.supremeFinale)for(const boss of this.supremeFinale.bosses)this.trackFloorActor(boss);
+    for(const enemy of this.enemies)this.trackFloorActor(enemy);
+    for(const turret of this.turrets)this.trackFloorActor(turret);
+    for(const mine of this.mines)this.trackFloorActor(mine);
+    for(const deathMine of this.deathMines)this.trackFloorActor(deathMine.mine);
+    for(const pickup of this.pickups)this.trackFloorActor(pickup);
+    for(const pickup of this.modPickups)this.trackFloorActor(pickup);
+    actors.endFrame();
+    // Rigid anchors: events avoid fences, placements avoid planned openings.
+    // Unexpected lost support retires the entire segment and dependent links.
+    for(const fence of this.systemInfusions?.fences??this.fences)if(floor.sweep(fence.x1,fence.y1,fence.x2,fence.y2,12)<1)fence.hp=0;
+    this.floorVisual?.update();
+  }
+
+  private destroyDynamicFloor():void {
+    this.floorActors?.reset();this.floorVisual?.destroy();this.dynamicFloor?.reset();
+    this.floorActors=null;this.floorVisual=null;this.dynamicFloor=null;this.floorDrivers=new WeakMap();this.floorNavigationRevision=-1;
   }
 
   private createInput(): void {
@@ -2053,7 +2213,6 @@ export class ArenaScene extends Phaser.Scene {
       sprite.setTexture(state.texture).setOrigin(0.5).setScale(1).setDisplaySize(state.width, state.height);
       const nativePalette = state.nativePalette ?? (
         state.from !== 'enemy'
-        && (state.ammoMode ?? 'normal') === 'normal'
         && state.texture === this.projectileTextureKey
         && this.projectileNativePalette
       );
@@ -2062,8 +2221,9 @@ export class ArenaScene extends Phaser.Scene {
       sprite.setAlpha(1).setRotation(state.rotation).setDepth(state.depth);
       projectile.echo = state.echo;
       if (state.echo) sprite.setTint(0x72faff).setAlpha(.72);
-      if (body && nativePalette) {
-        body.setSize(8 / Math.max(0.001, Math.abs(sprite.scaleX)), 8 / Math.max(0.001, Math.abs(sprite.scaleY)), true);
+      if (body && (nativePalette || (state.ammoMode && state.ammoMode !== 'normal'))) {
+        const behavior = PROJECTILE_BEHAVIOR_PROFILES[state.ammoMode ?? 'normal'];
+        body.setSize(behavior.bodyWidth / Math.max(0.001, Math.abs(sprite.scaleX)), behavior.bodyHeight / Math.max(0.001, Math.abs(sprite.scaleY)), true);
       } else if (body) {
         body.setSize(sprite.width, sprite.height, true);
       }
@@ -2276,6 +2436,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePlayerMovement(now: number): void {
+    if(this.floorFalling(this.player)){this.player.setVelocity(0,0);return;}
     if(this.systemInfusions?.railActive){this.player.setVelocity(0,0);return;}
     if(this.possession){
       this.player.setPosition(this.possession.boss.x,this.possession.boss.y).setVelocity(0,0);
@@ -2389,6 +2550,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePlayerShooting(now: number): void {
+    if(this.floorFalling(this.player))return;
     if(this.systemInfusions?.railActive||this.possession)return;
     if (!this.playerInput.held('fire')) return;
     if (this.player.heat >= this.player.weapon.maxHeat) return;
@@ -2432,7 +2594,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.echo?.timeline.recording) this.echo.timeline.recordShot({ x: spawnX, y: spawnY, angle, mode: ammoMode,
       speed, damage, critical: crit, ricochets: ricochetsRemaining, grenadeSequence: this.grenadeProjectileSequence,
       texture: this.projectileTextureKey, width: this.projectileWidth, height: this.projectileHeight,
-      nativePalette: ammoMode === 'normal' && this.projectileNativePalette });
+      nativePalette: this.projectileNativePalette });
     if (ammoMode === 'scattershot') {
       for (let index = 0; index < SCATTERSHOT_ANGLE_OFFSETS.length; index += 1) {
         const pelletAngle = angle + SCATTERSHOT_ANGLE_OFFSETS[index];
@@ -2488,12 +2650,8 @@ export class ArenaScene extends Phaser.Scene {
       ? TEMPORARY_AMMO_BALANCE.grenade.projectileSpeedMultiplier
       : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.projectileSpeedMultiplier : 1;
     const damageMultiplier = scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier : 1;
-    const width = grenade
-      ? TEMPORARY_AMMO_BALANCE.grenade.width
-      : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.width : echoShot?.width ?? this.projectileWidth;
-    const height = grenade
-      ? TEMPORARY_AMMO_BALANCE.grenade.height
-      : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.height : echoShot?.height ?? this.projectileHeight;
+    const width = echoShot?.width ?? this.projectileWidth;
+    const height = echoShot?.height ?? this.projectileHeight;
     const lifeMs = grenade
       ? TEMPORARY_AMMO_BALANCE.grenade.projectileLifetimeMs
       : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.projectileLifetimeMs : 950;
@@ -2504,7 +2662,7 @@ export class ArenaScene extends Phaser.Scene {
     this.projectiles.push(this.obtainProjectile({
       x,
       y,
-      texture: grenade ? 'ammo-grenade-round' : scattershot ? 'ammo-scatter-pellet' : echoShot?.texture ?? this.projectileTextureKey,
+      texture: echoShot?.texture ?? this.projectileTextureKey,
       width,
       height,
       tint,
@@ -2555,6 +2713,11 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updatePlanting(delta: number): void {
+    if(this.floorFalling(this.player)){
+      this.audio.stopPlantingLoop();
+      if(this.activePlantingSite)this.bombSites.cancelPlanting(this.activePlantingSite);
+      this.activePlantingSite=null;this.plantingProgressMs=0;return;
+    }
     if (this.infusionInteracting) {
       if(!this.possession)this.siteActionText.setText('');
       this.audio.stopPlantingLoop();
@@ -2849,6 +3012,8 @@ export class ArenaScene extends Phaser.Scene {
       enemy.updateDamageFlash(now);
       enemy.updateMechanicalPresentation(now);
 
+      if(this.floorFalling(enemy)){enemy.setVelocity(0,0);continue;}
+
       if (enemy instanceof FlyingDrone) { this.updateDrone(enemy, now, dt); continue; }
       if (objectiveChanged) {
         const nav = this.navState.get(enemy);
@@ -3053,6 +3218,7 @@ export class ArenaScene extends Phaser.Scene {
       const inverseDistance = 1 / Math.sqrt(distanceSquared);
       const resistance = enemy.stats.type === 'disruptor' ? 0.5 : 1;
       const speed = MOD_BALANCE.emergencyShield.knockbackSpeed * resistance;
+      enemy.setData('floorForcedUntil',now+150);
       enemy.setVelocity(dx * inverseDistance * speed, dy * inverseDistance * speed);
       enemy.defuseInterruptedUntil = now + 600;
     }
@@ -3408,7 +3574,7 @@ export class ArenaScene extends Phaser.Scene {
         nav.recoverySign = nav.recoverySign === 1 ? -1 : 1;
         if (nav.stuckTicks >= 14) {
           const recovery = this.pathfinder.findNearestWalkableWorld(enemy.x, enemy.y, 0, 4);
-          if (recovery && clearOfBombsites(recovery, this.layout.bombSites)) {
+          if (recovery && clearOfBombsites(recovery, this.layout.bombSites) && (this.dynamicFloor?.sweep(enemy.x,enemy.y,recovery.x,recovery.y,enemy.hazardRadius,true)??1)===1) {
             const recoveryDx = recovery.x - enemy.x;
             const recoveryDy = recovery.y - enemy.y;
             if (recoveryDx * recoveryDx + recoveryDy * recoveryDy > 24 * 24
@@ -3432,7 +3598,7 @@ export class ArenaScene extends Phaser.Scene {
       this.navigationQueriesRemaining -= 1;
       nav.path = this.pathfinder.findPath(enemy.x, enemy.y, targetX, targetY, {
         cellPenalty: this.navigationCellPenalty,
-        cellBlocked: this.fenceObstruction.cellBlocked,
+        cellBlocked: this.combatCellBlocked,
         smooth: nav.stuckTicks === 0,
         maxIterations: 4800,
         output: nav.path
@@ -3471,14 +3637,14 @@ export class ArenaScene extends Phaser.Scene {
     const directDistanceSquared = directX * directX + directY * directY;
     if (directDistanceSquared <= 1) {
       enemy.setVelocity(0, 0);
-    } else if (this.pathfinder.hasLineOfSightWorld(enemy.x, enemy.y, targetX, targetY,this.fenceObstruction.cellBlocked)) {
+    } else if (this.pathfinder.hasLineOfSightWorld(enemy.x, enemy.y, targetX, targetY,this.combatCellBlocked)) {
       const inverseDistance = 1 / Math.sqrt(directDistanceSquared);
       this.setEnemyNavigationVelocity(enemy, directX * inverseDistance, directY * inverseDistance, speed, nav, now);
     } else {
       // Never fall back to driving directly into geometry when a path query
       // temporarily fails. The next staggered repath will try again.
       const fence=this.fenceObstruction.firstHit(enemy.x,enemy.y,targetX,targetY,enemy.hazardRadius,now);
-      if(fence&&this.pathfinder.hasLineOfSightWorld(enemy.x,enemy.y,fence.x,fence.y)){
+      if(fence&&this.pathfinder.hasLineOfSightWorld(enemy.x,enemy.y,fence.x,fence.y,(cx,cy)=>this.dynamicFloor?.cellBlocked(cx,cy)??false)){
         const d=Math.hypot(fence.x-enemy.x,fence.y-enemy.y);
         if(d>1)enemy.setVelocity((fence.x-enemy.x)/d*speed,(fence.y-enemy.y)/d*speed);
         else {
@@ -3641,7 +3807,8 @@ export class ArenaScene extends Phaser.Scene {
   private updateGrenadeFlight(projectile: Projectile, now: number, delta: number): boolean {
     if (now >= (projectile.grenadeFuseAt ?? 0)) return true;
     if (now >= (projectile.grenadeNextBounceAt ?? Number.POSITIVE_INFINITY)
-      && this.consumeGrenadeBounce(projectile, now)) return true;
+      && (!(this.dynamicFloor?.isSupported(projectile.sprite.x,projectile.sprite.y,4) ?? true)
+        || this.consumeGrenadeBounce(projectile, now))) return true;
     const height = grenadeArcHeight(
       now,
       projectile.grenadeBounceStartedAt ?? now,
@@ -4333,6 +4500,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private placeAbility(type: AbilityType, now: number): void {
+    if(this.floorFalling(this.player))return;
     const cfg = this.getAbilityConfig(type);
     if (type !== 'mine' && now < this.abilityCooldownUntil[type]) {
       GameplayTelemetryRecorder.recordAbilityDenied(type, 'cooldown');
@@ -4360,12 +4528,14 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (type === 'fence') {
+      const half=ABILITY_BALANCE.fence.width/2,ox=Math.cos(this.player.rotation)*half,oy=Math.sin(this.player.rotation)*half;
+      if(this.dynamicFloor && this.dynamicFloor.sweep(x-ox,y-oy,x+ox,y+oy,28,true)<1){this.audio.playSfx('unavailable');return;}
       if (this.fences.length >= cfg.maxActive) {
         GameplayTelemetryRecorder.recordAbilityDenied('fence', 'active-limit');
         this.audio.playSfx('unavailable');
         return;
       }
-      const fence = new Fence(this, x, y, this.player.rotation, SaveSystem.getCosmeticColor('fenceStyle', now), ABILITY_BALANCE.fence.width, cfg.durationMs, cfg.hp, cfg.damage, ABILITY_BALANCE.fence.slowFactor);
+      const fence = new Fence(this, x, y, this.player.rotation, SaveSystem.getCosmeticColor('fenceStyle', now), ABILITY_BALANCE.fence.width, cfg.durationMs, cfg.hp, cfg.damage, ABILITY_BALANCE.fence.slowFactor, resolveFenceAppearance(getCosmeticById(SaveSystem.getEquippedCosmeticId('fenceStyle'))));
       this.fences.push(fence);
     }
 
@@ -4531,9 +4701,9 @@ export class ArenaScene extends Phaser.Scene {
       this.projectiles.push(this.obtainProjectile({
         x: turret.sprite.x,
         y: turret.sprite.y,
-        texture: grenade ? 'ammo-grenade-round' : scattershot ? 'ammo-scatter-pellet' : 'circle',
-        width: grenade ? TEMPORARY_AMMO_BALANCE.grenade.width : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.width : 6,
-        height: grenade ? TEMPORARY_AMMO_BALANCE.grenade.height : scattershot ? TEMPORARY_AMMO_BALANCE.scattershot.height : 6,
+        texture: mode === 'normal' ? 'circle' : this.projectileTextureKey,
+        width: mode === 'normal' ? 6 : this.projectileWidth,
+        height: mode === 'normal' ? 6 : this.projectileHeight,
         tint: projectileColor,
         rotation: projectileAngle,
         velocityX: Math.cos(projectileAngle) * speed,
@@ -4564,7 +4734,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private updateAbilities(now: number, dt: number): void {
     for (const turret of this.turrets) {
-      if (turret.hp <= 0 || !turret.sprite.active) continue;
+      if (turret.hp <= 0 || !turret.sprite.active || this.floorFalling(turret)) continue;
       turret.updateCosmetic(now);
       const playerAmmoMode = this.temporaryAmmo.activeSpecialMode(now);
       const turretAmmoMode = this.turretWeaponSync.activeAmmoMode(
@@ -4604,7 +4774,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     for (const mine of this.mines) {
-      if (!mine.sprite.active) continue;
+      if(!mine.sprite.active||this.floorFalling(mine))continue;
       mine.update(now);
       if (!mine.armed) continue;
       const bossTarget = this.nearestActiveBossTarget(mine.sprite.x, mine.sprite.y);
@@ -4645,7 +4815,7 @@ export class ArenaScene extends Phaser.Scene {
       this.fluxCores?.damageArea(mine.sprite.x, mine.sprite.y, mine.radius, mine.damage, 'mine');
       this.playMineExplosion(mine.sprite.x, mine.sprite.y, mine.radius, mine);
       for (const e of this.enemies) {
-        if (e.airborne) continue;
+        if (e.airborne || (this.dynamicFloor?.sweep(mine.sprite.x,mine.sprite.y,e.x,e.y,0)??1)<1) continue;
         const dx = e.x - mine.sprite.x;
         const dy = e.y - mine.sprite.y;
         const distanceSquared = dx * dx + dy * dy;
@@ -4673,6 +4843,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     for (const fence of this.systemInfusions?.fences ?? this.fences) {
+      (fence as Fence).updateCosmetic(now, !!this.systemInfusions?.railActive);
       if (!fence.sprite.active || fence.hp <= 0 || now >= fence.expiresAt) continue;
       const fieldDamage = this.bombsiteMods.fenceDamageMultiplier(fence.x1, fence.y1, fence.x2, fence.y2);
       let pulse = 0;
@@ -4695,6 +4866,7 @@ export class ArenaScene extends Phaser.Scene {
           fence.y2
         );
         if (d < enemy.hazardRadius + INFUSION_TUNING.fence.thickness + 2) {
+          (fence as Fence).markShock(now);
           enemy.takeDamage(effectiveDps * dt, 'fence');
           const body = enemy.body as Phaser.Physics.Arcade.Body | null;
           if (body) enemy.setVelocity(body.velocity.x * fence.slowFactor, body.velocity.y * fence.slowFactor);
@@ -4720,6 +4892,8 @@ export class ArenaScene extends Phaser.Scene {
     let fenceWriteIndex = 0;
     for (const fence of this.fences) {
       if (fence.isExpired(now)) {
+        this.spawnImpact(fence.x1, fence.y1, fence.appearance.color);
+        this.spawnImpact(fence.x2, fence.y2, fence.appearance.accent);
         fence.destroy();
       } else {
         this.fences[fenceWriteIndex] = fence;
@@ -4756,6 +4930,8 @@ export class ArenaScene extends Phaser.Scene {
     let writeIndex = 0;
     for (const deathMine of this.deathMines) {
       const mine = deathMine.mine;
+      if(!mine.sprite.active)continue;
+      if(this.floorFalling(mine)){this.deathMines[writeIndex++]=deathMine;continue;}
       mine.update(now);
       if (!mine.readyToDetonate(now)) {
         this.deathMines[writeIndex] = deathMine;
@@ -4777,7 +4953,7 @@ export class ArenaScene extends Phaser.Scene {
       const playerDx = this.player.x - mine.sprite.x;
       const playerDy = this.player.y - mine.sprite.y;
       const playerDistanceSquared = playerDx * playerDx + playerDy * playerDy;
-      if (playerDistanceSquared <= mine.radius * mine.radius) {
+      if (playerDistanceSquared <= mine.radius * mine.radius && (this.dynamicFloor?.sweep(mine.sprite.x,mine.sprite.y,this.player.x,this.player.y,0)??1)===1) {
         const playerDist = Math.sqrt(playerDistanceSquared);
         const falloff = 1 - playerDist / (mine.radius + 1);
         const damage = mine.damage * falloff;
@@ -4828,6 +5004,7 @@ export class ArenaScene extends Phaser.Scene {
       }
       const energyCollectionBlocked = p.type === 'energy'
         && energyPickupBlocked(this.player.energy, this.player.energyStats.max, this.isOverdriveProtocol());
+      if (this.floorFalling(p)||this.floorFalling(this.player)){this.pickups[writeIndex++]=p;continue;}
       if (collectOrAttractPickup(p.sprite, this.player.x, this.player.y, collectionRadius,
         magneticField.attractionRadius, magneticField.pullSpeed, dt, now >= (p.collectibleAt ?? 0) && !energyCollectionBlocked)) {
         this.collectPickup(p.type, p.source, p.amount);
@@ -4844,11 +5021,13 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateFloatingPickupMotion(now: number, dt: number): void {
-    this.pickupMotion.update(this.pickups, pickup => pickup.sprite, this.layout.generation.bounds, this.wallRects, now, dt);
+    this.floorFloatingPickups.length=0;
+    for(const pickup of this.pickups)if(!this.floorFalling(pickup))this.floorFloatingPickups.push(pickup);
+    this.pickupMotion.update(this.floorFloatingPickups, pickup => pickup.sprite, this.layout.generation.bounds, this.wallRects, now, dt);
   }
 
   private separateFloatingPickups(): void {
-    this.pickupMotion.separate(this.pickups, pickup => pickup.sprite, this.layout.generation.bounds, this.wallRects);
+    this.pickupMotion.separate(this.floorFloatingPickups, pickup => pickup.sprite, this.layout.generation.bounds, this.wallRects);
   }
 
   private infusionSpectrumColor(offset = 0): number {
@@ -4871,6 +5050,8 @@ export class ArenaScene extends Phaser.Scene {
       const inverseDistance = 1 / Math.sqrt(distanceSquared);
       const resistance = magneticResistanceForEnemy(enemy.stats.type);
       const speed = pullStrength * resistance;
+      if((this.dynamicFloor?.sweep(mine.sprite.x,mine.sprite.y,enemy.x,enemy.y,0)??1)<1)continue;
+      enemy.setData('floorForcedUntil',now+150);
       enemy.setVelocity(dx * inverseDistance * speed, dy * inverseDistance * speed);
     }
     if (now - mine.lastMagneticPulseAt >= 80) {
@@ -5014,6 +5195,7 @@ export class ArenaScene extends Phaser.Scene {
     const b = this.layout.generation.bounds;
     return point.x >= b.x+28 && point.y >= b.y+28 && point.x <= b.x+b.w-28 && point.y <= b.y+b.h-28
       && !this.intersectsWallGeometry(point.x,point.y,24,24)
+      && (this.dynamicFloor?.isSupported(point.x,point.y,this.player.combatRadius,true) ?? true)
       && !(this.gasHazard?.hasGasAt(point.x,point.y) ?? false)
       && !(this.arenaFireTraps?.isDangerousAt(point.x,point.y) ?? false)
       && !(this.laserSecurity?.isDangerousAt(point.x,point.y,this.time.now) ?? false);
@@ -5027,6 +5209,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateSystemInfusions(now: number, dt: number): void {
+    if(this.floorFalling(this.player))return;
     if (!this.systemInfusions && this.modRuntime.getActiveInfusions().length === 0) return;
     if (!this.systemInfusions) {
       const arena=this;
@@ -5050,10 +5233,12 @@ export class ArenaScene extends Phaser.Scene {
           && !this.intersectsWallGeometry(point.x,point.y,18,18)
           && this.mines.every(other=>other===mine||!other.sprite.active||Math.hypot(other.sprite.x-point.x,other.sprite.y-point.y)>=30),
         clearSegment: (a,b) => this.infusionSegmentClear(a,b),
+        validFenceSegment: (a,b) => (this.dynamicFloor?.sweep(a.x,a.y,b.x,b.y,28,true) ?? 1) === 1,
         teleport: point => {
           this.spawnImpact(this.player.x,this.player.y,0x70ffdf);
           (this.player.body as Phaser.Physics.Arcade.Body).reset(point.x,point.y);
           this.player.setVelocity(0,0);this.spawnImpact(point.x,point.y,0x70ffdf);
+          this.floorPlayerRelocated();
         },
         railMove: point => {
           (this.player.body as Phaser.Physics.Arcade.Body).reset(point.x,point.y);this.player.setVelocity(0,0);
@@ -5070,8 +5255,13 @@ export class ArenaScene extends Phaser.Scene {
         createLink: (a,b,first,second) => new Fence(this,(a.x+b.x)/2,(a.y+b.y)/2,Math.atan2(b.y-a.y,b.x-a.x),
           SaveSystem.getCosmeticColor('fenceStyle',this.time.now),Math.hypot(b.x-a.x,b.y-a.y),
           Math.max(1,Math.min(first.expiresAt,second.expiresAt)-this.time.now),Math.min(first.hp,second.hp),
-          Math.min((first as Fence).dps,(second as Fence).dps),Math.max((first as Fence).slowFactor,(second as Fence).slowFactor)),
+          Math.min((first as Fence).dps,(second as Fence).dps),Math.max((first as Fence).slowFactor,(second as Fence).slowFactor),(first as Fence).appearance),
         ascend: (_turrets,point,until) => this.beginPossession(point,until),
+        linkRetired: link => {
+          const fence=link as Fence;
+          this.spawnImpact(fence.x1,fence.y1,fence.appearance.color);
+          this.spawnImpact(fence.x2,fence.y2,fence.appearance.accent);
+        },
         boostActive: time => time<this.player.dashUntil,
         drainBoost: amount => {
           if(!this.player.canSpendEnergy(amount)){this.player.dashUntil=this.time.now;this.boostVisual.reset();return false;}
@@ -5146,6 +5336,7 @@ export class ArenaScene extends Phaser.Scene {
     (this.player.body as Phaser.Physics.Arcade.Body).reset(spawn.x,spawn.y);
     (this.player.body as Phaser.Physics.Arcade.Body).enable=false;
     this.player.setVelocity(0,0).setVisible(false);
+    this.floorPlayerRelocated();
     this.possession.playEntrance();this.audio.playSfx('miniBossSpawn');shakeGameplayCamera(this,160,.003);
     return true;
   }
@@ -5156,6 +5347,7 @@ export class ArenaScene extends Phaser.Scene {
     if(this.possessionRemainingMs<=0||!possession.boss.active||possession.boss.isDefeated||!this.modRuntime.hasActiveInfusion('ascension-protocol')){
       this.endPossession(true);return;
     }
+    if(this.floorFalling(this.player)){possession.boss.setVelocity(0,0);return;}
     possession.updateControlled(delta,{move:this.playerInput.move,aim:this.aimWorldPoint,
       primary:this.playerInput.held('fire'),secondary:this.playerInput.pressed('dash')});
     this.player.setPosition(possession.boss.x,possession.boss.y).setVisible(false).setVelocity(0,0);
@@ -5175,6 +5367,7 @@ export class ArenaScene extends Phaser.Scene {
     const body=this.player.body as Phaser.Physics.Arcade.Body;
     body.enable=true;body.reset(point.x,point.y);this.player.setVelocity(0,0).setVisible(true);
     if(protect)this.player.invulnUntil=Math.max(this.player.invulnUntil,this.time.now+INFUSION_TUNING.ascension.ejectProtectionMs);
+    this.floorPlayerRelocated();
     this.infusionHint?.setVisible(false);this.siteActionText?.setText('');this.hudPayload.healthLabel=undefined;
   }
 
@@ -5186,9 +5379,10 @@ export class ArenaScene extends Phaser.Scene {
       : Math.hypot(target.x-x,target.y-y)<=radius+target.hazardRadius;
     for(const enemy of this.enemies){
       if(!enemy.active||enemy.isDead()||!intersects(enemy))continue;
+      if(attack.startsWith('brawler')&&(this.dynamicFloor?.sweep(x,y,enemy.x,enemy.y,0)??1)<1)continue;
       const applied=enemy.takeDamage(damage,'weapon');
       if(enemy.isDead())this.triggerSplitCurrent(enemy,applied);
-      else if(attack.startsWith('brawler')){const d=Math.hypot(enemy.x-x,enemy.y-y)||1;enemy.setVelocity((enemy.x-x)/d*180,(enemy.y-y)/d*180);}
+      else if(attack.startsWith('brawler')){enemy.setData('floorForcedUntil',this.time.now+150);const d=Math.hypot(enemy.x-x,enemy.y-y)||1;enemy.setVelocity((enemy.x-x)/d*180,(enemy.y-y)/d*180);}
     }
     for(const boss of this.activeMajorBosses())if(boss.active&&!boss.isDefeated&&intersects(boss))boss.takeDamage(damage,'weapon');
   }
@@ -5660,6 +5854,7 @@ export class ArenaScene extends Phaser.Scene {
       bounds: this.layout.generation.bounds,
       isGameplayEligible: () => !this.bossEncounter
         && !this.supremeFinale
+        && !this.floorFalling(this.player)
         && !this.arcadeController?.activeEventId
         && this.state.state !== RoundState.Paused
         && this.state.state !== RoundState.Victory
@@ -5693,6 +5888,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private isAnomalyLocationValid(x: number, y: number, clearance: number): boolean {
+    if(this.dynamicFloor?.panels.some(p=>x>p.x-clearance&&x<p.x+p.w+clearance&&y>p.y-clearance&&y<p.y+p.h+clearance))return false;
     const bounds = this.layout.generation.bounds;
     if (x < bounds.x + clearance || y < bounds.y + clearance
       || x > bounds.x + bounds.w - clearance || y > bounds.y + bounds.h - clearance) return false;
@@ -5713,7 +5909,7 @@ export class ArenaScene extends Phaser.Scene {
     if (this.fences.some((fence) => this.distancePointToSegment(x, y, fence.x1, fence.y1, fence.x2, fence.y2) < clearance)) return false;
     if (this.pickups.some((pickup) => blockedBy(pickup.sprite.x, pickup.sprite.y, 38))) return false;
     if (this.modPickups.some((pickup) => blockedBy(pickup.sprite.x, pickup.sprite.y, 44))) return false;
-    return this.pathfinder.findPath(this.player.x, this.player.y, x, y, { maxIterations: 5_000 }).length > 0;
+    return this.pathfinder.findPath(this.player.x, this.player.y, x, y, { maxIterations: 5_000, cellBlocked: this.combatCellBlocked }).length > 0;
   }
 
   private spendAnomalyEntryCost(amount: number): boolean {
@@ -6469,6 +6665,7 @@ export class ArenaScene extends Phaser.Scene {
         pickup.sprite.destroy();
         continue;
       }
+      if(this.floorFalling(pickup)||this.floorFalling(this.player)){this.modPickups[writeIndex++]=pickup;continue;}
       updateGameplayModPickupVisual(pickup.visual, now, dt);
       const dx = this.player.x - pickup.sprite.x;
       const dy = this.player.y - pickup.sprite.y;
@@ -6604,6 +6801,7 @@ export class ArenaScene extends Phaser.Scene {
       createArenaFireTrapPlacements(this.layout, difficultyPosition),
       {
         environment: 'arena',
+        surfaceConnected:(x,y,tx,ty)=>(this.dynamicFloor?.sweep(x,y,tx,ty,0)??1)===1,
         isPlayerAlive: () => this.player.active && !this.player.isDead(),
         particlesEnabled: this.particlesEnabled,
         damageProfile: getFireHazardDamageProfile(difficultyPosition, this.protocol),
@@ -6623,7 +6821,11 @@ export class ArenaScene extends Phaser.Scene {
           redeployCooldownMs: 11_500,
           predictionSeconds: 0.32,
           maximumLead: 78,
-          resolvePlacement: (x, y, sequence) => resolveArenaFloorFirePlacement(this.layout, x, y, sequence)
+          resolvePlacement: (x, y, sequence) => {
+            const point=resolveArenaFloorFirePlacement(this.layout,x,y,sequence);
+            if(!point)return null;
+            return this.dynamicFloor?.panels.some(p=>point.x>p.x-96&&point.x<p.x+p.w+96&&point.y>p.y-96&&point.y<p.y+p.h+96)?null:point;
+          }
         }
       }
     );
@@ -6697,8 +6899,9 @@ export class ArenaScene extends Phaser.Scene {
     this.arenaSmashables?.damageArea(site.x, site.y, BOMBSITE_EXPLOSION_VISUAL_RADIUS, 9999);
     if (bombExplosionCosmeticEffect) {
       const definition = BOMB_EXPLOSION_COSMETIC_DEFINITIONS[bombExplosionCosmeticEffect];
-      if (definition.soundDelayMs) this.scheduleRoundHandoffCall(definition.soundDelayMs, () => this.audio.playSfx(definition.sound));
-      else this.audio.playSfx(BOMB_EXPLOSION_COSMETIC_DEFINITIONS[bombExplosionCosmeticEffect].sound);
+      const sound = definition.sound;
+      if (sound && definition.soundDelayMs) this.scheduleRoundHandoffCall(definition.soundDelayMs, () => this.audio.playSfx(sound));
+      else if (sound) this.audio.playSfx(sound);
     }
 
     if (this.modRuntime.hasInfusion('detonation-fireworks')) this.playDetonationFireworks(site.x, site.y);
@@ -7007,6 +7210,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     this.bossPickupRandom = new SeededRandom((bossSeed ^ 0x51f15e11) >>> 0);
+    this.createDynamicFloor(this.bossRound);
     this.nextBossSupportPickupAt = this.time.now + BOSS_BALANCE.supportPickupFirstDelayMs;
     this.shieldActiveUntil = 0;
     this.shieldCooldownUntil = 0;
@@ -8453,6 +8657,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private isValidPlacement(x: number, y: number): boolean {
+    if(!(this.dynamicFloor?.isSupported(x,y,24,true) ?? true))return false;
     const bounds=this.layout.generation.bounds;
     if (x < bounds.x+40 || y < bounds.y+40 || x > bounds.x+bounds.w-40 || y > bounds.y+bounds.h-40) return false;
     if (this.hitWall(x, y)) return false;
@@ -9233,6 +9438,9 @@ export class ArenaScene extends Phaser.Scene {
       destructionEffectsDegraded: destruction?.degradedEffects ?? 0,
       pickups: this.pickups.length + this.modPickups.length,
       deployables: this.fences.length + this.turrets.length + this.mines.length + this.deathMines.length,
+      floorPanels: this.dynamicFloor?.panels.length ?? 0,
+      floorActivePanels: this.dynamicFloor?.activeCount ?? 0,
+      floorNavigationUpdates: this.dynamicFloor?.navigationUpdates ?? 0,
       smashableProps: this.arenaSmashables?.diagnostics().active ?? 0,
       hazardControllers: Number(Boolean(this.laserSecurity)) + Number(Boolean(this.bombletHazard))
         + Number(Boolean(this.gasHazard)) + Number(Boolean(this.fluxCores)),
@@ -9528,6 +9736,7 @@ export class ArenaScene extends Phaser.Scene {
     this.anomalySuspensionState = null;
     this.lastAnomalyResourceAudit = null;
     this.retireRoundOwner('infusion-presentation', () => this.clearRoundInfusionEffects());
+    this.retireRoundOwner('dynamic-floor', () => this.destroyDynamicFloor());
     this.retireRoundOwner('arena-visuals', () => this.arenaVisuals?.destroy());
     this.arenaVisuals = null;
     this.retireRoundOwner('arena-smashables', () => this.arenaSmashables?.destroy());

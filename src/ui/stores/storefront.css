@@ -270,3 +270,15 @@
 .store-set-collection button[aria-current=true],.store-set-collection button:focus-visible { border-color:#a2ffbb; color:#a2ffbb; outline:1px solid #a2ffbb; }
 .reduced-effects .hw-svg * { animation:none!important; }
 .store-grid-panel.has-season-banner { grid-template-rows:auto auto minmax(0,1fr); }
+.premium-fence-svg,.premium-bomb-svg{width:100%;height:100%;overflow:visible}
+.premium-fence-art,.premium-bomb-art{min-height:130px}
+.cosmetic-visual.premium-fence-art::before,.cosmetic-visual.premium-fence-art::after,.cosmetic-visual.premium-bomb-art::before,.cosmetic-visual.premium-bomb-art::after{display:none}
+.cosmetic-visual.premium-fence-art,.cosmetic-visual.premium-bomb-art{background:none}
+.premium-fence-svg .fence-current{animation:fence-flow 1s linear infinite}
+.premium-bomb-svg .bomb-orbit{transform-origin:128px 128px;animation:bomb-orbit 9s linear infinite}
+.premium-bomb-svg .bomb-hero{transform-origin:128px 128px;animation:bomb-breathe 2.7s ease-in-out infinite}
+@keyframes fence-flow{to{stroke-dashoffset:-38}}
+@keyframes bomb-orbit{to{transform:rotate(360deg)}}
+@keyframes bomb-breathe{0%,100%{transform:scale(.85);opacity:.6}35%,65%{transform:scale(1);opacity:1}}
+@media(prefers-reduced-motion:reduce){.premium-fence-svg *,.premium-bomb-svg *{animation:none!important}}
+.reduced-effects .premium-fence-svg *,.reduced-effects .premium-bomb-svg *{animation:none!important}

@@ -6,16 +6,13 @@ const fence = readFileSync(new URL('../src/game/abilities/Fence.ts', import.meta
 const hud = readFileSync(new URL('../src/game/systems/Hud.ts', import.meta.url), 'utf8');
 const garage = readFileSync(new URL('../src/game/scenes/OperatorGarageScene.ts', import.meta.url), 'utf8');
 
-test('operative fences deploy two telescoping nodes and four live conductors without changing combat endpoints', () => {
-  assert.match(fence, /const FENCE_WIRE_LEVELS = \[-5, -11, -17, -23\]/);
-  assert.match(fence, /for \(const localX of \[-halfWidth, halfWidth\]\)/);
-  assert.match(fence, /const poleRoot = scene\.add\.container/);
-  assert.match(fence, /targets: this\.poleRoots, scaleY: 1/);
-  assert.match(fence, /targets: this\.wires, scaleX: 1/);
-  assert.match(fence, /targets: this\.warningLights/);
-  assert.match(fence, /targets: pip,[\s\S]*?repeat: -1/);
-  assert.match(fence, /this\.x1 = x - offsetX/);
-  assert.match(fence, /this\.x2 = x \+ offsetX/);
+test('fence presentation uses cached pylons and scene-clock conductors while endpoints stay fixed', () => {
+  assert.match(fence, /fenceTexture\(appearance.id\)/);
+  assert.match(fence, /for\(const px of \[-width\/2,width\/2\]\)/);
+  assert.match(fence, /for\(let i=0;i<4;i\+\+\)/);
+  assert.match(fence, /this.x1=x-ox; this.y1=y-oy; this.x2=x\+ox; this.y2=y\+oy/);
+  assert.match(fence, /updateCosmetic/);
+  assert.doesNotMatch(fence, /tweens.add|repeat: -1/);
 });
 
 test('HUD cooldown modules mirror the deployed fence, turret, mine, and shield art', () => {

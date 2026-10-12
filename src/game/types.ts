@@ -284,7 +284,7 @@ export type CosmeticVisualShape =
   | 'witchFrame' | 'batFrame' | 'pumpkinFrame'
   | 'witchBolt' | 'batShard' | 'pumpkinSeed';
 
-export type BombExplosionCosmeticEffectId = 'death-signal' | 'neon-bloom' | 'neon-bats' | 'witch-signal' | 'tug-life' | 'pumpkin-reactor';
+export type BombExplosionCosmeticEffectId = 'violet-plasma' | 'scarlet-heat' | 'cryo-shatter' | 'emerald-ion' | 'solar-flare' | 'prism-spectrum' | 'death-signal' | 'neon-bloom' | 'neon-bats' | 'witch-signal' | 'tug-life' | 'pumpkin-reactor';
 export type DashTrailCosmeticEffectId = 'ion' | 'fire-smoke' | 'grass-clippings' | 'bubbles' | 'plasma' | 'jet-plume' | 'stars';
 export type TurretSkinCosmeticEffectId =
   | 'void-reactor'
@@ -314,6 +314,7 @@ export interface CosmeticOption {
   /** Store availability only; never restricts an owned item's use. */
   holiday?: import('./cosmetics/SeasonalStore.ts').HolidayId;
   halloweenSet?: 'witch' | 'bats' | 'pumpkin';
+  fenceMotif?: import('./cosmetics/FenceCosmetics.ts').FenceMotif;
   category: 'playerColor' | 'playerShape' | 'projectileColor' | 'projectileShape' | 'trailColor' | 'bombColor' | 'turretSkin' | 'mineFrame' | 'fenceStyle' | 'dashTrail';
   label: string;
   currency: 'credits' | 'coreTokens' | 'plasmaChips';

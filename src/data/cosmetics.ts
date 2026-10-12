@@ -1,6 +1,7 @@
 import type { CosmeticOption } from '../game/types.ts';
 import type { CosmeticPriceTier } from '../game/economy/types.ts';
 import { HALLOWEEN_COSMETICS } from './halloweenCosmetics.ts';
+import { createSetFenceCosmetics } from '../game/cosmetics/FenceCosmetics.ts';
 
 export const DEFAULT_EQUIPPED_COSMETICS: Partial<Record<CosmeticOption['category'], string>> = {
   playerColor: 'player-cyan',
@@ -148,12 +149,12 @@ export const COSMETICS: CosmeticOption[] = [
   { id: 'trail-gold', category: 'trailColor', label: 'Solar Wake', currency: 'credits', cost: 750, color: 0xffcf5a },
   { id: 'trail-prism', category: 'trailColor', label: 'Prism Wake', currency: 'plasmaChips', cost: 70, additionalCosts: { credits: 7_500, coreTokens: 200 }, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
 
-  { id: 'bomb-purple', category: 'bombColor', label: 'Violet Detonation', currency: 'credits', cost: 700, color: 0xbe62ff },
-  { id: 'bomb-red', category: 'bombColor', label: 'Scarlet Detonation', currency: 'credits', cost: 825, color: 0xff4d4d },
-  { id: 'bomb-cyan', category: 'bombColor', label: 'Cryo Detonation', currency: 'credits', cost: 750, color: 0x4eeaff },
-  { id: 'bomb-green', category: 'bombColor', label: 'Emerald Detonation', currency: 'credits', cost: 825, color: 0x55ff8c },
-  { id: 'bomb-gold', category: 'bombColor', label: 'Solar Detonation', currency: 'credits', cost: 900, color: 0xffc94f },
-  { id: 'bomb-prism', category: 'bombColor', label: 'Prism Detonation', currency: 'coreTokens', cost: 260, additionalCosts: { credits: 9_500 }, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
+  { id: 'bomb-purple', bombExplosionEffect: 'violet-plasma', category: 'bombColor', label: 'Violet Detonation', currency: 'credits', cost: 700, color: 0xbe62ff },
+  { id: 'bomb-red', bombExplosionEffect: 'scarlet-heat', category: 'bombColor', label: 'Scarlet Detonation', currency: 'credits', cost: 825, color: 0xff4d4d },
+  { id: 'bomb-cyan', bombExplosionEffect: 'cryo-shatter', category: 'bombColor', label: 'Cryo Detonation', currency: 'credits', cost: 750, color: 0x4eeaff },
+  { id: 'bomb-green', bombExplosionEffect: 'emerald-ion', category: 'bombColor', label: 'Emerald Detonation', currency: 'credits', cost: 825, color: 0x55ff8c },
+  { id: 'bomb-gold', bombExplosionEffect: 'solar-flare', category: 'bombColor', label: 'Solar Detonation', currency: 'credits', cost: 900, color: 0xffc94f },
+  { id: 'bomb-prism', bombExplosionEffect: 'prism-spectrum', category: 'bombColor', label: 'Prism Detonation', currency: 'coreTokens', cost: 260, additionalCosts: { credits: 9_500 }, color: 0xffffff, colorMode: 'prism', priceTier: 'prestige' },
   {
     id: 'bomb-death-signal',
     category: 'bombColor',
@@ -277,6 +278,7 @@ export const COSMETICS: CosmeticOption[] = [
   ...HALLOWEEN_COSMETICS
 ];
 
+COSMETICS.push(...createSetFenceCosmetics(COSMETICS));
 const COSMETICS_BY_ID = new Map(COSMETICS.map((cosmetic) => [cosmetic.id, cosmetic]));
 
 export const getCosmeticById = (id: string | null | undefined): CosmeticOption | undefined =>

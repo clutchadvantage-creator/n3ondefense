@@ -1,0 +1,10 @@
+export const FLOOR_ART_PARTS=['deck','receiver','lava','ember'] as const;
+export function createDynamicFloorSvg(part:typeof FLOOR_ART_PARTS[number]):string {
+  if(part==='ember')return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 1 21 12 12 23 3 12z" fill="#ffdd77"/><circle cx="12" cy="12" r="3" fill="#fff7cf"/></svg>';
+  const common=`<path d="M2 8 8 2h96l6 6v80l-6 6H8l-6-6z" fill="#101b24" stroke="#415260" stroke-width="2"/><path d="M9 13h94v70H9z" fill="#0a111a" stroke="#253d49"/><g fill="#9db0b5">${[8,104].flatMap(x=>[8,88].map(y=>`<circle cx="${x}" cy="${y}" r="2"/>`)).join('')}</g>`;
+  let art=common;
+  if(part==='lava')art=`<defs><radialGradient id="magma"><stop stop-color="#ffc64a"/><stop offset=".48" stop-color="#f74b10"/><stop offset="1" stop-color="#411219"/></radialGradient></defs><rect width="112" height="96" fill="#11070b"/><rect x="7" y="7" width="98" height="82" rx="5" fill="url(#magma)"/><g fill="#4a1718" stroke="#ff972d" stroke-width="1.5"><path d="m6 24 24-13 25 5-7 14-25 10zM66 9l31 6 12 20-27 3-24-15zM48 45l28-6 12 19-26 12-25-11zM9 59l21-10 4 26-13 15-13-6zM87 67l21-9-4 30-34 4z"/></g><path d="M3 2h106v91" fill="none" stroke="#354453" stroke-width="6"/>`;
+  if(part==='deck')art+=`<path d="M13 15h86v23H13zm0 45h86v21H13z" fill="#1a2d38" stroke="#3e5966"/><g stroke="#0b1721" stroke-width="3">${[20,28,36,76,84,92].map(x=>`<path d="M${x} 19v15m0 31v12"/>`).join('')}</g><path d="m40 40 10 8-10 8m19-16 10 8-10 8" fill="none" stroke="#59d9cf" stroke-width="3"/><path d="M3 27v40m106-40v40" stroke="#5bafa8" stroke-width="2"/><path d="M17 85h15m48 0h15" stroke="#ffba4d" stroke-width="2"/><path d="M54 8v27m0 27v27" stroke="#080f17" stroke-width="2"/>`;
+  if(part==='receiver')art+=`<path d="M7 5h98v12H7zM7 78h98v12H7z" fill="#182b36"/><g stroke="#70818b" stroke-width="2">${[25,33,41,49,57,65,73].map(y=>`<path d="M14 ${y}h84"/>`).join('')}</g><path d="M15 8l5 6m11-6 5 6m11-6 5 6m11-6 5 6m11-6 5 6m11-6 5 6" stroke="#edb94e" stroke-width="4"/><path d="M15 85h20m42 0h20" stroke="#61ded0" stroke-width="2"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 96">${art}</svg>`;
+}

@@ -187,7 +187,7 @@ test('combat telemetry batches persistence but encounter and run boundaries flus
 test('fence endpoints are precomputed once for split and collision hot paths', () => {
   const source = fs.readFileSync(new URL('../src/game/abilities/Fence.ts', import.meta.url), 'utf8');
   assert.match(source, /readonly x1: number/);
-  assert.match(source, /const offsetX = Math\.cos\(angle\) \* halfWidth/);
+  assert.match(source, /const ox = Math\.cos\(angle\) \* width \/ 2/);
   const arena = fs.readFileSync(new URL('../src/game/scenes/ArenaScene.ts', import.meta.url), 'utf8');
   assert.match(arena, /fence\.x1, fence\.y1, fence\.x2, fence\.y2/);
   assert.doesNotMatch(arena, /Math\.cos\(fence\.sprite\.rotation\)/);

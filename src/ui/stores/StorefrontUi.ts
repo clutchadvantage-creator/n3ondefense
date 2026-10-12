@@ -1,6 +1,8 @@
 import { getSeasonalStoreInventory, getStoreCalendarKey, HOLIDAY_WINDOWS, isCosmeticInSeason } from '../../game/cosmetics/SeasonalStore.ts';
 import { createHalloweenSvgElement, halloweenArtKind } from '../../game/cosmetics/HalloweenCosmeticArt.ts';
 import { HALLOWEEN_SETS } from '../../data/halloweenCosmetics.ts';
+import { createFencePreviewSvg } from '../../game/cosmetics/FenceCosmetics.ts';
+import { createLegacyBombPreviewSvg, isLegacyBomb } from '../../game/cosmetics/LegacyBombArt.ts';
 import type { CosmeticOption, UpgradeDefinition } from '../../game/types';
 import { getUpgradeCost, getUpgradeLevel } from '../../data/upgrades';
 import { getUpgradeComparison, getUpgradeVisual } from './upgradePresentation';
@@ -810,6 +812,11 @@ export class StorefrontUi {
     if (item.turretSkinEffect) visual.dataset.turretSkin = item.turretSkinEffect;
     if (item.mineFrameEffect) visual.dataset.mineFrame = item.mineFrameEffect;
     visual.innerHTML = '<i class="trail-a"></i><i class="trail-b"></i><b></b><span></span>';
+    if (item.category === 'fenceStyle') {
+      visual.classList.add('premium-fence-art');
+      visual.innerHTML = createFencePreviewSvg(item);
+      return visual;
+    }
     if (item.halloweenSet) {
       visual.classList.add('halloween-cosmetic-art');
       visual.replaceChildren(createHalloweenSvgElement(item.halloweenSet, halloweenArtKind(item.category), this.options.particlesEnabled));
@@ -817,6 +824,11 @@ export class StorefrontUi {
     }
     if (item.bombExplosionEffect === 'tug-life') {
       visual.innerHTML = createTugLifeWhistleSvg();
+      return visual;
+    }
+    if (item.bombExplosionEffect && isLegacyBomb(item.bombExplosionEffect)) {
+      visual.classList.add('premium-bomb-art');
+      visual.innerHTML = createLegacyBombPreviewSvg(item.bombExplosionEffect);
       return visual;
     }
     if (COLOR_PALETTE_CATEGORIES.has(item.category) && !item.bombExplosionEffect) {

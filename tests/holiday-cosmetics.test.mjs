@@ -22,13 +22,13 @@ for (const year of [2026, 2027, 2028]) {
 
 test('off-season discovery hides holiday goods without removing catalog identities', () => {
   const seasonal = COSMETICS.filter(item => item.holiday);
-  assert.equal(seasonal.length, 15);
+  assert.equal(seasonal.length, 18);
   const ordinary = COSMETICS.filter(item => !item.holiday);
   const summer = getSeasonalStoreInventory(COSMETICS, local(2026, 8, 1));
   assert.deepEqual(new Set(summer.map(item => item.id)), new Set(ordinary.map(item => item.id)));
   const halloween = getSeasonalStoreInventory(COSMETICS, local(2026, 10, 11));
   assert.equal(halloween.length, COSMETICS.length);
-  assert.ok(halloween.slice(0, 15).every(item => item.holiday === 'halloween'));
+  assert.ok(halloween.slice(0, 18).every(item => item.holiday === 'halloween'));
   assert.ok(getCosmeticById('bomb-witch-signal'));
   assert.ok(getCosmeticById('bomb-neon-bats'));
   assert.equal(new Set(COSMETICS.map(item => item.id)).size, COSMETICS.length);
@@ -47,10 +47,10 @@ test('calendar supports tagged Christmas and July items without a separate rotat
 });
 
 for (const set of ['witch', 'bats', 'pumpkin']) {
-  test(`${set} has a complete five-piece set, durable ownership, and native combat art`, () => {
+  test(`${set} has a complete six-piece set, durable ownership, and native combat art`, () => {
     const items = COSMETICS.filter(item => item.halloweenSet === set);
-    assert.deepEqual(new Set(items.map(item => item.category)), new Set(['playerShape', 'turretSkin', 'mineFrame', 'projectileShape', 'bombColor']));
-    assert.equal(items.length, 5);
+    assert.deepEqual(new Set(items.map(item => item.category)), new Set(['playerShape', 'turretSkin', 'mineFrame', 'projectileShape', 'bombColor', 'fenceStyle']));
+    assert.equal(items.length, 6);
     const save = createDefaultLocalSave(`halloween-${set}`, 'Halloween Audit');
     for (const item of items) {
       assert.equal(item.priceTier, 'prestige');

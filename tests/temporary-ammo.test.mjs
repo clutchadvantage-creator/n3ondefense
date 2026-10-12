@@ -82,7 +82,7 @@ test('grenade rounds use restrained direct-plus-splash behavior and the shared a
   assert.match(arena, /enemy === this\.grenadeSplashExcludedEnemy/);
   assert.match(arena, /this\.enemySeparationGrid\.forEachNearby\(x, y, radius, this\.applyGrenadeSplashNeighbor\)/);
   assert.match(arena, /this\.mineExplosionVfx\.emitColors\(/);
-  assert.match(arena, /'ammo-grenade-round'/);
+  assert.doesNotMatch(arena, /'ammo-grenade-round'/);
   assert.match(arena, /primaryColor,\s*this\.time\.now,\s*false\s*\);/);
 });
 
@@ -196,7 +196,7 @@ test('scattershot is a symmetric pooled seven-pellet fan with one firing cost an
   assert.equal((shooting.match(/this\.player\.heat \+=/g) ?? []).length, 1);
   assert.match(shooting, /SCATTERSHOT_ANGLE_OFFSETS/);
   assert.match(shooting, /this\.projectiles\.push\(this\.obtainProjectile\(/);
-  assert.match(arena, /'ammo-scatter-pellet'/);
+  assert.doesNotMatch(arena, /'ammo-scatter-pellet'/);
   assert.match(arena, /ammoMode: projectile\.ammoMode/);
   assert.match(arena, /findSpecialAmmoHitEnemy/);
 });

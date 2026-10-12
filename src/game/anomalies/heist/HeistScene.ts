@@ -22,6 +22,8 @@ import { getMineRackEnergyCost, getMineRackPatternOffsets } from '../../abilitie
 import { resolveFenceSplitStage } from '../../abilities/FenceSplitRules.ts';
 import { getCosmeticById } from '../../../data/cosmetics.ts';
 import { SaveSystem } from '../../systems/SaveSystem.ts';
+import { PROJECTILE_BEHAVIOR_PROFILES } from '../../player/ProjectileBehaviorProfile.ts';
+import { resolveFenceAppearance } from '../../cosmetics/FenceCosmetics.ts';
 import { AudioManager } from '../../systems/AudioManager.ts';
 import { Hud, HUD_RADAR_RANGE, type HudPayload, type HudRadarContact } from '../../systems/Hud.ts';
 import { BoostVisualSystem, type BoostFxCircleSpawn } from '../../systems/BoostVisualSystem.ts';
@@ -518,7 +520,6 @@ export class AnomalyCombatScene extends Phaser.Scene {
       }
       const nativePalette = state.nativePalette ?? (
         state.owner !== 'enemy'
-        && state.ammoMode === 'normal'
         && state.texture === this.projectileTextureKey
         && this.projectileNativePalette
       );
@@ -526,10 +527,11 @@ export class AnomalyCombatScene extends Phaser.Scene {
         .setTexture(state.texture).setOrigin(0.5).setDisplaySize(state.width, state.height).clearTint()
         .setAlpha(1).setRotation(state.rotation).setDepth(9);
       if (!nativePalette) projectile.sprite.setTint(state.tint);
-      if (body && nativePalette) {
+      if (body && (nativePalette || state.ammoMode !== 'normal')) {
+        const behavior = PROJECTILE_BEHAVIOR_PROFILES[state.ammoMode];
         body.setSize(
-          8 / Math.max(0.001, Math.abs(projectile.sprite.scaleX)),
-          8 / Math.max(0.001, Math.abs(projectile.sprite.scaleY)),
+          behavior.bodyWidth / Math.max(0.001, Math.abs(projectile.sprite.scaleX)),
+          behavior.bodyHeight / Math.max(0.001, Math.abs(projectile.sprite.scaleY)),
           true
         );
       } else if (body) body.setSize(projectile.sprite.width, projectile.sprite.height, true);
@@ -974,7 +976,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
     if (this.echo?.timeline.recording) this.echo.timeline.recordShot({ x, y, angle, mode: ammoMode,
       speed: this.player.weapon.projectileSpeed, damage, critical, ricochets, grenadeSequence: this.grenadeProjectileSequence,
       texture: this.projectileTextureKey, width: this.projectileWidth, height: this.projectileHeight,
-      nativePalette: ammoMode === 'normal' && this.projectileNativePalette });
+      nativePalette: this.projectileNativePalette });
     if (ammoMode === 'scattershot') {
       for (const offset of SCATTERSHOT_ANGLE_OFFSETS) {
         this.spawnPlayerAmmoProjectile(ammoMode, x, y, angle + offset, damage, projectileColor, trailColor, critical, ricochets);
@@ -1029,7 +1031,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
     this.abilityState.cooldownUntil.fence = now + cfg.cooldownMs;
     this.fences.push(new Fence(this, aim.x, aim.y, this.player.rotation,
       SaveSystem.getCosmeticColor('fenceStyle', now), ABILITY_BALANCE.fence.width,
-      cfg.durationMs, cfg.hp, cfg.damage, ABILITY_BALANCE.fence.slowFactor));
+      cfg.durationMs, cfg.hp, cfg.damage, ABILITY_BALANCE.fence.slowFactor, resolveFenceAppearance(getCosmeticById(SaveSystem.getEquippedCosmeticId('fenceStyle')))));
     this.coreAudio.playSfx('electricFence');
   }
 
@@ -1132,9 +1134,9 @@ export class AnomalyCombatScene extends Phaser.Scene {
     const bounceCount = grenade ? grenadeBounceCountForSequence(grenadeSequence) : 0;
     const now = this.time.now;
     const projectile = this.projectilePool.obtain({
-      owner: 'player', texture: grenade ? 'ammo-grenade-round' : scatter ? 'ammo-scatter-pellet' : echoShot?.texture ?? this.projectileTextureKey,
-      width: grenade ? TEMPORARY_AMMO_BALANCE.grenade.width : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.width : echoShot?.width ?? this.projectileWidth,
-      height: grenade ? TEMPORARY_AMMO_BALANCE.grenade.height : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.height : echoShot?.height ?? this.projectileHeight,
+      owner: 'player', texture: echoShot?.texture ?? this.projectileTextureKey,
+      width: echoShot?.width ?? this.projectileWidth,
+      height: echoShot?.height ?? this.projectileHeight,
       tint, rotation: angle, velocityX: Math.cos(angle) * speed, velocityY: Math.sin(angle) * speed,
       damage: damage * (scatter ? TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier : 1) * (echoShot ? echoMultiplier : 1),
       echo: echoShot ? stampEchoDamage(damage * (scatter ? TEMPORARY_AMMO_BALANCE.scattershot.pelletDamageMultiplier : 1), echoMultiplier) : undefined,
@@ -1495,9 +1497,15 @@ export class AnomalyCombatScene extends Phaser.Scene {
   protected updateFences(now: number, dt: number): void {
     for (let index = this.fences.length - 1; index >= 0; index -= 1) {
       const fence = this.fences[index];
-      if (fence.isExpired(now)) { fence.destroy(); this.fences.splice(index, 1); continue; }
+      fence.updateCosmetic(now);
+      if (fence.isExpired(now)) {
+        this.projectileImpactVfx.emit(fence.x1,fence.y1,0,fence.appearance.color,now,2);
+        this.projectileImpactVfx.emit(fence.x2,fence.y2,Math.PI,fence.appearance.accent,now,2);
+        fence.destroy(); this.fences.splice(index, 1); continue;
+      }
       for (const enemy of this.enemies) {
         if (this.distanceToSegment(enemy.x, enemy.y, fence.x1, fence.y1, fence.x2, fence.y2) < enemy.stats.size * 0.5 + 7) {
+          fence.markShock(now);
           this.damageEnemy(enemy, fence.dps * dt);
         }
       }
@@ -1522,9 +1530,9 @@ export class AnomalyCombatScene extends Phaser.Scene {
       const bounceCount = grenade ? grenadeBounceCountForSequence(grenadeSequence) : 0;
       this.projectiles.push(this.projectilePool.obtain({
         owner: 'turret',
-        texture: grenade ? 'ammo-grenade-round' : scatter ? 'ammo-scatter-pellet' : this.projectileTextureKey,
-        width: grenade ? TEMPORARY_AMMO_BALANCE.grenade.width : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.width : this.projectileWidth,
-        height: grenade ? TEMPORARY_AMMO_BALANCE.grenade.height : scatter ? TEMPORARY_AMMO_BALANCE.scattershot.height : this.projectileHeight,
+        texture: this.projectileTextureKey,
+        width: this.projectileWidth,
+        height: this.projectileHeight,
         tint: color,
         rotation: projectileAngle,
         velocityX: Math.cos(projectileAngle) * speed,

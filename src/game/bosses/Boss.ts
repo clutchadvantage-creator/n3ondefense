@@ -114,9 +114,9 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     for (const part of this.weapons) { if (flash) part.setTint(0xffffff); else part.clearTint(); }
   }
 
-  takeDamage(amount: number, source: BossDamageSource = 'weapon', echo?: EchoDamageStamp): number {
+  takeDamage(amount: number, source: BossDamageSource = 'weapon', echo?: EchoDamageStamp, environmental = false): number {
     if (source === 'echo') amount = authoritativeEchoDamage(amount, echo);
-    if (this.defeated || this.shielded || !Number.isFinite(amount) || amount <= 0) return 0;
+    if (this.defeated || (this.shielded && !environmental) || !Number.isFinite(amount) || amount <= 0) return 0;
     const applied = Math.min(this.hp, amount * (source === 'hazard' && this.faction==='enemy' ? BOSS_BALANCE.hazardDamageMultiplier : 1));
     if (applied <= 0) return 0;
     this.hp = Math.max(0, this.hp - applied);
@@ -137,6 +137,13 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
 
   get healthRatio(): number {
     return Phaser.Math.Clamp(this.hp / this.maxHp, 0, 1);
+  }
+
+  /** Shared floor adapter owns this transient presentation; normal boss art is unchanged. */
+  presentFloorFall(scale:number,alpha:number,descent:number):void {
+    this.updatePresentation(this.presentationNow,this.rotation);
+    this.visualRoot.setPosition(this.x,this.y+descent).setScale(scale).setAlpha(alpha);
+    this.legRig.root.setPosition(this.x*(1-scale),this.y*(1-scale)+descent).setScale(scale).setAlpha(alpha);
   }
 
   get isDefeated(): boolean {
