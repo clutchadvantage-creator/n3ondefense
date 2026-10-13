@@ -2,6 +2,7 @@ import { ANOMALY_SCENES } from '../anomalies/AnomalyScenes.ts';
 import { DynamicFloorModel, floorEnabled, circleTouches, type FloorPanel } from '../arena/DynamicFloorModel.ts';
 import { DynamicFloorActors, type FloorActorDriver } from '../arena/DynamicFloorActors.ts';
 import { DynamicFloorVisual } from '../arena/DynamicFloorVisual.ts';
+import { LavaRecoveryVfx } from '../arena/LavaRecoveryVfx.ts';
 import { validateFloorConnectivity } from '../arena/DynamicFloorConnectivity.ts';
 import { DYNAMIC_FLOOR, DYNAMIC_FLOOR_AUDIO } from '../config/dynamicFloor.ts';
 import { GameplayPickupMotion, collectOrAttractPickup, energyPickupBlocked, findGameplayPickupLanding } from '../loot/GameplayPickupMotion.ts';
@@ -528,6 +529,7 @@ export class ArenaScene extends Phaser.Scene {
   private dynamicFloor: DynamicFloorModel | null = null;
   private floorActors: DynamicFloorActors | null = null;
   private floorVisual: DynamicFloorVisual | null = null;
+  private lavaRecoveryVfx: LavaRecoveryVfx | null = null;
   private floorDrivers = new WeakMap<object, FloorActorDriver>();
   private floorNavigationRevision = -1;
   private readonly floorFloatingPickups: Pickup[] = [];
@@ -1399,7 +1401,8 @@ export class ArenaScene extends Phaser.Scene {
       def.seed,
       this.layout.theme,
       this.layout.generation.bounds,
-      (x, y, halfWidth, halfHeight) => this.intersectsWallGeometry(x, y, halfWidth, halfHeight),
+      (x, y, halfWidth, halfHeight) => this.intersectsWallGeometry(x, y, halfWidth, halfHeight)
+        || !(this.dynamicFloor?.isRectSupported(x,y,halfWidth,halfHeight)??true),
       (x, y, halfWidth, halfHeight) => this.intersectsBombSiteGeometry(x, y, halfWidth, halfHeight),
       this.particlesEnabled,
       (event) => {
@@ -1924,6 +1927,7 @@ export class ArenaScene extends Phaser.Scene {
     const walls=[...this.getBlockers(),...this.layout.smashables.map(s=>({x:s.x-s.width/2,y:s.y-s.height/2,w:s.width,h:s.height}))];
     const required=[this.layout.playerSpawn,...this.layout.bombSites,...this.layout.enemySpawns];
     const validate=(panels:readonly FloorPanel[])=>{
+      if(panels.some(panel=>this.fluxCores?.hasCoreInRect(panel)))return false;
       // A rider on a selected hatch has a safe receiver; an actor elsewhere must
       // retain a walking route from their actual location, not just the spawn.
       const player=this.possession?.boss??this.player;
@@ -1947,9 +1951,19 @@ export class ArenaScene extends Phaser.Scene {
         // Ordinary Player.takeDamage owns this cue; possessed bodies need the same feedback.
         if(kind==='player'&&this.possession&&DYNAMIC_FLOOR_AUDIO.impact)this.audio.playSfx(DYNAMIC_FLOOR_AUDIO.impact);
       },
-      eject:()=>{const sound=DYNAMIC_FLOOR_AUDIO.ejection;if(sound)this.audio.playSfx(sound);}
+      eject:(_x,_y,kind,actor)=>{
+        this.lavaRecoveryVfx?.launch(actor,this.dynamicFloor!.elapsed);
+        if(kind==='player')shakeGameplayCamera(this,160,.0025,false);
+        const sound=DYNAMIC_FLOOR_AUDIO.ejection;if(sound)this.audio.playSfx(sound);
+      },
+      flight:(actor,descent)=>this.lavaRecoveryVfx?.flight(actor,descent),
+      land:actor=>{
+        this.lavaRecoveryVfx?.land(actor,this.dynamicFloor!.elapsed);
+        if(actor.kind==='player')shakeGameplayCamera(this,95,.0018,false);
+      }
     });
     this.floorVisual=new DynamicFloorVisual(this,this.dynamicFloor,this.particlesEnabled);
+    this.lavaRecoveryVfx=new LavaRecoveryVfx(this,this.particlesEnabled);
     // Register positions before the first physics step, including scene-created actors.
     this.updateDynamicFloor(0);
   }
@@ -1989,7 +2003,7 @@ export class ArenaScene extends Phaser.Scene {
       const image=actor instanceof Phaser.GameObjects.Sprite?actor:null;
       const originX=image?.originX??.5,originY=image?.originY??.5;
       const body=actor.body instanceof Phaser.Physics.Arcade.Body?actor.body:null;
-      let suspended=false,bodyWasEnabled=true;
+      let suspended=false,bodyWasEnabled=true,fallRotation=0;
       driver={
         get x(){return actor.x;},get y(){return actor.y;},
         get radius(){return player?arena.player.combatRadius:enemy||boss?target.hazardRadius:target instanceof Turret?18:12;},
@@ -2004,10 +2018,17 @@ export class ArenaScene extends Phaser.Scene {
           if(!actor.active)return;
           if(boss)target.setData('floorFalling',falling);
           body?.setVelocity(0,0);
-          if(body&&falling&&!suspended){bodyWasEnabled=body.enable;body.enable=false;suspended=true;}
+          if(body&&falling&&!suspended){fallRotation=actor.rotation;bodyWasEnabled=body.enable;body.enable=false;suspended=true;}
           if(body&&!falling&&suspended){body.reset(actor.x,actor.y);body.enable=bodyWasEnabled;suspended=false;}
         },
-        present:(scale,opacity,descent)=>{if(!actor.active)return;actor.setScale(scaleX*scale,scaleY*scale).setAlpha(alpha*opacity);image?.setOrigin(originX,originY-descent/Math.max(1,image.displayHeight));if(boss)target.presentFloorFall(scale,alpha*opacity,descent);},
+        present:(scale,opacity,descent,tilt=0)=>{
+          if(!actor.active)return;
+          actor.setScale(scaleX*scale,scaleY*scale).setAlpha(alpha*opacity);
+          if(suspended)actor.setRotation(fallRotation+(boss?0:tilt));
+          if(image)image.setOrigin(originX-Math.sin(image.rotation)*descent/Math.max(1,image.displayWidth),
+            originY-Math.cos(image.rotation)*descent/Math.max(1,image.displayHeight));
+          if(boss)target.presentFloorFall(scale,alpha*opacity,descent,tilt);
+        },
         impact:damage=>{
           if(player){const hp=target.hp;if(damage>0)target.takeDamage(damage,true);GameplayTelemetryRecorder.recordPlayerDamage('dynamic-floor',Math.max(0,hp-target.hp));}
           else if(boss){const applied=target.takeDamage(damage,'hazard',undefined,true);if(controlled)GameplayTelemetryRecorder.recordPlayerDamage('dynamic-floor',applied);}
@@ -2027,6 +2048,7 @@ export class ArenaScene extends Phaser.Scene {
     const miniBoss=this.arcadeController?.getBossTarget();
     if(miniBoss&&!DYNAMIC_FLOOR.bossesEnabled)floor.restore();
     floor.update(delta,!miniBoss||DYNAMIC_FLOOR.bossesEnabled);
+    this.fluxCores?.updateFloorSupport(floor,this.time.now);
     if(this.floorNavigationRevision!==floor.revision){
       this.floorNavigationRevision=floor.revision;
       for(const enemy of this.enemies){const nav=this.navState.get(enemy);if(nav&&floor.panels.some(p=>Math.hypot(enemy.x-p.x-p.w/2,enemy.y-p.y-p.h/2)<260||nav.path.some(point=>Math.abs(point.x-p.x-p.w/2)<p.w/2+60&&Math.abs(point.y-p.y-p.h/2)<p.h/2+60))){nav.path.length=0;nav.waypointIndex=0;nav.nextRepathAt=0;}}
@@ -2047,10 +2069,11 @@ export class ArenaScene extends Phaser.Scene {
     // Unexpected lost support retires the entire segment and dependent links.
     for(const fence of this.systemInfusions?.fences??this.fences)if(floor.sweep(fence.x1,fence.y1,fence.x2,fence.y2,12)<1)fence.hp=0;
     this.floorVisual?.update();
+    this.lavaRecoveryVfx?.update(floor.elapsed);
   }
 
   private destroyDynamicFloor():void {
-    this.floorActors?.reset();this.floorVisual?.destroy();this.dynamicFloor?.reset();
+    this.floorActors?.reset();this.floorVisual?.destroy();this.lavaRecoveryVfx?.destroy();this.lavaRecoveryVfx=null;this.dynamicFloor?.reset();
     this.floorActors=null;this.floorVisual=null;this.dynamicFloor=null;this.floorDrivers=new WeakMap();this.floorNavigationRevision=-1;
   }
 
@@ -5291,7 +5314,9 @@ export class ArenaScene extends Phaser.Scene {
     graphics.clear();this.infusionReticle?.update(now,this.systemInfusions);
     const target=this.systemInfusions.designatedTarget;if(target)graphics.lineStyle(3,0xff65cb,.95).strokeCircle(target.x,target.y,36);
     for(const device of this.systemInfusions.poweredDevices){graphics.lineStyle(2,0x70ffdf,.6).lineBetween(this.player.x,this.player.y,device.sprite.x,device.sprite.y);graphics.strokeCircle(device.sprite.x,device.sprite.y,25);}
-    this.infusionHint!.setText(this.systemInfusions.contextHint).setVisible(Boolean(this.systemInfusions.contextHint))
+    // Possession owns this text; writing the generic hint first would rebuild
+    // its canvas texture twice every frame before the boss hint overwrites it.
+    if(!this.possession)this.infusionHint!.setText(this.systemInfusions.contextHint).setVisible(Boolean(this.systemInfusions.contextHint))
       .setPosition(this.player.x,this.player.y-52);
   }
 

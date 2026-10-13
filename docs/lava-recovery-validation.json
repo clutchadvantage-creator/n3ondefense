@@ -1,0 +1,2888 @@
+{
+  "verified": "2026-10-13",
+  "automatedTests": 1029,
+  "productionBuild": "passed",
+  "environment": {
+    "width": 1600,
+    "height": 1000,
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 (0x00002F04) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+  },
+  "recovery": {
+    "checks": 193,
+    "cases": [
+      {
+        "name": "Flux support and premium recovery",
+        "peakHeight": 114,
+        "maximumDisplayObjects": 88,
+        "reducedDisplayObjects": 34
+      }
+    ],
+    "errors": []
+  },
+  "trailRendering": {
+    "checks": [
+      {
+        "ok": true,
+        "label": "exact interior palette and alpha ff8030"
+      },
+      {
+        "ok": true,
+        "label": "exact interior palette and alpha 30ff80"
+      },
+      {
+        "ok": true,
+        "label": "exact interior palette and alpha 8030ff"
+      },
+      {
+        "ok": true,
+        "label": "exact interior palette and alpha ffffff"
+      },
+      {
+        "ok": true,
+        "label": "same authored circle diameter"
+      },
+      {
+        "ok": true,
+        "label": "parent container transform retains location and color"
+      },
+      {
+        "ok": true,
+        "label": "expired trail leaves no stale pixels"
+      }
+    ],
+    "cases": [
+      {
+        "name": "Actual WebGL texture-batch visual parity",
+        "renderer": 2
+      },
+      {
+        "name": "6000 trails / previous vector renderer",
+        "samples": 26,
+        "meanRenderMs": 60.53076923810519,
+        "p95RenderMs": 62.59999990463257,
+        "maxRenderMs": 62.90000009536743
+      },
+      {
+        "name": "6000 trails / texture batch",
+        "samples": 90,
+        "meanRenderMs": 0.398888889948527,
+        "p95RenderMs": 0.5999999046325684,
+        "maxRenderMs": 0.7000000476837158
+      }
+    ],
+    "errors": []
+  },
+  "supreme": {
+    "options": {
+      "rounds": [
+        26
+      ],
+      "sampleMs": 12000,
+      "deployables": true
+    },
+    "loadout": {
+      "equippedMods": [
+        {
+          "id": "supreme-eventide-arsenal",
+          "rank": 3,
+          "slot": "weapon",
+          "infusionId": "ascension-protocol"
+        },
+        {
+          "id": "supreme-quantum-carapace",
+          "rank": 3,
+          "slot": "player",
+          "infusionId": "gridlink"
+        },
+        {
+          "id": "supreme-triune-bastion",
+          "rank": 3,
+          "slot": "defense",
+          "infusionId": "cascade"
+        },
+        {
+          "id": "supreme-final-protocol",
+          "rank": 3,
+          "slot": "bombSite",
+          "infusionId": "power-bus"
+        },
+        {
+          "id": "supreme-singularity-chamber",
+          "rank": 3,
+          "slot": "wildcard",
+          "infusionId": "target-designator"
+        }
+      ],
+      "fireRate": 13,
+      "pressure": {
+        "cadenceMultiplier": 1,
+        "activeCountCap": 26,
+        "activeWeightCap": 39
+      },
+      "scale": 1.3664,
+      "cap": 36
+    },
+    "stagedDeployables": {
+      "turrets": 5,
+      "fences": 5,
+      "mines": 1
+    },
+    "cases": [
+      {
+        "label": "supreme-26/operative",
+        "round": 26,
+        "cap": 36,
+        "raw": {
+          "n": 719,
+          "mean": 16.666620305914208,
+          "p95": 17,
+          "p99": 17.100000143051147,
+          "max": 30.299999952316284,
+          "over33": 0
+        },
+        "render": {
+          "n": 720,
+          "mean": 5.61986110508442,
+          "p95": 10.100000143051147,
+          "p99": 11,
+          "max": 11.600000143051147,
+          "over33": 0
+        },
+        "update": {
+          "n": 720,
+          "mean": 1.1352777772479588,
+          "p95": 1.5,
+          "p99": 2.299999952316284,
+          "max": 21.40000009536743,
+          "over33": 0
+        },
+        "costs": [
+          {
+            "name": "Graphics@5.2",
+            "calls": 5760,
+            "totalMs": 825.4999992847443,
+            "msPerFrame": 1.1481223912166123
+          },
+          {
+            "name": "Graphics@8",
+            "calls": 4073,
+            "totalMs": 414.7000000476837,
+            "msPerFrame": 0.576773296311104
+          },
+          {
+            "name": "Graphics@0",
+            "calls": 17707,
+            "totalMs": 355.5000021457672,
+            "msPerFrame": 0.49443672064779864
+          },
+          {
+            "name": "Graphics@4.449400000000001",
+            "calls": 720,
+            "totalMs": 252.60000228881836,
+            "msPerFrame": 0.3513212827382731
+          },
+          {
+            "name": "updateHud",
+            "calls": 720,
+            "totalMs": 252.39999890327454,
+            "msPerFrame": 0.3510431139127601
+          },
+          {
+            "name": "Graphics@1000",
+            "calls": 5760,
+            "totalMs": 235.49999690055847,
+            "msPerFrame": 0.3275382432552969
+          },
+          {
+            "name": "Arc@3",
+            "calls": 50400,
+            "totalMs": 216.10000324249268,
+            "msPerFrame": 0.3005563327433834
+          },
+          {
+            "name": "updateEnemies",
+            "calls": 720,
+            "totalMs": 120.70000052452087,
+            "msPerFrame": 0.16787204523577312
+          },
+          {
+            "name": "Graphics@6",
+            "calls": 4320,
+            "totalMs": 107.49999856948853,
+            "msPerFrame": 0.14951321080596458
+          },
+          {
+            "name": "Graphics@4.5055000000000005",
+            "calls": 720,
+            "totalMs": 87.29999899864197,
+            "msPerFrame": 0.12141863560311818
+          },
+          {
+            "name": "Graphics@-1.35",
+            "calls": 720,
+            "totalMs": 82.89999675750732,
+            "msPerFrame": 0.11529902191586554
+          },
+          {
+            "name": "Graphics@15",
+            "calls": 720,
+            "totalMs": 81.50000023841858,
+            "msPerFrame": 0.11335187793938606
+          },
+          {
+            "name": "Graphics@4.5193",
+            "calls": 720,
+            "totalMs": 79.60000085830688,
+            "msPerFrame": 0.11070931969166466
+          },
+          {
+            "name": "Ellipse@5.2",
+            "calls": 17280,
+            "totalMs": 71.10000133514404,
+            "msPerFrame": 0.09888734538963011
+          },
+          {
+            "name": "Graphics@4.5327",
+            "calls": 720,
+            "totalMs": 65.30000066757202,
+            "msPerFrame": 0.09082058507311824
+          },
+          {
+            "name": "Graphics@14",
+            "calls": 720,
+            "totalMs": 51.49999928474426,
+            "msPerFrame": 0.07162725908865683
+          },
+          {
+            "name": "Arc@6",
+            "calls": 8656,
+            "totalMs": 45.299999475479126,
+            "msPerFrame": 0.063004171732238
+          },
+          {
+            "name": "Graphics@8.66",
+            "calls": 720,
+            "totalMs": 36.59999752044678,
+            "msPerFrame": 0.050904029931080355
+          },
+          {
+            "name": "updatePlayerShooting",
+            "calls": 720,
+            "totalMs": 33.700000286102295,
+            "msPerFrame": 0.046870654083591506
+          },
+          {
+            "name": "updateDynamicFloor",
+            "calls": 720,
+            "totalMs": 32.59999990463257,
+            "msPerFrame": 0.04534075091047645
+          },
+          {
+            "name": "Graphics@7.85",
+            "calls": 720,
+            "totalMs": 31.500000715255737,
+            "msPerFrame": 0.04381084939534873
+          },
+          {
+            "name": "Graphics@-0.8",
+            "calls": 720,
+            "totalMs": 31.400001287460327,
+            "msPerFrame": 0.043671768132768185
+          },
+          {
+            "name": "Arc@2",
+            "calls": 3600,
+            "totalMs": 30.39999771118164,
+            "msPerFrame": 0.04228094257466153
+          },
+          {
+            "name": "Arc@-2.6",
+            "calls": 4320,
+            "totalMs": 29.900001764297485,
+            "msPerFrame": 0.04158553791974615
+          },
+          {
+            "name": "Arc@5",
+            "calls": 3644,
+            "totalMs": 28.599997758865356,
+            "msPerFrame": 0.03977746558952066
+          },
+          {
+            "name": "Graphics@2100",
+            "calls": 720,
+            "totalMs": 27.999996185302734,
+            "msPerFrame": 0.03894297105049059
+          },
+          {
+            "name": "Text@0",
+            "calls": 22998,
+            "totalMs": 25.09999942779541,
+            "msPerFrame": 0.03490959586619668
+          },
+          {
+            "name": "updateProjectiles",
+            "calls": 720,
+            "totalMs": 23.399999618530273,
+            "msPerFrame": 0.03254520113842875
+          },
+          {
+            "name": "Graphics@7.8",
+            "calls": 720,
+            "totalMs": 23.099998235702515,
+            "msPerFrame": 0.03212795303992005
+          },
+          {
+            "name": "Arc@0",
+            "calls": 3307,
+            "totalMs": 20.80000066757202,
+            "msPerFrame": 0.028929069078681532
+          },
+          {
+            "name": "Image@-0.3",
+            "calls": 30240,
+            "totalMs": 18.299999237060547,
+            "msPerFrame": 0.025452015628735114
+          },
+          {
+            "name": "Arc@2.2",
+            "calls": 2880,
+            "totalMs": 17.000001907348633,
+            "msPerFrame": 0.02364395258323871
+          },
+          {
+            "name": "RenderTexture@0",
+            "calls": 16560,
+            "totalMs": 16.700000286102295,
+            "msPerFrame": 0.02322670415313254
+          },
+          {
+            "name": "Graphics@9.1",
+            "calls": 720,
+            "totalMs": 15.300000429153442,
+            "msPerFrame": 0.021279555534288515
+          },
+          {
+            "name": "Graphics@5",
+            "calls": 2160,
+            "totalMs": 14.499998569488525,
+            "msPerFrame": 0.020166896480512553
+          },
+          {
+            "name": "Polygon@0",
+            "calls": 10080,
+            "totalMs": 12.200000047683716,
+            "msPerFrame": 0.016968011192884165
+          },
+          {
+            "name": "updateSystemInfusions",
+            "calls": 720,
+            "totalMs": 11.299999713897705,
+            "msPerFrame": 0.01571627220291753
+          },
+          {
+            "name": "Sprite@7",
+            "calls": 18488,
+            "totalMs": 11.199998140335083,
+            "msPerFrame": 0.015577187955959781
+          },
+          {
+            "name": "Image@1",
+            "calls": 23760,
+            "totalMs": 9.999998569488525,
+            "msPerFrame": 0.013908203851861648
+          },
+          {
+            "name": "Text@1000",
+            "calls": 10800,
+            "totalMs": 9.200000047683716,
+            "msPerFrame": 0.01279554944045023
+          },
+          {
+            "name": "bombletHazard",
+            "calls": 720,
+            "totalMs": 9.100000381469727,
+            "msPerFrame": 0.01265646784627222
+          },
+          {
+            "name": "updatePickups",
+            "calls": 720,
+            "totalMs": 9.000001668930054,
+            "msPerFrame": 0.01251738757848408
+          },
+          {
+            "name": "Rectangle@-0.3",
+            "calls": 17280,
+            "totalMs": 8.900002002716064,
+            "msPerFrame": 0.01237830598430607
+          },
+          {
+            "name": "Arc@1000",
+            "calls": 4320,
+            "totalMs": 8.599999189376831,
+            "msPerFrame": 0.01196105589621256
+          },
+          {
+            "name": "Ellipse@8",
+            "calls": 2160,
+            "totalMs": 8.100001335144043,
+            "msPerFrame": 0.011265648588517444
+          },
+          {
+            "name": "Rectangle@0",
+            "calls": 7200,
+            "totalMs": 8.100000619888306,
+            "msPerFrame": 0.011265647593725043
+          },
+          {
+            "name": "Ellipse@7",
+            "calls": 1440,
+            "totalMs": 8.099999189376831,
+            "msPerFrame": 0.011265645604140237
+          },
+          {
+            "name": "Polygon@6",
+            "calls": 8640,
+            "totalMs": 7.699999570846558,
+            "msPerFrame": 0.010709317901038328
+          },
+          {
+            "name": "Arc@10000",
+            "calls": 1034,
+            "totalMs": 7.20000147819519,
+            "msPerFrame": 0.010013910261745744
+          },
+          {
+            "name": "Text@3",
+            "calls": 7200,
+            "totalMs": 7.200000762939453,
+            "msPerFrame": 0.010013909266953343
+          },
+          {
+            "name": "Image@-2.55",
+            "calls": 12960,
+            "totalMs": 6.999999284744263,
+            "msPerFrame": 0.009735743094220114
+          },
+          {
+            "name": "laserSecurity",
+            "calls": 720,
+            "totalMs": 6.59999942779541,
+            "msPerFrame": 0.009179415059520737
+          },
+          {
+            "name": "Arc@8",
+            "calls": 1352,
+            "totalMs": 6.400000095367432,
+            "msPerFrame": 0.008901251871164717
+          },
+          {
+            "name": "Graphics@-3.8",
+            "calls": 720,
+            "totalMs": 6.300001859664917,
+            "msPerFrame": 0.008762172266571512
+          },
+          {
+            "name": "Rectangle@8",
+            "calls": 4482,
+            "totalMs": 5.999997615814209,
+            "msPerFrame": 0.008344920188893197
+          },
+          {
+            "name": "Graphics@9.2",
+            "calls": 720,
+            "totalMs": 5.800000190734863,
+            "msPerFrame": 0.008066759653316918
+          },
+          {
+            "name": "Image@10000",
+            "calls": 5450,
+            "totalMs": 5.599999666213989,
+            "msPerFrame": 0.007788594806973559
+          },
+          {
+            "name": "Text@6",
+            "calls": 4320,
+            "totalMs": 5.20000147819519,
+            "msPerFrame": 0.007232269093456454
+          },
+          {
+            "name": "Ellipse@9",
+            "calls": 720,
+            "totalMs": 4.799999952316284,
+            "msPerFrame": 0.006675938737574804
+          },
+          {
+            "name": "Rectangle@1000",
+            "calls": 4320,
+            "totalMs": 4.1000001430511475,
+            "msPerFrame": 0.0057023645939515265
+          },
+          {
+            "name": "Graphics@8.62",
+            "calls": 720,
+            "totalMs": 3.8999998569488525,
+            "msPerFrame": 0.0054242000792056365
+          },
+          {
+            "name": "Rectangle@3",
+            "calls": 7200,
+            "totalMs": 3.8000004291534424,
+            "msPerFrame": 0.005285118816625094
+          },
+          {
+            "name": "gasHazard",
+            "calls": 720,
+            "totalMs": 3.4999992847442627,
+            "msPerFrame": 0.0048678710497138565
+          },
+          {
+            "name": "RenderTexture@3",
+            "calls": 4320,
+            "totalMs": 3.2000010013580322,
+            "msPerFrame": 0.004450627261972228
+          },
+          {
+            "name": "Graphics@-1",
+            "calls": 720,
+            "totalMs": 3.200000524520874,
+            "msPerFrame": 0.0044506265987772934
+          },
+          {
+            "name": "Arc@7",
+            "calls": 427,
+            "totalMs": 2.59999942779541,
+            "msPerFrame": 0.003616132722942156
+          },
+          {
+            "name": "RenderTexture@-4",
+            "calls": 720,
+            "totalMs": 2.499999761581421,
+            "msPerFrame": 0.0034770511287641457
+          },
+          {
+            "name": "Arc@-1.3",
+            "calls": 720,
+            "totalMs": 2.499999761581421,
+            "msPerFrame": 0.0034770511287641457
+          },
+          {
+            "name": "updateAbilities",
+            "calls": 720,
+            "totalMs": 2.1999995708465576,
+            "msPerFrame": 0.0030598046882427785
+          },
+          {
+            "name": "RenderTexture@1",
+            "calls": 720,
+            "totalMs": 2.0000014305114746,
+            "msPerFrame": 0.0027816431578740956
+          },
+          {
+            "name": "Graphics@1",
+            "calls": 720,
+            "totalMs": 1.8999998569488525,
+            "msPerFrame": 0.0026425589109163455
+          },
+          {
+            "name": "Text@2.25",
+            "calls": 1440,
+            "totalMs": 1.8999993801116943,
+            "msPerFrame": 0.002642558247721411
+          },
+          {
+            "name": "RenderTexture@-2.55",
+            "calls": 1440,
+            "totalMs": 1.799999475479126,
+            "msPerFrame": 0.002503476321945933
+          },
+          {
+            "name": "Text@1005",
+            "calls": 720,
+            "totalMs": 1.7999989986419678,
+            "msPerFrame": 0.0025034756587509984
+          },
+          {
+            "name": "Sprite@8",
+            "calls": 720,
+            "totalMs": 1.4999992847442627,
+            "msPerFrame": 0.0020862298814245655
+          },
+          {
+            "name": "Rectangle@999",
+            "calls": 1436,
+            "totalMs": 1.400000810623169,
+            "msPerFrame": 0.001947149945233893
+          },
+          {
+            "name": "getHazardDamageTargets",
+            "calls": 720,
+            "totalMs": 1.3999998569488525,
+            "msPerFrame": 0.001947148618844023
+          },
+          {
+            "name": "Image@12",
+            "calls": 2463,
+            "totalMs": 1.3999996185302734,
+            "msPerFrame": 0.0019471482872465556
+          },
+          {
+            "name": "laserGeometry",
+            "calls": 412,
+            "totalMs": 1.1999998092651367,
+            "msPerFrame": 0.0016689844356956004
+          },
+          {
+            "name": "Text@9",
+            "calls": 427,
+            "totalMs": 1.1000003814697266,
+            "msPerFrame": 0.0015299031731150579
+          },
+          {
+            "name": "Text@8",
+            "calls": 720,
+            "totalMs": 1.0999999046325684,
+            "msPerFrame": 0.001529902509920123
+          },
+          {
+            "name": "RenderTexture@2",
+            "calls": 720,
+            "totalMs": 0.9999995231628418,
+            "msPerFrame": 0.0013908199209497103
+          },
+          {
+            "name": "Graphics@13.6",
+            "calls": 720,
+            "totalMs": 0.6000001430511475,
+            "msPerFrame": 0.0008344925494452677
+          },
+          {
+            "name": "Graphics@10",
+            "calls": 720,
+            "totalMs": 0.5,
+            "msPerFrame": 0.0006954102920723226
+          },
+          {
+            "name": "updatePossession",
+            "calls": 720,
+            "totalMs": 0.40000009536743164,
+            "msPerFrame": 0.0005563283662968451
+          },
+          {
+            "name": "Graphics@13.55",
+            "calls": 720,
+            "totalMs": 0.39999961853027344,
+            "msPerFrame": 0.0005563277031019103
+          },
+          {
+            "name": "Graphics@19",
+            "calls": 720,
+            "totalMs": 0.10000014305114746,
+            "msPerFrame": 0.000139082257372945
+          },
+          {
+            "name": "Graphics@7",
+            "calls": 720,
+            "totalMs": 0.09999990463256836,
+            "msPerFrame": 0.00013908192577547756
+          }
+        ],
+        "enemies": 25,
+        "projectiles": 9,
+        "peakProjectiles": 18,
+        "peakEnemies": 29,
+        "resources": {
+          "enemies": 25,
+          "bossControllers": 0,
+          "bossSupportEnemies": 0,
+          "projectiles": 9,
+          "activeProjectilePool": 9,
+          "activeFxPool": 0,
+          "activeTrails": 45,
+          "activeMechanicalFragments": 7,
+          "activeMechanicalBursts": 0,
+          "peakMechanicalFragments": 30,
+          "destructionAllocationMisses": 0,
+          "destructionEffectsDegraded": 0,
+          "pickups": 7,
+          "deployables": 0,
+          "floorPanels": 6,
+          "floorActivePanels": 0,
+          "floorNavigationUpdates": 1,
+          "smashableProps": 4,
+          "hazardControllers": 4,
+          "hazardSlots": 3,
+          "arcadeControllers": 1,
+          "anomalyControllers": 1,
+          "timers": 1,
+          "tweens": 9,
+          "colliders": 49,
+          "colliderCapacity": 49,
+          "dynamicBodies": 35,
+          "activeDynamicBodies": 35,
+          "staticBodies": 15,
+          "pendingPhysicsBodies": 0,
+          "displayObjects": 1451,
+          "updateListObjects": 42,
+          "renderTextures": 5,
+          "particleEmitters": 0,
+          "sceneEventListeners": 71,
+          "gameEventListeners": 28,
+          "projectilePoolCapacity": 720,
+          "fxPoolCapacity": 256,
+          "trailCapacity": 972,
+          "infusionEffects": 0,
+          "bossHudObjects": 0,
+          "queuedSpawns": 0,
+          "roundAudioLoops": 1,
+          "roundAudioVoices": 21,
+          "roundAudioTones": 0,
+          "pooledAudioVoices": 173,
+          "gameplayCallbacksRejected": 0,
+          "handoffCallbacksRejected": 0,
+          "encounterInitializations": 1,
+          "arenaWakes": 0,
+          "hudInstances": 1,
+          "premiumRevealScenes": 0,
+          "staleEncounterOwners": 0,
+          "cleanupFailures": 0
+        },
+        "loadoutScaling": {
+          "weaponDps": 874.9440000000001,
+          "supportDps": 325.35714285714283,
+          "offense": 1200.3011428571428,
+          "resilience": 3.2862576480704324,
+          "offenseRatio": 10.158515294402127,
+          "health": 1,
+          "damage": 1,
+          "pressure": 1
+        },
+        "laserSegments": 0
+      },
+      {
+        "label": "supreme-26/artillery",
+        "round": 26,
+        "cap": 36,
+        "raw": {
+          "n": 719,
+          "mean": 16.68970792780997,
+          "p95": 17,
+          "p99": 17.09999990463257,
+          "max": 31.700000047683716,
+          "over33": 0
+        },
+        "render": {
+          "n": 720,
+          "mean": 9.207083330551784,
+          "p95": 10.800000190734863,
+          "p99": 11.299999952316284,
+          "max": 21.09999990463257,
+          "over33": 0
+        },
+        "update": {
+          "n": 720,
+          "mean": 1.3873611175351672,
+          "p95": 1.8999998569488525,
+          "p99": 2.3999998569488525,
+          "max": 3.200000047683716,
+          "over33": 0
+        },
+        "costs": [
+          {
+            "name": "Graphics@15",
+            "calls": 720,
+            "totalMs": 1504.100001335144,
+            "msPerFrame": 2.0919332424689068
+          },
+          {
+            "name": "Graphics@5.2",
+            "calls": 5760,
+            "totalMs": 840.9999997615814,
+            "msPerFrame": 1.1696801109340493
+          },
+          {
+            "name": "Graphics@14",
+            "calls": 720,
+            "totalMs": 753.2000000476837,
+            "msPerFrame": 1.0475660640440663
+          },
+          {
+            "name": "Graphics@0",
+            "calls": 17672,
+            "totalMs": 371.29999351501465,
+            "msPerFrame": 0.5164116738734557
+          },
+          {
+            "name": "Graphics@4.449400000000001",
+            "calls": 720,
+            "totalMs": 257.2000012397766,
+            "msPerFrame": 0.3577190559663096
+          },
+          {
+            "name": "updateHud",
+            "calls": 720,
+            "totalMs": 248.5000011920929,
+            "msPerFrame": 0.3456189168179317
+          },
+          {
+            "name": "Arc@3",
+            "calls": 50400,
+            "totalMs": 238.10000586509705,
+            "msPerFrame": 0.33115438924213775
+          },
+          {
+            "name": "Graphics@1000",
+            "calls": 5760,
+            "totalMs": 215.20000219345093,
+            "msPerFrame": 0.29930459275862437
+          },
+          {
+            "name": "Graphics@6",
+            "calls": 5926,
+            "totalMs": 177.10000038146973,
+            "msPerFrame": 0.24631432598257263
+          },
+          {
+            "name": "updateEnemies",
+            "calls": 720,
+            "totalMs": 137.60000109672546,
+            "msPerFrame": 0.19137691390365155
+          },
+          {
+            "name": "Graphics@8",
+            "calls": 3992,
+            "totalMs": 105.7999997138977,
+            "msPerFrame": 0.14714881740458652
+          },
+          {
+            "name": "Graphics@4.5055000000000005",
+            "calls": 720,
+            "totalMs": 89.29999828338623,
+            "msPerFrame": 0.12420027577661506
+          },
+          {
+            "name": "updatePossession",
+            "calls": 720,
+            "totalMs": 84.1000006198883,
+            "msPerFrame": 0.11696801198871809
+          },
+          {
+            "name": "Graphics@-1.35",
+            "calls": 720,
+            "totalMs": 83.10000085830688,
+            "msPerFrame": 0.11557719173617091
+          },
+          {
+            "name": "Graphics@4.5193",
+            "calls": 720,
+            "totalMs": 82.1000006198883,
+            "msPerFrame": 0.1141863708204288
+          },
+          {
+            "name": "Ellipse@5.2",
+            "calls": 17280,
+            "totalMs": 79.0999972820282,
+            "msPerFrame": 0.11001390442563032
+          },
+          {
+            "name": "Arc@6",
+            "calls": 13458,
+            "totalMs": 71.50000262260437,
+            "msPerFrame": 0.09944367541391429
+          },
+          {
+            "name": "Graphics@4.5327",
+            "calls": 720,
+            "totalMs": 66.40000033378601,
+            "msPerFrame": 0.0923504872514409
+          },
+          {
+            "name": "Graphics@7.8",
+            "calls": 720,
+            "totalMs": 60.700000047683716,
+            "msPerFrame": 0.08442280952389947
+          },
+          {
+            "name": "updateDynamicFloor",
+            "calls": 720,
+            "totalMs": 54.299999713897705,
+            "msPerFrame": 0.07552155732113729
+          },
+          {
+            "name": "Graphics@8.66",
+            "calls": 720,
+            "totalMs": 51.30000114440918,
+            "msPerFrame": 0.07134909755828815
+          },
+          {
+            "name": "updateProjectiles",
+            "calls": 720,
+            "totalMs": 50.89999771118164,
+            "msPerFrame": 0.07079276454962675
+          },
+          {
+            "name": "Graphics@5.3",
+            "calls": 332,
+            "totalMs": 43.99999809265137,
+            "msPerFrame": 0.06119610304958466
+          },
+          {
+            "name": "Arc@0",
+            "calls": 5598,
+            "totalMs": 36.100000858306885,
+            "msPerFrame": 0.05020862428137258
+          },
+          {
+            "name": "Graphics@5",
+            "calls": 2160,
+            "totalMs": 35.299997091293335,
+            "msPerFrame": 0.049095962574816875
+          },
+          {
+            "name": "Arc@-2.6",
+            "calls": 4320,
+            "totalMs": 30.8999981880188,
+            "msPerFrame": 0.04297635352992879
+          },
+          {
+            "name": "Arc@2",
+            "calls": 3600,
+            "totalMs": 30.500001192092896,
+            "msPerFrame": 0.04242002947439902
+          },
+          {
+            "name": "Graphics@-0.8",
+            "calls": 720,
+            "totalMs": 29.200001001358032,
+            "msPerFrame": 0.04061196244973301
+          },
+          {
+            "name": "Graphics@12.4",
+            "calls": 720,
+            "totalMs": 28.600000143051147,
+            "msPerFrame": 0.039777468905495335
+          },
+          {
+            "name": "Graphics@2100",
+            "calls": 720,
+            "totalMs": 28.299999475479126,
+            "msPerFrame": 0.03936022180177903
+          },
+          {
+            "name": "Text@0",
+            "calls": 24833,
+            "totalMs": 25.800001859664917,
+            "msPerFrame": 0.035883173657392096
+          },
+          {
+            "name": "updatePickups",
+            "calls": 720,
+            "totalMs": 25.70000195503235,
+            "msPerFrame": 0.03574409173161662
+          },
+          {
+            "name": "Ellipse@8",
+            "calls": 6480,
+            "totalMs": 23.100002765655518,
+            "msPerFrame": 0.03212795934027193
+          },
+          {
+            "name": "Ellipse@7",
+            "calls": 4320,
+            "totalMs": 22.09999704360962,
+            "msPerFrame": 0.030737130797788066
+          },
+          {
+            "name": "Image@10000",
+            "calls": 35140,
+            "totalMs": 20.200000286102295,
+            "msPerFrame": 0.028094576197638797
+          },
+          {
+            "name": "Image@-0.3",
+            "calls": 30240,
+            "totalMs": 19.79999804496765,
+            "msPerFrame": 0.027538244846964745
+          },
+          {
+            "name": "Arc@8",
+            "calls": 4320,
+            "totalMs": 19.499998092651367,
+            "msPerFrame": 0.027120998738040844
+          },
+          {
+            "name": "Arc@5",
+            "calls": 2355,
+            "totalMs": 18.20000147819519,
+            "msPerFrame": 0.025312936687336845
+          },
+          {
+            "name": "Image@8.9",
+            "calls": 25920,
+            "totalMs": 17.400002002716064,
+            "msPerFrame": 0.024200280949535555
+          },
+          {
+            "name": "Polygon@0",
+            "calls": 15618,
+            "totalMs": 17.200002431869507,
+            "msPerFrame": 0.023922117429582068
+          },
+          {
+            "name": "RenderTexture@0",
+            "calls": 16560,
+            "totalMs": 15.90000033378601,
+            "msPerFrame": 0.022114047752136316
+          },
+          {
+            "name": "Arc@2.2",
+            "calls": 2880,
+            "totalMs": 14.999999523162842,
+            "msPerFrame": 0.020862308098974745
+          },
+          {
+            "name": "Rectangle@8",
+            "calls": 12960,
+            "totalMs": 13.599999904632568,
+            "msPerFrame": 0.01891515981172819
+          },
+          {
+            "name": "Graphics@9.2",
+            "calls": 720,
+            "totalMs": 12.699999809265137,
+            "msPerFrame": 0.017663421153359022
+          },
+          {
+            "name": "Image@1",
+            "calls": 23760,
+            "totalMs": 12.300001382827759,
+            "msPerFrame": 0.017107095108244447
+          },
+          {
+            "name": "Polygon@6",
+            "calls": 13458,
+            "totalMs": 12.200000047683716,
+            "msPerFrame": 0.016968011192884165
+          },
+          {
+            "name": "Arc@10000",
+            "calls": 1301,
+            "totalMs": 12.09999704360962,
+            "msPerFrame": 0.016828924956341612
+          },
+          {
+            "name": "Ellipse@9",
+            "calls": 2160,
+            "totalMs": 10.999999761581421,
+            "msPerFrame": 0.015299026093993631
+          },
+          {
+            "name": "Sprite@7",
+            "calls": 10799,
+            "totalMs": 10.700001001358032,
+            "msPerFrame": 0.014881781643057068
+          },
+          {
+            "name": "laserSecurity",
+            "calls": 720,
+            "totalMs": 10.100000858306885,
+            "msPerFrame": 0.014047289093611802
+          },
+          {
+            "name": "updateSystemInfusions",
+            "calls": 720,
+            "totalMs": 9.59999942779541,
+            "msPerFrame": 0.013351876811954674
+          },
+          {
+            "name": "Rectangle@-0.3",
+            "calls": 17280,
+            "totalMs": 9.100001335144043,
+            "msPerFrame": 0.01265646917266209
+          },
+          {
+            "name": "Rectangle@0",
+            "calls": 7698,
+            "totalMs": 8.700000762939453,
+            "msPerFrame": 0.01210014014317031
+          },
+          {
+            "name": "Text@1000",
+            "calls": 10800,
+            "totalMs": 8.500000953674316,
+            "msPerFrame": 0.011821976291619355
+          },
+          {
+            "name": "Arc@1000",
+            "calls": 4320,
+            "totalMs": 7.100000619888306,
+            "msPerFrame": 0.009874827009580396
+          },
+          {
+            "name": "Text@6",
+            "calls": 4320,
+            "totalMs": 6.900001049041748,
+            "msPerFrame": 0.00959666348962691
+          },
+          {
+            "name": "Image@-2.55",
+            "calls": 12960,
+            "totalMs": 6.400001049041748,
+            "msPerFrame": 0.008901253197554587
+          },
+          {
+            "name": "Text@3",
+            "calls": 7200,
+            "totalMs": 6.1999993324279785,
+            "msPerFrame": 0.008623086693223892
+          },
+          {
+            "name": "bombletHazard",
+            "calls": 720,
+            "totalMs": 5.999999523162842,
+            "msPerFrame": 0.008344922841672937
+          },
+          {
+            "name": "Image@12",
+            "calls": 8081,
+            "totalMs": 5.8999998569488525,
+            "msPerFrame": 0.008205841247494928
+          },
+          {
+            "name": "Text@20",
+            "calls": 720,
+            "totalMs": 4.999999761581421,
+            "msPerFrame": 0.00695410258912576
+          },
+          {
+            "name": "RenderTexture@3",
+            "calls": 4320,
+            "totalMs": 4.8999998569488525,
+            "msPerFrame": 0.006815020663350282
+          },
+          {
+            "name": "Graphics@-3.8",
+            "calls": 720,
+            "totalMs": 4.899999618530273,
+            "msPerFrame": 0.006815020331752814
+          },
+          {
+            "name": "Text@8",
+            "calls": 2160,
+            "totalMs": 4.69999885559082,
+            "msPerFrame": 0.0065368551538119895
+          },
+          {
+            "name": "Arc@5.3",
+            "calls": 664,
+            "totalMs": 4.600000619888306,
+            "msPerFrame": 0.006397775549218784
+          },
+          {
+            "name": "Graphics@8.62",
+            "calls": 720,
+            "totalMs": 4.000000715255737,
+            "msPerFrame": 0.005563283331370984
+          },
+          {
+            "name": "Graphics@-1",
+            "calls": 720,
+            "totalMs": 3.900001049041748,
+            "msPerFrame": 0.005424201737192973
+          },
+          {
+            "name": "Rectangle@3",
+            "calls": 7200,
+            "totalMs": 3.500000238418579,
+            "msPerFrame": 0.004867872376103726
+          },
+          {
+            "name": "gasHazard",
+            "calls": 720,
+            "totalMs": 3.4000003337860107,
+            "msPerFrame": 0.004728790450328249
+          },
+          {
+            "name": "Arc@7",
+            "calls": 392,
+            "totalMs": 3.4000000953674316,
+            "msPerFrame": 0.004728790118730781
+          },
+          {
+            "name": "Rectangle@1000",
+            "calls": 3605,
+            "totalMs": 3.3999998569488525,
+            "msPerFrame": 0.004728789787133314
+          },
+          {
+            "name": "RenderTexture@-4",
+            "calls": 720,
+            "totalMs": 2.8999993801116943,
+            "msPerFrame": 0.004033378831866056
+          },
+          {
+            "name": "Text@2.25",
+            "calls": 1440,
+            "totalMs": 1.9999995231628418,
+            "msPerFrame": 0.002781640505094356
+          },
+          {
+            "name": "Rectangle@999",
+            "calls": 1432,
+            "totalMs": 1.9000003337860107,
+            "msPerFrame": 0.0026425595741112807
+          },
+          {
+            "name": "Graphics@1",
+            "calls": 720,
+            "totalMs": 1.5999994277954102,
+            "msPerFrame": 0.0022253121387975105
+          },
+          {
+            "name": "laserGeometry",
+            "calls": 473,
+            "totalMs": 1.5000004768371582,
+            "msPerFrame": 0.0020862315394119028
+          },
+          {
+            "name": "Sprite@9",
+            "calls": 720,
+            "totalMs": 1.500000238418579,
+            "msPerFrame": 0.0020862312078144354
+          },
+          {
+            "name": "Image@7",
+            "calls": 2472,
+            "totalMs": 1.400000810623169,
+            "msPerFrame": 0.001947149945233893
+          },
+          {
+            "name": "Arc@-1.3",
+            "calls": 720,
+            "totalMs": 1.3000004291534424,
+            "msPerFrame": 0.0018080673562634803
+          },
+          {
+            "name": "RenderTexture@-2.55",
+            "calls": 1440,
+            "totalMs": 1.1999998092651367,
+            "msPerFrame": 0.0016689844356956004
+          },
+          {
+            "name": "Image@8",
+            "calls": 1302,
+            "totalMs": 0.9999997615814209,
+            "msPerFrame": 0.001390820252547178
+          },
+          {
+            "name": "Image@9.1",
+            "calls": 720,
+            "totalMs": 0.9000005722045898,
+            "msPerFrame": 0.0012517393215641028
+          },
+          {
+            "name": "Text@9",
+            "calls": 392,
+            "totalMs": 0.9000000953674316,
+            "msPerFrame": 0.0012517386583691678
+          },
+          {
+            "name": "RenderTexture@2",
+            "calls": 720,
+            "totalMs": 0.8000004291534424,
+            "msPerFrame": 0.0011126570641911578
+          },
+          {
+            "name": "getHazardDamageTargets",
+            "calls": 720,
+            "totalMs": 0.7999999523162842,
+            "msPerFrame": 0.0011126564009962228
+          },
+          {
+            "name": "Text@1005",
+            "calls": 720,
+            "totalMs": 0.7000002861022949,
+            "msPerFrame": 0.0009735748068182127
+          },
+          {
+            "name": "RenderTexture@1",
+            "calls": 720,
+            "totalMs": 0.6999995708465576,
+            "msPerFrame": 0.0009735738120258103
+          },
+          {
+            "name": "Sprite@10",
+            "calls": 720,
+            "totalMs": 0.6999995708465576,
+            "msPerFrame": 0.0009735738120258103
+          },
+          {
+            "name": "updateAbilities",
+            "calls": 720,
+            "totalMs": 0.6999993324279785,
+            "msPerFrame": 0.0009735734804283429
+          },
+          {
+            "name": "Graphics@7.2",
+            "calls": 720,
+            "totalMs": 0.6000001430511475,
+            "msPerFrame": 0.0008344925494452677
+          },
+          {
+            "name": "Graphics@10",
+            "calls": 720,
+            "totalMs": 0.5000002384185791,
+            "msPerFrame": 0.0006954106236697901
+          },
+          {
+            "name": "updatePlayerShooting",
+            "calls": 720,
+            "totalMs": 0.5,
+            "msPerFrame": 0.0006954102920723226
+          },
+          {
+            "name": "Graphics@13.55",
+            "calls": 720,
+            "totalMs": 0.39999985694885254,
+            "msPerFrame": 0.0005563280346993776
+          },
+          {
+            "name": "Graphics@13.6",
+            "calls": 720,
+            "totalMs": 0.3000004291534424,
+            "msPerFrame": 0.00041724677211883504
+          },
+          {
+            "name": "Graphics@7",
+            "calls": 720,
+            "totalMs": 0.20000004768371582,
+            "msPerFrame": 0.00027816418314842255
+          },
+          {
+            "name": "Graphics@19",
+            "calls": 720,
+            "totalMs": 0.10000014305114746,
+            "msPerFrame": 0.000139082257372945
+          },
+          {
+            "name": "Graphics@9.1",
+            "calls": 720,
+            "totalMs": 0.09999990463256836,
+            "msPerFrame": 0.00013908192577547756
+          },
+          {
+            "name": "Graphics@7.85",
+            "calls": 720,
+            "totalMs": 0,
+            "msPerFrame": 0
+          }
+        ],
+        "enemies": 21,
+        "projectiles": 59,
+        "peakProjectiles": 74,
+        "peakEnemies": 27,
+        "resources": {
+          "enemies": 21,
+          "bossControllers": 0,
+          "bossSupportEnemies": 0,
+          "projectiles": 59,
+          "activeProjectilePool": 59,
+          "activeFxPool": 2,
+          "activeTrails": 444,
+          "activeMechanicalFragments": 17,
+          "activeMechanicalBursts": 2,
+          "peakMechanicalFragments": 42,
+          "destructionAllocationMisses": 0,
+          "destructionEffectsDegraded": 0,
+          "pickups": 24,
+          "deployables": 0,
+          "floorPanels": 6,
+          "floorActivePanels": 0,
+          "floorNavigationUpdates": 1,
+          "smashableProps": 4,
+          "hazardControllers": 4,
+          "hazardSlots": 18,
+          "arcadeControllers": 1,
+          "anomalyControllers": 1,
+          "timers": 1,
+          "tweens": 9,
+          "colliders": 38,
+          "colliderCapacity": 38,
+          "dynamicBodies": 82,
+          "activeDynamicBodies": 81,
+          "staticBodies": 15,
+          "pendingPhysicsBodies": 0,
+          "displayObjects": 1474,
+          "updateListObjects": 39,
+          "renderTextures": 5,
+          "particleEmitters": 0,
+          "sceneEventListeners": 71,
+          "gameEventListeners": 28,
+          "projectilePoolCapacity": 720,
+          "fxPoolCapacity": 256,
+          "trailCapacity": 972,
+          "infusionEffects": 0,
+          "bossHudObjects": 0,
+          "queuedSpawns": 0,
+          "roundAudioLoops": 0,
+          "roundAudioVoices": 7,
+          "roundAudioTones": 0,
+          "pooledAudioVoices": 173,
+          "gameplayCallbacksRejected": 0,
+          "handoffCallbacksRejected": 0,
+          "encounterInitializations": 1,
+          "arenaWakes": 0,
+          "hudInstances": 1,
+          "premiumRevealScenes": 0,
+          "staleEncounterOwners": 0,
+          "cleanupFailures": 0
+        },
+        "loadoutScaling": {
+          "weaponDps": 874.9440000000001,
+          "supportDps": 325.35714285714283,
+          "offense": 1200.3011428571428,
+          "resilience": 3.2862576480704324,
+          "offenseRatio": 10.158515294402127,
+          "health": 1,
+          "damage": 1,
+          "pressure": 1
+        },
+        "laserSegments": 0
+      },
+      {
+        "label": "supreme-26/artillery-floor",
+        "round": 26,
+        "cap": 36,
+        "raw": {
+          "n": 717,
+          "mean": 16.736820083948025,
+          "p95": 17.09999990463257,
+          "p99": 18,
+          "max": 32.40000009536743,
+          "over33": 0
+        },
+        "render": {
+          "n": 718,
+          "mean": 11.784679662218332,
+          "p95": 14,
+          "p99": 14.600000143051147,
+          "max": 29.199999809265137,
+          "over33": 0
+        },
+        "update": {
+          "n": 718,
+          "mean": 1.4828690758654666,
+          "p95": 2,
+          "p99": 2.299999952316284,
+          "max": 2.9000000953674316,
+          "over33": 0
+        },
+        "costs": [
+          {
+            "name": "Graphics@15",
+            "calls": 718,
+            "totalMs": 1600.0999989509583,
+            "msPerFrame": 2.2316596917028706
+          },
+          {
+            "name": "Graphics@8",
+            "calls": 5481,
+            "totalMs": 1191.299998998642,
+            "msPerFrame": 1.6615062747540335
+          },
+          {
+            "name": "Graphics@14",
+            "calls": 718,
+            "totalMs": 831.400004863739,
+            "msPerFrame": 1.1595537027388272
+          },
+          {
+            "name": "Graphics@5.2",
+            "calls": 5744,
+            "totalMs": 826.1999936103821,
+            "msPerFrame": 1.1523012463185245
+          },
+          {
+            "name": "Graphics@6",
+            "calls": 13547,
+            "totalMs": 391.6000006198883,
+            "msPerFrame": 0.5461645754810157
+          },
+          {
+            "name": "Graphics@0",
+            "calls": 17631,
+            "totalMs": 373.09999322891235,
+            "msPerFrame": 0.5203626125926253
+          },
+          {
+            "name": "Graphics@4.449400000000001",
+            "calls": 718,
+            "totalMs": 261.69999647140503,
+            "msPerFrame": 0.36499302157797076
+          },
+          {
+            "name": "updateHud",
+            "calls": 718,
+            "totalMs": 239.79999828338623,
+            "msPerFrame": 0.3344490910507479
+          },
+          {
+            "name": "Graphics@1000",
+            "calls": 5744,
+            "totalMs": 228.90000128746033,
+            "msPerFrame": 0.3192468637203073
+          },
+          {
+            "name": "Arc@3",
+            "calls": 50260,
+            "totalMs": 227.40000319480896,
+            "msPerFrame": 0.31715481617128166
+          },
+          {
+            "name": "Arc@6",
+            "calls": 39079,
+            "totalMs": 200.09999322891235,
+            "msPerFrame": 0.2790794884643129
+          },
+          {
+            "name": "updateEnemies",
+            "calls": 718,
+            "totalMs": 157.49999499320984,
+            "msPerFrame": 0.21966526498355626
+          },
+          {
+            "name": "Graphics@4.5055000000000005",
+            "calls": 718,
+            "totalMs": 85.4000039100647,
+            "msPerFrame": 0.11910739736410697
+          },
+          {
+            "name": "Graphics@-1.35",
+            "calls": 718,
+            "totalMs": 84.3999993801117,
+            "msPerFrame": 0.11771269090671087
+          },
+          {
+            "name": "updatePossession",
+            "calls": 718,
+            "totalMs": 82.20000267028809,
+            "msPerFrame": 0.1146443551886863
+          },
+          {
+            "name": "Ellipse@5.2",
+            "calls": 17232,
+            "totalMs": 81.70000529289246,
+            "msPerFrame": 0.11394700877669799
+          },
+          {
+            "name": "Arc@0",
+            "calls": 12564,
+            "totalMs": 78.80000758171082,
+            "msPerFrame": 0.10990238156445023
+          },
+          {
+            "name": "Graphics@4.5327",
+            "calls": 718,
+            "totalMs": 76.69999694824219,
+            "msPerFrame": 0.10697349644106302
+          },
+          {
+            "name": "updateProjectiles",
+            "calls": 718,
+            "totalMs": 73.90000486373901,
+            "msPerFrame": 0.10306834709029151
+          },
+          {
+            "name": "updateDynamicFloor",
+            "calls": 718,
+            "totalMs": 67.6000030040741,
+            "msPerFrame": 0.0942817336179555
+          },
+          {
+            "name": "Graphics@5",
+            "calls": 2154,
+            "totalMs": 49.299996852874756,
+            "msPerFrame": 0.06875871248657567
+          },
+          {
+            "name": "Polygon@0",
+            "calls": 41184,
+            "totalMs": 43.299999475479126,
+            "msPerFrame": 0.060390515307502265
+          },
+          {
+            "name": "updatePickups",
+            "calls": 718,
+            "totalMs": 40.19999980926514,
+            "msPerFrame": 0.05606694534067662
+          },
+          {
+            "name": "Graphics@8.66",
+            "calls": 718,
+            "totalMs": 36.10000157356262,
+            "msPerFrame": 0.05034867722951551
+          },
+          {
+            "name": "Text@0",
+            "calls": 31506,
+            "totalMs": 32.90000081062317,
+            "msPerFrame": 0.04588563571913971
+          },
+          {
+            "name": "Polygon@6",
+            "calls": 36333,
+            "totalMs": 31.799999475479126,
+            "msPerFrame": 0.044351463703597105
+          },
+          {
+            "name": "Arc@2",
+            "calls": 3590,
+            "totalMs": 30.100000143051147,
+            "msPerFrame": 0.04198047439756088
+          },
+          {
+            "name": "Graphics@2100",
+            "calls": 718,
+            "totalMs": 30.09999942779541,
+            "msPerFrame": 0.0419804733999936
+          },
+          {
+            "name": "Arc@-2.6",
+            "calls": 4308,
+            "totalMs": 29.80000114440918,
+            "msPerFrame": 0.04156206575231406
+          },
+          {
+            "name": "Graphics@-0.8",
+            "calls": 718,
+            "totalMs": 28.39999794960022,
+            "msPerFrame": 0.039609481101255534
+          },
+          {
+            "name": "Ellipse@8",
+            "calls": 6462,
+            "totalMs": 23.999996662139893,
+            "msPerFrame": 0.03347279869196638
+          },
+          {
+            "name": "Graphics@12.4",
+            "calls": 718,
+            "totalMs": 21.29999852180481,
+            "msPerFrame": 0.02970711090907226
+          },
+          {
+            "name": "Ellipse@7",
+            "calls": 4308,
+            "totalMs": 20.699997901916504,
+            "msPerFrame": 0.028870289960831946
+          },
+          {
+            "name": "Image@-0.3",
+            "calls": 30156,
+            "totalMs": 19.400001525878906,
+            "msPerFrame": 0.027057184833861794
+          },
+          {
+            "name": "gasHazard",
+            "calls": 718,
+            "totalMs": 19.000000715255737,
+            "msPerFrame": 0.02649930364749754
+          },
+          {
+            "name": "Image@8",
+            "calls": 31141,
+            "totalMs": 18.999998331069946,
+            "msPerFrame": 0.026499300322273288
+          },
+          {
+            "name": "Arc@10000",
+            "calls": 2331,
+            "totalMs": 18.199998140335083,
+            "msPerFrame": 0.025383539944679335
+          },
+          {
+            "name": "Arc@2.2",
+            "calls": 2872,
+            "totalMs": 17.899997234344482,
+            "msPerFrame": 0.024965128639253112
+          },
+          {
+            "name": "Arc@8",
+            "calls": 4308,
+            "totalMs": 17.299999475479126,
+            "msPerFrame": 0.024128311681281905
+          },
+          {
+            "name": "Image@8.9",
+            "calls": 25848,
+            "totalMs": 16.19999933242798,
+            "msPerFrame": 0.022594141328351434
+          },
+          {
+            "name": "Image@10000",
+            "calls": 22540,
+            "totalMs": 15.800001382827759,
+            "msPerFrame": 0.02203626413225629
+          },
+          {
+            "name": "Image@1",
+            "calls": 23694,
+            "totalMs": 15.699999570846558,
+            "msPerFrame": 0.021896791591138852
+          },
+          {
+            "name": "Rectangle@0",
+            "calls": 15002,
+            "totalMs": 14.999999046325684,
+            "msPerFrame": 0.020920500761960507
+          },
+          {
+            "name": "RenderTexture@0",
+            "calls": 16514,
+            "totalMs": 14.999998092651367,
+            "msPerFrame": 0.020920499431870805
+          },
+          {
+            "name": "Graphics@4.5193",
+            "calls": 175,
+            "totalMs": 14.600000143051147,
+            "msPerFrame": 0.02036262223577566
+          },
+          {
+            "name": "Arc@5",
+            "calls": 1766,
+            "totalMs": 13.100002527236938,
+            "msPerFrame": 0.018270575351794893
+          },
+          {
+            "name": "Ellipse@9",
+            "calls": 2154,
+            "totalMs": 12.899999856948853,
+            "msPerFrame": 0.017991631599649723
+          },
+          {
+            "name": "Rectangle@8",
+            "calls": 12924,
+            "totalMs": 11.300000667572021,
+            "msPerFrame": 0.01576011250707395
+          },
+          {
+            "name": "Rectangle@-0.3",
+            "calls": 17232,
+            "totalMs": 9.400002002716064,
+            "msPerFrame": 0.013110184104206505
+          },
+          {
+            "name": "Text@1000",
+            "calls": 10770,
+            "totalMs": 9.400000810623169,
+            "msPerFrame": 0.013110182441594377
+          },
+          {
+            "name": "Graphics@13.6",
+            "calls": 718,
+            "totalMs": 8.799999952316284,
+            "msPerFrame": 0.012273361160831638
+          },
+          {
+            "name": "Text@3",
+            "calls": 7180,
+            "totalMs": 8.500000715255737,
+            "msPerFrame": 0.011854952183062395
+          },
+          {
+            "name": "Sprite@7",
+            "calls": 11339,
+            "totalMs": 8.40000057220459,
+            "msPerFrame": 0.011715481969601938
+          },
+          {
+            "name": "Arc@1000",
+            "calls": 4308,
+            "totalMs": 8.100000619888306,
+            "msPerFrame": 0.011297071994265419
+          },
+          {
+            "name": "updateSystemInfusions",
+            "calls": 718,
+            "totalMs": 7.699999809265137,
+            "msPerFrame": 0.010739190807901167
+          },
+          {
+            "name": "Image@12",
+            "calls": 9319,
+            "totalMs": 7.200001239776611,
+            "msPerFrame": 0.010041842733300712
+          },
+          {
+            "name": "Text@6",
+            "calls": 4308,
+            "totalMs": 6.499999046325684,
+            "msPerFrame": 0.009065549576465388
+          },
+          {
+            "name": "Image@-2.55",
+            "calls": 12924,
+            "totalMs": 6.300001621246338,
+            "msPerFrame": 0.008786613139813581
+          },
+          {
+            "name": "Graphics@-3.8",
+            "calls": 718,
+            "totalMs": 5.900000095367432,
+            "msPerFrame": 0.008228730955882052
+          },
+          {
+            "name": "Graphics@7.8",
+            "calls": 718,
+            "totalMs": 5.799998998641968,
+            "msPerFrame": 0.008089259412331894
+          },
+          {
+            "name": "laserSecurity",
+            "calls": 718,
+            "totalMs": 5,
+            "msPerFrame": 0.00697350069735007
+          },
+          {
+            "name": "Text@20",
+            "calls": 718,
+            "totalMs": 4.800000190734863,
+            "msPerFrame": 0.006694560935474008
+          },
+          {
+            "name": "Graphics@8.62",
+            "calls": 718,
+            "totalMs": 4.200000286102295,
+            "msPerFrame": 0.005857740984800969
+          },
+          {
+            "name": "Graphics@-1",
+            "calls": 718,
+            "totalMs": 4.100001335144043,
+            "msPerFrame": 0.00571827243395264
+          },
+          {
+            "name": "Rectangle@3",
+            "calls": 7180,
+            "totalMs": 4.099999666213989,
+            "msPerFrame": 0.005718270106295662
+          },
+          {
+            "name": "Text@8",
+            "calls": 2154,
+            "totalMs": 3.799999952316284,
+            "msPerFrame": 0.005299860463481568
+          },
+          {
+            "name": "bombletHazard",
+            "calls": 718,
+            "totalMs": 3.700000286102295,
+            "msPerFrame": 0.005160390915065962
+          },
+          {
+            "name": "RenderTexture@3",
+            "calls": 4308,
+            "totalMs": 3,
+            "msPerFrame": 0.0041841004184100415
+          },
+          {
+            "name": "Rectangle@1000",
+            "calls": 3635,
+            "totalMs": 2.8999996185302734,
+            "msPerFrame": 0.004044629872427159
+          },
+          {
+            "name": "Graphics@9.2",
+            "calls": 718,
+            "totalMs": 2.700000286102295,
+            "msPerFrame": 0.0037656907755959485
+          },
+          {
+            "name": "Arc@7",
+            "calls": 399,
+            "totalMs": 2.400001049041748,
+            "msPerFrame": 0.003347281797826706
+          },
+          {
+            "name": "Graphics@13.55",
+            "calls": 718,
+            "totalMs": 2.3000001907348633,
+            "msPerFrame": 0.0032078105867989724
+          },
+          {
+            "name": "RenderTexture@-4",
+            "calls": 718,
+            "totalMs": 2.1000003814697266,
+            "msPerFrame": 0.00292887082492291
+          },
+          {
+            "name": "Triangle@0",
+            "calls": 1018,
+            "totalMs": 2.0999999046325684,
+            "msPerFrame": 0.0029288701598780592
+          },
+          {
+            "name": "Graphics@1",
+            "calls": 718,
+            "totalMs": 2.0999996662139893,
+            "msPerFrame": 0.0029288698273556334
+          },
+          {
+            "name": "Arc@-1.3",
+            "calls": 718,
+            "totalMs": 2.000000238418579,
+            "msPerFrame": 0.0027894006114624536
+          },
+          {
+            "name": "Text@2.25",
+            "calls": 1436,
+            "totalMs": 1.8999998569488525,
+            "msPerFrame": 0.002649930065479571
+          },
+          {
+            "name": "RenderTexture@-2.55",
+            "calls": 1436,
+            "totalMs": 1.6000008583068848,
+            "msPerFrame": 0.002231521420232754
+          },
+          {
+            "name": "updateAbilities",
+            "calls": 718,
+            "totalMs": 1.200000286102295,
+            "msPerFrame": 0.0016736405663909273
+          },
+          {
+            "name": "Text@1005",
+            "calls": 718,
+            "totalMs": 1.0999996662139893,
+            "msPerFrame": 0.0015341696878856195
+          },
+          {
+            "name": "Text@9",
+            "calls": 399,
+            "totalMs": 1.099999189376831,
+            "msPerFrame": 0.0015341690228407685
+          },
+          {
+            "name": "Sprite@10",
+            "calls": 1393,
+            "totalMs": 1,
+            "msPerFrame": 0.001394700139470014
+          },
+          {
+            "name": "RenderTexture@1",
+            "calls": 718,
+            "totalMs": 0.9999997615814209,
+            "msPerFrame": 0.0013946998069475885
+          },
+          {
+            "name": "Rectangle@999",
+            "calls": 1432,
+            "totalMs": 0.8999998569488525,
+            "msPerFrame": 0.0012552299260095573
+          },
+          {
+            "name": "updatePlayerShooting",
+            "calls": 718,
+            "totalMs": 0.8000001907348633,
+            "msPerFrame": 0.0011157603775939515
+          },
+          {
+            "name": "RenderTexture@2",
+            "calls": 718,
+            "totalMs": 0.8000001907348633,
+            "msPerFrame": 0.0011157603775939515
+          },
+          {
+            "name": "RenderTexture@7",
+            "calls": 271,
+            "totalMs": 0.7999997138977051,
+            "msPerFrame": 0.0011157597125491005
+          },
+          {
+            "name": "Image@9.1",
+            "calls": 718,
+            "totalMs": 0.6000001430511475,
+            "msPerFrame": 0.0008368202831954637
+          },
+          {
+            "name": "laserGeometry",
+            "calls": 121,
+            "totalMs": 0.5999999046325684,
+            "msPerFrame": 0.0008368199506730382
+          },
+          {
+            "name": "Sprite@9",
+            "calls": 718,
+            "totalMs": 0.5999996662139893,
+            "msPerFrame": 0.0008368196181506127
+          },
+          {
+            "name": "Image@10",
+            "calls": 1080,
+            "totalMs": 0.4999995231628418,
+            "msPerFrame": 0.000697349404690156
+          },
+          {
+            "name": "Image@9",
+            "calls": 720,
+            "totalMs": 0.4999995231628418,
+            "msPerFrame": 0.000697349404690156
+          },
+          {
+            "name": "Graphics@10",
+            "calls": 718,
+            "totalMs": 0.40000009536743164,
+            "msPerFrame": 0.0005578801887969757
+          },
+          {
+            "name": "getHazardDamageTargets",
+            "calls": 718,
+            "totalMs": 0.3000004291534424,
+            "msPerFrame": 0.00041841064038137014
+          },
+          {
+            "name": "Graphics@19",
+            "calls": 718,
+            "totalMs": 0.2999999523162842,
+            "msPerFrame": 0.0004184099753365191
+          },
+          {
+            "name": "Graphics@9.1",
+            "calls": 718,
+            "totalMs": 0.20000028610229492,
+            "msPerFrame": 0.0002789404269209134
+          },
+          {
+            "name": "Graphics@7.85",
+            "calls": 718,
+            "totalMs": 0.09999990463256836,
+            "msPerFrame": 0.00013946988093803118
+          },
+          {
+            "name": "Graphics@7",
+            "calls": 718,
+            "totalMs": 0,
+            "msPerFrame": 0
+          },
+          {
+            "name": "Graphics@7.2",
+            "calls": 718,
+            "totalMs": 0,
+            "msPerFrame": 0
+          }
+        ],
+        "enemies": 9,
+        "projectiles": 56,
+        "peakProjectiles": 102,
+        "peakEnemies": 30,
+        "resources": {
+          "enemies": 9,
+          "bossControllers": 0,
+          "bossSupportEnemies": 0,
+          "projectiles": 56,
+          "activeProjectilePool": 56,
+          "activeFxPool": 8,
+          "activeTrails": 436,
+          "activeMechanicalFragments": 42,
+          "activeMechanicalBursts": 8,
+          "peakMechanicalFragments": 43,
+          "destructionAllocationMisses": 0,
+          "destructionEffectsDegraded": 0,
+          "pickups": 30,
+          "deployables": 0,
+          "floorPanels": 6,
+          "floorActivePanels": 4,
+          "floorNavigationUpdates": 20,
+          "smashableProps": 3,
+          "hazardControllers": 4,
+          "hazardSlots": 15,
+          "arcadeControllers": 1,
+          "anomalyControllers": 1,
+          "timers": 1,
+          "tweens": 10,
+          "colliders": 18,
+          "colliderCapacity": 18,
+          "dynamicBodies": 67,
+          "activeDynamicBodies": 66,
+          "staticBodies": 15,
+          "pendingPhysicsBodies": 0,
+          "displayObjects": 1468,
+          "updateListObjects": 27,
+          "renderTextures": 5,
+          "particleEmitters": 0,
+          "sceneEventListeners": 71,
+          "gameEventListeners": 28,
+          "projectilePoolCapacity": 720,
+          "fxPoolCapacity": 256,
+          "trailCapacity": 972,
+          "infusionEffects": 0,
+          "bossHudObjects": 0,
+          "queuedSpawns": 0,
+          "roundAudioLoops": 1,
+          "roundAudioVoices": 9,
+          "roundAudioTones": 0,
+          "pooledAudioVoices": 173,
+          "gameplayCallbacksRejected": 0,
+          "handoffCallbacksRejected": 0,
+          "encounterInitializations": 1,
+          "arenaWakes": 0,
+          "hudInstances": 1,
+          "premiumRevealScenes": 0,
+          "staleEncounterOwners": 0,
+          "cleanupFailures": 0
+        },
+        "loadoutScaling": {
+          "weaponDps": 874.9440000000001,
+          "supportDps": 325.35714285714283,
+          "offense": 1200.3011428571428,
+          "resilience": 3.2862576480704324,
+          "offenseRatio": 10.158515294402127,
+          "health": 1,
+          "damage": 1,
+          "pressure": 1
+        },
+        "laserSegments": 0
+      },
+      {
+        "label": "supreme-26/artillery-defenses",
+        "round": 26,
+        "cap": 36,
+        "raw": {
+          "n": 529,
+          "mean": 22.691682419840014,
+          "p95": 29,
+          "p99": 31.399999856948853,
+          "max": 41.09999990463257,
+          "over33": 1
+        },
+        "render": {
+          "n": 530,
+          "mean": 14.374528308184642,
+          "p95": 18.5,
+          "p99": 20.299999952316284,
+          "max": 23.199999809265137,
+          "over33": 0
+        },
+        "update": {
+          "n": 530,
+          "mean": 5.679811326062905,
+          "p95": 9.299999952316284,
+          "p99": 10,
+          "max": 11.100000143051147,
+          "over33": 0
+        },
+        "costs": [
+          {
+            "name": "updateEnemies",
+            "calls": 530,
+            "totalMs": 1945.1000039577484,
+            "msPerFrame": 3.676937625629014
+          },
+          {
+            "name": "Graphics@15",
+            "calls": 530,
+            "totalMs": 1362.5999960899353,
+            "msPerFrame": 2.5758033952550763
+          },
+          {
+            "name": "Graphics@8",
+            "calls": 3553,
+            "totalMs": 1315.6999971866608,
+            "msPerFrame": 2.487145552337733
+          },
+          {
+            "name": "Graphics@5.2",
+            "calls": 4240,
+            "totalMs": 630.2000031471252,
+            "msPerFrame": 1.191304353775284
+          },
+          {
+            "name": "Graphics@14",
+            "calls": 530,
+            "totalMs": 507.00000190734863,
+            "msPerFrame": 0.9584121019042507
+          },
+          {
+            "name": "updateProjectiles",
+            "calls": 530,
+            "totalMs": 362.0000002384186,
+            "msPerFrame": 0.6843100193542885
+          },
+          {
+            "name": "Graphics@6",
+            "calls": 11712,
+            "totalMs": 341.09999537467957,
+            "msPerFrame": 0.6448015035438177
+          },
+          {
+            "name": "Graphics@0",
+            "calls": 12770,
+            "totalMs": 276.599999666214,
+            "msPerFrame": 0.5228733453047524
+          },
+          {
+            "name": "Graphics@4.449400000000001",
+            "calls": 530,
+            "totalMs": 197.80000162124634,
+            "msPerFrame": 0.37391304654299873
+          },
+          {
+            "name": "Graphics@1000",
+            "calls": 4240,
+            "totalMs": 188.40000128746033,
+            "msPerFrame": 0.35614366973054884
+          },
+          {
+            "name": "updateHud",
+            "calls": 530,
+            "totalMs": 186.60000109672546,
+            "msPerFrame": 0.35274102286715586
+          },
+          {
+            "name": "Arc@3",
+            "calls": 37100,
+            "totalMs": 178.2000036239624,
+            "msPerFrame": 0.3368620106313089
+          },
+          {
+            "name": "Arc@6",
+            "calls": 34076,
+            "totalMs": 176.3999960422516,
+            "msPerFrame": 0.3334593497963168
+          },
+          {
+            "name": "Arc@10000",
+            "calls": 21425,
+            "totalMs": 149.60000324249268,
+            "msPerFrame": 0.2827977376984739
+          },
+          {
+            "name": "Image@10000",
+            "calls": 235726,
+            "totalMs": 147.40000295639038,
+            "msPerFrame": 0.27863894698750546
+          },
+          {
+            "name": "Graphics@5",
+            "calls": 1590,
+            "totalMs": 125.79999566078186,
+            "msPerFrame": 0.23780717516215852
+          },
+          {
+            "name": "Arc@0",
+            "calls": 15565,
+            "totalMs": 89.70000696182251,
+            "msPerFrame": 0.16956523055164935
+          },
+          {
+            "name": "Graphics@-1.35",
+            "calls": 530,
+            "totalMs": 65.79999899864197,
+            "msPerFrame": 0.12438563137739503
+          },
+          {
+            "name": "Ellipse@5.2",
+            "calls": 12720,
+            "totalMs": 65.19999742507935,
+            "msPerFrame": 0.12325141290185132
+          },
+          {
+            "name": "updatePossession",
+            "calls": 530,
+            "totalMs": 62.59999871253967,
+            "msPerFrame": 0.11833648149818464
+          },
+          {
+            "name": "Arc@9",
+            "calls": 8112,
+            "totalMs": 58.29999804496765,
+            "msPerFrame": 0.1102079358127933
+          },
+          {
+            "name": "updateDynamicFloor",
+            "calls": 530,
+            "totalMs": 57.900004863739014,
+            "msPerFrame": 0.10945180503542347
+          },
+          {
+            "name": "updateAbilities",
+            "calls": 530,
+            "totalMs": 50.99999809265137,
+            "msPerFrame": 0.09640831397476629
+          },
+          {
+            "name": "Polygon@0",
+            "calls": 35425,
+            "totalMs": 38.399999141693115,
+            "msPerFrame": 0.0725897904379832
+          },
+          {
+            "name": "Arc@7",
+            "calls": 5350,
+            "totalMs": 36.00000071525574,
+            "msPerFrame": 0.06805293140880102
+          },
+          {
+            "name": "Rectangle@0",
+            "calls": 26817,
+            "totalMs": 32.69999980926514,
+            "msPerFrame": 0.06181474444095489
+          },
+          {
+            "name": "Graphics@5.3",
+            "calls": 227,
+            "totalMs": 31.0999972820282,
+            "msPerFrame": 0.05879016499438223
+          },
+          {
+            "name": "Graphics@8.66",
+            "calls": 530,
+            "totalMs": 30.200000047683716,
+            "msPerFrame": 0.05708884697104672
+          },
+          {
+            "name": "Image@4",
+            "calls": 47700,
+            "totalMs": 29.000003814697266,
+            "msPerFrame": 0.054820423090164966
+          },
+          {
+            "name": "updatePickups",
+            "calls": 530,
+            "totalMs": 28.000001430511475,
+            "msPerFrame": 0.05293005941495553
+          },
+          {
+            "name": "Polygon@6",
+            "calls": 31956,
+            "totalMs": 27.59999656677246,
+            "msPerFrame": 0.05217390655344511
+          },
+          {
+            "name": "Image@8",
+            "calls": 47037,
+            "totalMs": 27.399999618530273,
+            "msPerFrame": 0.05179584048871507
+          },
+          {
+            "name": "Arc@2",
+            "calls": 2650,
+            "totalMs": 26.90000343322754,
+            "msPerFrame": 0.05085066811574204
+          },
+          {
+            "name": "Text@0",
+            "calls": 21992,
+            "totalMs": 24.99999976158142,
+            "msPerFrame": 0.047258978755352406
+          },
+          {
+            "name": "Graphics@4.5055000000000005",
+            "calls": 213,
+            "totalMs": 24.30000138282776,
+            "msPerFrame": 0.04593573040232091
+          },
+          {
+            "name": "Graphics@2100",
+            "calls": 530,
+            "totalMs": 23.69999861717224,
+            "msPerFrame": 0.04480150967329346
+          },
+          {
+            "name": "Rectangle@4",
+            "calls": 39750,
+            "totalMs": 23.000002145767212,
+            "msPerFrame": 0.04347826492583594
+          },
+          {
+            "name": "Graphics@-0.8",
+            "calls": 530,
+            "totalMs": 22.799999713897705,
+            "msPerFrame": 0.04310018849508073
+          },
+          {
+            "name": "Arc@5",
+            "calls": 2663,
+            "totalMs": 21.90000081062317,
+            "msPerFrame": 0.041398867316867996
+          },
+          {
+            "name": "Arc@-2.6",
+            "calls": 3180,
+            "totalMs": 21.000001192092896,
+            "msPerFrame": 0.03969754478656502
+          },
+          {
+            "name": "Graphics@12.4",
+            "calls": 530,
+            "totalMs": 18.49999713897705,
+            "msPerFrame": 0.03497163920411541
+          },
+          {
+            "name": "Ellipse@8",
+            "calls": 4770,
+            "totalMs": 18.30000138282776,
+            "msPerFrame": 0.03459357539286911
+          },
+          {
+            "name": "Ellipse@7",
+            "calls": 3180,
+            "totalMs": 17.10000205039978,
+            "msPerFrame": 0.03232514565292964
+          },
+          {
+            "name": "gasHazard",
+            "calls": 530,
+            "totalMs": 15.600000619888306,
+            "msPerFrame": 0.029489604196386212
+          },
+          {
+            "name": "Arc@8",
+            "calls": 3180,
+            "totalMs": 13.69999885559082,
+            "msPerFrame": 0.02589791844157055
+          },
+          {
+            "name": "Image@-0.3",
+            "calls": 22260,
+            "totalMs": 13.100000143051147,
+            "msPerFrame": 0.024763705374387802
+          },
+          {
+            "name": "Arc@2.2",
+            "calls": 2120,
+            "totalMs": 12.999998331069946,
+            "msPerFrame": 0.02457466603226833
+          },
+          {
+            "name": "Image@1",
+            "calls": 17490,
+            "totalMs": 11.299999713897705,
+            "msPerFrame": 0.02136105806029812
+          },
+          {
+            "name": "Image@8.9",
+            "calls": 19080,
+            "totalMs": 11.199999809265137,
+            "msPerFrame": 0.02117202232375262
+          },
+          {
+            "name": "Rectangle@8",
+            "calls": 9540,
+            "totalMs": 11.000000238418579,
+            "msPerFrame": 0.020793951301358374
+          },
+          {
+            "name": "Ellipse@9",
+            "calls": 1590,
+            "totalMs": 10.899999141693115,
+            "msPerFrame": 0.020604913311329142
+          },
+          {
+            "name": "RenderTexture@0",
+            "calls": 12190,
+            "totalMs": 10.100001573562622,
+            "msPerFrame": 0.019092630573842386
+          },
+          {
+            "name": "Triangle@0",
+            "calls": 6887,
+            "totalMs": 9.69999885559082,
+            "msPerFrame": 0.018336481768602683
+          },
+          {
+            "name": "Text@1000",
+            "calls": 7950,
+            "totalMs": 9.099998474121094,
+            "msPerFrame": 0.01720226554654271
+          },
+          {
+            "name": "Arc@1000",
+            "calls": 3180,
+            "totalMs": 8.100001811981201,
+            "msPerFrame": 0.0153119126880552
+          },
+          {
+            "name": "bombletHazard",
+            "calls": 530,
+            "totalMs": 8.100000619888306,
+            "msPerFrame": 0.015311910434571467
+          },
+          {
+            "name": "Sprite@7",
+            "calls": 10203,
+            "totalMs": 7.499999046325684,
+            "msPerFrame": 0.014177691959027757
+          },
+          {
+            "name": "Rectangle@-0.3",
+            "calls": 12720,
+            "totalMs": 6.700000286102295,
+            "msPerFrame": 0.012665406968057269
+          },
+          {
+            "name": "updateSystemInfusions",
+            "calls": 530,
+            "totalMs": 6.1999993324279785,
+            "msPerFrame": 0.011720225581149298
+          },
+          {
+            "name": "Text@3",
+            "calls": 5300,
+            "totalMs": 5.799999475479126,
+            "msPerFrame": 0.010964082184270559
+          },
+          {
+            "name": "Graphics@13.55",
+            "calls": 530,
+            "totalMs": 5.699999570846558,
+            "msPerFrame": 0.010775046447725062
+          },
+          {
+            "name": "Graphics@7.8",
+            "calls": 530,
+            "totalMs": 5.499999761581421,
+            "msPerFrame": 0.010396974974634066
+          },
+          {
+            "name": "Text@6",
+            "calls": 3180,
+            "totalMs": 4.800000190734863,
+            "msPerFrame": 0.009073724368118834
+          },
+          {
+            "name": "Graphics@9.2",
+            "calls": 530,
+            "totalMs": 4.700000762939453,
+            "msPerFrame": 0.00888468953296683
+          },
+          {
+            "name": "Graphics@4.5327",
+            "calls": 79,
+            "totalMs": 4.699999570846558,
+            "msPerFrame": 0.008884687279483095
+          },
+          {
+            "name": "Graphics@-3.8",
+            "calls": 530,
+            "totalMs": 4.200002431869507,
+            "msPerFrame": 0.007939513103723076
+          },
+          {
+            "name": "Arc@5.3",
+            "calls": 454,
+            "totalMs": 4.000000238418579,
+            "msPerFrame": 0.0075614371236646105
+          },
+          {
+            "name": "Image@-2.55",
+            "calls": 9540,
+            "totalMs": 3.8999996185302734,
+            "msPerFrame": 0.0073724000350288725
+          },
+          {
+            "name": "Text@20",
+            "calls": 530,
+            "totalMs": 3.6000003814697266,
+            "msPerFrame": 0.006805293726785872
+          },
+          {
+            "name": "Rectangle@3",
+            "calls": 5300,
+            "totalMs": 3.0999999046325684,
+            "msPerFrame": 0.005860113241271395
+          },
+          {
+            "name": "Rectangle@1000",
+            "calls": 2944,
+            "totalMs": 3.000000476837158,
+            "msPerFrame": 0.005671078406119392
+          },
+          {
+            "name": "Image@12",
+            "calls": 4094,
+            "totalMs": 2.900001287460327,
+            "msPerFrame": 0.005482044021664134
+          },
+          {
+            "name": "RenderTexture@3",
+            "calls": 3180,
+            "totalMs": 2.700000524520874,
+            "msPerFrame": 0.005103970745786151
+          },
+          {
+            "name": "Graphics@8.62",
+            "calls": 530,
+            "totalMs": 2.599998950958252,
+            "msPerFrame": 0.0049149318543634255
+          },
+          {
+            "name": "Line@0",
+            "calls": 2447,
+            "totalMs": 2.4999985694885254,
+            "msPerFrame": 0.004725895216424434
+          },
+          {
+            "name": "Graphics@-1",
+            "calls": 530,
+            "totalMs": 2.4000003337860107,
+            "msPerFrame": 0.004536862634756164
+          },
+          {
+            "name": "Text@8",
+            "calls": 1590,
+            "totalMs": 2.3000006675720215,
+            "msPerFrame": 0.004347827348907413
+          },
+          {
+            "name": "Graphics@13.6",
+            "calls": 530,
+            "totalMs": 1.8000001907348633,
+            "msPerFrame": 0.003402646863392936
+          },
+          {
+            "name": "Rectangle@999",
+            "calls": 1048,
+            "totalMs": 1.799999475479126,
+            "msPerFrame": 0.0034026455113026956
+          },
+          {
+            "name": "RenderTexture@-4",
+            "calls": 530,
+            "totalMs": 1.6999995708465576,
+            "msPerFrame": 0.0032136097747571977
+          },
+          {
+            "name": "Image@0",
+            "calls": 2891,
+            "totalMs": 1.5999999046325684,
+            "msPerFrame": 0.0030245744889084466
+          },
+          {
+            "name": "Rectangle@7",
+            "calls": 1364,
+            "totalMs": 1.5,
+            "msPerFrame": 0.002835538752362949
+          },
+          {
+            "name": "RenderTexture@7",
+            "calls": 475,
+            "totalMs": 1.4000000953674316,
+            "msPerFrame": 0.0026465030158174512
+          },
+          {
+            "name": "RenderTexture@-2.55",
+            "calls": 1060,
+            "totalMs": 1.2999999523162842,
+            "msPerFrame": 0.0024574668285752064
+          },
+          {
+            "name": "Arc@-1.3",
+            "calls": 530,
+            "totalMs": 1.299999475479126,
+            "msPerFrame": 0.0024574659271817127
+          },
+          {
+            "name": "laserSecurity",
+            "calls": 530,
+            "totalMs": 1.000000238418579,
+            "msPerFrame": 0.0018903596189387129
+          },
+          {
+            "name": "Sprite@9",
+            "calls": 530,
+            "totalMs": 0.9999995231628418,
+            "msPerFrame": 0.001890358266848472
+          },
+          {
+            "name": "Text@1005",
+            "calls": 530,
+            "totalMs": 0.9000005722045898,
+            "msPerFrame": 0.0017013243330899618
+          },
+          {
+            "name": "Image@9.1",
+            "calls": 530,
+            "totalMs": 0.9000000953674316,
+            "msPerFrame": 0.001701323431696468
+          },
+          {
+            "name": "Graphics@1",
+            "calls": 530,
+            "totalMs": 0.8999996185302734,
+            "msPerFrame": 0.0017013225303029744
+          },
+          {
+            "name": "Image@7",
+            "calls": 1441,
+            "totalMs": 0.8999996185302734,
+            "msPerFrame": 0.0017013225303029744
+          },
+          {
+            "name": "Text@2.25",
+            "calls": 1060,
+            "totalMs": 0.799999475479126,
+            "msPerFrame": 0.0015122863430607296
+          },
+          {
+            "name": "RenderTexture@1",
+            "calls": 530,
+            "totalMs": 0.6999995708465576,
+            "msPerFrame": 0.0013232506065152317
+          },
+          {
+            "name": "RenderTexture@2",
+            "calls": 530,
+            "totalMs": 0.5999996662139893,
+            "msPerFrame": 0.001134214869969734
+          },
+          {
+            "name": "getHazardDamageTargets",
+            "calls": 530,
+            "totalMs": 0.5000002384185791,
+            "msPerFrame": 0.0009451800348177299
+          },
+          {
+            "name": "Graphics@9.1",
+            "calls": 530,
+            "totalMs": 0.40000033378601074,
+            "msPerFrame": 0.000756144298272232
+          },
+          {
+            "name": "updatePlayerShooting",
+            "calls": 530,
+            "totalMs": 0.40000009536743164,
+            "msPerFrame": 0.0007561438475754852
+          },
+          {
+            "name": "Graphics@7.2",
+            "calls": 530,
+            "totalMs": 0.3000001907348633,
+            "msPerFrame": 0.0005671081110299873
+          },
+          {
+            "name": "Sprite@10",
+            "calls": 101,
+            "totalMs": 0.2999999523162842,
+            "msPerFrame": 0.0005671076603332404
+          },
+          {
+            "name": "Graphics@19",
+            "calls": 530,
+            "totalMs": 0.20000004768371582,
+            "msPerFrame": 0.0003780719237877426
+          },
+          {
+            "name": "Graphics@7",
+            "calls": 530,
+            "totalMs": 0.10000014305114746,
+            "msPerFrame": 0.00018903618724224472
+          },
+          {
+            "name": "Text@9",
+            "calls": 50,
+            "totalMs": 0.09999990463256836,
+            "msPerFrame": 0.00018903573654549785
+          },
+          {
+            "name": "Graphics@10",
+            "calls": 530,
+            "totalMs": 0.09999990463256836,
+            "msPerFrame": 0.00018903573654549785
+          },
+          {
+            "name": "Graphics@7.85",
+            "calls": 530,
+            "totalMs": 0,
+            "msPerFrame": 0
+          }
+        ],
+        "enemies": 31,
+        "projectiles": 411,
+        "peakProjectiles": 759,
+        "peakEnemies": 31,
+        "resources": {
+          "enemies": 31,
+          "bossControllers": 0,
+          "bossSupportEnemies": 0,
+          "projectiles": 417,
+          "activeProjectilePool": 411,
+          "activeFxPool": 57,
+          "activeTrails": 3230,
+          "activeMechanicalFragments": 2,
+          "activeMechanicalBursts": 0,
+          "peakMechanicalFragments": 45,
+          "destructionAllocationMisses": 0,
+          "destructionEffectsDegraded": 0,
+          "pickups": 18,
+          "deployables": 11,
+          "floorPanels": 6,
+          "floorActivePanels": 0,
+          "floorNavigationUpdates": 37,
+          "smashableProps": 1,
+          "hazardControllers": 4,
+          "hazardSlots": 3,
+          "arcadeControllers": 2,
+          "anomalyControllers": 1,
+          "timers": 1,
+          "tweens": 68,
+          "colliders": 62,
+          "colliderCapacity": 62,
+          "dynamicBodies": 444,
+          "activeDynamicBodies": 443,
+          "staticBodies": 15,
+          "pendingPhysicsBodies": 0,
+          "displayObjects": 1542,
+          "updateListObjects": 49,
+          "renderTextures": 5,
+          "particleEmitters": 0,
+          "sceneEventListeners": 71,
+          "gameEventListeners": 28,
+          "projectilePoolCapacity": 759,
+          "fxPoolCapacity": 256,
+          "trailCapacity": 5903,
+          "infusionEffects": 0,
+          "bossHudObjects": 0,
+          "queuedSpawns": 0,
+          "roundAudioLoops": 0,
+          "roundAudioVoices": 7,
+          "roundAudioTones": 0,
+          "pooledAudioVoices": 173,
+          "gameplayCallbacksRejected": 0,
+          "handoffCallbacksRejected": 0,
+          "encounterInitializations": 1,
+          "arenaWakes": 0,
+          "hudInstances": 1,
+          "premiumRevealScenes": 0,
+          "staleEncounterOwners": 0,
+          "cleanupFailures": 0
+        },
+        "loadoutScaling": {
+          "weaponDps": 874.9440000000001,
+          "supportDps": 325.35714285714283,
+          "offense": 1200.3011428571428,
+          "resilience": 3.2862576480704324,
+          "offenseRatio": 10.158515294402127,
+          "health": 1,
+          "damage": 1,
+          "pressure": 1
+        },
+        "laserSegments": 0
+      }
+    ],
+    "errors": []
+  },
+  "limits": [
+    "Desktop RTX 5070; lower-end hardware not measured.",
+    "Live combat samples are not deterministic event replays.",
+    "Heavy defense sample retains one 41ms frame; not a universal no-hitch guarantee."
+  ],
+  "reproduction": [
+    "npm.cmd test",
+    "npm.cmd run build",
+    "node scripts/run-layout-audit.mjs artifacts/lava-recovery-integration.json ./audit-lava-recovery.browser.js 1600x1000",
+    "node scripts/run-layout-audit.mjs artifacts/supreme-boss-batched-trails.json ./audit-supreme-boss-performance.browser.js 1600x1000",
+    "N3ON_LAYOUT_OPTIONS={\"benchmark\":true} node scripts/run-layout-audit.mjs artifacts/trail-rendering.json ./audit-trail-rendering.browser.js 1600x1000"
+  ]
+}

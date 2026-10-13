@@ -72,7 +72,7 @@
     const gx=p.x+p.w/2,gy=p.y+p.h/2;
     a.player.body.reset(gx,gy);a.floorPlayerRelocated();const hp=a.player.hp,maxHp=a.player.stats.maxHealth,combatInvulnerability=a.player.invulnUntil;
     a.updateDynamicFloor(20);check(a.floorFalling(a.player),'live player enters fall state');check(!a.player.body.enable,'fall suspends Arcade movement');
-    for(let i=0;i<55;i++)a.updateDynamicFloor(20);
+    for(let i=0;i<75;i++)a.updateDynamicFloor(20);
     check(Math.abs(a.player.hp-(hp-maxHp*.35))<.01,'live lava damage follows max-health tuning');
     check(a.player.body.enable&&!a.floorFalling(a.player),'surviving player body resumes');
     check(f.isSupported(a.player.x,a.player.y,a.player.combatRadius,true),'live player ejected onto safe supported floor');
@@ -86,7 +86,7 @@
     a.updateDynamicFloor(20);
     check(a.floorFalling(tank)&&a.floorFalling(mine)&&a.floorFalling(turret),'real enemy and deployables lose support');
     check(!a.floorFalling(drone),'real flying drone ignores opening');
-    for(let i=0;i<55;i++)a.updateDynamicFloor(20);
+    for(let i=0;i<75;i++)a.updateDynamicFloor(20);
     check(tank.hp===370&&!a.floorFalling(tank)&&tank.body.enable,'durable ground enemy takes damage and ejects');
     check(f.isSupported(tank.x,tank.y,tank.hazardRadius,true),'large enemy recovery validates full footprint');
     check(!mine.sprite.active&&turret.hp===0,'unsupported mine retires and turret loses health');
@@ -99,7 +99,7 @@
     const boss=a.possession.boss,bossHp=boss.hp,operativeHp=a.player.hp;
     boss.body.reset(gx,gy);boss.shielded=true;a.updateDynamicFloor(20);
     check(a.floorFalling(a.player)&&boss.getData('floorFalling'),'controlled boss uses player floor driver');
-    for(let i=0;i<55;i++)a.updateDynamicFloor(20);
+    for(let i=0;i<75;i++)a.updateDynamicFloor(20);
     check(Math.abs(boss.hp-(bossHp-boss.maxHp*.35))<.01,'controlled boss shield does not grant lava immunity');
     check(!a.floorFalling(a.player)&&boss.body.enable&&boss.visualRoot.scaleX===1&&boss.legRig.root.scaleX===1,'boss body and layered art recover');
     check(a.player.hp===operativeHp,'boss damage is not charged twice to operative');a.endPossession(false);

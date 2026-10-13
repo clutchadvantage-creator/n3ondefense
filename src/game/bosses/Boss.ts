@@ -140,10 +140,14 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
   }
 
   /** Shared floor adapter owns this transient presentation; normal boss art is unchanged. */
-  presentFloorFall(scale:number,alpha:number,descent:number):void {
+  presentFloorFall(scale:number,alpha:number,descent:number,tilt=0):void {
     this.updatePresentation(this.presentationNow,this.rotation);
     this.visualRoot.setPosition(this.x,this.y+descent).setScale(scale).setAlpha(alpha);
-    this.legRig.root.setPosition(this.x*(1-scale),this.y*(1-scale)+descent).setScale(scale).setAlpha(alpha);
+    this.visualRoot.rotation+=tilt;
+    // Feet are authored in world coordinates; rotate/scale about the chassis.
+    const c=Math.cos(tilt)*scale,s=Math.sin(tilt)*scale;
+    this.legRig.root.setPosition(this.x-this.x*c+this.y*s,this.y-this.x*s-this.y*c+descent)
+      .setRotation(tilt).setScale(scale).setAlpha(alpha);
   }
 
   get isDefeated(): boolean {

@@ -42,7 +42,7 @@ Configuration: [`src/game/config/dynamicFloor.ts`](../src/game/config/dynamicFlo
 
 Intensity grows over 180 seconds after the first delay. Events cannot overlap. Shared timing: 3.2s warning, 0.45s unlock, 1.6s slide each way, 6.5–10s exposed, 1.5s restoration warning and 0.6s lock. At most 12 candidate cassettes; 112×96 hatches; minimum 88% solid arena bounds; objective exclusion 124px and spawn exclusion 88px. Patterns alternate separated openings and nearby rows/clusters within mode caps.
 
-Player/controlled-frame damage: 35% of maximum health. Ordinary enemy damage: 80 + 55% of maximum health. Fall: 420ms; ejection: 480ms; recovery search: at most 224px; repeat environmental protection: 1.4s. Long frame stalls are capped at 100ms simulation advance to preserve warning/fall presentation.
+Player/controlled-frame damage: 35% of maximum health. Ordinary enemy damage: 80 + 55% of maximum health. Fall: 420ms; ejection: 720ms with a 108px base arc and a preferred 112px throw; recovery search: at most 224px; repeat environmental protection: 1.4s. Long frame stalls are capped at 100ms simulation advance to preserve warning/fall presentation.
 
 Warning/restoration use existing `beep` through AudioManager and its volume settings. Lava uses existing player-damage audio, including controlled frames. The centralized audio map has phase/ejection hooks. Dedicated unlock, slide, heavy machinery/locking, lava ambience and ejection assets are **not supplied**; those slots deliberately remain silent. Register future assets through the existing audio catalog/settings, then assign the hooks. No new audio loops or unrelated substitutes were introduced.
 
@@ -54,6 +54,8 @@ Warning/restoration use existing `beep` through AudioManager and its volume sett
 - Hardware WebGL measurements compare floor-disabled, warning/slide, open/reconstruction and laser controls in Normal rounds 9/14 at 1600×1000. The validation JSON records frame times, floor update costs and event-validation timings.
 
 These desktop RTX 5070 measurements cover ordinary Normal combat pressure, not low-end hardware or maximum-mod Supreme loadouts. Retain conservative timing and boss exclusion initially; use active-round duration/fall telemetry before reducing delays. Lava uses bounded top-down glow/embers rather than screen-wide distortion. Dynamic floors belong to Arena; anomaly scenes retain existing terrain.
+
+The [October 13 follow-up](lava-recovery-and-boss-performance.md) adds full-footprint Flux Core support, a fiery ballistic recovery, exact circular corner sweeps, throttled blocked-recovery searches, and Supreme round 26 artillery stress measurements. Its validation and limits are recorded separately from the initial Normal-mode measurements above.
 
 Reproduce with `npm.cmd test`, `npm.cmd run build`, and an isolated hardware-enabled DEV browser on CDP port 9225:
 

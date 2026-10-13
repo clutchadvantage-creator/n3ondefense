@@ -23,7 +23,21 @@ export function sweepRect(x:number,y:number,toX:number,toY:number,r:number,rect:
     let a=(lo-p)/d,b=(hi-p)/d;if(a>b){const temp=a;a=b;b=temp;}
     enter=Math.max(enter,a);exit=Math.min(exit,b);if(enter>exit)return 1;
   }
-  return enter<1&&exit>0?Math.max(0,enter):1;
+  if(enter>=1||exit<=0)return 1;
+  const first=Math.max(0,enter);
+  if(r<=0||circleTouches(x+dx*first,y+dy*first,r,rect))return first;
+  // The expanded AABB is only a broad phase. Its square corners extend past
+  // the actual circular footprint; treating them as lava re-drops safe riders.
+  const lengthSquared=dx*dx+dy*dy;if(lengthSquared<1e-12)return 1;
+  let hit=1;
+  for(let corner=0;corner<4;corner++){
+    const ox=x-(rect.x+(corner&1?rect.w:0)),oy=y-(rect.y+(corner&2?rect.h:0));
+    const b=ox*dx+oy*dy,c=ox*ox+oy*oy-r*r,discriminant=b*b-lengthSquared*c;
+    if(discriminant<0)continue;
+    const t=(-b-Math.sqrt(discriminant))/lengthSquared;
+    if(t>=first&&t<=exit)hit=Math.min(hit,t);
+  }
+  return hit;
 }
 const smooth=(v:number)=>v*v*(3-2*v);
 export function floorEnabled(round:number,boss=false):boolean{return C.enabled&&round>C.trainingRounds&&(!boss||C.bossesEnabled);}
@@ -69,6 +83,12 @@ export class DynamicFloorModel {
   get intensity():number{return Math.min(1,Math.max(0,(this.elapsed-C.modes[this.mode].firstDelayMs)/C.intensityRampMs));}
   get activeCount():number{let n=0;for(const p of this.panels)if(p.phase!=='stable')n++;return n;}
   readonly cellBlocked=(cx:number,cy:number):boolean=>this.cells.has(cy*4096+cx);
+  /** Full fixture footprint against today's exposed gap, not the whole cassette. */
+  isRectSupported(x:number,y:number,halfWidth:number,halfHeight:number):boolean {
+    for(const {gap:g} of this.panels)if(g.w>0&&g.h>0&&x+halfWidth>g.x&&x-halfWidth<g.x+g.w
+      &&y+halfHeight>g.y&&y-halfHeight<g.y+g.h)return false;
+    return true;
+  }
   isSupported(x:number,y:number,radius=0,pending=false):boolean {
     for(const p of this.panels){if(pending&&p.phase!=='stable'){if(circleTouches(x,y,radius,p))return false;}
       else if(circleTouches(x,y,radius,p.gap))return false;}

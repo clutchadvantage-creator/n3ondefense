@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DynamicFloorModel, floorEnabled, lavaDamage, overlaps, circleTouches } from '../src/game/arena/DynamicFloorModel.ts';
+import { DynamicFloorModel, floorEnabled, lavaDamage, overlaps, circleTouches, sweepRect } from '../src/game/arena/DynamicFloorModel.ts';
 import { DynamicFloorActors } from '../src/game/arena/DynamicFloorActors.ts';
 import { validateFloorConnectivity } from '../src/game/arena/DynamicFloorConnectivity.ts';
 import { DYNAMIC_FLOOR as C } from '../src/game/config/dynamicFloor.ts';
@@ -25,6 +25,25 @@ test('decks translate continuously into a receiver without fading or teleporting
 test('partial support follows the moving edge, not the original rectangle',()=>{const {f,p}=active();advance(f,C.warningMs+C.unlockMs+C.moveMs/2);assert.ok(p.gap.w>20&&p.gap.w<p.w-20);assert.equal(f.isSupported(p.gap.x+p.gap.w/2,p.y+48,1),false);const solid=p.direction===1?p.x+p.w-4:p.x+4;assert.equal(f.isSupported(solid,p.y+48,1),true);});
 test('all intermediate openings remain within validated full-open hatches',()=>{const {f,p}=active();advance(f,17000,()=>{assert.ok(p.gap.x>=p.x-.001);assert.ok(p.gap.x+p.gap.w<=p.x+p.w+.001);assert.ok(p.gap.w>=0&&p.gap.w<=p.w);});});
 test('large collision footprints are rejected even if the center is on solid ground',()=>{const {f,p}=open();assert.equal(f.isSupported(p.x-20,p.y+48,10),true);assert.equal(f.isSupported(p.x-20,p.y+48,34),false);});
+test('circular corner support agrees with stationary and moving sweeps',()=>{
+  const rect={x:100,y:100,w:112,h:96},r=34;
+  assert.equal(circleTouches(76,225,r,rect),false);
+  assert.equal(sweepRect(76,225,76,225,r,rect),1);
+  assert.equal(sweepRect(76,225,74,226,r,rect),1);
+  assert.ok(sweepRect(76,225,120,210,r,rect)<1);
+});
+test('Flux-sized rectangles avoid actual lava but allow supported deck and receiver',()=>{
+  const {f,p}=active(),y=p.y+p.h/2;
+  assert.equal(f.isRectSupported(p.x+p.w/2,y,38,46),true);
+  advance(f,C.warningMs+C.unlockMs+C.moveMs*.2);
+  assert.ok(p.gap.w>0&&p.gap.w<30);
+  assert.equal(f.isRectSupported(p.gap.x+p.gap.w/2,y,38,46),false);
+  const x=p.direction>0?p.x+p.w-39:p.x+39;
+  assert.equal(f.isRectSupported(x,y,38,46),true);
+  assert.equal(f.isRectSupported(p.x+p.w/2+p.direction*p.w,y,38,46),true);
+  assert.equal(f.isRectSupported(p.x-40,p.y-47,38,46),true);
+  assert.equal(f.isRectSupported(p.gap.x-37,y,38,46),false);
+});
 test('ground enemies avoid open gaps including fast swept crossing',()=>{for(const travel of [40,250]){const {f,p}=open(),a=actors(f),unit=actor(p.x-30,p.y+48);frame(f,a,[unit]);unit.x+=travel;frame(f,a,[unit]);assert.ok(unit.x<p.x-11);assert.equal(a.isFalling(unit),false);assert.equal(unit.damage,0);}});
 test('ground riders move with supported panels',()=>{const {f,p}=active(),a=actors(f),unit=actor(p.x+p.w/2,p.y+48);frame(f,a,[unit],0);advance(f,C.warningMs+C.unlockMs+800,()=>{a.beginFrame();a.update(unit);a.endFrame();});assert.ok(Math.abs(unit.x-(p.x+p.w/2+p.offset))<.01);assert.equal(a.isFalling(unit),false);});
 test('riders keep moving until their entire footprint reaches the stationary receiver',()=>{const {f,p}=active(),a=actors(f),unit=actor(p.x+p.w/2,p.y+48);frame(f,a,[unit],0);advance(f,C.warningMs+C.unlockMs+C.moveMs+1000,()=>{a.beginFrame();a.update(unit);a.endFrame();});assert.equal(a.isFalling(unit),false);assert.equal(unit.damage,0);assert.equal(f.isSupported(unit.x,unit.y,unit.radius),true);});
@@ -34,7 +53,22 @@ test('flying drones cross openings without support checks or damage',()=>{const 
 test('durable enemies take severe damage then eject locally to valid unoccupied ground',()=>{const {f,p}=open(),a=actors(f),unit=actor(p.x+50,p.y+48);for(let i=0;i<65;i++)frame(f,a,[unit]);assert.equal(unit.damage,lavaDamage('enemy',unit.maxHp));assert.equal(unit.active,true);assert.equal(a.isFalling(unit),false);assert.equal(f.isSupported(unit.x,unit.y,unit.radius,true),true);assert.ok(Math.hypot(unit.x-p.x-50,unit.y-p.y-48)<=C.recoveryRadius);assert.equal(unit.scale,1);assert.equal(unit.halted,false);});
 test('weak enemies die through their existing damage driver',()=>{const {f,p}=open(),a=actors(f),unit=actor(p.x+50,p.y+48,'enemy',{maxHp:100,hp:100});for(let i=0;i<30;i++)frame(f,a,[unit]);assert.equal(unit.active,false);assert.ok(unit.damage>=100);});
 test('players receive configured max-health damage and visible fall/ejection',()=>{const {f,p}=open(),a=actors(f),unit=actor(p.x+50,p.y+48,'player',{maxHp:200,hp:200});frame(f,a,[unit]);for(let i=0;i<8;i++)frame(f,a,[unit]);assert.ok(unit.descent>0&&unit.alpha<1);for(let i=0;i<60;i++)frame(f,a,[unit]);assert.equal(unit.damage,70);assert.equal(a.isFalling(unit),false);assert.equal(f.isSupported(unit.x,unit.y,12),true);});
-test('environmental recovery protection prevents a repeated lava hit without changing combat flags',()=>{const {f,p}=open(),a=actors(f),unit=actor(p.x+50,p.y+48,'player');for(let i=0;i<49;i++)frame(f,a,[unit]);const damage=unit.damage;unit.x=p.x+50;unit.y=p.y+48;for(let i=0;i<25;i++)frame(f,a,[unit]);assert.equal(unit.damage,damage);assert.equal('invulnerable' in unit,false);});
+test('recovery throws a player on a high arc, tumbles, lands once and restores pose',()=>{
+  const {f,p}=open();let launches=0,lands=0,peak=0,tilted=false;
+  const a=actors(f,{eject:()=>launches++,land:()=>lands++}),x=p.x+50,y=p.y+48;
+  const unit=actor(x,y,'player',{present(scale,alpha,descent,tilt=0){Object.assign(this,{scale,alpha,descent,tilt});peak=Math.max(peak,-descent);tilted||=Math.abs(tilt)>.3;}});
+  for(let i=0;i<65;i++)frame(f,a,[unit]);
+  assert.equal(launches,1);assert.equal(lands,1);assert.ok(peak>=100);assert.ok(tilted);
+  assert.ok(Math.hypot(unit.x-x,unit.y-y)>=C.preferredThrowDistance-1);assert.equal(unit.tilt,0);assert.equal(unit.scale,1);assert.equal(unit.halted,false);
+});
+test('blocked recovery searches are throttled and restore floor without crossing walls',()=>{
+  const {f,p}=open();let queries=0;
+  const a=actors(f,{validGround:()=>{queries++;return false;}}),unit=actor(p.x+50,p.y+48,'player');
+  for(let i=0;i<23;i++)frame(f,a,[unit]);const first=queries;assert.ok(first>0);
+  for(let i=0;i<8;i++)frame(f,a,[unit]);assert.equal(queries,first);
+  assert.equal(a.isFalling(unit),true);assert.equal(unit.x,p.x+50);assert.equal(p.phase,'restore-warning');
+});
+test('environmental recovery protection prevents a repeated lava hit without changing combat flags',()=>{const {f,p}=open(),a=actors(f),unit=actor(p.x+50,p.y+48,'player');advance(f,C.fallMs+C.ejectionMs+40,()=>{a.beginFrame();a.update(unit);a.endFrame();});assert.equal(a.isFalling(unit),false);const damage=unit.damage;unit.x=p.x+50;unit.y=p.y+48;a.relocated(unit);frame(f,a,[unit]);assert.equal(a.isFalling(unit),true);for(let i=0;i<25;i++)frame(f,a,[unit]);assert.equal(unit.damage,damage);assert.equal('invulnerable' in unit,false);});
 test('dash can sweep across a gap and land without changing speed or duration',()=>{const {f,p}=open(),a=actors(f),unit=actor(p.x-30,p.y+48,'player',{crossing:true});frame(f,a,[unit]);unit.x=p.x+50;frame(f,a,[unit]);assert.equal(a.isFalling(unit),false);unit.x=p.x+p.w+30;unit.crossing=false;frame(f,a,[unit]);assert.equal(a.isFalling(unit),false);});
 test('dash expiration above an opening starts a fall',()=>{const {f,p}=open(),a=actors(f),unit=actor(p.x+50,p.y+48,'player',{crossing:true});frame(f,a,[unit]);unit.crossing=false;frame(f,a,[unit]);assert.equal(a.isFalling(unit),true);});
 test('ordinary player motion cannot tunnel across thin gaps',()=>{const {f,p}=open(),a=actors(f),unit=actor(p.x-30,p.y+48,'player');frame(f,a,[unit]);unit.x=p.x+p.w+30;frame(f,a,[unit]);assert.equal(a.isFalling(unit),true);assert.ok(unit.x<p.x+p.w);});

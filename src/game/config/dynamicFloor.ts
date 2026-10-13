@@ -8,7 +8,8 @@ export const DYNAMIC_FLOOR = {
   openMs: 6500, extraOpenMs: 3500, intensityRampMs: 180_000,
   minimumSolidFraction: .88, objectivePadding: 124, spawnPadding: 88,
   navigationCellSize: 32, navigationPadding: 36, navigationQuantum: 8,
-  fallMs: 420, ejectionMs: 480, ejectionHeight: 46, recoveryRadius: 224, recoveryStep: 16,
+  fallMs: 420, ejectionMs: 720, ejectionHeight: 108, recoveryRadius: 224, recoveryStep: 16,
+  preferredThrowDistance: 112, recoveryRetryMs: 200,
   playerDamageFraction: .35, enemyDamageFraction: .55, enemyDamageBase: 80,
   environmentalProtectionMs: 1400,
   modes: {

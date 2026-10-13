@@ -19,19 +19,26 @@ const TRAIL_LIFETIME_MS = 130;
 
 /**
  * Draws combat trails through one Graphics object instead of creating a
- * display object and tween for every projectile every frame. Samples retain
- * the original 130ms fade/contract visual and are recycled after expiry.
+ * display object and tween for every projectile every frame. WebGL batches the
+ * existing white circle texture directly; Canvas retains the vector fallback.
+ * Samples keep their authored colors, radii, 130ms fade/contract and recycling.
  */
 export class ProjectileTrailBatch {
   private readonly graphics: Phaser.GameObjects.Graphics;
   private readonly active: TrailSample[] = [];
   private readonly available: TrailSample[] = [];
   private peak = 0;
+  private readonly webgl:boolean;
+  private readonly circleFrame:Phaser.Textures.Frame;
+  private renderAt=0;
 
   constructor(scene: Phaser.Scene) {
     this.graphics = scene.add.graphics()
       .setDepth(5)
       .setBlendMode(Phaser.BlendModes.ADD);
+    this.webgl=scene.game.renderer.type===Phaser.WEBGL;
+    this.circleFrame=scene.textures.getFrame('circle');
+    if(this.webgl)Object.assign(this.graphics,{renderWebGL:this.renderWebGL.bind(this)});
   }
 
   /** Moves the tiny sample allocation cost out of the first live firefight. */
@@ -104,12 +111,36 @@ export class ProjectileTrailBatch {
   }
 
   render(now: number): void {
+    this.renderAt=now;
+    if(this.webgl)return;
     for (const sample of this.active) {
       const lifetime = Math.max(1, sample.expiresAt - sample.bornAt);
       const remaining = Math.max(0, (sample.expiresAt - now) / lifetime);
       this.graphics.fillStyle(sample.color, 0.62 * remaining);
       this.graphics.fillCircle(sample.x, sample.y, sample.radius * (0.3 + remaining * 0.7));
     }
+  }
+
+  /** One quad per sample, through Phaser's normal texture/tint pipeline. Avoid
+   * allocating and tessellating a 100-point arc for every tiny trail each frame. */
+  private renderWebGL(renderer:Phaser.Renderer.WebGL.WebGLRenderer,src:Phaser.GameObjects.Graphics,
+    camera:Phaser.Cameras.Scene2D.Camera,parentMatrix?:Phaser.GameObjects.Components.TransformMatrix):void {
+    const alpha=camera.alpha*src.alpha;if(!this.active.length||!alpha)return;
+    camera.addToRenderList(src);
+    const pipeline=renderer.pipelines.set(src.pipeline,src) as Phaser.Renderer.WebGL.Pipelines.MultiPipeline;
+    renderer.pipelines.preBatch(src);
+    const matrix=Phaser.GameObjects.GetCalcMatrix(src,camera,parentMatrix).calc,frame=this.circleFrame;
+    let textureUnit=pipeline.setGameObject(src,frame);
+    for(const sample of this.active){
+      const remaining=Math.max(0,(sample.expiresAt-this.renderAt)/Math.max(1,sample.expiresAt-sample.bornAt));
+      if(!remaining)continue;
+      const radius=sample.radius*(.3+remaining*.7);
+      const q=matrix.setQuad(sample.x-radius,sample.y-radius,sample.x+radius,sample.y+radius,camera.roundPixels);
+      const tint=Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(sample.color,.62*remaining*alpha);
+      if(pipeline.batchQuad(src,q[0],q[1],q[2],q[3],q[4],q[5],q[6],q[7],frame.u0,frame.v0,frame.u1,frame.v1,
+        tint,tint,tint,tint,false,frame.glTexture,textureUnit))textureUnit=pipeline.setGameObject(src,frame);
+    }
+    renderer.pipelines.postBatch(src);
   }
 
   reset(): void {

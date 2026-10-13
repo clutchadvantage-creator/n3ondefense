@@ -8,18 +8,20 @@ export interface FloorActorDriver {
   readonly forcedMovement?:boolean;
   move(x:number,y:number):void;
   halt(falling:boolean):void;
-  present(scale:number,alpha:number,descent:number):void;
+  present(scale:number,alpha:number,descent:number,tilt?:number):void;
   impact(damage:number):void;
 }
 interface Rider {
   x:number;y:number;crossing:boolean; stage:'ground'|'fall'|'eject';at:number;protectedUntil:number;
-  originX:number;originY:number;landing:FloorPoint|null;seen:number;
+  originX:number;originY:number;landing:FloorPoint|null;seen:number;nextSearchAt:number;
 }
 export interface FloorActorPorts {
   validGround(x:number,y:number,radius:number):boolean;
   clearMotion(x:number,y:number,toX:number,toY:number,radius:number):boolean;
   impact?(x:number,y:number,kind:FloorActorKind):void;
-  eject?(x:number,y:number,kind:FloorActorKind):void;
+  eject?(x:number,y:number,kind:FloorActorKind,actor:FloorActorDriver):void;
+  flight?(actor:FloorActorDriver,descent:number):void;
+  land?(actor:FloorActorDriver):void;
 }
 
 /** Deterministic support/fall/recovery, independent of rendering and tested with real model geometry. */
@@ -35,22 +37,24 @@ export class DynamicFloorActors {
   private safe(x:number,y:number,r:number):boolean{return this.floor.isSupported(x,y,r,true)&&this.ports.validGround(x,y,r);}
   private landing(x:number,y:number,r:number):FloorPoint|null {
     // Small deterministic local search. Called once per impact, never a map-wide teleport.
+    // Prefer a real throw clear of the lip; retain a nearby fallback for tight spaces.
+    let fallback:FloorPoint|null=null;
     for(let distance=C.recoveryStep;distance<=C.recoveryRadius;distance+=C.recoveryStep){
       for(let i=0;i<16;i++){
         const angle=i*Math.PI/8,px=x+Math.cos(angle)*distance,py=y+Math.sin(angle)*distance;
         if(!this.safe(px,py,r)||!this.ports.clearMotion(x,y,px,py,r))continue;
         let occupied=false;
         for(const [other,state] of this.riders)if(other.active&&state.stage==='ground'&&Math.hypot(other.x-px,other.y-py)<other.radius+r+4){occupied=true;break;}
-        if(!occupied)return {x:px,y:py};
+        if(!occupied){if(distance>=C.preferredThrowDistance)return {x:px,y:py};fallback??={x:px,y:py};}
       }
     }
-    return null;
+    return fallback;
   }
   update(actor:FloorActorDriver):void {
     if(!actor.active){actor.present(1,1,0);actor.halt(false);this.riders.delete(actor);return;}
     const now=this.floor.elapsed,r=actor.radius;
     let state=this.riders.get(actor);
-    if(!state){state={x:actor.x,y:actor.y,crossing:actor.crossing,stage:'ground',at:now,protectedUntil:0,originX:actor.x,originY:actor.y,landing:null,seen:this.frame};this.riders.set(actor,state);}
+    if(!state){state={x:actor.x,y:actor.y,crossing:actor.crossing,stage:'ground',at:now,protectedUntil:0,originX:actor.x,originY:actor.y,landing:null,seen:this.frame,nextSearchAt:0};this.riders.set(actor,state);}
     state.seen=this.frame;
     if(actor.airborne){state.x=actor.x;state.y=actor.y;return;}
     if(state.stage==='fall'){
@@ -62,22 +66,30 @@ export class DynamicFloorActors {
         this.ports.impact?.(state.originX,state.originY,actor.kind);
         if(!actor.active){actor.present(1,1,0);actor.halt(false);this.riders.delete(actor);return;}
         state.stage='eject';state.at=now;state.landing=this.landing(state.originX,state.originY,r);
+        state.nextSearchAt=now+C.recoveryRetryMs;
         if(!state.landing)this.floor.restore();
-        else this.ports.eject?.(actor.x,actor.y,actor.kind);
+        else this.ports.eject?.(actor.x,actor.y,actor.kind,actor);
       }
       return;
     }
     if(state.stage==='eject'){
       actor.halt(true);
       if(!state.landing||!this.safe(state.landing.x,state.landing.y,r)){
+        // A blocked recovery must not repeat its entire geometry search every frame.
+        if(!state.landing&&now<state.nextSearchAt)return;
+        state.originX=actor.x;state.originY=actor.y;
         state.landing=this.landing(state.originX,state.originY,r);state.at=now;
+        state.nextSearchAt=now+C.recoveryRetryMs;
         if(!state.landing){this.floor.restore();return;}
-        this.ports.eject?.(actor.x,actor.y,actor.kind);
+        this.ports.eject?.(actor.x,actor.y,actor.kind,actor);
       }
-      const t=Math.min(1,(now-state.at)/C.ejectionMs),ease=t*t*(3-2*t);
+      const t=Math.min(1,(now-state.at)/C.ejectionMs),ease=1-(1-t)**1.35;
       actor.move(state.originX+(state.landing.x-state.originX)*ease,state.originY+(state.landing.y-state.originY)*ease);
-      actor.present(.35+.65*t,.3+.7*t,-Math.sin(t*Math.PI)*C.ejectionHeight);
-      if(t>=1){actor.present(1,1,0);actor.halt(false);state.stage='ground';state.x=actor.x;state.y=actor.y;state.crossing=false;}
+      const arc=4*t*(1-t),descent=-arc*(C.ejectionHeight+Math.min(32,r*.5));
+      const tilt=Math.sin(t*Math.PI*2)*.65*(state.landing.x>=state.originX?1:-1);
+      actor.present(Math.min(1,.35+t*2.8)+arc*.12,Math.min(1,.3+t*3),descent,tilt);
+      this.ports.flight?.(actor,descent);
+      if(t>=1){actor.present(1,1,0);actor.halt(false);this.ports.land?.(actor);state.stage='ground';state.x=actor.x;state.y=actor.y;state.crossing=false;}
       return;
     }
     if(!actor.crossing&&!state.crossing){

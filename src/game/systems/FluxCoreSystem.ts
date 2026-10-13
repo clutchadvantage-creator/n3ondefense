@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { DynamicFloorModel, FloorRect } from '../arena/DynamicFloorModel.ts';
 import { HudInformationSystem } from '../ui/HudInformationSystem.ts';
 import { FLUX_CORE_BALANCE, getFluxCoreCapacity, getFluxCoreHealth } from '../config/fluxCores';
 import type { Player } from '../entities/Player';
@@ -127,6 +128,33 @@ export class FluxCoreSystem {
       if (dx * dx + dy * dy <= combinedRadiusSquared) return true;
     }
     return false;
+  }
+
+  hasCoreInRect(rect:FloorRect):boolean {
+    const {geometryHalfWidth:w,geometryHalfHeight:h}=FLUX_CORE_BALANCE;
+    return this.cores.some(core=>core.x+w>rect.x&&core.x-w<rect.x+rect.w&&core.y+h>rect.y&&core.y-h<rect.y+rect.h);
+  }
+
+  /** A core deployed onto a supported moving deck rides it to the receiver.
+   * If only part of its footprint was supported and that support disappears,
+   * retire without loot or laser credit and retry the same deployment later. */
+  updateFloorSupport(floor:DynamicFloorModel,now:number):void {
+    const {geometryHalfWidth:w,geometryHalfHeight:h}=FLUX_CORE_BALANCE;
+    for(let i=this.cores.length-1;i>=0;i--){
+      const core=this.cores[i];
+      for(const panel of floor.panels){
+        const d=panel.previousDeck,dx=panel.offset-panel.previousOffset;
+        if(!dx||core.x-w<d.x||core.x+w>d.x+d.w||core.y-h<d.y||core.y+h>d.y+d.h)continue;
+        if(core.x+w<panel.x||core.x-w>panel.x+panel.w)continue;
+        core.x+=dx;
+        core.root.x+=dx;core.floorHatch.x+=dx;core.hatchGlow.x+=dx;core.hatchLip.x+=dx;
+        break;
+      }
+      if(floor.isRectSupported(core.x,core.y,w,h))continue;
+      this.destroyCoreVisual(core);this.cores.splice(i,1);
+      this.spawnedCoreCount=Math.max(0,this.spawnedCoreCount-1);
+      this.cyclePhase='spawning';this.nextSpawnAt=now+FLUX_CORE_BALANCE.perCoreSpawnMinMs;
+    }
   }
 
   /** Used by fixed-rate smart-fuse checks. Returns the existing runtime object
