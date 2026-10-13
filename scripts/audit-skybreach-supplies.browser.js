@@ -22,8 +22,8 @@
       const first=resources()[0];p.hp=10;p.energy=0;first.root.setPosition(p.x,p.y);
       sky.updatePickups(sky.time.now,0);
       check(!first.root.active&&resources().length===0,'collection does not immediately replace the supply');
-      check(first.kind==='health'?p.hp===10+P.healthRestore*sky.modRuntime.multiplier('healthPickupValue')
-        :p.energy===p.energyStats.max*P.energyRestoreFraction*sky.modRuntime.multiplier('energyPickupValue'),'shared Arena restore amount is preserved');
+      check(first.kind==='health'?p.hp===10+Math.max(P.healthRestore,p.stats.maxHealth*.22)*sky.modRuntime.multiplier('healthPickupValue')
+        :p.energy===p.energyStats.max*P.energyRestoreFraction*sky.modRuntime.multiplier('energyPickupValue'),'flight health scales with maximum HP and shared pickup Mods remain active');
       advance(22000);check(resources().length>0&&resources().length<=2,'supplies return after a randomized interval');
       const old=resources()[0];old.root.y=sky.pickupBounds.h+31;
       const roots=sky.pickups.map(p=>p.root);

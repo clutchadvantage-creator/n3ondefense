@@ -18,7 +18,7 @@
       for(const s of game.scene.getScenes(false))if(s.sys.isActive()||s.sys.isPaused()||s.sys.isSleeping())game.scene.stop(s.scene.key);
       await wait(150);
       check(S.createProfile('Sky '+Date.now().toString().slice(-7)).ok,'isolated profile');
-      S.setSettings({masterVolume:0,contextualTutorials:false});
+      S.setSettings({masterVolume:0,contextualTutorials:false,particles:globalThis.__n3onLayoutAuditOptions?.particles!==false});
       S.updateTutorialProgress(p=>{p.firstRunStage='complete';p.firstRunWelcomePending=false;});
       S.addFluxCores(1000);
       S.addCredits(200000);
@@ -97,7 +97,7 @@
         sky.player.energy=sky.player.energyStats.max;sky.abilityState.cooldownUntil.turret=0;sky.placeTurret(sky.time.now);
         check(sky.turrets.length>0,mode+': authoritative turret placed');
         sky.player.energy=sky.player.energyStats.max;sky.placeMine(sky.time.now);
-        check(sky.mines.length>0,mode+': mine rack launches');
+        check(sky.rockets.available<32&&sky.mines.length===0,mode+': shared mine rack launches seeking rockets');
         sky.player.energy=sky.player.energyStats.max;sky.abilityState.cooldownUntil.fence=0;sky.placeFence(sky.time.now);
         check(sky.fences.length===0&&sky.player.energy===sky.player.energyStats.max,mode+': fence disabled without spending energy');
         sky.updateHud(sky.time.now);check(sky.hudPayload.abilities[0].status==='OFFLINE',mode+': fence HUD explicitly says offline');

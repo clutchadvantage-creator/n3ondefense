@@ -990,6 +990,7 @@ export class Hud {
   private updateAbility(slot: HudAbilitySlot): void {
     const visual = this.abilitySlots.get(slot.id);
     if (!visual) return;
+    this.setTextIfChanged(visual.labelText, slot.label);
     const cooldownMs = slot.cooldownMs <= COOLDOWN_READY_EPSILON_MS ? 0 : slot.cooldownMs;
     const coolingDown = cooldownMs > 0;
     const recharging = Boolean(slot.recharging && coolingDown);

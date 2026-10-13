@@ -839,7 +839,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
       abilities: [
         slot('fence', 'FENCE', this.inputController.prompt('fence', compactBindingLabel(bindings.fence))),
         slot('turret', 'TURRET', this.inputController.prompt('turret', compactBindingLabel(bindings.turret))),
-        slot('mine', 'MINE', this.inputController.prompt('mine', compactBindingLabel(bindings.mine))),
+        slot('mine', this.mineAbilityLabel, this.inputController.prompt('mine', compactBindingLabel(bindings.mine))),
         slot('shield', 'SHIELD', this.inputController.prompt('shield', compactBindingLabel(bindings.shield)))
       ],
       radarRange: HUD_RADAR_RANGE, radarContacts: this.hudRadarContacts
@@ -1050,6 +1050,8 @@ export class AnomalyCombatScene extends Phaser.Scene {
       cfg.hp, cfg.damage, cfg.fireRate, cfg.range, cosmetic?.turretSkinEffect, cosmetic?.accentColor));
     this.coreAudio.playSfx('placeTurret');
   }
+
+  protected get mineAbilityLabel(): string { return 'MINE'; }
 
   protected placeMine(now: number): void {
     const cfg = this.session.abilities.mine;
@@ -1612,6 +1614,8 @@ export class AnomalyCombatScene extends Phaser.Scene {
     }
   }
 
+  protected healthPickupRestore(base: number): number { return base; }
+
   protected collectGameplayPickup(pickup: HeistPickup, now: number): void {
     const type = pickup.kind;
     this.onGameplayPickupCollected(type, now);
@@ -1623,7 +1627,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
         ? HEIST_BALANCE.supportHealthAmount
         : PICKUP_BALANCE.healthRestore;
       this.player.hp = Math.min(healthCap,
-        this.player.hp + baseRestore * this.modRuntime.multiplier('healthPickupValue'));
+        this.player.hp + this.healthPickupRestore(baseRestore) * this.modRuntime.multiplier('healthPickupValue'));
     } else if (type === 'energy') {
       const energyCap = resourcePickupCap(this.player.energyStats.max, this.session.protocol !== 'normal');
       const restoreFraction = pickup.source === 'support'

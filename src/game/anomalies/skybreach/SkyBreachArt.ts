@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { SeededRandom } from '../../systems/SeededRandom.ts';
+import { drawSkyHighway } from './SkyBreachHighwayArt.ts';
 import { CITY_BUILDINGS, CITY_AA_BUILDING, CITY_ROOF_ANCHOR, CITY_TEXTURE_WIDTH, cityTextureHeight,
   drawCityBuilding, drawCityShadow } from './SkyBreachCityArt.ts';
 
@@ -199,41 +200,37 @@ export function ensureSkyArt(scene: Phaser.Scene): void {
       }
     }
   });
-  bake('sky-industrial',512,1024,c=>{
-    c.fillStyle='#091725';c.fillRect(0,0,512,1024);
-    // A continuous 156px street matches groundLaneX and the three-vehicle patrol width.
-    c.fillStyle='#142333';c.fillRect(178,0,156,1024);
-    for(const x of [169,341]){c.fillStyle='#263e4c';c.fillRect(x,0,2,1024);}
-    for(const x of [182,330]){c.fillStyle='#416475';c.fillRect(x,0,1,1024);}
-    for(let row=0;row<4;row++) {
-      const y=row*256;
-      c.fillStyle='#132738';c.fillRect(0,y+207,512,49);
-      for(const x of [187,305])for(let j=0;j<4;j++){c.fillStyle='#395665';c.fillRect(x,y+213+j*9,19,4);}
-      // Street-level service yards and ducts; all elevated architecture is separate geometry.
-      for(const x of [30,365]) {
-        c.strokeStyle='#1c3343';c.lineWidth=1;c.strokeRect(x,y+32,113,143);
-        for(let slot=0;slot<5;slot++){c.beginPath();c.moveTo(x+12,y+47+slot*23);c.lineTo(x+37,y+47+slot*23);c.stroke();}
-        c.fillStyle='#101f2d';c.fillRect(x+61,y+66,34,77);
-        for(let i=0;i<6;i++){c.fillStyle='#30434c';c.fillRect(x+65,y+71+i*11,26,2);}
-      }
-      for(const x of [174,336]) {lamp(c,x,y+70,2,5,'#5797a6');lamp(c,x,y+183,2,5,'#ad8155');}
-      // Tiny traffic/service lights establish that the roads lie far below the aircraft.
-      for(const x of [215,287]){c.fillStyle='#263b4a';c.fillRect(x,y+92,8,15);lamp(c,x,y+91,2,2,'#a5bdc2');lamp(c,x+6,y+107,2,2,'#b47364');}
-    }
-    c.strokeStyle='#45606a';c.setLineDash([16,23]);c.beginPath();c.moveTo(256,0);c.lineTo(256,1024);c.stroke();
+  bake('sky-industrial',512,2048,drawSkyHighway);
+  bake('sky-player-rocket',48,96,c=>{
+    c.translate(24,48);
+    polygon(c,[0,-44,8,-25,8,22,16,38,4,30,-4,30,-16,38,-8,22,-8,-25],metal(c,-16,32));
+    polygon(c,[0,-43,6,-26,-6,-26],'#ccefff','#61efff');
+    lamp(c,-3,-19,6,24,'#55eaff'); vent(c,-5,11,10,3);
+    lamp(c,-5,29,10,5,'#ffb85e');
+  });
+  bake('sky-shock-ring',256,256,c=>{
+    c.translate(128,128);c.strokeStyle='#f3d2a4';c.lineWidth=3;c.shadowColor='#ff923a';c.shadowBlur=12;
+    c.beginPath();c.arc(0,0,109,0,Math.PI*2);c.stroke();c.shadowBlur=0;
+    c.strokeStyle='#71d9e7';c.lineWidth=1;c.beginPath();c.arc(0,0,119,0,Math.PI*2);c.stroke();
   });
 }
 
+export interface SkyAASite {
+  image: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image;
+  wreck: Phaser.GameObjects.Image; smoke: Phaser.GameObjects.Image;
+  x: number; y: number; active: boolean; destroyed: boolean;
+}
 interface CityStructure {
   image: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image;
   baseY: number; x: number; elevation: number; speed: number; period: number; band: number; side: number; jitter: number;
 }
 export class SkyBreachWorld {
+  private readonly aaSites: SkyAASite[] = [];
   private readonly layers: Phaser.GameObjects.TileSprite[];
   private readonly structures: CityStructure[] = [];
   private readonly edgeClouds: Phaser.GameObjects.TileSprite;
   private scroll = 0;
-  constructor(scene:Phaser.Scene, private readonly width:number,height:number) {
+  constructor(private readonly scene:Phaser.Scene, private readonly width:number,height:number) {
     ensureSkyArt(scene);
     this.layers=[
       scene.add.tileSprite(width/2,height/2,width,height,'sky-industrial').setDepth(-20).setAlpha(.8),
@@ -280,6 +277,34 @@ export class SkyBreachWorld {
     const road=Math.round((ground.x+lane*512-firstRoad)/512);
     return firstRoad+road*512-ground.tilePositionX;
   }
+  get canAddAASite(): boolean { return this.aaSites.length < 24 || this.aaSites.some(site => !site.active); }
+  addAASite(x: number, y: number, lane: number): SkyAASite {
+    let site = this.aaSites.find(value => !value.active);
+    if (!site) {
+      if (!this.canAddAASite) throw new Error('AA scenery capacity exceeded');
+      const image = this.scene.add.image(0,0,'sky-city-aa-left')
+        .setOrigin(CITY_ROOF_ANCHOR.x/CITY_TEXTURE_WIDTH,CITY_ROOF_ANCHOR.y/cityTextureHeight(CITY_AA_BUILDING)).setScale(.78);
+      site = { image, shadow: this.scene.add.image(0,0,'sky-city-shadow-aa').setScale(.78).setDepth(-18.75).setAlpha(.6),
+        wreck: this.scene.add.image(0,0,'sky-wreck').setDisplaySize(70,70).setDepth(3),
+        smoke: this.scene.add.image(0,0,'sky-smoke').setDisplaySize(48,78).setDepth(4),
+        x,y,active:true,destroyed:false };
+      this.aaSites.push(site);
+    }
+    site.x=x;site.y=y;site.active=true;site.destroyed=false;
+    site.image.setTexture(`sky-city-aa-${lane<0?'left':'right'}`).setActive(true).setVisible(true);
+    site.shadow.setOrigin((lane>0?320:200)/520,70/340).setFlipX(lane>0).setActive(true).setVisible(true);
+    site.wreck.setActive(true).setVisible(false);site.smoke.setActive(true).setVisible(false);
+    this.positionAASite(site);
+    return site;
+  }
+  private positionAASite(site: SkyAASite): void {
+    const groundY=site.y+CITY_AA_BUILDING.height*.78;
+    site.image.setPosition(site.x,site.y).setDepth(-18+groundY/10000);
+    site.shadow.setPosition(site.x,groundY);
+    site.wreck.setPosition(site.x,site.y).setVisible(site.destroyed);
+    site.smoke.setPosition(site.x+Math.sin(this.scroll*2)*7,site.y-22).setAlpha(.45).setVisible(site.destroyed);
+  }
+  discardReferences():void { this.aaSites.length=0;this.structures.length=0; }
   update(dt:number,height:number):void {
     this.scroll+=dt;
     this.layers.forEach((layer,i)=>{layer.tilePositionY-=dt*(49+i*20);if(i)layer.tilePositionX=Math.sin(this.scroll/30+i)*30;});
@@ -293,5 +318,12 @@ export class SkyBreachWorld {
       structure.shadow.setPosition(structure.x,structure.baseY);
     }
     this.edgeClouds.tilePositionY-=dt*64;
+    for (const site of this.aaSites) if (site.active) {
+      site.y+=Math.max(0,dt)*49;
+      if (site.y>height+160) {
+        site.active=false;
+        for (const image of [site.image,site.shadow,site.wreck,site.smoke]) image.setActive(false).setVisible(false);
+      } else this.positionAASite(site);
+    }
   }
 }

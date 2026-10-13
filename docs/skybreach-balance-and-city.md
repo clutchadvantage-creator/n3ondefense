@@ -46,6 +46,8 @@ Attack combination interval falls from 5.2 to 3.8 seconds before mode pressure. 
 
 ## Supplies
 
+The [October 13 flight-support update](skybreach-flight-support.md) supersedes the shared health cooldown and fixed health restore below with bounded, need-aware relief. It also adds mine-rack rockets, independent AA buildings, staged weapon destruction and six-lane highways.
+
 - The first scheduled resource arrives after 8–13 active seconds. Subsequent scheduled drops use randomized intervals around 12–20 seconds, shortened by up to three seconds when resources are low.
 - Health/energy preference is weighted toward need. Neither kind is guaranteed on every event.
 - At most one health and one energy pickup can coexist. Enemy drops share that budget and an eight-second minimum resource-drop spacing.

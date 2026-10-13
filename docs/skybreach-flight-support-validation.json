@@ -1,0 +1,245 @@
+{
+  "date": "2026-10-13",
+  "automatedTests": {
+    "passed": 1038,
+    "failed": 0
+  },
+  "productionBuild": "passed",
+  "renderer": "ANGLE / NVIDIA GeForce RTX 5070 / Direct3D11",
+  "fixtures": [
+    {
+      "name": "normal",
+      "report": "artifacts/skybreach-flight-normal.json",
+      "checks": 56,
+      "errors": [],
+      "viewport": {
+        "width": 1600,
+        "height": 1000
+      },
+      "samples": [
+        {
+          "mode": "normal",
+          "frames": 300,
+          "p50": 16.699999809265137,
+          "p95": 16.90000009536743,
+          "max": 17,
+          "rockets": 0,
+          "objectsBefore": 773,
+          "objectsAfter": 772,
+          "destruction": {
+            "activeFragments": 0,
+            "peakFragments": 168,
+            "fragmentCapacity": 168,
+            "fragmentPool": {
+              "created": 168,
+              "reused": 262,
+              "active": 0,
+              "available": 168
+            },
+            "activeBursts": 0,
+            "peakBursts": 96,
+            "allocationMisses": 58,
+            "degradedEffects": 165,
+            "droppedOptionalFragments": 58
+          }
+        }
+      ],
+      "cases": [
+        {
+          "name": "shared charge rack, rocket guidance and mine Mod parity",
+          "passed": true
+        },
+        {
+          "name": "independent AA scenery and pooled weapon destruction",
+          "passed": true
+        },
+        {
+          "name": "need-aware health relief and cached highways",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "supreme",
+      "report": "artifacts/skybreach-flight-supreme.json",
+      "checks": 49,
+      "errors": [],
+      "viewport": {
+        "width": 1600,
+        "height": 1000
+      },
+      "samples": [
+        {
+          "mode": "supreme-capricornus",
+          "frames": 300,
+          "p50": 16.700000047683716,
+          "p95": 16.90000009536743,
+          "max": 17,
+          "rockets": 2,
+          "objectsBefore": 789,
+          "objectsAfter": 787,
+          "destruction": {
+            "activeFragments": 0,
+            "peakFragments": 168,
+            "fragmentCapacity": 168,
+            "fragmentPool": {
+              "created": 168,
+              "reused": 262,
+              "active": 0,
+              "available": 168
+            },
+            "activeBursts": 0,
+            "peakBursts": 96,
+            "allocationMisses": 58,
+            "degradedEffects": 165,
+            "droppedOptionalFragments": 58
+          }
+        }
+      ],
+      "cases": [
+        {
+          "name": "shared charge rack, rocket guidance and mine Mod parity",
+          "passed": true
+        },
+        {
+          "name": "independent AA scenery and pooled weapon destruction",
+          "passed": true
+        },
+        {
+          "name": "need-aware health relief and cached highways",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "reduced",
+      "report": "artifacts/skybreach-flight-reduced.json",
+      "checks": 55,
+      "errors": [],
+      "viewport": {
+        "width": 1600,
+        "height": 1000
+      },
+      "samples": [
+        {
+          "mode": "normal",
+          "frames": 300,
+          "p50": 16.699999809265137,
+          "p95": 16.90000009536743,
+          "max": 17.299999952316284,
+          "rockets": 5,
+          "objectsBefore": 589,
+          "objectsAfter": 588,
+          "destruction": {
+            "activeFragments": 0,
+            "peakFragments": 0,
+            "fragmentCapacity": 168,
+            "fragmentPool": {
+              "created": 0,
+              "reused": 0,
+              "active": 0,
+              "available": 0
+            },
+            "activeBursts": 0,
+            "peakBursts": 96,
+            "allocationMisses": 0,
+            "degradedEffects": 73,
+            "droppedOptionalFragments": 0
+          }
+        }
+      ],
+      "cases": [
+        {
+          "name": "shared charge rack, rocket guidance and mine Mod parity",
+          "passed": true
+        },
+        {
+          "name": "independent AA scenery and pooled weapon destruction",
+          "passed": true
+        },
+        {
+          "name": "need-aware health relief and cached highways",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "all-modes",
+      "report": "artifacts/skybreach-flight-all-modes.json",
+      "checks": 251,
+      "errors": [],
+      "viewport": {
+        "width": 1600,
+        "height": 1000
+      },
+      "samples": [
+        {
+          "mode": "normal",
+          "round": 4,
+          "frames": 180,
+          "mean": 16.61500000026491,
+          "p95": 16.90000009536743
+        },
+        {
+          "mode": "overdrive",
+          "round": 16,
+          "frames": 180,
+          "mean": 16.602777777777778,
+          "p95": 17
+        },
+        {
+          "mode": "supreme",
+          "round": 26,
+          "frames": 180,
+          "mean": 16.646111110846203,
+          "p95": 16.90000009536743
+        }
+      ],
+      "cases": []
+    },
+    {
+      "name": "city",
+      "report": "artifacts/skybreach-flight-city.json",
+      "checks": 38,
+      "errors": [],
+      "viewport": {
+        "width": 1600,
+        "height": 1000
+      },
+      "samples": [
+        {
+          "cityUpdateMs": 0.0006527777844005161,
+          "minimumPerSide": 10
+        }
+      ],
+      "cases": [
+        {
+          "name": "city canyon geometry, parallax, AA roof anchoring, viewports and teardown",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "supplies",
+      "report": "artifacts/skybreach-flight-supplies.json",
+      "checks": 30,
+      "errors": [],
+      "viewport": {
+        "width": 1600,
+        "height": 1000
+      },
+      "samples": [],
+      "cases": [
+        {
+          "name": "randomized resource collection, kill-drop pacing, scroll retirement, recovery and pause",
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "limits": "Isolated assisted desktop samples; not low-end hardware or every loadout. Stress starts with 32 rockets, 160 enemy shots, live enemy cap and eight destruction effects.",
+  "artwork": [
+    "artifacts/skybreach-highway.png",
+    "artifacts/skybreach-weapon-destruction.png"
+  ]
+}

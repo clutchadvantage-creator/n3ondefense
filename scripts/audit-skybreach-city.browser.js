@@ -38,12 +38,12 @@
       check(Math.max(...structures.map(s=>s.elevation))>750,'foreground skyscrapers have substantially taller walls');
       check(structures.every(s=>Math.abs(s.image.y+s.elevation-s.baseY)<.001&&s.shadow.y===s.baseY),'complete facades terminate at their ground shadows');
       const aa=sky.spawnAircraft('aa',185,430),state=sky.flights.get(aa),aaBody=aa.body;
-      check(state.decorations.length===2&&state.decorations[0].texture.key==='sky-city-aa-left','live AA has an extruded tower and a ground shadow');
+      check(state.site.image.texture.key==='sky-city-aa-left','live AA has an independently owned extruded tower and ground shadow');
       aa.body.reset(195,445);sky.updateEnemies(sky.time.now,.016);
-      check(state.decorations[0].x===aa.x&&state.decorations[0].y===aa.y&&aa.body===aaBody,'tower roof stays anchored to unchanged AA combat position');
-      check(state.decorations[1].y>aa.y+150,'AA shadow remains at the street-level base');
-      const decorations=[...state.decorations];sky.damageEnemy(aa,1e9);sky.updateEnemies(sky.time.now,.016);
-      check(decorations.every(d=>!d.active)&&!sky.flights.has(aa),'AA defeat retires its tower and shadow');
+      check(state.site.image.x===aa.x&&state.site.image.y===aa.y&&aa.body===aaBody,'AA combat body stays anchored to tower roof');
+      check(state.site.shadow.y>aa.y+150,'AA shadow remains at the street-level base');
+      const site=state.site;sky.damageEnemy(aa,1e9);sky.updateEnemies(sky.time.now,.016);world.update(0,sky.pickupBounds.h);
+      check(site.image.active&&site.shadow.active&&site.destroyed&&site.wreck.visible&&!sky.flights.has(aa),'AA defeat preserves its tower and leaves a rooftop wreck');
       const capture=async label=>{
         await wait(100);
         const png=await new Promise(resolve=>game.renderer.snapshot(img=>resolve(img.src)));
