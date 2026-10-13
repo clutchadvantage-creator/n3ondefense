@@ -29,8 +29,9 @@ export function normalizeAccessCards(value: unknown, now = Date.now()): AnomalyA
 
 export function accessCardUseError(state: AnomalyAccessCards, id: AnomalyId, lastStarted?: string): string | null {
   if (!ACCESS_CARD_TYPES.includes(id)) return 'UNKNOWN ACCESS CARD';
+  // Purchase/use allowances are not inventory. Require a real, whole owned card.
+  if (!Number.isSafeInteger(state.owned[id]) || state.owned[id] < 1) return 'NO CARD OWNED';
   if (lastStarted === `anomaly:${id}`) return 'LAST EVENT PLAYED — CHOOSE A DIFFERENT ANOMALY';
-  if (state.owned[id] < 1) return 'NO CARD OWNED';
   if (state.uses >= ACCESS_CARD_DAILY_LIMIT) return 'DAILY USE LIMIT REACHED';
   return null;
 }

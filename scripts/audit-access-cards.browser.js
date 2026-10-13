@@ -18,6 +18,8 @@
       S.updateTutorialProgress(p=>{p.firstRunStage='complete';p.firstRunWelcomePending=false;});
       const profile=S.getActiveProfileSummary().id;
       const exportSave=()=>S.exportProfile(profile).file.save;
+      check(!S.useAccessCard('heist').ok&&!S.useAccessCard('skybreach').ok,'new profile cannot use either unpurchased card');
+      check(S.getAccessCards().uses===0,'denied unowned entry does not spend daily allowance');
       check(!S.purchaseAccessCard('heist').ok,'insufficient credits rejected');
       S.addCredits(200000);
       const before=exportSave();
@@ -34,6 +36,7 @@
       document.querySelector('[data-controller-focus-id="buy-access-skybreach"]').click();
       document.querySelector('[data-controller-focus-id="buy-access-heist"]').click();
       check(S.get().credits===50000&&S.getAccessCards().purchases===3,'store charges 50,000 per card and counts combined purchases');
+      check(!S.purchaseAccessCard('skybreach').ok&&S.get().credits===50000,'fourth mixed purchase also rejected by transaction without charging');
       check([...document.querySelectorAll('.access-card-panel button')].every(b=>b.disabled),'store disables purchases at combined cap');
       check(exportSave().accessCards.owned.heist===2&&exportSave().accessCards.owned.skybreach===1,'purchases reach real profile storage');
       S.selectProfile(profile);check(S.getAccessCards().owned.heist===2,'inventory survives profile reload');
@@ -50,10 +53,16 @@
       check(S.importProfile(yesterday,'replace',profile).ok,'prior day profile reload');
       check(S.getAccessCards().purchases===0&&S.getAccessCards().uses===0&&S.getAccessCards().owned.heist===2,'both daily quotas reset without losing owned cards');
       check(S.purchaseAccessCard('skybreach').ok&&S.useAccessCard('heist').ok,'new day allows both purchase and use');
+      S.addCredits(150000); // Fund the next purchases before reopening the store panel.
       document.querySelectorAll('.store-mode-tab')[1].click();
       check(!access(),'Cosmetics does not list Access Cards');
       document.querySelectorAll('.store-mode-tab')[0].click();access().click();
       check(document.querySelector('.access-card-panel').textContent.includes('1 / 3 purchased'),'reopened panel displays updated day counters');
+      document.querySelector('[data-controller-focus-id="buy-access-skybreach"]').click();
+      document.querySelector('[data-controller-focus-id="buy-access-skybreach"]').click();
+      check(S.getAccessCards().purchases===3&&S.getAccessCards().owned.skybreach===3,'three same-type purchases allowed on new day');
+      check(!S.purchaseAccessCard('heist').ok,'three same-type purchases exhaust shared cap for other type');
+      check(S.useAccessCard('skybreach').ok&&!S.purchaseAccessCard('heist').ok,'consuming a card never refunds a daily purchase');
       report.cases.push({name:'store persistence, failure rollback, caps and daily reset',passed:true});
     }catch(error){report.errors.push(String(error.stack??error));}
     finally{Storage.prototype.setItem=write;report.running=false;}

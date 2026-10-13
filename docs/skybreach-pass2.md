@@ -34,6 +34,10 @@ Interacting with a ready portal pauses Arena simulation and opens a keyboard/mou
 
 Card purchases and uses require a verified persistent save write. Rejected writes restore the in-memory wallet/inventory and deny the transaction, rather than granting consumables from a session-only fallback. Other save operations retain their existing policy.
 
+October 13 ownership follow-up: the portal now shows both card types with their actual owned counts and explicitly disables unowned cards. It re-reads inventory on interaction and confirmation, so a depleted card cannot remain actionable from an old dialog snapshot. The shared eligibility check rejects missing, non-finite and fractional counts before considering history or daily allowances. Daily resets never grant cards; three purchases may be the same type or any mix. The existing persistent consumption, daily limits and Flux alternative remain authoritative.
+
+Verification: 1,031 automated tests and the production build pass. `scripts/audit-portal-card-ownership.browser.js` passes 38 live checks covering empty inventory, mouse/keyboard/controller gating, real HEIST paid entry, real SkyBreach card entry, cancellation, stale inventory and profile reload. `scripts/audit-access-cards.browser.js` passes 28 checks covering mixed and same-type purchase caps, persistent consumption, failed-save rollback and UTC rollover. These use isolated browser profiles; reports are in `artifacts/portal-card-ownership.json` and `artifacts/portal-card-store.json`.
+
 Normal entry still costs the rolled **35–90 Flux**. Card entry spends no Flux, but retains the portal's nominal fee in the encounter session so existing fee-dependent reward formulas remain unchanged. Reward positions remain 1–90; Supreme difficulty retains its approved compressed 61–148 range. Exchange rates, upgrade prices, Mod prices and HEIST coefficients are unchanged.
 
 ## Rotation and lifecycle

@@ -215,8 +215,10 @@ export class AnomalyController {
   private openEntryChoices(): void {
     if (this.entryDialog || !this.definition || !this.context.isGameplayEligible()) return;
     this.context.setEntryChoiceOpen?.(true);
-    this.entryDialog = new AnomalyEntryDialog(this.definition.id,this.cost,this.context.availableFluxCores(),
-      SaveSystem.getAccessCards(),this.context.lastStartedEvent?.(),()=>this.closeEntryChoices(),card=>{
+    this.entryDialog = new AnomalyEntryDialog(this.definition.id, this.cost, () => ({
+      flux: this.context.availableFluxCores(), cards: SaveSystem.getAccessCards(),
+      lastStarted: this.context.lastStartedEvent?.()
+    }), ()=>this.closeEntryChoices(),card=>{
         if(card){
           const error=accessCardUseError(SaveSystem.getAccessCards(),card,this.context.lastStartedEvent?.());
           if(error)return {ok:false,message:error};

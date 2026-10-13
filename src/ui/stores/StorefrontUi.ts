@@ -321,7 +321,7 @@ export class StorefrontUi {
     const state = this.options.getAccessCards!();
     const heading = document.createElement('h2'); heading.textContent = 'ANOMALY ACCESS CARDS';
     const detail = document.createElement('p');
-    detail.textContent = 'Consumable clearance. Choose an anomaly at an existing portal and bypass its Flux fee. Cards never spawn portals and cannot repeat the last event played.';
+    detail.textContent = 'Buy up to 3 cards total per day: all the same type or any mix. Each purchase adds one owned card; portal entry consumes one card of the selected type instead of Flux. Cards never spawn portals and cannot repeat the last event played.';
     const limits = document.createElement('p');
     limits.textContent = `Today: ${state.purchases} / 3 purchased · ${state.uses} / 3 used · Resets at 00:00 UTC`;
     const feedback = document.createElement('div'); feedback.setAttribute('role', 'status'); feedback.setAttribute('aria-live', 'polite');

@@ -36,6 +36,27 @@ test('card options reject the last played anomaly, absent ownership and combined
   state.owned.skybreach=0;assert.ok(accessCardUseError(state,'skybreach'));
   state.uses=3;assert.ok(accessCardUseError(state,'heist'));
 });
+test('daily allowances and historical purchases never grant unowned card entry', () => {
+  for (const purchases of [0, 1, 3]) {
+    const state = normalizeAccessCards({ purchases, uses: 0 }, now);
+    for (const id of ['heist', 'skybreach']) assert.equal(accessCardUseError(state, id), 'NO CARD OWNED');
+    const tomorrow = normalizeAccessCards(state, now + 1000);
+    assert.equal(tomorrow.purchases, 0);
+    assert.equal(accessCardUseError(tomorrow, 'heist'), 'NO CARD OWNED');
+  }
+  const state = normalizeAccessCards({ owned: { heist: 3, skybreach: 0 } }, now);
+  assert.equal(accessCardUseError(state, 'heist'), null);
+  assert.equal(accessCardUseError(state, 'skybreach', 'anomaly:skybreach'), 'NO CARD OWNED');
+});
+test('entry eligibility fails closed for malformed or partial card counts', () => {
+  const state = normalizeAccessCards(null, now);
+  for (const count of [undefined, null, NaN, Infinity, -1, 0, 0.5, 1.5, '1']) {
+    state.owned.heist = count;
+    assert.equal(accessCardUseError(state, 'heist'), 'NO CARD OWNED', String(count));
+  }
+  state.owned.heist = 1;
+  assert.equal(accessCardUseError(state, 'heist'), null);
+});
 test('portal offer and cancellation do not rewrite history; redirected entry becomes the excluded event', () => {
   const pool=[{kind:'anomaly',id:'heist'},{kind:'anomaly',id:'skybreach'},{kind:'arcade',id:'redline'}];
   const rotation=new WorldEventRotation(1,pool,{remainingMs:0,drawIndex:1,pending:'anomaly:heist',lastStarted:'arcade:redline'});
