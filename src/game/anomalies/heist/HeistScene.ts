@@ -59,6 +59,7 @@ import { RICOCHET_MAX_WALL_BOUNCES, reflectRicochetVelocity } from '../../player
 import { createAnomalyAudioHooks } from '../AnomalyAudioHooks.ts';
 import { AnomalyPortalVisual } from '../AnomalyPortalVisual.ts';
 import { recordAnomalyMetric } from '../AnomalyTelemetry.ts';
+import { RelicPickupSystem } from '../../collection/RelicPickupSystem.ts';
 import type {
   AnomalyMetricName,
   AnomalyReturnResult,
@@ -174,6 +175,8 @@ export class AnomalyCombatScene extends Phaser.Scene {
   protected rewards!: HeistRewardService;
   protected campaignPositions!: ReturnType<typeof getHeistCampaignPositions>;
   protected lootPickups!: HeistLootPickupSystem;
+  protected relicPickups: RelicPickupSystem | null = null;
+  private collectionEnemyKills = 0;
   protected pickupPresentation!: GameplayPickupPresentation;
   protected readonly pickupMotion = new GameplayPickupMotion();
   protected readonly pickupMotionRoots: Phaser.GameObjects.Container[] = [];
@@ -348,6 +351,13 @@ export class AnomalyCombatScene extends Phaser.Scene {
     this.mineExplosionVfx = new MineExplosionVfx(this, settings.particles);
     this.random = new SeededRandom((data.seed ^ 0x4e1a57 ^ Math.imul(data.round, 0x27d4eb2d)) >>> 0);
     this.rewards = HeistRewardService.forCampaign(data.seed, data.round, data.protocol, data.cost);
+    this.collectionEnemyKills = 0;
+    this.relicPickups = new RelicPickupSystem(this, { round: this.campaignPositions.rewardPosition, seed: data.seed, protocol: data.protocol, focus: data.modFocus, contract: data.contract });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.relicPickups?.destroy(); this.relicPickups = null;
+      if (this.collectionEnemyKills) SaveSystem.recordEnemyDestroyed(this.collectionEnemyKills, data.protocol);
+      this.collectionEnemyKills = 0;
+    });
     this.pickupPresentation = new GameplayPickupPresentation(
       this,
       () => this.modRuntime.hasInfusion('pickup-orbit')
@@ -682,6 +692,8 @@ export class AnomalyCombatScene extends Phaser.Scene {
     this.pickupMotion.update(this.pickupMotionRoots, root => root, this.pickupBounds, pickupWalls, now, dt);
     this.pickupMotion.separate(this.pickupMotionRoots, root => root, this.pickupBounds, pickupWalls);
     this.updatePickups(now, dt);
+    this.relicPickups?.update(dt, this.player.x, this.player.y, this.player.stats.pickupRadius);
+    if (this.collectionEnemyKills >= 10) { SaveSystem.recordEnemyDestroyed(this.collectionEnemyKills, this.session.protocol); this.collectionEnemyKills = 0; }
     const pickupField = this.modRuntime.magneticServiceField(this.player.stats.pickupRadius);
     this.lootPickups.update(now, dt, this.player.x, this.player.y, this.player.stats.pickupRadius,
       pickupField.attractionRadius, pickupField.pullSpeed,
@@ -881,6 +893,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
   }
 
   protected dropEnvironmentSmashableLoot(type: ArenaSmashableLoot, x: number, y: number): void {
+    this.relicPickups?.tryDrop('normalEnemy', x, y);
     const provisionalReward: HeistContainerReward | undefined = type === 'credits'
       ? { kind: 'credits', amount: PICKUP_BALANCE.credits }
       : type === 'coreToken' ? { kind: 'coreTokens', amount: 1 }
@@ -923,6 +936,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
       } else {
         this.player.spendEnergy(PLAYER_BALANCE.dashEnergyCost);
         this.player.dashTowardPoint(aim.x, aim.y, now);
+        SaveSystem.recordCollectionMetric('dashes');
         this.coreAudio.playSfx('boost');
         this.boostVisual.start(this.player, angle, now, this.player.dashUntil);
       }
@@ -1048,6 +1062,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
     const cosmetic = getCosmeticById(SaveSystem.getEquippedCosmeticId('turretSkin'));
     this.turrets.push(new Turret(this, aim.x, aim.y, SaveSystem.getCosmeticColor('turretSkin', now),
       cfg.hp, cfg.damage, cfg.fireRate, cfg.range, cosmetic?.turretSkinEffect, cosmetic?.accentColor));
+    SaveSystem.recordCollectionMetric('turrets');
     this.coreAudio.playSfx('placeTurret');
   }
 
@@ -1841,6 +1856,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
     container.opened = true;
     this.containersOpened += 1;
     const reward = this.rewards.rollContainer();
+    this.relicPickups?.tryDrop('anomaly', container.root.x, container.root.y);
     this.audio.play('loot-container-break');
     this.emitMetric('anomaly_container_opened', { progress: this.containersOpened, target: this.containers.length });
     this.createContainerBurst(container);
@@ -2168,6 +2184,11 @@ export class AnomalyCombatScene extends Phaser.Scene {
     // Transfer plain result data only. Arena's shared return lifecycle owns the
     // ordered HEIST stop -> Arena resume operation for every future anomaly.
     this.cameras.main.setAlpha(0).setVisible(false);
+    // Damage during an excursion also disqualifies the enclosing Arena round.
+    if (this.damageTaken > 0) {
+      const operative = (arena as unknown as { player?: Player }).player;
+      if (operative) operative.damageRevision++;
+    }
     arena.events.emit('anomaly-return', result);
   }
 
@@ -2424,6 +2445,9 @@ export class AnomalyCombatScene extends Phaser.Scene {
       this.lootPickups.spawn(enemy.x, enemy.y, premiumDrop, 1000 + this.containersOpened);
     }
     if (enemy.hp <= 0) {
+      this.collectionEnemyKills++;
+      this.relicPickups?.tryDrop(enemy.name === 'heist-mini-boss' ? 'boss' : 'normalEnemy',
+        Phaser.Math.Clamp(enemy.x, 30, this.pickupBounds.w - 30), Phaser.Math.Clamp(enemy.y, 30, this.pickupBounds.h - 30));
       this.coreAudio.playSfx('enemyDeath');
       const color = enemy.stats.color;
       const pulse = this.fxCirclePool.obtain({ x: enemy.x, y: enemy.y, radius: 9, color, alpha: 0.28,

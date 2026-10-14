@@ -14,7 +14,7 @@ import type { LegacyCampaignRecord } from '../progression/CampaignLegacyMigratio
 // Compatibility identifiers: changing these would orphan existing local
 // profiles and exported backups created before the N3ONDefense rename.
 export const STORAGE_NAMESPACE = 'neon-breach';
-export const CURRENT_SAVE_VERSION = 20;
+export const CURRENT_SAVE_VERSION = 21;
 export const EXPORT_FORMAT = 'neon-breach-local-save';
 export { GAME_VERSION };
 
@@ -137,6 +137,7 @@ export interface LocalPlayerMetadata {
 }
 
 export interface LocalPlayerSave {
+  collection: import('../collection/CollectionProgress.ts').CollectionState;
   accessCards: import('../anomalies/AnomalyAccessCards.ts').AnomalyAccessCards;
   version: number;
   profile: LocalPlayerProfile;

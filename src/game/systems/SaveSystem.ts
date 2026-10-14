@@ -74,6 +74,12 @@ export class SaveSystem {
     PlayerProfileStore.save();
   }
 
+  static getCollection() { return PlayerProfileStore.getCollection(); }
+  static collectRelicFragment(id: string) { return PlayerProfileStore.collectRelicFragment(id); }
+  static recordCollectionMetric(metric: import('../collection/CollectionCatalog.ts').CollectionMetric, amount = 1, absolute = false) { PlayerProfileStore.recordCollectionMetric(metric, amount, absolute); }
+  static acknowledgeCollectionCelebration(id: string) { return PlayerProfileStore.acknowledgeCollectionCelebration(id); }
+  static toggleCollectionDisplay(kind: 'trophies' | 'relics', id: string) { return PlayerProfileStore.toggleCollectionDisplay(kind, id); }
+
   static addCredits(amount: number): void {
     PlayerProfileStore.addCredits(amount);
   }

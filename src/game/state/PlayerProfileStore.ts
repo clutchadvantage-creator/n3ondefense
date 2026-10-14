@@ -1,4 +1,7 @@
 import { isCosmeticInSeason } from '../cosmetics/SeasonalStore.ts';
+import { acquireFragment, advanceCollection, syncCollectionEvidence, toggleCollectionDisplay } from '../collection/CollectionProgress.ts';
+import { INFUSION_CATEGORIES, type CollectionMetric } from '../collection/CollectionCatalog.ts';
+import { MOD_INFUSION_BY_ID } from '../mods/infusions.ts';
 import { earnWeeklyCampaignRewards, getWeeklyFeaturedRewards, getWeeklyRewardHistory } from '../progression/WeeklyRewardCampaigns.ts';
 import { deliverWeeklyFeaturedRewards } from '../progression/WeeklyRewardDelivery.ts';
 import type { WeeklyMissionEligibility } from '../progression/WeeklyMissionLibrary.ts';
@@ -82,6 +85,38 @@ export class PlayerProfileStore {
   }
 
   static getAccessCards() { return normalizeAccessCards(PlayerProfileStore.getActiveSave().accessCards); }
+
+  static getCollection() { return PlayerProfileStore.getActiveSave().collection; }
+
+  /** Rare rewards commit ownership and reveal receipt together. A failed write leaves the pickup available. */
+  static collectRelicFragment(id: string): boolean {
+    const save = PlayerProfileStore.getActiveSave(), previous = structuredClone(save.collection);
+    if (!acquireFragment(save.collection, id)) return false;
+    if (PlayerProfileStore.save(true)) return true;
+    save.collection = previous;
+    return false;
+  }
+
+  static recordCollectionMetric(metric: CollectionMetric, amount = 1, absolute = false): void {
+    advanceCollection(PlayerProfileStore.getCollection(), { [metric]: amount }, absolute);
+    PlayerProfileStore.save();
+  }
+
+  static acknowledgeCollectionCelebration(id: string): boolean {
+    const state = PlayerProfileStore.getCollection(), previous = state.pending;
+    state.pending = previous.filter(entry => entry.id !== id);
+    if (PlayerProfileStore.save(true)) return true;
+    state.pending = previous;
+    return false;
+  }
+
+  static toggleCollectionDisplay(kind: 'trophies' | 'relics', id: string): boolean {
+    const save = PlayerProfileStore.getActiveSave(), previous = structuredClone(save.collection);
+    if (!toggleCollectionDisplay(save.collection, kind, id)) return false;
+    if (PlayerProfileStore.save(true)) return true;
+    save.collection = previous;
+    return false;
+  }
 
   static purchaseAccessCard(id: AnomalyId): PurchaseResult {
     return PlayerProfileStore.accessCardTransaction(id, false);
@@ -973,6 +1008,11 @@ export class PlayerProfileStore {
 
   static infuseModCard(instanceId: string, infusionId: ModInfusionId): PurchaseResult {
     const save = PlayerProfileStore.getActiveSave();
+    const definition = MOD_INFUSION_BY_ID.get(infusionId);
+    if (!definition) return { ok: false, message: 'UNKNOWN INFUSION' };
+    const category = INFUSION_CATEGORIES[definition.cosmeticOnly ? 0 : 1];
+    // Installed cards remain active. Only a new installation or replacement is gated.
+    if (!save.collection.unlockedCategories.includes(category.id)) return { ok: false, message: category.lock };
     const result = infuseModCard(save.mods, instanceId, infusionId);
     if (result.ok) PlayerProfileStore.save();
     return result;
@@ -1051,6 +1091,7 @@ export class PlayerProfileStore {
 
   static save(requirePersistent = false): boolean {
     const save = PlayerProfileStore.getActiveSave();
+    syncCollectionEvidence(save.collection, save.progress, save.mods.inventory);
     const loadout = save.mods.loadouts.find(item => item.id === save.mods.activeLoadoutId);
     reconcileTutorialEvidence(save.tutorials, !!loadout && Object.values(loadout.slots).some(Boolean),
       Object.values(save.upgrades).some(level => level > 0));

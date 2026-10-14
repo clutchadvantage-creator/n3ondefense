@@ -639,6 +639,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
     if(this.rewardDropped)return;this.rewardDropped=true;
     const rewards=getBossRewards(this.difficulty.rewardPosition),m=this.difficulty.rewardMultiplier;
     const x=this.pickupBounds.w/2,y=this.pickupBounds.h*.46;
+    this.relicPickups?.tryDrop('boss', x, y + 110);
     this.lootPickups.spawn(x-55,y,{kind:'credits',amount:Math.round(rewards.credits*m*this.modRuntime.multiplier('creditValue'))},9100);
     this.lootPickups.spawn(x,y,{kind:'coreTokens',amount:Math.max(1,Math.round(rewards.coreTokens*m))},9101);
     this.lootPickups.spawn(x+55,y,{kind:'plasmaChips',amount:Math.max(1,Math.round(rewards.plasmaChips*m))},9102);

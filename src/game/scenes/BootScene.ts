@@ -1,5 +1,6 @@
 import { createHalloweenSvg, halloweenSvgDataUri, halloweenTexture, HALLOWEEN_PARTS } from '../cosmetics/HalloweenCosmeticArt.ts';
 import Phaser from 'phaser';
+import { collectionArtAssets } from '../collection/CollectionArt.ts';
 import splashImageUrl from '../../assets/splashimage.png';
 import { COLORS } from '../config/constants';
 import { SceneKeys } from '../flow/SceneKeys';
@@ -32,6 +33,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    for (const art of collectionArtAssets()) this.load.svg(art.key, `data:image/svg+xml;base64,${btoa(art.svg)}`, { width: 512, height: 512 });
     for(const part of FLOOR_ART_PARTS)this.load.svg(`floor-${part}`,halloweenSvgDataUri(createDynamicFloorSvg(part)),{width:224,height:192});
     for (const theme of LEGACY_BOMB_THEMES) for (const part of LEGACY_BOMB_PARTS) {
       this.load.svg(legacyBombTexture(theme,part),halloweenSvgDataUri(createLegacyBombSvg(theme,part)),{width:part==='hero'?512:256,height:part==='hero'?512:256});

@@ -95,6 +95,7 @@ import { compactBindingLabel } from '../config/controls';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { MOD_BALANCE, RUN_PROTOCOLS, normalizeRunProtocolId } from '../mods/modBalance.ts';
 import { isGuaranteedMilestone, rollModDrop } from '../mods/ModDropService.ts';
+import { RelicPickupSystem, type FragmentPickup } from '../collection/RelicPickupSystem.ts';
 import type { ModDefinition, ModDropSource, ModRarity, ModRewardRecord, ModSlot, RunProtocolId } from '../mods/types.ts';
 import { magneticResistanceForEnemy, splitCurrentSecondaryDamage } from '../mods/ModRules.ts';
 import { createModCardView } from '../mods/ModCardView.ts';
@@ -541,6 +542,9 @@ export class ArenaScene extends Phaser.Scene {
   private readonly combatCellBlocked = (cx:number,cy:number):boolean => this.fenceObstruction.cellBlocked(cx,cy) || (this.dynamicFloor?.cellBlocked(cx,cy) ?? false);
   private pickups: Pickup[] = [];
   private modPickups: ModPickup[] = [];
+  private relicPickups: RelicPickupSystem | null = null;
+  private flawlessDamageRevision = 0;
+  private readonly relicCollectible = (pickup: FragmentPickup): boolean => !this.floorFalling(pickup) && !this.floorFalling(this.player);
   private pickupPresentation!: GameplayPickupPresentation;
   private readonly pickupMotion = new GameplayPickupMotion();
   private fences: Fence[] = [];
@@ -2019,7 +2023,7 @@ export class ArenaScene extends Phaser.Scene {
     const driver=this.floorDrivers.get(this.player);if(driver)this.floorActors?.relocated(driver);
   }
 
-  private trackFloorActor(target:Player|Enemy|Boss|Turret|Mine|Pickup|ModPickup):void {
+  private trackFloorActor(target:Player|Enemy|Boss|Turret|Mine|Pickup|ModPickup|FragmentPickup):void {
     if(!this.floorActors)return;
     let driver=this.floorDrivers.get(target);
     if(!driver){
@@ -2091,6 +2095,7 @@ export class ArenaScene extends Phaser.Scene {
     for(const deathMine of this.deathMines)this.trackFloorActor(deathMine.mine);
     for(const pickup of this.pickups)this.trackFloorActor(pickup);
     for(const pickup of this.modPickups)this.trackFloorActor(pickup);
+    if(this.relicPickups)for(const pickup of this.relicPickups.floorActors)this.trackFloorActor(pickup);
     actors.endFrame();
     // Rigid anchors: events avoid fences, placements avoid planned openings.
     // Unexpected lost support retires the entire segment and dependent links.
@@ -2542,6 +2547,7 @@ export class ArenaScene extends Phaser.Scene {
       } else {
         this.player.spendEnergy(PLAYER_BALANCE.dashEnergyCost);
         GameplayTelemetryRecorder.recordAbilityUse('dash', PLAYER_BALANCE.dashEnergyCost);
+        SaveSystem.recordCollectionMetric('dashes');
         (this.player.body as SweptPlayerBody).resetMomentum();
         this.player.dashTowardPoint(aim.x, aim.y, now);
         TutorialEventBus.emit('combat.ability.dash');
@@ -4599,6 +4605,7 @@ export class ArenaScene extends Phaser.Scene {
       turret.telemetryId = `turret-${++this.turretTelemetrySequence}`;
       this.turrets.push(turret);
       GameplayTelemetryRecorder.recordTurretPlaced(turret.telemetryId, { maximumHealth: cfg.hp, damage: cfg.damage, fireRate: cfg.fireRate, range: cfg.range });
+      SaveSystem.recordCollectionMetric('turrets');
     }
 
     if (type === 'mine') {
@@ -5372,7 +5379,7 @@ export class ArenaScene extends Phaser.Scene {
       this.layout.generation.bounds,(x,y)=>this.intersectsWallGeometry(x,y,72,72),{
         fireProjectile:spec=>this.spawnBossProjectile(spec,'player'),
         damageArea:(x,y,r,d,attack,path)=>this.applyPossessedBossAreaDamage(x,y,r,d,attack,path),
-        dropCredit:()=>{},onDamaged:()=>{},onAttackCast:attack=>this.playBossAttackCue(attack),
+        dropCredit:()=>{},onDamaged:()=>{ this.player.damageRevision++; },onAttackCast:attack=>this.playBossAttackCue(attack),
         onDefeated:()=>{this.possessionRemainingMs=0;}
       },this.currentModeFamily(),{faction:'player',ownerId:'operative',showHealthUi:false,
         healthMultiplier:stage.healthMultiplier*INFUSION_TUNING.ascension.healthScale,
@@ -6663,6 +6670,8 @@ export class ArenaScene extends Phaser.Scene {
     forcePhysical = false,
     arcadeEventId?: ArcadeEventId
   ): ModPickup | null {
+    // Milestone rolls happen after combat retirement; physical fragments use enemy/boss/arcade drops.
+    if (source !== 'milestone') this.relicPickups?.tryDrop(source, x, y);
     const definition = rollModDrop({
       source,
       round: getCampaignRewardPosition(this.currentModeFamily(), this.currentCombatRound()),
@@ -6708,6 +6717,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateModPickups(now: number, dt: number): void {
+    const bossRelics = this.relicPickups?.pendingBossLoot ?? 0;
+    this.relicPickups?.update(dt, this.player.x, this.player.y, this.player.stats.pickupRadius, undefined, this.relicCollectible);
+    if (bossRelics !== (this.relicPickups?.pendingBossLoot ?? 0)) this.refreshBossCollectionGate();
     if (this.modPickups.length === 0) return;
     const collectionRadius = this.player.stats.pickupRadius + 10;
     const collectionRadiusSquared = collectionRadius * collectionRadius;
@@ -6827,6 +6839,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private dropArenaSmashableLoot(type: ArenaSmashableLoot, x: number, y: number): void {
+    this.relicPickups?.tryDrop('normalEnemy', x, y);
     const sprite = this.createPickupSprite(type, x, y, GAMEPLAY_PICKUP_COLOR_BY_TYPE[type]);
     this.pickups.push({
       type,
@@ -7073,6 +7086,7 @@ export class ArenaScene extends Phaser.Scene {
     SaveSystem.addFluxCores(rewardFluxCores);
     const trainingWasComplete = hasTutorialObjective(SaveSystem.getTutorialProgress(), 'training.rounds');
     SaveSystem.recordRoundCompletion(completedRound, this.protocol);
+    if (this.player.damageRevision === this.flawlessDamageRevision) SaveSystem.recordCollectionMetric('flawless');
     const graduatedTraining = !trainingWasComplete && hasTutorialObjective(SaveSystem.getTutorialProgress(), 'training.rounds')
       && SaveSystem.getTutorialProgress().firstRunStage !== 'complete';
     this.tutorialDirector?.suspend();
@@ -7611,6 +7625,7 @@ export class ArenaScene extends Phaser.Scene {
     encounter.cancelCombat();
     this.physics.pause();
     GameplayTelemetryRecorder.recordBossDefeated();
+    SaveSystem.recordCollectionMetric('bosses');
 
     // Fatal damage can arrive from inside projectile, laser, or bomblet update
     // callbacks. Destructively clearing those same systems in that call stack
@@ -7624,6 +7639,7 @@ export class ArenaScene extends Phaser.Scene {
     const encounter = this.supremeFinale?.encounters.find((candidate) => candidate.archetype === archetype);
     if (!encounter) return;
     GameplayTelemetryRecorder.recordBossDefeated();
+    SaveSystem.recordCollectionMetric('bosses');
     this.audio.playSfx('bomblet');
     this.mechanicalDestructionVfx.emitBossStage(
       archetype, encounter.boss.x, encounter.boss.y, BOSS_ARCHETYPES[archetype].color, this.time.now, true
@@ -7683,6 +7699,7 @@ export class ArenaScene extends Phaser.Scene {
       SaveSystem.addPlasmaChips(terminalPlasma);
       SaveSystem.addFluxCores(terminalFlux);
       SaveSystem.recordSupremeCompletion();
+      if (this.player.damageRevision === this.flawlessDamageRevision) SaveSystem.recordCollectionMetric('flawless');
       this.runCreditsEarned += terminalCredits;
       this.pendingProgressEnemyKills += 3;
       this.flushPendingCombatProgress();
@@ -7927,7 +7944,7 @@ export class ArenaScene extends Phaser.Scene {
     for (const pickup of this.pickups) {
       if (pickup.source === 'boss-loot' && pickup.sprite.active) resourcePickupsRemaining += 1;
     }
-    let modPickupsRemaining = 0;
+    let modPickupsRemaining = this.relicPickups?.pendingBossLoot ?? 0;
     for (const pickup of this.modPickups) {
       if (pickup.source === 'boss' && pickup.sprite.active && !pickup.collected) modPickupsRemaining += 1;
     }
@@ -7980,6 +7997,7 @@ export class ArenaScene extends Phaser.Scene {
     SaveSystem.addPlasmaChips(collectedPlasma);
     SaveSystem.addFluxCores(collectedFluxCores);
     SaveSystem.recordRoundCompletion(this.bossRound, this.protocol, 'boss');
+    if (this.player.damageRevision === this.flawlessDamageRevision) SaveSystem.recordCollectionMetric('flawless');
     this.tryAwardMod('milestone', true);
     this.presentCampaignPackages();
     OnlineRunManager.recordMilestone(this.bossRound);
@@ -9348,6 +9366,9 @@ export class ArenaScene extends Phaser.Scene {
       this.encounterInitializationCount += 1;
       initialize();
       this.captureEncounterCheckpoint('G_INITIALIZED');
+      this.flawlessDamageRevision = this.player.damageRevision;
+      SaveSystem.recordCollectionMetric('round', round, true);
+      this.relicPickups = new RelicPickupSystem(this, { round: this.currentCombatPosition(), seed: this.layout.seed, protocol: this.protocol, focus: this.modFocus, contract: this.contract });
       const setupDurationMs = performance.now() - setupStartedAt;
       if (startupKind) {
         // The existing RoundRuntimeLifecycle remains the only authority. The
@@ -9712,6 +9733,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private clearRoundCollections(): void {
+    this.relicPickups = null;
     // Also used after Phaser-owned shutdown: drop references without touching
     // already-destroyed display objects, colliders or scene plugins.
     this.systemInfusions=null;this.infusionInteracting=false;
@@ -9864,6 +9886,7 @@ export class ArenaScene extends Phaser.Scene {
     this.retireRoundOwner('projectile-trails', () => this.projectileTrails?.reset());
     this.retireRoundOwner('missiles', () => this.homingMissiles.forEach((missile) => missile.sprite.destroy()));
     this.retireRoundOwner('pickups', () => {
+      this.relicPickups?.destroy(); this.relicPickups = null;
       this.pickups.forEach((pickup) => pickup.sprite.destroy());
       this.modPickups.forEach((pickup) => pickup.sprite.destroy());
     });

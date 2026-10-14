@@ -22,7 +22,7 @@ test('version 19 migration preserves progression and gives empty cards; version 
   const original=createDefaultLocalSave('cards-test','Cards Test');original.version=19;delete original.accessCards;
   original.wallet.credits=123456;original.wallet.fluxCores=93;
   const migrated=normalizeLocalSave(original);
-  assert.equal(migrated.version,20);assert.deepEqual(migrated.wallet,original.wallet);
+  assert.equal(migrated.version,21);assert.deepEqual(migrated.wallet,original.wallet);
   assert.deepEqual(migrated.progress.campaign,original.progress.campaign);
   assert.deepEqual(migrated.accessCards.owned,{heist:0,skybreach:0});
   migrated.accessCards.owned={heist:2,skybreach:5};migrated.accessCards.purchases=2;migrated.accessCards.uses=1;

@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-14",
+  "feature": "Premium relics, trophies, infusion category authorization and Garage displays",
+  "saveVersion": 21,
+  "decisions": {
+    "installedInfusions": "Remain active; reconstruction gates new installations and replacements",
+    "veteranOperative": "Reach Round 30 in any mode",
+    "untouchable": "25 cumulative flawless rounds"
+  },
+  "automated": { "command": "npm.cmd test", "passed": 1066, "failed": 0 },
+  "build": { "command": "npm.cmd run build", "passed": true },
+  "browser": [
+    { "fixture": "scripts/audit-collection.browser.js", "checks": 22, "cases": 2, "errors": [] },
+    { "fixture": "scripts/audit-collection-gameplay.browser.js", "checks": 36, "cases": 4, "errors": [] },
+    { "fixture": "scripts/audit-collection-persistence.mjs", "checks": 8, "actualPageReloads": 2, "errors": [] },
+    { "fixture": "scripts/audit-collection-layout.mjs", "collectionCases": 18, "infusionScreenshots": 6, "viewports": [[1600, 1000], [1280, 720], [800, 600]], "errors": [] }
+  ],
+  "performance": {
+    "renderer": "ANGLE NVIDIA GeForce RTX 5070 Direct3D11",
+    "mode": "Supreme",
+    "round": 26,
+    "viewport": [1600, 1000],
+    "physicalFragmentLimit": 6,
+    "addedDisplayRoots": 6,
+    "childrenPerRoot": 4,
+    "addedPhysicsBodies": 0,
+    "addedTimers": 0,
+    "pickupUpdateProbe": { "iterations": 1000, "p95Ms": 0, "maxMs": 0.10000014305114746, "note": "Zero indicates browser timer quantization, not zero computational cost" },
+    "frames": [
+      { "animationEnabled": false, "sampleMs": 4000, "frames": 240, "meanMs": 16.749750000000017, "p95Ms": 16.670000000000073, "maxMs": 26.660000000000036 },
+      { "animationEnabled": true, "sampleMs": 4000, "frames": 240, "meanMs": 16.666375000000023, "p95Ms": 16.67999999999993, "maxMs": 16.68000000000011 }
+    ],
+    "limits": "Short desktop collection-workload probe; not a low-end or maximum-mod artillery stress certification"
+  },
+  "followUps": [
+    "Supply recordings for null pickup, snap, reconstruction and trophy audio hooks",
+    "Fence Rail gameplay design review; existing behavior preserved and labeled"
+  ]
+}

@@ -11,6 +11,7 @@ import { disableButton } from '../utils/ui';
 import { ModRuntime } from '../mods/ModRuntime.ts';
 import { rollModDrop } from '../mods/ModDropService.ts';
 import { getInfusionOperationCost, getInfusionRemovalCost, MOD_INFUSIONS, MOD_INFUSION_BY_ID } from '../mods/infusions.ts';
+import { INFUSION_CATEGORIES, RELICS, type InfusionCategory } from '../collection/CollectionCatalog.ts';
 import { getModCopyCounts, getRecyclableUnupgradedDuplicates } from '../mods/ModInventoryService.ts';
 import {
   buildModOperationStatus,
@@ -84,6 +85,7 @@ export class ModCollectionScene extends Phaser.Scene {
   private bulkRecycleModal: LocalModalHandle | null = null;
   private infusionConfirmModal: LocalModalHandle | null = null;
   private infusionPage = 0;
+  private infusionCategory: InfusionCategory = 'blacksite';
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
   private resumePausedScene = false;
   private tutorialDirector: TutorialDirector | null = null;
@@ -470,17 +472,28 @@ export class ModCollectionScene extends Phaser.Scene {
     root.add(this.add.text(width / 2, panelTop + 82, `Plasma Chips: ${SaveSystem.getModCollection().plasmaChips} // Active systems: ${new ModRuntime(SaveSystem.getModCollection(),undefined,SaveSystem.getPreferredProtocol()).getActiveInfusions().length}/5`, {
       fontFamily: 'Rajdhani, sans-serif', fontSize: '19px', fontStyle: 'bold', color: '#a7ffe8'
     }).setOrigin(0.5));
-    root.add(this.add.text(width / 2, panelTop + 108, 'SYSTEM INFUSIONS unlock new interactions. COSMETIC INFUSIONS change visuals only. One infusion per Mod; five equipped Mods; duplicate systems never stack.', {
-      fontFamily: 'Rajdhani, sans-serif', fontSize: panelWidth < 620 ? '14px' : '15px', color: '#b4cddd', align: 'center', lineSpacing: 1
-    }).setOrigin(0.5, 0).setWordWrapWidth(panelWidth - 72, true).setMaxLines(2));
+    INFUSION_CATEGORIES.forEach((category, index) => {
+      root.add(createModCollectionButton(this, width / 2 + (index - 0.5) * (panelWidth - 56) / 2, panelTop + 124,
+        category.name, () => { this.infusionCategory = category.id; this.infusionPage = 0; this.showInfusionModal(card, true); },
+        (panelWidth - 76) / 2, category.id === this.infusionCategory ? 'utility' : 'standard', { height: 36, fontSize: 14 }));
+    });
+    const category = INFUSION_CATEGORIES.find(c => c.id === this.infusionCategory)!;
+    const relic = RELICS.find(r => r.id === category.relicId)!;
+    const collection = SaveSystem.getCollection();
+    const unlocked = collection.unlockedCategories.includes(category.id);
+    const found = relic.fragments.filter(f => collection.fragments.includes(f.id)).length;
+    root.add(this.add.text(width / 2, panelTop + 156, unlocked ? 'CATEGORY AUTHORIZED // ONE INFUSION PER MOD'
+      : `${category.lock} // ${found}/3`, { fontFamily: 'Rajdhani, sans-serif', fontSize: panelWidth < 620 ? '13px' : '16px',
+      fontStyle: 'bold', color: unlocked ? '#81ffd1' : '#ff9bac', align: 'center' }).setOrigin(0.5).setWordWrapWidth(panelWidth - 50));
 
-    const infusionsPerPage = panelHeight >= 560 ? 2 : 1;
-    const pageCount = Math.max(1, Math.ceil(MOD_INFUSIONS.length / infusionsPerPage));
+    const categoryInfusions = MOD_INFUSIONS.filter(i => i.cosmeticOnly === (this.infusionCategory === 'cosmetic'));
+    const infusionsPerPage = panelHeight >= 620 ? 2 : 1;
+    const pageCount = Math.max(1, Math.ceil(categoryInfusions.length / infusionsPerPage));
     this.infusionPage = Phaser.Math.Clamp(this.infusionPage, 0, pageCount - 1);
-    const visibleInfusions = MOD_INFUSIONS.slice(this.infusionPage * infusionsPerPage, (this.infusionPage + 1) * infusionsPerPage);
+    const visibleInfusions = categoryInfusions.slice(this.infusionPage * infusionsPerPage, (this.infusionPage + 1) * infusionsPerPage);
     const pageY = panelBottom - 92;
     const closeY = panelBottom - 32;
-    const rowsTop = panelTop + (panelHeight < 500 ? 142 : 156);
+    const rowsTop = panelTop + 184;
     const rowsBottom = pageY - 34;
     const rowSlotHeight = (rowsBottom - rowsTop) / visibleInfusions.length;
     const rowHeight = Phaser.Math.Clamp(rowSlotHeight - 10, 100, 220);
@@ -503,14 +516,14 @@ export class ModCollectionScene extends Phaser.Scene {
       root.add(infusionTitle);
       const descriptionY = infusionTitle.y + infusionTitle.height + 8;
       const descriptionLines = Math.max(1, Math.floor((rowY + rowHeight/2 - 32 - descriptionY)/18));
-      root.add(this.add.text(copyX, descriptionY, `${infusion.cosmeticOnly?'COSMETIC':'SYSTEM INFUSION'} // ${infusion.description}`, {
+      root.add(this.add.text(copyX, descriptionY, `${infusion.id === 'fence-rail' ? 'DESIGN REVIEW PENDING // ' : ''}${infusion.description}`, {
         fontFamily: 'Rajdhani, sans-serif', fontSize: '15px', color: '#c0d9e7', lineSpacing: 0
       }).setOrigin(0, 0).setWordWrapWidth(copyWidth, true).setMaxLines(descriptionLines));
       root.add(this.add.text(copyX, rowY + rowHeight / 2 - 15, installed
         ? 'INSTALLED'
         : `${replacing ? 'RECONFIGURE' : 'INSTALL'} // ${operationCost} PLASMA CHIPS`, { fontFamily: 'Rajdhani, sans-serif', fontSize: '14px', fontStyle: 'bold', color: installed ? '#70ffad' : affordable ? '#ffd98a' : '#ff91a4' }).setOrigin(0, 0.5));
-      const install = createModCollectionButton(this, installX, rowY, installed ? 'Installed' : affordable ? replacing ? 'Swap' : 'Install' : 'Not Enough Chips', () => {
-        if (installed) return false;
+      const install = createModCollectionButton(this, installX, rowY, installed ? 'Installed' : !unlocked ? 'Relic Required' : affordable ? replacing ? 'Swap' : 'Install' : 'Not Enough Chips', () => {
+        if (installed || !unlocked) return false;
         if (!affordable) return this.finishOperation({ ok: false, message: `Requires ${operationCost} Plasma Chips.` });
         this.confirmInfusionOperation(
           replacing ? 'RECONFIGURE MOD INFUSION' : 'INSTALL MOD INFUSION',
@@ -520,7 +533,7 @@ export class ModCollectionScene extends Phaser.Scene {
         );
         return true;
       }, installWidth, installed ? 'return' : affordable ? 'utility' : 'warning');
-      if (installed) disableButton(install);
+      if (installed || !unlocked) disableButton(install);
       root.add(install);
     });
 
@@ -550,8 +563,8 @@ export class ModCollectionScene extends Phaser.Scene {
         canRemove ? `Remove // ${removalCost} Chips` : `Need ${removalCost} Chips`, () => {
           if (!canRemove) return this.finishOperation({ ok: false, message: `Requires ${removalCost} Plasma Chips.` });
           this.confirmInfusionOperation(
-            'REMOVE COSMETIC INFUSION',
-            `Remove the installed infusion from this Mod card?\n\nExact charge: ${removalCost} Plasma Chips.\nBalance after transaction: ${(SaveSystem.getModCollection().plasmaChips - removalCost).toLocaleString()} Plasma Chips.`,
+            'REMOVE MOD INFUSION',
+            `Remove the installed infusion from this Mod card?\n\nExact charge: ${removalCost} Plasma Chips.\nBalance after transaction: ${(SaveSystem.getModCollection().plasmaChips - removalCost).toLocaleString()} Plasma Chips.${SaveSystem.getCollection().unlockedCategories.includes(MOD_INFUSION_BY_ID.get(card.infusionId!)?.cosmeticOnly ? 'cosmetic' : 'blacksite') ? '' : '\n\nReinstalling requires reconstructing its category relic.'}`,
             'Confirm Removal',
             () => this.apply(() => SaveSystem.removeModInfusion(card.instanceId))
           );

@@ -1,6 +1,8 @@
 import { createConfigurationPresetsView } from '../ui/ConfigurationPresetsView.ts';
 import { addTerminalDetail } from '../ui/TerminalChrome.ts';
 import Phaser from 'phaser';
+import { CollectionWing, createGarageCollectionDisplays } from '../collection/CollectionView.ts';
+import { CollectionCelebrations } from '../collection/CollectionCelebrations.ts';
 import { COSMETICS, getCosmeticById, getCosmeticDisplayColor, getCosmeticTextureKey } from '../../data/cosmetics.ts';
 import { createCosmeticPreview } from '../cosmetics/CosmeticPreview.ts';
 import { ECONOMY_BALANCE, MOD_FOCUS_CATEGORIES, MOD_FOCUS_LABELS, RUN_CONTRACT_IDS, RUN_CONTRACTS } from '../economy/economyBalance.ts';
@@ -127,6 +129,9 @@ const ECONOMY_TABS = ['MARKET', 'PROGRESSION', 'COMMERCE', 'MOD ECONOMY'] as con
 
 export class OperatorGarageScene extends Phaser.Scene {
   private readonly audio = AudioManager.get();
+  private collectionWing: CollectionWing | null = null;
+  private collectionDisplays: Phaser.GameObjects.Container | null = null;
+  private collectionCelebrations: CollectionCelebrations | null = null;
   private returnScene: SceneKeyValue = SceneKeys.MainMenu;
   private overlay: Phaser.GameObjects.Container | null = null;
   private readonly overlayAnimatedTargets: Phaser.GameObjects.GameObject[] = [];
@@ -170,6 +175,8 @@ export class OperatorGarageScene extends Phaser.Scene {
   private exchangeConfirmationArmed = true;
   private economyConsoleTabIndex = 0;
   private readonly handleEscape = (): void => {
+    if (this.collectionCelebrations?.active) { this.collectionCelebrations.dismiss(); return; }
+    if (this.collectionWing) { this.collectionWing.close(); return; }
     if (this.resetNativeConfirmModal) {
       this.resetNativeConfirmModal.destroy();
       this.resetNativeConfirmModal = null;
@@ -270,6 +277,18 @@ export class OperatorGarageScene extends Phaser.Scene {
       }
     ).setOrigin(1, 0.5).setDepth(21);
     this.createStations(layout.stationCenters, layout.stationWidth, layout.stationHeight);
+    const openCollectionWing = (tab: 'trophies' | 'relics') => {
+      if (this.collectionWing || this.collectionCelebrations?.active) return;
+      this.collectionWing = new CollectionWing(this, () => {
+        this.collectionWing = null;
+        this.collectionDisplays?.destroy(true);
+        this.collectionDisplays = createGarageCollectionDisplays(this, layout, openCollectionWing);
+      }, tab);
+    };
+    this.collectionDisplays = createGarageCollectionDisplays(this, layout, openCollectionWing);
+    createButton(this, width - layout.safe - (layout.compact ? 90 : 135), 34, 'TROPHIES & RELICS', () => openCollectionWing('trophies'),
+      layout.compact ? 180 : 270, 'menu', { height: 40, fontSize: layout.compact ? 12 : 17 }).setDepth(80);
+    this.collectionCelebrations = new CollectionCelebrations(this, () => !this.overlay && !this.collectionWing && !this.tutorialDirector?.isActive());
 
     this.tutorialDirector = new TutorialDirector({
       scene: 'garage',
@@ -298,7 +317,7 @@ export class OperatorGarageScene extends Phaser.Scene {
         return projectTutorialBoundsToViewport(rect, canvas, this.scale.width, this.scale.height);
       },
       setMode: () => undefined,
-      canPresent: () => this.scene.isActive()
+      canPresent: () => this.scene.isActive() && !this.collectionWing && !this.collectionCelebrations?.active
     });
     this.time.delayedCall(0, () => this.tutorialDirector?.startEligible());
     this.time.delayedCall(180, () => {
@@ -319,6 +338,9 @@ export class OperatorGarageScene extends Phaser.Scene {
     this.scale.off('resize', this.handleResize, this);
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.collectionWing?.destroy(); this.collectionWing = null;
+      this.collectionCelebrations?.destroy(); this.collectionCelebrations = null;
+      this.collectionDisplays = null;
       this.input.keyboard?.off('keydown-ESC', this.handleEscape);
       this.scale.off('resize', this.handleResize, this);
       this.closeOverlay(false);

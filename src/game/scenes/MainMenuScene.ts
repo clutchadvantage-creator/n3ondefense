@@ -1,6 +1,7 @@
 import { attachWeeklyOperationsTray } from '../ui/WeeklyOperationsTray.ts';
 import { getWeeklyRewardColumns, WEEKLY_CURRENCY_ROW_HEIGHT, getWeeklyRewardEntries, renderWeeklyCurrencyRewards, renderWeeklyFeaturedRewards } from '../ui/WeeklyRewardView.ts';
 import Phaser from 'phaser';
+import { CollectionCelebrations } from '../collection/CollectionCelebrations.ts';
 import mainMenuBackgroundUrl from '../../assets/newmainmenubackgrd.png';
 import { GAME_TAGLINE, GAME_TITLE, OBJECTIVE_CONFIG } from '../config/gameplay';
 import { RunTransitionManager } from '../flow/RunTransitionManager';
@@ -80,6 +81,8 @@ interface MainMenuLaunchData {
 }
 
 export class MainMenuScene extends Phaser.Scene {
+  private collectionCelebrations: CollectionCelebrations | null = null;
+  private readonly dismissCollectionReveal = (): void => { if (this.collectionCelebrations?.active) this.collectionCelebrations.dismiss(); };
   private tutorialDirector: TutorialDirector | null = null;
   private operationDeck: WeeklyOperationDeck = 'regular';
   private readonly deploymentLaunchGate = new DeploymentLaunchGate();
@@ -103,6 +106,8 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   create(_data: MainMenuLaunchData = {}): void {
+    this.collectionCelebrations = new CollectionCelebrations(this, () => !this.deploymentModal && !this.tutorialDirector?.isActive());
+    this.input.keyboard?.on('keydown-ESC', this.dismissCollectionReveal);
     this.deploymentLaunchGate.reset();
     this.closeDeploymentModal();
     this.unsubscribeDeploymentConfiguration?.();
@@ -358,7 +363,7 @@ export class MainMenuScene extends Phaser.Scene {
         return projectTutorialBoundsToViewport(bounds, canvas, this.scale.width, this.scale.height);
       },
       setMode: () => undefined,
-      canPresent: () => this.scene.isActive() && !this.deploymentModal
+      canPresent: () => this.scene.isActive() && !this.deploymentModal && !this.collectionCelebrations?.active
     });
     // Phaser marks the scene active after create returns. Presentation uses that
     // lifecycle boundary so shutdown/covered scenes cannot show stale lessons.
@@ -371,6 +376,8 @@ export class MainMenuScene extends Phaser.Scene {
       if (Object.values(collection.inventory).some((entry) => entry.discovered)) TutorialEventBus.emit('progression.firstModOwned');
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.collectionCelebrations?.destroy(); this.collectionCelebrations = null;
+      this.input.keyboard?.off('keydown-ESC', this.dismissCollectionReveal);
       this.scale.off('resize', this.handleResize, this);
       this.events.off(Phaser.Scenes.Events.WAKE, this.handleDeploymentConfigurationChanged, this);
       this.unsubscribeDeploymentConfiguration?.();

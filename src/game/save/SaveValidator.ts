@@ -1,4 +1,5 @@
 import { normalizeWeeklyRewardCampaignState } from '../progression/WeeklyRewardCampaigns.ts';
+import { normalizeCollection, syncCollectionEvidence } from '../collection/CollectionProgress.ts';
 import { DEFAULT_EQUIPPED_COSMETICS, COSMETICS } from '../../data/cosmetics.ts';
 import { UPGRADE_DEFINITIONS } from '../../data/upgrades.ts';
 import type { CosmeticOption } from '../types.ts';
@@ -254,6 +255,7 @@ export const createDefaultLocalSave = (profileId: string, profileName: string, s
   const legacyTokens = typeof source?.coreTokens === 'number' ? source.coreTokens : 0;
   const progress = normalizeProgress(source?.progress);
   const save: LocalPlayerSave = {
+    collection: normalizeCollection(source?.collection),
     accessCards: normalizeAccessCards(source?.accessCards),
     version: CURRENT_SAVE_VERSION,
     profile: {
@@ -373,7 +375,7 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
       saveRevision: 1,
       gameVersion: typeof v1.metadata?.gameVersion === 'string' ? v1.metadata.gameVersion : GAME_VERSION
     };
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8 || version === 9 || version === 10 || version === 11 || version === 12 || version === 13 || version === 14 || version === 15 || version === 16 || version === 17 || version === 18 || version === 19 || version === CURRENT_SAVE_VERSION) {
+  } else if (version >= 2 && version <= CURRENT_SAVE_VERSION) {
     const candidate = input as Partial<LocalPlayerSave>;
     const legacyCandidate = candidate as Partial<LocalPlayerSave> & Record<string, unknown>;
     current.version = CURRENT_SAVE_VERSION;
@@ -415,6 +417,8 @@ export const normalizeLocalSave = (input: unknown): LocalPlayerSave | null => {
 
   current.accessCards = normalizeAccessCards(input.accessCards);
   current.mods = normalizeModCollection(current.mods);
+  current.collection = normalizeCollection(input.collection);
+  syncCollectionEvidence(current.collection, current.progress!, current.mods.inventory);
   current.garage = normalizeGarageState(current.garage);
   current.protocol = normalizeProtocolPreference(current.protocol, current.progress?.normalHighestRound ?? 0, version >= 19 ? current.progress?.campaign : undefined);
   current.tutorials = normalizeTutorialProgress(current.tutorials);
