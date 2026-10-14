@@ -11,12 +11,21 @@
   const savedPads=navigator.getGamepads;navigator.getGamepads=()=>{pad.timestamp=performance.now();return[pad];};
   const originalError=console.error;console.error=(...args)=>{report.errors.push(args.map(String).join(' '));originalError.apply(console,args);};
   const sample=async(arena,label,detail={})=>{
+    if(options.kinetic===false){
+      for(const actor of [arena.player,...arena.enemies,arena.possession?.boss].filter(Boolean)){
+        if(actor.body?.kinetic){actor.body.kinetic=null;actor.body.mass=1;}
+      }
+    }
     report.current=label;await wait(250);
     const raw=[],renders=[],updates=[],costs=new Map(),restores=[];let previous,peakProjectiles=0,peakEnemies=0;
     const wrap=(object,key,name)=>{const original=object?.[key];if(typeof original!=='function')return;const owned=Object.hasOwn(object,key);
       object[key]=function(...args){const start=performance.now();try{return original.apply(this,args);}finally{const ms=performance.now()-start;if(name==='render')renders.push(ms);else if(name==='update')updates.push(ms);else{const cost=costs.get(name)??{calls:0,totalMs:0};cost.calls++;cost.totalMs+=ms;costs.set(name,cost);}}};restores.push(()=>{if(owned)object[key]=original;else delete object[key];});};
     const visit=(object)=>{if(object.type==='Container'){object.list.forEach(visit);return;}wrap(object,'renderWebGL',`${object.type}@${object.parentContainer?.depth??object.depth}`);};
-    arena.children.list.forEach(visit);wrap(game.renderer,'render','render');wrap(arena.sys,'sceneUpdate','update');
+    arena.children.list.forEach(visit);wrap(game.renderer,'render','render');wrap(arena.sys,'sceneUpdate','update');wrap(arena.physics.world,'step','physicsStep');
+    // Arcade registers the original update function on the scene emitter.
+    // Wrapping world.update alone misses it; step() only covers catch-up steps.
+    const listeners=arena.events._events.update;
+    for(const listener of Array.isArray(listeners)?listeners:[listeners])if(listener?.context===arena.physics.world)wrap(listener,'fn','physicsWorld');
     for(const key of ['updateEnemies','updateProjectiles','updateSystemInfusions','updateHud','updatePlayerShooting','getHazardDamageTargets','updateDynamicFloor','updatePossession','updatePickups','updateAbilities','updateTurrets','updateFences'])wrap(arena,key,key);
     for(const key of ['laserSecurity','gasHazard','bombletHazard'])wrap(arena[key],'update',key);
     wrap(arena.laserSecurity,'buildSegments','laserGeometry');
@@ -30,7 +39,8 @@
     game.events.on('step',step);
     try{await wait(options.sampleMs);}finally{game.events.off('step',step);for(const restore of restores.reverse())restore();pad.buttons[7]={pressed:false,value:0,touched:false};}
     const result={label,...detail,raw:stats(raw),render:stats(renders),update:stats(updates),costs:[...costs].map(([name,cost])=>({name,...cost,msPerFrame:cost.totalMs/Math.max(1,raw.length)})).sort((a,b)=>b.msPerFrame-a.msPerFrame),
-      enemies:arena.enemies.length,projectiles:arena.projectiles.length,peakProjectiles,peakEnemies,resources:arena.captureRoundRuntimeDiagnostics(),loadoutScaling:arena.loadoutScaling,laserSegments:arena.laserSecurity?.liveSegmentCount};
+      enemies:arena.enemies.length,projectiles:arena.projectiles.length,peakProjectiles,peakEnemies,resources:arena.captureRoundRuntimeDiagnostics(),loadoutScaling:arena.loadoutScaling,laserSegments:arena.laserSecurity?.liveSegmentCount,
+      kineticBudget:arena.kinetics?{peakVisits:arena.kinetics.peakVisits,peakContacts:arena.kinetics.peakContacts}:null};
     report.cases.push(result);globalThis.__n3onSaveLayoutCheckpoint?.(JSON.stringify(report));
   };
   report.promise=(async()=>{
@@ -57,6 +67,7 @@
         T.requestArenaTransition(menu,{reason:'new-run',session});await until(()=>game.scene.isActive('loading')&&T.snapshot(game.scene.keys.loading).lastStep==='awaiting-user-deploy-confirmation','loading');
         game.scene.keys.loading.confirmDeployment(session,'new-run');await until(()=>game.scene.isActive('arena')&&game.scene.keys.arena.roundRuntime?.phase==='active','arena');
         const a=game.scene.keys.arena;globalThis.__normalPerfArena=a;a.pointerLock.hidePrompt();a.playerInput.adoptDevice('gamepad');if(a.state.state==='Paused')a.resumeGameplay();
+        if(options.kinetic===false){const spawn=a.spawnEnemy;a.spawnEnemy=function(...args){const e=spawn.apply(this,args);if(e?.body?.kinetic){e.body.kinetic=null;e.body.mass=1;}return e;};}
         a.player.invulnUntil=Infinity;const site=a.bombSites.sites.find(site=>site.state==='Available');
         if(site){a.bombSites.armSite(site,180000,a.time.now);a.state.set('Defense');}
         const pressure=getConcurrentSpawnPressure(getSpawnProfile(a.currentCombatPosition(),0,'supreme'),site?1:0),scale=a.currentModeBalance().activePressureMultiplier*a.loadoutScaling.pressure;
@@ -89,6 +100,13 @@
           }}finally{a.getAimWorldPoint=aim;}
           report.stagedDeployables={turrets:a.turrets.length,fences:a.fences.length,mines:a.mines.length};
           await sample(a,'supreme-26/artillery-defenses',{round,cap});
+        }
+        if(options.kineticStress){
+          prime();let next=0,bursts=0;
+          const burst=time=>{if(time<next)return;next=time+1800;bursts++;
+            const actor=a.possession?.boss??a.player;actor.body.externalVelocity(900*Math.sin(bursts),900*Math.cos(bursts));
+            for(const e of a.enemies.slice(0,24)){const angle=Math.atan2(e.y-actor.y,e.x-actor.x);e.setExternalVelocity(Math.cos(angle)*850,Math.sin(angle)*850);}};
+          game.events.on('step',burst);try{await sample(a,'supreme-26/forced-kinetic-bursts',{round,cap,syntheticForces:true});}finally{game.events.off('step',burst);}
         }
         report.final={possessed:!!a.possession,projectiles:a.projectiles.length,enemies:a.enemies.length};
       }

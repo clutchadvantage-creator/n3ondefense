@@ -30,6 +30,7 @@ const dependencies={
   phaser:{__esModule:true,default:Phaser},'../config/bossBalance':balance,
   '../systems/SeededRandom':{SeededRandom},'./Boss':{Boss:FakeBoss},
   './BrawlerMaceMotion.ts':mace,
+  '../physics/SweptPlayerBody.ts':{SweptPlayerBody:class {}},
   '../vfx/OperativeShieldEffect.ts':{OperativeShieldEffect:FakeShield},
   '../vfx/BossCombatVfx.ts':{BossCombatVfx:class {update(){} emit(){} emitArrival(){} reset(){} destroy(){}}},
   './ArtilleryMarker.ts':{createArtilleryMarker:()=>Object.fromEntries(['marker','targetRing','timingRing','reticle','payload'].map(k=>[k,display()]))}

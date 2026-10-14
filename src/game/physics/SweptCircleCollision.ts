@@ -11,7 +11,7 @@ export interface SweptCircleResolution {
   tangentY?: number;
 }
 
-interface SegmentHit {
+export interface SegmentHit {
   time: number;
   normalX: number;
   normalY: number;
@@ -92,7 +92,7 @@ const nearestHit = (
  * outside the circular player's actual footprint and otherwise snag a clear
  * route by up to radius * (sqrt(2) - 1). Side hits retain the fast slab path;
  * only corner candidates pay for a swept point/circle intersection. */
-const segmentCircleRectHit = (
+export const segmentCircleRectHit = (
   startX: number, startY: number, deltaX: number, deltaY: number, radius: number, rect: RectSpec
 ): SegmentHit | null => {
   const broad = segmentExpandedRectHit(startX, startY, deltaX, deltaY, radius, rect);

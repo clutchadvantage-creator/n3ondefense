@@ -14,6 +14,7 @@ export interface FloorActorDriver {
 interface Rider {
   x:number;y:number;crossing:boolean; stage:'ground'|'fall'|'eject';at:number;protectedUntil:number;
   originX:number;originY:number;landing:FloorPoint|null;seen:number;nextSearchAt:number;
+  traced:boolean;traceHit:FloorPoint|null;
 }
 export interface FloorActorPorts {
   validGround(x:number,y:number,radius:number):boolean;
@@ -33,7 +34,17 @@ export class DynamicFloorActors {
   constructor(floor:DynamicFloorModel,ports:FloorActorPorts){this.floor=floor;this.ports=ports;}
   beginFrame():void{this.frame++;}
   isFalling(actor:FloorActorDriver):boolean {return this.riders.get(actor)?.stage!=='ground'&&this.riders.has(actor);}
-  relocated(actor:FloorActorDriver):void {const state=this.riders.get(actor);if(state){state.x=actor.x;state.y=actor.y;state.crossing=true;}}
+  relocated(actor:FloorActorDriver):void {const state=this.riders.get(actor);if(state){state.x=actor.x;state.y=actor.y;state.crossing=true;state.traced=false;state.traceHit=null;}}
+  /** Consume each real ricochet segment, not the chord between frame endpoints.
+   * Only the first lost-support point is retained; no path arrays or new loop. */
+  trace(actor:FloorActorDriver,x:number,y:number,toX:number,toY:number):void {
+    const state=this.riders.get(actor);
+    if(!state||state.stage!=='ground'||actor.airborne||actor.crossing||state.crossing)return;
+    state.traced=true;
+    if(state.traceHit)return;
+    const t=this.floor.sweep(x,y,toX,toY,actor.radius);
+    if(t<1){const into=Math.min(1,t+.03);state.traceHit={x:x+(toX-x)*into,y:y+(toY-y)*into};}
+  }
   private safe(x:number,y:number,r:number):boolean{return this.floor.isSupported(x,y,r,true)&&this.ports.validGround(x,y,r);}
   private landing(x:number,y:number,r:number):FloorPoint|null {
     // Small deterministic local search. Called once per impact, never a map-wide teleport.
@@ -54,7 +65,7 @@ export class DynamicFloorActors {
     if(!actor.active){actor.present(1,1,0);actor.halt(false);this.riders.delete(actor);return;}
     const now=this.floor.elapsed,r=actor.radius;
     let state=this.riders.get(actor);
-    if(!state){state={x:actor.x,y:actor.y,crossing:actor.crossing,stage:'ground',at:now,protectedUntil:0,originX:actor.x,originY:actor.y,landing:null,seen:this.frame,nextSearchAt:0};this.riders.set(actor,state);}
+    if(!state){state={x:actor.x,y:actor.y,crossing:actor.crossing,stage:'ground',at:now,protectedUntil:0,originX:actor.x,originY:actor.y,landing:null,seen:this.frame,nextSearchAt:0,traced:false,traceHit:null};this.riders.set(actor,state);}
     state.seen=this.frame;
     if(actor.airborne){state.x=actor.x;state.y=actor.y;return;}
     if(state.stage==='fall'){
@@ -106,16 +117,19 @@ export class DynamicFloorActors {
         break;
       }
     }
-    if(actor.crossing){state.x=actor.x;state.y=actor.y;state.crossing=true;return;}
+    if(actor.crossing){state.x=actor.x;state.y=actor.y;state.crossing=true;state.traced=false;state.traceHit=null;return;}
     const supported=this.floor.isSupported(actor.x,actor.y,r);
-    const sweep=state.crossing?1:this.floor.sweep(state.x,state.y,actor.x,actor.y,r);
-    if(!supported||sweep<1){
+    const traceHit=state.traceHit;
+    const sweep=state.crossing||state.traced?1:this.floor.sweep(state.x,state.y,actor.x,actor.y,r);
+    state.traced=false;state.traceHit=null;
+    if(!supported||sweep<1||traceHit){
       // Walking enemies avoid a new edge; removal under their feet or a push from
       // unsupported ground still makes them fall. Players intentionally step off.
       if(actor.kind==='enemy'&&!actor.forcedMovement&&this.floor.isSupported(state.x,state.y,r)&&sweep<1){
         const t=Math.max(0,sweep-.02);actor.move(state.x+(actor.x-state.x)*t,state.y+(actor.y-state.y)*t);actor.halt(false);
       }else{
-        if(sweep<1&&supported){const t=Math.min(1,sweep+.03);actor.move(state.x+(actor.x-state.x)*t,state.y+(actor.y-state.y)*t);}
+        if(traceHit)actor.move(traceHit.x,traceHit.y);
+        else if(sweep<1&&supported){const t=Math.min(1,sweep+.03);actor.move(state.x+(actor.x-state.x)*t,state.y+(actor.y-state.y)*t);}
         state.originX=actor.x;state.originY=actor.y;state.at=now;state.stage='fall';actor.halt(true);
       }
     }

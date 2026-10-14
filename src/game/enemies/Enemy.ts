@@ -3,6 +3,8 @@ import { authoritativeEchoDamage, type EchoDamageStamp } from '../echo/EchoRules
 import type { EnemyType } from '../types';
 import { ENEMY_BALANCE } from '../config/balance';
 import { GameplayTelemetryRecorder, type CombatDamageSource } from '../telemetry/GameplayTelemetryRecorder.ts';
+import { SweptPlayerBody } from '../physics/SweptPlayerBody.ts';
+import { KINETIC } from '../config/kinetic.ts';
 
 export const ENEMY_VISUAL_SCALE = 1.9;
 export const ENEMY_VISUAL_SIZE_BONUS = 2;
@@ -51,7 +53,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.stats = stats;
     this.hp = stats.hp;
     scene.add.existing(this);
-    scene.physics.add.existing(this);
+    if(scene.scene.key==='arena'&&stats.type!=='drone'){
+      const body=new SweptPlayerBody(scene.physics.world,this);this.body=body;scene.physics.world.add(body);
+      body.enableKinetics(KINETIC.mass[stats.type]);body.sweepOnlyWithMomentum=true;
+    }else scene.physics.add.existing(this);
 
     const bodyScale = stats.type === 'tank' || stats.type === 'star' ? 0.86 : 0.72;
     this.body?.setSize(stats.size * bodyScale, stats.size * bodyScale, true);
@@ -81,6 +86,22 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (!this.damageFlashActive) this.damageFlashUntil = this.scene.time.now + 50;
     this.damageFlashActive = true;
     return applied;
+  }
+
+  override setVelocity(x:number,y=x):this {
+    if(this.body instanceof SweptPlayerBody&&this.body.kinetic?.remaining)
+      this.body.steer(x,y,this.scene.game.loop.delta/1000);
+    else super.setVelocity(x,y);
+    return this;
+  }
+
+  /** Existing physical forces opt in explicitly; ordinary AI stays in charge
+   * when contact/knockback momentum settles. Other scenes retain their behavior. */
+  setExternalVelocity(x:number,y:number):this {
+    if(this.body instanceof SweptPlayerBody)this.body.externalVelocity(x,y);
+    else super.setVelocity(x,y);
+    this.setData('floorForcedUntil',this.scene.time.now+KINETIC.enemyMomentumSeconds*1000);
+    return this;
   }
 
   updateDamageFlash(now: number): void {

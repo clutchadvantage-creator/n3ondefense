@@ -57,6 +57,8 @@ These desktop RTX 5070 measurements cover ordinary Normal combat pressure, not l
 
 The [October 13 follow-up](lava-recovery-and-boss-performance.md) adds full-footprint Flux Core support, a fiery ballistic recovery, exact circular corner sweeps, throttled blocked-recovery searches, and Supreme round 26 artillery stress measurements. Its validation and limits are recorded separately from the initial Normal-mode measurements above.
 
+The [kinetic rebound update](kinetic-rebound.md) feeds actual ricochet segments into support checks, preserves momentum while riding panels, and clears collision energy during falls, ejection and teleports. It includes rebound-induced lava tests and separate Supreme 26 performance measurements.
+
 Reproduce with `npm.cmd test`, `npm.cmd run build`, and an isolated hardware-enabled DEV browser on CDP port 9225:
 
 ```powershell

@@ -1,5 +1,6 @@
 import { createArtilleryMarker } from './ArtilleryMarker.ts';
 import Phaser from 'phaser';
+import { SweptPlayerBody } from '../physics/SweptPlayerBody.ts';
 import { BOSS_ARCHETYPES, BOSS_BALANCE, getBossDamageMultiplier, type BossArchetype } from '../config/bossBalance';
 import type { RunModeFamily } from '../config/modeBalance.ts';
 import type { RectSpec } from '../types';
@@ -283,7 +284,9 @@ export class BossEncounter {
 
   private controlledMovement(speed:number):void {
     const move=this.control!.move,scale=speed/Math.max(1,Math.hypot(move.x,move.y));
-    this.boss.setVelocity(move.x*scale,move.y*scale);
+    const body=this.boss.body;
+    if(body instanceof SweptPlayerBody)body.steer(move.x*scale,move.y*scale,this.scene.game.loop.delta/1000);
+    else this.boss.setVelocity(move.x*scale,move.y*scale);
   }
 
   private primaryInterval(nativeMs: number): number {

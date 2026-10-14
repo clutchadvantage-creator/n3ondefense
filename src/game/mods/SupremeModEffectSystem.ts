@@ -155,7 +155,7 @@ export class SupremeModEffectSystem {
         enemy.takeDamage(damage, 'bombSite');
         const resistance = enemy.stats.type === 'star' ? 0.22 : enemy.stats.type === 'tank' ? 0.38 : enemy.stats.type === 'disruptor' ? 0.65 : 1;
         const inverseDistance = distanceSquared > 1 ? 1 / Math.sqrt(distanceSquared) : 1;
-        enemy.setVelocity((distanceSquared > 1 ? dx : 1) * inverseDistance * config.knockbackSpeed * resistance,
+        enemy.setExternalVelocity((distanceSquared > 1 ? dx : 1) * inverseDistance * config.knockbackSpeed * resistance,
           (distanceSquared > 1 ? dy : 0) * inverseDistance * config.knockbackSpeed * resistance);
         enemy.defuseInterruptedUntil = Math.max(enemy.defuseInterruptedUntil, now + config.staggerMs * resistance);
       }

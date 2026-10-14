@@ -5,6 +5,8 @@ import type { RunModeFamily } from '../config/modeBalance.ts';
 import type { RectSpec } from '../types.ts';
 import { BossLegRig } from './BossLegRig.ts';
 import { BrawlerMaceMotion } from './BrawlerMaceMotion.ts';
+import { SweptPlayerBody } from '../physics/SweptPlayerBody.ts';
+import { KINETIC } from '../config/kinetic.ts';
 import { BrawlerMaceRig } from './BrawlerMaceRig.ts';
 
 export type BossDamageSource = 'weapon' | 'echo' | 'turret' | 'mine' | 'fence' | 'hazard';
@@ -57,7 +59,10 @@ export class Boss extends Phaser.Physics.Arcade.Sprite {
     ));
     this.hp = this.maxHp;
     scene.add.existing(this);
-    scene.physics.add.existing(this);
+    if(this.faction==='player'&&scene.scene.key==='arena'){
+      const body=new SweptPlayerBody(scene.physics.world,this);this.body=body;scene.physics.world.add(body);
+      body.enableKinetics(KINETIC.mass.controlledBoss,true);
+    }else scene.physics.add.existing(this);
     this.setDisplaySize(archetype === 'artillery' ? 112 : 102, archetype === 'artillery' ? 96 : 102)
       .clearTint().setDepth(9);
     this.body?.setCircle(36, Math.max(0, (this.displayWidth - 72) * 0.5), Math.max(0, (this.displayHeight - 72) * 0.5));

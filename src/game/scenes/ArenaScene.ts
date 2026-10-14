@@ -11,6 +11,9 @@ import { WeeklyCompletionTracker } from '../progression/WeeklyCompletionTracker.
 import type { WeeklyOperationsState } from '../progression/WeeklyOperations.ts';
 import { shakeGameplayCamera } from '../vfx/GameplayCameraShake.ts';
 import Phaser from 'phaser';
+import { SweptPlayerBody } from '../physics/SweptPlayerBody.ts';
+import { ArenaKinetics } from '../physics/ArenaKinetics.ts';
+import { KineticImpactVfx } from '../vfx/KineticImpactVfx.ts';
 import { normalizeWorldEventRotation, WorldEventRotation } from '../arcade/WorldEventRotation.ts';
 import { ARCADE_EVENT_DEFINITIONS } from '../arcade/ArcadeEventRegistry.ts';
 import { ANOMALY_DEFINITIONS } from '../anomalies/AnomalyRegistry.ts';
@@ -502,6 +505,8 @@ export class ArenaScene extends Phaser.Scene {
   private enemies: Enemy[] = [];
   private readonly enemyColliders = new Map<Enemy, Phaser.Physics.Arcade.Collider[]>();
   private playerWallCollider: Phaser.Physics.Arcade.Collider | null = null;
+  private kinetics: ArenaKinetics | null = null;
+  private kineticVfx: KineticImpactVfx | null = null;
   private bossWallCollider: Phaser.Physics.Arcade.Collider | null = null;
   private supremeBossWallColliders: Phaser.Physics.Arcade.Collider[] = [];
   private projectiles: Projectile[] = [];
@@ -856,6 +861,9 @@ export class ArenaScene extends Phaser.Scene {
     const push = (ENEMY_SEPARATION_RADIUS - distance) * 1.8;
     const body = enemy.body as Phaser.Physics.Arcade.Body | null;
     if (!body) return;
+    // The contact solver already separates launched actors. Adding the legacy
+    // crowd nudge every frame here would accumulate energy during that coast.
+    if(body instanceof SweptPlayerBody&&body.kinetic?.remaining)return;
     body.velocity.x += dx / distance * push;
     body.velocity.y += dy / distance * push;
   };
@@ -881,6 +889,7 @@ export class ArenaScene extends Phaser.Scene {
     this.refreshAbilityBindings();
     const settings = SaveSystem.get().settings;
     this.particlesEnabled = settings.particles;
+    this.kineticVfx?.setParticles(settings.particles);
     this.aimSettings = normalizeAimSettings(settings.aim);
     this.crosshairValid = null;
     this.pointerLock?.setSensitivity(this.aimSettings.mouseSensitivity);
@@ -1458,6 +1467,8 @@ export class ArenaScene extends Phaser.Scene {
       const body = this.walls.create(wall.x + wall.w * 0.5, wall.y + wall.h * 0.5, 'pixel');
       body.setDisplaySize(wall.w, wall.h);
       body.setVisible(false);
+      const bounds=layout.generation.bounds;
+      body.setData('kineticSurface',wall.x<=bounds.x||wall.y<=bounds.y||wall.x+wall.w>=bounds.x+bounds.w||wall.y+wall.h>=bounds.y+bounds.h?'outer':'inner');
       body.refreshBody();
       this.wallRects.push({ ...wall });
     }
@@ -1471,6 +1482,7 @@ export class ArenaScene extends Phaser.Scene {
       };
       const body = this.walls.create(obstacle.x, obstacle.y, 'pixel');
       body.setDisplaySize(rect.w, rect.h);
+      body.setData('kineticSurface','obstacle');
       body.setVisible(false);
       body.refreshBody();
       this.wallRects.push(rect);
@@ -1546,6 +1558,19 @@ export class ArenaScene extends Phaser.Scene {
 
     this.playerWallCollider?.destroy();
     this.playerWallCollider = this.physics.add.collider(this.player, this.walls);
+    (this.player.body as SweptPlayerBody).enableKinetics();
+    this.kinetics?.destroy();this.kineticVfx?.destroy();
+    this.kineticVfx=new KineticImpactVfx(this,this.particlesEnabled);
+    this.kinetics=new ArenaKinetics(this,this.enemySeparationGrid,{
+      player:()=>this.possession?.boss??this.player,
+      bosses:()=>{const bosses=this.activeMajorBosses(),mini=this.arcadeController?.getBossTarget();if(mini)bosses.push(mini);return bosses;},
+      blocked:()=>!!this.systemInfusions?.railActive||this.floorFalling(this.player),
+      contact:enemy=>this.applyEnemyContactDamage(enemy),
+      impact:(actor,impact)=>this.kineticVfx?.emit(actor,impact,this.time.now),
+      travel:(actor,x,y,toX,toY)=>{const driver=this.floorDrivers.get(actor);if(driver)this.floorActors?.trace(driver,x,y,toX,toY);},
+      relocated:actor=>{const driver=this.floorDrivers.get(actor);if(driver)this.floorActors?.relocated(driver);}
+    });
+    this.kinetics.attach(this.player);
   }
 
   private createHudLayer(): void {
@@ -1754,6 +1779,7 @@ export class ArenaScene extends Phaser.Scene {
       // continue rendering during the short non-interactive Victory hold.
       this.mineExplosionVfx.update(now);
       this.bombExplosionCosmeticVfx.update(now);
+      this.kineticVfx?.update(now);
       this.arenaSmashables?.update(now);
     }
     if (!this.tutorialHardPaused && !this.legendaryRevealInProgress
@@ -2012,12 +2038,13 @@ export class ArenaScene extends Phaser.Scene {
         kind:player||controlled?'player':enemy||boss?'enemy':'object',
         get airborne(){return enemy?target.airborne:target instanceof Mine&&arena.time.now<target.landedAt;},
         get crossing(){return player&&(arena.time.now<target.dashUntil||!!arena.systemInfusions?.railActive);},
-        get forcedMovement(){return enemy&&arena.time.now<(target.getData('floorForcedUntil')??0);},
-        move:(x,y)=>{actor.setPosition(x,y);if(controlled)arena.player.setPosition(x,y);if(body){const vx=body.velocity.x,vy=body.velocity.y;body.reset(x,y);body.setVelocity(vx,vy);}},
+        get forcedMovement(){return enemy&&(arena.time.now<(target.getData('floorForcedUntil')??0)||(body instanceof SweptPlayerBody&&!!body.kinetic?.remaining));},
+        move:(x,y)=>{actor.setPosition(x,y);if(controlled)arena.player.setPosition(x,y);if(body instanceof SweptPlayerBody)body.moveWithSupport(x,y);else if(body){const vx=body.velocity.x,vy=body.velocity.y;body.reset(x,y);body.setVelocity(vx,vy);}},
         halt:falling=>{
           if(!actor.active)return;
           if(boss)target.setData('floorFalling',falling);
           body?.setVelocity(0,0);
+          if(body instanceof SweptPlayerBody)body.resetMomentum();
           if(body&&falling&&!suspended){fallRotation=actor.rotation;bodyWasEnabled=body.enable;body.enable=false;suspended=true;}
           if(body&&!falling&&suspended){body.reset(actor.x,actor.y);body.enable=bodyWasEnabled;suspended=false;}
         },
@@ -2458,7 +2485,7 @@ export class ArenaScene extends Phaser.Scene {
     this.fxCirclePool.release(circle);
   }
 
-  private updatePlayerMovement(now: number): void {
+  private updatePlayerMovement(now: number, dt=this.game.loop.delta/1000): void {
     if(this.floorFalling(this.player)){this.player.setVelocity(0,0);return;}
     if(this.systemInfusions?.railActive){this.player.setVelocity(0,0);return;}
     if(this.possession){
@@ -2499,9 +2526,9 @@ export class ArenaScene extends Phaser.Scene {
         const speedScale = this.playerInput.activeDevice === 'gamepad'
           ? this.player.speed * fieldSpeed
           : this.player.speed * fieldSpeed / Math.sqrt(movementLengthSquared);
-        this.player.setVelocity(movementX * speedScale, movementY * speedScale);
+        (this.player.body as SweptPlayerBody).steer(movementX * speedScale, movementY * speedScale,dt);
       } else {
-        this.player.setVelocity(0, 0);
+        (this.player.body as SweptPlayerBody).steer(0,0,dt);
       }
     }
 
@@ -2515,6 +2542,7 @@ export class ArenaScene extends Phaser.Scene {
       } else {
         this.player.spendEnergy(PLAYER_BALANCE.dashEnergyCost);
         GameplayTelemetryRecorder.recordAbilityUse('dash', PLAYER_BALANCE.dashEnergyCost);
+        (this.player.body as SweptPlayerBody).resetMomentum();
         this.player.dashTowardPoint(aim.x, aim.y, now);
         TutorialEventBus.emit('combat.ability.dash');
         if (this.sound.get('sfx-boost')) {
@@ -2941,12 +2969,10 @@ export class ArenaScene extends Phaser.Scene {
       this.enemies.push(enemy);
       return enemy;
     }
+    this.kinetics?.attach(enemy);
     const wallCollider = this.physics.add.collider(enemy, this.walls);
     const playerCollider = this.physics.add.collider(enemy, this.player, () => {
-      const hit = this.player.takeDamage(enemy.stats.damage);
-      if (hit) {
-        GameplayTelemetryRecorder.recordPlayerDamage('enemy-contact', enemy.stats.damage);
-      }
+      this.applyEnemyContactDamage(enemy);
     },()=>!this.systemInfusions?.railActive&&!this.possession);
     this.enemyColliders.set(enemy, [wallCollider, playerCollider]);
 
@@ -3242,7 +3268,7 @@ export class ArenaScene extends Phaser.Scene {
       const resistance = enemy.stats.type === 'disruptor' ? 0.5 : 1;
       const speed = MOD_BALANCE.emergencyShield.knockbackSpeed * resistance;
       enemy.setData('floorForcedUntil',now+150);
-      enemy.setVelocity(dx * inverseDistance * speed, dy * inverseDistance * speed);
+      enemy.setExternalVelocity(dx * inverseDistance * speed, dy * inverseDistance * speed);
       enemy.defuseInterruptedUntil = now + 600;
     }
   }
@@ -5075,7 +5101,7 @@ export class ArenaScene extends Phaser.Scene {
       const speed = pullStrength * resistance;
       if((this.dynamicFloor?.sweep(mine.sprite.x,mine.sprite.y,enemy.x,enemy.y,0)??1)<1)continue;
       enemy.setData('floorForcedUntil',now+150);
-      enemy.setVelocity(dx * inverseDistance * speed, dy * inverseDistance * speed);
+      enemy.setExternalVelocity(dx * inverseDistance * speed, dy * inverseDistance * speed);
     }
     if (now - mine.lastMagneticPulseAt >= 80) {
       mine.lastMagneticPulseAt = now;
@@ -5357,6 +5383,7 @@ export class ArenaScene extends Phaser.Scene {
         },particlesEnabled:this.particlesEnabled,legBlockers:this.getBlockers()});
     this.ascensionUntil=until;this.possessionRemainingMs=Math.max(0,until-this.time.now);
     this.ascensionWallCollider=this.physics.add.collider(this.possession.boss,this.walls);
+    this.kinetics?.attach(this.possession.boss);
     this.player.combatBody=this.possession.boss;
     (this.player.body as Phaser.Physics.Arcade.Body).reset(spawn.x,spawn.y);
     (this.player.body as Phaser.Physics.Arcade.Body).enable=false;
@@ -5407,7 +5434,7 @@ export class ArenaScene extends Phaser.Scene {
       if(attack.startsWith('brawler')&&(this.dynamicFloor?.sweep(x,y,enemy.x,enemy.y,0)??1)<1)continue;
       const applied=enemy.takeDamage(damage,'weapon');
       if(enemy.isDead())this.triggerSplitCurrent(enemy,applied);
-      else if(attack.startsWith('brawler')){enemy.setData('floorForcedUntil',this.time.now+150);const d=Math.hypot(enemy.x-x,enemy.y-y)||1;enemy.setVelocity((enemy.x-x)/d*180,(enemy.y-y)/d*180);}
+      else if(attack.startsWith('brawler')){const d=Math.hypot(enemy.x-x,enemy.y-y)||1;enemy.setExternalVelocity((enemy.x-x)/d*180,(enemy.y-y)/d*180);}
     }
     for(const boss of this.activeMajorBosses())if(boss.active&&!boss.isDefeated&&intersects(boss))boss.takeDamage(damage,'weapon');
   }
@@ -6538,6 +6565,15 @@ export class ArenaScene extends Phaser.Scene {
   private isNearBombSite(x: number, y: number, radius: number): boolean {
     const radiusSquared = radius * radius;
     return this.bombSites.sites.some((site) => (site.x - x) ** 2 + (site.y - y) ** 2 < radiusSquared);
+  }
+
+  private applyEnemyContactDamage(enemy:Enemy):void {
+    if(!enemy.active||enemy.isDead()||this.systemInfusions?.railActive||this.floorFalling(this.player)||this.floorFalling(enemy))return;
+    if(this.possession){
+      if(this.time.now-enemy.lastAttackMs<ENEMY_BALANCE[enemy.stats.type].attackCooldownMs)return;
+      enemy.lastAttackMs=this.time.now;
+    }
+    if(this.player.takeDamage(enemy.stats.damage))GameplayTelemetryRecorder.recordPlayerDamage('enemy-contact',enemy.stats.damage);
   }
 
   private removeArcadeEnemy(enemy: Enemy): void {
@@ -8830,6 +8866,9 @@ export class ArenaScene extends Phaser.Scene {
     this.mineSalvoInput.cancel();
     this.pendingMineSalvo = false;
     this.player?.setVelocity(0, 0);
+    if(this.player?.body instanceof SweptPlayerBody)this.player.body.resetMomentum();
+    if(this.possession?.boss.body instanceof SweptPlayerBody)this.possession.boss.body.resetMomentum();
+    this.kineticVfx?.reset();
     this.input.keyboard?.resetKeys();
   }
 
@@ -9812,6 +9851,7 @@ export class ArenaScene extends Phaser.Scene {
       }
     });
     this.retireRoundOwner('player-collider', () => this.playerWallCollider?.destroy());
+    this.retireRoundOwner('kinetic-contacts',()=>{this.kinetics?.destroy();this.kinetics=null;this.kineticVfx?.destroy();this.kineticVfx=null;});
     this.playerWallCollider = null;
     this.retireRoundOwner('boss-collider', () => this.bossWallCollider?.destroy());
     this.bossWallCollider = null;
@@ -9892,6 +9932,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private cleanup(): void {
+    this.kinetics?.destroy();this.kinetics=null;this.kineticVfx?.destroy();this.kineticVfx=null;
     // Phaser shuts down the display list, tweens, and Arcade Physics before
     // emitting the Scene shutdown event handled here. Only release our
     // references at this point; endCurrentRoundRuntime handles explicit teardown

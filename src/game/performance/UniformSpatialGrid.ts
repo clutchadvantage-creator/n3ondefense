@@ -41,7 +41,8 @@ export class UniformSpatialGrid<T extends SpatialPoint> {
     this.activeBuckets.length = 0;
   }
 
-  forEachNearby(x: number, y: number, radius: number, visit: (item: T) => void): void {
+  forEachNearby(x: number, y: number, radius: number, visit: (item: T) => void, limit=Infinity): number {
+    let visited=0;
     const minX = Math.floor((x - radius) / this.cellSize);
     const maxX = Math.floor((x + radius) / this.cellSize);
     const minY = Math.floor((y - radius) / this.cellSize);
@@ -51,9 +52,13 @@ export class UniformSpatialGrid<T extends SpatialPoint> {
       for (let cellX = minX; cellX <= maxX; cellX += 1) {
         const bucket = this.buckets.get(this.key(cellX, cellY));
         if (!bucket) continue;
-        for (let index = 0; index < bucket.length; index += 1) visit(bucket[index]);
+        for (let index = 0; index < bucket.length; index += 1) {
+          if(visited>=limit)return visited;
+          visit(bucket[index]);visited++;
+        }
       }
     }
+    return visited;
   }
 
   private key(cellX: number, cellY: number): number {

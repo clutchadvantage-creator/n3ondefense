@@ -565,7 +565,7 @@ export class BombsiteModSystem {
       if (damage > 0) totalDamage += enemy.takeDamage(damage, 'bombSite');
       const resistance = enemy.stats.type === 'star' ? 0.2 : enemy.stats.type === 'tank' ? 0.35 : enemy.stats.type === 'disruptor' ? 0.65 : 1;
       const inverseDistance = distanceSquared > 1 ? 1 / Math.sqrt(distanceSquared) : 1;
-      enemy.setVelocity((distanceSquared > 1 ? dx : 1) * inverseDistance * speed * resistance, (distanceSquared > 1 ? dy : 0) * inverseDistance * speed * resistance);
+      enemy.setExternalVelocity((distanceSquared > 1 ? dx : 1) * inverseDistance * speed * resistance, (distanceSquared > 1 ? dy : 0) * inverseDistance * speed * resistance);
       enemy.defuseInterruptedUntil = Math.max(enemy.defuseInterruptedUntil, this.scene.time.now + staggerMs * resistance);
     }
     if (totalDamage > 0) GameplayTelemetryRecorder.recordModEffect(modId, 'damage', totalDamage);
