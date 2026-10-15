@@ -26,20 +26,20 @@
     check(p.x<=x+168.01&&b.kinetic.impacts===hits,'slow held contact slides without bounce jitter');
     const runs=[];
     for(const speed of [265,900,2400,8000]){
-      reset(x+155);b.setVelocity(speed,0);const before=b.kinetic.impacts;
+      reset(x+155);a.updatePlayerMovement(a.time.now);b.setVelocity(speed,0);const before=b.kinetic.impacts;
       for(let i=0;i<8&&b.kinetic.impacts===before;i++)tick();
       check(b.velocity.x<0&&b.kinetic.impacts>before,'live wall reverses incoming '+speed);
       const after=b.velocity.x;a.updatePlayerMovement(a.time.now,1/60);
-      check(b.velocity.x<0,'movement input preserves rebound '+speed);
+      check(b.velocity.x<0&&b.kinetic.remaining===0,'unchanged input permits bounded response without momentum '+speed);
       runs.push({speed,reflected:after,x:p.x});
     }
     reset(x+150,y-30);b.setVelocity(1600,600);tick();tick();
-    check(b.velocity.x<0&&b.velocity.y>0,'glancing wall banks along its tangent');
+    check(b.velocity.x<0&&b.kinetic.operative.remaining>0,'glancing operative collision produces short outward response');
     reset(x+150);p.stats.moveSpeed=265;p.dashTowardPoint(x+1000,y,a.time.now);tick();tick();
     check(b.velocity.x<0&&p.dashUntil>a.time.now,'Dash ricochets during its original active window');
     p.dashUntil=0;reset(x+155);p.stats.moveSpeed=265;const heldStart=b.kinetic.impacts;
     for(let i=0;i<240;i++)tick(1000/60,true);
-    check(b.kinetic.impacts-heldStart<12,'holding toward wall creates separated impacts, no per-frame pump');
+    check(b.kinetic.impacts-heldStart===1,'holding toward wall produces one response with no repeated bounce');
     check(b.velocity.length()<400,'held wall input does not create runaway energy');
     reset(x+160);b.setVelocity(0,0);tick();
     b.position.x+=80;b.updateCenter();b.setVelocity(8000,0);tick();
@@ -112,7 +112,7 @@
     check(vfx.pulses.every(p=>!p.ghost.visible),'new impacts respect reduced effects immediately');
     vfx.update(a.time.now+500);check(vfx.pulses.every(p=>!p.active&&!p.ghost.visible),'impact visuals fully retire');
     a.playerInput.pressed=pressed;a.playerInput.held=held;a.getAimWorldPoint=aim;
-    report.cases.push({name:'walls, steering, Dash, mass contacts, damage, lava, Ascension, pause and pooled presentation',passed:true});
+    report.cases.push({name:'walls, bounded operative response, Dash, mass contacts, damage, lava, Ascension, pause and pooled presentation',passed:true});
     if(!globalThis.__n3onLayoutAuditOptions?.capture){game.scene.stop('arena');await wait(100);
       check(kinetic.bodies.size===0&&vfx.pulses.length===0,'scene shutdown releases kinetic bodies and effects');}
   }catch(error){report.errors.push(error.stack??String(error));}finally{context?.restoreInput();report.running=false;}})();return 'Kinetic integration started';

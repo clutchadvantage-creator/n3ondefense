@@ -53,8 +53,8 @@ test('repeated same-contact corrections cannot pump energy; real departure remai
   const first=reflectKinetic(1000,0,-1,0,'outer'),repeat=reflectKinetic(1000,0,-1,0,'outer',false,true);
   assert.ok(Math.abs(repeat.vx)<Math.abs(first.vx));near(reflectKinetic(-500,0,-1,0,'outer').vx,-500);
 });
-test('rebound steering preserves momentum on next input frame and accepts lateral steering',()=>{
-  const s=kineticState();s.remaining=C.momentumSeconds;
+test('ground enemy steering retains its separate knockback response',()=>{
+  const s=kineticState(C.mass.grunt);s.remaining=C.enemyMomentumSeconds;
   const v=steerKinetic(-1400,0,265,265,1/60,s);assert.ok(v.x< -1300&&v.y>0);
   resetKinetic(s);assert.deepEqual(steerKinetic(-1400,0,265,0,1/60,s),{x:265,y:0});
 });

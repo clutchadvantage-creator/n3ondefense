@@ -45,8 +45,18 @@ export class ArenaKinetics {
       get vx(){return body.velocity.x;},get vy(){return body.velocity.y;},
       get radius(){return Math.max(body.halfWidth,body.halfHeight);},
       get mass(){return body instanceof SweptPlayerBody?body.kinetic?.mass??1:Infinity;},
-      receive:(vx,vy)=>{
-        if(body instanceof SweptPlayerBody){body.externalVelocity(vx,vy);actor.setData('floorForcedUntil',this.scene.time.now+C.enemyMomentumSeconds*1000);}
+      receive:(vx,vy,nx,ny,speed)=>{
+        if(body instanceof SweptPlayerBody){
+          const response=body.kinetic?.operative;
+          if(response&&this.subject){
+            const source=this.target(this.subject);
+            if(response.collide(source,nx,ny,speed,body.center.x,body.center.y,source)){
+              body.setVelocity(response.velocityX,response.velocityY);
+              body.kinetic!.impacts++;
+              this.ports.impact(actor,{x:body.center.x-nx*body.halfWidth,y:body.center.y-ny*body.halfHeight,nx,ny,speed,surface:'body'});
+            }
+          }else{body.externalVelocity(vx,vy);actor.setData('floorForcedUntil',this.scene.time.now+C.enemyMomentumSeconds*1000);}
+        }
       },
       contact:()=>{
         this.contacts++;

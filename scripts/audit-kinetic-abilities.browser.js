@@ -16,7 +16,7 @@
     const fence=a.fences[0],cx=(fence.x1+fence.x2)/2,cy=(fence.y1+fence.y2)/2;
     const d=Math.hypot(fence.x2-fence.x1,fence.y2-fence.y1),nx=-(fence.y2-fence.y1)/d,ny=(fence.x2-fence.x1)/d;
     b.reset(cx-nx*55,cy-ny*55);b.externalVelocity(nx*700,ny*700);const impacts=b.kinetic.impacts;
-    for(let i=0;i<12;i++){tick();a.updateFenceObstruction(a.time.now);}
+    for(let i=0;i<12;i++){b.driveFromInput(nx*700,ny*700);tick();a.updateFenceObstruction(a.time.now);}
     check((p.x-cx)*nx+(p.y-cy)*ny>20&&b.kinetic.impacts===impacts,'friendly fence remains passable during fast movement');
     b.reset(origin.x+230,origin.y);const enemy=a.spawnEnemy('grunt',false,{x:cx-nx*55,y:cy-ny*55});
     enemy.body.reset(cx-nx*55,cy-ny*55);a.updateFenceObstruction(a.time.now);enemy.setExternalVelocity(nx*700,ny*700);
@@ -28,7 +28,7 @@
       b.reset(origin.x,origin.y);a.getAimWorldPoint=()=>point;p.energy=p.energyStats.max;a.abilityCooldownUntil[type]=0;
       a.placeAbility(type,a.time.now);check((type==='turret'?a.turrets:a.mines).length>0,'real '+type+' placed');
       b.reset(point.x-55,point.y);b.externalVelocity(700,0);const before=b.kinetic.impacts;
-      for(let i=0;i<12;i++)tick();check(p.x>point.x+20&&b.kinetic.impacts===before,'friendly '+type+' remains passable');
+      for(let i=0;i<12;i++){b.driveFromInput(700,0);tick();}check(p.x>point.x+20&&b.kinetic.impacts===before,'friendly '+type+' remains passable');
     }
     const has=a.modRuntime.hasActiveInfusion,active=a.modRuntime.getActiveInfusions;
     a.modRuntime.hasActiveInfusion=id=>id==='relay-jump';a.modRuntime.getActiveInfusions=()=>['relay-jump'];

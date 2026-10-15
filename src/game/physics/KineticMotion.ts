@@ -1,19 +1,21 @@
 import { KINETIC as C, type KineticSurface } from '../config/kinetic.ts';
 import { segmentCircleRectHit, type SegmentHit } from './SweptCircleCollision.ts';
 import type { RectSpec } from '../types.ts';
+import type { OperativeRebound } from './OperativeRebound.ts';
 
-export interface KineticRect extends RectSpec { surface?: KineticSurface; velocityX?:number; velocityY?:number }
+export interface KineticRect extends RectSpec { surface?: KineticSurface; velocityX?:number; velocityY?:number; contactKey?: object }
 export interface KineticImpact { x:number;y:number;nx:number;ny:number;speed:number;surface:KineticSurface }
-export interface KineticTarget { x:number;y:number;vx:number;vy:number;radius:number;mass:number; receive(vx:number,vy:number):void; contact():void }
+export interface KineticTarget { x:number;y:number;vx:number;vy:number;radius:number;mass:number; receive(vx:number,vy:number,nx:number,ny:number,speed:number):void; contact():void }
 export interface KineticHit extends SegmentHit { target:KineticTarget }
 export interface KineticState {
   mass:number; heavy:boolean; remaining:number; clock:number; lastAt:number; lastNX:number;lastNY:number;
   impacts:number; iterations:number; exhausted:number;
+  operative?: OperativeRebound;
 }
 export function kineticState(mass=1,heavy=false):KineticState {
   return {mass,heavy,remaining:0,clock:0,lastAt:-100,lastNX:0,lastNY:0,impacts:0,iterations:0,exhausted:0};
 }
-export function resetKinetic(s:KineticState):void {s.remaining=0;s.lastAt=-100;s.lastNX=s.lastNY=0;}
+export function resetKinetic(s:KineticState):void {s.remaining=0;s.lastAt=-100;s.lastNX=s.lastNY=0;s.operative?.reset();}
 export function responseCurve(speed:number):number {
   const t=Math.max(0,Math.min(1,(speed-C.threshold)/(C.fullResponseSpeed-C.threshold)));
   return t*t*(3-2*t);
@@ -58,7 +60,10 @@ export function resolveKineticMotion(x:number,y:number,vx:number,vy:number,radiu
   let remaining=dt;state.iterations=0;
   for(let i=0;i<C.maxIterations&&remaining>C.cornerEpsilon;i++){
     state.iterations++;
-    const travel=Math.hypot(vx,vy)*remaining,step=remaining*Math.min(1,C.maxSweepDisplacement/Math.max(1,travel));
+    const operative=state.operative;
+    const travel=Math.hypot(vx,vy)*remaining;
+    let step=remaining*Math.min(1,C.maxSweepDisplacement/Math.max(1,travel));
+    if(operative?.remaining)step=Math.min(step,operative.remaining);
     const dx=vx*step,dy=vy*step;
     let nearest:SegmentHit|null=null,wall:KineticRect|undefined;
     for(const rect of rects){
@@ -67,23 +72,40 @@ export function resolveKineticMotion(x:number,y:number,vx:number,vy:number,radiu
     }
     const dynamic=findTarget?.(x,y,dx,dy,radius,step),target=dynamic&&(!nearest||dynamic.time<nearest.time)?dynamic.target:null;
     if(target)nearest=dynamic!;
-    if(!nearest){trace?.(x,y,x+dx,y+dy);x+=dx;y+=dy;remaining-=step;continue;}
+    if(!nearest){
+      trace?.(x,y,x+dx,y+dy);x+=dx;y+=dy;remaining-=step;
+      if(operative?.advance(step)){vx=operative.inputX;vy=operative.inputY;}
+      continue;
+    }
     const n=Math.hypot(nearest.normalX,nearest.normalY)||1,nx=nearest.normalX/n,ny=nearest.normalY/n;
     const t=Math.max(0,nearest.time-C.contactSkin/Math.max(C.contactSkin,Math.hypot(dx,dy)));
     trace?.(x,y,x+dx*t,y+dy*t);x+=dx*t;y+=dy*t;remaining-=step*nearest.time;
+    operative?.advance(step*nearest.time);
     const surface=target?'body':wall?.surface??'inner';
     let speed=0;
-    if(target){
+    let fresh=true;
+    if(operative){
+      const sx=target?.vx??wall?.velocityX??0,sy=target?.vy??wall?.velocityY??0;
+      const into=(vx-sx)*nx+(vy-sy)*ny;speed=Math.max(0,-into);
+      fresh=operative.collide(target??wall!.contactKey??wall!,nx,ny,speed,x,y,target);
+      if(target){
+        if(fresh){const response=exchangeMomentum(vx,vy,target.vx,target.vy,nx,ny,state.mass,target.mass);
+          target.receive(response.bvx,response.bvy,-nx,-ny,speed);}
+        target.contact();
+      }
+      if(fresh){vx=operative.velocityX;vy=operative.velocityY;}
+      else if(into<0){vx-=into*nx;vy-=into*ny;}
+    }else if(target){
       const response=exchangeMomentum(vx,vy,target.vx,target.vy,nx,ny,state.mass,target.mass);
       vx=response.avx;vy=response.avy;speed=response.speed;
-      target.receive(response.bvx,response.bvy);target.contact();
+      target.receive(response.bvx,response.bvy,-nx,-ny,speed);target.contact();
     }else{
       const repeated=state.clock-state.lastAt<C.repeatedImpactSeconds&&nx*state.lastNX+ny*state.lastNY>.98;
       const response=reflectKinetic(vx,vy,nx,ny,surface,state.heavy,repeated,wall?.velocityX,wall?.velocityY);
       vx=response.vx;vy=response.vy;speed=response.speed;
     }
-    if(speed>C.threshold){
-      state.remaining=Math.max(state.remaining,state.mass===C.mass.operative?C.momentumSeconds:C.enemyMomentumSeconds);
+    if(speed>C.threshold&&fresh){
+      if(!operative)state.remaining=Math.max(state.remaining,C.enemyMomentumSeconds);
       state.impacts++;state.lastAt=state.clock;state.lastNX=nx;state.lastNY=ny;
       onImpact?.({x:x-nx*radius,y:y-ny*radius,nx,ny,speed,surface});
     }
@@ -91,12 +113,18 @@ export function resolveKineticMotion(x:number,y:number,vx:number,vy:number,radiu
     x+=nx*C.cornerEpsilon*10;y+=ny*C.cornerEpsilon*10;
     if(nearest.time<C.cornerEpsilon&&Math.hypot(vx,vy)<C.cornerEpsilon)break;
   }
-  if(remaining>C.cornerEpsilon)state.exhausted++;
+  if(remaining>C.cornerEpsilon){
+    state.exhausted++;
+    // Blocked travel still consumes response time. A corner may not preserve
+    // an impulse indefinitely by resolving a zero-time contact every substep.
+    if(state.operative?.advance(remaining)){vx=state.operative.inputX;vy=state.operative.inputY;}
+  }
   return {x,y,vx,vy};
 }
 export function steerKinetic(vx:number,vy:number,desiredX:number,desiredY:number,dt:number,state:KineticState) {
   if(state.remaining<=0)return {x:desiredX,y:desiredY};
-  const rate=state.mass===C.mass.operative?C.steeringPerSecond:C.enemySteeringPerSecond;
+  if(state.operative)return {x:desiredX,y:desiredY};
+  const rate=C.enemySteeringPerSecond;
   const alpha=1-Math.exp(-rate*Math.max(0,Math.min(.05,dt)));
   return {x:vx+(desiredX-vx)*alpha,y:vy+(desiredY-vy)*alpha};
 }

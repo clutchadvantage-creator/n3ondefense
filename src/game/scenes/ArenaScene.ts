@@ -2490,7 +2490,7 @@ export class ArenaScene extends Phaser.Scene {
     this.fxCirclePool.release(circle);
   }
 
-  private updatePlayerMovement(now: number, dt=this.game.loop.delta/1000): void {
+  private updatePlayerMovement(now: number): void {
     if(this.floorFalling(this.player)){this.player.setVelocity(0,0);return;}
     if(this.systemInfusions?.railActive){this.player.setVelocity(0,0);return;}
     if(this.possession){
@@ -2524,16 +2524,17 @@ export class ArenaScene extends Phaser.Scene {
       }
     } else this.tutorialMoveOrigin = null;
 
-    if (now >= this.player.dashUntil) {
+    // Keep observing input during Dash so a collision can hand control back.
+    {
       const movementLengthSquared = movementX * movementX + movementY * movementY;
       if (movementLengthSquared > 0) {
         const fieldSpeed = this.bombsiteMods?.playerMoveSpeedMultiplier(this.player.x, this.player.y) ?? 1;
         const speedScale = this.playerInput.activeDevice === 'gamepad'
           ? this.player.speed * fieldSpeed
           : this.player.speed * fieldSpeed / Math.sqrt(movementLengthSquared);
-        (this.player.body as SweptPlayerBody).steer(movementX * speedScale, movementY * speedScale,dt);
+        (this.player.body as SweptPlayerBody).driveFromInput(movementX * speedScale, movementY * speedScale,now >= this.player.dashUntil);
       } else {
-        (this.player.body as SweptPlayerBody).steer(0,0,dt);
+        (this.player.body as SweptPlayerBody).driveFromInput(0,0,now >= this.player.dashUntil);
       }
     }
 

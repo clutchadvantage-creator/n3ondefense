@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { RectSpec } from '../types.ts';
 import { resolveSweptCircleMotion } from './SweptCircleCollision.ts';
 import { KINETIC } from '../config/kinetic.ts';
+import { OperativeRebound } from './OperativeRebound.ts';
 import { kineticState, resetKinetic, resolveKineticMotion, steerKinetic,
   type KineticState, type KineticRect, type KineticImpact, type FindKineticTarget, type TraceKineticTravel } from './KineticMotion.ts';
 
@@ -27,6 +28,7 @@ export class SweptPlayerBody extends Phaser.Physics.Arcade.Body {
 
   enableKinetics(mass:number=KINETIC.mass.operative,heavy=false):void {
     this.kinetic=kineticState(mass,heavy);this.mass=mass;this.resolvedX=this.resolvedY=NaN;
+    if(mass===KINETIC.mass.operative&&!heavy)this.kinetic.operative=new OperativeRebound();
   }
   resetMomentum():void {if(this.kinetic)resetKinetic(this.kinetic);}
   override reset(x:number,y:number):void {
@@ -42,7 +44,14 @@ export class SweptPlayerBody extends Phaser.Physics.Arcade.Body {
   }
   externalVelocity(vx:number,vy:number):void {
     this.setVelocity(vx,vy);
-    if(this.kinetic)this.kinetic.remaining=this.kinetic.mass===KINETIC.mass.operative?KINETIC.momentumSeconds:KINETIC.enemyMomentumSeconds;
+    if(this.kinetic&&!this.kinetic.operative)this.kinetic.remaining=KINETIC.enemyMomentumSeconds;
+  }
+  driveFromInput(vx:number,vy:number,ordinaryMovement=true):void {
+    const response=this.kinetic?.operative;
+    response?.input(vx,vy);
+    // A collision interrupts Dash travel, not its authored timer. Once control
+    // returns, subsequent direction changes/releases must also stay immediate.
+    if(ordinaryMovement||response?.inputOwnsMotion)this.setVelocity(response?.remaining?response.velocityX:vx,response?.remaining?response.velocityY:vy);
   }
   steer(vx:number,vy:number,dt:number):void {
     const v=this.kinetic?steerKinetic(this.velocity.x,this.velocity.y,vx,vy,dt,this.kinetic):{x:vx,y:vy};
@@ -52,32 +61,36 @@ export class SweptPlayerBody extends Phaser.Physics.Arcade.Body {
   override update(delta: number): void {
     if (!this.moves || this.directControl || delta <= 0) { super.update(delta); return; }
     const momentum=this.kinetic;
+    const response=momentum?.operative;
+    response?.separate(this.center.x,this.center.y,this.halfWidth);
     if(momentum){momentum.clock+=delta;momentum.remaining=Math.max(0,momentum.remaining-delta);}
     if(this.sweepOnlyWithMomentum&&!(momentum?.remaining)){
       this.resolvedX=this.resolvedY=NaN;super.update(delta);return;
     }
     this.prev.copy(this.position);
-    if(momentum&&momentum.remaining>0){
+    if(momentum&&!response&&momentum.remaining>0){
       const x=this.drag.x,y=this.drag.y,damping=this.useDamping;
       this.drag.set(Math.exp(-KINETIC.impulseDecayPerSecond));this.useDamping=true;
       this.world.updateMotion(this,delta);this.drag.set(x,y);this.useDamping=damping;
     }else this.world.updateMotion(this, delta);
+    if(response?.remaining)this.setVelocity(response.velocityX,response.velocityY);
     let startX = this.position.x + this.halfWidth;
     let startY = this.position.y + this.halfHeight;
     const dx = this.velocity.x * delta;
     const dy = this.velocity.y * delta;
     this.blockers.length = 0;
-    const append = (x: number, y: number, w: number, h: number, surface:KineticRect['surface']='inner'): void => {
+    const append = (x: number, y: number, w: number, h: number, surface:KineticRect['surface']='inner',key?:object): void => {
       const index = this.blockers.length;
       const rect = this.rectReserve[index] ?? (this.rectReserve[index] = { x, y, w, h });
       rect.x = x; rect.y = y; rect.w = w; rect.h = h;
       (rect as KineticRect).surface=surface;
+      (rect as KineticRect).contactKey=key??rect;
       this.blockers.push(rect);
     };
     if (dx !== 0 || dy !== 0 || (momentum && Number.isFinite(this.resolvedX))) {
       for (const body of this.world.staticBodies.entries) {
         if (body.enable && !body.checkCollision.none) append(body.x, body.y, body.width, body.height,
-          body.gameObject?.getData('kineticSurface')??'inner');
+          body.gameObject?.getData('kineticSurface')??'inner',body);
       }
       if (this.collideWorldBounds) {
         const b = this.world.bounds;

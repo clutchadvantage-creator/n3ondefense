@@ -1,11 +1,13 @@
-/** Arena contact tuning. Velocity is never capped here: the bombsite's existing
- * .35 Arcade timeScale and native pre-contact damping remain authoritative. */
+/** Arena contact tuning. Operative input and pre-contact launch speeds retain
+ * the bombsite's .35 Arcade timeScale and original native damping. */
 export const KINETIC = {
   threshold: 90, fullResponseSpeed: 330,
   restitution: { outer: 1, inner: .96, obstacle: .88, body: .72 },
   highSpeedAmplification: .08, // Included in, never added beyond, the restitution ceiling.
   tangentRetention: .99,
-  momentumSeconds: .82, steeringPerSecond: 1.6, impulseDecayPerSecond: .8,
+  // Only collision responses are bounded; ordinary movement and Dash have no added speed cap.
+  operativeReboundSeconds: .10, operativeReboundSpeedMin: 140, operativeReboundSpeedMax: 360,
+  impulseDecayPerSecond: .8,
   enemyMomentumSeconds: .62, enemySteeringPerSecond: 2.4,
   mass: { operative: 1, grunt: .65, shooter: .85, defuser: .7, disruptor: 1.4, tank: 4.5, star: 7, controlledBoss: 9 },
   controlledRestitution: .42,
