@@ -3,6 +3,7 @@ import { ARENA_GENERATION_CONFIG as CONFIG } from '../config/arenaGeneration.ts'
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants.ts';
 import { SeededRandom } from './SeededRandom.ts';
 import { ArenaStructureGrammar } from './ArenaStructureGrammar.ts';
+import { arenaRectClearance } from './ArenaObstaclePlacement.ts';
 
 export interface PointSpec { x: number; y: number }
 export interface ArenaTopologyDraft {
@@ -51,12 +52,18 @@ const edges = (b: RectSpec): PointSpec[] => [point(b, .05, .12), point(b, .95, .
 
 const openField: Generator = (r, b) => {
   const walls: RectSpec[] = [];
-  const clusters = r.int(3, 5);
-  for (let i = 0; i < clusters; i += 1) {
-    const x = r.float(.18, .78), y = r.float(.18, .78);
-    walls.push(hWall(b, x, y, r.float(.07, .14)), vWall(b, x + .025, y - .025, r.float(.05, .1)));
+  const groups: RectSpec[] = [];
+  const clusters = r.int(3, 4);
+  for (let i = 0; i < clusters * 12 && groups.length < clusters; i += 1) {
+    const t = CONFIG.minimumInteriorWallThickness;
+    const group = { x: b.x + b.w * r.float(.18, .76), y: b.y + b.h * r.float(.18, .76),
+      w: b.w * r.float(.08, .13), h: b.h * r.float(.09, .13) };
+    if (groups.some(other => arenaRectClearance(group, other) < CONFIG.minimumCorridorWidth)) continue;
+    groups.push(group);
+    walls.push(...(groups.length % 2 ? ArenaStructureGrammar.lShape(group.x,group.y,group.w,group.h,t)
+      : ArenaStructureGrammar.longWall(group.x,group.y,group.w,t)));
   }
-  return base('open-field', b, walls, [point(b,.2,.24),point(b,.76,.28),point(b,.62,.76),point(b,.27,.72),point(b,.5,.1)], [point(b,.5,.5)], edges(b), clusters, 0, 1, { horizontal:.4, vertical:.35, diagonal:.25 });
+  return base('open-field', b, walls, [point(b,.2,.24),point(b,.76,.28),point(b,.62,.76),point(b,.27,.72),point(b,.5,.1)], [point(b,.5,.5)], edges(b), groups.length, 0, 1, { horizontal:.4, vertical:.35, diagonal:.25 });
 };
 const islands: Generator = (r, b) => {
   const centers = [[.22,.25],[.68,.2],[.3,.68],[.76,.7]] as const;
@@ -117,12 +124,24 @@ const chambers: Generator = (r, b) => {
 };
 const asymmetricClusters: Generator = (r,b) => {
   const walls: RectSpec[] = [];
-  for (let i=0;i<8;i+=1) {
-    const dense = i < 6;
-    const x = dense ? r.float(.12,.4) : r.float(.46,.56), y=r.float(.12,.76);
-    walls.push(...ringWalls(b,x,y,r.float(.08,.19),r.float(.07,.18)));
+  // The old eight tiny rings collapsed to dozens of corner blocks when their
+  // openings expanded to the required corridor width. Use substantial connected
+  // installations in the same left-heavy silhouette, separated as whole groups.
+  const groups: RectSpec[] = [];
+  const slots = r.shuffle([[.10,.12],[.37,.12],[.10,.42],[.37,.42],[.10,.72],[.37,.72]]);
+  const target = r.int(4,6), t = CONFIG.minimumInteriorWallThickness;
+  for (const [sx,sy] of slots) {
+    const group = { x:b.x+b.w*(sx+r.float(-.008,.008)), y:b.y+b.h*(sy+r.float(-.01,.01)),
+      w:Math.max(CONFIG.minimumCorridorWidth+2*t,b.w*r.float(.125,.15)), h:b.h*r.float(.11,.14) };
+    if(groups.some(other=>arenaRectClearance(group,other)<CONFIG.minimumCorridorWidth))continue;
+    groups.push(group);
+    const shape=groups.length%3;
+    walls.push(...(shape===0?ArenaStructureGrammar.uShape(group.x,group.y,group.w,group.h,t)
+      :shape===1?ArenaStructureGrammar.lShape(group.x,group.y,group.w,group.h,t)
+      :ArenaStructureGrammar.longWall(group.x,group.y,group.w,t)));
+    if(groups.length>=target)break;
   }
-  return base('asymmetric-clusters',b,walls,[point(b,.72,.18),point(b,.82,.48),point(b,.68,.83),point(b,.9,.72),point(b,.9,.25)],[point(b,.86,.9)],[point(b,.5,.05),point(b,.95,.12),point(b,.95,.88),point(b,.5,.95)],8,3,3,{horizontal:.42,vertical:.38,diagonal:.2});
+  return base('asymmetric-clusters',b,walls,[point(b,.72,.18),point(b,.82,.48),point(b,.68,.83),point(b,.9,.72),point(b,.9,.25)],[point(b,.86,.9)],[point(b,.5,.05),point(b,.95,.12),point(b,.95,.88),point(b,.5,.95)],groups.length,3,3,{horizontal:.42,vertical:.38,diagonal:.2});
 };
 const crossroads: Generator = (r,b) => {
   const offset=r.float(-.08,.08);

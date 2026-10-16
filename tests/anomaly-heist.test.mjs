@@ -151,8 +151,10 @@ test('HEIST uses the shared combat runtime instead of a parallel simplified load
   assert.match(rules, /resolveShieldRuntime/);
   assert.match(heist, /findTurretHit[\s\S]*?turret\.takeDamage\(projectile\.damage\)/);
   assert.match(heist, /findFenceHit[\s\S]*?fence\.hp -= projectile\.damage/);
-  assert.match(heist, /applyEnemyHealthMode/);
-  assert.match(heist, /applyEnemyDamageMode/);
+  assert.match(heist, /heistEnemyStats\(type, this\.campaignPositions\.difficultyPosition, this\.session\.protocol, elite, this\.session\.difficulty\?\.loadout\)/);
+  const stats = source('../src/game/anomalies/heist/HeistEnemyStats.ts');
+  assert.match(stats, /applyEnemyHealthMode/);
+  assert.match(stats, /applyEnemyDamageMode/);
   assert.match(heist, /resourcePickupCap\(/);
   assert.match(heist, /nextPickupBuffStack\(/);
   assert.match(heist, /this\.player\.hp = Math\.max\(0, source\.hp\)/);
@@ -334,7 +336,8 @@ test('HEIST escape timer, traps, patrols, and reinforcements remain bounded and 
   assert.match(heist, /phase === 'egress-ready' && !this\.facility\.isInsideVault/);
   assert.match(heist, /this\.escapeDeadline = now \+ HEIST_BALANCE\.extractionDurationMs/);
   assert.match(heist, /protected spawnInfiltrationPatrols/);
-  assert.match(heist, /escapeMaximumEnemies - this\.enemies\.length/);
+  assert.match(heist, /escapeMaximumEnemies - this\.mobileHeistEnemyCount\(\)/);
+  assert.match(heist, /for \(const enemy of this\.enemies\) if \(!this\.sentryRooms\?\.owns\(enemy\)\) count\+\+/);
   assert.match(heist, /selectEnemyPickup/);
   assert.match(heist, /enemyAnomalyLootChance/);
   assert.match(facility, /heistPathPoints\(layout, from, layout\.extractionNodeId\)/);

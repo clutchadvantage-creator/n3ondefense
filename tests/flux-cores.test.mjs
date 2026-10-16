@@ -21,7 +21,7 @@ test('Flux Core durability scales without becoming unbounded', () => {
   assert.ok(FLUX_CORE_BALANCE.windowOpenMs > 0);
 });
 
-test('Flux Core deployments are staggered and wait for a continuous laser-online recovery window', () => {
+test('Flux Core deployments preserve stagger and recovery timing while full deployment owns laser activation', () => {
   assert.ok(FLUX_CORE_BALANCE.perCoreSpawnMinMs > 0);
   assert.ok(FLUX_CORE_BALANCE.perCoreSpawnMaxMs > FLUX_CORE_BALANCE.perCoreSpawnMinMs);
   assert.ok(FLUX_CORE_BALANCE.laserOnlineGraceMs >= 15_000);
@@ -39,7 +39,8 @@ test('Flux Core deployments are staggered and wait for a continuous laser-online
 test('Flux Core shutdown requires the complete planned deployment to be destroyed', () => {
   const source = readFileSync(new URL('../src/game/systems/FluxCoreSystem.ts', import.meta.url), 'utf8');
   assert.match(source, /this\.cyclePhase = 'engaged'/);
-  assert.match(source, /if \(this\.cyclePhase === 'engaged' && this\.cores\.length === 0\) \{/);
+  assert.match(source, /this\.cores\.length === 0 && this\.spawnedCoreCount >= this\.plannedCoreCount/);
+  assert.match(source, /this\.cores\.every\(core => now >= core\.spawnedAt \+ FLUX_CORE_BALANCE\.floorRiseMs \+ FLUX_CORE_BALANCE\.windowOpenMs\)/);
   assert.match(source, /this\.cyclePhase = 'shutdown'/);
   assert.match(source, /this\.laserSuppressedUntil = now \+ FLUX_CORE_BALANCE\.laserShutdownMs/);
 });

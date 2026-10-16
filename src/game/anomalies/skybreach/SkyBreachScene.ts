@@ -8,7 +8,8 @@ import { SkyBreachDestruction } from './SkyBreachDestruction.ts';
 import { SkyBreachRockets } from './SkyBreachRockets.ts';
 import { getMineRackEnergyCost } from '../../abilities/MineRackSalvo.ts';
 import { skyBreachDifficulty, scaleArenaEnemyStats } from './SkyBreachDifficulty.ts';
-import { SkyBreachSupplies, type FlightSupplyState } from './SkyBreachSupplies.ts';
+import { SkyBreachSupplies, flightSupplyPosition, type FlightSupplyState } from './SkyBreachSupplies.ts';
+import { SkyBreachAmmoSupplies, type FlightAmmoState } from './SkyBreachAmmoSupplies.ts';
 import { SkyBreachDirector, DreadnoughtCrossfire, DREADNOUGHT_WEAPONS, attackWeapons, coreExposed,
   formationSlots, tankGroupSlots, skyReinforcementPlan, type DreadnoughtAttack, type FlightModule, type SkyRole, type HardpointId } from './SkyBreachDirector.ts';
 import { createArtilleryMarker } from '../../bosses/ArtilleryMarker.ts';
@@ -20,7 +21,7 @@ import type { RectSpec, PickupType } from '../../types.ts';
 import type { EchoDamageStamp } from '../../echo/EchoRules.ts';
 import { SupremeModEffectSystem } from '../../mods/SupremeModEffectSystem.ts';
 import { MOD_BALANCE } from '../../mods/modBalance.ts';
-import { createFlightSteering, droneSeparation, steerFlight, skyForwardAim, SKY_DURABILITY, flightBank, dreadnoughtPosition, type FlightSteering } from './SkyBreachMotion.ts';
+import { createFlightSteering, droneSeparation, steerFlight, skyForwardAim, SKY_DURABILITY, SKY_GROUND_SCROLL, flightBank, dreadnoughtPosition, type FlightSteering } from './SkyBreachMotion.ts';
 import { DroneBurstWeapon } from '../../enemies/drone/DroneFlight.ts';
 import { getTankHomingMissileSpeed, steerTankHomingMissile } from '../../enemies/HomingMissile.ts';
 import { ENEMY_BALANCE, TANK_HOMING_MISSILE_BALANCE } from '../../config/balance/index.ts';
@@ -42,6 +43,7 @@ interface Strike extends ReturnType<typeof createArtilleryMarker> {
   x:number;y:number;radius:number;damage:number;start:number;due:number;owner:Enemy|null;
 }
 const NO_WALLS: readonly RectSpec[] = [];
+const isFlightSupply = (kind: PickupType): boolean => kind === 'health' || kind === 'energy' || kind === 'grenadeRounds' || kind === 'scattershot';
 const EXPLOSION = [0xffffff,0xffc477,0xff583d,0xa53468] as const;
 
 /** Same combat/escrow owner as HEIST; only world, mission, and enemy presentation differ. */
@@ -50,6 +52,7 @@ export class SkyBreachScene extends AnomalyCombatScene {
   private difficulty!: ReturnType<typeof skyBreachDifficulty>;
   private director = new SkyBreachDirector();
   private supplies = new SkyBreachSupplies(0);
+  private ammoSupplies = new SkyBreachAmmoSupplies(0);
   private scheduler = new DreadnoughtCrossfire();
   private bossStartedAt = 0;
   private bossCues: { family:DreadnoughtAttack; at:number }[] = [];
@@ -128,7 +131,8 @@ export class SkyBreachScene extends AnomalyCombatScene {
     this.destructionAt=0;this.destructionStep=0;this.rewardDropped=false;this.bossBursts.length=0;
     this.core=null;this.hull=null;this.coreDoors=[];this.moduleLabel='ENTERING HOSTILE AIRSPACE';
     this.difficulty=skyBreachDifficulty(this.session);
-    this.supplies=new SkyBreachSupplies(this.session.seed);
+    this.supplies=new SkyBreachSupplies(this.session.seed,this.difficulty.spawnCadence);
+    this.ammoSupplies=new SkyBreachAmmoSupplies(this.session.seed,this.supplies.tempo);
     this.director=new SkyBreachDirector(this.session.seed,this.difficulty.spawnCadence);
     this.pickupBounds.w=1440;this.pickupBounds.h=Math.max(900,Math.min(1260,1440*this.scale.height/this.scale.width));
     this.physics.world.setBounds(30,110,this.pickupBounds.w-60,this.pickupBounds.h-145);
@@ -299,11 +303,16 @@ export class SkyBreachScene extends AnomalyCombatScene {
         f.warning.destroy();for(const d of f.decorations)d.destroy();this.flights.delete(enemy);enemy.destroy();this.enemies.splice(i,1);continue;
       }
       if(f.role==='tank')enemy.x=this.world.groundLaneX(f.lane)+f.laneOffset;
-      if(f.site)enemy.setPosition(f.site.x,f.site.y);
+      if(f.site){
+        // Also reset the Arcade anchor: later postUpdate must not add a stale
+        // displacement to the roof coordinate after a pull/knockback.
+        (enemy.body as Phaser.Physics.Arcade.Body).reset(f.site.x,f.site.y);
+        enemy.setDepth(f.site.image.depth+.00001);
+      }
       const dx=this.player.x-enemy.x,dy=this.player.y-enemy.y;
       const aim=Math.atan2(dy,dx),speed=enemy.effectiveSpeed(enemy.stats.speed,now);
       if(now<enemy.disabledUntil){
-        enemy.setVelocity(0,0);f.steering.velocityX=0;f.steering.velocityY=0;
+        enemy.setVelocity(0,f.role==='tank'?SKY_GROUND_SCROLL:0);f.steering.velocityX=0;f.steering.velocityY=0;
         f.warning.setVisible(false);f.warningAt=0;continue;
       }
       let separateX=0,separateY=0;
@@ -663,15 +672,18 @@ export class SkyBreachScene extends AnomalyCombatScene {
   }
 
   protected override createGameplayPickup(type: PickupType, x: number, y: number): Phaser.GameObjects.Container {
-    // Apply this to ordinary enemy rolls too: an offscreen kill must not occupy
-    // the only health slot while critical-health relief waits behind it.
+    if(isFlightSupply(type))({x,y}=flightSupplyPosition(x,y,this.player.x,this.player.y,
+      this.player.speed,this.pickupBounds.w,this.pickupBounds.h));
     if(type==='health'&&this.player.hp/this.player.stats.maxHealth<=.35){
       x=Phaser.Math.Clamp(x,Math.max(80,this.player.x-140),Math.min(this.pickupBounds.w-80,this.player.x+140));
       y=Phaser.Math.Clamp(this.player.y-140,150,this.pickupBounds.h-100);
     }
     const root = super.createGameplayPickup(type, x, y);
     // Flight supplies scroll with the world instead of bouncing off Arena bounds.
-    if (type === 'health' || type === 'energy') this.pickupMotion.delete(root);
+    if (isFlightSupply(type)) {
+      this.pickupMotion.delete(root);
+      root.setData('flightSupplyExpiresAt',this.time.now+22_000);
+    }
     return root;
   }
 
@@ -679,8 +691,9 @@ export class SkyBreachScene extends AnomalyCombatScene {
     if (this.returning) return;
     for (let i = this.pickups.length - 1; i >= 0; i--) {
       const pickup = this.pickups[i];
-      if (pickup.kind !== 'health' && pickup.kind !== 'energy') continue;
-      pickup.root.y += Math.max(0, dt) * 49;
+      if (!isFlightSupply(pickup.kind)) continue;
+      pickup.expiresAt=Math.max(pickup.expiresAt,pickup.root.getData('flightSupplyExpiresAt')??0);
+      pickup.root.y += Math.max(0, dt) * SKY_GROUND_SCROLL;
       if (pickup.root.y <= this.pickupBounds.y + this.pickupBounds.h + 32) continue;
       pickup.root.destroy(true);
       this.pickups.splice(i, 1);
@@ -697,23 +710,38 @@ export class SkyBreachScene extends AnomalyCombatScene {
     return state;
   }
   protected override allowEnemyGameplayPickup(kind: PickupType): boolean {
+    if(kind==='grenadeRounds'||kind==='scattershot')return !this.returning&&!this.destructionAt&&!this.extractionPortal
+      &&this.ammoSupplies.accept(kind,this.missionTime,this.ammoSupplyState());
     if (kind !== 'health' && kind !== 'energy') return true;
     return !this.returning && !this.destructionAt && !this.extractionPortal
       && this.supplies.acceptEnemyDrop(kind, this.missionTime, this.supplyState());
   }
   protected override spawnEnemyDrops(enemy:Enemy):void {
-    if(!this.returning&&!this.destructionAt&&!this.extractionPortal
-      &&this.supplies.healthFromEnemy(this.missionTime,this.supplyState(),this.modRuntime.multiplier('enemyPickupChance')))
-      this.spawnFlightSupply('health',enemy.x,enemy.y);
+    if(!this.returning&&!this.destructionAt&&!this.extractionPortal){
+      const multiplier=this.modRuntime.multiplier('enemyPickupChance');
+      if(this.supplies.healthFromEnemy(this.missionTime,this.supplyState(),multiplier))this.spawnFlightSupply('health',enemy.x,enemy.y);
+      if(this.supplies.energyFromEnemy(this.missionTime,this.supplyState(),multiplier))this.spawnFlightSupply('energy',enemy.x,enemy.y);
+      const ammo=this.ammoSupplies.next(this.missionTime,this.ammoSupplyState(),true,multiplier);
+      if(ammo)this.spawnFlightSupply(ammo,enemy.x,enemy.y);
+    }
     super.spawnEnemyDrops(enemy);
   }
-  private spawnFlightSupply(kind:'health'|'energy',x:number,y:number):void {
+  private ammoSupplyState():FlightAmmoState {
+    let onScreen=0;
+    for(const pickup of this.pickups)if(pickup.root.active&&(pickup.kind==='grenadeRounds'||pickup.kind==='scattershot'))onScreen++;
+    const active=this.temporaryAmmo.activeSpecialMode(this.time.now);
+    return {onScreen,activeRemainingMs:this.temporaryAmmo.remainingMs(this.time.now),
+      activeKind:active==='grenade'?'grenadeRounds':active==='scattershot'?'scattershot':null};
+  }
+  private spawnFlightSupply(kind:'health'|'energy'|'grenadeRounds'|'scattershot',x:number,y:number):void {
     if(kind==='health')y=Math.min(y,this.player.y-100);
     this.pickups.push({kind,root:this.createGameplayPickup(kind,Phaser.Math.Clamp(x,80,this.pickupBounds.w-80),
       Phaser.Math.Clamp(y,150,this.pickupBounds.h-100)),expiresAt:this.time.now+22_000,source:'enemy'});
   }
   private updateResourceSupplies(recovery = false): void {
     if (this.returning || this.destructionAt || this.extractionPortal) return;
+    const ammo=this.ammoSupplies.next(this.missionTime,this.ammoSupplyState());
+    if(ammo)this.spawnFlightSupply(ammo,this.player.x,this.player.y-220);
     const kind = this.supplies.next(this.missionTime, this.supplyState(), recovery);
     if (!kind) return;
     const x = this.pickupBounds.x + this.pickupBounds.w * (.22 + this.random.next() * .56);

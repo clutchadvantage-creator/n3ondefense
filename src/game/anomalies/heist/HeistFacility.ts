@@ -36,6 +36,7 @@ export interface HeistFacilityRuntime {
   wallRects: RectSpec[];
   vaultDoor: Phaser.Physics.Arcade.Image;
   vaultDoors: Phaser.Physics.Arcade.StaticGroup;
+  hostileVaultBarrier: Phaser.Physics.Arcade.StaticGroup;
   route: readonly HeistLayoutPoint[];
   extractionPoint: HeistLayoutPoint;
   containerPoints: readonly HeistLayoutPoint[];
@@ -409,6 +410,10 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
   const vaultDoors = scene.physics.add.staticGroup();
   const doorVisuals = layout.vaultDoors.map((spec) => createDoorVisual(scene, vaultDoors, spec));
   const vaultDoor = doorVisuals[0].body;
+  // Hostiles retain this boundary after the player-facing doors open.
+  const hostileVaultBarrier = scene.physics.add.staticGroup();
+  (hostileVaultBarrier.create(vault.x + vault.w / 2, vault.y + vault.h / 2, 'pixel') as Phaser.Physics.Arcade.Image)
+    .setVisible(false).setDisplaySize(vault.w, vault.h).refreshBody();
 
   const ambientGraphics = scene.add.graphics().setDepth(4).setBlendMode(Phaser.BlendModes.ADD);
   const utilityLights = layout.nodes
@@ -439,7 +444,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     return adjacency;
   };
   const closedDoorAdjacency = buildNavigationAdjacency(false);
-  const openDoorAdjacency = buildNavigationAdjacency(true);
+  const hostileLayout = { ...layout, nodes: layout.nodes.filter(node => node.kind === 'facility') };
   const navigationQueue: string[] = [];
   const navigationVisited = new Set<string>();
   let doorsOpen = false;
@@ -451,7 +456,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     navigationQueue.push(targetNodeId);
     navigationVisited.clear();
     navigationVisited.add(targetNodeId);
-    const adjacency = doorsOpen ? openDoorAdjacency : closedDoorAdjacency;
+    const adjacency = closedDoorAdjacency;
     for (let read = 0; read < navigationQueue.length; read += 1) {
       const current = navigationQueue[read];
       for (const neighbor of adjacency.get(current) ?? []) {
@@ -512,6 +517,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
     wallRects: runtimeWallRects,
     vaultDoor,
     vaultDoors,
+    hostileVaultBarrier,
     route: layout.route,
     extractionPoint: { ...layout.extractionPoint },
     containerPoints: layout.containerPoints,
@@ -525,7 +531,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       loops: layout.diagnostics.loops, deadEnds: layout.diagnostics.deadEnds,
       sourceWallRects: layout.wallRects.length,
       runtimeWallRects: runtimeWallRects.length,
-      staticPhysicsBodies: runtimeWallRects.length + layout.vaultDoors.length,
+      staticPhysicsBodies: runtimeWallRects.length + layout.vaultDoors.length + 1,
       wallIndexBuckets: wallPointIndex.diagnostics.bucketCount,
       wallIndexMaximumCandidates: wallPointIndex.diagnostics.maximumCandidatesPerBucket,
       staticTextureObjects: staticVisuals.length,
@@ -563,18 +569,20 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       return wallPointIndex.contains(x, y);
     },
     prepareNavigationTarget(targetX: number, targetY: number): void {
-      const targetNodeId = nearestHeistNodeId(layout, targetX, targetY);
+      const targetNodeId = nearestHeistNodeId(hostileLayout, targetX, targetY);
       if (targetNodeId !== cachedTargetNodeId) rebuildNavigationMap(targetNodeId);
     },
     navigationTarget(x: number, y: number, targetX: number, targetY: number, out?: HeistLayoutPoint): HeistLayoutPoint {
-      const from = nearestHeistNodeId(layout, x, y);
-      if (!cachedTargetNodeId) rebuildNavigationMap(nearestHeistNodeId(layout, targetX, targetY));
+      const from = nearestHeistNodeId(hostileLayout, x, y);
+      if (!cachedTargetNodeId) rebuildNavigationMap(nearestHeistNodeId(hostileLayout, targetX, targetY));
       const target = cachedTargetNodeId;
       const result = out ?? { x: targetX, y: targetY };
       const next = cachedTargetNext.get(from);
       if (!next || from === target) {
-        result.x = targetX;
-        result.y = targetY;
+        const outside = targetX >= vault.x && targetX <= vault.x + vault.w
+          && targetY >= vault.y && targetY <= vault.y + vault.h ? nodeById.get(target) : null;
+        result.x = outside?.x ?? targetX;
+        result.y = outside?.y ?? targetY;
         return result;
       }
       const node = nodeById.get(next);
@@ -659,6 +667,7 @@ export const createHeistFacility = (scene: Phaser.Scene, seed: number): HeistFac
       for (const visual of doorVisuals) visual.root.destroy(true);
       walls.destroy(true);
       vaultDoors.destroy(true);
+      hostileVaultBarrier.destroy(true);
       guideMarkers = [];
       cachedTargetNext.clear();
       navigationQueue.length = 0;

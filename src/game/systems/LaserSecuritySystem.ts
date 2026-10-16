@@ -77,9 +77,7 @@ export class LaserSecuritySystem {
   ): void {
     this.liveSegmentCount = 0;
     if (suppressed) {
-      this.setAudioActive(false);
-      this.clearPresentation();
-      this.warningText.setAlpha(0);
+      this.suppress();
       return;
     }
     const config = LASER_HAZARD_BALANCE;
@@ -144,6 +142,14 @@ export class LaserSecuritySystem {
         target.takeDamage(enemyDamagePerSecond * dt, 'hazard');
       }
     }
+  }
+
+  /** Core deaths can happen after this frame's hazard update. Clear immediately. */
+  suppress(): void {
+    this.liveSegmentCount = 0;
+    this.setAudioActive(false);
+    this.clearPresentation();
+    this.warningText.setAlpha(0);
   }
 
   isDangerWindow(now: number, suppressed = false): boolean {

@@ -65,10 +65,11 @@ export class FluxCoreSystem {
   private cyclePhase: FluxCoreCyclePhase = 'waiting';
   private plannedCoreCount = 0;
   private spawnedCoreCount = 0;
-  private requiresOnlineGrace = false;
-  private lasersOnlineSince = 0;
+  private requiresRecoveryGrace = false;
+  private recoveryStartedAt = 0;
   private laserSuppressedUntil = 0;
   private recoveryAlarmPlayed = false;
+  private disposed = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -98,7 +99,7 @@ export class FluxCoreSystem {
   }
 
   update(now: number, player: Player, externalLaserSuppressed = false): void {
-    if (this.round < FLUX_CORE_BALANCE.unlockRound) return;
+    if (this.disposed || this.round < FLUX_CORE_BALANCE.unlockRound) return;
     this.updateCycle(now, player.x, player.y, externalLaserSuppressed);
 
     let closestDistanceSquared = Number.POSITIVE_INFINITY;
@@ -116,7 +117,7 @@ export class FluxCoreSystem {
   }
 
   isLaserSuppressed(now: number): boolean {
-    return now < this.laserSuppressedUntil;
+    return this.disposed || this.cyclePhase !== 'engaged' || now < this.laserSuppressedUntil;
   }
 
   hasCoreWithin(x: number, y: number, radius: number): boolean {
@@ -139,6 +140,7 @@ export class FluxCoreSystem {
    * If only part of its footprint was supported and that support disappears,
    * retire without loot or laser credit and retry the same deployment later. */
   updateFloorSupport(floor:DynamicFloorModel,now:number):void {
+    if(this.disposed)return;
     const {geometryHalfWidth:w,geometryHalfHeight:h}=FLUX_CORE_BALANCE;
     for(let i=this.cores.length-1;i>=0;i--){
       const core=this.cores[i];
@@ -153,6 +155,7 @@ export class FluxCoreSystem {
       if(floor.isRectSupported(core.x,core.y,w,h))continue;
       this.destroyCoreVisual(core);this.cores.splice(i,1);
       this.spawnedCoreCount=Math.max(0,this.spawnedCoreCount-1);
+      if(this.cyclePhase==='engaged')this.onLasersShutdown?.();
       this.cyclePhase='spawning';this.nextSpawnAt=now+FLUX_CORE_BALANCE.perCoreSpawnMinMs;
     }
   }
@@ -237,6 +240,9 @@ export class FluxCoreSystem {
   }
 
   destroy(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.nextSpawnAt = Number.POSITIVE_INFINITY;
     this.onProximityChanged?.(0);
     for (const tween of this.effectTweens) tween.stop();
     this.effectTweens.clear();
@@ -254,33 +260,43 @@ export class FluxCoreSystem {
     if (this.cyclePhase === 'shutdown') {
       if (now < this.laserSuppressedUntil) return;
       this.cyclePhase = 'waiting';
-      this.requiresOnlineGrace = true;
-      this.lasersOnlineSince = 0;
+      this.requiresRecoveryGrace = true;
+      this.recoveryStartedAt = 0;
       this.nextSpawnAt = Number.POSITIVE_INFINITY;
     }
 
     if (this.cyclePhase === 'engaged') return;
 
-    // Gas is the other legitimate security-grid suppression. No new core may
-    // emerge during it, and the continuous 15-second laser-online requirement
-    // restarts after the atmosphere clears.
+    // Keep the existing 15-second recovery grace and spawn variance. The grid
+    // stays OFF throughout that wait; elapsed time never grants activation.
+    // Gas remains an independent veto and restarts this recovery wait.
     if (externalLaserSuppressed) {
-      this.requiresOnlineGrace = true;
-      this.lasersOnlineSince = 0;
+      this.requiresRecoveryGrace = true;
+      this.recoveryStartedAt = 0;
       this.nextSpawnAt = Number.POSITIVE_INFINITY;
       return;
     }
 
-    if (this.requiresOnlineGrace) {
-      if (this.lasersOnlineSince <= 0) {
-        this.lasersOnlineSince = now;
+    if (this.requiresRecoveryGrace) {
+      if (this.recoveryStartedAt <= 0) {
+        this.recoveryStartedAt = now;
         this.nextSpawnAt = now
           + FLUX_CORE_BALANCE.laserOnlineGraceMs
           + this.random.int(FLUX_CORE_BALANCE.nextCycleVarianceMinMs, FLUX_CORE_BALANCE.nextCycleVarianceMaxMs);
       }
       if (now < this.nextSpawnAt) return;
-      this.requiresOnlineGrace = false;
-      this.lasersOnlineSince = 0;
+      this.requiresRecoveryGrace = false;
+      this.recoveryStartedAt = 0;
+    }
+
+    // Spawned counts include cores already destroyed by valid combat. A core
+    // lost to missing support decrements that count and must be replaced.
+    if (this.cyclePhase === 'spawning' && this.spawnedCoreCount >= this.plannedCoreCount) {
+      if (this.cores.length === 0) this.beginShutdown(now);
+      else if (this.cores.every(core => now >= core.spawnedAt + FLUX_CORE_BALANCE.floorRiseMs + FLUX_CORE_BALANCE.windowOpenMs)) {
+        this.cyclePhase = 'engaged';
+      }
+      return;
     }
 
     if (now < this.nextSpawnAt) return;
@@ -311,7 +327,6 @@ export class FluxCoreSystem {
     });
 
     if (this.spawnedCoreCount >= this.plannedCoreCount) {
-      this.cyclePhase = 'engaged';
       this.nextSpawnAt = Number.POSITIVE_INFINITY;
       return;
     }
@@ -508,16 +523,20 @@ export class FluxCoreSystem {
       droppedCore: this.random.float(0, 1) < FLUX_CORE_BALANCE.collectibleDropChance
     });
     // A partial clear never affects the lasers. Shutdown begins only after the
-    // complete, already-planned deployment has emerged and every core is gone.
-    if (this.cyclePhase === 'engaged' && this.cores.length === 0) {
-      this.cyclePhase = 'shutdown';
-      this.laserSuppressedUntil = now + FLUX_CORE_BALANCE.laserShutdownMs;
-      this.onLasersShutdown?.();
-      this.recoveryAlarmPlayed = false;
-      this.nextSpawnAt = Number.POSITIVE_INFINITY;
-      this.plannedCoreCount = 0;
-      this.spawnedCoreCount = 0;
-    }
+    // selected slots have all spawned and every surviving core is gone.
+    if (this.cores.length === 0 && this.spawnedCoreCount >= this.plannedCoreCount
+      && (this.cyclePhase === 'engaged' || this.cyclePhase === 'spawning')) this.beginShutdown(now);
+  }
+
+  private beginShutdown(now: number): void {
+    if (this.disposed || this.cyclePhase === 'shutdown') return;
+    this.cyclePhase = 'shutdown';
+    this.laserSuppressedUntil = now + FLUX_CORE_BALANCE.laserShutdownMs;
+    this.onLasersShutdown?.();
+    this.recoveryAlarmPlayed = false;
+    this.nextSpawnAt = Number.POSITIVE_INFINITY;
+    this.plannedCoreCount = 0;
+    this.spawnedCoreCount = 0;
   }
 
   private playDestroyedEffect(x: number, y: number, color: number): void {

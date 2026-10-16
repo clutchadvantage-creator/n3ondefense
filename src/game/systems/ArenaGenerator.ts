@@ -3,17 +3,16 @@ import type { ArenaLayout, ArenaTemplate, GeneratedObstacle, RectSpec } from '..
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants.ts';
 import { ARENA_ARCHETYPES, ARENA_GENERATION_CONFIG as CONFIG } from '../config/arenaGeneration.ts';
 import { ArenaThemeManager } from './ArenaThemeManager.ts';
-import { ObstacleFactory } from './ObstacleFactory.ts';
+import { placeArenaEquipment } from './ArenaObstaclePlacement.ts';
 import { SeededRandom } from './SeededRandom.ts';
 import { ArenaValidator } from './ArenaValidator.ts';
 import { generateArenaTopology, type PointSpec } from './ArenaTopology.ts';
 import { ArenaHistory, createArenaFingerprint, type ArenaFingerprint } from './ArenaFingerprint.ts';
-import { createsNarrowPassage, repairNarrowPassages } from './ArenaTraversal.ts';
+import { repairNarrowPassages } from './ArenaTraversal.ts';
 import { createSafeArenaFallbacks, type SafeArenaFallbackDraft } from './ArenaFallbacks.ts';
 import { createArenaSmashablePlacements } from '../arena/ArenaSmashablePlacement.ts';
 import { separateEnemyEntrances } from '../arena/EnemySpawnSafety.ts';
 
-const pointClear = (point:PointSpec, rects:RectSpec[], clearance:number):boolean => rects.every((r)=>point.x<r.x-clearance||point.x>r.x+r.w+clearance||point.y<r.y-clearance||point.y>r.y+r.h+clearance);
 const obstacleRect = (obstacle:GeneratedObstacle):RectSpec => ({x:obstacle.x-obstacle.w/2,y:obstacle.y-obstacle.h/2,w:obstacle.w,h:obstacle.h});
 const vector = (point:PointSpec):Phaser.Math.Vector2 => new Phaser.Math.Vector2(Math.round(point.x),Math.round(point.y));
 
@@ -113,26 +112,7 @@ export class ArenaGenerator {
   }
 
   private static addSecondaryObstacles(random:SeededRandom,bounds:RectSpec,walls:RectSpec[],protectedPoints:PointSpec[],archetype:ArenaTemplate,round:number):GeneratedObstacle[]{
-    const factory=new ObstacleFactory(random);
-    const ranges:Record<ArenaTemplate,[number,number]>={
-      'open-field':[8,15],islands:[3,8],fortress:[3,7],ring:[2,6],split:[4,9],'hub-spoke':[4,8],canyon:[2,6],maze:[1,4],chambers:[2,5],'asymmetric-clusters':[2,5],crossroads:[3,7],perimeter:[3,7]
-    };
-    const [min,max]=ranges[archetype];
-    const target=random.int(min,Math.min(max,min+Math.floor(round/5)+4));
-    const obstacles:GeneratedObstacle[]=[];
-    for(let attempt=0;attempt<target*15&&obstacles.length<target;attempt+=1){
-      const candidate=factory.createAt(random.int(bounds.x+90,bounds.x+bounds.w-90),random.int(bounds.y+90,bounds.y+bounds.h-90),26,archetype==='open-field'?88:64);
-      const rect=obstacleRect(candidate);
-      const center={x:candidate.x,y:candidate.y};
-      const existingObstacleRects=obstacles.map(obstacleRect);
-      if(!pointClear(center,walls,35)
-        || protectedPoints.some((p)=>Math.hypot(p.x-center.x,p.y-center.y)<150)
-        || obstacles.some((o)=>!pointClear(center,[obstacleRect(o)],45))
-        || createsNarrowPassage(rect,[...walls,...existingObstacleRects],CONFIG.minimumCorridorWidth))continue;
-      if(rect.x<bounds.x+35||rect.y<bounds.y+35||rect.x+rect.w>bounds.x+bounds.w-35||rect.y+rect.h>bounds.y+bounds.h-35)continue;
-      obstacles.push(candidate);
-    }
-    return obstacles;
+    return placeArenaEquipment(random,bounds,walls,protectedPoints,archetype,round);
   }
 
   private static createDecorations(random:SeededRandom,bounds:RectSpec,archetype:ArenaTemplate):RectSpec[]{

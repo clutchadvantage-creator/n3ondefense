@@ -34,12 +34,12 @@ test('drones separate from exact overlap and remain independently active in the 
  }
 });
 
-test('paused movement preserves steering, and ground/AA retain distinct scroll layers',()=>{
+test('paused movement preserves steering, and ground/AA follow the existing road scroll',()=>{
  const s=createFlightSteering(1,1);
  steerFlight(s,'interceptor','line',.1,720,200,720,680,1440,900,100);
  const before=structuredClone(s);
  steerFlight(s,'interceptor','line',0,720,200,720,680,1440,900,100);
  assert.deepEqual(s,before);
- assert.equal(steerFlight(s,'tank','line',.1,200,600,720,680,1440,900,100).y,14);
+ assert.equal(steerFlight(s,'tank','line',.1,200,600,720,680,1440,900,100).y,49);
  assert.equal(steerFlight(s,'aa','line',.1,200,600,720,680,1440,900,100).y,49);
 });

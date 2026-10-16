@@ -152,6 +152,6 @@ test('Flux Core completion uses lasersoff only for an actual laser shutdown', ()
   assert.match(config, /key: 'lasersOff'/);
   assert.match(audio, /soundeffects\/lasersoff\.mp3/);
   assert.match(audio, /case 'lasersOff':[\s\S]*?this\.playLasersOffSfx\(\)/);
-  assert.match(flux, /this\.cyclePhase === 'engaged' && this\.cores\.length === 0[\s\S]*?this\.onLasersShutdown\?\.\(\)/);
+  assert.match(flux, /this\.cores\.length === 0 && this\.spawnedCoreCount >= this\.plannedCoreCount[\s\S]*?this\.onLasersShutdown\?\.\(\)/);
   assert.match(arena, /if \(!\(this\.gasHazard\?\.isLaserSuppressed\(this\.time\.now\) \?\? false\)\) this\.audio\.playSfx\('lasersOff'\)/);
 });

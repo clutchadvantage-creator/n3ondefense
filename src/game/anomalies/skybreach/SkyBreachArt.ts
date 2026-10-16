@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SeededRandom } from '../../systems/SeededRandom.ts';
 import { drawSkyHighway } from './SkyBreachHighwayArt.ts';
+import { SKY_GROUND_SCROLL } from './SkyBreachMotion.ts';
 import { CITY_BUILDINGS, CITY_AA_BUILDING, CITY_ROOF_ANCHOR, CITY_TEXTURE_WIDTH, cityTextureHeight,
   drawCityBuilding, drawCityShadow } from './SkyBreachCityArt.ts';
 
@@ -254,7 +255,7 @@ export class SkyBreachWorld {
         // Foundations and roads share motion. Height comes from complete extruded
         // walls; differing ground velocities made the old buildings appear to float.
         this.structures.push({image,shadow,x,baseY:i*layer.spacing-650+(side>0?135:0)+random.next()*55,
-          elevation,speed:49,period,band,side,jitter});
+          elevation,speed:SKY_GROUND_SCROLL,period,band,side,jitter});
       }
     }
     this.edgeClouds=scene.add.tileSprite(width/2,height/2,width,height,'sky-clouds').setDepth(-11).setAlpha(.06).setTileScale(2.3);
@@ -299,15 +300,17 @@ export class SkyBreachWorld {
   }
   private positionAASite(site: SkyAASite): void {
     const groundY=site.y+CITY_AA_BUILDING.height*.78;
-    site.image.setPosition(site.x,site.y).setDepth(-18+groundY/10000);
+    // The threat's whole tower belongs to the foreground architecture layer.
+    // Drawing only the gun over nearer facades makes it look detached from its roof.
+    site.image.setPosition(site.x,site.y).setDepth(-16+groundY/10000);
     site.shadow.setPosition(site.x,groundY);
-    site.wreck.setPosition(site.x,site.y).setVisible(site.destroyed);
-    site.smoke.setPosition(site.x+Math.sin(this.scroll*2)*7,site.y-22).setAlpha(.45).setVisible(site.destroyed);
+    site.wreck.setPosition(site.x,site.y).setDepth(site.image.depth+.00001).setVisible(site.destroyed);
+    site.smoke.setPosition(site.x+Math.sin(this.scroll*2)*7,site.y-22).setDepth(site.image.depth+.00002).setAlpha(.45).setVisible(site.destroyed);
   }
   discardReferences():void { this.aaSites.length=0;this.structures.length=0; }
   update(dt:number,height:number):void {
     this.scroll+=dt;
-    this.layers.forEach((layer,i)=>{layer.tilePositionY-=dt*(49+i*20);if(i)layer.tilePositionX=Math.sin(this.scroll/30+i)*30;});
+    this.layers.forEach((layer,i)=>{layer.tilePositionY-=dt*(SKY_GROUND_SCROLL+i*20);if(i)layer.tilePositionX=Math.sin(this.scroll/30+i)*30;});
     for(const structure of this.structures) {
       structure.baseY+=Math.max(0,dt)*structure.speed;
       // Recycle only after the entire roof, mast and wall have left the viewport.
@@ -319,7 +322,7 @@ export class SkyBreachWorld {
     }
     this.edgeClouds.tilePositionY-=dt*64;
     for (const site of this.aaSites) if (site.active) {
-      site.y+=Math.max(0,dt)*49;
+      site.y+=Math.max(0,dt)*SKY_GROUND_SCROLL;
       if (site.y>height+160) {
         site.active=false;
         for (const image of [site.image,site.shadow,site.wreck,site.smoke]) image.setActive(false).setVisible(false);

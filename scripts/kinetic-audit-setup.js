@@ -10,15 +10,20 @@ export async function kineticAuditArena(options={}) {
   // fixtures with ?import, which would create duplicate singleton managers.
   const moduleAt=new Function('path','return import(path)');
   const {SaveSystem:S}=await moduleAt(dep('SaveSystem')),{RunTransitionManager:T}=await moduleAt(dep('RunTransitionManager'));
+  // A stopped anomaly wakes its preserved Arena in cleanup. Drain that queue
+  // before stopping Arena, especially when rerunning a failed/capture fixture.
+  for(const scene of game.scene.getScenes(false))if(scene.scene.key.startsWith('anomaly-'))game.scene.stop(scene.scene.key);
+  await wait(100);
   for(const scene of game.scene.getScenes(false))if(scene.sys.isActive()||scene.sys.isPaused()||scene.sys.isSleeping())game.scene.stop(scene.scene.key);
   await wait(150);
   if(!S.createProfile('Kinetic '+Date.now().toString().slice(-7)).ok)throw Error('Isolated profile');
   S.setSettings({masterVolume:0,contextualTutorials:false,particles:options.particles!==false});
   S.updateTutorialProgress(p=>{p.firstRunStage='complete';p.firstRunWelcomePending=false;});
+  if(options.maxUpgrades){const {UPGRADE_DEFINITIONS}=await import('/src/data/upgrades.ts');for(const upgrade of UPGRADE_DEFINITIONS)S.setUpgradeLevel(upgrade.id,upgrade.maxLevel);}
   const pads=navigator.getGamepads;
   navigator.getGamepads=()=>[{id:'Xbox 360 Controller',index:0,connected:true,mapping:'standard',axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0,touched:false})),timestamp:performance.now()}];
   game.scene.start('menu');await until(()=>game.scene.isActive('menu')&&game.scene.keys.menu.children.list.length>10,'menu');await wait(150);const menu=game.scene.keys.menu;T.clearForMenu(menu);
-  const session={baseSeed:550055,round:options.round??9,protocol:options.protocol??'normal',objectiveMode:'open',equippedMods:[],modsEarned:[]};
+  const session={baseSeed:550055,round:options.round??9,protocol:options.protocol??'normal',objectiveMode:'open',equippedMods:options.equippedMods??[],modsEarned:[]};
   T.requestArenaTransition(menu,{reason:'new-run',session});
   await until(()=>game.scene.isActive('loading')&&T.snapshot(game.scene.keys.loading).lastStep==='awaiting-user-deploy-confirmation','loading');
   game.scene.keys.loading.confirmDeployment(session,'new-run');

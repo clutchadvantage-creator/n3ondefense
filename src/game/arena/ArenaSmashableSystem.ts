@@ -97,7 +97,8 @@ export class ArenaSmashableSystem implements SmashableCombatQuery {
     private readonly onLoot: (type: ArenaSmashableLoot, x: number, y: number) => void,
     private readonly particlesEnabled: boolean,
     private readonly environment: SmashableEnvironment = 'arena',
-    private readonly onDestroyed?: (x: number, y: number) => void
+    private readonly onDestroyed?: (x: number, y: number) => void,
+    private readonly onDamaged?: (x: number, y: number) => void
   ) {
     this.destructionGraphics = scene.add.graphics().setDepth(13.55);
     this.destructionGlowGraphics = scene.add.graphics().setDepth(13.6).setBlendMode(Phaser.BlendModes.ADD);
@@ -225,6 +226,7 @@ export class ArenaSmashableSystem implements SmashableCombatQuery {
 
   private applyDamage(prop: SmashableRuntime, damage: number): void {
     prop.hp = Math.max(0, prop.hp - damage);
+    this.onDamaged?.(prop.placement.x, prop.placement.y);
     const nextStage = prop.hp <= prop.maximumHp * 0.34 ? 2 : prop.hp <= prop.maximumHp * 0.68 ? 1 : 0;
     if (nextStage !== prop.damageStage) {
       prop.damageStage = nextStage;

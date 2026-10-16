@@ -1425,6 +1425,7 @@ export class ArenaScene extends Phaser.Scene {
       (strength) => this.audio.setFluxCoreProximity(strength),
       () => this.audio.playSfx('defuseAlarm'),
       () => {
+        this.laserSecurity?.suppress();
         if (!(this.gasHazard?.isLaserSuppressed(this.time.now) ?? false)) this.audio.playSfx('lasersOff');
       }
     );

@@ -3,9 +3,9 @@ import { EchoRuntime } from '../../echo/EchoRuntime.ts';
 import type { EchoShot } from '../../echo/EchoTimeline.ts';
 import { authoritativeEchoDamage, stampEchoDamage, type EchoDamageStamp } from '../../echo/EchoRules.ts';
 import Phaser from 'phaser';
-import { ABILITY_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, WEAPON_BALANCE, getDifficultyCurve } from '../../config/balance/index.ts';
+import { ABILITY_BALANCE, PICKUP_BALANCE, PLAYER_BALANCE, WEAPON_BALANCE } from '../../config/balance/index.ts';
 import { COLORS } from '../../config/constants.ts';
-import { applyEnemyDamageMode, applyEnemyHealthMode, getProtocolModeBalance } from '../../config/modeBalance.ts';
+import { getProtocolModeBalance } from '../../config/modeBalance.ts';
 import { normalizeControllerSettings } from '../../config/controllerSettings.ts';
 import { normalizeAimSettings, type AimSettings } from '../../config/interfaceSettings.ts';
 import { compactBindingLabel } from '../../config/controls.ts';
@@ -81,6 +81,11 @@ import { circleTouchesSmashable, grenadeTouchesSmashable, type SmashableCombatQu
 import { ArenaSmashableSystem } from '../../arena/ArenaSmashableSystem.ts';
 import type { ArenaSmashableLoot } from '../../arena/ArenaSmashableDefinitions.ts';
 import { createHeistSmashablePlacements } from './HeistSmashablePlacement.ts';
+import { heistEnemyStats, heistSentryStats } from './HeistEnemyStats.ts';
+import { hostileOverlapsRect, safeHeistHostilePosition, validHeistHostilePosition } from './HeistHostileGeometry.ts';
+import { createHeistSentryPlan, type HeistSentryRoomPlan } from './HeistSentryPlan.ts';
+import { HeistSentryRooms } from './HeistSentryRooms.ts';
+import { resolveSweptCircleMotion } from '../../physics/SweptCircleCollision.ts';
 import {
   GAMEPLAY_PICKUP_SFX_BY_TYPE,
   GameplayPickupPresentation
@@ -170,6 +175,9 @@ export class AnomalyCombatScene extends Phaser.Scene {
   protected player!: Player;
   protected inputController!: PlayerInput;
   protected facility!: HeistFacilityRuntime;
+  protected sentryRooms: HeistSentryRooms | null = null;
+  private sentryPlans: HeistSentryRoomPlan[] = [];
+  private readonly hostilePositions = new Map<Enemy, { x: number; y: number }>();
   protected trapSystem!: HeistTrapSystem;
   protected random!: SeededRandom;
   protected rewards!: HeistRewardService;
@@ -310,7 +318,10 @@ export class AnomalyCombatScene extends Phaser.Scene {
   protected worldEntryPoint(): {x:number;y:number} { return this.facility.layout.entryPoint; }
   protected worldCollisionGroups(): Phaser.Physics.Arcade.StaticGroup[] { return [this.facility.walls, this.facility.vaultDoors]; }
   protected worldPickupWalls(): readonly RectSpec[] { return this.facility.vaultDoor.body?.enable ? this.pickupClosedDoorWalls : this.facility.wallRects; }
-  protected updateWorld(now: number, _dt: number): void { this.facility.update(now, this.player.x, this.player.y); }
+  protected updateWorld(now: number, dt: number): void {
+    this.facility.update(now, this.player.x, this.player.y);
+    this.sentryRooms?.update(dt * 1000);
+  }
   protected prepareWorldNavigation(): void { this.facility.prepareNavigationTarget(this.player.x, this.player.y); }
   protected resizeWorld(): void {}
   protected weaponContextMultiplier(_now: number): number { return 1; }
@@ -447,6 +458,20 @@ export class AnomalyCombatScene extends Phaser.Scene {
       snarePlayer: (until) => { this.movementSnaredUntil = Math.max(this.movementSnaredUntil, until); },
       playSfx: (name) => this.coreAudio.playSfx(name)
     }, settings.particles);
+    const stats = heistSentryStats(this.campaignPositions.difficultyPosition, data.protocol, data.difficulty?.loadout);
+    this.sentryRooms = new HeistSentryRooms(this, this.sentryPlans, stats.hp, this.fxCirclePool, settings.particles,
+      (x, y) => {
+        const enemy = this.createHeistHostile(x, y, stats);
+        if (!enemy) return null;
+        enemy.setName('heist-room-sentry').setVisible(false);
+        const body = enemy.body as Phaser.Physics.Arcade.Body;
+        body.setSize(32 / enemy.scaleX, 32 / enemy.scaleY, true);
+        body.setImmovable(true); body.moves = false;
+        enemy.lastShotMs = this.time.now;
+        return enemy;
+      },
+      (x, y) => this.lootPickups.spawn(x, y, this.rewards.rollEnemyBonus(), 4_000 + this.enemyLootSequence++),
+      () => this.coreAudio.playSfx('enemyDeath'));
     this.spawnInfiltrationPatrols();
     this.audio.play('facility-arrival');
     this.audio.play('corridor-ambience');
@@ -472,6 +497,9 @@ export class AnomalyCombatScene extends Phaser.Scene {
     this.pickups.length = 0;
     this.pickupMotionRoots.length = 0;
     this.environmentSmashables = null;
+    this.sentryRooms = null;
+    this.sentryPlans = [];
+    this.hostilePositions.clear();
     this.fences.length = 0;
     this.turrets.length = 0;
     this.mines.length = 0;
@@ -882,13 +910,15 @@ export class AnomalyCombatScene extends Phaser.Scene {
 
   protected createEnvironmentSmashables(): void {
     const placements = createHeistSmashablePlacements(this.facility.layout, this.session.round);
+    this.sentryPlans = createHeistSentryPlan(this.facility.layout, placements);
     this.environmentSmashables = new ArenaSmashableSystem(
       this,
       placements,
       (type, x, y) => this.dropEnvironmentSmashableLoot(type, x, y),
       SaveSystem.get().settings.particles,
       'heist',
-      () => this.coreAudio.playSfx('smashableBreak')
+      () => this.coreAudio.playSfx('smashableBreak'),
+      (x, y) => this.sentryRooms?.damageAt(x, y)
     );
   }
 
@@ -1441,6 +1471,18 @@ export class AnomalyCombatScene extends Phaser.Scene {
     for (let index = this.enemies.length - 1; index >= 0; index -= 1) {
       const enemy = this.enemies[index];
       if (!enemy.active || enemy.hp <= 0) { this.removeEnemy(enemy, index); continue; }
+      this.containHeistHostile(enemy);
+      if (this.sentryRooms?.owns(enemy)) {
+        enemy.setVelocity(0, 0);
+        const angle = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
+        this.sentryRooms.aim(enemy, angle);
+        if (now >= enemy.disabledUntil && (enemy.x - this.player.x) ** 2 + (enemy.y - this.player.y) ** 2 < 360 ** 2
+          && now - enemy.lastShotMs >= 1350) {
+          enemy.lastShotMs = now;
+          this.spawnProjectile('enemy', enemy.x, enemy.y, angle, 330, enemy.stats.damage, 0xff6a91, HEIST_BALANCE.enemyProjectileLifeMs);
+        }
+        continue;
+      }
       enemy.updateDamageFlash(now);
       enemy.updateMechanicalPresentation(now);
       const navigationTarget = this.facility.navigationTarget(
@@ -1737,7 +1779,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
     const forceMiniBoss = this.session.dev?.forceMiniBoss;
     const spawnMiniBoss = forceMiniBoss === true
       || (forceMiniBoss !== false && this.random.next() < HEIST_BALANCE.miniBossChance);
-    const regularCapacity = Math.max(0, HEIST_BALANCE.escapeMaximumEnemies - this.enemies.length
+    const regularCapacity = Math.max(0, HEIST_BALANCE.escapeMaximumEnemies - this.mobileHeistEnemyCount()
       - (spawnMiniBoss ? 1 : 0));
     const count = Math.min(regularCapacity,
       HEIST_BALANCE.escapeInitialEnemyCount + Math.floor(this.campaignPositions.difficultyPosition / 8) * HEIST_BALANCE.enemyPerEightRounds);
@@ -1749,7 +1791,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
       this.spawnEnemy(types[index % types.length], point.x + (index % 3 - 1) * 34,
         point.y + (Math.floor(index / 3) % 3 - 1) * 30, false);
     }
-    if (spawnMiniBoss && this.enemies.length < HEIST_BALANCE.escapeMaximumEnemies) {
+    if (spawnMiniBoss && this.mobileHeistEnemyCount() < HEIST_BALANCE.escapeMaximumEnemies) {
       const point = positions[Math.min(positions.length - 1, this.facility.layout.vaultDoors.length + 2)];
       this.spawnEnemy('tank', point.x, point.y, true);
     }
@@ -1786,7 +1828,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
   protected updateEscapeReinforcements(now: number): void {
     if (this.phase !== 'escape' || now < this.nextEscapeReinforcementAt || this.returning) return;
     this.nextEscapeReinforcementAt = now + HEIST_BALANCE.escapeReinforcementIntervalMs;
-    const capacity = Math.max(0, HEIST_BALANCE.escapeMaximumEnemies - this.enemies.length);
+    const capacity = Math.max(0, HEIST_BALANCE.escapeMaximumEnemies - this.mobileHeistEnemyCount());
     const count = Math.min(capacity, HEIST_BALANCE.escapeReinforcementCount);
     if (count <= 0) return;
     const positions = this.facility.ambushPoints;
@@ -1806,34 +1848,61 @@ export class AnomalyCombatScene extends Phaser.Scene {
   }
 
   protected spawnEnemy(type: keyof typeof baseEnemyStats, x: number, y: number, elite: boolean): void {
-    const base = baseEnemyStats[type];
-    const curve = getDifficultyCurve(this.campaignPositions.difficultyPosition);
-    const mode = getProtocolModeBalance(this.session.protocol);
-    const stats: EnemyStats = {
-      ...base,
-      hp: applyEnemyHealthMode(base.hp * curve.healthMultiplier * (elite ? 2.8 : 1)
-        * (this.session.difficulty?.loadout?.health ?? 1), this.session.protocol),
-      damage: applyEnemyDamageMode(base.damage * curve.damageMultiplier * (elite ? 1.35 : 1)
-        * (this.session.difficulty?.loadout?.damage ?? 1), this.session.protocol),
-      speed: base.speed * curve.speedMultiplier * mode.enemySpeedMultiplier * (elite ? 0.92 : 1),
-      size: base.size * (elite ? 1.55 : 1),
-      color: elite ? 0xffd85c : base.color
-    };
-    const enemy = new Enemy(this, x, y, ENEMY_ROBOT_FRAMES[type].textureKey, stats);
+    const stats = heistEnemyStats(type, this.campaignPositions.difficultyPosition, this.session.protocol, elite, this.session.difficulty?.loadout);
+    const enemy = this.createHeistHostile(x, y, stats);
+    if (!enemy) return;
     if (this.modRuntime.hasInfusion('enemy-growth')) enemy.setScale(elite ? 1.7 : 1.12);
+    // Infusions can resize a body after construction; validate that final footprint too.
+    (enemy.body as Phaser.Physics.Arcade.Body).updateFromGameObject();
+    this.containHeistHostile(enemy);
     if (elite) {
       enemy.setName('heist-mini-boss');
       this.miniBossEncountered = true;
     }
+  }
+
+  private mobileHeistEnemyCount(): number {
+    let count = 0;
+    for (const enemy of this.enemies) if (!this.sentryRooms?.owns(enemy)) count++;
+    return count;
+  }
+
+  private createHeistHostile(x: number, y: number, stats: EnemyStats): Enemy | null {
+    const safe = safeHeistHostilePosition(this.facility.layout, x, y, stats.size);
+    if (!safe) return null;
+    const enemy = new Enemy(this, safe.x, safe.y, ENEMY_ROBOT_FRAMES[stats.type].textureKey, stats);
     this.enemies.push(enemy);
+    this.hostilePositions.set(enemy, { x: safe.x, y: safe.y });
     const wallCollider = this.physics.add.collider(enemy, this.facility.walls);
     const doorCollider = this.physics.add.collider(enemy, this.facility.vaultDoors);
+    const vaultCollider = this.physics.add.collider(enemy, this.facility.hostileVaultBarrier);
     enemy.once(Phaser.GameObjects.Events.DESTROY, () => {
       // Bodies do not own Phaser colliders. Retire the pair at enemy death,
       // instead of iterating dead enemy overlaps for the rest of the HEIST.
       if (wallCollider.world) wallCollider.destroy();
       if (doorCollider.world) doorCollider.destroy();
+      if (vaultCollider.world) vaultCollider.destroy();
+      this.hostilePositions.delete(enemy);
     });
+    return enemy;
+  }
+
+  private containHeistHostile(enemy: Enemy): void {
+    const body = enemy.body as Phaser.Physics.Arcade.Body;
+    const previous = this.hostilePositions.get(enemy);
+    if (!previous) return;
+    const halfW = body.halfWidth, halfH = body.halfHeight, vault = this.facility.layout.vaultBounds;
+    if (hostileOverlapsRect(enemy.x, enemy.y, halfW, halfH, vault)) {
+      const safe = validHeistHostilePosition(this.facility.layout, previous.x, previous.y, halfW, halfH) ? previous
+        : safeHeistHostilePosition(this.facility.layout, enemy.x, enemy.y, halfW, halfH);
+      if (safe) body.reset(safe.x, safe.y);
+    } else if (Math.max(previous.x, enemy.x) + halfW > vault.x && Math.min(previous.x, enemy.x) - halfW < vault.x + vault.w
+      && Math.max(previous.y, enemy.y) + halfH > vault.y && Math.min(previous.y, enemy.y) - halfH < vault.y + vault.h) {
+      // Catch knockback/relocation that crosses the whole vault in one physics step.
+      const sweep = resolveSweptCircleMotion(previous.x, previous.y, enemy.x, enemy.y, Math.max(halfW, halfH), [vault]);
+      if (sweep.hit) body.reset(sweep.x, sweep.y);
+    }
+    previous.x = enemy.x; previous.y = enemy.y;
   }
 
   protected openExtraction(): void {
@@ -1910,14 +1979,14 @@ export class AnomalyCombatScene extends Phaser.Scene {
     const ring = this.add.circle(x, y, 14, color, 0.18).setStrokeStyle(4, color, 1).setDepth(12);
     this.tweens.add({ targets: flash, scale: 3.2, alpha: 0, duration: 180, onComplete: () => flash.destroy() });
     this.tweens.add({ targets: ring, scale: 4.8, alpha: 0, duration: 390, onComplete: () => ring.destroy() });
-    const sparkArc = this.add.graphics().setDepth(13).setBlendMode(Phaser.BlendModes.ADD);
+    const sparkArc = this.add.graphics().setPosition(x, y).setDepth(13).setBlendMode(Phaser.BlendModes.ADD);
     sparkArc.lineStyle(2, 0xffffff, 0.92);
     for (let index = 0; index < 4; index += 1) {
       const angle = index / 4 * Math.PI * 2 + container.index * 0.31;
       sparkArc.beginPath();
-      sparkArc.moveTo(x + Math.cos(angle) * 8, y + Math.sin(angle) * 8);
-      sparkArc.lineTo(x + Math.cos(angle + 0.16) * 27, y + Math.sin(angle + 0.16) * 27);
-      sparkArc.lineTo(x + Math.cos(angle - 0.09) * 43, y + Math.sin(angle - 0.09) * 43);
+      sparkArc.moveTo(Math.cos(angle) * 8, Math.sin(angle) * 8);
+      sparkArc.lineTo(Math.cos(angle + 0.16) * 27, Math.sin(angle + 0.16) * 27);
+      sparkArc.lineTo(Math.cos(angle - 0.09) * 43, Math.sin(angle - 0.09) * 43);
       sparkArc.strokePath();
     }
     this.tweens.add({ targets: sparkArc, alpha: 0, scaleX: 1.35, scaleY: 1.35, duration: 210,
@@ -1943,6 +2012,7 @@ export class AnomalyCombatScene extends Phaser.Scene {
   protected damageEnemy(enemy: Enemy, amount: number, echo?: EchoDamageStamp): void {
     if (echo) amount = authoritativeEchoDamage(amount, echo);
     if (!enemy.active || enemy.hp <= 0 || amount <= 0) return;
+    this.sentryRooms?.damageAt(enemy.x, enemy.y);
     if (echo) { this.damageDealt += enemy.takeDamage(amount, 'echo', echo); return; }
     const applied = Math.min(enemy.hp, amount);
     enemy.hp -= applied;
@@ -2439,6 +2509,10 @@ export class AnomalyCombatScene extends Phaser.Scene {
   }
 
   protected removeEnemy(enemy: Enemy, index: number): void {
+    if (enemy.hp <= 0 && this.sentryRooms?.owns(enemy)) {
+      if (this.sentryRooms.killed(enemy)) this.collectionEnemyKills++;
+      enemy.destroy(); this.enemies.splice(index, 1); return;
+    }
     if (enemy.name === 'heist-mini-boss' && enemy.hp <= 0) {
       this.miniBossKilled = true;
       const premiumDrop = this.rewards.rollMiniBossReward();
@@ -2715,6 +2789,10 @@ export class AnomalyCombatScene extends Phaser.Scene {
     safely('fx-pool-references', () => this.fxCirclePool?.discardReferences());
     safely('loot-pickup-references', () => this.lootPickups?.discardReferences());
     safely('smashable-references', () => this.environmentSmashables?.discardReferences());
+    safely('sentry-references', () => this.sentryRooms?.discardReferences());
+    this.sentryRooms = null;
+    this.sentryPlans = [];
+    this.hostilePositions.clear();
     safely('trap-references', () => this.trapSystem?.discardReferences());
     this.environmentSmashables = null;
     this.enemies.length = 0;

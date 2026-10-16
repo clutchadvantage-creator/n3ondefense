@@ -8,6 +8,8 @@ export const skyForwardAim = (x: number, y: number, lateral: number) => ({
 export const SKY_DURABILITY: Record<SkyRole, number> = {
   drone: 1, interceptor: 1, strike: 1, tank: 1, zeppelin: 7, aa: 1
 };
+/** Roads, foundations, rooftop emplacements and grounded vehicles share this speed. */
+export const SKY_GROUND_SCROLL = 49;
 
 export interface FlightSteering {
   phase: number; side: number; stage: 'attack' | 'bank' | 'climb'; stageAge: number;
@@ -43,8 +45,7 @@ export function steerFlight(s:FlightSteering,role:SkyRole,pattern:Formation,dt:n
   x:number,y:number,playerX:number,playerY:number,width:number,height:number,speed:number,
   separationX=0,separationY=0) {
   dt=clamp(dt,0,.1);s.age+=dt;
-  if(role==='tank')return {x:0,y:14}; // Same scroll as the lowest industrial layer.
-  if(role==='aa')return {x:0,y:49};
+  if(role==='tank'||role==='aa')return {x:0,y:SKY_GROUND_SCROLL};
   if(role==='zeppelin')return accelerate(s,Math.sin(s.age*.45+s.phase)*24,(245-y)*.45,75,dt);
   if(role==='drone') {
     s.stageAge+=dt;

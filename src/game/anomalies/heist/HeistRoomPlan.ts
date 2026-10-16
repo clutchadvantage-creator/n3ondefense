@@ -45,7 +45,7 @@ export interface HeistRoomDetail extends HeistLayoutPoint {
 /** Existing side chambers gain a purpose without changing the maze graph,
  * loot budget, or the central 184px movement lane. All raised fixtures fit
  * inside the wall's existing footprint; floor diagrams are flat inlays. */
-export const createHeistRoomPlan = (layout: HeistFacilityLayout): HeistRoomDetail[] => {
+export const createHeistRoomPlan = (layout: HeistFacilityLayout, maximum = 24): HeistRoomDetail[] => {
   const degrees = new Map(layout.nodes.map(n => [n.id, 0]));
   for (const [a, b] of layout.edges) { degrees.set(a, (degrees.get(a) ?? 0) + 1); degrees.set(b, (degrees.get(b) ?? 0) + 1); }
   const excluded = new Set([layout.entryNodeId, layout.extractionNodeId,
@@ -58,7 +58,7 @@ export const createHeistRoomPlan = (layout: HeistFacilityLayout): HeistRoomDetai
     const mount = findHeistWallMount(layout, node);
     if (!mount) continue;
     rooms.push({ x: node.x, y: node.y, nodeId: node.id, mount, role: HEIST_ROOM_ROLES[rooms.length % HEIST_ROOM_ROLES.length] });
-    if (rooms.length === 24) break;
+    if (rooms.length === maximum) break;
   }
   return rooms;
 };

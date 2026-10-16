@@ -1,0 +1,1074 @@
+{
+  "date": "2026-10-16",
+  "baselineRevision": "b602e62",
+  "scope": "Arena generation, SkyBreach, Heist and Flux Core repair",
+  "automated": {
+    "command": "npm.cmd test",
+    "passed": 1094,
+    "failed": 0,
+    "skipped": 0,
+    "build": {
+      "command": "npm.cmd run build",
+      "passed": true
+    },
+    "lint": "No lint script defined"
+  },
+  "browser": {
+    "viewport": {
+      "width": 1600,
+      "height": 1000
+    },
+    "isolated": true,
+    "hardware": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 (0x00002F04) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "checks": {
+      "repair-arena-browser": {
+        "checks": 1,
+        "errors": 0
+      },
+      "repair-sky-browser": {
+        "checks": 47,
+        "errors": 0
+      },
+      "repair-heist-browser": {
+        "checks": 43,
+        "errors": 0
+      },
+      "repair-flux-browser": {
+        "checks": 55,
+        "errors": 0
+      }
+    },
+    "arena": {
+      "comparedLayouts": 480,
+      "archetypes": [
+        {
+          "archetype": "open-field",
+          "before": {
+            "requested": 20,
+            "matched": 19,
+            "fallbacks": 1,
+            "meanSmallWallSegments": 1.3,
+            "meanWalls": 11.1,
+            "meanEquipment": 10.85,
+            "generationMs": {
+              "mean": 5.610000002384186,
+              "p95": 13.100000143051147,
+              "max": 13.100000143051147
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 18,
+            "fallbacks": 2,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 9.4,
+            "meanEquipment": 4.8,
+            "generationMs": {
+              "mean": 3.7549999833106993,
+              "p95": 9.800000190734863,
+              "max": 9.800000190734863
+            }
+          }
+        },
+        {
+          "archetype": "islands",
+          "before": {
+            "requested": 20,
+            "matched": 6,
+            "fallbacks": 20,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 9.6,
+            "meanEquipment": 0,
+            "generationMs": {
+              "mean": 7.064999961853028,
+              "p95": 9.399999856948853,
+              "max": 9.399999856948853
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 6,
+            "fallbacks": 20,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 9.6,
+            "meanEquipment": 0,
+            "generationMs": {
+              "mean": 6.400000023841858,
+              "p95": 7.599999904632568,
+              "max": 7.599999904632568
+            }
+          }
+        },
+        {
+          "archetype": "fortress",
+          "before": {
+            "requested": 20,
+            "matched": 18,
+            "fallbacks": 2,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 13.8,
+            "meanEquipment": 4.25,
+            "generationMs": {
+              "mean": 5.275,
+              "p95": 13.5,
+              "max": 13.5
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 19,
+            "fallbacks": 1,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 13.9,
+            "meanEquipment": 2.6,
+            "generationMs": {
+              "mean": 4.480000019073486,
+              "p95": 12.399999856948853,
+              "max": 12.399999856948853
+            }
+          }
+        },
+        {
+          "archetype": "ring",
+          "before": {
+            "requested": 20,
+            "matched": 20,
+            "fallbacks": 0,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 12,
+            "meanEquipment": 4.1,
+            "generationMs": {
+              "mean": 1.35,
+              "p95": 3.200000047683716,
+              "max": 3.200000047683716
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 20,
+            "fallbacks": 0,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 12,
+            "meanEquipment": 3.45,
+            "generationMs": {
+              "mean": 1.2299999952316285,
+              "p95": 2.799999952316284,
+              "max": 2.799999952316284
+            }
+          }
+        },
+        {
+          "archetype": "split",
+          "before": {
+            "requested": 20,
+            "matched": 20,
+            "fallbacks": 0,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 7,
+            "meanEquipment": 6.55,
+            "generationMs": {
+              "mean": 0.9149999856948853,
+              "p95": 1.5,
+              "max": 1.5
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 20,
+            "fallbacks": 0,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 7,
+            "meanEquipment": 6.45,
+            "generationMs": {
+              "mean": 1.0799999833106995,
+              "p95": 2.9000000953674316,
+              "max": 2.9000000953674316
+            }
+          }
+        },
+        {
+          "archetype": "hub-spoke",
+          "before": {
+            "requested": 20,
+            "matched": 0,
+            "fallbacks": 20,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 9.6,
+            "meanEquipment": 0,
+            "generationMs": {
+              "mean": 9.5849999666214,
+              "p95": 12.099999904632568,
+              "max": 12.099999904632568
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 0,
+            "fallbacks": 20,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 9.6,
+            "meanEquipment": 0,
+            "generationMs": {
+              "mean": 9.439999997615814,
+              "p95": 12,
+              "max": 12
+            }
+          }
+        },
+        {
+          "archetype": "canyon",
+          "before": {
+            "requested": 20,
+            "matched": 7,
+            "fallbacks": 13,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 12.3,
+            "meanEquipment": 1.35,
+            "generationMs": {
+              "mean": 4.469999957084656,
+              "p95": 6.799999952316284,
+              "max": 6.799999952316284
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 8,
+            "fallbacks": 12,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 12.2,
+            "meanEquipment": 1.65,
+            "generationMs": {
+              "mean": 4.085000038146973,
+              "p95": 7,
+              "max": 7
+            }
+          }
+        },
+        {
+          "archetype": "maze",
+          "before": {
+            "requested": 20,
+            "matched": 17,
+            "fallbacks": 3,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 9.7,
+            "meanEquipment": 1.25,
+            "generationMs": {
+              "mean": 2.9699999928474425,
+              "p95": 6.299999952316284,
+              "max": 6.299999952316284
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 18,
+            "fallbacks": 2,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 9.6,
+            "meanEquipment": 0.65,
+            "generationMs": {
+              "mean": 3.015000021457672,
+              "p95": 6.300000190734863,
+              "max": 6.300000190734863
+            }
+          }
+        },
+        {
+          "archetype": "chambers",
+          "before": {
+            "requested": 20,
+            "matched": 16,
+            "fallbacks": 4,
+            "meanSmallWallSegments": 2.4,
+            "meanWalls": 30.4,
+            "meanEquipment": 2.4,
+            "generationMs": {
+              "mean": 3.0250000238418577,
+              "p95": 7.8999998569488525,
+              "max": 7.8999998569488525
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 19,
+            "fallbacks": 1,
+            "meanSmallWallSegments": 1.8,
+            "meanWalls": 34.5,
+            "meanEquipment": 0.7,
+            "generationMs": {
+              "mean": 1.684999978542328,
+              "p95": 5.700000047683716,
+              "max": 5.700000047683716
+            }
+          }
+        },
+        {
+          "archetype": "asymmetric-clusters",
+          "before": {
+            "requested": 20,
+            "matched": 20,
+            "fallbacks": 0,
+            "meanSmallWallSegments": 59.5,
+            "meanWalls": 68,
+            "meanEquipment": 3.65,
+            "generationMs": {
+              "mean": 1.2449999928474427,
+              "p95": 3.700000047683716,
+              "max": 3.700000047683716
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 20,
+            "fallbacks": 0,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 13.55,
+            "meanEquipment": 2.3,
+            "generationMs": {
+              "mean": 0.4850000023841858,
+              "p95": 0.8999998569488525,
+              "max": 0.8999998569488525
+            }
+          }
+        },
+        {
+          "archetype": "crossroads",
+          "before": {
+            "requested": 20,
+            "matched": 3,
+            "fallbacks": 20,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 9.6,
+            "meanEquipment": 0,
+            "generationMs": {
+              "mean": 2.8050000071525574,
+              "p95": 3.700000047683716,
+              "max": 3.700000047683716
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 3,
+            "fallbacks": 20,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 9.6,
+            "meanEquipment": 0,
+            "generationMs": {
+              "mean": 2.7449999928474424,
+              "p95": 3.9000000953674316,
+              "max": 3.9000000953674316
+            }
+          }
+        },
+        {
+          "archetype": "perimeter",
+          "before": {
+            "requested": 20,
+            "matched": 19,
+            "fallbacks": 1,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 13.9,
+            "meanEquipment": 4.6,
+            "generationMs": {
+              "mean": 3.6700000166893005,
+              "p95": 8.700000047683716,
+              "max": 8.700000047683716
+            }
+          },
+          "after": {
+            "requested": 20,
+            "matched": 20,
+            "fallbacks": 0,
+            "meanSmallWallSegments": 0,
+            "meanWalls": 14,
+            "meanEquipment": 2.7,
+            "generationMs": {
+              "mean": 3.2699999690055845,
+              "p95": 7.099999904632568,
+              "max": 7.099999904632568
+            }
+          }
+        }
+      ],
+      "sequence": {
+        "layouts": 300,
+        "distinctAcceptedArchetypes": 11,
+        "fallbacks": 29,
+        "consecutiveDuplicates": 0,
+        "timings": {
+          "mean": 5.812333334287008,
+          "p95": 14,
+          "max": 18.600000143051147
+        }
+      }
+    },
+    "skybreach": {
+      "samples": [
+        {
+          "mode": "normal",
+          "round": 9,
+          "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 (0x00002F04) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "maxHealth": 130,
+          "maxEnergy": 110,
+          "weapon": {
+            "name": "VX Neon Carbine",
+            "damage": 16,
+            "fireRate": 9,
+            "projectileSpeed": 700,
+            "critChance": 0.1,
+            "heatPerShot": 9,
+            "maxHeat": 100,
+            "cooldownRate": 40
+          },
+          "mods": [],
+          "cadence": 1,
+          "tempo": 1,
+          "resources": {
+            "health": 28.6,
+            "energy": 55,
+            "grenadeRounds": 45000.00000000001,
+            "scattershot": 45000.00000000001
+          },
+          "rates": [
+            {
+              "label": "before",
+              "opportunitiesPerMinute": {
+                "health": 4.808,
+                "energy": 0.798,
+                "grenadeRounds": 0.62,
+                "scattershot": 0.646
+              }
+            },
+            {
+              "label": "after",
+              "opportunitiesPerMinute": {
+                "health": 4.808,
+                "energy": 0.798,
+                "grenadeRounds": 0.874,
+                "scattershot": 0.958
+              }
+            }
+          ],
+          "aaMaxAnchorError": 0,
+          "frames": {
+            "n": 480,
+            "mean": 16.64083333313465,
+            "p95": 16.90000009536743,
+            "max": 17.100000143051147
+          },
+          "updateMs": {
+            "n": 481,
+            "mean": 0.5725571712684234,
+            "p95": 0.8000001907348633,
+            "max": 1.5
+          },
+          "flights": 20,
+          "shots": 14,
+          "seekers": 1,
+          "objects": 628
+        },
+        {
+          "mode": "supreme",
+          "round": 26,
+          "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 (0x00002F04) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "maxHealth": 230,
+          "maxEnergy": 160,
+          "weapon": {
+            "name": "VX Neon Carbine",
+            "damage": 39.24,
+            "fireRate": 13,
+            "projectileSpeed": 940,
+            "critChance": 0.30000000000000004,
+            "heatPerShot": 5,
+            "maxHeat": 100,
+            "cooldownRate": 40
+          },
+          "mods": [
+            {
+              "id": "calibrated-barrel",
+              "rank": 3
+            },
+            {
+              "id": "sentry-dominion",
+              "rank": 3
+            },
+            {
+              "id": "magnetic-service",
+              "rank": 3
+            },
+            {
+              "id": "supreme-crown-of-stars",
+              "rank": 3
+            },
+            {
+              "id": "supreme-singularity-chamber",
+              "rank": 3
+            }
+          ],
+          "cadence": 0.6804,
+          "tempo": 1.4,
+          "resources": {
+            "health": 50.599999999999994,
+            "energy": 80,
+            "grenadeRounds": 198000,
+            "scattershot": 198000
+          },
+          "rates": [
+            {
+              "label": "before",
+              "opportunitiesPerMinute": {
+                "health": 11.47,
+                "energy": 2.958,
+                "grenadeRounds": 1.242,
+                "scattershot": 1.232
+              }
+            },
+            {
+              "label": "after",
+              "opportunitiesPerMinute": {
+                "health": 14.15,
+                "energy": 7.864,
+                "grenadeRounds": 1.39,
+                "scattershot": 1.454
+              }
+            }
+          ],
+          "aaMaxAnchorError": 0,
+          "frames": {
+            "n": 481,
+            "mean": 16.625571725769994,
+            "p95": 16.90000009536743,
+            "max": 17.199999809265137
+          },
+          "updateMs": {
+            "n": 482,
+            "mean": 0.5425311198373058,
+            "p95": 0.7999999523162842,
+            "max": 1.1000001430511475
+          },
+          "flights": 24,
+          "shots": 10,
+          "seekers": 0,
+          "objects": 639
+        }
+      ],
+      "rateMethod": "100 seeds x 300 seconds; Normal9: kill every 1.4s, 40% missing HP/energy; Supreme26: kill every 0.7s, 75% missing HP/80% missing energy; 2s collection delay; pickup-chance multiplier 1; actual equipped ammo durations. Opportunities per minute, not healing per minute or an unassisted survival result.",
+      "matchedStress": {
+        "before": {
+          "mode": "supreme-capricornus",
+          "frames": 301,
+          "p50": 16.699999809265137,
+          "p95": 16.899999856948853,
+          "max": 17.100000143051147,
+          "rockets": 0,
+          "objectsBefore": 789,
+          "objectsAfter": 787,
+          "destruction": {
+            "activeFragments": 0,
+            "peakFragments": 168,
+            "fragmentCapacity": 168,
+            "fragmentPool": {
+              "created": 168,
+              "reused": 262,
+              "active": 0,
+              "available": 168
+            },
+            "activeBursts": 0,
+            "peakBursts": 96,
+            "allocationMisses": 58,
+            "degradedEffects": 165,
+            "droppedOptionalFragments": 58
+          }
+        },
+        "after": {
+          "mode": "supreme-capricornus",
+          "frames": 300,
+          "p50": 16.699999809265137,
+          "p95": 16.899999856948853,
+          "max": 17,
+          "rockets": 0,
+          "objectsBefore": 789,
+          "objectsAfter": 787,
+          "destruction": {
+            "activeFragments": 0,
+            "peakFragments": 168,
+            "fragmentCapacity": 168,
+            "fragmentPool": {
+              "created": 168,
+              "reused": 262,
+              "active": 0,
+              "available": 168
+            },
+            "activeBursts": 0,
+            "peakBursts": 96,
+            "allocationMisses": 58,
+            "degradedEffects": 165,
+            "droppedOptionalFragments": 58
+          }
+        },
+        "method": "Existing flight-support stress fixture, Supreme26, rank3 Mods, five seconds, 32 rockets/160 enemy rounds/eight destruction slots. Not the all-upgrades sample."
+      }
+    },
+    "heist": {
+      "samples": [
+        {
+          "miniBossHp": 2401.08624,
+          "sentryHp": 1200.54312,
+          "debris": {
+            "activeFragments": 30,
+            "peakFragments": 30,
+            "fragmentCapacity": 168,
+            "fragmentPool": {
+              "created": 64,
+              "reused": 30,
+              "active": 30,
+              "available": 34
+            },
+            "activeBursts": 7,
+            "peakBursts": 9,
+            "allocationMisses": 0,
+            "degradedEffects": 0,
+            "droppedOptionalFragments": 0
+          }
+        }
+      ],
+      "checks": [
+        {
+          "ok": true,
+          "label": "three independently planned rooms"
+        },
+        {
+          "ok": true,
+          "label": "Arena remains suspended"
+        },
+        {
+          "ok": true,
+          "label": "entering rooms without damage leaves every sentry concealed"
+        },
+        {
+          "ok": true,
+          "label": "unrelated patrol damage outside rooms triggers nothing"
+        },
+        {
+          "ok": true,
+          "label": "actual smashable hit deploys only its room"
+        },
+        {
+          "ok": true,
+          "label": "deployment visible before combat entity appears"
+        },
+        {
+          "ok": true,
+          "label": "pause freezes deployment"
+        },
+        {
+          "ok": true,
+          "label": "sentry becomes a live combat entity only after rise"
+        },
+        {
+          "ok": true,
+          "label": "enemy damage inside second room triggers only second room"
+        },
+        {
+          "ok": true,
+          "label": "active sentry fires through existing projectile pipeline"
+        },
+        {
+          "ok": true,
+          "label": "Supreme26 health exactly half applicable mini-boss"
+        },
+        {
+          "ok": true,
+          "label": "existing damage pipeline damages sentry"
+        },
+        {
+          "ok": true,
+          "label": "sentry destruction retires combat entity"
+        },
+        {
+          "ok": true,
+          "label": "one provisional loot reward at sentry position"
+        },
+        {
+          "ok": true,
+          "label": "repeat death/trigger cannot duplicate loot; secondary mechanical breakup plays"
+        },
+        {
+          "ok": true,
+          "label": "sentry physical loot is collectible and provisional"
+        },
+        {
+          "ok": true,
+          "label": "spawn request inside open vault relocates safely outside"
+        },
+        {
+          "ok": true,
+          "label": "forced hostile relocation into vault restores prior safe position"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "hostile route target stays outside open vault"
+        },
+        {
+          "ok": true,
+          "label": "real hostile physics cannot cross open vault doorway"
+        },
+        {
+          "ok": true,
+          "label": "opened vault remains accessible to player"
+        },
+        {
+          "ok": true,
+          "label": "container electrical burst has a local origin at the destroyed container"
+        },
+        {
+          "ok": true,
+          "label": "scaling destruction does not translate its origin"
+        },
+        {
+          "ok": true,
+          "label": "shutdown retires room state and hostile references"
+        },
+        {
+          "ok": true,
+          "label": "original Arena resumes"
+        }
+      ]
+    },
+    "flux": {
+      "cases": [
+        {
+          "selected": 1,
+          "passed": true
+        },
+        {
+          "selected": 3,
+          "passed": true
+        },
+        {
+          "selected": 6,
+          "passed": true
+        },
+        {
+          "selected": 3,
+          "passed": true
+        }
+      ],
+      "checks": [
+        {
+          "ok": true,
+          "label": "startup stays off until first complete group"
+        },
+        {
+          "ok": true,
+          "label": "gas recovery schedules a finite next deployment"
+        },
+        {
+          "ok": true,
+          "label": "last partially open window cannot activate beams"
+        },
+        {
+          "ok": true,
+          "label": "actual final core window still visibly deploying"
+        },
+        {
+          "ok": true,
+          "label": "gate releases only after every actual visual completes"
+        },
+        {
+          "ok": true,
+          "label": "normal laser pattern operates after gate release"
+        },
+        {
+          "ok": true,
+          "label": "final death immediately clears beam render and damage segments"
+        },
+        {
+          "ok": true,
+          "label": "shutdown remains exactly nine seconds"
+        },
+        {
+          "ok": true,
+          "label": "shutdown interval does not spawn cores"
+        },
+        {
+          "ok": true,
+          "label": "timer expiry leaves lasers off through existing next-cycle wait"
+        },
+        {
+          "ok": true,
+          "label": "selected group incomplete stays off"
+        },
+        {
+          "ok": true,
+          "label": "selected group incomplete stays off"
+        },
+        {
+          "ok": true,
+          "label": "last partially open window cannot activate beams"
+        },
+        {
+          "ok": true,
+          "label": "actual final core window still visibly deploying"
+        },
+        {
+          "ok": true,
+          "label": "gate releases only after every actual visual completes"
+        },
+        {
+          "ok": true,
+          "label": "normal laser pattern operates after gate release"
+        },
+        {
+          "ok": true,
+          "label": "partial clear keeps lasers active"
+        },
+        {
+          "ok": true,
+          "label": "partial clear keeps lasers active"
+        },
+        {
+          "ok": true,
+          "label": "final death immediately clears beam render and damage segments"
+        },
+        {
+          "ok": true,
+          "label": "shutdown remains exactly nine seconds"
+        },
+        {
+          "ok": true,
+          "label": "shutdown interval does not spawn cores"
+        },
+        {
+          "ok": true,
+          "label": "timer expiry leaves lasers off through existing next-cycle wait"
+        },
+        {
+          "ok": true,
+          "label": "selected group incomplete stays off"
+        },
+        {
+          "ok": true,
+          "label": "selected group incomplete stays off"
+        },
+        {
+          "ok": true,
+          "label": "selected group incomplete stays off"
+        },
+        {
+          "ok": true,
+          "label": "selected group incomplete stays off"
+        },
+        {
+          "ok": true,
+          "label": "selected group incomplete stays off"
+        },
+        {
+          "ok": true,
+          "label": "last partially open window cannot activate beams"
+        },
+        {
+          "ok": true,
+          "label": "actual final core window still visibly deploying"
+        },
+        {
+          "ok": true,
+          "label": "gate releases only after every actual visual completes"
+        },
+        {
+          "ok": true,
+          "label": "normal laser pattern operates after gate release"
+        },
+        {
+          "ok": true,
+          "label": "partial clear keeps lasers active"
+        },
+        {
+          "ok": true,
+          "label": "partial clear keeps lasers active"
+        },
+        {
+          "ok": true,
+          "label": "partial clear keeps lasers active"
+        },
+        {
+          "ok": true,
+          "label": "partial clear keeps lasers active"
+        },
+        {
+          "ok": true,
+          "label": "partial clear keeps lasers active"
+        },
+        {
+          "ok": true,
+          "label": "final death immediately clears beam render and damage segments"
+        },
+        {
+          "ok": true,
+          "label": "shutdown remains exactly nine seconds"
+        },
+        {
+          "ok": true,
+          "label": "shutdown interval does not spawn cores"
+        },
+        {
+          "ok": true,
+          "label": "timer expiry leaves lasers off through existing next-cycle wait"
+        },
+        {
+          "ok": true,
+          "label": "selected group incomplete stays off"
+        },
+        {
+          "ok": true,
+          "label": "selected group incomplete stays off"
+        },
+        {
+          "ok": true,
+          "label": "last partially open window cannot activate beams"
+        },
+        {
+          "ok": true,
+          "label": "actual final core window still visibly deploying"
+        },
+        {
+          "ok": true,
+          "label": "gate releases only after every actual visual completes"
+        },
+        {
+          "ok": true,
+          "label": "normal laser pattern operates after gate release"
+        },
+        {
+          "ok": true,
+          "label": "partial clear keeps lasers active"
+        },
+        {
+          "ok": true,
+          "label": "partial clear keeps lasers active"
+        },
+        {
+          "ok": true,
+          "label": "final death immediately clears beam render and damage segments"
+        },
+        {
+          "ok": true,
+          "label": "shutdown remains exactly nine seconds"
+        },
+        {
+          "ok": true,
+          "label": "shutdown interval does not spawn cores"
+        },
+        {
+          "ok": true,
+          "label": "timer expiry leaves lasers off through existing next-cycle wait"
+        },
+        {
+          "ok": true,
+          "label": "cleanup probe has rising cores"
+        },
+        {
+          "ok": true,
+          "label": "destroy retires deployment state"
+        },
+        {
+          "ok": true,
+          "label": "retired core system cannot respawn or release gate"
+        }
+      ]
+    }
+  },
+  "visualInspection": [
+    "repair-arena-atlas.png",
+    "repair-arena-asymmetric-art.png",
+    "repair-arena-openfield-art.png",
+    "repair-sky-aa-after.png",
+    "repair-heist-sentry.png",
+    "repair-heist-destruction.png",
+    "repair-heist-destruction-expanded.png"
+  ],
+  "limits": [
+    "Assisted automated browser probes, not an unassisted gameplay playthrough.",
+    "RTX 5070 desktop timings do not establish low-end hardware performance.",
+    "All 12 arena definitions retained. Hub-spoke fell back in 20/20 forced seeds before and after; existing validation/fallback restrictions remain. Sequence accepted 11 archetypes.",
+    "Manual balance check: complete Supreme26 SkyBreach with a fully upgraded loadout using real health/energy expenditure and missed pickups; assess resource tension across several seeds."
+  ],
+  "artifacts": [
+    "artifacts/repair-arena-browser.json",
+    "artifacts/repair-sky-browser.json",
+    "artifacts/repair-heist-browser.json",
+    "artifacts/repair-flux-browser.json"
+  ]
+}
