@@ -1,5 +1,7 @@
 # Arena kinetic rebounds and the preserved bombsite slingshot
 
+**Historical implementation:** The October 14 [arcade movement correction](arcade-movement-correction.md) supersedes the operative momentum, steering and prolonged banking described below. Current operative controls are immediate, with a short, cancellable collision response. The original measurements below remain as the historical record; enemy and controlled-frame behavior remains separate.
+
 Implemented October 13, 2026. Results and before/after measurements are in [kinetic-rebound-validation.json](kinetic-rebound-validation.json). Central tuning is [kinetic.ts](../src/game/config/kinetic.ts).
 
 ## What produces the original launch

@@ -1,0 +1,464 @@
+{
+  "reportDate": "2026-10-15",
+  "verificationDate": "2026-10-14",
+  "implementationCommit": "87040daa9c3d9fd6325dd24f323eb9d5403b8c6c",
+  "baselineCommit": "10a2af5",
+  "regressionCommit": "fbb95f7",
+  "scope": "Restore direct Arena operative input while retaining short solid-contact responses and existing swept collision integration.",
+  "cause": "Direct input assignment was replaced by exponential steering at 1.6/second during a 0.82-physics-second momentum window, with lighter drag extending operative coasting after impact.",
+  "tuning": {
+    "responsePhysicsSeconds": 0.1,
+    "responseSpeedMin": 140,
+    "responseSpeedMax": 360,
+    "contactSlots": 12,
+    "cancelOnReleaseOrChangedDirection": true,
+    "cancelOnSpeedChangeOver": 1,
+    "ordinaryInputSmoothing": false,
+    "operativeMomentumWindow": false,
+    "nativeDragChanged": false,
+    "detonationTimeScale": 0.35,
+    "detonationDurationMs": 850
+  },
+  "tests": {
+    "count": 1076,
+    "failed": 0,
+    "focusedOperativeCases": 10,
+    "productionBuild": "pass"
+  },
+  "fixtures": {
+    "arcade-movement-browser": {
+      "checks": 55,
+      "passed": 55,
+      "cases": 4,
+      "errors": [],
+      "labels": [
+        "clear real Arena runway",
+        "instant keyboard command 1,0",
+        "input never starts momentum window",
+        "instant keyboard command 0,0",
+        "release produces zero displacement",
+        "input never starts momentum window",
+        "instant keyboard command -1,0",
+        "input never starts momentum window",
+        "instant keyboard command 0,-1",
+        "input never starts momentum window",
+        "instant keyboard command 1,1",
+        "input never starts momentum window",
+        "instant keyboard command -1,1",
+        "input never starts momentum window",
+        "instant keyboard command 1,-1",
+        "input never starts momentum window",
+        "instant keyboard command 0,0",
+        "release produces zero displacement",
+        "input never starts momentum window",
+        "pickup and Mod speed multipliers apply instantly",
+        "boosted instant reversal",
+        "boosted instant stop",
+        "analog magnitude stays authoritative",
+        "held full-speed contact rebounds exactly once",
+        "visible outward wall displacement",
+        "wall hold settles without jitter or penetration",
+        "no operative momentum after rebound",
+        "obstacle creates short outward bounce",
+        "collision followed by reversal restores full command immediately",
+        "no release drift after a collision",
+        "high-speed wall containment 900",
+        "uncommanded rebound expires without drift 900",
+        "high-speed wall containment 2400",
+        "uncommanded rebound expires without drift 2400",
+        "high-speed wall containment 8000",
+        "uncommanded rebound expires without drift 8000",
+        "existing Dash ability starts at authored speed",
+        "Dash collision rebounds safely",
+        "Dash duration is unchanged",
+        "reverse input cancels Dash collision response",
+        "release remains immediate after cancelling Dash rebound",
+        "Arcade separation correction still cannot tunnel through walls",
+        "grunt produces physical rebound",
+        "grunt existing shield handling preserved",
+        "tank produces physical rebound",
+        "tank existing shield handling preserved",
+        "flying enemy adds no physical rebound",
+        "drone existing shield handling preserved",
+        "ground collision deals existing contact damage once",
+        "later overlap cannot duplicate contact damage",
+        "incoming ground-body collision uses separate operative response",
+        "incoming enemy cannot leave persistent operative momentum",
+        "rendered loop responds at full speed in both directions",
+        "rendered loop stops on input release",
+        "rendered release has zero residual travel"
+      ]
+    },
+    "arcade-movement-contacts": {
+      "checks": 58,
+      "passed": 58,
+      "cases": 1,
+      "errors": [],
+      "labels": [
+        "clear live collision test area",
+        "slow held contact slides without bounce jitter",
+        "live wall reverses incoming 265",
+        "unchanged input permits bounded response without momentum 265",
+        "live wall reverses incoming 900",
+        "unchanged input permits bounded response without momentum 900",
+        "live wall reverses incoming 2400",
+        "unchanged input permits bounded response without momentum 2400",
+        "live wall reverses incoming 8000",
+        "unchanged input permits bounded response without momentum 8000",
+        "glancing operative collision produces short outward response",
+        "Dash ricochets during its original active window",
+        "holding toward wall produces one response with no repeated bounce",
+        "held wall input does not create runaway energy",
+        "post-sweep overlap separation cannot push through a solid wall",
+        "spawn grunt",
+        "grunt receives player momentum",
+        "grunt contact respects shield",
+        "spawn shooter",
+        "shooter receives player momentum",
+        "shooter contact respects shield",
+        "spawn tank",
+        "tank receives player momentum",
+        "tank contact respects shield",
+        "spawn star",
+        "star receives player momentum",
+        "star contact respects shield",
+        "heavy chassis resists more than light chassis",
+        "swept contact applies existing damage once",
+        "duplicate overlap obeys original hit immunity",
+        "enemy-enemy collision transfers a launch",
+        "both displaced units retain temporary momentum",
+        "legacy crowd nudges cannot add energy during retained momentum",
+        "teleport reset clears stale contact momentum",
+        "moving-panel rider translation preserves genuine momentum",
+        "validated floor event starts",
+        "real lava opening",
+        "kinetic movement over lava loses support",
+        "fall clears stale rebound energy",
+        "lava ejects to safe active body",
+        "existing lava damage still applies",
+        "ejection has safe support and no stale collision launch",
+        "actual wall rebound sends operative into exposed lava",
+        "rebound-induced fall recovers without carrying impact energy",
+        "controlled artillery frame",
+        "controlled frame owns heavy kinetic body",
+        "controlled frame accepts steering without dropping momentum",
+        "controlled collision footprint preserved",
+        "controlled frame can fall into lava",
+        "controlled frame recovery clears momentum",
+        "return restores operative mass and body",
+        "paused scene freezes momentum clock",
+        "200 impacts remain in fixed VFX slots without texture allocation",
+        "cosmetic squash preserves real circle and equipped artwork",
+        "Options reduced-effects change hides existing impact afterimages",
+        "new impacts respect reduced effects immediately",
+        "impact visuals fully retire",
+        "scene shutdown releases kinetic bodies and effects"
+      ]
+    },
+    "arcade-movement-abilities": {
+      "checks": 20,
+      "passed": 20,
+      "cases": 1,
+      "errors": [],
+      "labels": [
+        "clear actual deployable placement",
+        "real friendly fence placed",
+        "friendly fence remains passable during fast movement",
+        "launched enemy remains blocked by fence",
+        "blocked enemy still attacks fence",
+        "real turret placed",
+        "friendly turret remains passable",
+        "real mine placed",
+        "friendly mine remains passable",
+        "actual infusion runtime",
+        "Relay Jump executes through valid destination selection",
+        "Relay clears rebound energy at a legal landing",
+        "Echo records outbound and reflected movement",
+        "Echo return resets physics momentum",
+        "Echo hologram follows the recorded bank",
+        "rendered high-speed gameplay produces rebounds with real input",
+        "rendered gameplay retains an outward wall rebound",
+        "rendered gameplay stays inside generated arena",
+        "new round movement owner releases old hooks and resets energy",
+        "shutdown removes recreated owners"
+      ]
+    },
+    "arcade-movement-slingshot": {
+      "checks": 30,
+      "passed": 30,
+      "cases": 14,
+      "errors": [],
+      "labels": [
+        "multiple real bombsites available",
+        "open diagnostic runway",
+        "standing detonation does not directly change velocity (false)",
+        "standing remains contained (false)",
+        "walking detonation does not directly change velocity (false)",
+        "walking remains contained (false)",
+        "full-speed detonation does not directly change velocity (false)",
+        "full-speed remains contained (false)",
+        "speed-boost detonation does not directly change velocity (false)",
+        "speed-boost remains contained (false)",
+        "dash detonation does not directly change velocity (false)",
+        "dash remains contained (false)",
+        "diagonal detonation does not directly change velocity (false)",
+        "diagonal remains contained (false)",
+        "upgraded-boost detonation does not directly change velocity (false)",
+        "upgraded-boost remains contained (false)",
+        "standing detonation does not directly change velocity (true)",
+        "standing remains contained (true)",
+        "walking detonation does not directly change velocity (true)",
+        "walking remains contained (true)",
+        "full-speed detonation does not directly change velocity (true)",
+        "full-speed remains contained (true)",
+        "speed-boost detonation does not directly change velocity (true)",
+        "speed-boost remains contained (true)",
+        "dash detonation does not directly change velocity (true)",
+        "dash remains contained (true)",
+        "diagonal detonation does not directly change velocity (true)",
+        "diagonal remains contained (true)",
+        "upgraded-boost detonation does not directly change velocity (true)",
+        "upgraded-boost remains contained (true)"
+      ]
+    },
+    "arcade-movement-performance": {
+      "checks": 4,
+      "passed": 4,
+      "cases": 5,
+      "errors": [],
+      "labels": [
+        "WebGL renderer",
+        "isolated performance profile",
+        "artillery possession",
+        "artillery chassis"
+      ]
+    }
+  },
+  "detonationComparison": [
+    {
+      "name": "standing",
+      "continuingDefense": false,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 0,
+      "correctedPeakPxPerSecond": 0
+    },
+    {
+      "name": "walking",
+      "continuingDefense": false,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 152.63425015900907,
+      "correctedPeakPxPerSecond": 152.63425015900907
+    },
+    {
+      "name": "full-speed",
+      "continuingDefense": false,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 436.0978575971785,
+      "correctedPeakPxPerSecond": 436.0978575971785
+    },
+    {
+      "name": "speed-boost",
+      "continuingDefense": false,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 566.9272148763321,
+      "correctedPeakPxPerSecond": 566.9272148763321
+    },
+    {
+      "name": "dash",
+      "continuingDefense": false,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 2943.6605387809586,
+      "correctedPeakPxPerSecond": 2943.6605387809586
+    },
+    {
+      "name": "diagonal",
+      "continuingDefense": false,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 436.0978575971802,
+      "correctedPeakPxPerSecond": 436.0978575971827
+    },
+    {
+      "name": "upgraded-boost",
+      "continuingDefense": false,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 2125.9770557862485,
+      "correctedPeakPxPerSecond": 2125.9770557862485
+    },
+    {
+      "name": "standing",
+      "continuingDefense": true,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 0,
+      "correctedPeakPxPerSecond": 0
+    },
+    {
+      "name": "walking",
+      "continuingDefense": true,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 196.64654963632074,
+      "correctedPeakPxPerSecond": 196.64654963632074
+    },
+    {
+      "name": "full-speed",
+      "continuingDefense": true,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 561.8472846752002,
+      "correctedPeakPxPerSecond": 561.8472846751968
+    },
+    {
+      "name": "speed-boost",
+      "continuingDefense": true,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 730.4014700777589,
+      "correctedPeakPxPerSecond": 730.4014700777623
+    },
+    {
+      "name": "dash",
+      "continuingDefense": true,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 2943.6605387809586,
+      "correctedPeakPxPerSecond": 2943.6605387809586
+    },
+    {
+      "name": "diagonal",
+      "continuingDefense": true,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 561.8472846751988,
+      "correctedPeakPxPerSecond": 561.8472846752037
+    },
+    {
+      "name": "upgraded-boost",
+      "continuingDefense": true,
+      "velocitiesMatch": true,
+      "physicsSubstepsMatch": true,
+      "baselinePeakPxPerSecond": 2739.005512791589,
+      "correctedPeakPxPerSecond": 2739.005512791589
+    }
+  ],
+  "performance": {
+    "environment": {
+      "width": 1600,
+      "height": 1000,
+      "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 (0x00002F04) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    },
+    "sampleMs": 5000,
+    "cases": [
+      {
+        "label": "supreme-26/operative",
+        "rawFrameMs": {
+          "n": 299,
+          "mean": 16.667558528906525,
+          "p95": 17,
+          "p99": 17.100000143051147,
+          "max": 17.600000143051147,
+          "over33": 0
+        },
+        "arcadeCpuMsPerFrame": 0.09632107725111537,
+        "peakEnemies": 29,
+        "peakProjectiles": 15,
+        "kineticBudget": {
+          "peakVisits": 2,
+          "peakContacts": 0
+        }
+      },
+      {
+        "label": "supreme-26/artillery",
+        "rawFrameMs": {
+          "n": 299,
+          "mean": 16.66622073594543,
+          "p95": 16.90000009536743,
+          "p99": 17.09999990463257,
+          "max": 20.59999990463257,
+          "over33": 0
+        },
+        "arcadeCpuMsPerFrame": 0.13712374661678456,
+        "peakEnemies": 30,
+        "peakProjectiles": 80,
+        "kineticBudget": {
+          "peakVisits": 6,
+          "peakContacts": 1
+        }
+      },
+      {
+        "label": "supreme-26/artillery-floor",
+        "rawFrameMs": {
+          "n": 298,
+          "mean": 16.721476510067113,
+          "p95": 16.90000009536743,
+          "p99": 17,
+          "max": 33.90000009536743,
+          "over33": 1
+        },
+        "arcadeCpuMsPerFrame": 0.13892618361735504,
+        "peakEnemies": 31,
+        "peakProjectiles": 63,
+        "kineticBudget": {
+          "peakVisits": 6,
+          "peakContacts": 1
+        }
+      },
+      {
+        "label": "supreme-26/artillery-defenses",
+        "rawFrameMs": {
+          "n": 287,
+          "mean": 17.416724739174395,
+          "p95": 21.600000143051147,
+          "p99": 22.600000143051147,
+          "max": 23.5,
+          "over33": 0
+        },
+        "arcadeCpuMsPerFrame": 0.19303137333966297,
+        "peakEnemies": 31,
+        "peakProjectiles": 140,
+        "kineticBudget": {
+          "peakVisits": 6,
+          "peakContacts": 1
+        }
+      },
+      {
+        "label": "supreme-26/forced-kinetic-bursts",
+        "rawFrameMs": {
+          "n": 300,
+          "mean": 16.66699999968211,
+          "p95": 17,
+          "p99": 17.09999990463257,
+          "max": 17.5,
+          "over33": 0
+        },
+        "arcadeCpuMsPerFrame": 0.19533334016799928,
+        "peakEnemies": 32,
+        "peakProjectiles": 101,
+        "kineticBudget": {
+          "peakVisits": 119,
+          "peakContacts": 2
+        }
+      }
+    ],
+    "timing": "Measured before final constant-cost fixes for blocked response expiry and Dash input ownership; final behavior covered by focused tests and browser input/ability checks.",
+    "limits": "RTX 5070 desktop, five-second live samples, not deterministic combat replay or a low-end guarantee. One 33.9ms frame occurred during floor activity. Defense p95 was 21.6ms. Budgets were unchanged; this does not establish hitch-free gameplay."
+  },
+  "correctedFixtureAssumptions": [
+    "The friendly-passability fixture now maintains its desired input each frame; it no longer expects persistent operative coasting after one external velocity assignment.",
+    "The movement fixture reserves the actual staged-obstacle footprint plus clearance instead of requiring an unnecessarily wide empty runway unavailable in some fortress layouts."
+  ],
+  "limitations": [
+    "A response lasts 0.1 physics seconds; existing detonation cadence can make that shorter in real time.",
+    "Input overrides collision response; a free Dash retains its authored timing until collision or normal completion.",
+    "Existing broad-phase and sweep budgets bound extra contacts under extreme crowding. Existing overlap/contact-damage handling remains authoritative.",
+    "Dedicated rebound audio remains unassigned pending an asset. No audio or save-schema change.",
+    "Automated checks verify responsiveness and containment; subjective movement feel still benefits from player feedback."
+  ]
+}
